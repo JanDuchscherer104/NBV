@@ -1,0 +1,9 @@
+\begin{abstract}
+\vspace{-1em}
+
+Next Best View (NBV) algorithms aim to maximize 3D scene acquisition quality using minimal resources, e.g. number of acquisitions, time taken, or distance traversed. Prior methods often rely on coverage maximization as a proxy for reconstruction quality, but for complex scenes with occlusions and finer details, this is not always sufficient and leads to poor reconstructions. Our key insight is to train an acquisition policy that directly optimizes for reconstruction quality rather than just coverage. To achieve this, we introduce the View Introspection Network (VIN): a lightweight neural network that predicts the Relative Reconstruction Improvement (RRI) of a potential next viewpoint without making any new acquisitions. We use this network to power a simple, yet effective, sequential sampling-based greedy NBV policy. Our approach, VIN-NBV, generalizes to unseen object categories, operates without prior scene knowledge, is adaptable to resource constraints, and can handle occlusions. We show that our RRI fitness criterion leads to a $\sim$30\% gain in reconstruction quality over a coverage-based criterion using the same greedy strategy. Furthermore, VIN-NBV also outperforms deep reinforcement learning methods, Scan-RL and GenNBV, by $\sim$40\%. For more result visuals please refer to our \href{https://noahfrahm.github.io/VIN-NBVProjectPage/}{Project page.}
+
+
+\end{abstract}
+
+{\renewcommand\thefootnote{\fnsymbol{footnote}}\footnotetext[1]{These authors contributed equally.}}

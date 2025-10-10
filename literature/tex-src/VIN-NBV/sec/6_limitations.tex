@@ -1,0 +1,5 @@
+\section{Limitations}
+\label{sec:limitations}
+\vspace{-0.25em}
+
+We use ground truth depth maps in RGB-D capture to match the evaluation setting of the prior works GenNBV \cite{chen2024gennbv} and ScanRL \cite{peralta2020next}, but these depth maps are noise-free and not reflective of true depth sensor readings. The performance of our method has not been evaluated with real world data and could have different performance in such settings. In Fig. \ref{fig:chamfer_comparison} we see a gap to the Oracle-NBV in early capture stages, indicating that our method still has room for improvement.

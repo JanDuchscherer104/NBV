@@ -1,0 +1,136 @@
+% !TEX TS-program = pdflatex
+\pdfoutput=1
+
+% 3DV 2026 Paper Template; see https://github.com/cvpr-org/author-kit
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+% NOTE: this is added for ArXiv compile fixing
+\PassOptionsToPackage{dvipsnames}{xcolor}
+\usepackage{xcolor}
+% NOTE: this is added for ArXiv compile fixing
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{wrapfig}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{bbm}
+\usepackage{glossaries-extra}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\usepackage{graphicx}
+\usepackage{pdfpages}
+\usepackage{titlesec}
+\usepackage{bbm}
+\usepackage{afterpage}
+
+%%%%%%%%% PAPER TYPE
+% \usepackage{cvpr}              % To produce the CAMERA-READY version
+% \usepackage[review]{cvpr}      % To produce the REVIEW version
+\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+
+% Import additional packages in the preamble file, before hyperref
+\input{preamble}
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, 
+% e.g. with the file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete *.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you should be clear).
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,citecolor=cvprblue]{hyperref}
+
+%%%%%%%%% PAPER ID
+\def\paperID{166} % *** Enter the Paper ID here
+\def\confName{3DV\xspace}
+\def\confYear{2026\xspace}
+
+%%%%%%%%% TITLE
+\title{VIN-NBV: A View Introspection Network for Next-Best-View Selection}
+
+%%%%%%%%% AUTHORS
+% \author{%
+% Noah Frahm\\
+% {\tt\small nofrahm@cs.unc.edu}
+% \and
+% Dongxu Zhao \thanks{Equal contribution.}\\
+% {\tt\small dongxuz1@cs.unc.edu}
+% \and
+% Andrea Dunn Beltran \footnotemark[1]\\
+% {\tt\small asdunnbe@cs.unc.edu}
+% \and
+% Ron Alterovitz\\
+% {\tt\small ron@cs.unc.edu}
+% \and
+% Jan-Michael Frahm\\
+% {\tt\small jmf@cs.unc.edu}
+% \and
+% Junier Oliva \\
+% {\tt\small joliva@cs.unc.edu}
+% \and
+% Roni Sengupta\\
+% {\tt\small ronisen@cs.unc.edu}
+% \and
+% The University of North Carolina\\
+% }
+
+\author{%
+Noah Frahm \quad
+Dongxu Zhao \thanks{Equal contribution.} \quad
+Andrea Dunn Beltran \footnotemark[1]\\ \quad
+Ron Alterovitz \quad
+Jan-Michael Frahm \quad
+Junier Oliva \quad
+Roni Sengupta \\
+\and
+The University of North Carolina\\
+}
+
+  
+\begin{document}
+
+\twocolumn[{
+\renewcommand\twocolumn[1][]{#1}
+    \maketitle
+    \begin{center}
+    \captionsetup{type=figure}
+    \includegraphics[width=\textwidth]{Figures/teaser.pdf}
+    \captionof{figure}{
+    Our approach, VIN-NBV (blue), is an NBV policy that selects best next views by maximizing a predicted reconstruction quality criterion and outperforms coverage maximization policy, Cov-NBV (red), achieving higher reconstruction accuracy with less captures.
+    }
+    \label{fig:teaser}
+    \end{center}
+}]
+
+
+\input{sec/0_abstract}    
+\input{sec/1_intro}
+\input{sec/2_related_work}
+\input{sec/3_methods}
+\input{sec/4_experiments}
+\input{sec/6_limitations}
+\input{sec/7_conclusion}
+
+% \newpage
+{
+    \small
+    \bibliographystyle{ieeenat_fullname}
+    \bibliography{main}
+}
+
+\clearpage
+\input{sec/8_appendix}
+
+\end{document}
+
+
+
+
+
+
+
+
+

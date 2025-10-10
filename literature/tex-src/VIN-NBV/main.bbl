@@ -1,0 +1,233 @@
+\begin{thebibliography}{46}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[dro()]{drone_save}
+Robot rescuers to help save lives after disasters.
+\newblock \url{https://projects.research-and-innovation.ec.europa.eu/en/horizon-magazine/robot-rescuers-help-save-lives-after-disasters}.
+\newblock Written 19 March 2014.
+
+\bibitem[Agarwal et~al.(2011)Agarwal, Furukawa, Snavely, Simon, Curless, Seitz, and Szeliski]{agarwal2011building}
+Sameer Agarwal, Yasutaka Furukawa, Noah Snavely, Ian Simon, Brian Curless, Steven~M Seitz, and Richard Szeliski.
+\newblock Building rome in a day.
+\newblock \emph{Communications of the ACM}, 54\penalty0 (10):\penalty0 105--112, 2011.
+
+\bibitem[Bleyer et~al.(2011)Bleyer, Rhemann, and Rother]{bleyer2011patchmatch}
+Michael Bleyer, Christoph Rhemann, and Carsten Rother.
+\newblock Patchmatch stereo-stereo matching with slanted support windows.
+\newblock In \emph{Bmvc}, pages 1--11, 2011.
+
+\bibitem[Cao et~al.(2020)Cao, Mirjalili, and Raschka]{coral2020}
+Wenzhi Cao, Vahid Mirjalili, and Sebastian Raschka.
+\newblock Rank consistent ordinal regression for neural networks with application to age estimation.
+\newblock \emph{Pattern Recognition Letters}, 140:\penalty0 325--331, 2020.
+
+\bibitem[Chen et~al.(2024)Chen, Li, Wang, Xue, and Pang]{chen2024gennbv}
+Xiao Chen, Quanyi Li, Tai Wang, Tianfan Xue, and Jiangmiao Pang.
+\newblock Gennbv: Generalizable next-best-view policy for active 3d reconstruction.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 16436--16445, 2024.
+
+\bibitem[Connolly(1985)]{connollydetermination}
+C. Connolly.
+\newblock The determination of next best views.
+\newblock In \emph{Proceedings. 1985 IEEE International Conference on Robotics and Automation}, pages 432--435, 1985.
+
+\bibitem[Devrim~Kaba et~al.(2017)Devrim~Kaba, Gokhan~Uzunbas, and Nam~Lim]{devrim2017reinforcement}
+Mustafa Devrim~Kaba, Mustafa Gokhan~Uzunbas, and Ser Nam~Lim.
+\newblock A reinforcement learning approach to the view planning problem.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition}, pages 6933--6941, 2017.
+
+\bibitem[Falcon and {The PyTorch Lightning team}(2019)]{Falcon_PyTorch_Lightning_2019}
+William Falcon and {The PyTorch Lightning team}.
+\newblock {PyTorch Lightning}, 2019.
+
+\bibitem[Frahm et~al.(2010)Frahm, Fite-Georgel, Gallup, Johnson, Raguram, Wu, Jen, Dunn, Clipp, Lazebnik, et~al.]{frahm2010building}
+Jan-Michael Frahm, Pierre Fite-Georgel, David Gallup, Tim Johnson, Rahul Raguram, Changchang Wu, Yi-Hung Jen, Enrique Dunn, Brian Clipp, Svetlana Lazebnik, et~al.
+\newblock Building rome on a cloudless day.
+\newblock In \emph{Computer Vision--ECCV 2010: 11th European Conference on Computer Vision, Heraklion, Crete, Greece, September 5-11, 2010, Proceedings, Part IV 11}, pages 368--381. Springer, 2010.
+
+\bibitem[Furukawa and Ponce(2009)]{furukawa2009accurate}
+Yasutaka Furukawa and Jean Ponce.
+\newblock Accurate, dense, and robust multiview stereopsis.
+\newblock \emph{IEEE transactions on pattern analysis and machine intelligence}, 32\penalty0 (8):\penalty0 1362--1376, 2009.
+
+\bibitem[Furukawa et~al.(2010)Furukawa, Curless, Seitz, and Szeliski]{furukawa2010towards}
+Yasutaka Furukawa, Brian Curless, Steven~M Seitz, and Richard Szeliski.
+\newblock Towards internet-scale multi-view stereo.
+\newblock In \emph{2010 IEEE computer society conference on computer vision and pattern recognition}, pages 1434--1441. IEEE, 2010.
+
+\bibitem[Goesele et~al.(2007)Goesele, Snavely, Curless, Hoppe, and Seitz]{goesele2007multi}
+Michael Goesele, Noah Snavely, Brian Curless, Hugues Hoppe, and Steven~M Seitz.
+\newblock Multi-view stereo for community photo collections.
+\newblock In \emph{2007 IEEE 11th international conference on computer vision}, pages 1--8. IEEE, 2007.
+
+\bibitem[Gu\'edon et~al.(2022)Gu\'edon, Monasse, and Lepetit]{guedon2022scone}
+Antoine Gu\'edon, Pascal Monasse, and Vincent Lepetit.
+\newblock Scone: Surface coverage optimization in unknown environments by volumetric integration.
+\newblock \emph{Advances in Neural Information Processing Systems}, 35:\penalty0 20731--20743, 2022.
+
+\bibitem[GuÃ©don et~al.(2023)GuÃ©don, Monnier, Monasse, and Lepetit]{guedon2023macarons}
+Antoine GuÃ©don, Tom Monnier, Pascal Monasse, and Vincent Lepetit.
+\newblock {MACARONS: Mapping And Coverage Anticipation with RGB ONline Self-supervision}.
+\newblock In \emph{{CVPR}}, 2023.
+
+\bibitem[Hardouin et~al.(2020)Hardouin, Moras, Morbidi, Marzat, and Mouaddib]{hardouinUAVNBV}
+Guillaume Hardouin, Julien Moras, Fabio Morbidi, Julien Marzat, and El~Mustapha Mouaddib.
+\newblock Next-best-view planning for surface reconstruction of large-scale 3d environments with multiple uavs.
+\newblock In \emph{2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 1567--1574, 2020.
+
+\bibitem[Hepp et~al.(2018{\natexlab{a}})Hepp, Dey, Sinha, Kapoor, Joshi, and Hilliges]{hepp2018learn}
+Benjamin Hepp, Debadeepta Dey, Sudipta~N Sinha, Ashish Kapoor, Neel Joshi, and Otmar Hilliges.
+\newblock Learn-to-score: Efficient 3d scene exploration by predicting view utility.
+\newblock In \emph{Proceedings of the European conference on computer vision (ECCV)}, pages 437--452, 2018{\natexlab{a}}.
+
+\bibitem[Hepp et~al.(2018{\natexlab{b}})Hepp, Nie{\ss}ner, and Hilliges]{hepp2018plan3d}
+Benjamin Hepp, Matthias Nie{\ss}ner, and Otmar Hilliges.
+\newblock Plan3d: Viewpoint and trajectory optimization for aerial multi-view stereo reconstruction.
+\newblock \emph{ACM Transactions on Graphics (TOG)}, 38\penalty0 (1):\penalty0 1--17, 2018{\natexlab{b}}.
+
+\bibitem[Hornung et~al.(2008)Hornung, Zeng, and Kobbelt]{hornung2008image}
+Alexander Hornung, Boyi Zeng, and Leif Kobbelt.
+\newblock Image selection for improved multi-view stereo.
+\newblock In \emph{2008 IEEE Conference on Computer Vision and Pattern Recognition}, pages 1--8. IEEE, 2008.
+
+\bibitem[Isler et~al.(2016)Isler, Sabzevari, Delmerico, and Scaramuzza]{Islerinformationgainvolumetric3d}
+Stefan Isler, Reza Sabzevari, Jeffrey Delmerico, and Davide Scaramuzza.
+\newblock An information gain formulation for active volumetric 3d reconstruction.
+\newblock In \emph{2016 IEEE International Conference on Robotics and Automation (ICRA)}, pages 3477--3484, 2016.
+
+\bibitem[Jiang et~al.(2023)Jiang, Lei, and Daniilidis]{jiang2023fisherrf}
+Wen Jiang, Boshu Lei, and Kostas Daniilidis.
+\newblock Fisherrf: Active view selection and uncertainty quantification for radiance fields using fisher information.
+\newblock \emph{arXiv preprint arXiv:2311.17874}, 2023.
+
+\bibitem[Jing et~al.(2016)Jing, Polden, Tao, Lin, and Shimada]{jing2016view}
+Wei Jing, Joseph Polden, Pey~Yuen Tao, Wei Lin, and Kenji Shimada.
+\newblock View planning for 3d shape reconstruction of buildings with unmanned aerial vehicles.
+\newblock In \emph{2016 14th International Conference on Control, Automation, Robotics and Vision (ICARCV)}, pages 1--6. IEEE, 2016.
+
+\bibitem[Lee et~al.(2023)Lee, Gupta, Kim, Makwana, Chen, and Feng]{lee2023so}
+Keifer Lee, Shubham Gupta, Sunglyoung Kim, Bhargav Makwana, Chao Chen, and Chen Feng.
+\newblock So-nerf: Active view planning for nerf using surrogate objectives.
+\newblock \emph{arXiv preprint arXiv:2312.03266}, 2023.
+
+\bibitem[Lee et~al.(2022)Lee, Chen, Wang, Liniger, Kumar, and Yu]{lee2022uncertaintyguidedpolicyactive}
+Soomin Lee, Le Chen, Jiahao Wang, Alexander Liniger, Suryansh Kumar, and Fisher Yu.
+\newblock Uncertainty guided policy for active robotic 3d reconstruction using neural radiance fields, 2022.
+
+\bibitem[Loshchilov and Hutter(2017)]{loshchilov2017sgdrstochasticgradientdescent}
+Ilya Loshchilov and Frank Hutter.
+\newblock Sgdr: Stochastic gradient descent with warm restarts, 2017.
+
+\bibitem[Loshchilov and Hutter(2019)]{loshchilov2019decoupledweightdecayregularization}
+Ilya Loshchilov and Frank Hutter.
+\newblock Decoupled weight decay regularization, 2019.
+
+\bibitem[Maver and Bajcsy(1993)]{maver1993occlusions}
+Jasna Maver and Ruzena Bajcsy.
+\newblock Occlusions as a guide for planning the next view.
+\newblock \emph{IEEE transactions on pattern analysis and machine intelligence}, 15\penalty0 (5):\penalty0 417--433, 1993.
+
+\bibitem[Pan et~al.(2022)Pan, Lai, Song, and Huang]{pan2022activenerf}
+Xuran Pan, Zihang Lai, Shiji Song, and Gao Huang.
+\newblock Activenerf: Learning where to see with uncertainty estimation.
+\newblock In \emph{European Conference on Computer Vision}, pages 230--246. Springer, 2022.
+
+\bibitem[Paszke et~al.(2019)Paszke, Gross, Massa, Lerer, Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, Desmaison, Köpf, Yang, DeVito, Raison, Tejani, Chilamkurthy, Steiner, Fang, Bai, and Chintala]{paszke2019pytorchimperativestylehighperformance}
+Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Köpf, Edward Yang, Zach DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala.
+\newblock Pytorch: An imperative style, high-performance deep learning library, 2019.
+
+\bibitem[Peralta et~al.(2020)Peralta, Casimiro, Nilles, Aguilar, Atienza, and Cajote]{peralta2020next}
+Daryl Peralta, Joel Casimiro, Aldrin~Michael Nilles, Justine~Aletta Aguilar, Rowel Atienza, and Rhandley Cajote.
+\newblock Next-best view policy for 3d reconstruction.
+\newblock In \emph{Computer Vision--ECCV 2020 Workshops: Glasgow, UK, August 23--28, 2020, Proceedings, Part IV 16}, pages 558--573. Springer, 2020.
+
+\bibitem[Pito(1999)]{pito1999solution}
+Richard Pito.
+\newblock A solution to the next best view problem for automated surface acquisition.
+\newblock \emph{IEEE Transactions on pattern analysis and machine intelligence}, 21\penalty0 (10):\penalty0 1016--1030, 1999.
+
+\bibitem[Potthast and Sukhatme(2014)]{POTTHAST2014148}
+Christian Potthast and Gaurav~S. Sukhatme.
+\newblock A probabilistic framework for next best view estimation in a cluttered environment.
+\newblock \emph{Journal of Visual Communication and Image Representation}, 25\penalty0 (1):\penalty0 148--164, 2014.
+\newblock Visual Understanding and Applications with RGB-D Cameras.
+
+\bibitem[Qi et~al.(2023)Qi, Wu, Wang, and Sengupta]{qi2023my3dgen}
+Luchao Qi, Jiaye Wu, Shengze Wang, and Soumyadip Sengupta.
+\newblock My3dgen: Building lightweight personalized 3d generative model.
+\newblock \emph{arXiv preprint arXiv:2307.05468}, 2023.
+
+\bibitem[Ran et~al.(2023)Ran, Zeng, He, Chen, Li, Chen, Lee, and Ye]{ran2023neurar}
+Yunlong Ran, Jing Zeng, Shibo He, Jiming Chen, Lincheng Li, Yingfeng Chen, Gimhee Lee, and Qi Ye.
+\newblock Neurar: Neural uncertainty for autonomous 3d reconstruction with implicit neural representations.
+\newblock \emph{IEEE Robotics and Automation Letters}, 8\penalty0 (2):\penalty0 1125--1132, 2023.
+
+\bibitem[Ravi et~al.(2020)Ravi, Reizenstein, Novotny, Gordon, Lo, Johnson, and Gkioxari]{ravi2020pytorch3d}
+Nikhila Ravi, Jeremy Reizenstein, David Novotny, Taylor Gordon, Wan-Yen Lo, Justin Johnson, and Georgia Gkioxari.
+\newblock Accelerating 3d deep learning with pytorch3d.
+\newblock \emph{arXiv:2007.08501}, 2020.
+
+\bibitem[Roberts et~al.(2017)Roberts, Dey, Truong, Sinha, Shah, Kapoor, Hanrahan, and Joshi]{roberts2017submodular}
+Mike Roberts, Debadeepta Dey, Anh Truong, Sudipta Sinha, Shital Shah, Ashish Kapoor, Pat Hanrahan, and Neel Joshi.
+\newblock Submodular trajectory optimization for aerial 3d scanning.
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer Vision}, pages 5324--5333, 2017.
+
+\bibitem[Sch{\"o}nberger et~al.(2016)Sch{\"o}nberger, Zheng, Frahm, and Pollefeys]{schonberger2016pixelwise}
+Johannes~L Sch{\"o}nberger, Enliang Zheng, Jan-Michael Frahm, and Marc Pollefeys.
+\newblock Pixelwise view selection for unstructured multi-view stereo.
+\newblock In \emph{Computer Vision--ECCV 2016: 14th European Conference, Amsterdam, The Netherlands, October 11-14, 2016, Proceedings, Part III 14}, pages 501--518. Springer, 2016.
+
+\bibitem[Smith et~al.(2022)Smith, Drozdzal, Nowrouzezahrai, Meger, and Romero-Soriano]{smith2022uncertainty}
+Edward~J Smith, Michal Drozdzal, Derek Nowrouzezahrai, David Meger, and Adriana Romero-Soriano.
+\newblock Uncertainty-driven active vision for implicit scene reconstruction.
+\newblock \emph{arXiv preprint arXiv:2210.00978}, 2022.
+
+\bibitem[Strecha et~al.(2004)Strecha, Fransens, and Van~Gool]{strecha2004wide}
+Christoph Strecha, Rik Fransens, and Luc Van~Gool.
+\newblock Wide-baseline stereo from multiple views: a probabilistic account.
+\newblock In \emph{Proceedings of the 2004 IEEE Computer Society Conference on Computer Vision and Pattern Recognition, 2004. CVPR 2004.}, pages I--I. IEEE, 2004.
+
+\bibitem[Sun et~al.(2021)Sun, Huang, Hsiao, Guan, and Hua]{sun2021learning}
+Yifan Sun, Qixing Huang, Dun-Yu Hsiao, Li Guan, and Gang Hua.
+\newblock Learning view selection for 3d scenes.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 14464--14473, 2021.
+
+\bibitem[Wu et~al.(2014)Wu, Sun, Long, Huang, Cohen-Or, Gong, Deussen, and Chen]{wuqualitydriven}
+Shihao Wu, Wei Sun, Pinxin Long, Hui Huang, Daniel Cohen-Or, Minglun Gong, Oliver Deussen, and Baoquan Chen.
+\newblock Quality-driven poisson-guided autoscanning.
+\newblock \emph{ACM Trans. Graph.}, 33\penalty0 (6), 2014.
+
+\bibitem[Wu et~al.(2023)Wu, Zhang, Fu, Wang, Ren, Pan, Wu, Yang, Wang, Qian, et~al.]{wu2023omniobject3d}
+Tong Wu, Jiarui Zhang, Xiao Fu, Yuxin Wang, Jiawei Ren, Liang Pan, Wayne Wu, Lei Yang, Jiaqi Wang, Chen Qian, et~al.
+\newblock Omniobject3d: Large-vocabulary 3d object dataset for realistic perception, reconstruction and generation.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 803--814, 2023.
+
+\bibitem[Yan et~al.(2021)Yan, Xia, Li, and Zhou]{yan2021sampling}
+Feihu Yan, Enyong Xia, Zhaoxin Li, and Zhong Zhou.
+\newblock Sampling-based path planning for high-quality aerial 3d reconstruction of urban scenes.
+\newblock \emph{Remote Sensing}, 13\penalty0 (5):\penalty0 989, 2021.
+
+\bibitem[Zeng et~al.(2020)Zeng, Zhao, and Liu]{9340916}
+Rui Zeng, Wang Zhao, and Yong-Jin Liu.
+\newblock Pc-nbv: A point cloud based deep network for efficient next best view planning.
+\newblock In \emph{2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 7050--7057, 2020.
+
+\bibitem[Zhan et~al.(2022)Zhan, Zheng, Xu, Reid, and Rezatofighi]{zhan2022activermapradiancefieldactive}
+Huangying Zhan, Jiyang Zheng, Yi Xu, Ian Reid, and Hamid Rezatofighi.
+\newblock Activermap: Radiance field for active mapping and planning, 2022.
+
+\bibitem[Zhang et~al.(2021)Zhang, Yao, Xie, Fu, Zhang, and Huang]{zhang2021continuous}
+Han Zhang, Yucong Yao, Ke Xie, Chi-Wing Fu, Hao Zhang, and Hui Huang.
+\newblock Continuous aerial path planning for 3d urban scene reconstruction.
+\newblock \emph{ACM Trans. Graph.}, 40\penalty0 (6):\penalty0 225--1, 2021.
+
+\bibitem[Zhou et~al.(2020)Zhou, Xie, Huang, Liu, Zhou, Gong, and Huang]{zhou2020offsite}
+Xiaohui Zhou, Ke Xie, Kai Huang, Yilin Liu, Yang Zhou, Minglun Gong, and Hui Huang.
+\newblock Offsite aerial path planning for efficient urban scene reconstruction.
+\newblock \emph{ACM Transactions on Graphics (TOG)}, 39\penalty0 (6):\penalty0 1--16, 2020.
+
+\end{thebibliography}
