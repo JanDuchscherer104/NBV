@@ -1,0 +1,21 @@
+\section{Interactive Scene Reconstruction}
+
+Scene reconstruction often occurs offline, on pre-recorded walkthroughs of an environment, or derivatives of them, such as a point cloud. 
+However, we take advantage of \METHOD's inference occurring at an interactive rate, which takes between 2-5s depending on the size of the environment, by implementing streaming of \METHOD's live reconstructions into a modern VR headset. This enables an interactive experience where the user can see the reconstruction overlaid onto the environment they are exploring in real-time. See the video recording 
+% in the supplemental material 
+on the website
+for examples.
+
+With this the user can actively refine the results, for example through more thorough exploration of areas that may have been missed. Visualisations of this interface are included in the bottom half for Figure~\ref{fig:teaser}.
+
+
+\section{Limitations and Future Work}
+\label{section:limitations_future_work}
+
+\METHOD~exhibits certain limitations that should be acknowledged. First, the structured language commands are manually defined, which requires human intervention at this stage. Secondly, due to the higher-level nature of our commands, it can be challenging to capture fine-grained geometric details with extremely high precision (i.e. mm). As a consequence, the resulting reconstructions based on this representation tend to lead to simpler and coarser geometries, potentially missing intricate nuances at the very high detail level. 
+These limitations potentially highlight areas for future research and optimization, aiming to automate the command definition process and explore techniques to enhance the representation's ability to capture intricate geometric details accurately. However, we believe that the ability to built scene representations that are based on structured language commands will be a key part in complex and efficient methods of scene reconstruction in the future, enabling them to be used in conjunction with general purpose LLMs.
+
+\section{Conclusion}
+\label{section:conclusion}
+
+We introduced \METHOD, a novel reconstruction method that is based on a tokenized scene representation. \METHOD{} autoregressively predicts a sequence of structured scene language commands given a video stream of an indoor space. This tokenized scene representation is compact, editable and intepretable. In addition, we showed that a strength of \METHOD{} is the ability to extend to arbitrary elements (e.g. Bezier curves, object part decomposition) with minimal changes. This research opens up new directions in representing 3D scenes as language, bringing the 3D reconstruction community closer to the recent advances in large language models such as GPT-class models \cite{openai2023gpt4}.

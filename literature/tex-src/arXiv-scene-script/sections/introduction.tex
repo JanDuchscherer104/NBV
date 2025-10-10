@@ -1,0 +1,42 @@
+\vspace{-1em}
+
+\section{Introduction}
+\label{section:intro}
+
+% Paragraph: scene representations are important
+Scene representations play a crucial role in machine learning and computer vision applications, enabling accurate understanding of the environment. Over the years, researchers have explored various options such as meshes, voxel grids, point clouds, and implicit representations, aiming to represent complex real-world scenes with high-fidelity. Each of these exhibits distinct advantages and limitations that impact their suitability for different tasks. Meshes offer detailed geometric information but can be expensive in both computation and memory. Voxel grids provide a volumetric representation but suffer from a trade-off between resolution and memory requirements. Point clouds are efficient in representing sparse scenes but lack semantics and explicit connectivity information. Implicit representations, such as DeepSDF~\cite{park2019deepsdf} and NeRF \cite{mildenhall2021nerf}, can be infinitely precise but lack interpretability and editability. The selection of an appropriate representation directly impacts the performance and efficacy of various tasks including object recognition, scene understanding, and 3D reconstruction. In this paper, we propose a novel scene representation based on structured language commands as a more efficient and versatile solution.
+% Scene representations play a crucial role in machine learning and computer vision applications, enabling accurate understanding of the environment. Researchers have explored various options such as meshes, voxel grids, point clouds and radiance fields, aiming to represent real-world scenes with high-fidelity. In this paper, we propose a novel scene representation based on structured language commands.
+
+
+% Paragraph: motivation of new representation
+Our motivation stems from the recent advancements in the field of Large Language Models (LLMs) and ``next token prediction'' autoregressive methods~\cite{openai2023gpt4}, coupled with recent works on exploring generation of sequences to represent geometric structures. For example, PolyGen \cite{nash2020polygen} demonstrated the ability to describe 3D meshes as a sequence of vertices and faces generated using transformers \cite{vaswani2017attention}. Similarly, CAD-as-Language \cite{ganin2021computer} showcased the effectiveness of generating Computer-Aided Design (CAD) primitives to represent 2D CAD sketches. 
+% Our motivation stems from the recent advancements in the field of Large Language Models (LLMs) and ``next token prediction'' autoregressive methods~\cite{openai2023gpt4}, coupled with recent works on exploring generation of sequences to represent geometric structures~\cite{nash2020polygen,ganin2021computer}. These works have demonstrated the ability to describe 3D meshes and Computer-Aided Design (CAD) sketches as sequences of vertices or CAD primitives.
+Our main goal is to \textbf{directly infer a metrically accurate representation of a full scene} as a text-based sequence of specialized structured language commands.
+
+
+% Paragraph: High-level overview of representation + pros
+Our method, denoted \METHOD, autoregressively predicts a language of hand-designed structured language commands in pure text form. This language offers several distinct advantages: 1) As pure text, it is compact and reduces memory requirements of a large scene to only a few \textbf{bytes}. 2) It is crisp and complete since the commands are designed to result in sharp and well-defined geometry (similar to scalable vector graphics). 3) It is interpretable, editable and semantically rich by design via the use of \textit{high-level parametric} commands such as \texttt{make\_door(*door\_parameters)}. 4) It can seamlessly integrate novel geometric entities by simply adding new structured commands to the language. 5) The fact that the scene representation is a series of language tokens similar to \cite{openai2023gpt4} opens up a plethora of potential new applications in the future such as ways to edit the scene, query it, or spin up chat interactions. 
+
+
+% Paragraph: dataset introduction and overview
+We mainly focus on the problems of architectural layout estimation and object detection as proxy tasks for the efficacy of our \METHOD~language as a scene representation. Architectural entities such as walls, doors, and windows are highly structured entities, making them an ideal test-bed. However, one notable drawback of language models is that they require vast amounts of data for training. Since there is no existing dataset of scene walkthroughs and their corresponding structured language commands, we publicly released \DatasetName{} (\DatasetNameShort{}),
+% \footnote{We redact the dataset's name to ensure compliance with the anonymization policy.}
+a synthetically generated dataset of 100k unique interior scenes. For each scene, we simulate egocentric trajectories with an entire suite of sensor data from Project Aria~\cite{projectaria}. We also release multiple sources of ground truth including depth and instance segmentations. Importantly, for each rendered egocentric sequence, the architectural layout ground truth is given in our proposed \METHOD~language.
+
+
+% Paragraph: Extensions
+While architectural layout serves as a test-bed, we demonstrate that our method \METHOD~can easily be extended to new tasks via simple extensions to \METHOD~language while keeping both the visual input and network architecture fixed. We illustrate this on the problem of 3D object detection, which results in a method that jointly infers architectural layout and 3D oriented bounding boxes. Additionally, we demonstrate more proof-of-concept experiments that show that our method results in a significantly lower barrier to entry for new tasks including representing coarse 3D object reconstruction, curved entities, composition of entities, and entity states.
+
+Our core contributions are:
+\begin{itemize}
+    % the method
+    \item We propose \METHOD, a method that jointly predicts architectural layout and object bounding boxes of a scene in the form of structured language commands given a video stream. 
+    \item We demonstrate that \METHOD~can easily be extended 
+    to completely new tasks with simple additions of commands to our structured language,
+    significantly lowering the barrier to entry for new tasks.
+    \item We release a large-scale synthetic dataset, named \DatasetName,
+    comprized of \textbf{100k} unique high-quality 3D indoor scenes with GT,
+    which will enable large scale ML training of scene understanding methods.
+    \item We show that training \METHOD~on \DatasetName~leads to generalization on real scenes (
+    see videos/demos on the project page).
+\end{itemize}

@@ -1,0 +1,45 @@
+% Preview source code for paragraph 0
+
+\begin{table}
+\small
+\begin{centering}
+\caption{
+    Comparison between existing indoor datasets.
+    P-R: Photo-realistic;
+    Ego: Ego-centric;
+    Camera: Either Fisheye(F) or Pinhole(P), or panorama photo(360);
+    Seg: object and layout segmentations rendered to images;
+    L-GT: Layout entity ground-truth,
+    such as individual wall/window/door parameters.
+}
+\label{tab:ase_stats}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|c|c|c|ccccccc|c|}
+\hline 
+Type & Name & Scenes & Trajectory & P-R & Ego & Camera & Depth & Seg & L-GT & License\tabularnewline
+\hline 
+\hline 
+\multirow{7}{*}{Syn} & ASE (\textbf{Ours}) & 100k & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & F & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & Agreement needed\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & ProcTHOR & 10k & \textcolor{red}{$\times$} & \textcolor{red}{$\times$} & \textcolor{green}{$\checkmark$} & P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & Apache2.0\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & HyperSim & 461 & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & Special license\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & Structured3D & 3,500 & \textcolor{red}{$\times$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & MIT\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & SceneNet RGB-D & 57 & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & Special license\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & InteriorNet & 10k/1.7M & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & F, P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & Agreement needed\tabularnewline
+\hline 
+\multirow{3}{*}{Real} & Zillow Indoor & 2,564 & \textcolor{red}{$\times$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & 360 & \textcolor{red}{$\times$} & \textcolor{red}{$\times$} & \textcolor{green}{$\checkmark$} & Apache 2.0\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & HM3D & 1,000 & \textcolor{red}{$\times$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & P & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & \textcolor{red}{$\times$} & MIT\tabularnewline
+\cline{2-11} \cline{3-11} \cline{4-11} \cline{5-11} \cline{6-11} \cline{7-11} \cline{8-11} \cline{9-11} \cline{10-11} \cline{11-11} 
+ & ScanNet & 1,513 & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & P & \textcolor{green}{$\checkmark$} & \textcolor{green}{$\checkmark$} & \textcolor{red}{$\times$} & Special license (data)\tabularnewline
+\hline 
+\end{tabular}
+}
+\par\end{centering}
+\end{table}
+

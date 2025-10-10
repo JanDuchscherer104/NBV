@@ -1,0 +1,165 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\providecommand{\doi}[1]{https://doi.org/#1}
+
+\bibitem{AriaMPS2023}
+Aria, P.: Project aria machine perception services (2023), \url{https://facebookresearch.github.io/projectaria_tools/docs/data_utilities/core_code_snippets/mps}, accessed: 2023-11-27
+
+\bibitem{avetisyan2020scenecad}
+Avetisyan, A., Khanova, T., Choy, C., Dash, D., Dai, A., Nie{\ss}ner, M.: Scenecad: Predicting object alignments and layouts in rgb-d scans. In: Computer Vision--ECCV 2020: 16th European Conference, Glasgow, UK, August 23--28, 2020, Proceedings, Part XXII 16. pp. 596--612. Springer (2020)
+
+\bibitem{mrBash2023Tables}
+Bash, B.: Procedural table with geometry nodes in blender (2023), \url{https://blenderbash.gumroad.com/l/daghsw}, accessed: 2023-05-23
+
+\bibitem{brazil2023omni3d}
+Brazil, G., Kumar, A., Straub, J., Ravi, N., Johnson, J., Gkioxari, G.: {Omni3D}: A large benchmark and model for {3D} object detection in the wild. In: CVPR. IEEE, Vancouver, Canada (June 2023)
+
+\bibitem{cabral2014piecewise}
+Cabral, R., Furukawa, Y.: Piecewise planar and compact floorplan reconstruction from images. In: 2014 IEEE Conference on Computer Vision and Pattern Recognition (2014)
+
+\bibitem{carlier2020deepsvg}
+Carlier, A., Danelljan, M., Alahi, A., Timofte, R.: Deepsvg: A hierarchical generative network for vector graphics animation. In: Advances in Neural Information Processing Systems (2020)
+
+\bibitem{chen2019floor}
+Chen, J., Liu, C., Wu, J., Furukawa, Y.: Floor-sp: Inverse cad for floorplans by sequential room-wise shortest path. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (2019)
+
+\bibitem{chen2021pix2seq}
+Chen, T., Saxena, S., Li, L., Fleet, D.J., Hinton, G.: Pix2seq: A language modeling framework for object detection. In: International Conference on Learning Representations (ICLR) (2022)
+
+\bibitem{collins2022abo}
+Collins, J., Goel, S., Deng, K., Luthra, A., Xu, L., Gundogdu, E., Zhang, X., Yago~Vicente, T.F., Dideriksen, T., Arora, H., Guillaumin, M., Malik, J.: Abo: Dataset and benchmarks for real-world 3d object understanding. CVPR  (2022)
+
+\bibitem{dai2017scannet}
+Dai, A., Chang, A.X., Savva, M., Halber, M., Funkhouser, T., Nie{\ss}ner, M.: Scannet: Richly-annotated 3d reconstructions of indoor scenes. In: Proc. Computer Vision and Pattern Recognition (CVPR), IEEE (2017)
+
+\bibitem{engel14eccv}
+Engel, J., Schöps, T., Cremers, D.: {LSD-SLAM}: Large-scale direct monocular {SLAM}. In: European Conference on Computer Vision (ECCV) (September 2014)
+
+\bibitem{furukawa2009manhattan}
+Furukawa, Y., Curless, B., Seitz, S.M., Szeliski, R.: Manhattan-world stereo. In: 2009 IEEE Conference on Computer Vision and Pattern Recognition (2009)
+
+\bibitem{furukawa2009reconstructing}
+Furukawa, Y., Curless, B., Seitz, S.M., Szeliski, R.: Reconstructing building interiors from images. In: 2009 IEEE 12th international conference on computer vision (2009)
+
+\bibitem{ganin2021computer}
+Ganin, Y., Bartunov, S., Li, Y., Keller, E., Saliceti, S.: Computer-aided design as language. Advances in Neural Information Processing Systems  \textbf{34},  5885--5897 (2021)
+
+\bibitem{girshick2015fast}
+Girshick, R.: Fast r-cnn. In: Proceedings of the IEEE international conference on computer vision. pp. 1440--1448 (2015)
+
+\bibitem{he2016deep}
+He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 770--778 (2016)
+
+\bibitem{holtzman2019curious}
+Holtzman, A., Buys, J., Du, L., Forbes, M., Choi, Y.: The curious case of neural text degeneration. arXiv preprint arXiv:1904.09751  (2019)
+
+\bibitem{jones2020shapeassembly}
+Jones, R.K., Barton, T., Xu, X., Wang, K., Jiang, E., Guerrero, P., Mitra, N.J., Ritchie, D.: Shapeassembly: Learning to generate programs for 3d shape structure synthesis. ACM Transactions on Graphics (TOG)  \textbf{39}(6),  1--20 (2020)
+
+\bibitem{jones2021shapemod}
+Jones, R.K., Charatan, D., Guerrero, P., Mitra, N.J., Ritchie, D.: Shapemod: macro operation discovery for 3d shape programs. ACM Transactions on Graphics (TOG)  \textbf{40}(4),  1--16 (2021)
+
+\bibitem{jones2022plad}
+Jones, R.K., Walke, H., Ritchie, D.: Plad: Learning to infer shape programs with pseudo-labels and approximate distributions. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (2022)
+
+\bibitem{lee2017roomnet}
+Lee, C.Y., Badrinarayanan, V., Malisiewicz, T., Rabinovich, A.: Roomnet: End-to-end room layout estimation. In: Proceedings of the IEEE international conference on computer vision (2017)
+
+\bibitem{liu2019planercnn}
+Liu, C., Kim, K., Gu, J., Furukawa, Y., Kautz, J.: Planercnn: 3d plane detection and reconstruction from a single image (2019)
+
+\bibitem{beziercurves}
+Loop, C., Blinn, J.: Resolution independent curve rendering using programmable graphics hardware. In: ACM SIGGRAPH 2005 Papers, pp. 1000--1009 (2005)
+
+\bibitem{projectaria}
+Meta: Project aria. \url{https://projectaria.com/} (2022), accessed: 2023-08-30
+
+\bibitem{mildenhall2021nerf}
+Mildenhall, B., Srinivasan, P.P., Tancik, M., Barron, J.T., Ramamoorthi, R., Ng, R.: Nerf: Representing scenes as neural radiance fields for view synthesis. Communications of the ACM  \textbf{65}(1),  99--106 (2021)
+
+\bibitem{misra2021end}
+Misra, I., Girdhar, R., Joulin, A.: An end-to-end transformer model for 3d object detection. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 2906--2917 (2021)
+
+\bibitem{murali2017indoor}
+Murali, S., Speciale, P., Oswald, M.R., Pollefeys, M.: Indoor scan2bim: Building information models of house interiors. In: 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) (2017)
+
+\bibitem{nash2020polygen}
+Nash, C., Ganin, Y., Eslami, S.A., Battaglia, P.: Polygen: An autoregressive generative model of 3d meshes. In: International conference on machine learning. pp. 7220--7229. PMLR (2020)
+
+\bibitem{ochmann2019automatic}
+Ochmann, S., Vock, R., Klein, R.: Automatic reconstruction of fully volumetric 3d building models from oriented point clouds. ISPRS journal of photogrammetry and remote sensing  \textbf{151},  251--262 (2019)
+
+\bibitem{openai2023gpt4}
+OpenAI: Gpt-4 technical report (2023)
+
+\bibitem{para2021sketchgen}
+Para, W., Bhat, S., Guerrero, P., Kelly, T., Mitra, N., Guibas, L.J., Wonka, P.: Sketchgen: Generating constrained cad sketches. In: Advances in Neural Information Processing Systems (2021)
+
+\bibitem{park2019deepsdf}
+Park, J.J., Florence, P., Straub, J., Newcombe, R., Lovegrove, S.: Deepsdf: Learning continuous signed distance functions for shape representation. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition (2019)
+
+\bibitem{pearl2022geocode}
+Pearl, O., Lang, I., Hu, Y., Yeh, R.A., Hanocka, R.: Geocode: Interpretable shape programs  (2022)
+
+\bibitem{pintore2020atlantanet}
+Pintore, G., Agus, M., Gobbetti, E.: Atlantanet: inferring the 3d indoor layout from a single 360 image beyond the manhattan world assumption. In: Proceedings of the European conference on computer vision (ECCV) (2020)
+
+\bibitem{qi2019deep}
+Qi, C.R., Litany, O., He, K., Guibas, L.J.: Deep hough voting for 3d object detection in point clouds. In: proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 9277--9286 (2019)
+
+\bibitem{rukhovich2022imvoxelnet}
+Rukhovich, D., Vorontsova, A., Konushin, A.: Imvoxelnet: Image to voxels projection for monocular and multi-view general-purpose 3d object detection. In: Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision. pp. 2397--2406 (2022)
+
+\bibitem{aria_white_paper}
+Somasundaram, K., Dong, J., Tang, H., Straub, J., Yan, M., Goesele, M., Engel, J.J., De~Nardi, R., Newcombe, R.: Project aria: A new tool for egocentric multi-modal ai research. arXiv preprint arXiv:2308.13561  (2023)
+
+\bibitem{song2015sun}
+Song, S., Lichtenberg, S.P., Xiao, J.: Sun rgb-d: A rgb-d scene understanding benchmark suite. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 567--576 (2015)
+
+\bibitem{sutskever2014sequence}
+Sutskever, I., Vinyals, O., Le, Q.V.: Sequence to sequence learning with neural networks (2014)
+
+\bibitem{tang2022torchsparse}
+Tang, H., Liu, Z., Li, X., Lin, Y., Han, S.: {TorchSparse: Efficient Point Cloud Inference Engine}. In: Conference on Machine Learning and Systems (MLSys) (2022)
+
+\bibitem{tang2020searching}
+Tang, H., Liu, Z., Zhao, S., Lin, Y., Lin, J., Wang, H., Han, S.: {Searching Efficient 3D Architectures with Sparse Point-Voxel Convolution}. In: European Conference on Computer Vision (ECCV) (2020)
+
+\bibitem{tomasi1991detection}
+Tomasi, C., Kanade, T.: Detection and tracking of point. Int J Comput Vis  \textbf{9}(137-154), ~3 (1991)
+
+\bibitem{tulsiani2017learning}
+Tulsiani, S., Su, H., Guibas, L.J., Efros, A.A., Malik, J.: Learning shape abstractions by assembling volumetric primitives. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) (2017)
+
+\bibitem{tyszkiewicz2022raytran}
+Tyszkiewicz, M.J., Maninis, K.K., Popov, S., Ferrari, V.: Raytran: 3d pose estimation and shape reconstruction of multiple objects from videos with ray-traced transformers. In: Computer Vision--ECCV 2022: 17th European Conference, Tel Aviv, Israel, October 23--27, 2022, Proceedings, Part X. pp. 211--228. Springer (2022)
+
+\bibitem{vaswani2017attention}
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser, {\L}., Polosukhin, I.: Attention is all you need. NeurIPS  \textbf{30} (2017)
+
+\bibitem{vu2022softgroup}
+Vu, T., Kim, K., Luu, T.M., Nguyen, X.T., Yoo, C.D.: Softgroup for 3d instance segmentation on 3d point clouds. In: CVPR (2022)
+
+\bibitem{wu2021deepcad}
+Wu, R., Xiao, C., Zheng, C.: Deepcad: A deep generative network for computer-aided design models. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (2021)
+
+\bibitem{xu2022skexgen}
+Xu, X., Willis, K.D., Lambourne, J.G., Cheng, C.Y., Jayaraman, P.K., Furukawa, Y.: Skexgen: Autoregressive generation of cad construction sequences with disentangled codebooks. In: International Conference on Machine Learning (ICML) (2022)
+
+\bibitem{xue2022point2seq}
+Xue, Y., Mao, J., Niu, M., Xu, H., Mi, M.B., Zhang, W., Wang, X., Wang, X.: Point2seq: Detecting 3d objects as sequences. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 8521--8530 (2022)
+
+\bibitem{yang2021unsupervised}
+Yang, K., Chen, X.: Unsupervised learning for cuboid shape abstraction via joint segmentation from point clouds. ACM Transactions on Graphics (TOG)  \textbf{40}(4),  1--11 (2021)
+
+\bibitem{yin2021center}
+Yin, T., Zhou, X., Krahenbuhl, P.: Center-based 3d object detection and tracking. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition (2021)
+
+\bibitem{yue2023connecting}
+Yue, Y., Kontogianni, T., Schindler, K., Engelmann, F.: Connecting the dots: Floorplan reconstruction using two-level queries. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (2023)
+
+\bibitem{zou2018layoutnet}
+Zou, C., Colburn, A., Shan, Q., Hoiem, D.: Layoutnet: Reconstructing the 3d room layout from a single rgb image. In: Proceedings of the IEEE conference on computer vision and pattern recognition (2018)
+
+\end{thebibliography}

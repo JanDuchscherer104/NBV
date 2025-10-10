@@ -1,0 +1,174 @@
+\section{Related Works}
+\label{section:related}
+
+%% Table with Language
+\begin{table*}[t]
+\caption{Complete set of structured language commands designed for detailing architectural layouts and object bounding boxes. Supported data types can include \texttt{int, float, bool}. It is important to note that the language's extensibility allows for easy augmentation by introducing new commands like \texttt{make\_prim, make\_pillar}, or enhancing existing commands, such as incorporating \texttt{is\_double\_door (bool)}.}
+\centering
+\begin{ttfamily}
+\scriptsize
+\begin{tabular}{cccc}
+make\_wall (\textcolor{teal}{int}) & make\_door (\textcolor{teal}{int}) & make\_window (\textcolor{teal}{int}) & make\_bbox (\textcolor{teal}{int}) 
+%& Tokenized scene sequence
+\tabularnewline
+\hline 
+\hline 
+ % &  &  & 
+ % \tabularnewline
+\multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+a\_x & \textcolor{blue}{float}\tabularnewline
+a\_y & \textcolor{blue}{float}\tabularnewline
+a\_z & \textcolor{blue}{float}\tabularnewline
+b\_x & \textcolor{blue}{float}\tabularnewline
+b\_y & \textcolor{blue}{float}\tabularnewline
+b\_z & \textcolor{blue}{float}\tabularnewline
+%thickness & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+wall0\_id & \textcolor{teal}{int}\tabularnewline
+wall1\_id & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+width & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+wall0\_id & \textcolor{teal}{int}\tabularnewline
+wall1\_id & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+width & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+class & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+angle\_z & \textcolor{blue}{float}\tabularnewline
+scale\_x & \textcolor{blue}{float}\tabularnewline
+scale\_y & \textcolor{blue}{float}\tabularnewline
+scale\_z & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} \tabularnewline
+
+
+ % &  &  & \tabularnewline
+
+% \hline 
+\end{tabular}
+
+\end{ttfamily}
+\label{table:commands_and_parameters}
+\end{table*}
+
+
+
+
+\subsection{Layout Estimation}
+Layout estimation is an active research area, aiming to infer architectural elements. Scan2BIM~\cite{murali2017indoor} proposes heuristics for wall detection to produce 2D floorplans.
+Ochmann et al.~\cite{ochmann2019automatic} formulate layout inference as an integer linear program using constraints on detected walls. 
+Shortest path algorithms around birds-eye view (BEV) free space~\cite{cabral2014piecewise} and wall plus room instance segmentation~\cite{chen2019floor} have also been explored.
+
+
+Furukawa et al.~\cite{furukawa2009reconstructing} utilize a \textit{Manhattan world}-based multi-view stereo algorithm~\cite{furukawa2009manhattan} to merge axis-aligned depth maps into a full 3D mesh of building interiors.
+RoomNet~\cite{lee2017roomnet} predicts layout keypoints while assuming that a fixed set of Manhattan layouts can occur in a single image of a room. 
+LayoutNet~\cite{zou2018layoutnet} improves on this by predicting keypoints and optimising the Manhattan room layout inferred from them.
+Similarly, AtlantaNet~\cite{pintore2020atlantanet} predicts a BEV floor or ceiling shape and approximates the shape contour with a polygon resulting in an \textit{Atlanta world} prior. 
+SceneCAD~\cite{avetisyan2020scenecad} uses a graph neural network to predict object-object and object-layout relationships to refine its layout prediction.
+
+Our approach stands out by requiring neither heuristics nor explicitly defined prior knowledge about architectural scene structure.
+In fact, our method demonstrates geometric understanding of the scene which emerges despite learning to predict the GT scene language as a sequence of text tokens.
+
+\subsection{Geometric Sequence Modelling}
+
+Recent works have explored transformers for generating objects as text-based sequences.
+PolyGen~\cite{nash2020polygen} models 3D meshes as a sequence of vertices and faces. 
+CAD-as-Language~\cite{ganin2021computer} represents 2D CAD sketches as a sequence of triplets in protobuf representation, followed by a sequence of constraints. 
+Both SketchGen~\cite{para2021sketchgen} and SkexGen~\cite{xu2022skexgen} use transformers to generate sketches.
+DeepSVG~\cite{carlier2020deepsvg} learns a transformer-based variational autoencoder (VAE) that is capable of generating and interpolating through 2D vector graphics images. 
+DeepCAD~\cite{wu2021deepcad} proposes a low-level language and architecture  similarly to DeepSVG, but applies it to 3D CAD models instead of 2D vector graphics.
+Our approach stands out by utilising \textit{high-level} commands, offering interpretability and semantic richness. Additionally, while low-level commands can represent arbitrarily complex geometries, they lead to prohibitively longer sequences when representing a full scene.
+
+
+
+The closest work to ours is Pix2Seq~\cite{chen2021pix2seq}. Pix2Seq proposes a similar architecture to ours but experiments only with 2D object detection, thus requiring domain-specific augmentation strategies. Another closely related work is Point2Seq~\cite{xue2022point2seq} that trains a recurrent network for autoregressively regressing continuous 3D bounding box parameters. Interestingly, they find the autoregressive ordering of parameters outperforms current standards for object detection architectures, including anchors~\cite{girshick2015fast} and centers~\cite{yin2021center}.
+
+
+
+
+\iffalse
+%% Table with Language
+\begin{table}[t]
+\centering
+\begin{ttfamily}
+\scriptsize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{cccc}
+make\_wall (\textcolor{teal}{int}) & 
+make\_door (\textcolor{teal}{int}) & 
+make\_window (\textcolor{teal}{int}) &
+make\_bbox (\textcolor{teal}{int})
+\tabularnewline
+\hline 
+ &  &  \tabularnewline
+\multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+a\_x & \textcolor{blue}{float}\tabularnewline
+a\_y & \textcolor{blue}{float}\tabularnewline
+a\_z & \textcolor{blue}{float}\tabularnewline
+b\_x & \textcolor{blue}{float}\tabularnewline
+b\_y & \textcolor{blue}{float}\tabularnewline
+b\_z & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+wall0\_id & \textcolor{teal}{int}\tabularnewline
+wall1\_id & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+width & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c|}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+wall0\_id & \textcolor{teal}{int}\tabularnewline
+wall1\_id & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+width & \textcolor{blue}{float}\tabularnewline
+height & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} & \multicolumn{1}{c}{%
+\begin{tabular}{cc}
+id & \textcolor{teal}{int}\tabularnewline
+class & \textcolor{teal}{int}\tabularnewline
+position\_x & \textcolor{blue}{float}\tabularnewline
+position\_y & \textcolor{blue}{float}\tabularnewline
+position\_z & \textcolor{blue}{float}\tabularnewline
+angle\_z & \textcolor{teal}{float}\tabularnewline
+scale\_x & \textcolor{blue}{float}\tabularnewline
+scale\_y & \textcolor{blue}{float}\tabularnewline
+scale\_z & \textcolor{blue}{float}\tabularnewline
+\end{tabular}} \tabularnewline
+\hline
+ &  & \tabularnewline
+\end{tabular}
+}
+\end{ttfamily}
+\caption{Our basic language command set for room layouts and object detection.}
+\label{table:commands_and_parameters}
+\end{table}
+\fi
+
+

@@ -1,0 +1,25 @@
+\subsection{Training Dataset}
+\label{section:data}
+
+To enable practical indoor scene reconstruction
+based on our structured language commands
+(Section~\ref{subsec:ssl_commands}),
+we publicly released a new dataset called \DatasetName.
+It consists of a large number of training pairs
+of egocentric scene walkthroughs
+linked with corresponding ground truth command sequences.
+
+Since transformers require vast amounts of data,
+we generated $100k$ synthetic scenes,
+which is in comparison infeasible for real-world data.
+Each synthetic scene comes with a floor plan model, 
+a corresponding complete 3D scene
+ as well as a simulated agent trajectory and
+a photo-realistic rendering of this trajectory.
+Fig. \ref{fig:dataset_teaser} illustrates
+the basics of \DatasetName{}.
+For brevity, we refer the reader
+to 
+% the supplemental material 
+Appendix~\ref{sec:input_data}
+for further details.
