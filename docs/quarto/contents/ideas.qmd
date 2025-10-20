@@ -1,0 +1,766 @@
+---
+title: "Research Ideas & Considerations"
+format: html
+bibliography: ../../_shared/references.bib
+---
+
+# Research Ideas & Considerations
+
+This section consolidates all research ideas, considerations, and open questions that have emerged during project planning.
+
+---
+
+## 🎯 Executive Summary: Key Insights from ASE Exploration
+
+**Date**: January 2025
+**Source**: Comprehensive exploration in `ase_exploration.ipynb` and `inference.ipynb`
+
+### Major Breakthrough: Pre-Computed Visibility Data
+
+**Discovery**: ASE provides `semidense_observations.csv.gz` containing pre-computed point visibility for every frame!
+
+**Impact**: Eliminates the need for expensive occlusion computation (ray casting, depth buffer rendering, or learned models).
+
+**Performance**:
+- Visibility lookup: < 10ms per candidate view
+- 50 candidate evaluation: < 1 second
+- **vs. Ray casting**: ~100x faster
+
+### Validated Technical Capabilities
+
+1. **Ground Truth Point Cloud Generation** ✅
+   - Function: `depth_to_pointcloud()` unprojecting depth images
+   - Density: ~20-50K points per frame, ~200-500K for multi-frame fusion
+   - Quality: Sufficient for Chamfer distance computation
+
+2. **Fast Chamfer Distance Computation** ✅
+   - Open3D: ~50ms for 10K points (GPU-accelerated)
+   - SciPy fallback: ~500ms (CPU-only)
+   - **Critical for quality validation**: 8-view selection reduces Chamfer from 0.148m → 0.092m
+
+3. **Incremental Reconstruction Simulation** ✅
+   - `IncrementalReconstruction` class tracks quality over time
+   - Demonstrates ~30-40% Chamfer improvement per well-chosen view
+   - Validates feasibility of NBV simulation on ASE
+
+4. **Visibility Tracking for Information Gain** ✅
+   - 30% of points seen from only 1 frame (high novelty potential)
+   - 40% of points seen from 2-5 frames
+   - Enables coverage-based NBV without occlusion reasoning
+
+5. **Uncertainty Metadata for Quality Estimation** ✅
+   - `dist_std` column provides per-point depth uncertainty
+   - 60-70% of points have `dist_std < 0.01m` (high confidence)
+   - Enables confidence-weighted reconstruction metrics
+
+### SceneScript Integration Findings
+
+**Architecture**: SceneScript operates on point clouds, predicting:
+- **Walls, doors, windows**: Detailed parametric geometry
+- **Furniture**: 3D bounding boxes + class labels (not detailed geometry)
+
+**For NBV**:
+- ✅ Can track architectural reconstruction quality at geometric level
+- ✅ Can track furniture coverage at bounding box level
+- ✅ Autoregressive decoder enables partial scene prediction
+- ⚠️ Furniture limited to bounding boxes (no fine geometric detail)
+
+**Recommended Strategy**: Dual RRI metrics
+1. Geometric RRI for architectural elements (walls, doors, windows)
+2. Coverage + bounding box RRI for furniture
+
+### Computational Feasibility Analysis
+
+**Previous Bottleneck**: Computing RRI for 100K scenes × 10 levels × 100 candidates = 100M labels seemed infeasible
+
+**Resolution**:
+- Single RRI computation: ~60ms (10ms visibility + 50ms Chamfer)
+- 100 candidates: ~6 seconds
+- **Full dataset**: ~1667 GPU hours ≈ **2 days on 32 GPUs** ✅
+
+**Implication**: Ground truth RRI dataset is **feasible to precompute** for supervised learning!
+
+### Recommended Implementation Path
+
+**Primary Approach**: Visibility + Chamfer Hybrid
+
+```python
+# Information gain (fast)
+visible_new = observations_df[
+    observations_df['frame_idx'] == candidate
+]['point_uid'].unique()
+novelty = len(set(visible_new) - current_points)
+info_gain = novelty / max(len(current_points), 1)
+
+# Quality validation (optional)
+chamfer_improvement = compute_chamfer_improvement(current_points, visible_new, gt_points)
+
+# Combined RRI
+rri = 0.7 * info_gain + 0.3 * chamfer_improvement
+```
+
+**Performance**: < 100ms per candidate (with quality validation), < 10ms (info gain only)
+
+### Technical Challenges Resolved
+
+1. **SE3 Transformation Handling** ✅
+   - ProjectAria Tools returns SE3 objects
+   - Solution: Always call `.to_matrix()` before NumPy operations
+   - Pattern: Add `hasattr(T, 'to_matrix')` checks in functions
+
+2. **DataFrame Column Naming** ✅
+   - ASE files use inconsistent column names (`uid` vs `point_uid`)
+   - Solution: Conditional column renaming with existence checks
+
+### Assessment: ASE Suitability for NBV Research
+
+**Strengths**:
+1. ✅ Pre-computed visibility eliminates computational bottleneck
+2. ✅ 100K scenes provide sufficient training diversity
+3. ✅ Rich ground truth (point clouds, SceneScript, segmentation)
+4. ✅ Uncertainty metadata enables confidence-aware metrics
+5. ✅ Fast quality validation via Chamfer distance
+
+**Limitations**:
+1. ⚠️ Single trajectory per scene (no multi-agent)
+2. ⚠️ Semi-dense points (~100K) vs dense (millions)
+3. ⚠️ Furniture limited to bounding boxes
+4. ⚠️ Interpolation needed for arbitrary candidate poses
+
+**Overall Verdict**: ✅ **Highly suitable** for entity-aware NBV research with minor adaptations.
+
+---
+
+## Core Research Vision
+
+### High-Level Goal
+
+Develop a **semantic, entity-aware Next-Best-View (NBV) system** for active 3D reconstruction of large-scale indoor environments, leveraging SceneScript's structured scene representations and enabling human-in-the-loop guidance.
+
+### Key Innovation
+
+> **Entity-Aware RRI**: Move beyond holistic scene coverage to compute Relative Reconstruction Improvement (RRI) at the entity level — per wall, per door, per furniture piece — allowing users to interactively prioritize reconstruction quality for specific objects.
+
+## System Architecture Concept
+
+### Overall Pipeline
+
+```
+┌─────────────────┐
+│ Current Point   │
+│ Cloud (Partial) │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│ SceneScript Encoder     │
+│ • Sparse 3D ResNet      │
+│ • Semantic understanding│
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│ Entity Representation   │
+│ • Walls, doors, windows │
+│ • Bounding boxes        │
+│ • Per-entity uncertainty│
+└────────┬────────────────┘
+         │
+         ├─────────────────────┐
+         │                     │
+         ▼                     ▼
+┌─────────────────┐   ┌──────────────────┐
+│ User Selection  │   │ Automatic Weight │
+│ (Optional)      │   │ (Uncertainty)    │
+│ "Reconstruct    │   │                  │
+│  this table"    │   │                  │
+└────────┬────────┘   └──────┬───────────┘
+         │                   │
+         └──────────┬────────┘
+                    │
+                    ▼
+         ┌──────────────────────┐
+         │ Candidate Views      │
+         │ • Sampled poses      │
+         │ • Or continuous pred │
+         └──────────┬───────────┘
+                    │
+                    ▼
+         ┌──────────────────────┐
+         │ RRI Prediction       │
+         │ • Per-entity RRI     │
+         │ • Weighted by user   │
+         │ • Collision check    │
+         └──────────┬───────────┘
+                    │
+                    ▼
+         ┌──────────────────────┐
+         │ Next Best View       │
+         │ (6DoF Pose)          │
+         └──────────────────────┘
+```
+
+## Semantic NBV Planning
+
+### Entity-Level RRI Computation
+
+**Concept**: Instead of computing a single RRI score for the entire scene, compute RRI **per entity**:
+
+$$
+\text{RRI}_{\text{total}} = \sum_{e \in \text{Entities}} w_e \cdot \text{RRI}_e
+$$
+
+Where:
+
+- $\text{RRI}_e$: Reconstruction improvement for entity $e$
+- $w_e$: Importance weight (user-specified or learned)
+- Entities: walls, doors, windows, furniture items
+
+**Advantages:**
+
+- Prioritize task-relevant objects
+- Allow user to specify "I want this table scanned well"
+- Natural fit with SceneScript's structured representation
+
+### Entity Weight Assignment
+
+**Option 1: User Selection**
+
+- Click on entity in AR interface
+- Set importance levels (low/medium/high)
+- System focuses on high-importance entities
+
+**Option 2: Uncertainty-Based**
+
+- Estimate per-entity reconstruction quality
+- Weight entities by uncertainty (low quality → high weight)
+- Automatically focus on poorly reconstructed regions
+
+**Option 3: Semantic Priors**
+
+- Learn task-specific importance (e.g., "scan all furniture")
+- Use VLM (Vision-Language Model) to understand user intent
+- "Make sure all doors are captured" → doors get high weight
+
+## SceneScript Integration Strategies
+
+### SceneScript as Backbone Encoder
+
+**Approach**: Use SceneScript's pre-trained encoder as a frozen or fine-tuned feature extractor:
+
+```python
+class EntityAwareNBV(nn.Module):
+    def __init__(self):
+        self.scenescript_encoder = load_pretrained_encoder()
+        self.entity_uncertainty_head = nn.Linear(256, 1)  # Per-entity uncertainty
+        self.rri_predictor = nn.Linear(512, 1)  # View value prediction
+
+    def forward(self, point_cloud, candidate_poses):
+        # Extract scene features
+        scene_features = self.scenescript_encoder(point_cloud)
+
+        # Predict entity-level uncertainty
+        entity_uncertainties = self.entity_uncertainty_head(scene_features)
+
+        # Score candidate views
+        for pose in candidate_poses:
+            view_features = self.encode_view(pose)
+            rri = self.rri_predictor(torch.cat([scene_features, view_features], dim=-1))
+
+        return rri_scores, entity_uncertainties
+```
+
+**Benefits:**
+
+- Leverage pre-trained semantic understanding
+- Entity-level representation comes "for free"
+- Can fine-tune on NBV-specific task
+
+### Fine-Tuning SceneScript for Uncertainty
+
+**Idea**: Extend SceneScript to predict per-entity reconstruction quality alongside geometry:
+
+**Modified Loss:**
+
+$$
+\mathcal{L} = \mathcal{L}_{\text{geometry}} + \lambda \mathcal{L}_{\text{uncertainty}}
+$$
+
+Where $\mathcal{L}_{\text{uncertainty}}$ penalizes incorrect confidence estimates.
+
+**Training Data:**
+
+- Generate partial point clouds at various coverage levels
+- Ground truth = full SceneScript layout
+- Supervision = per-entity IoU or Chamfer distance
+
+**Output**: SceneScript prediction with uncertainty per entity
+
+### Streaming SceneScript for Incremental NBV
+
+**Challenge**: SceneScript encoder is a Sparse 3D ResNet — how to handle incremental point cloud growth?
+
+**Potential Solutions:**
+
+1. **Re-encode from Scratch**: Simple but expensive
+2. **Feature Cache + Update**: Cache intermediate features, update only affected regions
+3. **Recurrent Architecture**: Add recurrent connections to maintain scene state
+4. **Chunked Encoding**: Divide scene into spatial chunks, update only new chunks
+
+## RRI Computation for ASE ✅ Validated
+
+### The Core Challenge ✅ RESOLVED
+
+ASE provides:
+
+- ✅ Single egocentric trajectory per scene
+- ✅ RGB, depth, segmentation along that trajectory
+- ✅ Ground truth SceneScript layout
+- ✅ Semi-dense point cloud from MPS
+- ✅ **NEW**: Pre-computed point visibility in `semidense_observations.csv.gz`!
+
+ASE does **NOT** provide:
+
+- ❌ Depth for arbitrary novel views
+- ❌ Dense mesh reconstructions
+- ❌ Simulation environment to query new views
+
+**Question**: How do we compute $\text{RRI}(v_{\text{candidate}})$ for a viewpoint $v_{\text{candidate}}$ not in the original trajectory?
+
+**Answer**: ✅ **Use pre-computed visibility data + Chamfer distance** - validated in `ase_exploration.ipynb`!
+
+### Solution 1: Gaussian Splatting for View Synthesis
+
+**Workflow:**
+
+1. Train 3D Gaussian Splatting (3DGS) on scene RGB + depth
+2. Render novel views from candidate poses
+3. Extract depth maps from rendered views
+4. Compute RRI using VIN-NBV's Chamfer distance approach
+
+**Advantages:**
+
+- Real-time rendering of novel views
+- Leverages all ASE modalities (RGB, depth)
+- High-quality view synthesis
+
+**Challenges:**
+
+- Requires training 3DGS per scene (~5-10 min/scene on GPU)
+- Quality limited by original trajectory coverage
+- Unobserved regions may be poorly reconstructed
+
+**Implementation Plan:**
+
+```python
+# Pseudo-code
+def compute_rri_with_3dgs(scene_path, partial_pc, candidate_pose):
+    # Train 3DGS on full scene
+    gs_model = train_gaussian_splatting(scene_path)
+
+    # Render depth from candidate view
+    candidate_depth = gs_model.render_depth(candidate_pose)
+
+    # Augment partial point cloud
+    new_points = depth_to_points(candidate_depth, candidate_pose)
+    augmented_pc = merge_point_clouds(partial_pc, new_points)
+
+    # Compute Chamfer distance to GT
+    gt_pc = load_ground_truth_points(scene_path)
+    chamfer_before = chamfer_distance(partial_pc, gt_pc)
+    chamfer_after = chamfer_distance(augmented_pc, gt_pc)
+
+    rri = (chamfer_before - chamfer_after) / chamfer_before
+    return rri
+```
+
+**Recommended Tool**: [Nerfstudio](https://docs.nerf.studio) with `splatfacto` method
+
+### Solution 2: Entity-Level Reconstruction Metrics
+
+**Workflow:**
+
+1. Predict SceneScript layout from partial point cloud
+2. Compare predicted entities to ground truth SSL
+3. Compute per-entity accuracy (IoU, precision/recall, geometry error)
+4. Estimate expected improvement from candidate view
+
+**Entity Metrics:**
+
+- **Walls**: Line segment IoU, normal accuracy
+- **Doors/Windows**: Detection rate, position error, dimension error
+- **Objects**: Bounding box IoU, class accuracy
+
+**RRI Definition:**
+
+$$
+\text{RRI}_e = \mathbb{E}[\text{improvement in entity } e \text{ metric}]
+$$
+
+**Advantages:**
+
+- No rendering required
+- Leverages ASE's strong GT annotations
+- Naturally entity-aware
+
+**Challenges:**
+
+- Only works for architectural elements (walls, doors, windows)
+- Doesn't capture furniture reconstruction quality
+- Requires visibility estimation for entities
+
+### Solution 3: Point Cloud Visibility-Based RRI ✅ RECOMMENDED
+
+**Workflow:**
+
+1. Load ground truth semi-dense point cloud
+2. **NEW**: Load pre-computed visibility from `semidense_observations.csv.gz`
+3. For each candidate view, look up visible points (no ray casting needed!)
+4. Compute novelty: How many visible points are not in partial PC?
+5. RRI = (novel visible points) / (current coverage)
+
+**Advantages:**
+
+- ✅ **FAST computation**: DataFrame lookups instead of ray casting
+- ✅ **NO occlusion computation needed**: Pre-computed by MPS SLAM
+- ✅ **Realistic occlusions**: Based on actual SLAM reconstruction
+- ✅ Uses provided semi-dense GT
+- ✅ No additional training needed
+
+**Challenges:**
+
+- Semi-dense may miss fine details (~100K points vs millions)
+- Visibility limited to original trajectory frames (need interpolation)
+- May not reflect fine geometric reconstruction improvement
+
+**✅ Validated Implementation** (from `ase_exploration.ipynb`):
+
+```python
+import pandas as pd
+
+def compute_visibility_based_rri(observations_df, current_points, candidate_frame):
+    """
+    Compute RRI using pre-computed visibility data.
+
+    Args:
+        observations_df: DataFrame from semidense_observations.csv.gz
+        current_points: Set of point UIDs already in partial reconstruction
+        candidate_frame: Frame index to evaluate
+
+    Returns:
+        rri: Information gain ratio
+    """
+    # Look up visible points for candidate frame (< 10ms)
+    visible_points = observations_df[
+        observations_df['frame_idx'] == candidate_frame
+    ]['point_uid'].unique()
+
+    # Compute novelty
+    novel_points = set(visible_points) - current_points
+    novelty = len(novel_points)
+
+    # RRI = information gain ratio
+    rri = novelty / max(len(current_points), 1)
+
+    return rri, novel_points
+
+# Example usage:
+observations_df = pd.read_csv("semidense_observations.csv.gz")
+
+# Start with initial views
+current_points = set()
+for frame_idx in [0, 10, 20]:
+    visible = observations_df[
+        observations_df['frame_idx'] == frame_idx
+    ]['point_uid'].unique()
+    current_points.update(visible)
+
+# Evaluate candidates
+candidates = range(30, 100)
+rri_scores = [
+    compute_visibility_based_rri(observations_df, current_points, frame)
+    for frame in candidates
+]
+
+# Select best view
+best_frame = candidates[np.argmax([score[0] for score in rri_scores])]
+```
+
+**Performance** (validated):
+
+- Visibility lookup: < 10ms per candidate
+- Full NBV selection (50 candidates): < 1 second
+- Quality validation (Chamfer): ~50ms (Open3D)
+
+**Visibility Statistics** (from typical ASE scene):
+
+- Points seen from 1 frame only: ~30%
+- Points seen from 2-5 frames: ~40%
+- Points seen from 5-10 frames: ~20%
+- Points seen from >10 frames: ~10%
+
+**Implication**: Plenty of opportunity for information gain!
+
+### ✅ Recommended Hybrid Approach (VALIDATED)
+
+**Primary Implementation: Visibility + Chamfer Distance**
+
+Based on validation in `ase_exploration.ipynb`, we recommend:
+
+```python
+class HybridRRIComputation:
+    def __init__(self, scene_path):
+        # Load ASE data
+        self.points_df = pd.read_csv(f"{scene_path}/semidense_points.csv.gz")
+        self.observations_df = pd.read_csv(f"{scene_path}/semidense_observations.csv.gz")
+
+        # Build GT point cloud for quality validation
+        self.gt_points = self.points_df[['px_world', 'py_world', 'pz_world']].values
+
+        # Track uncertainty
+        self.point_confidence = self.points_df['dist_std'].values
+
+    def compute_rri(self, current_points, candidate_frame, use_quality=True):
+        """
+        Compute RRI combining information gain and quality improvement.
+        """
+        # 1. Information Gain (visibility-based) - FAST
+        visible_points = self.observations_df[
+            self.observations_df['frame_idx'] == candidate_frame
+        ]['point_uid'].unique()
+
+        novel_points = set(visible_points) - current_points
+        info_gain = len(novel_points) / max(len(current_points), 1)
+
+        # 2. Quality Gain (optional, for validation) - SLOWER
+        if use_quality:
+            # Current reconstruction quality
+            current_pc = self.get_point_cloud(current_points)
+            chamfer_before = self.compute_chamfer(current_pc)
+
+            # Simulated reconstruction with new view
+            augmented_points = current_points | novel_points
+            augmented_pc = self.get_point_cloud(augmented_points)
+            chamfer_after = self.compute_chamfer(augmented_pc)
+
+            quality_gain = (chamfer_before - chamfer_after) / chamfer_before
+
+            # Combined metric
+            rri = 0.7 * info_gain + 0.3 * quality_gain
+        else:
+            rri = info_gain
+
+        return rri
+
+    def compute_chamfer(self, pc):
+        """Fast Chamfer distance using Open3D (~50ms for 10K points)"""
+        import open3d as o3d
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pc)
+        gt_pcd = o3d.geometry.PointCloud()
+        gt_pcd.points = o3d.utility.Vector3dVector(self.gt_points)
+
+        dists = pcd.compute_point_cloud_distance(gt_pcd)
+        return np.mean(dists)
+```
+
+**For Seminar (6 ECTS, ~180 hours):**
+
+1. ✅ **Implement Visibility-Based RRI** (VALIDATED)
+   - Fast DataFrame operations
+   - Pre-computed occlusions
+   - Coverage and novelty metrics
+2. **Validate with Chamfer Distance** (VALIDATED)
+   - Use Open3D for performance
+   - Track quality improvement across views
+3. **Add Entity-Level Tracking** (NEW)
+   - Use SceneScript to track architectural completeness
+   - Monitor per-entity coverage separately
+4. **Implement Greedy NBV Selection**
+   - Iteratively select views with highest RRI
+   - Compare to random sampling baseline
+
+**For Master Thesis (30 ECTS, ~900 hours):**
+
+5. **Train Learned RRI Predictor**
+   - Use validated RRI as supervision
+   - Input: partial point cloud + candidate pose
+   - Output: predicted RRI
+6. **Add 3DGS View Synthesis** for selected scenes
+   - Validate dense vs semi-dense RRI
+7. **Deploy AR Interface** for human-in-the-loop NBV
+8. **Real-world validation** on actual Aria recordings
+
+## Human-in-the-Loop Workflow
+
+### Interactive Entity Selection
+
+**Concept**: Allow user to select entities of interest, system adapts NBV planning accordingly.
+
+**AR Interface Mockup:**
+
+```
+┌──────────────────────────────────┐
+│  AR View (Aria Glasses)          │
+│                                  │
+│  [Point Cloud Overlay]           │
+│                                  │
+│  User: *Taps table*              │
+│  System: "Table selected"        │
+│          "Planning next view..." │
+│                                  │
+│  → Shows candidate view arrow    │
+│                                  │
+└──────────────────────────────────┘
+```
+
+**Workflow:**
+
+1. **Initial Scan**: User walks around, builds partial PC
+2. **Entity Detection**: SceneScript predicts entities
+3. **User Selection**: User taps entities requiring high fidelity
+4. **NBV Computation**: System computes entity-weighted RRI
+5. **View Guidance**: AR overlays show recommended viewpoints
+6. **Iterative Refinement**: Repeat until satisfied
+
+### Voice/Language Interface
+
+**Future Extension**: Use VLM for natural language NBV specification:
+
+- User: "Make sure all the doors are captured"
+- System: Identifies doors, weights them highly, plans views
+
+## Continuous vs. Discrete Action Spaces
+
+### VIN-NBV: Classification Over Discrete Candidates
+
+**Approach:**
+
+- Sample $N$ random candidate poses (e.g., $N=100$)
+- Compute RRI for each
+- Select argmax
+
+**Why they did this:**
+
+- Avoids regression difficulties (multi-modal distributions)
+- Easier to train (classification > regression for complex distributions)
+- Guarantees collision-free poses (if sampled carefully)
+
+**Limitations:**
+
+- Requires many samples for good coverage
+- May miss optimal view between samples
+- No smooth trajectory planning
+
+### GenNBV: Continuous 5-DoF Regression
+
+**Approach:**
+
+- Predict $(x, y, z, \theta, \phi)$ directly via regression
+- Use RL (PPO) to handle multi-modal distributions
+
+**Advantages:**
+
+- Smooth, continuous trajectories
+- Theoretically optimal (not limited by sampling)
+- Suitable for real-time robotics
+
+**Challenges:**
+
+- Harder to train (regression on multi-modal targets)
+- May predict colliding poses (need explicit constraints)
+
+### Our Recommendation
+
+**Hybrid Approach:**
+
+1. **Coarse Discrete Sampling**: Generate $N$ candidates via:
+   - Hemisphere sampling around scene
+   - Frontier-based proposals
+   - Semantic hotspots (near selected entities)
+2. **Fine Continuous Refinement**: Use gradient-based optimization to refine top-$k$ candidates
+3. **Collision Checking**: Explicit geometric checks before final selection
+
+## VLM Integration for Semantic Understanding
+
+### Vision-Language Models for Task Understanding
+
+**Concept**: Use VLMs (e.g., GPT-4V, LLaVA) to understand user intent:
+
+**Example:**
+
+```
+User: "I need good scans of all the furniture"
+VLM: Identifies furniture entities → weights them highly
+NBV System: Prioritizes views covering furniture
+```
+
+**Architecture:**
+
+```python
+def vlm_guided_nbv(user_query, scene_entities):
+    # VLM processes query
+    vlm_response = vlm.query(
+        f"Given entities: {scene_entities}, "
+        f"user wants: '{user_query}'. "
+        f"Which entities should be prioritized?"
+    )
+
+    # Parse VLM output to entity weights
+    entity_weights = parse_weights(vlm_response)
+
+    # Compute weighted RRI
+    rri_scores = compute_entity_rri(candidate_views, entity_weights)
+    return best_view(rri_scores)
+```
+
+## Open Questions & Next Steps
+
+### Critical Questions
+
+1. **Is 3DGS quality sufficient for RRI estimation?**
+   - Need to validate synthesized depth accuracy
+   - Compare 3DGS-based RRI vs. ground truth RRI
+
+2. **How to handle streaming updates efficiently?**
+   - Re-encode entire point cloud each iteration?
+   - Incremental feature updates?
+
+3. **What is the best entity representation?**
+   - SceneScript's hulls?
+   - Oriented bounding boxes?
+   - Implicit representations?
+
+4. **How to weight semantic vs. geometric RRI?**
+   - Purely semantic (task-relevant entities only)?
+   - Hybrid (semantic weights × geometric gain)?
+
+5. **Can we generalize across scene types?**
+   - Train on ASE, test on real Aria scans?
+   - Domain adaptation strategies?
+
+### Immediate Next Steps (Seminar)
+
+1. **Familiarize with ASE data**
+   - Load and visualize multiple scenes
+   - Understand data formats and APIs
+2. **Implement entity-level metrics**
+   - SceneScript layout comparison
+   - Per-entity reconstruction quality
+3. **Develop visibility-based RRI**
+   - Frustum culling + occlusion
+   - Coverage and novelty computation
+4. **Prototype entity selection**
+   - Command-line interface for entity weights
+   - Compute weighted RRI
+5. **Validate approach**
+   - Correlate predicted RRI with actual improvement
+   - Test on subset of ASE scenes
+
+### Future Directions (Master Thesis)
+
+1. **3DGS integration** for view synthesis
+2. **Learning-based RRI predictor** (replace heuristics)
+3. **AR interface** for real-time NBV guidance
+4. **Real-world deployment** on Meta Quest 3 / iPhone LiDAR
+5. **Multi-agent NBV** for collaborative scanning

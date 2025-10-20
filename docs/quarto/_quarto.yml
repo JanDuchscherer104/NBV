@@ -1,0 +1,88 @@
+# docs/quarto/_quarto.yml
+project:
+  type: website
+  output-dir: _site
+  resources:
+    - figures/
+
+# Global execution defaults (fast iterations; deterministic rebuilds)
+execute:
+  freeze: auto      # re-render only when source changes
+  cache: true       # cache expensive chunks across renders
+  echo: false       # hide code by default (toggle via code-tools below)
+  warning: false
+  message: false
+
+format:
+  html:
+    theme:
+      light: cosmo
+      dark: darkly           # built-in dark variant; auto toggles
+    toc: true
+    number-sections: true
+    code-copy: true          # copy-to-clipboard buttons for code blocks
+    code-tools: true         # per-page "Show code" toggle
+    code-fold: show          # collapse long code by default
+    link-external-newwindow: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+    # resource-path:
+    #   - ../_shared/figures/
+    lightbox: true           # built-in lightbox for images (Quarto ≥1.4)
+
+# Citations site-wide
+bibliography: ../_shared/references.bib   # single source of truth
+csl: ieee.csl                             # choose a style now or later
+link-citations: true                      # clickable in-text cites
+
+website:
+  title: "Semantic NBV Planning"
+  search:
+    location: navbar
+    type: overlay
+  navbar:
+    search: true
+    left:
+      - text: Home
+        file: index.qmd
+      - text: Literature
+        file: contents/literature.qmd
+      - text: ASE Dataset
+        file: contents/ase_dataset.qmd
+      - text: Ideas
+        file: contents/ideas.qmd
+      - text: Roadmap
+        file: contents/roadmap.qmd
+    right:
+      - icon: github
+        menu:
+          - text: "View Source"
+            href: https://github.com/JanDuchscherer104/NBV
+          - text: "Open Issue"
+            href: https://github.com/JanDuchscherer104/NBV/issues
+  sidebar:
+    style: "docked"
+    search: true
+    collapse-level: 2
+    contents:
+      - section: "Overview"
+        contents:
+          - index.qmd
+      - section: "Background"
+        contents:
+          - contents/literature.qmd
+          - contents/ase_dataset.qmd
+          - contents/glossary.qmd
+      - section: "Research"
+        contents:
+          - contents/ideas.qmd
+          - contents/roadmap.qmd
+          - contents/issues.qmd
+          - contents/questions.qmd
+      - section: "Resources"
+        contents:
+          - contents/resources.qmd
+          - contents/todos.qmd
+  page-footer:
+    left: ""
+    right: "Built with Quarto"

@@ -1,3 +1,6 @@
 [submodule "external/scenescript"]
 	path = external/scenescript
 	url = git@github.com:facebookresearch/scenescript.git
+[submodule "external/projectaria_tools"]
+	path = external/projectaria_tools
+	url = git@github.com:facebookresearch/projectaria_tools.git

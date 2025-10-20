@@ -1,0 +1,351 @@
+---
+title: "Resources & Tools"
+format: html
+---
+
+# Resources & Tools
+
+This section provides an overview of the key libraries, tools, and documentation used in this project.
+
+## Core Libraries
+
+### Project Aria Tools
+
+Project Aria Tools provides Python and C++ APIs for working with Aria data and the ASE dataset.
+
+- **GitHub**: [facebookresearch/projectaria_tools](https://github.com/facebookresearch/projectaria_tools)
+- **Documentation**: [https://facebookresearch.github.io/projectaria_tools](https://facebookresearch.github.io/projectaria_tools/docs/data_utilities)
+- **License**: Apache 2.0
+
+**Key Features:**
+
+- VRS data provider for accessing sensor streams
+- Device calibration and projection utilities
+- MPS (Machine Perception Services) data loaders
+- Visualization tools (Rerun-based)
+- ASE, ADT, and AEA dataset utilities
+
+**Installation:**
+
+```bash
+# Create virtual environment
+python3 -m venv $HOME/projectaria_tools_env
+source $HOME/projectaria_tools_env/bin/activate
+
+# Install from PyPI
+pip install --upgrade pip
+pip install projectaria-tools[all]
+```
+
+**Core Modules:**
+
+```python
+# Data access
+from projectaria_tools.core import data_provider, calibration
+from projectaria_tools.core.mps import utils as mps_utils
+
+# ASE dataset
+from projectaria_tools.projects.ase import readers, interpreter
+
+# Visualization
+from projectaria_tools.tools.viewer_projects import viewer_projects_ase
+```
+
+**Documentation Structure:**
+
+```
+projectaria_tools/
+├── core/
+│   ├── calibration/          # Camera models, extrinsics
+│   ├── data_provider/        # VRS file access
+│   ├── mps/                  # MPS output loaders
+│   └── python/               # Python bindings
+├── projects/
+│   ├── AriaSyntheticEnvironment/  # ASE utilities
+│   ├── AriaDigitalTwinDatasetTools/
+│   └── AriaEverydayActivities/
+└── tools/
+    ├── viewer_projects/      # Scene visualizers
+    ├── viewer_mps/           # MPS data viewer
+    └── aria_rerun_viewer/    # General Aria viewer
+```
+
+### SceneScript
+
+SceneScript is the structured language model for scene reconstruction used to train on ASE.
+
+- **GitHub**: [facebookresearch/scenescript](https://github.com/facebookresearch/scenescript)
+- **Paper**: [@SceneScript-avetisyan2024]
+- **License**: Meta research license
+
+**Repository Structure:**
+
+```
+scenescript/
+├── src/
+│   ├── data/
+│   │   ├── geometries/
+│   │   │   ├── base_entity.py    # Base class for scene primitives
+│   │   │   ├── wall.py           # Wall representation
+│   │   │   ├── door.py           # Door representation
+│   │   │   ├── window.py         # Window representation
+│   │   │   └── bbox.py           # Bounding box utilities
+│   │   ├── language_sequence.py  # SSL tokenization
+│   │   └── point_cloud.py        # Point cloud utilities
+│   └── networks/
+│       ├── encoder.py            # Sparse 3D ResNet encoder
+│       ├── decoder.py            # Autoregressive transformer
+│       └── scenescript_model.py  # Full model pipeline
+├── inference.ipynb               # Demo notebook
+└── environment.yaml              # Conda environment
+```
+
+**Key Classes:**
+
+- `BaseEntity`: Abstract base for scene primitives
+- `Wall`, `Door`, `Window`: Geometric entities with SSL serialization
+- `LanguageSequence`: SSL tokenizer and parser
+- `SceneScriptModel`: End-to-end encoder-decoder
+
+**Environment Setup:**
+
+```bash
+conda env create -f environment.yaml
+conda activate scenescript
+```
+
+**Known Issues:**
+
+- `torchsparse` build may fail on some systems
+- Requires CUDA-capable GPU
+- See project `SETUP.md` for manual `torchsparse` installation
+
+## Dataset Access
+
+### ASE Dataset Downloader
+
+```bash
+# Download scenes
+python projectaria_tools/projects/AriaSyntheticEnvironment/aria_synthetic_environments_downloader.py \
+  --cdn-file ase_download_urls.json \
+  --output-dir ./data/ase \
+  --num-sequences 10
+```
+
+**ASE on HuggingFace:**
+
+- [projectaria/aria-synthetic-environments](https://huggingface.co/datasets/projectaria/aria-synthetic-environments)
+
+### MPS Sample Data
+
+Official sample data for testing:
+
+```bash
+# Download via Project Aria Tools
+aria_dataset_downloader --dataset-name mps_sample --output-dir ./data/mps_sample
+```
+
+## Visualization Tools
+
+### ASE Viewer
+
+```bash
+viewer_projects_ase --dataset_path /path/to/ase/scene_id
+```
+
+**Features:**
+
+- Interactive 3D point cloud
+- RGB frame playback
+- Trajectory visualization
+- Timeline scrubbing
+
+### MPS Viewer
+
+```bash
+viewer_mps --vrs sample.vrs \
+  --trajectory closed_loop_trajectory.csv \
+  --points global_points.csv.gz \
+  --eyegaze personalized_eye_gaze.csv
+```
+
+**Features:**
+
+- Multi-modal data overlay
+- SLAM trajectory + point cloud
+- Eye gaze and hand tracking
+- Synchronized playback
+
+### Rerun Visualization
+
+[Rerun](https://www.rerun.io/) is the underlying visualization engine.
+
+- **Documentation**: [https://www.rerun.io/docs](https://www.rerun.io/docs)
+- **Python API**: `pip install rerun-sdk`
+
+```python
+import rerun as rr
+
+rr.init("my_app")
+rr.spawn()
+
+# Log point cloud
+rr.log("world/points", rr.Points3D(positions, colors=colors))
+
+# Log camera
+rr.log("world/camera", rr.Transform3D(translation=t, rotation=R))
+```
+
+## Related Libraries
+
+### Gaussian Splatting / Novel View Synthesis
+
+For rendering novel views from ASE data:
+
+#### Nerfstudio
+
+- **GitHub**: [nerfstudio-project/nerfstudio](https://github.com/nerfstudio-project/nerfstudio)
+- **Docs**: [https://docs.nerf.studio](https://docs.nerf.studio)
+
+```bash
+# Install
+pip install nerfstudio
+
+# Train 3D Gaussian Splatting
+ns-train splatfacto --data /path/to/scene
+```
+
+#### 3D Gaussian Splatting (Original)
+
+- **GitHub**: [graphdeco-inria/gaussian-splatting](https://github.com/graphdeco-inria/gaussian-splatting)
+- **Paper**: [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/)
+
+### Point Cloud Processing
+
+#### Open3D
+
+- **Docs**: [http://www.open3d.org/docs/](http://www.open3d.org/docs/)
+
+```python
+import open3d as o3d
+
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(points)
+o3d.visualization.draw_geometries([pcd])
+```
+
+#### PyTorch3D
+
+- **GitHub**: [facebookresearch/pytorch3d](https://github.com/facebookresearch/pytorch3d)
+
+For differentiable point cloud operations, Chamfer distance, etc.
+
+### Sparse Convolution
+
+#### TorchSparse
+
+- **GitHub**: [mit-han-lab/torchsparse](https://github.com/mit-han-lab/torchsparse)
+
+Used by SceneScript for sparse 3D convolutions on point clouds.
+
+```bash
+# Install (may require manual build)
+pip install --no-build-isolation --no-deps git+https://github.com/mit-han-lab/torchsparse.git
+```
+
+## File Formats
+
+### VRS (Virtual Reality Standard)
+
+Meta's multimodal sensor data format.
+
+- **Docs**: [VRS Format Specification](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/vrs_format)
+- **Tools**: Project Aria Tools provide VRS readers
+
+### CSV Formats
+
+All MPS outputs (trajectory, eye gaze, etc.) use CSV with standardized columns.
+
+See individual MPS documentation for schema details:
+
+- [MPS SLAM Output](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/mps_slam)
+- [MPS Eye Gaze](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/mps_eye_gaze)
+
+## Useful Documentation
+
+### Project Aria
+
+- [Getting Started](https://facebookresearch.github.io/projectaria_tools/docs/intro)
+- [Data Provider Tutorial](https://facebookresearch.github.io/projectaria_tools/docs/ARK/sdk/tutorials/dataprovider)
+- [Coordinate Conventions](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/coordinate_convention)
+- [Calibration](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/calibration)
+
+### Machine Perception Services (MPS)
+
+- [MPS Overview](https://facebookresearch.github.io/projectaria_tools/docs/ARK/mps/mps)
+- [SLAM Output](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/mps_slam)
+- [Eye Gaze Output](https://facebookresearch.github.io/projectaria_tools/docs/tech_spec/mps_eye_gaze)
+
+### ASE Dataset
+
+- [ASE Getting Started](https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/dataset_getting_started)
+- [ASE Data Format](https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/dataset_format)
+- [ASE Tutorial Notebook](https://github.com/facebookresearch/projectaria_tools/blob/main/projects/AriaSyntheticEnvironment/tutorial/ase_tutorial_notebook.ipynb)
+
+## Troubleshooting
+
+### Common Issues
+
+**Q: `torchsparse` installation fails**
+
+A: See `SETUP.md` for manual build instructions. Requires CUDA and compatible GCC version.
+
+**Q: Jupyter notebook kernel crashes**
+
+A: Upgrade Python to 3.10+ and recreate virtual environment.
+
+**Q: VRS files won't open**
+
+A: Ensure `projectaria-tools` is installed with VRS support: `pip install projectaria-tools[all]`
+
+**Q: Rerun viewer shows black screen**
+
+A: Check GPU drivers and try CPU rendering: `WGPU_BACKEND=gl viewer_projects_ase ...`
+
+### Support Channels
+
+- **Project Aria**: [GitHub Issues](https://github.com/facebookresearch/projectaria_tools/issues)
+- **SceneScript**: [GitHub Issues](https://github.com/facebookresearch/scenescript/issues)
+
+## Development Environment
+
+### Recommended Setup
+
+```bash
+# Create conda environment
+conda create -n nbv_research python=3.10
+conda activate nbv_research
+
+# Install core dependencies
+pip install projectaria-tools[all]
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install open3d rerun-sdk pandas matplotlib jupyter
+
+# Clone repositories
+git clone https://github.com/facebookresearch/projectaria_tools.git
+git clone https://github.com/facebookresearch/scenescript.git
+```
+
+### IDE Configuration
+
+**VS Code Extensions:**
+
+- Python
+- Jupyter
+- Pylance (for type hints)
+- Rerun (for log file viewing)
+
+**PyCharm:**
+
+- Mark `projectaria_tools` and `scenescript/src` as source roots
+- Configure remote interpreter if using GPU cluster

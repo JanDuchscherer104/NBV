@@ -1,0 +1,336 @@
+---
+title: "Action Items & TODOs"
+format: html
+---
+
+# Action Items & TODOs
+
+This section tracks concrete tasks and action items organized by priority and phase.
+
+## Immediate Next Steps (This Week)
+
+### High Priority
+
+- [ ] **Download ASE sample data** (10-20 scenes)
+  - Use `aria_synthetic_environments_downloader.py`
+  - Verify data structure matches documentation
+  - Estimate storage requirements for full dataset
+
+- [ ] **Complete ASE tutorial notebook**
+  - Run through provided Jupyter notebook
+  - Understand data loading APIs
+  - Test visualization tools
+
+- [ ] **Set up project structure**
+  - Create Python package for NBV toolkit
+  - Organize code into modules (data/, metrics/, visualization/)
+  - Set up version control best practices
+
+### Medium Priority
+
+- [ ] **Benchmark SceneScript inference**
+  - Measure encoding time vs. point cloud size
+  - Test on various ASE scenes
+  - Determine if re-encoding is viable for streaming
+
+- [ ] **Explore instance segmentation**
+  - Load instance masks from ASE
+  - Map instances to semantic classes
+  - Visualize entity-level segmentation
+
+- [ ] **Survey 3D Gaussian Splatting tools**
+  - Test Nerfstudio installation
+  - Convert one ASE scene to 3DGS format
+  - Render sample novel view
+
+---
+
+## Phase 1 Tasks (Weeks 1-3)
+
+### Data & Environment
+
+- [x] Install Project Aria Tools
+- [x] Install SceneScript repository
+- [x] Configure conda environment
+- [ ] Download MPS sample data
+- [ ] Set up Rerun visualization
+- [ ] Create data loading utilities
+  - [ ] SceneScript language parser
+  - [ ] Trajectory CSV reader
+  - [ ] Point cloud loader with filtering
+  - [ ] Instance segmentation reader
+
+### Exploration & Understanding
+
+- [ ] **Analyze ASE statistics**
+  - Scene size distribution
+  - Room count per scene
+  - Entity type frequencies
+  - Trajectory length and coverage
+
+- [ ] **Coordinate system validation**
+  - Verify trajectory poses align with point clouds
+  - Test projection functions (3D → 2D)
+  - Understand camera calibration
+
+- [ ] **SceneScript code walkthrough**
+  - Understand encoder architecture
+  - Trace decoder autoregressive generation
+  - Identify extension points for uncertainty
+
+### Documentation
+
+- [ ] Document ASE data loading pipeline
+- [ ] Create visualization examples
+- [ ] Write coordinate convention summary
+
+---
+
+## Phase 2 Tasks (Weeks 4-6)
+
+### Entity-Level Metrics
+
+- [ ] **Implement SceneScript parser**
+  - `parse_wall(line)` → Wall object
+  - `parse_door(line)` → Door object
+  - `parse_window(line)` → Window object
+  - Full scene parser with entity list
+
+- [ ] **Geometric primitive classes**
+  - `Wall`: 3D line segment, height, thickness
+  - `Door`: position, dimensions, wall connections
+  - `Window`: position, dimensions
+  - Conversion to visualization format
+
+- [ ] **Entity comparison metrics**
+  - **Wall metrics**:
+    - [ ] Line segment IoU (2D floor plan)
+    - [ ] Endpoint distance error
+    - [ ] Normal angle error
+    - [ ] Height difference
+  - **Door/Window metrics**:
+    - [ ] Detection rate (precision/recall)
+    - [ ] Position error (L2 distance)
+    - [ ] Dimension error (width, height)
+    - [ ] Wall connection accuracy
+
+- [ ] **Partial scene generation**
+  - [ ] Sample trajectory prefixes (25%, 50%, 75%)
+  - [ ] Subsample point clouds
+  - [ ] Run SceneScript inference on partial PCs
+  - [ ] Store predictions for analysis
+
+- [ ] **Validation experiments**
+  - [ ] Compare entity predictions at different coverage levels
+  - [ ] Plot reconstruction quality vs. coverage
+  - [ ] Identify which entities are hardest to reconstruct
+
+---
+
+## Phase 3 Tasks (Weeks 7-9)
+
+### Visibility & Coverage Analysis
+
+- [ ] **Frustum culling implementation**
+  - [ ] Camera frustum class (pose, FoV, near/far planes)
+  - [ ] Point-in-frustum test
+  - [ ] Batch frustum culling (vectorized)
+
+- [ ] **Occlusion reasoning**
+  - [ ] **Approach A**: Ray casting
+    - [ ] KD-tree for efficient nearest neighbor
+    - [ ] Ray-point intersection test
+    - [ ] Batch ray casting
+  - [ ] **Approach B**: Depth buffer
+    - [ ] Render partial PC to depth map
+    - [ ] Project GT points, compare depths
+    - [ ] Handle edge cases (occlusion at boundaries)
+
+- [ ] **Visibility metrics**
+  - [ ] Visible point count
+  - [ ] Novel visible points (not in partial PC)
+  - [ ] Coverage ratio (visible / total)
+  - [ ] Viewpoint diversity (minimize overlap)
+
+### Candidate View Generation
+
+- [ ] **Sampling strategies**
+  - [ ] Hemisphere sampling (Fibonacci sphere)
+  - [ ] Frontier-based (boundary of observed region)
+  - [ ] Semantic hotspots (entity centroids)
+  - [ ] Random sampling (baseline)
+
+- [ ] **Collision checking**
+  - [ ] Load room boundaries from SceneScript
+  - [ ] Point-in-polygon test (2D floor plan)
+  - [ ] Height constraints (floor to ceiling)
+  - [ ] Minimum distance to walls/furniture
+
+- [ ] **Candidate filtering**
+  - [ ] Remove colliding poses
+  - [ ] Filter by minimum coverage
+  - [ ] Diversity pruning (avoid redundant views)
+
+### RRI Computation
+
+- [ ] **Coverage-based RRI**
+  - [ ] Count novel visible points per candidate
+  - [ ] Normalize by current coverage
+  - [ ] Weight by point uncertainty (if available)
+
+- [ ] **Validate RRI predictions**
+  - [ ] Hold out trajectory frames as test views
+  - [ ] Predict RRI for held-out views
+  - [ ] Measure correlation with actual improvement
+
+---
+
+## Phase 4 Tasks (Weeks 10-12)
+
+### Integration
+
+- [ ] **Entity-weighted RRI**
+  - [ ] Combine entity metrics + visibility
+  - [ ] Allow manual entity weights (dict: entity_id → weight)
+  - [ ] Aggregate to single RRI score
+
+- [ ] **End-to-end pipeline**
+  - [ ] Input: partial PC + candidate poses + entity weights
+  - [ ] Output: ranked candidate views
+  - [ ] Visualization of top-k candidates
+
+### Validation & Analysis
+
+- [ ] **Experiment design**
+  - [ ] Select 20 diverse ASE scenes
+  - [ ] Generate partial scenes (25%, 50%, 75%)
+  - [ ] Sample 100 candidate views per partial scene
+  - [ ] Compute ground truth improvement
+
+- [ ] **Metrics & plots**
+  - [ ] RRI prediction accuracy (MAE, R²)
+  - [ ] Top-k ranking quality (NDCG, MRR)
+  - [ ] Ablation: entity only vs. visibility only vs. combined
+  - [ ] Correlation matrix (entity RRI ↔ coverage RRI)
+
+- [ ] **Failure analysis**
+  - [ ] Identify failure modes (when does RRI prediction fail?)
+  - [ ] Visualize failure cases
+  - [ ] Hypothesize causes
+
+### Documentation & Presentation
+
+- [ ] **Quarto website**
+  - [ ] Finalize all sections
+  - [ ] Add figures and visualizations
+  - [ ] Render to HTML
+
+- [ ] **Seminar presentation**
+  - [ ] Slides (motivation, approach, results)
+  - [ ] Demo video (visualizing NBV selections)
+  - [ ] Q&A preparation
+
+- [ ] **Code release**
+  - [ ] Clean up code, add docstrings
+  - [ ] Create README with usage examples
+  - [ ] Publish GitHub repository
+
+---
+
+## Future Work (Master Thesis)
+
+### Research Directions
+
+- [ ] **3D Gaussian Splatting integration**
+  - [ ] ASE-to-3DGS data conversion
+  - [ ] Batch training infrastructure
+  - [ ] Novel view depth rendering
+  - [ ] Dense Chamfer-based RRI
+
+- [ ] **Learning-based RRI predictor**
+  - [ ] Generate training dataset (100K+ examples)
+  - [ ] Design network architecture
+  - [ ] Training pipeline with validation
+  - [ ] Ablation studies
+
+- [ ] **Human-in-the-loop interface**
+  - [ ] Entity selection UI (AR or desktop)
+  - [ ] Real-time NBV computation (< 1 sec)
+  - [ ] AR view guidance visualization
+  - [ ] User study design and execution
+
+- [ ] **Real-world deployment**
+  - [ ] Port to mobile runtime (PyTorch Mobile, ONNX)
+  - [ ] Integrate with Meta Quest 3 or iPhone LiDAR
+  - [ ] Optimize inference speed
+  - [ ] Field testing and evaluation
+
+### Technical Debt
+
+- [ ] Improve occlusion reasoning (learned or hardware-accelerated)
+- [ ] Implement streaming SceneScript updates
+- [ ] Add uncertainty estimation to SceneScript
+- [ ] Parallelize RRI computation (multi-GPU)
+
+---
+
+## Dataset Expansion
+
+- [ ] **Collect real Aria scans**
+  - [ ] Scan 5-10 rooms with Aria glasses
+  - [ ] Process through MPS
+  - [ ] Manually annotate entities for validation
+
+- [ ] **Synthetic data augmentation**
+  - [ ] Generate additional ASE-like scenes (if tools available)
+  - [ ] Add noise/corruption to simulate real sensors
+  - [ ] Domain randomization for robustness
+
+---
+
+## Infrastructure & Tooling
+
+- [ ] **Caching system**
+  - [ ] Cache SceneScript predictions
+  - [ ] Cache 3DGS models
+  - [ ] Cache RRI computations
+  - [ ] Implement cache invalidation
+
+- [ ] **Benchmarking suite**
+  - [ ] Standardized evaluation protocol
+  - [ ] Leaderboard for different RRI methods
+  - [ ] Reproducible experiment configs
+
+- [ ] **Visualization tools**
+  - [ ] Interactive 3D viewer for candidates
+  - [ ] Entity-level heatmaps
+  - [ ] Trajectory planning visualization
+  - [ ] Coverage evolution over time
+
+---
+
+## Questions to Resolve
+
+- [ ] What is the optimal number of candidate views? (50? 100? 500?)
+- [ ] Should we use learned or heuristic occlusion reasoning?
+- [ ] How to handle multi-floor buildings?
+- [ ] What is the minimum acceptable RRI prediction accuracy?
+- [ ] Can we achieve real-time NBV on mobile devices?
+
+---
+
+## Meeting Agenda Items
+
+- [ ] Discuss entity vs. visibility RRI weighting
+- [ ] Review compute budget for 3DGS training
+- [ ] Plan user study design (if applicable)
+- [ ] Decide on publication venue (conference/journal)
+
+---
+
+## Long-Term Vision
+
+- [ ] Multi-agent NBV (multiple robots/humans scanning collaboratively)
+- [ ] Language-driven NBV ("scan the important parts")
+- [ ] Adaptive NBV (learn user preferences over time)
+- [ ] NBV for dynamic scenes (people moving, objects changing)

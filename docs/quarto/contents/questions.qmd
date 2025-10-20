@@ -1,0 +1,395 @@
+---
+title: "Research Questions"
+format: html
+bibliography: ../../_shared/references.bib
+---
+
+# Research Questions
+
+This section documents key research questions that guide our investigation into semantic Next-Best-View planning.
+
+## Core Research Questions
+
+### 1. Entity-Aware RRI
+
+**Q1.1**: Is computing RRI at the entity level (per-wall, per-door, per-furniture) more effective than holistic scene coverage metrics?
+
+**Hypothesis**: Entity-aware RRI allows task-specific prioritization and should outperform coverage-only approaches when users have specific reconstruction goals.
+
+**Evaluation**:
+
+- Compare entity-weighted NBV vs. uniform coverage NBV
+- Measure reconstruction quality for selected vs. non-selected entities
+- User study: "Reconstruct this table well" → does system focus appropriately?
+
+**Metrics**:
+
+- Per-entity reconstruction F1 score
+- Targeted entity reconstruction quality vs. global quality
+- User satisfaction ratings
+
+---
+
+**Q1.2**: How should we weight different entities when computing aggregate RRI?
+
+**Options**:
+
+- **User-specified**: Manual weights per entity
+- **Uncertainty-based**: Weight inversely by current reconstruction quality
+- **Semantic priors**: Learn task-specific importance (e.g., "doors matter more")
+
+**Investigation**:
+
+- [ ] Test all three weighting schemes on ASE
+- [ ] Measure reconstruction quality under each scheme
+- [ ] Analyze when each approach works best
+
+---
+
+### 2. SceneScript as NBV Backbone
+
+**Q2.1**: Can SceneScript's structured scene representation serve as an effective encoder for NBV planning?
+
+**Rationale**: SceneScript provides semantic understanding (walls, doors, windows) that pure geometric methods lack. This should enable semantic-aware NBV.
+
+**Hypothesis**: Fine-tuned SceneScript encoder will outperform generic point cloud encoders (PointNet++, Sparse CNN) for entity-aware NBV.
+
+**Evaluation**:
+
+- Train NBV predictor with:
+  - SceneScript encoder (frozen)
+  - SceneScript encoder (fine-tuned)
+  - PointNet++ encoder (baseline)
+- Compare RRI prediction accuracy
+- Analyze failure cases
+
+---
+
+**Q2.2**: How do we efficiently handle streaming point cloud updates with SceneScript's Sparse 3D ResNet encoder?
+
+**Challenge**: Re-encoding the entire point cloud every frame may be too slow for real-time NBV.
+
+**Questions**:
+
+- What is the computational cost of re-encoding? (benchmark needed)
+- Can we cache intermediate features and update only new regions?
+- Is incremental encoding architecturally feasible?
+
+**Experiments**:
+
+- [ ] Benchmark encoding time vs. point cloud size
+- [ ] Prototype feature caching approach
+- [ ] Measure latency for streaming scenario (new points added every second)
+
+---
+
+### 3. RRI Computation Strategies
+
+**Q3.1**: Which RRI formulation is most predictive of actual reconstruction improvement?
+
+**Formulations to test**:
+
+1. **Entity-Level Accuracy**: Precision/recall for detecting walls, doors, windows
+2. **Visibility-Based Coverage**: Novel visible points from candidate view
+3. **Chamfer Distance** (if 3DGS available): Geometric point cloud similarity
+4. **Hybrid**: Weighted combination of above
+
+**Hypothesis**: Hybrid RRI combining semantic (entity) and geometric (coverage) signals will be most robust.
+
+**Evaluation**:
+
+- Compute all RRI variants for candidate views
+- Measure correlation with ground truth improvement
+- Identify which formulation best predicts valuable views
+
+---
+
+**Q3.2**: Can we learn to predict RRI from data, or are heuristics sufficient?
+
+**Comparison**:
+
+- **Heuristic RRI**: Hand-crafted rules (visibility, coverage, entity accuracy)
+- **Learned RRI**: Neural network trained to predict improvement
+
+**Questions**:
+
+- Does learned RRI generalize across scenes?
+- How much training data is needed?
+- Can we bootstrap with heuristic RRI as pseudo-labels?
+
+**Experiments**:
+
+- [ ] Train RRI predictor on labeled dataset
+- [ ] Compare learned vs. heuristic on held-out scenes
+- [ ] Measure generalization to real-world Aria scans
+
+---
+
+### 4. Novel View Synthesis for RRI
+
+**Q4.1**: Is 3D Gaussian Splatting (3DGS) quality sufficient for accurate RRI estimation?
+
+**Concern**: 3DGS may introduce artifacts or miss fine details, leading to inaccurate RRI.
+
+**Validation**:
+
+- Train 3DGS on ASE scenes
+- Render novel views from test trajectory frames
+- Compare synthesized depth to ground truth depth
+- Measure depth error distribution
+
+**Metrics**:
+
+- Depth MAE, RMSE
+- Coverage ratio (% of GT pixels reconstructed)
+- Qualitative visual inspection
+
+**Threshold**: If depth error > X%, 3DGS may not be reliable for RRI
+
+---
+
+**Q4.2**: How many training views are needed for 3DGS to accurately synthesize novel views in ASE scenes?
+
+**Experiment**:
+
+- Vary training set size: 10%, 25%, 50%, 75%, 100% of trajectory
+- Measure novel view synthesis quality
+- Determine minimum viable coverage for RRI
+
+**Question**: Can we use 3DGS even on partially scanned scenes?
+
+---
+
+### 5. Human-in-the-Loop Interaction
+
+**Q5.1**: What is the optimal interface for users to specify entities of interest?
+
+**Candidate Interfaces**:
+
+1. **Direct AR tap**: User taps entity in 3D view
+2. **Voice command**: "Focus on the table"
+3. **Semantic category**: "Prioritize all furniture"
+4. **Bounding box selection**: Draw box around region
+
+**Evaluation**:
+
+- User study with 10-15 participants
+- Measure selection speed and accuracy
+- Subjective usability ratings
+
+**Metrics**:
+
+- Time to select entity
+- Selection accuracy (did they select the right entity?)
+- User preference (Likert scale)
+
+---
+
+**Q5.2**: Does NBV guidance improve reconstruction quality and/or reduce scanning time compared to manual scanning?
+
+**Experimental Design**:
+
+- **Control group**: Manual scanning, no NBV guidance
+- **Treatment group**: NBV-guided scanning with AR overlays
+
+**Metrics**:
+
+- Reconstruction completeness (coverage %)
+- Reconstruction accuracy (Chamfer distance to GT)
+- Scanning time
+- Number of views captured
+
+**Hypothesis**: NBV guidance reduces time while maintaining quality.
+
+---
+
+### 6. Generalization & Robustness
+
+**Q6.1**: Do models trained on synthetic ASE data generalize to real-world Aria scans?
+
+**Challenge**: Synthetic data lacks sensor noise, motion blur, lighting variations.
+
+**Evaluation**:
+
+- Train NBV predictor on ASE
+- Test on real Aria recordings
+- Measure RRI prediction accuracy
+- Analyze domain gap
+
+**Questions**:
+
+- Is domain adaptation necessary?
+- Can we fine-tune on small real dataset?
+- Which components transfer well vs. poorly?
+
+---
+
+**Q6.2**: How sensitive is entity-aware NBV to SceneScript prediction errors?
+
+**Scenario**: If SceneScript mispredicts a wall or door, does NBV planning degrade significantly?
+
+**Experiments**:
+
+- Inject noise into SceneScript predictions (remove/add random entities)
+- Measure NBV quality under noisy entities
+- Determine robustness threshold
+
+**Mitigation**: Use uncertainty estimates to down-weight low-confidence entities.
+
+---
+
+### 7. Computational Efficiency
+
+**Q7.1**: Can we achieve real-time NBV prediction (< 1 second) on mobile devices?
+
+**Target Platforms**: Meta Quest 3, iPhone with LiDAR
+
+**Bottlenecks**:
+
+- SceneScript encoding (sparse convolutions)
+- RRI computation (occlusion reasoning)
+- Candidate view sampling
+
+**Optimization Strategies**:
+
+- Model quantization (FP32 → FP16 or INT8)
+- Sparse convolution optimization
+- Pre-computed candidate library
+- Hardware acceleration (Metal, GPU shaders)
+
+**Benchmark**: Measure latency on target device.
+
+---
+
+**Q7.2**: What is the trade-off between candidate view density and NBV quality?
+
+**Question**: Do we need 100, 500, or 1000 candidate views for good NBV selection?
+
+**Experiment**:
+
+- Vary candidate count: 10, 50, 100, 500
+- Measure selected view quality (RRI of chosen view)
+- Plot quality vs. computation time
+
+**Goal**: Find minimum candidate count that achieves 95% of optimal RRI.
+
+---
+
+### 8. Continuous vs. Discrete Action Spaces
+
+**Q8.1**: Should NBV prediction output discrete view selection or continuous pose regression?
+
+**Comparison**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Discrete** | Easier to train, collision-free | Suboptimal, limited resolution |
+| **Continuous** | Optimal, smooth | Harder to train, collision risk |
+
+**Research Question**: For large-scale indoor scenes, which approach performs better?
+
+**Hypothesis**: Hybrid approach (coarse discrete + fine continuous refinement) is best.
+
+---
+
+### 9. Semantic Understanding
+
+**Q9.1**: Can Vision-Language Models (VLMs) improve entity selection and NBV planning?
+
+**Use Cases**:
+
+- Natural language task specification: "Scan all the furniture carefully"
+- Semantic reasoning: Understanding which entities are task-relevant
+- Ambiguity resolution: "The table" → which table?
+
+**Questions**:
+
+- Does VLM add significant value over manual selection?
+- What is the latency cost?
+- How accurate are VLM entity mappings?
+
+**Prototype**: Implement VLM-based entity selection, compare to manual baseline.
+
+---
+
+### 10. Multi-Room & Large-Scale Scenes
+
+**Q10.1**: Should NBV planning be global (entire scene) or local (per-room)?
+
+**Trade-offs**:
+
+- **Global**: Considers cross-room views, may be inefficient
+- **Local**: Focuses on current room, may miss important connections
+
+**Questions**:
+
+- Can SceneScript's wall-based room segmentation enable efficient local planning?
+- When does global planning outperform local?
+- How to transition between rooms?
+
+**Experiment**:
+
+- Implement both strategies
+- Test on multi-room ASE scenes
+- Measure reconstruction efficiency
+
+---
+
+## Open-Ended Questions
+
+### Philosophical
+
+- **What makes a "good" next view?** Is it novelty, coverage, semantic importance, or user preference?
+- **How much autonomy should the system have?** Full automation vs. suggestion-based?
+- **Is NBV planning a solved problem once RRI prediction is accurate?** Or are there higher-level planning challenges?
+
+### Practical
+
+- **How to handle occluded regions?** If an area is completely unobserved, how do we plan views?
+- **Multi-agent NBV**: How do multiple users/robots coordinate scanning?
+- **Dynamic scenes**: Can NBV handle moving objects or people?
+
+### Future Directions
+
+- **Active learning for NBV**: The system improves its RRI prediction as it collects more data.
+- **Transfer learning**: Pre-train on ASE, fine-tune on specific domains (hospitals, warehouses).
+- **Lifelong NBV**: The system continuously scans and updates its model over time.
+
+---
+
+## Prioritization
+
+### Must Answer (Seminar Scope)
+
+- ✅ Q1.1: Entity-aware vs. coverage-only RRI
+- ✅ Q3.1: Which RRI formulation is best
+- ✅ Q6.2: Robustness to SceneScript errors
+
+### Should Answer (Master Thesis Scope)
+
+- Q2.1: SceneScript as encoder
+- Q4.1: 3DGS quality for RRI
+- Q5.2: NBV vs. manual scanning user study
+- Q6.1: ASE → real-world generalization
+
+### Nice to Have (Future Work)
+
+- Q5.1: Optimal UI for entity selection
+- Q7.1: Real-time on mobile
+- Q9.1: VLM integration
+- Q10.1: Global vs. local planning
+
+---
+
+## Hypothesis Summary
+
+| Question | Hypothesis | Status |
+|----------|-----------|--------|
+| Q1.1 | Entity-aware RRI > coverage-only | ⏳ To test |
+| Q2.1 | SceneScript encoder > generic encoder | ⏳ To test |
+| Q3.1 | Hybrid RRI is most robust | ⏳ To test |
+| Q4.1 | 3DGS quality is sufficient | ⏳ To validate |
+| Q5.2 | NBV guidance improves efficiency | ⏳ User study needed |
+| Q6.1 | Domain gap exists but is bridgeable | ⏳ To test |
+| Q7.2 | 100 candidates is sufficient | ⏳ To benchmark |
+| Q8.1 | Hybrid discrete+continuous is best | 🤔 Uncertain |

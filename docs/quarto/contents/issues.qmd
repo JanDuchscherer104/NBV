@@ -1,0 +1,585 @@
+---
+title: "Open Issues & Questions"
+format: html
+bibliography: ../../_shared/references.bib
+---
+
+# Open Issues & Questions
+
+This section documents unresolved challenges, design decisions, and questions that require further investigation.
+
+## Dataset Limitations
+
+### ASE: Single Trajectory Per Scene
+
+**Issue**: Each ASE scene provides only one pre-recorded egocentric trajectory. We cannot query arbitrary novel viewpoints.
+
+**Impact**:
+
+- Cannot directly compute RRI for candidate views not in the trajectory
+- No ground truth depth for novel viewpoints
+- Limits supervised training data generation
+
+**Status**: 🟡 Mitigation strategies identified
+
+**Potential Solutions**:
+
+1. ✅ **3D Gaussian Splatting**: Synthesize novel views (computationally expensive but feasible)
+2. ✅ **Entity-Level Metrics**: Use SceneScript GT for architectural elements (limited to walls/doors/windows)
+3. ✅ **Visibility Analysis**: Use semi-dense point cloud (approximate but fast)
+
+**Decision**: Use hybrid approach — entity metrics + visibility for seminar, add 3DGS for master thesis
+
+---
+
+### ⚠️ CLARIFIED: No Dense Ground Truth for Furniture
+
+**Issue**: ASE provides detailed SceneScript annotations only for architectural elements (walls, doors, windows). Furniture and objects have:
+
+- ❌ No ground truth 3D models
+- ❌ Only bounding box or segmentation mask
+- ❌ No detailed geometry
+- ✅ **NEW**: SceneScript outputs bounding boxes for furniture (confirmed in `inference.ipynb`)
+
+**Impact**:
+
+- Entity-level RRI for furniture is limited to:
+  - Bounding box detection/localization (yes)
+  - Class prediction (yes)
+  - Detailed geometry reconstruction (no)
+- Cannot validate fine-grained furniture reconstruction quality
+- Point-cloud based RRI still works for furniture (uses visibility data)
+
+**Status**: 🟡 **Partial limitation - bounding boxes available**
+
+**Revised Understanding**:
+
+SceneScript provides:
+- **Architectural elements**: Detailed parametric geometry (walls, doors, windows)
+- **Furniture**: 3D bounding boxes + class labels (sufficient for some applications)
+
+**Implications for NBV**:
+
+- ✅ Can compute bounding box coverage (how many furniture items detected?)
+- ✅ Can use visibility-based RRI for furniture regions (point cloud quality)
+- ❌ Cannot measure fine geometric reconstruction quality for furniture
+- ✅ Architectural reconstruction can be entity-aware at geometric level
+
+**Recommendation**:
+
+Use **dual RRI metrics**:
+1. **Architectural RRI**: Geometric accuracy (wall positions, door dimensions)
+2. **Furniture RRI**: Coverage + bounding box accuracy + point cloud density
+
+**Next Steps**:
+
+- [x] ~~Investigate SceneScript furniture representation~~ - Done: bounding boxes
+- [ ] Implement bounding box IoU metric for furniture RRI
+- [ ] Focus geometric RRI on walls/doors/windows
+- [ ] Use visibility-based RRI for furniture point cloud quality
+
+---
+
+### Simulation-to-Reality Gap
+
+**Issue**: ASE is synthetic data with perfect rendering. Real Aria scans have:
+
+- Sensor noise
+- Motion blur
+- Lighting variations
+- Different MPS reconstruction quality
+
+**Impact**: Models trained purely on ASE may not generalize to real data.
+
+**Status**: 🟡 Accepted limitation for seminar
+
+**Mitigation**:
+
+- Plan real-world validation in master thesis phase
+- Consider domain adaptation techniques
+- Collect small real dataset for fine-tuning
+
+---
+
+## SceneScript Architecture Questions
+
+### Streaming Updates with Sparse ResNet
+
+**Issue**: SceneScript encoder is a Sparse 3D ResNet. How do we efficiently handle incremental point cloud growth?
+
+**Current Behavior**:
+
+- Encoder processes full point cloud in one pass
+- No built-in mechanism for incremental updates
+
+**Options**:
+
+1. **Re-encode from scratch**: Simple but expensive (seconds per update)
+2. **Feature caching**: Cache intermediate features, update only new regions
+3. **Recurrent architecture**: Add LSTM/GRU to maintain state
+4. **Chunked processing**: Divide scene spatially, update only affected chunks
+
+**Status**: 🔴 Unresolved — requires architectural changes
+
+**Questions**:
+
+- How much does re-encoding cost in practice?
+- Can we exploit spatial locality in sparse convolutions?
+- Is incremental update necessary for real-time NBV?
+
+**Next Steps**:
+
+- [ ] Benchmark SceneScript encoding time on various point cloud sizes
+- [ ] Test re-encoding latency for streaming scenario
+- [ ] Prototype feature caching approach
+
+---
+
+### Fine-Tuning for Uncertainty Estimation
+
+**Issue**: SceneScript predicts geometry, not uncertainty. We need per-entity confidence estimates.
+
+**Options**:
+
+1. **Add uncertainty head**: Multi-task learning (geometry + uncertainty)
+2. **Ensemble methods**: Multiple predictions, variance as uncertainty
+3. **Bayesian approach**: Dropout at test time, MC sampling
+4. **Heuristic**: Use prediction confidence from softmax
+
+**Status**: 🟡 Design decision pending
+
+**Questions**:
+
+- Does SceneScript's autoregressive decoder already provide token-level probabilities?
+- Can we use per-token confidence as entity uncertainty?
+- Is ground truth uncertainty available in ASE?
+
+**Next Steps**:
+
+- [ ] Analyze SceneScript decoder outputs for confidence scores
+- [ ] Define ground truth uncertainty (e.g., reconstruction error from partial PC)
+- [ ] Implement baseline uncertainty estimator
+
+---
+
+## RRI Computation Challenges
+
+### ✅ RESOLVED: Occlusion Reasoning for Visibility RRI
+
+**Issue**: Determining which points are visible from a candidate view requires occlusion handling.
+
+**~~Previous Approaches~~**:
+
+1. ~~**Ray Casting**: Cast rays from camera to each GT point, check intersection with partial PC (accurate but slow)~~
+2. ~~**Depth Buffer**: Render partial PC to depth map, compare (faster but requires rendering)~~
+3. ~~**Learned Occlusion**: Train network to predict visibility (fast but requires training data)~~
+
+**Status**: ✅ **RESOLVED - No occlusion computation needed!**
+
+**Solution Discovered** (from `ase_exploration.ipynb`):
+
+ASE provides pre-computed visibility in `semidense_observations.csv.gz`!
+
+```python
+# Direct visibility lookup - no ray casting!
+observations_df = pd.read_csv("semidense_observations.csv.gz")
+visible_points = observations_df[
+    observations_df['frame_idx'] == candidate_frame
+]['point_uid'].unique()
+```
+
+**Performance**:
+
+- ✅ Visibility lookup: < 10ms per candidate (DataFrame operations)
+- ✅ No rendering or ray tracing required
+- ✅ Realistic occlusion patterns from MPS SLAM reconstruction
+
+**Key Insight**: The visibility data was computed by MPS SLAM during trajectory recording, providing accurate occlusion handling for free!
+
+**Remaining Challenge**: Interpolation for arbitrary candidate poses (not on original trajectory)
+
+**Next Steps**:
+
+- [x] ~~Measure ray casting time~~ - Not needed!
+- [x] ~~Implement depth buffer approach~~ - Not needed!
+- [ ] Implement nearest-neighbor interpolation for off-trajectory poses
+
+---
+
+### Defining "Good" RRI
+
+**Issue**: What is the gold standard for RRI? Different formulations may be better for different tasks.
+
+**RRI Formulations**:
+
+1. **Chamfer Distance**: Geometric accuracy (VIN-NBV approach)
+2. **Entity-Level Accuracy**: Semantic correctness (wall/door detection)
+3. **Coverage**: Surface area observed
+4. **Novelty**: New information gained
+
+**Questions**:
+
+- Should we optimize one metric or combine them?
+- How to weight geometric vs. semantic RRI?
+- Does optimal RRI depend on user task?
+
+**Status**: 🟡 Hybrid approach planned
+
+**Decision**: Compute multiple RRI types, allow task-specific weighting
+
+---
+
+### ✅ RESOLVED: Ground Truth RRI for Training
+
+**Issue**: If training a learning-based RRI predictor, we need ground truth RRI labels.
+
+**~~Previous Challenge~~**: Computing true RRI requires:
+
+1. ~~Rendering or synthesizing candidate view depth~~
+2. ~~Augmenting partial point cloud~~
+3. ~~Measuring improvement~~
+
+~~This is expensive for 100K scenes × 10 partial levels × 100 candidates = 100M labels!~~
+
+**Status**: ✅ **RESOLVED - Fast computation with pre-cached visibility**
+
+**Solution** (validated in `ase_exploration.ipynb`):
+
+```python
+def compute_gt_rri_fast(observations_df, points_df, current_points, candidate_frame, gt_points):
+    """
+    Compute ground truth RRI in < 100ms using visibility data + Chamfer distance.
+    """
+    # 1. Visibility lookup (< 10ms)
+    visible_new = observations_df[
+        observations_df['frame_idx'] == candidate_frame
+    ]['point_uid'].unique()
+
+    # 2. Information gain
+    novel_points = set(visible_new) - current_points
+    info_gain = len(novel_points) / max(len(current_points), 1)
+
+    # 3. Quality gain (optional, ~50ms with Open3D)
+    current_pc = points_df[points_df['uid'].isin(current_points)][
+        ['px_world', 'py_world', 'pz_world']
+    ].values
+    chamfer_before = compute_chamfer_open3d(current_pc, gt_points)
+
+    augmented_pc = points_df[points_df['uid'].isin(current_points | novel_points)][
+        ['px_world', 'py_world', 'pz_world']
+    ].values
+    chamfer_after = compute_chamfer_open3d(augmented_pc, gt_points)
+
+    quality_gain = (chamfer_before - chamfer_after) / chamfer_before
+
+    return 0.7 * info_gain + 0.3 * quality_gain
+```
+
+**Performance**:
+
+- Single RRI computation: ~60ms (10ms visibility + 50ms Chamfer)
+- 100 candidates: ~6 seconds
+- Full dataset (100K scenes × 10 levels × 100 candidates): ~1667 GPU hours = **~2 days on 32 GPUs**
+
+**Breakthrough**: What seemed like an insurmountable computational bottleneck (months of compute) is now **feasible** (days with modest GPU cluster)!
+
+**Implementation Strategy**:
+
+1. ✅ **Precompute & cache**: One-time offline computation (~2 days on cluster)
+2. Store in HDF5: `scene_id → {partial_level → {candidate_frame → rri}}`
+3. Training: Direct lookup, no runtime RRI computation
+
+**Next Steps**:
+
+- [x] ~~Estimate compute requirements~~ - Done: ~2 days on 32 GPUs
+- [ ] Implement HDF5 caching system
+- [ ] Parallelize RRI computation across scenes
+- [ ] Validate cached RRI matches runtime computation
+
+---
+
+## System Design Questions
+
+### Continuous vs. Discrete Action Space
+
+**Issue**: Should NBV prediction output discrete selection (VIN-NBV) or continuous pose (GenNBV)?
+
+**Trade-offs**:
+
+| Approach | Advantages | Disadvantages |
+|----------|-----------|---------------|
+| **Discrete** (VIN-NBV) | Easier to train (classification), guaranteed collision-free | Limited by sampling density, suboptimal |
+| **Continuous** (GenNBV) | Theoretically optimal, smooth trajectories | Harder to train (multi-modal regression), collision risk |
+
+**Status**: 🟡 Hybrid approach considered
+
+**Proposed Solution**:
+
+1. Coarse discrete sampling (100 candidates)
+2. Fine continuous refinement (gradient-based on top-k)
+3. Explicit collision checking
+
+---
+
+### How to Handle Multi-Room Scenes?
+
+**Issue**: Large scenes span multiple rooms. Should we:
+
+- **Global NBV**: Optimize over entire scene (may be inefficient)
+- **Room-by-Room**: Segment scene, NBV per room (may miss cross-room views)
+- **Frontier-Based**: Focus on unexplored regions (may ignore low-quality areas)
+
+**Status**: 🟡 Design decision pending
+
+**Considerations**:
+
+- SceneScript provides natural room segmentation (walls define boundaries)
+- User may specify "scan living room, then bedroom"
+- Frontier approach aligns with exploration literature
+
+**Next Steps**:
+
+- [ ] Analyze ASE room statistics (how many rooms per scene?)
+- [ ] Prototype room-based NBV planning
+- [ ] Compare global vs. room-wise strategies
+
+---
+
+### VLM Integration: Necessary or Overkill?
+
+**Issue**: Is integrating a Vision-Language Model (VLM) for semantic understanding worth the complexity?
+
+**Pros**:
+
+- Natural language task specification ("scan all furniture")
+- Semantic reasoning beyond geometry
+- Flexible entity selection
+
+**Cons**:
+
+- Adds latency (LLM inference ~1-5 seconds)
+- Requires prompt engineering
+- May not be necessary if manual selection works
+
+**Status**: 🟡 Deferred to master thesis
+
+**Decision**: Start with manual entity selection, add VLM if time permits
+
+---
+
+## Human-in-the-Loop Design
+
+### How to Visualize Recommended Views in AR?
+
+**Issue**: Users need to see where to move next. How to present NBV guidance?
+
+**Options**:
+
+1. **Arrow Overlay**: Simple directional arrow in 3D
+2. **Ghost Camera**: Show semi-transparent camera frustum at target pose
+3. **Path Trajectory**: Animated path from current to target pose
+4. **Heatmap**: Color-code scene by "value if viewed from this direction"
+
+**Status**: 🟡 Prototyping needed
+
+**User Study Questions**:
+
+- Which visualization is most intuitive?
+- Does guidance improve reconstruction quality?
+- Is real-time update (< 1 sec) necessary?
+
+---
+
+### Entity Selection UX
+
+**Issue**: How should users select entities of interest?
+
+**Options**:
+
+1. **Tap in AR**: Direct interaction with reconstructed entities
+2. **Voice Command**: "Focus on the table"
+3. **Semantic Slider**: Adjust importance by category (all furniture +10%)
+4. **Region Selection**: Draw bounding box, prioritize contents
+
+**Status**: 🔴 User testing required
+
+**Next Steps**:
+
+- [ ] Mockup different UX flows
+- [ ] Pilot test with 3-5 users
+- [ ] Evaluate speed and accuracy of entity selection
+
+---
+
+## Evaluation & Validation
+
+### How to Validate RRI Predictions?
+
+**Issue**: Without ground truth RRI for novel views, how do we know our predictions are correct?
+
+**Validation Strategies**:
+
+1. **Leave-one-out**: Predict RRI for trajectory frames, validate with held-out frame
+2. **Synthetic experiments**: Use 3DGS to generate GT RRI, compare predictions
+3. **Real-world proxy**: Compare reconstruction quality with/without NBV guidance
+
+**Status**: 🟡 Multi-strategy approach planned
+
+---
+
+### What Metrics Demonstrate Success?
+
+**Seminar Success Metrics**:
+
+- Correlation between predicted RRI and GT improvement (R² > 0.7?)
+- Entity-level reconstruction F1 score improvement
+- Computational efficiency (RRI computed in < 1 second?)
+
+**Master Thesis Success Metrics**:
+
+- User study: NBV-guided scanning vs. manual (reconstruction quality, time)
+- Real-world deployment: System runs on mobile device at > 1 FPS
+- Generalization: Model trained on ASE works on real Aria scans
+
+**Status**: 🟡 Thresholds to be defined after initial experiments
+
+---
+
+## Implementation Concerns
+
+### Computational Requirements
+
+**Issue**: Is our compute budget sufficient?
+
+**Requirements**:
+
+- **Training 3DGS**: ~5-10 min/scene × 100K scenes = ~347 days on single GPU
+- **SceneScript inference**: ~1 sec/scene (acceptable)
+- **RRI computation**: Depends on method (ray casting may be slow)
+
+**Mitigation**:
+
+- Use GPU cluster for parallel 3DGS training
+- Focus on subset of scenes (10K) for initial experiments
+- Optimize bottleneck operations
+
+**Next Steps**:
+
+- [ ] Benchmark all major operations
+- [ ] Estimate total compute time
+- [ ] Secure GPU resources if needed
+
+---
+
+### Dependency Management
+
+**Issue**: Multiple complex dependencies (Project Aria Tools, SceneScript, 3DGS, etc.)
+
+**Challenges**:
+
+- `torchsparse` build issues
+- CUDA version conflicts
+- Python version incompatibilities
+
+**Mitigation**:
+
+- Use conda/pip for reproducible environments
+- Docker container for deployment
+- Document all installation steps
+
+**Status**: 🟢 Addressed in `SETUP.md`
+
+---
+
+## Research Questions for Discussion
+
+1. **Is entity-aware RRI a significant improvement over coverage-based NBV?**
+   - Need quantitative comparison
+
+2. **Can we learn a generalizable RRI predictor from ASE that works on real data?**
+   - Requires real-world validation
+
+3. **What is the right balance between user guidance and automation?**
+   - Too much automation → system makes bad decisions
+   - Too little → defeats purpose of NBV
+
+4. **How important is real-time performance?**
+   - If NBV takes 10 seconds, is that acceptable for human-in-the-loop?
+
+5. **Should we focus on architectural elements or furniture?**
+   - ASE GT is stronger for walls/doors/windows
+   - But furniture may be more practically useful
+
+---
+
+## New Technical Challenges Discovered
+
+### SE3 Transformation Handling
+
+**Issue**: ProjectAria Tools returns SE3 (Special Euclidean Group) transformation objects that are not directly compatible with NumPy operations.
+
+**Problem**:
+
+```python
+# This fails!
+T = Ts_world_device[0]  # SE3 object
+position = T[:3, 3]  # TypeError: SE3 does not support indexing
+```
+
+**Solution**:
+
+```python
+# Need explicit conversion
+T_matrix = T.to_matrix()  # Convert to 4x4 numpy array
+position = T_matrix[:3, 3]  # Now works!
+```
+
+**Status**: ✅ **RESOLVED in ase_exploration.ipynb**
+
+**Pattern Established**:
+
+1. Always call `.to_matrix()` on SE3 objects before NumPy operations
+2. Add auto-detection in functions:
+   ```python
+   if hasattr(T, 'to_matrix'):
+       T = T.to_matrix()
+   ```
+
+**Impact**: Required fixes in 4 notebook cells involving trajectory/pose handling
+
+---
+
+### DataFrame Column Name Conflicts
+
+**Issue**: ASE data files use inconsistent column naming:
+- `semidense_points.csv.gz`: uses `uid` column
+- `semidense_observations.csv.gz`: sometimes uses `point_uid` column
+
+**Problem**: Attempting to rename `uid` → `point_uid` when column already renamed causes KeyError
+
+**Solution**:
+
+```python
+# Safe conditional rename
+if 'uid' in observations_df.columns and 'point_uid' not in observations_df.columns:
+    observations_df = observations_df.rename(columns={'uid': 'point_uid'})
+```
+
+**Status**: ✅ **RESOLVED**
+
+**Lesson**: Always check column existence before DataFrame operations when working with ASE data
+
+---
+
+## Decision Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2025-01 | Use hybrid RRI (entity + visibility) | Leverages ASE strengths, avoids 3DGS initially |
+| 2025-01 | Focus on walls/doors/windows for seminar | Strong GT available, defer furniture to thesis |
+| 2025-01 | Defer VLM integration | Complexity not justified for seminar scope |
+| 2025-01 | **Use visibility-based RRI as primary metric** | ✅ Pre-computed occlusions eliminate computational bottleneck |
+| 2025-01 | **Use Chamfer distance for quality validation** | ✅ Open3D provides fast implementation (~50ms) |
+| 2025-01 | **Precompute & cache full RRI dataset** | ✅ Feasible in ~2 days on modest GPU cluster |
+| TBD | Streaming vs. batch SceneScript | Pending latency benchmarks |
+| TBD | Discrete vs. continuous action space | Pending initial RRI results |

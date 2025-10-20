@@ -1,0 +1,521 @@
+<!-- ---
+title: "Literature Review"
+format: html
+bibliography: ../../_shared/references.bib
+--- -->
+
+# Literature Review
+
+This section provides an overview of the key papers and methods that inform our approach to semantic Next-Best-View (NBV) planning for active 3D reconstruction.
+
+## Core Papers
+
+### VIN-NBV: A View Introspection Network for Next-Best-View Selection
+
+[@VIN-NBV-frahm2025]
+
+VIN-NBV presents a learning-based approach to NBV that directly optimizes for **reconstruction quality** rather than coverage. The key innovation is the View Introspection Network (VIN), which predicts the **Relative Reconstruction Improvement (RRI)** of candidate viewpoints without actually capturing new images.
+
+#### Key Contributions
+
+1. **Reconstruction Quality Optimization**: First NBV method to directly maximize reconstruction quality (measured via Chamfer Distance) rather than coverage
+2. **View Introspection Network (VIN)**: Lightweight neural network that predicts RRI of candidate views from current reconstruction state
+3. **Imitation Learning Approach**: Trained using pre-computed ground truth RRI values (not RL)
+4. **Greedy Sequential Policy**: Simple sampling-based strategy that selects best view at each step
+5. **Performance**: 30% improvement over coverage-based baseline, 40% improvement over RL methods (GenNBV, ScanRL)
+
+![VIN-NBV Architecture](../figures/VIN_arch.png){#fig-vin-arch width=80%}
+
+#### Problem Formulation
+
+**Input**: Initial base images $I_{base} = \{I_1, ..., I_k\}$ with camera parameters $C_{base}$ and depth maps $D_{base}$
+
+**Objective**: Find next best views $C_{nbv} = \{C_1, ..., C_m\}$ that maximize reconstruction quality:
+
+$$
+C^*_{nbv} = \text{argmax}_{C_{nbv}} \frac{CD(\mathcal{R}_{base}, \mathcal{R}_{GT}) - CD(\mathcal{R}_{final}, \mathcal{R}_{GT})}{CD(\mathcal{R}_{base}, \mathcal{R}_{GT})}
+$$
+
+where $CD(\mathcal{R}, \mathcal{R}_{GT})$ is Chamfer Distance between reconstruction $\mathcal{R}$ and ground truth $\mathcal{R}_{GT}$.
+
+**Key Innovation**: Unlike prior work that maximizes coverage, VIN-NBV directly maximizes this reconstruction improvement.
+
+#### Relative Reconstruction Improvement (RRI)
+
+For a query view $q$, RRI quantifies reconstruction improvement:
+
+$$
+\mathcal{RRI}(q) = \frac{CD(\mathcal{R}_{base}, \mathcal{R}_{GT}) - CD(\mathcal{R}_{base \cup q}, \mathcal{R}_{GT})}{CD(\mathcal{R}_{base}, \mathcal{R}_{GT})}
+$$
+
+**Properties**:
+- Range: $[0, 1]$ where higher is better
+- Normalized by current error → scale/object-independent
+- Requires ground truth only during training
+
+#### VIN Architecture
+
+**Three-Stage Pipeline**:
+
+1. **Scene Reconstruction**:
+   - Backproject RGB-D images to 3D point cloud $\mathcal{R}_{base}$
+   - Voxel downsample for efficiency
+
+2. **3D-Aware Featurization**:
+   - **Surface Normals**: Variance indicates geometric complexity (high variance = complex surfaces needing more views)
+   - **Visibility Count**: Tracks how many base views observe each point (low count = potentially informative)
+   - **Depth Values**: Distance information for surface consistency
+   - **Coverage Feature $F_{empty}$**: Empty pixel mask when projecting $\mathcal{R}_{base}$ to query view
+
+3. **RRI Prediction**:
+   - **Convolutional Encoder**: 4 layers, hidden dimension 256
+   - Processes featurized point cloud projected to query view
+   - **Ranking MLP**: 3 layers, hidden dimension 256
+   - **Output**: CORAL layer for ordinal classification (15 bins)
+
+**Network Signature**:
+$$
+\widehat{\mathcal{RRI}}(q) = \text{VIN}_\theta(\mathcal{R}_{base}, C_{base}, C_q)
+$$
+
+#### Training Methodology
+
+**Dataset**:
+- **Train**: Modified subset of Houses3K
+- **Test**: House category from OmniObject3D (generalization test)
+- 120 rendered views per object
+
+**Ground Truth RRI Computation**:
+1. For each training scene, sample query views
+2. Explicitly reconstruct scene with query view added
+3. Compute actual RRI using Chamfer Distance
+4. Normalize via z-scores within capture stage groups
+5. Soft-clip with tanh, bin into 15 ordinal classes
+
+**Training Details**:
+- **Loss**: CORAL loss for ordinal classification
+- **Optimizer**: AdamW with learning rate 1e-3
+- **Scheduler**: Cosine annealing
+- **Epochs**: 60
+- **Hardware**: 4× A6000 GPUs, ~24 hours
+- **Batching**: By object (one point cloud per batch projected to all candidate views)
+
+#### VIN-NBV Policy (Algorithm)
+
+**Greedy Sequential Strategy**:
+
+```
+1. Start with k=2 base views (first random, second closest to first)
+2. Repeat until termination criterion:
+   a. Reconstruct R_base from current captures
+   b. Sample n query views around reconstruction
+   c. For each query q:
+      - Featurize reconstruction
+      - Predict RRI(q) using VIN
+   d. Select q* = argmax RRI(q)
+   e. Move to q*, capture image, update base views
+3. Return final reconstruction R_final
+```
+
+**Key Features**:
+- **Flexible Constraints**: Can limit by number of captures, time, or distance
+- **Collision-Free**: Sampling strategy can avoid obstacles
+- **No Prior Knowledge**: Works without scene CAD models or preliminary scans
+- **Generalizable**: Trained on houses, tested on unseen categories (dinosaurs, trucks, animals)
+
+#### Experimental Results
+
+**Limited Acquisitions (20 captures)**:
+- VIN-NBV: **0.20 cm** Chamfer Distance (houses)
+- GenNBV: **0.33 cm** (39% worse)
+- ScanRL: **0.37 cm** (41% worse)
+- Coverage baseline (Cov-NBV): **~30% worse** than VIN-NBV
+
+**Coverage vs Quality**:
+- Cov-NBV baseline uses same greedy strategy but scores views by empty pixel count:
+  $$Cov(q) = W \times H - \sum_{u,v} \mathbb{1}(C_q(\mathcal{R}_{base})_{u,v})$$
+- VIN-NBV achieves largest gains in early capture stages
+- Late stages: both converge (coverage becomes more important)
+
+**Ablation - Coverage Feature $F_{empty}$**:
+- Removing $F_{empty}$ hurts performance in later stages
+- Early stages: RRI dominates
+- Late stages: Coverage information becomes helpful
+
+**Generalization** (unseen categories):
+- Dinosaurs: Slightly behind GenNBV
+- Toy animals: **Significantly outperforms** both baselines
+- Toy trucks: **Significantly outperforms** both baselines
+
+#### Comparison to Our NBV Research
+
+**Similarities**:
+- Both use Chamfer Distance for reconstruction quality
+- Both require pre-computed ground truth for training
+- Both focus on maximizing reconstruction improvement
+
+**Key Differences**:
+- **VIN-NBV**: Single objects, imitation learning, greedy sampling
+- **Our Approach**: Multi-entity scenes, entity-aware RRI, SceneScript integration
+- **VIN-NBV**: Coverage-agnostic (though includes $F_{empty}$ feature)
+- **Our Approach**: Hybrid visibility + Chamfer Distance, pre-computed occlusions from ASE
+
+**Lessons for Our Work**:
+1. ✅ Direct quality optimization (RRI) beats coverage by ~30%
+2. ✅ Imitation learning is simpler and more effective than RL
+3. ✅ 3D-aware featurization (normals, visibility) is crucial
+4. ✅ Coverage information still helps in later stages
+5. ⚠️ Greedy strategy works well but leaves ~20% gap to oracle
+
+**Integration Strategy**:
+- Adopt VIN's RRI formulation for entity-level metrics
+- Use ASE visibility data instead of VIN's visibility count
+- Extend to per-entity RRI: $\mathcal{RRI}_e$ for each entity $e$
+- Weighted combination: $\mathcal{RRI}_{total} = \sum_e w_e \cdot \mathcal{RRI}_e$
+
+#### Limitations
+
+- **Ground truth depth**: Uses noise-free depth maps (not realistic)
+- **Real-world validation**: Not evaluated on real sensor data
+- **Single objects**: Not designed for multi-room scenes
+- **Gap to oracle**: ~20% performance gap in early stages indicates room for improvement
+
+
+### GenNBV: Generalizable Next-Best-View Policy for Active 3D Reconstruction
+
+[@GenNBV-chen2024]
+
+GenNBV addresses the generalization challenge in NBV planning through reinforcement learning and a continuous 5D action space.
+
+#### Key Contributions
+
+- **Continuous Action Space**: 5-DOF pose prediction (3D position + 2D orientation) allows smooth, collision-free trajectories
+- **Multi-Source State Embedding**: Combines geometric features, semantic information, and action history
+- **Cross-Dataset Generalization**: Achieves 98.26% and 97.12% coverage on unseen building datasets
+- **Reinforcement Learning**: Trained in Isaac Gym simulator using PPO algorithm
+
+#### Architecture Components
+
+1. **Geometric Encoder**: Processes partial point clouds to extract shape features
+2. **Semantic Encoder**: Encodes object categories and semantic labels
+3. **Action History Encoder**: Maintains context of recent viewpoints
+4. **Policy Network**: Predicts continuous viewpoint parameters
+
+#### Limitations
+
+- **Coverage-Based Objective**: Optimizes for geometric coverage rather than reconstruction quality
+- **Limited Semantic Reasoning**: Treats all surfaces equally without task-specific prioritization
+- **Requires Simulation**: Training requires large-scale simulated environments
+
+#### Relevance to Our Work
+
+GenNBV demonstrates the value of:
+
+- **Structured state representations** combining multiple modalities
+- **Learning-based policies** that generalize across scenes
+- **Continuous action spaces** for practical robotics applications
+
+
+### SceneScript: Reconstructing Scenes With An Autoregressive Structured Language Model
+
+[@SceneScript-avetisyan2024]
+
+SceneScript represents a paradigm shift in scene understanding by using structured language to describe complete 3D layouts.
+
+#### Key Contributions
+
+- **Structured Scene Language**: Represents scenes as sequences of language-like commands (walls, doors, windows, objects)
+- **Autoregressive Transformer**: Generates scene descriptions token-by-token, enabling streaming and partial updates
+- **Aria Synthetic Environments (ASE)**: Introduces 100K synthetic indoor scenes for training
+- **Entity-Level Representation**: Provides explicit geometric primitives (hulls, bounding boxes) for architectural elements
+
+![SceneScript Commands](../figures/commands.pdf){#fig-scenescript-commands width=95%}
+
+#### Scene Representation
+
+The SceneScript language encodes:
+
+```plaintext
+```plaintext
+make_wall, id=0, a_x=-2.56, a_y=6.16, a_z=0.0, b_x=5.07, b_y=6.16, b_z=0.0, height=3.26, thickness=0.0
+make_door, id=1000, wall0_id=2, wall1_id=4, position_x=-1.51, position_y=1.84, position_z=1.01, width=1.82, height=2.02
+make_window, id=2000, wall0_id=0, position_x=4.45, position_y=6.16, position_z=1.64, width=1.01, height=2.12
+```
+
+![SceneScript Language Format](../figures/commands.pdf){width=100%}
+
+#### Architecture
+```
+
+#### Architecture Details
+
+SceneScript uses a two-stage architecture combining geometric encoding with autoregressive structured language generation:
+
+##### 1. Sparse 3D ResNet Encoder
+
+**Input Processing**:
+- **Point Cloud Discretization**: Input point clouds discretized to **5cm resolution**
+- **Sparse Representation**: Uses `torchsparse` for efficient handling of sparse 3D data
+- **Preprocessing**: Points normalized and voxelized
+
+**Architecture**:
+- **ResNet-Style Encoder**: Sparse 3D ResNet using sparse convolutions
+- **Downsampling**: **5 down convolutional layers** with kernel size 3 and stride 2
+- **Point Reduction**: Reduces number of active sites by ~1000×
+- **Parameters**: ~20M optimizable parameters
+
+**Output**: Sparse feature tensor → converted to sequence of features $\mathbf{F} \in \mathbb{R}^{N \times d_{model}}$ where $N$ is number of non-empty voxels (much smaller than input)
+
+**Coordinate Encoding**:
+- Active site coordinates appended to feature vectors: $\mathbf{f}_i \leftarrow \text{cat}(\mathbf{f_i}, \mathbf{c_i})$
+- Features sorted lexicographically by coordinate
+- Provides positional information for transformer decoder
+
+##### 2. Transformer Decoder
+
+**Token Types**:
+SceneScript uses **typed tokens** where each token has both a *value* and a *type*:
+
+- **Value Tokens**: Discretized parameters (e.g., wall corner position)
+- **Type Tokens**: Indicate semantic role (e.g., `MAKE_WALL_A_X`, `COMMAND`, `PART`, `STOP`)
+
+**Embeddings**:
+```
+embedding = position_emb + value_emb + type_emb
+```
+
+**Autoregressive Generation**:
+1. Start with `<START>` token
+2. For each timestep $t$:
+   - Feed sequence $\{\text{token}_1, ..., \text{token}_t\}$ to decoder
+   - Attend to encoded point cloud features (cross-attention)
+   - Predict next token value via softmax over $N_{bins} + 6$ special tokens
+   - Decode type of next token based on grammar rules
+3. Generate until `<STOP>` token
+
+**Type-Guided Decoding**:
+- Entity generation follows strict grammar:
+  ```
+  <PART> → <COMMAND> → param_1 → param_2 → ... → param_n → <PART>
+  ```
+- Type token determines valid next parameters (e.g., after `make_wall` expect `a_x`, `a_y`, ...)
+- Enforces structural consistency during generation
+
+**Decoder Details**:
+- **8 transformer decoder layers** (fixed architecture)
+- **8 attention heads** for multi-head attention
+- **Feature dimension**: 512 ($d_{model} = 512$)
+- **Parameters**: ~35M optimizable parameters
+- **Vocabulary size**: 2048 tokens (also max sequence length)
+- Causal self-attention mask for autoregressive generation
+- Cross-attention to encoded point cloud features
+
+![SceneScript Diagram](../figures/scenescript_diagram.png){#fig-scenescript-diagram width=100%}
+
+#### Entity Types and Parameters
+
+SceneScript defines four primitive types with specific parameter sets:
+
+##### Wall Entity
+```python
+PARAMS = {
+    'id': int,           # Unique identifier
+    'a_x', 'a_y', 'a_z': float,  # Corner A (meters)
+    'b_x', 'b_y', 'b_z': float,  # Corner B (meters)
+    'height': float,     # Wall height (meters)
+    'thickness': float   # Always 0.0 (legacy)
+}
+```
+- Defines 3D line segment with vertical extrusion
+- Implicitly defines floor/ceiling at z=0 and z=height
+
+##### Door Entity
+```python
+PARAMS = {
+    'id': int,
+    'wall0_id': int,     # Parent wall reference
+    'wall1_id': int,     # (duplicate for legacy)
+    'position_x', 'position_y', 'position_z': float,  # Center
+    'width': float,      # Door width
+    'height': float      # Door height
+}
+```
+- Attached to parent wall
+- Oriented parallel to wall
+
+##### Window Entity
+- Inherits same parameters as Door
+- Differentiated only by command type
+
+##### Bbox Entity (Objects)
+```python
+PARAMS = {
+    'id': int,
+    'class': str,        # Object category (e.g., 'chair', 'table')
+    'position_x', 'position_y', 'position_z': float,  # Center
+    'angle_z': float,    # Rotation around Z-axis (radians)
+    'scale_x', 'scale_y', 'scale_z': float  # Bounding box size
+}
+```
+- Represents furniture and objects
+- Oriented bounding box with Z-axis rotation
+
+#### Input/Output Formulation
+
+**Input**:
+- **Point Cloud**: $\mathbf{P} \in \mathbb{R}^{N_p \times 3}$ from MPS semi-dense SLAM
+- **Discretization**: Points discretized to **5cm resolution**
+- **Features**: XYZ coordinates serve as input features
+
+**Output**:
+- **Token Sequence**: $\{\text{tok}_1, \text{tok}_2, ..., \text{tok}_T\}$ where $T \leq T_{max} = 2048$
+- **Structured Language**: Each entity encoded as:
+  ```
+  <PART> <CMD> <param_1> <param_2> ... <param_n> <PART> ...
+  ```
+- **Example**:
+  ```
+  <PART> make_wall 42 156 200 0 198 312 200 0 255 0 <PART>
+  ```
+  (Discretized integer tokens, later undiscretized to continuous floats)
+
+**Tokenization**:
+- **Integer parameters**: $t = \text{int}(x)$
+- **Float parameters**: $t = \text{round}(x / \text{res})$ where res = 5cm resolution
+- **Vocabulary**: 2048 tokens maximum
+- Not BPE-based (unlike NLP); custom discretization scheme
+
+**Post-Processing**:
+1. Parse token sequence into entities
+2. Undiscretize parameters back to continuous values
+3. Assign doors/windows to nearest wall
+4. Translate back to original coordinate frame
+
+#### Training Methodology
+
+**Dataset**: 100K ASE synthetic scenes
+- **Train/Val/Test**: 80K / 10K / 10K split
+- **Augmentation**: Random rotations, translations, point subsampling
+
+**Loss Function**:
+- **Cross-Entropy**: On discretized token predictions
+- **Type-Aware**: Separate losses for each token type
+- **Weighted**: Higher weight on command tokens vs parameters
+
+**Training Strategy**:
+- **Teacher Forcing**: During training, feed ground truth previous tokens
+- **Nucleus Sampling**: At inference, use nucleus sampling (top-p) for diversity
+- **Greedy Decoding**: Quantitative results decoded greedily
+- **Augmentation**: Random z-axis rotation (360°), random point subsampling (up to 500K points)
+
+**Optimization**:
+- **Optimizer**: AdamW with **learning rate 1e-4** (10^-3 for image-only encoder variant)
+- **Batch Size**: **64 scenes** (effective batch size, distributed across multiple nodes)
+- **Training Time**: **~3-4 days** (hardware not specified in paper)
+- **Convergence**: **~200K iterations**
+- **Loss**: Standard cross-entropy on next token prediction
+
+#### Relevance to Our Work
+
+SceneScript provides a **semantic backbone** for NBV planning:
+
+1. **Entity-Level Primitives**: Explicit geometric hulls enable per-entity RRI computation
+2. **Streaming Capability**: Autoregressive generation allows incremental scene updates as more views are acquired
+3. **Structured Representation**: Entity parameters provide targets for reconstruction quality metrics
+4. **Semantic Awareness**: Different entity types (walls vs doors vs objects) can be weighted differently for NBV
+
+**Key Insight**: SceneScript's structured representation enables **entity-aware NBV planning** where we can:
+- Compute RRI separately for each wall, door, or object
+- Prioritize views that improve reconstruction of specific entities
+- Integrate user-specified importance weights per entity type
+- Track reconstruction completeness at entity-level granularity
+
+**NBV Integration Strategy**:
+1. Run SceneScript on partial point cloud → get predicted entities
+2. Compare predicted vs (incrementally estimated) ground truth entities
+3. Compute per-entity reconstruction error
+4. Candidate view RRI = expected reduction in entity errors visible from that view
+5. Select view maximizing weighted sum of entity-level RRI
+
+SceneScript provides:
+
+- **Semantic Scene Understanding**: Explicit representation of walls, doors, windows, and objects
+- **Entity-Level Primitives**: Geometric hulls that can be used for entity-specific RRI computation
+- **Streaming Capability**: Autoregressive generation allows incremental scene updates
+- **Backbone for NBV**: Potential to serve as a semantic encoder for NBV prediction
+
+**Key Insight**: SceneScript's structured representation enables **entity-aware NBV planning** where we can compute RRI separately for each room, wall, or object of interest.
+
+
+### Human-in-the-Loop Local Corrections of 3D Scene Layouts via Infilling
+
+[@HITL-SceneScript-xie2025]
+
+This recent work extends SceneScript with interactive refinement capabilities, enabling human-in-the-loop corrections.
+
+#### Key Contributions
+
+- **Multi-Task SceneScript**: Jointly trains global scene prediction and local infilling tasks
+- **Interactive Refinement**: Users can click erroneous regions for localized re-generation
+- **Improved Local Accuracy**: Significantly better reconstruction quality in user-specified regions
+- **Beyond Training Distribution**: Enables layouts that diverge from training data through iterative refinement
+
+#### Human-in-the-Loop Workflow
+
+1. **Initial Prediction**: Generate full scene layout from point cloud
+2. **User Feedback**: Identify regions requiring correction
+3. **Local Infilling**: Re-generate only the problematic area while maintaining global consistency
+4. **Iterative Refinement**: Repeat until satisfactory
+
+#### Relevance to Our Work
+
+This work demonstrates:
+
+- **Interactive Scene Understanding**: Users can specify regions/entities of interest
+- **Partial Updates**: Ability to refine specific parts without full re-processing
+- **Quality-Aware Refinement**: System can focus computational resources where needed
+
+**Application to NBV**: We can extend this paradigm to NBV planning where users select entities requiring higher reconstruction quality, and the system prioritizes views that improve those specific regions.
+
+---
+
+## Related Work
+
+### Classical NBV Methods
+
+Traditional NBV approaches rely on:
+
+- **Visibility Analysis**: Ray-casting to determine visible surfaces
+- **Information Gain Heuristics**: Entropy reduction, frontier-based exploration
+- **Coverage Maximization**: Maximizing observed surface area
+
+**Limitations**:
+
+- Computationally expensive (ray-casting bottlenecks)
+- Limited to restricted action spaces (e.g., hemisphere sampling)
+- No semantic awareness
+- Poor generalization to novel scenes
+
+### Semantic NBV Planning
+
+Recent work incorporates semantic information:
+
+- **Task-Relevant Object Detection**: Prioritize objects important for specific tasks (e.g., plants for harvesting)
+- **Region-Based Importance**: Weight different scene regions by semantic relevance
+- **Semantic Gain**: Combine visibility-based gain with semantic utility
+
+**Gap**: Existing methods focus on small-scale scenes or single-object reconstruction. Scaling to building-level environments with multiple rooms and diverse entities remains challenging.
+
+---
+
+## Research Gaps and Opportunities
+
+Based on the literature review, we identify several key opportunities:
+
+1. **Entity-Aware RRI**: Compute reconstruction improvement at the entity level (per-wall, per-door, per-furniture)
+2. **SceneScript as Backbone**: Leverage structured scene representations for semantic NBV planning
+3. **Streaming NBV**: Incremental viewpoint selection as more of the scene is revealed
+4. **Human-in-the-Loop NBV**: Allow users to interactively specify entities requiring high-fidelity reconstruction
+5. **Multi-Modal Integration**: Combine geometric, semantic, and uncertainty information for robust view selection
+
+Our project aims to bridge these gaps by developing a **SceneScript-driven, entity-aware NBV system** that can operate on large-scale indoor environments with human guidance.

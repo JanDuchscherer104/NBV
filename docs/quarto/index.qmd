@@ -1,0 +1,120 @@
+---
+title: "Semantic Next-Best-View Planning"
+subtitle: "Active 3D Reconstruction with Human-Machine Collaboration"
+author: "Jan Duchscherer"
+format: html
+bibliography: ../_shared/references.bib
+---
+
+# Project Overview
+
+## Motivation
+
+Manual 3D reconstruction of large-scale environments is **time-consuming and error-prone**. Professional teams can spend days scanning building-scale scenes with drones, and even experts frequently overlook regions that require multiple rescans [@GenNBV-chen2024].
+
+**Next-Best-View (NBV)** planning aims to automate this process by intelligently selecting camera viewpoints that maximize information gain, but existing approaches face significant limitations:
+
+- **Classical NBV methods** rely on hand-crafted heuristics and restricted action spaces, limiting generalization
+- **Learning-based NBV policies** focus on single-object reconstruction, not complex multi-room and -entity scenes
+- **Coverage-based metrics** optimize geometric completeness without considering semantic importance
+
+## Research Vision
+
+This project explores **semantic, entity-aware NBV planning** for large-scale indoor scene reconstruction. By leveraging SceneScript's structured scene representations [@SceneScript-avetisyan2024], we aim to:
+
+1. **Compute Relative Reconstruction Improvement (RRI) at the entity level** — per wall, door, furniture piece
+2. **Enable human-in-the-loop guidance** where users can select entities requiring high-fidelity reconstruction
+3. **Develop a system that bridges semantic understanding and geometric planning**
+
+### Key Innovation
+
+> **Entity-Aware RRI**: Move beyond holistic scene coverage to compute reconstruction improvement separately for each semantic entity, allowing task-specific and user-guided scanning priorities.
+
+## Project Scope
+
+### Part 1: Seminar (6 ECTS, ~180 hours)
+
+**Goal**: Develop a system to compute entity-level RRI for candidate views on the Aria Synthetic Environments (ASE) dataset.
+
+**Deliverables**:
+
+- Entity-level reconstruction quality metrics
+- Visibility-based RRI computation
+- Correlation analysis between different RRI formulations
+- Validation on ASE benchmark scenes
+
+### Part 2: Master Thesis (30 ECTS, ~900 hours)
+
+**Goal**: Implement and deploy a learning-based NBV prediction system with AR interface.
+
+**Planned Extensions**:
+
+- View synthesis via 3D Gaussian Splatting
+- Learning-based RRI predictor
+- AR interface for real-time view guidance
+- Real-world deployment on Meta Quest 3 or iPhone LiDAR
+- Multi-agent collaborative scanning
+
+## Technical Approach
+
+### Foundation: SceneScript as Backbone
+
+SceneScript [@SceneScript-avetisyan2024] provides:
+
+- **Structured scene representation** (walls, doors, windows as geometric primitives)
+- **Autoregressive generation** enabling streaming updates
+- **Entity-level outputs** ideal for semantic NBV planning
+
+### RRI Computation Strategy
+
+We explore three complementary approaches:
+
+1. **Entity-Level Metrics**: Compare predicted vs. ground truth SceneScript layouts
+2. **Visibility-Based Coverage**: Analyze novel point visibility from candidate views
+3. **View Synthesis (future)**: Use 3D Gaussian Splatting to render novel views for dense RRI
+
+### Human-in-the-Loop Workflow
+
+```
+User walks around → Partial PC captured → SceneScript predicts entities
+         ↓
+User selects "I want this table scanned well"
+         ↓
+System computes entity-weighted RRI → Recommends next views
+         ↓
+AR overlay shows optimal viewpoints → User captures → Repeat
+```
+
+## Dataset: Aria Synthetic Environments
+
+**100,000 synthetic indoor scenes** with:
+
+- Egocentric RGB trajectories (~2 min/scene)
+- Ground truth depth and segmentation
+- SceneScript layout annotations
+- Semi-dense point clouds from MPS SLAM
+
+**Key Challenge**: Each scene has only one pre-recorded trajectory, limiting our ability to query arbitrary novel views for RRI computation. We address this through view synthesis and entity-level metrics.
+
+## Related Work
+
+This project builds on three foundational papers:
+
+- **VIN-NBV** [@VIN-NBV-frahm2025]: Introduced RRI metric for viewpoint utility
+- **GenNBV** [@GenNBV-chen2024]: Demonstrated generalization through RL and continuous action spaces
+- **SceneScript** [@SceneScript-avetisyan2024]: Structured language model for scene reconstruction
+
+See the [Literature Review](contents/literature.qmd) for detailed analysis.
+
+## Navigation
+
+Use the sidebar to explore:
+
+- **[Literature Review](contents/literature.qmd)**: Key papers and methods
+- **[ASE Dataset](contents/ase_dataset.qmd)**: Dataset structure and suitability for NBV
+- **[Research Ideas](contents/ideas.qmd)**: Detailed concepts and system architecture
+- **[Roadmap](contents/roadmap.qmd)**: Timeline and milestones
+- **[Resources](contents/resources.qmd)**: Tools, libraries, and documentation
+- **[Glossary](contents/glossary.qmd)**: Abbreviations and technical terms
+- **[Issues & Questions](contents/issues.qmd)**: Open problems and considerations
+- **[TODOs](contents/todos.qmd)**: Action items and next steps

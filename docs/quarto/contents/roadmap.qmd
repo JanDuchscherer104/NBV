@@ -1,0 +1,320 @@
+---
+title: "Project Roadmap"
+format: html
+---
+
+# Project Roadmap
+
+## Seminar Phase (6 ECTS, ~180 hours)
+
+### Phase 1: Foundation & Familiarization (Weeks 1-3, ~40 hours) ✅ COMPLETE
+
+**Goal**: Understand the ecosystem — ASE data, SceneScript, Project Aria Tools
+
+#### Tasks
+
+- [x] Set up development environment
+  - Install Project Aria Tools
+  - Set up SceneScript repository
+  - Configure conda environments
+- [x] Download sample ASE data (10-20 scenes)
+- [x] ✅ Complete ASE tutorial notebook → **Created comprehensive `ase_exploration.ipynb`**
+- [x] ✅ Visualize scenes using `viewer_projects_ase`
+- [x] ✅ Understand data formats:
+  - Trajectory CSV structure (SE3 transforms)
+  - SceneScript language format
+  - Semi-dense point cloud format (~100K points with uncertainty)
+  - Instance segmentation mapping
+  - **NEW**: Pre-computed visibility in `semidense_observations.csv.gz`!
+
+#### Deliverables
+
+- ✅ Working development environment
+- ✅ **`ase_exploration.ipynb`**: Comprehensive exploration notebook with:
+  - Data loading and visualization
+  - Ground truth point cloud generation
+  - Chamfer distance computation (Open3D + SciPy)
+  - Incremental reconstruction simulation
+  - Visibility analysis
+- ✅ Documentation of data structure and formats (updated in `ase_dataset.qmd`)
+
+**Key Discoveries**:
+
+- Pre-computed visibility data eliminates need for ray casting
+- Open3D provides fast Chamfer distance (~50ms)
+- SE3 transformation objects require `.to_matrix()` conversion
+- 60-70% of points have high confidence (`dist_std < 0.01m`)
+
+---
+
+### Phase 2: Entity-Level Metrics Development (Weeks 4-6, ~50 hours)
+
+**Goal**: Implement reconstruction quality metrics at entity granularity
+
+#### Tasks
+
+- [ ] Implement SceneScript layout parser
+  - Parse walls, doors, windows from SSL
+  - Convert to geometric primitives (line segments, rectangles)
+- [ ] Develop entity comparison metrics
+  - **Walls**: Line segment IoU, endpoint distance, normal alignment
+  - **Doors**: Detection rate, position error (2D/3D), dimension error
+  - **Windows**: Similar to doors
+- [ ] Create partial scene generation pipeline
+  - Simulate partial trajectories (first N frames)
+  - Generate partial point clouds
+  - Run SceneScript on partial data
+- [ ] Compute per-entity reconstruction quality
+  - Compare predicted vs. GT entities
+  - Aggregate metrics per entity type
+
+#### Deliverables
+
+- Python module for entity-level metrics
+- Validation notebook showing metric behavior
+- Analysis of reconstruction quality vs. coverage level
+
+---
+
+### Phase 3: Visibility-Based RRI (Weeks 7-9, ~50 hours) ⚡ SIMPLIFIED
+
+**Goal**: Implement point cloud visibility analysis for candidate views
+
+**Status**: ✅ **MAJOR SIMPLIFICATION - No occlusion computation needed!**
+
+#### Tasks
+
+- [x] ~~Implement frustum culling~~ → **Not needed! Use pre-computed visibility**
+- [x] ~~Develop occlusion reasoning~~ → **Not needed! ASE provides this data**
+  - ~~**Option A**: Ray casting against partial point cloud (slow but accurate)~~
+  - ~~**Option B**: Depth buffer approach (faster approximation)~~
+- [ ] ✅ **SIMPLIFIED**: Load visibility from `semidense_observations.csv.gz`
+  ```python
+  visible_points = observations_df[
+      observations_df['frame_idx'] == candidate_frame
+  ]['point_uid'].unique()
+  ```
+- [ ] Compute visibility metrics
+  - Novel visible points (not in partial PC) - **DataFrame operations**
+  - Coverage increase - **Set operations**
+  - Viewpoint diversity - **Validated in notebook**
+- [ ] Generate candidate viewpoints
+  - Use trajectory frames as candidates (no sampling needed!)
+  - Or interpolate between frames for denser sampling
+- [ ] RRI computation ✅ **VALIDATED**
+  - Score each candidate by information gain (< 10ms per candidate)
+  - Optional: Validate with Chamfer distance (~50ms)
+
+#### Deliverables
+
+- ✅ **Prototype complete in `ase_exploration.ipynb`**:
+  - `IncrementalReconstruction` class
+  - Visibility lookup methods
+  - Chamfer distance validation
+- [ ] Production-ready visibility analysis module
+- [ ] RRI scorer with uncertainty weighting
+
+**Performance Achieved**:
+
+- Visibility lookup: < 10ms per candidate
+- Chamfer distance: ~50ms (Open3D)
+- Full NBV selection (50 candidates): < 1 second
+
+---
+
+### Phase 4: Integration & Validation (Weeks 10-12, ~40 hours)
+
+**Goal**: Combine entity and visibility metrics, validate on ASE
+
+#### Tasks
+
+- [ ] Implement entity-weighted RRI
+  - Combine entity-level metrics with visibility
+  - Allow user-specified entity weights
+- [ ] Validation experiments
+  - Select 10-20 diverse ASE scenes
+  - Generate partial scenes at multiple coverage levels (25%, 50%, 75%)
+  - Compute RRI for sampled candidate views
+  - Compare predicted RRI with actual improvement
+- [ ] Correlation analysis
+  - Entity-level RRI vs. ground truth layout error
+  - Visibility RRI vs. point cloud coverage
+  - Combined metric effectiveness
+- [ ] Documentation & reporting
+  - Write up methodology
+  - Create visualization of results
+  - Prepare seminar presentation
+
+#### Deliverables
+
+- Integrated NBV value estimation system
+- Validation report with quantitative results
+- Seminar presentation slides
+- Final documentation webpage (this Quarto site)
+
+---
+
+## Master Thesis Phase (30 ECTS, ~900 hours)
+
+### Phase 5: View Synthesis Integration (Months 1-2, ~200 hours)
+
+**Goal**: Add 3D Gaussian Splatting for novel view rendering
+
+#### Tasks
+
+- [ ] Integrate Nerfstudio or 3DGS codebase
+- [ ] Develop ASE-to-3DGS data pipeline
+  - Convert ASE format to 3DGS input
+  - Batch training on multiple scenes
+- [ ] Implement view synthesis RRI
+  - Render depth from candidate poses
+  - Compute dense Chamfer distance
+- [ ] Comparative analysis
+  - 3DGS RRI vs. entity-level RRI
+  - 3DGS RRI vs. visibility RRI
+  - Identify when each metric is most reliable
+
+---
+
+### Phase 6: Learning-Based RRI Predictor (Months 3-4, ~250 hours)
+
+**Goal**: Train neural network to predict viewpoint RRI
+
+#### Architecture
+
+- **Encoder**: SceneScript encoder (frozen or fine-tuned)
+- **Candidate Encoder**: View pose + frustum features
+- **Predictor**: MLP regressing RRI score
+
+#### Tasks
+
+- [ ] Generate training dataset
+  - Compute ground truth RRI for thousands of (scene, partial_pc, candidate_view) tuples
+  - Use all three RRI formulations as labels
+- [ ] Implement NBV prediction network
+  - Integrate SceneScript encoder
+  - Design view encoding (pose + context)
+- [ ] Training & evaluation
+  - Train on 80K scenes, validate on 10K, test on 10K
+  - Measure RRI prediction accuracy
+  - Ablation studies (entity weights, coverage, etc.)
+
+---
+
+### Phase 7: Human-in-the-Loop System (Months 5-6, ~250 hours)
+
+**Goal**: Develop interactive AR interface for real-time NBV guidance
+
+#### Components
+
+1. **Entity Selection UI**
+   - Tap entities in AR view
+   - Set importance weights
+2. **Real-Time NBV Computation**
+   - Streaming point cloud input
+   - Incremental SceneScript updates
+   - Fast RRI prediction (< 1 second)
+3. **View Guidance Overlay**
+   - AR arrows/markers showing optimal viewpoints
+   - Distance and quality indicators
+
+#### Tasks
+
+- [ ] Implement entity selection interface
+  - 2D/3D entity interaction
+  - Weight adjustment UI
+- [ ] Develop streaming NBV pipeline
+  - Incremental point cloud updates
+  - Efficient SceneScript re-encoding
+  - Candidate generation + RRI prediction
+- [ ] AR visualization
+  - Overlay recommended views in 3D
+  - Show entity-specific coverage maps
+- [ ] User study
+  - Compare manual scanning vs. NBV-guided scanning
+  - Measure reconstruction quality and time
+  - Evaluate usability
+
+---
+
+### Phase 8: Real-World Deployment & Evaluation (Months 7-8, ~200 hours)
+
+**Goal**: Deploy on mobile devices and validate in real environments
+
+#### Target Platforms
+
+- **Meta Quest 3**: Inside-out tracking, depth sensor
+- **iPhone LiDAR**: Portable, high-quality depth
+
+#### Tasks
+
+- [ ] Port to mobile runtime
+  - Optimize model for inference (quantization, pruning)
+  - Implement on-device SceneScript + RRI
+- [ ] Collect real-world scans
+  - Test in diverse environments (homes, offices, labs)
+  - Compare NBV-guided vs. manual scans
+- [ ] Evaluation
+  - Reconstruction quality (completeness, accuracy)
+  - Time to achieve target coverage
+  - User experience metrics
+- [ ] Thesis writing
+  - Related work, methodology, experiments
+  - Results, discussion, limitations
+  - Future work
+
+---
+
+## Milestones & Deadlines
+
+### Seminar Milestones
+
+| Date | Milestone | Deliverable |
+|------|-----------|-------------|
+| Week 3 | Environment Setup | Working ASE data loader |
+| Week 6 | Entity Metrics | Entity comparison module |
+| Week 9 | Visibility RRI | Candidate scoring system |
+| Week 12 | Seminar Complete | Final presentation + documentation |
+
+### Master Thesis Milestones
+
+| Month | Milestone | Deliverable |
+|-------|-----------|-------------|
+| Month 2 | View Synthesis | 3DGS-based RRI |
+| Month 4 | Learning Model | Trained NBV predictor |
+| Month 6 | AR Interface | Working HitL system |
+| Month 8 | Thesis Defense | Final thesis document |
+
+---
+
+## Risk Mitigation
+
+### Potential Blockers
+
+1. **3DGS quality insufficient**
+   - **Mitigation**: Fall back to entity + visibility metrics only
+2. **ASE data limitations**
+   - **Mitigation**: Collect supplementary real-world data with Aria glasses
+3. **AR deployment challenges**
+   - **Mitigation**: Prototype on desktop first, mobile as stretch goal
+4. **Training data generation too slow**
+   - **Mitigation**: Use pre-computed RRI database, parallelize computation
+
+---
+
+## Success Criteria
+
+### Seminar Success
+
+- ✅ Working entity-level RRI computation
+- ✅ Visibility-based RRI validated on ASE
+- ✅ Correlation analysis shows predictive power
+- ✅ Documentation complete
+
+### Master Thesis Success
+
+- ✅ Learning-based RRI predictor outperforms heuristics
+- ✅ AR interface enables real-time NBV guidance
+- ✅ User study shows reconstruction improvement over manual scanning
+- ✅ System deployed on mobile device
+- ✅ Thesis accepted

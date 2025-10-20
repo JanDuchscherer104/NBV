@@ -1,0 +1,73 @@
+---
+title: "Glossary"
+format: html
+---
+
+# Glossary
+
+## Abbreviations and Terms
+
+**ASE** - Aria Synthetic Environments
+: A large-scale dataset of 100K unique procedurally-generated indoor scenes with simulated Aria glasses sensor characteristics, egocentric trajectories, and ground truth annotations.
+
+**CPF** - Central Pupil Frame
+: The coordinate frame placed at the midpoint between the eye boxes of the left and right eye of Aria glasses. Used as the reference frame for eye gaze vectors.
+
+**GT** - Ground Truth
+: Reference data or annotations that represent the true or expected values, used for training and evaluation.
+
+**MPS** - Machine Perception Services
+: A suite of derived data processing services provided by Meta for Project Aria data, including SLAM, eye gaze tracking, hand tracking, and more.
+
+**NBV** - Next-Best-View
+: The problem of autonomously selecting the optimal next camera viewpoint to maximize information gain during active 3D reconstruction.
+
+**OOB** - Oriented Bounding Box
+: A 3D bounding box that can be arbitrarily rotated in space to tightly fit objects, unlike axis-aligned bounding boxes.
+
+**PC** - Point Cloud
+: A set of 3D points representing the geometry of a scene or object, typically acquired through depth sensors or reconstruction algorithms.
+
+**RRI** - Relative Reconstruction Improvement
+: A metric quantifying how much a candidate view would improve the quality of 3D reconstruction, accounting for coverage, novelty, and information gain.
+
+**SLAM** - Simultaneous Localization and Mapping
+: A technique for building a map of an unknown environment while simultaneously tracking the position of the sensor within it.
+
+**SSL** - Structure Scene Language / SceneScript Language
+: A structured language format for representing 3D scene layouts using primitives like walls, doors, windows, and objects with geometric parameters.
+
+**VIO** - Visual-Inertial Odometry
+: A method of estimating pose and motion by combining visual features from cameras with inertial measurements from IMUs.
+
+**VRS** - Virtual Reality Standard (file format)
+: A file format developed by Meta for storing and accessing multi-modal sensor data streams efficiently, used for Project Aria recordings.
+
+**6DoF** - Six Degrees of Freedom
+: The complete specification of a rigid body's position and orientation in 3D space (3 translational + 3 rotational degrees of freedom).
+
+## Technical Terms
+
+**Autoregressive Model**
+: A model that generates outputs sequentially, where each element depends on previously generated elements. SceneScript uses this approach to generate structured scene representations.
+
+**Coverage Ratio**
+: The percentage of a scene or object surface that has been captured by the current set of viewpoints, often used as a metric for reconstruction completeness.
+
+**Egocentric Trajectory**
+: A camera/sensor path recorded from a first-person perspective, as captured by wearable devices like Aria glasses.
+
+**Information Gain**
+: A measure of how much new or useful information would be acquired by taking a particular action, such as capturing a view from a specific pose.
+
+**Manhattan World**
+: An assumption that all surfaces in an indoor environment are aligned with three dominant orthogonal directions (typically X, Y, Z axes).
+
+**Semantic Gain**
+: The value of a viewpoint based on the semantic importance of visible objects or regions, prioritizing task-relevant entities.
+
+**Semi-Dense Reconstruction**
+: A 3D reconstruction that contains a substantial number of points but is not completely dense, typically from feature-based SLAM systems.
+
+**State Embedding**
+: A learned or engineered representation of the current system state, combining geometric, semantic, and action information for decision making.
