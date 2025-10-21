@@ -164,24 +164,6 @@
   - #link("https://www.youtube.com/watch?v=m6oFLfYUpoM&t=7242s")[ECCV 2024 Tutorial: Egocentric Research with Project Aria]
 ]
 
-// TODO slide
-#slide(title: [Next Steps & TODOs])[
-  *Literature Review*
-  - Read Project Aria paper @ProjectAria-ASE-2025
-  - Study EFM3D & EVL in depth @EFM3D-straub2024
-  - Reread VIN-NBV and GenNBV approach to get in-depth understanding of potential  metrics and loss functions
-
-  *Technical Exploration*
-  - Explore GT meshes (`.ply` files) in ASE dataset
-  - Get familiar with #link("https://github.com/facebookresearch/ATEK")[ATEK] and #link("https://github.com/facebookresearch/ATEK/blob/main/docs/ATEK_Data_Store.md")[ATEK Data Store]
-  - Test mesh-based evaluation metrics
-
-  *Implementation Goals*
-  - Implement ray-casting/rendering for candidate views
-  - Develop RRI computation pipeline using GT meshes
-
-]
-
 // VIN-NBV Overview
 #slide(title: [VIN-NBV: Learning-Based Next-Best-View])[
   *Key Innovation* @VIN-NBV-frahm2025
@@ -194,7 +176,7 @@
 
   For a candidate view $q$, RRI quantifies expected improvement:
 
-  $ "RRI"(q) = ("CD"(cal(R)_"base", cal(R)_"GT") - "CD"(cal(R)_("base" union q), cal(R)_"GT")) / ("CD"(cal(R)_"base", cal(R)_"GT")) $
+  $ "RRI"(q) = ("CD"(cal(P)_"base", cal(P)_"GT") - "CD"(cal(P)_("base" union q), cal(P)_"GT")) / ("CD"(cal(P)_"base", cal(P)_"GT")) $
 
   - Range: $[0, 1]$ where higher = better view
   - Normalized by current error → scale-independent
@@ -204,36 +186,62 @@
 
   Predicts RRI from current reconstruction state:
 
-  $ hat("RRI")(q) = "VIN"_theta (cal(R)_"base", C_"base", C_q) $
+  $ hat("RRI")(q) = "VIN"_theta (cal(P)_"base", C_"base", C_q) $
 
   - Input: Partial point cloud + camera poses
   - Features: Surface normals, visibility counts, depth, coverage
-  - Output: Predicted RRI via ordinal classification (15 bins)
+  - Output: RRI ranking via ordinal classification
 ]
 
 // Putting it together: RRI & NBV with ASE, EFM3D & ATEK
 #slide(title: [RRI-based NBV with ASE, EFM3D & ATEK])[
-  - Use ASE visibility data + GT meshes for oracle RRI
-  - Maybe compute RRI separately for each entity (walls, doors, objects)
-  - Weight by semantic importance: $ "RRI"_"total" = sum_e w_e dot "RRI"_e $
+  - Use ASE visibility data + GT meshes for oracle RRI and visibility count
+  - Maybe compute RRI separately for each entity (walls, doors, objects) to allow semantic weighting
+  - Use EVL as scene encoder
 
   *Pipeline*
-  1. *Reconstruct*: Build partial point cloud from historical trajectory
-  2. *Sample*: Generate candidate viewpoint pool around last pose
-  3. *Predict*: Use EVL network to predict RRI per candidate or directly predict NBV
+  1. *Scene Encoding*:
+    - Sample random point $t$ in ASE trajectory as starting pose
+    - Get partial PC, camera poses and RGB-D frames $(C, cal(P)_("base"), I_("RGB"-D))^(1:t)$ up to $t$ from historical trajectory
+    - Use EVL to encode current scene observation
+  3. *Sample*: Generate candidate viewpoint pool around last pose
+  4. *Predict*: Use _scene encodings_ + _candidate view encoding_ to predict RRI per candidate
+    - _freeze_ EVL weights, only train _VIN head_
 
+  #pagebreak()
   *ATEK Integration*
   - GT meshes enable oracle RRI computation (training labels)
   - Mesh-based metrics (accuracy, completeness, F-score) for evaluation
   - Pre-processed data splits for model training
 
   *Key Challenges*
-  - Ray-casting from candidate views to compute visibility
-  - Multi-entity scenes vs. VIN-NBV's single-object focus
-  - Scaling to scene-level environments
+  - Ray-casting from candidate views to compute visibility and $cal(P)_("base" union q)$ from GT meshes
+  - Multi-entity scenes vs. VIN-NBV's single-object focus $=>$ compute?
+  - Projection of features to candidate views? Is this explicit $"SE"(3)$ tf actually necesary?
 ]
+
+// TODO slide
+#slide(title: [Next Steps & TODOs])[
+  *Literature Review*
+  - Read Project Aria paper @ProjectAria-ASE-2025
+  - Study EFM3D & EVL in depth @EFM3D-straub2024
+  - Reread VIN-NBV and GenNBV approach to get in-depth understanding of potential  metrics and loss functions
+  - Mesh to distance field conversion / Distance to mesh surface as as metric?
+  - Is CD dependent on the density of the point cloud?
+
+  *Technical Exploration*
+  - Explore GT meshes (`.ply` files) in ASE dataset
+  - Get familiar with #link("https://github.com/facebookresearch/ATEK")[ATEK] and #link("https://github.com/facebookresearch/ATEK/blob/main/docs/ATEK_Data_Store.md")[ATEK Data Store]
+  - Test mesh-based evaluation metrics
+
+  *Implementation Goals*
+  - Implement ray-casting/rendering for candidate views
+  - Develop RRI computation pipeline using GT meshes
+
+]
+
 
 // Bibliography slide
 #slide(title: [Bibliography])[
-  #bibliography("/references.bib", style: "/ieee.csl")
+  #bibliography("/references.bib", style: "ieee")
 ]
