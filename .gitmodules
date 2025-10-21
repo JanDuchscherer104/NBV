@@ -4,3 +4,6 @@
 [submodule "external/projectaria_tools"]
 	path = external/projectaria_tools
 	url = git@github.com:facebookresearch/projectaria_tools.git
+[submodule "external/ATEK"]
+	path = external/ATEK
+	url = git@github.com:facebookresearch/ATEK.git
