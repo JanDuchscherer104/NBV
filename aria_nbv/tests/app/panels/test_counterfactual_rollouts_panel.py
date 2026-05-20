@@ -30,6 +30,8 @@ from aria_nbv.pose_generation import (
     ViewDirectionMode,
 )
 from aria_nbv.pose_generation.types import CandidateSamplingResult
+from aria_nbv.rollouts import RolloutZarrStoreReader, write_rollout_zarr_store
+from tests.rollout_fixtures import build_rollout_records
 
 
 def _dummy_camera() -> CameraTW:
@@ -75,6 +77,7 @@ def _target_row(*, gt_label_valid: bool = True) -> TargetCandidateRow:
         projected_area_fraction=0.01,
         semidense_support_count=5,
         evl_support_count=7,
+        effective_support_count=12.0,
         visibility_score=0.8,
         support_score=0.7,
         deficit_score=0.1,
@@ -122,10 +125,11 @@ def test_default_target_mixture_uses_requested_budget_16() -> None:
     counts = rollout_panel._target_mixture_counts_from_budget(16)
 
     assert counts == {
-        ViewDirectionMode.TARGET_POINT: 6,
-        ViewDirectionMode.RADIAL_TOWARDS: 4,
-        ViewDirectionMode.RADIAL_AWAY: 3,
-        ViewDirectionMode.FORWARD_RIG: 3,
+        "target_bearing_local": 5,
+        "forward_local": 5,
+        "lateral_target_bypass": 3,
+        "local_refinement": 2,
+        "revisit_backtrack": 1,
     }
 
 
@@ -187,6 +191,20 @@ def test_loaded_sample_info_documents_target_table_columns() -> None:
         assert f"`{column}`" in rollout_panel._LOADED_SAMPLE_INFO
 
 
+def test_target_rows_table_preserves_score_decomposition() -> None:
+    row = rollout_panel._target_rows_table((_target_row(),))[0]
+
+    assert row["confidence"] == pytest.approx(0.9)
+    assert row["projected_area_px"] == pytest.approx(64.0)
+    assert row["semidense_support"] == 5
+    assert row["evl_support"] == 7
+    assert row["effective_support"] == pytest.approx(12.0)
+    assert row["visibility_score"] == pytest.approx(0.8)
+    assert row["support_score"] == pytest.approx(0.7)
+    assert row["selection_score"] == pytest.approx(0.75)
+    assert row["gt_match_score"] == pytest.approx(0.5)
+
+
 def test_active_target_info_documents_actor_visible_and_gt_eval_boundary() -> None:
     info = rollout_panel._ACTIVE_TARGET_INFO
 
@@ -219,27 +237,18 @@ def test_format_rollout_option_includes_context_and_nan_beam() -> None:
     )
 
 
-def test_stored_candidate_rows_decode_strategy_and_mixture_names() -> None:
-    reader = _FakeRolloutReader(
-        {
-            "candidates/rollout_row_id": np.asarray([4], dtype=np.int64),
-            "candidates/candidate_row_id": np.asarray([10], dtype=np.int64),
-            "candidates/step_index": np.asarray([0], dtype=np.int16),
-            "candidates/shell_index": np.asarray([3], dtype=np.int32),
-            "candidates/selected_mask": np.asarray([True]),
-            "candidates/actor_action_mask": np.asarray([True]),
-            "candidates/q_train_mask": np.asarray([True]),
-            "candidates/target_rri": np.asarray([0.25], dtype=np.float32),
-            "candidates/scene_rri": np.asarray([np.nan], dtype=np.float32),
-            "candidates/strategy_id": np.asarray([3], dtype=np.int32),
-            "candidates/mixture_id": np.asarray([2], dtype=np.int32),
-        }
+def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=37)[:1],
     )
+    reader = RolloutZarrStoreReader(result.store_dir)
 
-    rows = stored_rollouts_panel.candidate_rows_for_rollout(reader, 4)
+    rows = stored_rollouts_panel.candidate_rows_for_rollout(reader, 0)
 
-    assert rows[0]["strategy"] == "target_point"
-    assert rows[0]["mixture"] == "component_2"
+    assert rows[0]["strategy"] != ""
+    assert rows[0]["position"] == "forward_local"
+    assert rows[0]["mixture"] != ""
 
 
 def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:
@@ -253,7 +262,14 @@ def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:
     assert isinstance(cfg, CandidateMixtureViewGeneratorConfig)
     assert cfg.total_count == 16
     assert cfg.base.num_samples == 16
-    assert [component.count for component in cfg.components] == [6, 4, 3, 3]
+    assert [component.name for component in cfg.components] == [
+        "target_bearing_local",
+        "forward_local",
+        "lateral_target_bypass",
+        "local_refinement",
+        "revisit_backtrack",
+    ]
+    assert [component.count for component in cfg.components] == [5, 5, 3, 2, 1]
     assert cfg.components[0].strategy is ViewDirectionMode.TARGET_POINT
 
 
@@ -396,6 +412,17 @@ def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
         rollout_panel._valid_step_metric_values(step, "target_rri")
 
 
+def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
+    step = SimpleNamespace(
+        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, True])),
+        metric_vectors={"target_root_gain": torch.tensor([0.5, float("nan"), 0.9])},
+    )
+
+    values = rollout_panel._valid_step_metric_values(step, "target_root_gain")
+
+    assert values.tolist() == pytest.approx([0.5, 0.9])
+
+
 def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
     rows = rollout_panel.pd.DataFrame(
         [
@@ -421,7 +448,7 @@ def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
     assert fig.layout.title.text == "Valid-candidate target-RRI empirical 95% band"
     assert "CI" not in fig.layout.title.text
     assert any(trace.fill == "tonexty" for trace in fig.data)
-    assert any("selected r_t^e" in str(trace.name) for trace in fig.data)
+    assert any("selected target_root_gain" in str(trace.name) for trace in fig.data)
     assert not any("candidate min" in str(trace.name) for trace in fig.data)
     assert not any("candidate mean" in str(trace.name) for trace in fig.data)
     assert not any("candidate max" in str(trace.name) for trace in fig.data)

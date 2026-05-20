@@ -21,8 +21,7 @@ from aria_nbv.pose_generation.counterfactuals import (
     CounterfactualTrajectory,
 )
 from aria_nbv.pose_generation.target_counterfactuals import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
-from aria_nbv.pose_generation.types import SamplingStrategy
-from aria_nbv.pose_generation.types import CandidatePositionMode
+from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy
 from aria_nbv.rollouts import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from aria_nbv.utils.fingerprints import stable_config_hash
 
@@ -119,6 +118,14 @@ def build_rollout_records(
                     target_inst_id=1000 + source_row_id,
                     target_class_name="fixture_object",
                     target_confidence=0.9,
+                    target_projected_area_pixels=512.0,
+                    target_projected_area_fraction=512.0 / (240.0 * 240.0),
+                    target_semidense_support_count=7,
+                    target_evl_support_count=5,
+                    target_effective_support_count=12.0,
+                    target_visibility_score=0.8,
+                    target_support_score=1.0,
+                    target_deficit_score=0.9,
                     target_center_world=(float(source_row_id), 0.0, 0.5),
                     target_extents=(0.4, 0.5, 0.6),
                     target_pose_world_object=(

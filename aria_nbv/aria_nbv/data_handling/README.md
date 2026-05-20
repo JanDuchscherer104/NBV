@@ -200,11 +200,20 @@ rollouts.zarr/
     selected_mask                       # bool[C]
     target_rri                          # float32[C]
     scene_rri                           # float32[C]
-    target_root_gain, scene_root_gain   # float32[C], root-normalized rewards
+    target_root_gain, scene_root_gain   # float32[C], target reward + scene diagnostic
     target_log_error_gain               # float32[C], diagnostic
     target_pm_dist_before/after         # float32[C], diagnostic
-    strategy_id, mixture_id             # int32[C]
+    strategy_id, position_id, mixture_id # int32[C]
     invalid_reason_bitset               # uint32[C]
+  candidate_diagnostics/
+    candidate_row_id                    # int64[C] -> candidates/candidate_row_id
+    position_id                         # int32[C], inspection copy aligned to candidates/
+    mesh_distance_m                     # float32[C], NaN if unavailable
+    path_min_clearance_m                # float32[C], NaN if unavailable
+    path_collision_mask                 # bool[C]
+    free_space_margin_m                 # float32[C], NaN if unavailable
+    motion_step_length_m                # float32[C], NaN if unavailable
+    target_distance_m                   # float32[C], NaN if unavailable
   selected_depth/
     step_row_id                         # int64[T] -> steps/step_row_id
     candidate_row_id                    # int64[T] -> candidates/candidate_row_id
@@ -212,7 +221,7 @@ rollouts.zarr/
     valid_mask                          # compressed bool[T, 240, 240]
     focal_px, principal_point_px        # float32[T, 2]
     image_size_hw                       # int32[T, 2]
-  target_eval_crops/
+  target_eval_crops/                    # sampled/audit payload; empty in lean stores
     crop_row_id                         # int64[K]
     step_row_id                         # int64[K] -> steps/step_row_id
     candidate_row_id                    # int64[K], -1 for current eval crop
@@ -227,6 +236,7 @@ rollouts.zarr/
     q_train_mask                        # bool[T, N_q]
     target_row_id                       # int64[T]
     selected_candidate_index            # int32[T]
+    position_id                         # int32[T, N_q]
     one_step_target_rri                 # float32[T, N_q]
     one_step_target_root_gain           # float32[T, N_q], training reward field
     invalid_reason_bitset               # uint32[T, N_q]
@@ -417,6 +427,7 @@ rollouts_v1/
         lineage/
         steps/
         candidates/
+        candidate_diagnostics/          # typed candidate-generation audit metrics
         selected_depth/                 # required selected-action depth profile
         q_h/                            # persisted derived training-hot view
         diagnostics/                    # optional inspection payloads
@@ -449,6 +460,7 @@ relationships, not by nested directories:
 | `lineage/`      | Rollout-row id plus config/protocol hashes.                         | Source, target, step, or candidate mirrors.                    |
 | `steps/`        | One row per time step in a rollout chain.                           | Full candidate shell payloads.                                 |
 | `candidates/`   | Full-shell candidate rows, masks, provenance, and RRI labels.       | Materialized training batches or selected-action rasters.      |
+| `candidate_diagnostics/` | Typed candidate-generation audit metrics aligned with `candidates/`. | Q_H labels, arbitrary debug blobs, or training-required tensors. |
 | `selected_depth/` | Required selected-action depth maps for actor-history/Q_H inputs. | All-candidate depth renders or source depth streams.           |
 | `q_h/`          | Derived, chunked training-hot candidate-query tensors.              | Canonical facts that are not reconstructable from row tables.  |
 | `diagnostics/`  | Optional retained heavy debug payloads.                             | Any training-required field.                                   |
@@ -566,10 +578,10 @@ The rollout generator reuses immutable VIN rows for cached substrate features
 and raw snippet/mesh references for counterfactual rendering. It renders all
 valid candidates at the low resolution configured under `target_scorer.depth`
 for oracle RRI scoring, then re-renders only selected actions at the
-high-resolution `selected_depth` setting for durable actor-history/Q_H inputs.
-The initial writer keeps the high-resolution selected-depth rasters as
-Q_H/history evidence only; it does not change low-resolution RRI scoring or the
-current transition point-cloud semantics.
+configured `selected_depth` resolution for durable successor-state history.
+Those selected/parent rasters become actor-visible for descendant states after
+the action is materialized; they do not change the pre-selection low-resolution
+oracle scoring pass.
 
 ![Rollout generation sequence](../../../docs/figures/diagrams/data_handling/mermaid/rollout_generation_sequence.svg)
 
@@ -626,7 +638,7 @@ Current compatibility gates:
 
 - VIN offline stores must match `OFFLINE_DATASET_VERSION`, currently `7`.
 - Rollout stores must match `ROLLOUT_ZARR_SCHEMA_VERSION`, currently
-  `0.7-root-gain-target-crops`.
+  `1.0-target-rollout-core`.
 - A rollout store with the current schema can still be untrusted if validation
   reports missing `manifest.json`, empty `sources/source_shard_id`, negative
   `sources/source_shard_row`, or another lineage error.

@@ -65,8 +65,8 @@ if TYPE_CHECKING:
 ROLLOUT_ZARR_SCHEMA_ID = "aria_nbv.rollout_zarr_q_invalidity"
 """Schema id stored as a root attribute on rollout replay stores."""
 
-ROLLOUT_ZARR_SCHEMA_VERSION = "0.9-candidate-diagnostics"
-"""Manifest-backed rollout replay schema version with typed candidate-generation diagnostics."""
+ROLLOUT_ZARR_SCHEMA_VERSION = "1.0-target-rollout-core"
+"""Target-first rollout schema with hot candidate provenance and core parent-depth history."""
 
 DEFAULT_RETURN_SEMANTICS = "cumulative_target_root_gain"
 """Default return target family for root-normalized ``Q_H`` replay views."""
@@ -94,6 +94,7 @@ Q_H_ARRAY_NAMES = (
     "q_train_mask",
     "target_row_id",
     "selected_candidate_index",
+    "position_id",
     "one_step_target_rri",
     "one_step_target_root_gain",
     "invalid_reason_bitset",
@@ -236,6 +237,7 @@ CANDIDATE_TABLE = _TableSchema(
         _TableField("q_train_mask", np.bool_),
         _TableField("selected_mask", np.bool_),
         _TableField("strategy_id", np.int32),
+        _TableField("position_id", np.int32),
         _TableField("mixture_id", np.int32),
         _TableField("sampler_probability", np.float32),
         _TableField("score_source_id", np.int32),
@@ -378,6 +380,9 @@ class RolloutZarrStoreConfig(BaseConfig):
     target_eval_crop_max_points: int = Field(default=DEFAULT_TARGET_EVAL_CROP_MAX_POINTS, ge=1)
     """Fixed row width for oracle/eval target crop point payloads."""
 
+    target_eval_crops_enabled: bool = False
+    """Persist oracle/eval target crop point payloads for sampled audit shards."""
+
     _resolve_store_dir = field_validator("store_dir", mode="before")(resolve_cache_artifact_dir)
 
 
@@ -442,6 +447,7 @@ def write_rollout_zarr_store(
     selected_depth_source_resolution: str = "exact_output_size",
     q_h_chunk_states: int = 64,
     target_eval_crop_max_points: int = DEFAULT_TARGET_EVAL_CROP_MAX_POINTS,
+    target_eval_crops_enabled: bool = False,
 ) -> RolloutZarrWriteResult:
     """Write rollout records into a standalone ``rollouts.zarr`` store."""
 
@@ -466,6 +472,7 @@ def write_rollout_zarr_store(
         selected_depth_source_resolution=selected_depth_source_resolution,
         q_h_chunk_states=q_h_chunk_states,
         target_eval_crop_max_points=target_eval_crop_max_points,
+        target_eval_crops_enabled=target_eval_crops_enabled,
     ).write()
 
 
@@ -495,6 +502,7 @@ class _RolloutZarrWriteSession:
         selected_depth_source_resolution: str,
         q_h_chunk_states: int,
         target_eval_crop_max_points: int,
+        target_eval_crops_enabled: bool,
     ) -> None:
         self.output_dir = Path(store_dir).expanduser().resolve()
         self.records = records
@@ -516,6 +524,7 @@ class _RolloutZarrWriteSession:
         self.selected_depth_source_resolution = str(selected_depth_source_resolution)
         self.q_h_chunk_states = int(q_h_chunk_states)
         self.target_eval_crop_max_points = int(target_eval_crop_max_points)
+        self.target_eval_crops_enabled = bool(target_eval_crops_enabled)
         if self.selected_depth_width_px < 1 or self.selected_depth_height_px < 1:
             raise ValueError("selected_depth_width_px and selected_depth_height_px must be positive.")
         if self.selected_depth_chunk_steps < 1:
@@ -537,6 +546,7 @@ class _RolloutZarrWriteSession:
             selected_depth_width_px=self.selected_depth_width_px,
             selected_depth_height_px=self.selected_depth_height_px,
             target_eval_crop_max_points=self.target_eval_crop_max_points,
+            target_eval_crops_enabled=self.target_eval_crops_enabled,
         )
         q_h_horizon = _table_horizon(table)
         q_h_arrays = _build_q_h_arrays(table, gamma=self.discount_gamma)
@@ -562,6 +572,7 @@ class _RolloutZarrWriteSession:
             selected_depth_zfar_m=self.selected_depth_zfar_m,
             selected_depth_source_resolution=self.selected_depth_source_resolution,
             target_eval_crop_max_points=self.target_eval_crop_max_points,
+            target_eval_crops_enabled=self.target_eval_crops_enabled,
             created_at_utc=created_at_utc,
             manifest_sha256="",
         )
@@ -608,6 +619,7 @@ class _RolloutZarrWriteSession:
             table.target_eval_crops,
             dictionaries=dictionaries,
             max_points=self.target_eval_crop_max_points,
+            enabled=self.target_eval_crops_enabled,
         )
         _write_q_h_group(
             groups["q_h"],
@@ -785,6 +797,8 @@ class _RolloutZarrValidator:
         actor_action_mask = np.asarray(self.root["candidates/actor_action_mask"])
         if np.any(selected_mask & (~actor_action_mask)):
             self.errors.append("Selected candidates must be actor-selectable.")
+        if np.any(actor_action_mask & (np.asarray(self.root["candidates/position_id"]) < 0)):
+            self.errors.append("Actor-selectable candidates require non-placeholder position_id.")
 
         rollout_split_id = np.asarray(self.root["rollouts/split_id"])
         if np.unique(rollout_split_id).shape[0] > 1:
@@ -808,16 +822,17 @@ class _RolloutZarrValidator:
         diag_candidate_row_id = np.asarray(group["candidate_row_id"], dtype=np.int64)
         if not np.array_equal(diag_candidate_row_id, candidate_row_id.astype(np.int64)):
             self.errors.append("candidate_diagnostics/candidate_row_id must align with candidates/candidate_row_id.")
-        for field in CANDIDATE_DIAGNOSTIC_TABLE.fields:
-            array = np.asarray(group[field.name])
+        for table_field in CANDIDATE_DIAGNOSTIC_TABLE.fields:
+            array = np.asarray(group[table_field.name])
             if int(array.shape[0]) != int(candidate_row_id.shape[0]):
                 self.errors.append(
-                    f"Candidate diagnostic field {field.name!r} has {array.shape[0]} rows, "
+                    f"Candidate diagnostic field {table_field.name!r} has {array.shape[0]} rows, "
                     f"expected {candidate_row_id.shape[0]}."
                 )
-            if np.dtype(array.dtype) != np.dtype(field.dtype):
+            if np.dtype(array.dtype) != np.dtype(table_field.dtype):
                 self.errors.append(
-                    f"Candidate diagnostic field {field.name!r} dtype {array.dtype} must be {np.dtype(field.dtype)}."
+                    f"Candidate diagnostic field {table_field.name!r} dtype {array.dtype} "
+                    f"must be {np.dtype(table_field.dtype)}."
                 )
         collision_mask = np.asarray(group["path_collision_mask"], dtype=np.bool_).reshape(-1)
         if collision_mask.any():
@@ -873,6 +888,10 @@ class _RolloutZarrValidator:
             self.errors.append("Missing required group 'target_eval_crops'.")
             return
         group = self.root["target_eval_crops"]
+        if not bool(self.root.attrs.get("target_eval_crops_enabled", False)):
+            if int(np.asarray(group["crop_row_id"]).shape[0]) != 0:
+                self.errors.append("target_eval_crops must be empty when target_eval_crops_enabled is false.")
+            return
         required = set(TARGET_EVAL_CROP_TABLE.names) | {"points_world", "mask", "source_role_names"}
         missing = sorted(name for name in required if name not in group)
         if missing:
@@ -1139,6 +1158,7 @@ def _root_metadata_payload(
     selected_depth_zfar_m: float | None,
     selected_depth_source_resolution: str,
     target_eval_crop_max_points: int,
+    target_eval_crops_enabled: bool,
     created_at_utc: str,
     manifest_sha256: str,
 ) -> dict[str, Any]:
@@ -1174,7 +1194,7 @@ def _root_metadata_payload(
         "selected_depth_invalid_fill_value": SELECTED_DEPTH_INVALID_FILL_VALUE,
         "selected_depth_codec": SELECTED_DEPTH_CODEC,
         "selected_depth_chunk_steps": int(selected_depth_chunk_steps),
-        "selected_depth_role": "q_h_history_only",
+        "selected_depth_role": "selected_successor_state_history",
         "selected_depth_renderer": selected_depth_renderer,
         "selected_depth_znear_m": _float_or_nan(selected_depth_znear_m),
         "selected_depth_zfar_m": _float_or_nan(selected_depth_zfar_m),
@@ -1201,7 +1221,7 @@ def _root_metadata_payload(
         "candidate_diagnostics_unavailable_bool": "false",
         "num_candidate_diagnostics": int(tables.candidate_diagnostics["candidate_row_id"].shape[0]),
         "num_selected_depths": int(tables.selected_depth["step_row_id"].shape[0]),
-        "target_eval_crops_enabled": True,
+        "target_eval_crops_enabled": bool(target_eval_crops_enabled),
         "target_eval_crops_role": "oracle_eval_only",
         "target_eval_crops_coordinate_frame": "world",
         "target_eval_crops_max_points": int(target_eval_crop_max_points),
@@ -1610,6 +1630,31 @@ def _write_targets(
             dtype=np.float32,
         ),
     )
+    for name in (
+        "target_projected_area_pixels",
+        "target_projected_area_fraction",
+        "target_effective_support_count",
+        "target_visibility_score",
+        "target_support_score",
+        "target_deficit_score",
+    ):
+        _write_array(
+            group,
+            name,
+            np.asarray(
+                [_float_or_nan(target_rows[target_row_id].get(name)) for target_row_id in target_ids],
+                dtype=np.float32,
+            ),
+        )
+    for name in ("target_semidense_support_count", "target_evl_support_count"):
+        _write_array(
+            group,
+            name,
+            np.asarray(
+                [_int_or_default(target_rows[target_row_id].get(name), default=-1) for target_row_id in target_ids],
+                dtype=np.int32,
+            ),
+        )
     _write_array(
         group,
         "target_center_world",
@@ -1796,6 +1841,14 @@ def _target_rows_from_records(records: list[RolloutZarrRecord]) -> dict[int, dic
             "target_inst_id": lineage.target_inst_id,
             "target_class_name": lineage.target_class_name,
             "target_confidence": lineage.target_confidence,
+            "target_projected_area_pixels": lineage.target_projected_area_pixels,
+            "target_projected_area_fraction": lineage.target_projected_area_fraction,
+            "target_semidense_support_count": lineage.target_semidense_support_count,
+            "target_evl_support_count": lineage.target_evl_support_count,
+            "target_effective_support_count": lineage.target_effective_support_count,
+            "target_visibility_score": lineage.target_visibility_score,
+            "target_support_score": lineage.target_support_score,
+            "target_deficit_score": lineage.target_deficit_score,
             "target_center_world": lineage.target_center_world,
             "target_extents": lineage.target_extents,
             "target_pose_world_object": lineage.target_pose_world_object,
@@ -1823,6 +1876,7 @@ def _flatten_records(
     selected_depth_width_px: int,
     selected_depth_height_px: int,
     target_eval_crop_max_points: int,
+    target_eval_crops_enabled: bool,
 ) -> _RolloutTables:
     source_rows: dict[str, list[Any]] = _empty_rows(SOURCE_TABLE)
     rollout_rows: dict[str, list[Any]] = _empty_rows(ROLLOUT_TABLE)
@@ -1948,16 +2002,17 @@ def _flatten_records(
                 step_row_id=this_step_row_id,
                 selected_candidate_row_id=selected_candidate_row_id,
             )
-            crop_row_id = _append_target_eval_crop_rows(
-                target_eval_crop_rows,
-                step=step,
-                candidate_valid=candidate_valid,
-                step_row_id=this_step_row_id,
-                candidate_row_id_start=candidate_row_id,
-                crop_row_id_start=crop_row_id,
-                dictionaries=dictionaries,
-                fixed_max_points=target_eval_crop_max_points,
-            )
+            if target_eval_crops_enabled:
+                crop_row_id = _append_target_eval_crop_rows(
+                    target_eval_crop_rows,
+                    step=step,
+                    candidate_valid=candidate_valid,
+                    step_row_id=this_step_row_id,
+                    candidate_row_id_start=candidate_row_id,
+                    crop_row_id_start=crop_row_id,
+                    dictionaries=dictionaries,
+                    fixed_max_points=target_eval_crop_max_points,
+                )
 
             for shell_index in range(int(candidate_valid.shape[0])):
                 _append_candidate_row(
@@ -2243,6 +2298,7 @@ def _append_candidate_row(
     rows["q_train_mask"].append(q_train)
     rows["selected_mask"].append(is_selected)
     rows["strategy_id"].append(_full_shell_value(step.candidates.strategy_id, shell_index, candidate_valid, default=-1))
+    rows["position_id"].append(_full_shell_value(step.candidates.position_id, shell_index, candidate_valid, default=-1))
     rows["mixture_id"].append(_full_shell_value(step.candidates.mixture_id, shell_index, candidate_valid, default=-1))
     rows["sampler_probability"].append(
         _full_shell_value(step.candidates.sampler_probability, shell_index, candidate_valid, default=np.nan)
@@ -2314,7 +2370,9 @@ def _append_candidate_diagnostic_row(
         _candidate_extra_value(step.candidates.extras, "target_distance_m", shell_index, candidate_valid)
     )
     rows["target_bearing_yaw_deg"].append(
-        np.degrees(_candidate_extra_value(step.candidates.extras, "target_bearing_yaw_rad", shell_index, candidate_valid))
+        np.degrees(
+            _candidate_extra_value(step.candidates.extras, "target_bearing_yaw_rad", shell_index, candidate_valid)
+        )
     )
 
 
@@ -2398,7 +2456,7 @@ def _write_selected_depth_group(
             "invalid_fill_value": SELECTED_DEPTH_INVALID_FILL_VALUE,
             "codec": SELECTED_DEPTH_CODEC,
             "chunk_steps": int(chunk_steps),
-            "role": "q_h_history_only",
+            "role": "selected_successor_state_history",
             "renderer": renderer,
             "znear_m": _float_or_nan(znear_m),
             "zfar_m": _float_or_nan(zfar_m),
@@ -2417,18 +2475,20 @@ def _write_target_eval_crops_group(
     *,
     dictionaries: dict[str, list[str]],
     max_points: int,
+    enabled: bool,
 ) -> None:
     """Write oracle/eval-only target crop point payloads and row metadata."""
 
     group.attrs.update(
         {
-            "enabled": True,
+            "enabled": bool(enabled),
             "role": "oracle_eval_only",
             "coordinate_frame": "world",
             "points_dtype": "float32",
             "mask_dtype": "bool",
             "max_points": int(max_points),
             "source_roles": "current_eval,candidate_eval",
+            "retention": "sampled_audit" if enabled else "disabled_training_core",
         }
     )
     for name in TARGET_EVAL_CROP_TABLE.names:
@@ -2488,6 +2548,7 @@ def _build_q_h_arrays(tables: _RolloutTables, *, gamma: float) -> dict[str, np.n
         "q_train_mask": np.zeros((state_count, max_candidates), dtype=np.bool_),
         "target_row_id": np.zeros((state_count,), dtype=np.int64),
         "selected_candidate_index": np.full((state_count,), -1, dtype=np.int32),
+        "position_id": np.full((state_count, max_candidates), -1, dtype=np.int32),
         "one_step_target_rri": np.full((state_count, max_candidates), np.nan, dtype=np.float32),
         "one_step_target_root_gain": np.full((state_count, max_candidates), np.nan, dtype=np.float32),
         "invalid_reason_bitset": np.zeros((state_count, max_candidates), dtype=np.uint32),
@@ -2518,6 +2579,7 @@ def _build_q_h_arrays(tables: _RolloutTables, *, gamma: float) -> dict[str, np.n
             q["candidate_row_id"][row, local_index] = int(candidates["candidate_row_id"][candidate_index])
             q["valid_action_mask"][row, local_index] = bool(candidates["actor_action_mask"][candidate_index])
             q["q_train_mask"][row, local_index] = bool(candidates["q_train_mask"][candidate_index])
+            q["position_id"][row, local_index] = int(candidates["position_id"][candidate_index])
             q["one_step_target_rri"][row, local_index] = float(candidates["target_rri"][candidate_index])
             q["one_step_target_root_gain"][row, local_index] = float(candidates["target_root_gain"][candidate_index])
             q["invalid_reason_bitset"][row, local_index] = int(candidates["invalid_reason_bitset"][candidate_index])

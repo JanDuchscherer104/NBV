@@ -110,6 +110,14 @@ class RolloutLineage:
     target_inst_id: int | None = None
     target_class_name: str | None = None
     target_confidence: float | None = None
+    target_projected_area_pixels: float | None = None
+    target_projected_area_fraction: float | None = None
+    target_semidense_support_count: int | None = None
+    target_evl_support_count: int | None = None
+    target_effective_support_count: float | None = None
+    target_visibility_score: float | None = None
+    target_support_score: float | None = None
+    target_deficit_score: float | None = None
     target_center_world: tuple[float, float, float] | None = None
     target_extents: tuple[float, float, float] | None = None
     target_pose_world_object: tuple[float, ...] | None = None

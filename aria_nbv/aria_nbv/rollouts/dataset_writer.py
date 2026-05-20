@@ -248,6 +248,9 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     require_label_valid: bool = True
     """Skip selected targets without valid GT/evaluation labels when true."""
 
+    min_valid_root_candidates: int = Field(default=3, ge=0)
+    """Skip rollout roots whose materialized first step has too few valid actions."""
+
     verbosity: Verbosity = Field(default=Verbosity.NORMAL)
     """Console verbosity."""
 
@@ -478,6 +481,7 @@ class RolloutDatasetWriter:
             selected_depth_source_resolution="exact_output_size",
             q_h_chunk_states=self.config.store.q_h_chunk_states,
             target_eval_crop_max_points=self.config.store.target_eval_crop_max_points,
+            target_eval_crops_enabled=self.config.store.target_eval_crops_enabled,
         )
         self.stats.rollouts_written = int(result.num_rollouts)
         validation = validate_rollout_zarr_store(result.store_dir)
@@ -600,6 +604,15 @@ class RolloutDatasetWriter:
                     f"target={target.target_id}: {exc}",
                 )
                 continue
+            low_valid_root = self._low_valid_root_reason(result)
+            if low_valid_root is not None:
+                self.stats.rollout_invalid_skips += 1
+                self.stats.skip(low_valid_root)
+                self.console.warn(
+                    f"Skipping rollout recipe={recipe.name} scene={sample.scene_id} snippet={sample.snippet_id} "
+                    f"target={target.target_id}: {low_valid_root}",
+                )
+                continue
             if selected_depth_renderer is not None:
                 self._attach_selected_depths(
                     result=result,
@@ -635,7 +648,9 @@ class RolloutDatasetWriter:
                         target_protocol_version=self.config.store.target_protocol_version,
                         target_crop_policy=self.config.target_scorer.target_crop_policy,
                         reason_code_version=INVALID_REASON_VERSION,
-                        selection_rng_state_hash="not-captured-v1",
+                        selection_rng_state_hash=(
+                            f"seed-once:{recipe.seed}:split-manifest:{source_lineage.split_manifest_hash}"
+                        ),
                         target_selection_policy=self.config.target_selector.policy.value,
                         target_selection_rank=target.selected_rank if target.selected_rank is not None else target_rank,
                         target_selection_score=target.score,
@@ -647,6 +662,14 @@ class RolloutDatasetWriter:
                         target_inst_id=target.inst_id,
                         target_class_name=target.class_name,
                         target_confidence=target.confidence,
+                        target_projected_area_pixels=target.projected_area_pixels,
+                        target_projected_area_fraction=target.projected_area_fraction,
+                        target_semidense_support_count=target.semidense_support_count,
+                        target_evl_support_count=target.evl_support_count,
+                        target_effective_support_count=target.effective_support_count,
+                        target_visibility_score=target.visibility_score,
+                        target_support_score=target.support_score,
+                        target_deficit_score=target.deficit_score,
                         target_center_world=target.center_world,
                         target_extents=target.extents,
                         target_pose_world_object=target.pose_world_object,
@@ -661,8 +684,26 @@ class RolloutDatasetWriter:
                         gt_match_status=target.gt_match_status,
                     ),
                 )
-            )
+        )
         return records
+
+    def _low_valid_root_reason(self, result: CounterfactualRolloutResult) -> str | None:
+        """Return a skip reason when the root step falls below the valid-action gate."""
+
+        threshold = int(self.config.min_valid_root_candidates)
+        if threshold <= 0:
+            return None
+        root_counts = [
+            int(trajectory.steps[0].candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
+            for trajectory in result.trajectories
+            if trajectory.steps
+        ]
+        if not root_counts:
+            return "low_valid_root_candidates:missing_root_step"
+        min_count = min(root_counts)
+        if min_count < threshold:
+            return f"low_valid_root_candidates:{min_count}<min{threshold}"
+        return None
 
     def _attach_selected_depths(
         self,

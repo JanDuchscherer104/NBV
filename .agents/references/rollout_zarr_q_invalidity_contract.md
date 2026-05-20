@@ -54,7 +54,7 @@ Root attributes:
 | `selected_depth_invalid_fill_value` | when enabled | Default `0.0`; valid pixels are defined by the separate mask. |
 | `selected_depth_codec` | when enabled | Default `blosc:zstd:clevel=5:bitshuffle`. |
 | `selected_depth_chunk_steps` | when enabled | Default first chunk dimension, currently `16`. |
-| `selected_depth_role` | when enabled | Default `q_h_history_only`; not an oracle-label semantic. |
+| `selected_depth_role` | when enabled | Default `selected_successor_state_history`; not an oracle-label semantic. |
 | `selected_depth_renderer`, `selected_depth_znear_m`, `selected_depth_zfar_m` | when enabled | Renderer identity and depth clip planes. |
 | `selected_depth_source_resolution` | when enabled | Default `exact_output_size`; selected-depth output is rendered directly at persisted size. |
 
@@ -102,6 +102,20 @@ rollouts.zarr/
     candidate_pose_world_cam
     candidate_pose_relative
     metric_vectors
+    position_id
+  candidate_diagnostics/
+    candidate_row_id
+    position_id
+    mesh_distance_m
+    path_min_clearance_m
+    path_collision_mask
+    free_space_margin_m
+    motion_step_length_m
+    motion_height_delta_m
+    motion_backward_step_m
+    motion_yaw_delta_deg
+    target_distance_m
+    target_bearing_yaw_deg
   selected_depth/
     step_row_id
     candidate_row_id
@@ -110,7 +124,7 @@ rollouts.zarr/
     focal_px
     principal_point_px
     image_size_hw
-  target_eval_crops/
+  target_eval_crops/        # optional sampled/audit payload; empty in lean stores
     crop_row_id
     step_row_id
     candidate_row_id
@@ -388,7 +402,7 @@ Recommended tensor shapes:
 
 Multi-step target tensors such as `q_target_target_rri[S,H,C]` are future
 derived views, not part of the current schema
-`0.7-root-gain-target-crops` writer.
+`1.0-target-rollout-core` writer.
 
 Array attributes must record:
 

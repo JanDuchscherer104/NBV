@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import torch
@@ -29,6 +30,7 @@ from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGeneratorConfig,
+    CandidatePositionMode,
     CandidateViewGeneratorConfig,
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
@@ -42,11 +44,13 @@ from ...pose_generation import (
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
+from ...rollouts import candidate_result_diagnostic_counts
 from ...rri_metrics import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
 from ..state_types import config_signature
 from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
+from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 if TYPE_CHECKING:
     from ...pose_generation.counterfactuals import CounterfactualEvaluatorFn
@@ -79,12 +83,18 @@ Target table fields:
 - `class`: human-readable class name when available.
 - `sem_id` / `inst_id`: semantic and instance ids from the actor-visible target record.
 - `confidence`: detector/source confidence.
-- `score`: target-selection score, not target-RRI.
-- `support`: semidense plus EVL support count used as actor-visible evidence.
+- `projected_area_px` / `projected_fraction`: maximum actor-visible projected OBB support.
+- `visibility_score`: smooth projected-visibility factor used by target selection.
+- `semidense_support` / `evl_support` / `effective_support`: actor-visible support counts.
+- `support_score` / `deficit_score`: support-validity and under-observedness score factors.
+- `selection_score`: target-selection score, not target-RRI.
+- `selection_probability`: stochastic target-selection probability when available.
 - `eligible`: whether actor-side gates allow the target.
+- `invalid_reason`: hard actor-visible target invalidity reason.
 - `gt_label_valid`: whether GT matching produced a valid oracle/evaluation label.
 - `gt_match_status`: GT matching outcome such as `matched`, `not_requested`, or ambiguity/invalid status.
 - `gt_iou`: IoU of the accepted GT match when available.
+- `gt_match_score`: scalar GT-match audit score when available.
 """
 
 _ACTIVE_TARGET_INFO = """
@@ -120,12 +130,13 @@ This block defines the finite-candidate rollout tree.
 _TARGET_MIXTURE_INFO = """
 Target-RRI rollouts use a mixed finite candidate set.
 
-- `TARGET_POINT`: view directions aimed at the active actor-visible target center.
-- `RADIAL_TOWARDS`: radial poses oriented toward the target region.
-- `RADIAL_AWAY`: radial poses that expand support from the opposite side.
-- `FORWARD_RIG`: forward-facing rig poses for exploration/coverage.
+- `target_bearing_local`: centers biased along the actor-visible target bearing.
+- `forward_local`: local forward continuity around the reference pose.
+- `lateral_target_bypass`: target-bearing views with signed lateral bypass.
+- `local_refinement`: short local refinement views around the current pose.
+- `revisit_backtrack`: controlled backward-looking revisit views.
 
-The default budget `16` maps to `6/4/3/3`. These are candidate-set sampling counts, not rollout branch counts.
+Stored rollout stores persist `position_id`, `strategy_id`, `mixture_id`, and sampler probability so these families can be audited after generation. These are candidate-set sampling counts, not rollout branch counts.
 """
 
 _SCORER_CONTROLS_INFO = """
@@ -286,17 +297,18 @@ def _load_vin_offline_sample(*, store_dir: Path, split: str, sample_index: int) 
     return sample
 
 
-def _target_mixture_counts_from_budget(candidate_budget: int) -> dict[ViewDirectionMode, int]:
-    """Allocate a 6/4/3/3 target-aware mixture for a requested candidate budget."""
+def _target_mixture_counts_from_budget(candidate_budget: int) -> dict[str, int]:
+    """Allocate the current five-family target-aware mixture for a requested budget."""
 
     budget = int(candidate_budget)
-    if budget < 4:
-        raise ValueError("Target-aware rollout mixtures require at least 4 candidates.")
+    if budget < 5:
+        raise ValueError("Target-aware rollout mixtures require at least 5 candidates.")
     weights = {
-        ViewDirectionMode.TARGET_POINT: 6.0,
-        ViewDirectionMode.RADIAL_TOWARDS: 4.0,
-        ViewDirectionMode.RADIAL_AWAY: 3.0,
-        ViewDirectionMode.FORWARD_RIG: 3.0,
+        "target_bearing_local": 18.0,
+        "forward_local": 18.0,
+        "lateral_target_bypass": 12.0,
+        "local_refinement": 6.0,
+        "revisit_backtrack": 6.0,
     }
     total = sum(weights.values())
     counts = {mode: max(1, int(np.floor(budget * weight / total))) for mode, weight in weights.items()}
@@ -313,36 +325,52 @@ def _target_mixture_counts_from_budget(candidate_budget: int) -> dict[ViewDirect
 def _target_mixture_config(
     base: CandidateViewGeneratorConfig,
     *,
-    counts: dict[ViewDirectionMode, int],
+    counts: dict[str, int],
 ) -> CandidateMixtureViewGeneratorConfig:
     """Build a target-aware mixed candidate generator from per-family counts."""
 
     components = [
         CandidateMixtureComponentConfig(
-            name="target_point",
-            count=int(counts[ViewDirectionMode.TARGET_POINT]),
-            strategy=ViewDirectionMode.TARGET_POINT,
+            name="target_bearing_local",
+            count=int(counts["target_bearing_local"]),
+            view_mode=ViewDirectionMode.TARGET_POINT,
+            position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
             view_max_azimuth_deg=0.0,
             view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
-            name="radial_towards",
-            count=int(counts[ViewDirectionMode.RADIAL_TOWARDS]),
-            strategy=ViewDirectionMode.RADIAL_TOWARDS,
+            name="forward_local",
+            count=int(counts["forward_local"]),
+            view_mode=ViewDirectionMode.FORWARD_RIG,
+            position_mode=CandidatePositionMode.FORWARD_LOCAL,
             view_max_azimuth_deg=0.0,
             view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
-            name="radial_away",
-            count=int(counts[ViewDirectionMode.RADIAL_AWAY]),
-            strategy=ViewDirectionMode.RADIAL_AWAY,
+            name="lateral_target_bypass",
+            count=int(counts["lateral_target_bypass"]),
+            view_mode=ViewDirectionMode.TARGET_POINT,
+            position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
             view_max_azimuth_deg=0.0,
             view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
-            name="forward_rig",
-            count=int(counts[ViewDirectionMode.FORWARD_RIG]),
-            strategy=ViewDirectionMode.FORWARD_RIG,
+            name="local_refinement",
+            count=int(counts["local_refinement"]),
+            view_mode=ViewDirectionMode.RADIAL_TOWARDS,
+            position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
+            min_radius=0.2,
+            max_radius=0.7,
+            view_max_azimuth_deg=0.0,
+            view_max_elevation_deg=0.0,
+        ),
+        CandidateMixtureComponentConfig(
+            name="revisit_backtrack",
+            count=int(counts["revisit_backtrack"]),
+            view_mode=ViewDirectionMode.FORWARD_RIG,
+            position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
+            min_radius=0.25,
+            max_radius=0.9,
             view_max_azimuth_deg=0.0,
             view_max_elevation_deg=0.0,
         ),
@@ -356,7 +384,7 @@ def _candidate_config_for_live_rollout(
     candidate_budget: int,
     seed: int | None,
     device: str,
-    counts: dict[ViewDirectionMode, int] | None = None,
+    counts: dict[str, int] | None = None,
 ) -> CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig:
     """Return the candidate generator used by one live rollout run."""
 
@@ -520,18 +548,25 @@ def _trajectory_metric_rows(rollouts: CounterfactualRolloutResult) -> pd.DataFra
             selected_target_rri = _metric_float(
                 step.selected_metrics.get("target_rri", step.selected_metrics.get("rri"))
             )
-            if selected_target_rri is not None:
-                cumulative += selected_target_rri
-            valid_target_rri = _valid_step_metric_values(step, "target_rri")
-            fanout_q025 = float(np.quantile(valid_target_rri, 0.025)) if valid_target_rri.size else None
-            fanout_q975 = float(np.quantile(valid_target_rri, 0.975)) if valid_target_rri.size else None
-            top_values = sorted(valid_target_rri.tolist(), reverse=True)[:5]
+            selected_target_root_gain = _metric_float(step.selected_metrics.get("target_root_gain"))
+            selected_return = (
+                selected_target_root_gain if selected_target_root_gain is not None else selected_target_rri
+            )
+            if selected_return is not None:
+                cumulative += selected_return
+            valid_target_gain = _valid_step_metric_values(step, "target_root_gain")
+            if valid_target_gain.size == 0:
+                valid_target_gain = _valid_step_metric_values(step, "target_rri")
+            fanout_q025 = float(np.quantile(valid_target_gain, 0.025)) if valid_target_gain.size else None
+            fanout_q975 = float(np.quantile(valid_target_gain, 0.975)) if valid_target_gain.size else None
+            top_values = sorted(valid_target_gain.tolist(), reverse=True)[:5]
             rows.append(
                 {
                     "trajectory": traj_idx,
                     "step": int(step.step_index) + 1,
                     "selected_target_rri": selected_target_rri,
-                    "G_target": cumulative if selected_target_rri is not None else None,
+                    "selected_target_root_gain": selected_target_root_gain,
+                    "G_target": cumulative if selected_return is not None else None,
                     "fanout_q025": fanout_q025,
                     "fanout_q975": fanout_q975,
                     "valid_candidates": int(step.candidates.mask_valid.sum().item()),
@@ -549,17 +584,19 @@ def _valid_step_metric_values(step: object, metric_name: str) -> np.ndarray:
     if values is None:
         return np.asarray([], dtype=float)
     values_np = values.detach().cpu().numpy().reshape(-1)
-    mask = np.ones(values_np.shape, dtype=bool)
     candidates = getattr(step, "candidates", None)
     mask_valid = getattr(candidates, "mask_valid", None)
     if mask_valid is not None:
         mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
-        if mask.shape != values_np.shape:
+        if mask.shape == values_np.shape:
+            values_np = values_np[mask]
+        elif values_np.shape[0] != int(mask.sum()):
             raise ValueError(
-                f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape}."
+                f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape} "
+                f"or compact valid count {int(mask.sum())}."
             )
     finite = np.isfinite(values_np)
-    return values_np[finite & mask].astype(float, copy=False)
+    return values_np[finite].astype(float, copy=False)
 
 
 def _metric_float(value: object) -> float | None:
@@ -573,6 +610,52 @@ def _metric_float(value: object) -> float | None:
 def _format_optional_metric(value: object) -> str:
     value_float = _metric_float(value)
     return "n/a" if value_float is None else f"{value_float:.4f}"
+
+
+def _render_live_step_candidate_diagnostics(step: object) -> None:
+    """Render per-step live candidate fanout by family and rejection reason."""
+
+    candidates = getattr(step, "candidates", None)
+    if candidates is None:
+        return
+    counts = candidate_result_diagnostic_counts(candidates)
+    position_rows = counts.get("position", [])
+    invalid_rows = counts.get("invalid_reason", [])
+    if not position_rows and not invalid_rows:
+        st.info("No candidate provenance or rule diagnostics were collected for this step.")
+        return
+    chart_col1, chart_col2 = st.columns(2)
+    with chart_col1:
+        if position_rows:
+            pos_df = pd.DataFrame(position_rows)
+            st.dataframe(pos_df, width="stretch", hide_index=True)
+            st.plotly_chart(
+                px.bar(
+                    pos_df,
+                    x="position",
+                    y=["valid", "invalid"],
+                    barmode="stack",
+                    title="Candidate Fanout by Position Family",
+                ),
+                width="stretch",
+            )
+        else:
+            st.info("No position-family ids are available.")
+    with chart_col2:
+        if invalid_rows:
+            reason_df = pd.DataFrame(invalid_rows)
+            st.dataframe(reason_df, width="stretch", hide_index=True)
+            st.plotly_chart(
+                px.bar(
+                    reason_df,
+                    x="invalid_reason",
+                    y="count",
+                    title="Rejected Candidates by Primary Reason",
+                ),
+                width="stretch",
+            )
+        else:
+            st.success("No rejected candidates in this step.")
 
 
 _ROLLOUT_PLOT_COLORS = (
@@ -600,6 +683,9 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
     for traj_idx, traj_df in step_df.groupby("trajectory", sort=True):
         traj_sorted = traj_df.sort_values("step")
         color = _ROLLOUT_PLOT_COLORS[int(traj_idx) % len(_ROLLOUT_PLOT_COLORS)]
+        selected_metric = traj_sorted["selected_target_rri"]
+        if "selected_target_root_gain" in traj_sorted:
+            selected_metric = traj_sorted["selected_target_root_gain"].fillna(selected_metric)
         fig.add_trace(
             go.Scatter(
                 x=traj_sorted["step"],
@@ -625,17 +711,17 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
         fig.add_trace(
             go.Scatter(
                 x=traj_sorted["step"],
-                y=traj_sorted["selected_target_rri"],
+                y=selected_metric,
                 mode="lines+markers",
                 line={"color": color, "width": 3},
                 marker={"color": color, "size": 7},
-                name=f"traj {traj_idx} selected r_t^e",
+                name=f"traj {traj_idx} selected target_root_gain",
             )
         )
     fig.update_layout(
         title="Valid-candidate target-RRI empirical 95% band",
         xaxis_title="rollout step",
-        yaxis_title="candidate target RRI",
+        yaxis_title="candidate target root gain / target RRI",
     )
     return fig
 
@@ -643,23 +729,7 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
 def _target_rows_table(rows: tuple[TargetCandidateRow, ...]) -> list[dict[str, object]]:
     """Return a compact dataframe payload for target rows."""
 
-    return [
-        {
-            "target_row_id": int(row.target_row_id),
-            "selected_rank": row.selected_rank,
-            "class": row.class_name,
-            "sem_id": int(row.sem_id),
-            "inst_id": int(row.inst_id),
-            "confidence": float(row.confidence),
-            "score": None if not np.isfinite(row.score) else float(row.score),
-            "support": int(row.semidense_support_count + row.evl_support_count),
-            "eligible": bool(row.eligible),
-            "gt_label_valid": bool(row.gt_label_valid),
-            "gt_match_status": row.gt_match_status,
-            "gt_iou": row.gt_match_iou,
-        }
-        for row in rows
-    ]
+    return target_selection_audit_rows(rows)
 
 
 def _target_detail_row(row: TargetCandidateRow) -> dict[str, object]:
@@ -846,6 +916,8 @@ def _render_live_rollouts_tab() -> None:
         st.warning("\n".join(target_result.warnings))
 
     st.dataframe(_target_rows_table(target_result.rows), width="stretch", hide_index=True)
+    with st.expander("Target-selection score audit", expanded=False):
+        render_target_selection_audit(target_result.rows, title="Actor-Visible Target Selection")
     selected_target = None
     if target_result.selected_rows:
         _info_popover("active target label", _ACTIVE_TARGET_INFO)
@@ -868,7 +940,7 @@ def _render_live_rollouts_tab() -> None:
                 format_func=lambda mode: mode.value,
                 key="cf_scoring_mode",
             )
-            candidate_budget = int(st.slider("Candidates per step", 4, 128, 16, step=1, key="cf_candidate_budget"))
+            candidate_budget = int(st.slider("Candidates per step", 5, 128, 60, step=1, key="cf_candidate_budget"))
             device = st.selectbox(
                 "Generator device",
                 options=_live_rollout_device_options(),
@@ -925,27 +997,25 @@ def _render_live_rollouts_tab() -> None:
                 "Advanced target-mixture counts", value=False, key="cf_advanced_mixture_counts"
             )
             if advanced_counts:
-                mix_cols = st.columns(4)
+                mix_cols = st.columns(5)
                 target_counts = {
-                    ViewDirectionMode.TARGET_POINT: int(
-                        mix_cols[0].number_input("TARGET_POINT", min_value=1, value=6, step=1)
+                    "target_bearing_local": int(
+                        mix_cols[0].number_input("target_bearing_local", min_value=1, value=18, step=1)
                     ),
-                    ViewDirectionMode.RADIAL_TOWARDS: int(
-                        mix_cols[1].number_input("RADIAL_TOWARDS", min_value=1, value=4, step=1)
+                    "forward_local": int(mix_cols[1].number_input("forward_local", min_value=1, value=18, step=1)),
+                    "lateral_target_bypass": int(
+                        mix_cols[2].number_input("lateral_target_bypass", min_value=1, value=12, step=1)
                     ),
-                    ViewDirectionMode.RADIAL_AWAY: int(
-                        mix_cols[2].number_input("RADIAL_AWAY", min_value=1, value=3, step=1)
-                    ),
-                    ViewDirectionMode.FORWARD_RIG: int(
-                        mix_cols[3].number_input("FORWARD_RIG", min_value=1, value=3, step=1)
+                    "local_refinement": int(mix_cols[3].number_input("local_refinement", min_value=1, value=6, step=1)),
+                    "revisit_backtrack": int(
+                        mix_cols[4].number_input("revisit_backtrack", min_value=1, value=6, step=1)
                     ),
                 }
                 st.caption(f"Advanced mixture total: {sum(target_counts.values())} candidates per step.")
             else:
                 target_counts = _target_mixture_counts_from_budget(candidate_budget)
                 st.caption(
-                    "Default target mixture: "
-                    + ", ".join(f"{mode.value}={count}" for mode, count in target_counts.items())
+                    "Default target mixture: " + ", ".join(f"{name}={count}" for name, count in target_counts.items())
                 )
 
     with st.expander("Scorer controls", expanded=False):
@@ -1200,6 +1270,12 @@ def _render_rollout_result(
                         value=True,
                         key="cf_step_candidate_frusta",
                     )
+                    color_metric = st.selectbox(
+                        "Candidate color metric",
+                        options=["target_root_gain", "target_rri", "selection_probability", "position_family"],
+                        index=0,
+                        key="cf_step_candidate_color_metric",
+                    )
                     step_crop_basis = st.selectbox(
                         "Step target crop basis",
                         options=["Actor-visible OBB", "GT/evaluation OBB"],
@@ -1227,9 +1303,12 @@ def _render_rollout_result(
                         step_index=int(step_display_index - 1),
                         include_rejected=include_rejected,
                         show_frusta=show_candidate_frusta,
+                        candidate_color_metric=str(color_metric),
                     )
                     step_fig = step_builder.finalize()
                     st.plotly_chart(step_fig, width="stretch")
+                    with st.expander("Step candidate fanout diagnostics", expanded=True):
+                        _render_live_step_candidate_diagnostics(trajectory.steps[int(step_display_index - 1)])
 
     with log_tab:
         st.caption("No implemented content yet.")
@@ -1275,9 +1354,9 @@ def _render_live_rollout_metric_dashboard(
         rri_fig.add_trace(
             go.Scatter(
                 x=traj_df["step"],
-                y=traj_df["selected_target_rri"],
+                y=traj_df["selected_target_root_gain"].fillna(traj_df["selected_target_rri"]),
                 mode="lines+markers",
-                name=f"traj {traj_idx} selected r_t^e",
+                name=f"traj {traj_idx} selected target_root_gain",
             )
         )
         rri_fig.add_trace(
@@ -1290,9 +1369,9 @@ def _render_live_rollout_metric_dashboard(
             )
         )
     rri_fig.update_layout(
-        title="Selected target-RRI return by rollout step",
+        title="Selected target return by rollout step",
         xaxis_title="rollout step",
-        yaxis_title="target RRI / cumulative return",
+        yaxis_title="target root gain / cumulative return",
     )
 
     fanout_fig = _build_fanout_band_figure(step_df)
@@ -1303,8 +1382,8 @@ def _render_live_rollout_metric_dashboard(
     with chart_col2:
         st.plotly_chart(fanout_fig, width="stretch")
         st.caption(
-            "Band shows the 2.5-97.5 percentile range of valid candidate target-RRI at each rollout "
-            "step; the selected line shows the action actually taken."
+            "Band shows the 2.5-97.5 percentile range of valid candidate target root gain when available, "
+            "falling back to target RRI; the selected line shows the action actually taken."
         )
 
     top_rows = []
@@ -1331,9 +1410,9 @@ def _render_live_rollout_metric_dashboard(
                 )
             )
         top_fig.update_layout(
-            title="Top-k valid candidate target RRI per step",
+            title="Top-k valid candidate target root gain / RRI per step",
             xaxis_title="rollout step",
-            yaxis_title="target RRI",
+            yaxis_title="target root gain / target RRI",
         )
         st.plotly_chart(top_fig, width="stretch")
 

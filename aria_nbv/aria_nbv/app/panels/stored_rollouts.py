@@ -10,8 +10,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ...pose_generation import ViewDirectionMode, candidate_strategy_id
-from ...rollouts import RolloutZarrStoreReader
+from ...rollouts import (
+    RolloutSuspiciousQueryConfig,
+    RolloutZarrStoreReader,
+    candidate_audit_rows,
+    candidate_group_summary_rows,
+    suspicious_rollout_rows,
+    target_audit_rows,
+    validity_waterfall_rows,
+)
 from ..rerun_launch import (
     build_rerun_rollout_spawn_command,
     build_rerun_rollout_web_command,
@@ -28,8 +35,9 @@ Stored rollouts inspect a standalone `rollouts.zarr` shard without recomputation
 - Validation metadata checks table/mask consistency before inspection.
 - The manifest records source/config lineage and source coverage.
 - Target summary separates actor target validity from GT-label validity.
-- Candidate rows show `actor_action`, `q_train`, target/scene RRI labels, and strategy/mixture provenance.
+- Candidate rows show `actor_action`, `q_train`, target/scene labels, root gains, motion diagnostics, and strategy/position/mixture provenance.
 - `q_train` marks rows usable for finite-candidate `Q_H` training views.
+- QA tabs expose validity waterfalls, invalidity distributions, rollout geometry, and suspicious rows before opening a dense Rerun inspection.
 - Rerun launch opens or serves the selected rollout row in the 3D inspector.
 """
 
@@ -43,9 +51,12 @@ Candidate row fields:
 - `actor_action`: whether the actor may choose this row after hard masks.
 - `q_train`: whether this row has the labels and masks required for `Q_H` training.
 - `target_rri`: target-specific oracle RRI label when available.
+- `target_root_gain`: root-normalized rollout/Q_H reward when available.
 - `scene_rri`: scene-level oracle RRI audit label when available.
 - `strategy`: candidate-generation family decoded from `strategy_id`.
+- `position`: candidate-center family decoded from `position_id`.
 - `mixture`: mixture component id; component names are shown when persisted, otherwise `component_<id>`.
+- motion/clearance fields: candidate-generation diagnostics aligned from `candidate_diagnostics/`.
 """
 
 
@@ -104,8 +115,16 @@ def render_stored_rollouts_panel() -> None:
     with st.expander("Generation manifest", expanded=False):
         st.json(manifest_bundle["manifest"])
 
+    if not validation.ok:
+        st.warning(
+            "This rollout store is not compatible with the current inspection schema. Regenerate the rollout shard "
+            "before using candidate/Q_H summaries or Rerun launch from this panel."
+        )
+        return
+
     _render_rollout_store_summaries(reader, manifest=manifest_bundle["manifest"])
     _render_stored_metric_dashboard(reader)
+    _render_rollout_qa_dashboard(reader, store_path=store_path, config_path=config_path)
     rollout_ids = reader.array("rollouts/rollout_row_id").astype(int).tolist()
     if not rollout_ids:
         st.info("No rollout rows are present.")
@@ -239,6 +258,179 @@ def _render_stored_metric_dashboard(reader: RolloutZarrStoreReader) -> None:
         )
 
 
+def _render_rollout_qa_dashboard(
+    reader: RolloutZarrStoreReader,
+    *,
+    store_path: Path,
+    config_path: Path,
+) -> None:
+    """Render rollout-scale QA tables and anomaly queries."""
+
+    st.subheader("Rollout QA")
+    row_limit = int(
+        st.number_input(
+            "Candidate audit row limit (0 = all)",
+            min_value=0,
+            max_value=5_000_000,
+            value=50_000,
+            step=10_000,
+            key="stored_rollout_candidate_audit_limit",
+        )
+    )
+    limit = None if row_limit <= 0 else row_limit
+    tab_waterfall, tab_targets, tab_candidates, tab_geometry, tab_suspicious = st.tabs(
+        ["Validity", "Targets", "Candidate Groups", "Geometry", "Suspicious Rows"],
+    )
+
+    with tab_waterfall:
+        waterfall = pd.DataFrame(validity_waterfall_rows(reader))
+        st.dataframe(waterfall, width="stretch", hide_index=True)
+        st.plotly_chart(
+            px.bar(
+                waterfall,
+                x="stage",
+                y="count",
+                text="count",
+                title="Candidate Validity Waterfall",
+            ),
+            width="stretch",
+        )
+
+    with tab_targets:
+        targets = pd.DataFrame(target_audit_rows(reader))
+        if targets.empty:
+            st.info("No stored target rows are available.")
+        else:
+            st.dataframe(targets, width="stretch", hide_index=True)
+            chart_col1, chart_col2 = st.columns(2)
+            with chart_col1:
+                st.plotly_chart(
+                    px.histogram(targets, x="gt_match_status", color="target_valid", title="GT Match Status"),
+                    width="stretch",
+                )
+            with chart_col2:
+                if "effective_support" in targets and targets["effective_support"].notna().any():
+                    st.plotly_chart(
+                        px.scatter(
+                            targets,
+                            x="effective_support",
+                            y="selection_score",
+                            color="gt_match_status",
+                            hover_data=["target_row_id", "class", "confidence"],
+                            title="Stored Target Score Decomposition",
+                        ),
+                        width="stretch",
+                    )
+                else:
+                    st.info("Support/visibility fields are absent in this store; regenerate with target audit fields.")
+
+    with tab_candidates:
+        for group_by in ("position", "strategy", "mixture", "invalid_reason", "policy"):
+            rows = candidate_group_summary_rows(reader, group_by=group_by)
+            if not rows:
+                continue
+            df = pd.DataFrame(rows)
+            st.markdown(f"**By {group_by}**")
+            st.dataframe(df, width="stretch", hide_index=True)
+            st.plotly_chart(
+                px.bar(
+                    df,
+                    x=group_by,
+                    y=["actor_valid", "q_train", "selected"],
+                    barmode="group",
+                    title=f"Candidate Counts by {group_by}",
+                ),
+                width="stretch",
+            )
+
+    with tab_geometry:
+        audit_df = pd.DataFrame(candidate_audit_rows(reader, limit=limit))
+        if audit_df.empty:
+            st.info("No candidate audit rows are available.")
+        else:
+            metric_options = [
+                "motion_step_length_m",
+                "motion_height_delta_m",
+                "motion_backward_step_m",
+                "motion_yaw_delta_deg",
+                "mesh_distance_m",
+                "path_min_clearance_m",
+                "free_space_margin_m",
+                "target_distance_m",
+                "target_bearing_yaw_deg",
+                "target_root_gain",
+                "target_rri",
+            ]
+            available = [name for name in metric_options if name in audit_df.columns and audit_df[name].notna().any()]
+            selected_metric = st.selectbox(
+                "Geometry / label metric",
+                options=available or metric_options[:1],
+                key="stored_rollout_geometry_metric",
+            )
+            color_field = st.selectbox(
+                "Color / split by",
+                options=["position", "strategy", "mixture", "invalid_reason", "policy"],
+                key="stored_rollout_geometry_color",
+            )
+            st.dataframe(audit_df.head(1000), width="stretch", hide_index=True)
+            if selected_metric in audit_df:
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.plotly_chart(
+                        px.histogram(
+                            audit_df,
+                            x=selected_metric,
+                            color=color_field,
+                            title=f"{selected_metric} Distribution",
+                        ),
+                        width="stretch",
+                    )
+                with chart_col2:
+                    st.plotly_chart(
+                        px.density_heatmap(
+                            audit_df,
+                            x="step_index",
+                            y=selected_metric,
+                            nbinsx=32,
+                            nbinsy=64,
+                            title=f"{selected_metric} by Rollout Step",
+                        ),
+                        width="stretch",
+                    )
+
+    with tab_suspicious:
+        cfg_cols = st.columns(4)
+        cfg = RolloutSuspiciousQueryConfig(
+            min_valid_candidates=int(cfg_cols[0].number_input("Min valid fanout", 0, 256, 3, step=1)),
+            dominant_invalid_fraction=float(cfg_cols[1].slider("Dominant invalid fraction", 0.0, 1.0, 0.8, step=0.05)),
+            high_target_score=float(cfg_cols[2].slider("High target score", 0.0, 1.0, 0.5, step=0.05)),
+            max_step_distance_m=float(cfg_cols[3].slider("Max selected step (m)", 0.1, 5.0, 1.25, step=0.05)),
+        )
+        suspicious = pd.DataFrame(suspicious_rollout_rows(reader, config=cfg))
+        if suspicious.empty:
+            st.success("No suspicious rows matched the current thresholds.")
+            return
+        st.dataframe(suspicious, width="stretch", hide_index=True)
+        rollout_options = [
+            int(value)
+            for value in suspicious["rollout_row_id"].dropna().astype(int).drop_duplicates().sort_values().tolist()
+        ]
+        if rollout_options:
+            rollout_row_id = int(
+                st.selectbox(
+                    "Suspicious rollout to open",
+                    options=rollout_options,
+                    key="stored_rollout_suspicious_open",
+                )
+            )
+            command = build_rerun_rollout_spawn_command(
+                config_path=config_path,
+                rollout_store=store_path,
+                rollout_row_id=rollout_row_id,
+            )
+            st.code(format_command(command), language="bash")
+
+
 def _stored_rollout_metric_rows(reader: RolloutZarrStoreReader) -> pd.DataFrame:
     policies = _string_list(reader, "dictionaries/policy")
     scenes = _string_list(reader, "dictionaries/scene")
@@ -280,35 +472,7 @@ def _stored_rollout_metric_rows(reader: RolloutZarrStoreReader) -> pd.DataFrame:
 def candidate_rows_for_rollout(reader: RolloutZarrStoreReader, rollout_row_id: int) -> list[dict[str, object]]:
     """Return display rows for one rollout's full candidate table."""
 
-    rollout_ids = reader.array("candidates/rollout_row_id")
-    mask = rollout_ids == int(rollout_row_id)
-    candidate_row_ids = reader.array("candidates/candidate_row_id")
-    step_indices = reader.array("candidates/step_index")
-    shell_indices = reader.array("candidates/shell_index")
-    selected_mask = reader.array("candidates/selected_mask")
-    actor_action_mask = reader.array("candidates/actor_action_mask")
-    q_train_mask = reader.array("candidates/q_train_mask")
-    target_rri = reader.array("candidates/target_rri")
-    scene_rri = reader.array("candidates/scene_rri")
-    strategy_id = reader.array("candidates/strategy_id")
-    mixture_id = reader.array("candidates/mixture_id")
-    rows: list[dict[str, object]] = []
-    for index in np.nonzero(mask)[0].tolist():
-        rows.append(
-            {
-                "candidate_row_id": int(candidate_row_ids[index]),
-                "step_index": int(step_indices[index]),
-                "shell_index": int(shell_indices[index]),
-                "selected": bool(selected_mask[index]),
-                "actor_action": bool(actor_action_mask[index]),
-                "q_train": bool(q_train_mask[index]),
-                "target_rri": _finite_or_none(target_rri[index]),
-                "scene_rri": _finite_or_none(scene_rri[index]),
-                "strategy": _strategy_name(int(strategy_id[index])),
-                "mixture": _mixture_name(int(mixture_id[index])),
-            }
-        )
-    return rows
+    return candidate_audit_rows(reader, rollout_row_id=int(rollout_row_id))
 
 
 def format_rollout_option(reader: RolloutZarrStoreReader, rollout_row_id: int) -> str:
@@ -332,17 +496,6 @@ def format_rollout_option(reader: RolloutZarrStoreReader, rollout_row_id: int) -
         f"{rollout_row_id} · scene {scene} · target {target_row} · {policy} · "
         f"chain {chain} · H={horizon} · B={branch_factor} · beam={beam}"
     )
-
-
-def _strategy_name(value: int) -> str:
-    for mode in ViewDirectionMode:
-        if candidate_strategy_id(mode) == int(value):
-            return mode.value
-    return "unknown" if int(value) < 0 else f"strategy_{int(value)}"
-
-
-def _mixture_name(value: int) -> str:
-    return "unknown" if int(value) < 0 else f"component_{int(value)}"
 
 
 def _format_stored_beam_width(value: int) -> str:

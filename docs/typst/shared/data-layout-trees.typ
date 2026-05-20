@@ -139,7 +139,9 @@
           - #code("rollout_row_id + step_index") -- time index $t$ #array_node
         - #code-strong("candidates/") -- finite candidate shell per step #group
           - #code("step_row_id + shell_index") -- candidate row $q_(t,i)$ #array_node
+        - #code-strong("candidate_diagnostics/") -- candidate-generation audit metrics #group
         - #code-strong("selected_depth/") -- selected-action history depth #group
+        - #code("target_eval_crops/") -- optional sampled/audit target crops #group
         - #code-strong("q_h/") -- persisted derived training view #derived
   ]
 }
@@ -160,7 +162,7 @@
     orientation: orientation,
   )
   tree[
-    - #code-strong("rollouts.zarr/") -- schema 0.7 root-gain target-crops shard #group
+    - #code-strong("rollouts.zarr/") -- schema 0.9 candidate-diagnostics shard #group
       - #code("zarr.json") -- compact attrs, counts, manifest hash #leaf
       - #code("manifest.json") -- resolved config, TOML, provenance, coverage #leaf
       - #code-strong("metadata/") #group
@@ -223,13 +225,17 @@
           - #code("target_rri") -- diagnostic $r_t^e(q_(t,i))$; float32[C] #array_node
           - #code("scene_rri") -- diagnostic float32[C] #array_node
         - provenance and invalidity #group
-          - #code("strategy_id, mixture_id") -- int32[C] provenance #array_node
+          - #code("strategy_id, position_id, mixture_id") -- int32[C] provenance #array_node
           - #code("invalid_reason_bitset") -- uint32[C] #array_node
+      - #code-strong("candidate_diagnostics/") -- typed generator audit metrics #group
+        - #code("candidate_row_id, position_id") -- candidate links and position family #array_node
+        - #code("mesh_distance_m, path_min_clearance_m") -- clearance diagnostics #array_node
+        - #code("motion_step_length_m, target_distance_m") -- motion/target diagnostics #array_node
       - #code-strong("selected_depth/") -- selected-action history rasters #group
         - #code("step_row_id, candidate_row_id") -- int64[T] links #array_node
         - #code("depth_m") -- float16[T,240,240], metres #array_node
         - #code("valid_mask") -- bool[T,240,240] #array_node
-      - #code-strong("target_eval_crops/") -- oracle/eval-only fixed target crops #group
+      - #code-strong("target_eval_crops/") -- optional sampled/audit target crops #group
         - #code("crop_row_id, step_row_id, candidate_row_id") -- row links #array_node
         - #code("points_world") -- float32[K,50000,3] #array_node
         - #code("lengths, mask") -- int32[K], bool[K,50000] #array_node
@@ -328,6 +334,7 @@
             - #code("sources/, targets/, rollouts/") #group
             - #code("lineage/, steps/, candidates/") #group
             - #code("selected_depth/") -- selected-action depth profile #group
+            - #code("target_eval_crops/") -- optional sampled/audit target crops #group
             - #code("q_h/") -- persisted derived training view #group
             - #code("diagnostics/") -- optional inspection payloads #group
           - #code-strong("shard=000001.zarr/") -- same contract #group

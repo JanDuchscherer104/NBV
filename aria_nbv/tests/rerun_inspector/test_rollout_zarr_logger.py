@@ -17,9 +17,12 @@ from aria_nbv.rerun_inspector._config import RerunOfflineInspectorConfig
 from aria_nbv.rerun_inspector._entities import ENTITY_WORLD
 from aria_nbv.rerun_inspector._rollout_zarr import (
     ENTITY_ROLLOUT_DIAGNOSTICS_ROOT,
+    ENTITY_ROLLOUT_INVALID_FRACTION,
     ENTITY_ROLLOUT_METADATA,
     ENTITY_ROLLOUT_ROOT,
     ENTITY_ROLLOUT_RRI_ROOT,
+    ENTITY_ROLLOUT_SELECTED_POSITION_ID,
+    ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN,
     RerunRolloutZarrLogger,
     _candidate_rri_summary,
     _plot_step_payload,
@@ -252,11 +255,14 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert target_metadata["source_row_id"] == 0
     assert target_metadata["target_id"] == "fixture-target-0"
     assert target_metadata["matched_gt_target_id"] == "fixture-gt-target-0"
+    assert target_metadata["target_effective_support_count"] == pytest.approx(12.0)
+    assert target_metadata["target_visibility_score"] == pytest.approx(0.8)
     assert len(fake.blueprints) == 1
     rollout_contents = _world_view_contents_from_blueprint(fake.blueprints[-1])
     rollout_overrides = _world_view_overrides_from_blueprint(fake.blueprints[-1])
     assert rollout_contents == ["+ /world/**"]
     assert all(not rule.startswith("- ") for rule in rollout_contents)
+    assert "/world/efm/obbs/detected" in rollout_overrides
     assert f"/{chain_root}/step_000/valid" in rollout_overrides
     assert f"/{chain_root}/step_000/invalid" in rollout_overrides
     assert f"/{chain_root}/step_001/valid" in rollout_overrides
@@ -270,6 +276,10 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert any(f"{chain_root}/step_" in path and "/valid/candidate_shell_" in path for path in fake.logged)
     assert any(f"{chain_root}/step_" in path and "/invalid/candidate_shell_" in path for path in fake.logged)
     assert any(f"{chain_root}/step_" in path and "/selected/candidate_shell_" in path for path in fake.logged)
+    assert any(
+        f"{chain_root}/step_" in path and "/groups/position_family/forward_local" in path for path in fake.logged
+    )
+    assert any(f"{chain_root}/step_" in path and "/groups/invalid_reason/valid" in path for path in fake.logged)
 
     depth_calls = [
         call
@@ -286,6 +296,8 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     }
     depth_path = str(depth_calls[0][1])
     camera_path = depth_path.removesuffix("/depth")
+    assert f"/{depth_path}" in rollout_overrides
+    assert f"/{camera_path}/points" in rollout_overrides
     depth_image = fake.logged[depth_path]
     assert depth_image.kwargs["meter"] == 1.0
     assert depth_image.kwargs["colormap"] == "turbo"
@@ -310,6 +322,9 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert any(path.startswith(f"{ENTITY_ROLLOUT_DIAGNOSTICS_ROOT}/") for path in plot_paths)
     assert any("/candidate_top_01" in path for path in plot_paths)
     assert any("/candidate_fanout_mean" in path for path in plot_paths)
+    assert ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN in fake.logged
+    assert ENTITY_ROLLOUT_INVALID_FRACTION in fake.logged
+    assert ENTITY_ROLLOUT_SELECTED_POSITION_ID in fake.logged
     descriptor_calls = [
         call
         for call in fake.calls
@@ -329,17 +344,33 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert camera_calls
     assert len(camera_calls[0][2]) == 2
     assert "labels" not in camera_calls[0][2][0].kwargs
-    assert camera_calls[0][2][1].kwargs["candidate_row_id"] >= 0
-    assert camera_calls[0][2][1].kwargs["rollout_row_id"] == rows.rollout_row_id
-    assert camera_calls[0][2][1].kwargs["chain_id"] == rows.chain_id
-    assert camera_calls[0][2][1].kwargs["candidate_status"] == "valid"
-    assert camera_calls[0][2][1].kwargs["sampling_strategy_id"] >= 0
-    assert camera_calls[0][2][1].kwargs["sampling_strategy_name"]
-    assert camera_calls[0][2][1].kwargs["mixture_id"] >= 0
-    assert camera_calls[0][2][1].kwargs["sampler_probability"] > 0.0
-    assert camera_calls[0][2][1].kwargs["target_rri_rank"] > 0
-    assert camera_calls[0][2][1].kwargs["target_rri_rank_total"] > 0
-    assert camera_calls[0][2][1].kwargs["target_rri_rank_semantics"] == "valid_finite_target_rri_desc"
+    camera_metadata = camera_calls[0][2][1].kwargs
+    assert camera_metadata["candidate_row_id"] >= 0
+    assert camera_metadata["step_row_id"] == int(rows.step_rows[0])
+    assert camera_metadata["compact_valid_index"] >= 0
+    assert camera_metadata["mixture_component_name"]
+    assert camera_metadata["position_mode_name"] == "forward_local"
+    assert camera_metadata["position_id"] >= 0
+    assert camera_metadata["sampler_probability"] > 0.0
+    assert camera_metadata["target_root_gain"] != camera_metadata["target_rri"]
+    assert camera_metadata["target_rri_rank"] > 0
+    assert camera_metadata["target_rri_rank_total"] > 0
+    assert camera_metadata["selection_probability"] >= 0.0
+    assert camera_metadata["mesh_distance_m"] > 0.0
+    assert camera_metadata["path_min_clearance_m"] > 0.0
+    assert camera_metadata["motion_step_length_m"] > 0.0
+    assert camera_metadata["target_distance_m"] > 0.0
+    assert camera_metadata["primary_invalid_reason_name"] == "VALID"
+    assert "rollout_row_id" not in camera_metadata
+    assert "chain_id" not in camera_metadata
+    assert "step_index" not in camera_metadata
+    assert "shell_index" not in camera_metadata
+    assert "candidate_status" not in camera_metadata
+    assert "sampling_strategy_id" not in camera_metadata
+    assert "mixture_id" not in camera_metadata
+    assert "selection_logit" not in camera_metadata
+    assert "selection_entropy" not in camera_metadata
+    assert "invalid_reason_bitset" not in camera_metadata
 
     metadata = json.loads(fake.logged[ENTITY_ROLLOUT_METADATA].args[0])
     assert metadata["validation"]["ok"]
@@ -365,6 +396,11 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert step_metadata["q_h"]["state_row_found"]
     assert step_metadata["q_h"]["selected_transition_available"]
     assert step_metadata["invalid_candidate_count"] > 0
+    assert step_metadata["invalid_fraction"] > 0.0
+    assert step_metadata["selected_position_family"] == "forward_local"
+    assert step_metadata["selected_target_root_gain"] != step_metadata["selected_target_rri"]
+    assert step_metadata["candidate_counts_by_position"]["forward_local"]["total"] > 0
+    assert "VALID" in step_metadata["candidate_counts_by_invalid_reason"]
     assert "display_validity_trusted" not in step_metadata
     assert "stored_invalid_candidate_count" not in step_metadata
     assert step_metadata["selected_depth"]["available"]

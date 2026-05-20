@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._entities import ENTITY_CANDIDATE_ROOT, ENTITY_EFM_VOXELS, ENTITY_GT_OBBS
+from ._entities import ENTITY_CANDIDATE_ROOT, ENTITY_DETECTED_OBBS, ENTITY_EFM_VOXELS, ENTITY_GT_OBBS
 from ._session import RerunModule
 
 
@@ -19,6 +19,7 @@ def hidden_world_view_paths(*, hidden_world_paths: Sequence[str] = ()) -> tuple[
 
     return (
         normalize_blueprint_entity_path(ENTITY_CANDIDATE_ROOT),
+        normalize_blueprint_entity_path(ENTITY_DETECTED_OBBS),
         normalize_blueprint_entity_path(ENTITY_EFM_VOXELS),
         normalize_blueprint_entity_path(ENTITY_GT_OBBS),
         *(normalize_blueprint_entity_path(path) for path in hidden_world_paths),

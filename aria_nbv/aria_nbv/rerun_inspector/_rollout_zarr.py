@@ -14,7 +14,7 @@ from aria_nbv.data_handling.efm_dataset_utils import (
     compact_ase_atek_sample_id,
     raw_ase_atek_sample_id,
 )
-from aria_nbv.rollouts import RolloutZarrStoreReader, validate_rollout_zarr_store
+from aria_nbv.rollouts import INVALID_REASON_CODES, RolloutZarrStoreReader, validate_rollout_zarr_store
 
 from ._blueprint import log_default_inspector_blueprint
 from ._colors import INVALID_RGBA, step_to_rgba
@@ -47,6 +47,9 @@ ENTITY_ROLLOUT_DIAGNOSTICS_ROOT = "plots/rollout/diagnostics"
 ENTITY_ROLLOUT_VALID_COUNT = f"{ENTITY_ROLLOUT_DIAGNOSTICS_ROOT}/selected/valid_candidates"
 ENTITY_ROLLOUT_SELECTED_PROBABILITY = f"{ENTITY_ROLLOUT_DIAGNOSTICS_ROOT}/selected/selected_probability"
 ENTITY_ROLLOUT_SELECTED_TARGET_RRI = f"{ENTITY_ROLLOUT_RRI_ROOT}/selected/selected_target_rri"
+ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN = f"{ENTITY_ROLLOUT_RRI_ROOT}/selected/selected_target_root_gain"
+ENTITY_ROLLOUT_INVALID_FRACTION = f"{ENTITY_ROLLOUT_DIAGNOSTICS_ROOT}/selected/invalid_fraction"
+ENTITY_ROLLOUT_SELECTED_POSITION_ID = f"{ENTITY_ROLLOUT_DIAGNOSTICS_ROOT}/selected/selected_position_id"
 
 ROLLOUT_STEP_TIMELINE = "rollout_step"
 
@@ -59,12 +62,15 @@ _PLOT_PALETTE = (
     (249, 115, 22, 255),
 )
 
-_STRATEGY_NAMES = {
-    0: "forward_rig",
-    1: "radial_away",
-    2: "radial_towards",
-    3: "target_point",
+_POSITION_NAMES = {
+    0: "upper_bound_free_shell",
+    1: "forward_local",
+    2: "target_bearing_local",
+    3: "lateral_target_bypass",
+    4: "local_refinement",
+    5: "revisit_backtrack",
 }
+_INVALID_REASON_NAMES = {code: name for name, code in INVALID_REASON_CODES.items()}
 _TARGET_RRI_RANK_SEMANTICS = "valid_finite_target_rri_desc"
 
 
@@ -315,9 +321,16 @@ class RerunRolloutZarrLogger:
             self._log_candidate_camera(candidate)
             self._log_selected_depth_representation(candidate)
             self._log_candidate_center(candidate)
+        self._log_candidate_group_centers(step)
         self.rr.log(ENTITY_ROLLOUT_VALID_COUNT, self.rr.Scalars(float(step.valid_candidate_count)))
         self.rr.log(ENTITY_ROLLOUT_SELECTED_PROBABILITY, self.rr.Scalars(_finite_or_zero(step.selected_probability)))
         self.rr.log(ENTITY_ROLLOUT_SELECTED_TARGET_RRI, self.rr.Scalars(_finite_or_zero(step.selected_target_rri)))
+        self.rr.log(
+            ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN,
+            self.rr.Scalars(_finite_or_zero(step.selected_target_root_gain)),
+        )
+        self.rr.log(ENTITY_ROLLOUT_INVALID_FRACTION, self.rr.Scalars(_finite_or_zero(step.invalid_fraction)))
+        self.rr.log(ENTITY_ROLLOUT_SELECTED_POSITION_ID, self.rr.Scalars(float(step.selected_position_id)))
         self.rr.log(
             step.metadata_entity,
             self.rr.TextDocument(
@@ -428,31 +441,56 @@ class RerunRolloutZarrLogger:
             pinhole,
             self.rr.AnyValues(
                 candidate_row_id=candidate.row_id,
-                rollout_row_id=candidate.rollout_row_id,
-                chain_id=candidate.chain_id,
-                step_index=candidate.step_index,
                 step_row_id=candidate.step_row_id,
-                shell_index=candidate.shell_index,
                 compact_valid_index=candidate.compact_valid_index,
-                candidate_status=candidate.status,
-                valid_mask=candidate.valid,
-                selected_mask=candidate.selected,
+                mixture_component_name=candidate.mixture_component_name,
+                position_mode_name=candidate.position_mode_name,
+                sampler_probability=candidate.sampler_probability,
+                position_id=candidate.position_id,
                 target_rri=candidate.target_rri,
+                target_root_gain=candidate.target_root_gain,
                 target_rri_rank=candidate.target_rri_rank,
                 target_rri_rank_total=candidate.target_rri_rank_total,
-                target_rri_rank_semantics=candidate.target_rri_rank_semantics,
                 selection_probability=candidate.probability,
-                selection_logit=candidate.logit,
-                selection_entropy=candidate.entropy,
-                sampling_strategy_id=candidate.sampling_strategy_id,
-                sampling_strategy_name=candidate.sampling_strategy_name,
-                mixture_id=candidate.mixture_id,
-                sampler_probability=candidate.sampler_probability,
-                invalid_reason_bitset=candidate.reason_bitset,
-                primary_invalid_reason=candidate.primary_reason,
-                color_rgba=candidate.color,
+                mesh_distance_m=candidate.mesh_distance_m,
+                path_min_clearance_m=candidate.path_min_clearance_m,
+                motion_step_length_m=candidate.motion_step_length_m,
+                target_distance_m=candidate.target_distance_m,
+                primary_invalid_reason_name=candidate.primary_invalid_reason_name,
             ),
         )
+
+    def _log_candidate_group_centers(self, step: "_RolloutStepPayload") -> None:
+        """Log low-cardinality candidate center groups for fast Rerun filtering."""
+
+        group_specs = (
+            ("position_family", "position_mode_name"),
+            ("invalid_reason", "primary_invalid_reason_name"),
+        )
+        for group_name, attr_name in group_specs:
+            grouped: dict[str, list[_RolloutCandidatePayload]] = {}
+            for candidate in step.candidates:
+                grouped.setdefault(str(getattr(candidate, attr_name)), []).append(candidate)
+            for value, candidates in grouped.items():
+                points = np.stack([candidate.center for candidate in candidates], axis=0).astype(np.float32)
+                colors = [candidate.color for candidate in candidates]
+                selected_count = sum(1 for candidate in candidates if candidate.selected)
+                valid_count = sum(1 for candidate in candidates if candidate.primary_invalid_reason_name == "VALID")
+                self.rr.log(
+                    f"{step.step_entity}/groups/{group_name}/{_safe_entity_token(value)}",
+                    self.rr.Points3D(
+                        points,
+                        radii=self.config.geometry.candidate_center_radius * 0.85,
+                        colors=colors,
+                    ),
+                    self.rr.AnyValues(
+                        group_name=group_name,
+                        group_value=value,
+                        candidate_count=len(candidates),
+                        valid_count=valid_count,
+                        selected_count=selected_count,
+                    ),
+                )
 
     def _log_selected_depth_representation(self, candidate: "_RolloutCandidatePayload") -> None:
         if candidate.selected_depth is None:
@@ -510,30 +548,25 @@ class RerunRolloutZarrLogger:
 @dataclass(frozen=True, slots=True)
 class _RolloutCandidatePayload:
     row_id: int
-    rollout_row_id: int
-    chain_id: int
-    step_index: int
     step_row_id: int
-    shell_index: int
     compact_valid_index: int
-    status: str
-    valid: bool
     selected: bool
     pose: NDArray[np.float32]
     center: NDArray[np.float32]
+    position_id: int
     target_rri: float
+    target_root_gain: float
     target_rri_rank: int
     target_rri_rank_total: int
-    target_rri_rank_semantics: str
     probability: float
-    logit: float
-    entropy: float
-    sampling_strategy_id: int
-    sampling_strategy_name: str
-    mixture_id: int
+    mixture_component_name: str
+    position_mode_name: str
     sampler_probability: float
-    reason_bitset: int
-    primary_reason: int
+    mesh_distance_m: float
+    path_min_clearance_m: float
+    motion_step_length_m: float
+    target_distance_m: float
+    primary_invalid_reason_name: str
     color: list[int]
     camera_entity: str
     center_entity: str
@@ -557,12 +590,16 @@ class _RolloutStepPayload:
     chain_id: int
     step_row_id: int
     step_index: int
+    step_entity: str
     metadata_entity: str
     candidates: list[_RolloutCandidatePayload]
     selected_center: NDArray[np.float32] | None
     valid_candidate_count: int
     selected_probability: float
     selected_target_rri: float
+    selected_target_root_gain: float
+    selected_position_id: int
+    invalid_fraction: float
     metadata: dict[str, Any]
 
 
@@ -723,6 +760,13 @@ def _step_payload(
     poses = reader.array("candidates/pose_world_cam")[row_positions].astype(np.float32).reshape(-1, 12)
     centers = _pose_centers(poses)
     target_rri = reader.array("candidates/target_rri")[row_positions].astype(np.float32).reshape(-1)
+    target_root_gain = _optional_rows(
+        reader,
+        "candidates/target_root_gain",
+        row_positions=row_positions,
+        dtype=np.float32,
+        default=np.nan,
+    )
     target_rri_ranks, target_rri_rank_total = _target_rri_ranks(
         target_rri=target_rri,
         valid_mask=valid,
@@ -732,15 +776,14 @@ def _step_payload(
     log_probabilities = (
         reader.array("candidates/selection_log_probabilities")[row_positions].astype(np.float32).reshape(-1)
     )
-    logits = reader.array("candidates/selection_logits")[row_positions].astype(np.float32).reshape(-1)
     entropy = _selection_entropy(probabilities=probabilities, log_probabilities=log_probabilities, valid_mask=valid)
     reason_bitsets = reader.array("candidates/invalid_reason_bitset")[row_positions].astype(np.uint32).reshape(-1)
     primary_reasons = reader.array("candidates/primary_invalid_reason")[row_positions].astype(np.uint16).reshape(-1)
     compact_valid = reader.array("candidates/compact_valid_index")[row_positions].astype(np.int64).reshape(-1)
     candidate_row_ids = reader.array("candidates/candidate_row_id")[row_positions].astype(np.int64).reshape(-1)
-    strategy_ids = reader.array("candidates/strategy_id")[row_positions].astype(np.int32).reshape(-1)
     mixture_ids = reader.array("candidates/mixture_id")[row_positions].astype(np.int32).reshape(-1)
     sampler_probabilities = reader.array("candidates/sampler_probability")[row_positions].astype(np.float32).reshape(-1)
+    diagnostics = _candidate_diagnostics_for_rows(reader, row_positions=row_positions)
 
     selected_local = int(np.nonzero(selected)[0][0]) if selected.any() else -1
     selected_depth, selected_depth_warnings = _selected_depth_payload(
@@ -762,17 +805,21 @@ def _step_payload(
         poses=poses,
         centers=centers,
         target_rri=target_rri,
+        target_root_gain=target_root_gain,
         target_rri_ranks=target_rri_ranks,
         target_rri_rank_total=target_rri_rank_total,
         probabilities=probabilities,
-        logits=logits,
-        entropy=entropy,
-        strategy_ids=strategy_ids,
         mixture_ids=mixture_ids,
         sampler_probabilities=sampler_probabilities,
+        position_ids=diagnostics["position_id"],
+        mesh_distance_m=diagnostics["mesh_distance_m"],
+        path_min_clearance_m=diagnostics["path_min_clearance_m"],
+        motion_step_length_m=diagnostics["motion_step_length_m"],
+        target_distance_m=diagnostics["target_distance_m"],
         reason_bitsets=reason_bitsets,
         primary_reasons=primary_reasons,
         selected_depth=selected_depth,
+        component_name_by_id=_component_names(reader),
     )
     metadata = {
         "rollout_row_id": rollout_row_id,
@@ -786,11 +833,22 @@ def _step_payload(
         "selected_shell_index": int(shell_indices[selected_local]) if selected_local >= 0 else None,
         "selected_probability": float(probabilities[selected_local]) if selected_local >= 0 else None,
         "selected_target_rri": float(target_rri[selected_local]) if selected_local >= 0 else None,
+        "selected_target_root_gain": float(target_root_gain[selected_local]) if selected_local >= 0 else None,
+        "selected_position_id": int(diagnostics["position_id"][selected_local]) if selected_local >= 0 else -1,
+        "selected_position_family": _position_name(int(diagnostics["position_id"][selected_local]))
+        if selected_local >= 0
+        else "unknown",
         "selection_entropy": float(entropy) if selected_local >= 0 else None,
         "target_rri_rank": int(target_rri_ranks[selected_local]) if selected_local >= 0 else -1,
         "target_rri_rank_total": int(target_rri_rank_total),
         "target_rri_rank_semantics": _TARGET_RRI_RANK_SEMANTICS,
         "invalid_candidate_count": int((~valid).sum()),
+        "invalid_fraction": float((~valid).sum()) / float(max(valid.shape[0], 1)),
+        "candidate_counts_by_position": _candidate_count_summary(candidate_payloads, "position_mode_name"),
+        "candidate_counts_by_invalid_reason": _candidate_count_summary(
+            candidate_payloads,
+            "primary_invalid_reason_name",
+        ),
         "pose_frame": "stored_pose_world_cam",
         "target": target_metadata or {},
         "selected_depth": {
@@ -825,6 +883,11 @@ def _step_payload(
         chain_id=chain_id,
         step_row_id=step_row_id,
         step_index=step_index,
+        step_entity=_rollout_step_entity(
+            rollout_row_id=rollout_row_id,
+            chain_id=chain_id,
+            step_index=step_index,
+        ),
         metadata_entity=_rollout_step_metadata_entity(
             rollout_row_id=rollout_row_id,
             chain_id=chain_id,
@@ -835,6 +898,9 @@ def _step_payload(
         valid_candidate_count=int(valid.sum()),
         selected_probability=float(probabilities[selected_local]) if selected_local >= 0 else float("nan"),
         selected_target_rri=float(target_rri[selected_local]) if selected_local >= 0 else float("nan"),
+        selected_target_root_gain=float(target_root_gain[selected_local]) if selected_local >= 0 else float("nan"),
+        selected_position_id=int(diagnostics["position_id"][selected_local]) if selected_local >= 0 else -1,
+        invalid_fraction=float((~valid).sum()) / float(max(valid.shape[0], 1)),
         metadata=metadata,
     )
 
@@ -1086,6 +1152,21 @@ def _q_h_metadata(reader: RolloutZarrStoreReader, *, step_row_id: int) -> dict[s
     }
 
 
+def _candidate_count_summary(candidates: list[_RolloutCandidatePayload], attr_name: str) -> dict[str, dict[str, int]]:
+    """Return compact valid/selected counts by one candidate payload attribute."""
+
+    output: dict[str, dict[str, int]] = {}
+    for candidate in candidates:
+        key = str(getattr(candidate, attr_name))
+        row = output.setdefault(key, {"total": 0, "valid": 0, "selected": 0})
+        row["total"] += 1
+        if candidate.primary_invalid_reason_name == "VALID":
+            row["valid"] += 1
+        if candidate.selected:
+            row["selected"] += 1
+    return output
+
+
 def _pose_centers(pose_rows: NDArray[np.float32]) -> NDArray[np.float32]:
     if pose_rows.size == 0:
         return np.empty((0, 3), dtype=np.float32)
@@ -1176,14 +1257,17 @@ def _rollout_candidate_group_hidden_paths(
     """Return exact rollout candidate subtrees hidden by default in the viewer."""
 
     step_indices = reader.array("steps/step_index")[rows.step_rows].astype(np.int64).reshape(-1)
+    selected_shell_indices = reader.array("steps/selected_shell_index")[rows.step_rows].astype(np.int64).reshape(-1)
     hidden_paths: list[str] = []
-    for step_index in step_indices.tolist():
+    for step_index, selected_shell_index in zip(step_indices.tolist(), selected_shell_indices.tolist(), strict=False):
         step_entity = _rollout_step_entity(
             rollout_row_id=rows.rollout_row_id,
             chain_id=rows.chain_id,
             step_index=int(step_index),
         )
         hidden_paths.extend((f"{step_entity}/valid", f"{step_entity}/invalid"))
+        selected_camera = f"{step_entity}/selected/candidate_shell_{int(selected_shell_index):03d}/camera"
+        hidden_paths.extend((f"{selected_camera}/depth", f"{selected_camera}/points"))
     return tuple(hidden_paths)
 
 
@@ -1208,8 +1292,101 @@ def _target_rri_ranks(
     return ranks, int(eligible.size)
 
 
-def _strategy_name(strategy_id: int) -> str:
-    return _STRATEGY_NAMES.get(int(strategy_id), f"unknown_{int(strategy_id)}")
+def _position_name(position_id: int) -> str:
+    return _POSITION_NAMES.get(int(position_id), f"unknown_{int(position_id)}")
+
+
+def _primary_reason_name(reason_id: int) -> str:
+    return _INVALID_REASON_NAMES.get(int(reason_id), f"unknown_{int(reason_id)}")
+
+
+def _candidate_diagnostics_for_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    row_positions: NDArray[Any],
+) -> dict[str, NDArray[Any]]:
+    """Read curated candidate-generation diagnostics aligned with candidate row positions."""
+
+    return {
+        "position_id": _optional_rows(
+            reader,
+            "candidate_diagnostics/position_id",
+            row_positions=row_positions,
+            dtype=np.int32,
+            default=-1,
+        ),
+        "mesh_distance_m": _optional_rows(
+            reader,
+            "candidate_diagnostics/mesh_distance_m",
+            row_positions=row_positions,
+            dtype=np.float32,
+            default=np.nan,
+        ),
+        "path_min_clearance_m": _optional_rows(
+            reader,
+            "candidate_diagnostics/path_min_clearance_m",
+            row_positions=row_positions,
+            dtype=np.float32,
+            default=np.nan,
+        ),
+        "motion_step_length_m": _optional_rows(
+            reader,
+            "candidate_diagnostics/motion_step_length_m",
+            row_positions=row_positions,
+            dtype=np.float32,
+            default=np.nan,
+        ),
+        "target_distance_m": _optional_rows(
+            reader,
+            "candidate_diagnostics/target_distance_m",
+            row_positions=row_positions,
+            dtype=np.float32,
+            default=np.nan,
+        ),
+    }
+
+
+def _optional_rows(
+    reader: RolloutZarrStoreReader,
+    path: str,
+    *,
+    row_positions: NDArray[Any],
+    dtype: Any,
+    default: float | int | bool,
+) -> NDArray[Any]:
+    """Read a row-aligned optional array, filling absent fields for old stores."""
+
+    try:
+        values = reader.array(path)[row_positions].astype(dtype).reshape(-1)
+    except KeyError:
+        values = np.full((int(row_positions.shape[0]),), default, dtype=dtype)
+    return values
+
+
+def _component_names(reader: RolloutZarrStoreReader) -> dict[int, str]:
+    """Return candidate-mixture component names from the store manifest when available."""
+
+    try:
+        writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
+    except Exception:
+        writer_config = None
+    components = []
+    if isinstance(writer_config, dict):
+        candidate_mixture = writer_config.get("candidate_mixture")
+        if isinstance(candidate_mixture, dict):
+            components = candidate_mixture.get("components") or []
+    names: dict[int, str] = {}
+    if isinstance(components, list):
+        for index, component in enumerate(components):
+            if isinstance(component, dict):
+                name = component.get("name") or component.get("family") or component.get("position_mode")
+                if name is not None:
+                    names[index] = str(name)
+    return names
+
+
+def _component_name(component_name_by_id: dict[int, str], mixture_id: int) -> str:
+    return component_name_by_id.get(int(mixture_id), f"mixture_{int(mixture_id)}")
 
 
 def _candidate_payloads(
@@ -1226,17 +1403,21 @@ def _candidate_payloads(
     poses: NDArray[np.float32],
     centers: NDArray[np.float32],
     target_rri: NDArray[Any],
+    target_root_gain: NDArray[Any],
     target_rri_ranks: NDArray[Any],
     target_rri_rank_total: int,
     probabilities: NDArray[Any],
-    logits: NDArray[Any],
-    entropy: float,
-    strategy_ids: NDArray[Any],
     mixture_ids: NDArray[Any],
     sampler_probabilities: NDArray[Any],
+    position_ids: NDArray[Any],
+    mesh_distance_m: NDArray[Any],
+    path_min_clearance_m: NDArray[Any],
+    motion_step_length_m: NDArray[Any],
+    target_distance_m: NDArray[Any],
     reason_bitsets: NDArray[Any],
     primary_reasons: NDArray[Any],
     selected_depth: _SelectedDepthPayload | None,
+    component_name_by_id: dict[int, str],
 ) -> list[_RolloutCandidatePayload]:
     payloads: list[_RolloutCandidatePayload] = []
     for values in zip(
@@ -1248,12 +1429,16 @@ def _candidate_payloads(
         poses,
         centers,
         target_rri,
+        target_root_gain,
         target_rri_ranks,
         probabilities,
-        logits,
-        strategy_ids,
         mixture_ids,
         sampler_probabilities,
+        position_ids,
+        mesh_distance_m,
+        path_min_clearance_m,
+        motion_step_length_m,
+        target_distance_m,
         reason_bitsets,
         primary_reasons,
         strict=False,
@@ -1267,13 +1452,17 @@ def _candidate_payloads(
             pose,
             center,
             rri,
+            root_gain,
             rri_rank,
             prob,
-            logit,
-            strategy_id,
             mixture_id,
             sampler_probability,
-            reason,
+            position_id,
+            mesh_distance,
+            path_clearance,
+            motion_step_length,
+            target_distance,
+            _reason,
             primary,
         ) = values
         shell_index = int(shell)
@@ -1293,30 +1482,25 @@ def _candidate_payloads(
         payloads.append(
             _RolloutCandidatePayload(
                 row_id=int(row_id),
-                rollout_row_id=int(rollout_row_id),
-                chain_id=int(chain_id),
-                step_index=int(step_index),
                 step_row_id=int(step_row_id),
-                shell_index=shell_index,
                 compact_valid_index=int(compact),
-                status=status,
-                valid=bool(is_valid),
                 selected=bool(is_selected),
                 pose=np.asarray(pose, dtype=np.float32).reshape(12),
                 center=np.asarray(center, dtype=np.float32).reshape(3),
+                position_id=int(position_id),
                 target_rri=float(rri),
+                target_root_gain=float(root_gain),
                 target_rri_rank=int(rri_rank),
                 target_rri_rank_total=int(target_rri_rank_total),
-                target_rri_rank_semantics=_TARGET_RRI_RANK_SEMANTICS,
                 probability=float(prob),
-                logit=float(logit),
-                entropy=float(entropy),
-                sampling_strategy_id=int(strategy_id),
-                sampling_strategy_name=_strategy_name(int(strategy_id)),
-                mixture_id=int(mixture_id),
+                mixture_component_name=_component_name(component_name_by_id, int(mixture_id)),
+                position_mode_name=_position_name(int(position_id)),
                 sampler_probability=float(sampler_probability),
-                reason_bitset=int(reason),
-                primary_reason=int(primary),
+                mesh_distance_m=float(mesh_distance),
+                path_min_clearance_m=float(path_clearance),
+                motion_step_length_m=float(motion_step_length),
+                target_distance_m=float(target_distance),
+                primary_invalid_reason_name=_primary_reason_name(int(primary)),
                 color=color,
                 camera_entity=f"{candidate_root}/camera",
                 center_entity=f"{candidate_root}/center",
@@ -1469,6 +1653,30 @@ def _rollout_target_payload(reader: RolloutZarrStoreReader, *, rows: SelectedRol
         "target_inst_id": int(reader.array("targets/target_inst_id")[target_index]),
         "target_class_name": _value_at(class_names, target_index),
         "target_confidence": float(reader.array("targets/target_confidence")[target_index]),
+        "target_projected_area_pixels": _optional_scalar(
+            reader,
+            "targets/target_projected_area_pixels",
+            target_index,
+        ),
+        "target_projected_area_fraction": _optional_scalar(
+            reader,
+            "targets/target_projected_area_fraction",
+            target_index,
+        ),
+        "target_semidense_support_count": _optional_scalar(
+            reader,
+            "targets/target_semidense_support_count",
+            target_index,
+        ),
+        "target_evl_support_count": _optional_scalar(reader, "targets/target_evl_support_count", target_index),
+        "target_effective_support_count": _optional_scalar(
+            reader,
+            "targets/target_effective_support_count",
+            target_index,
+        ),
+        "target_visibility_score": _optional_scalar(reader, "targets/target_visibility_score", target_index),
+        "target_support_score": _optional_scalar(reader, "targets/target_support_score", target_index),
+        "target_deficit_score": _optional_scalar(reader, "targets/target_deficit_score", target_index),
         "target_center_world": center.astype(float).tolist(),
         "target_extents": extents.astype(float).tolist(),
         "matched_gt_target_row_id": int(reader.array("targets/matched_gt_target_row_id")[target_index]),
@@ -1540,6 +1748,21 @@ def _encoded_values(root: Any, *, dictionary_name: str, array_path: str) -> list
 
 def _value_at(values: list[str], index: int) -> str:
     return values[index] if 0 <= int(index) < len(values) else ""
+
+
+def _optional_scalar(reader: RolloutZarrStoreReader, path: str, index: int) -> float | int | None:
+    """Read one optional scalar field from a rollout store."""
+
+    try:
+        values = np.asarray(reader.array(path)).reshape(-1)
+    except KeyError:
+        return None
+    if index < 0 or index >= int(values.shape[0]):
+        return None
+    value = values[index].item()
+    if isinstance(value, float):
+        return value if np.isfinite(value) else None
+    return value
 
 
 def _target_identifier_mentions_other_snippet(*, identifier: str, snippet: str) -> bool:
@@ -1631,9 +1854,12 @@ def run_rollout_zarr_inspector(
 
 __all__ = [
     "ENTITY_ROLLOUT_DIAGNOSTICS_ROOT",
+    "ENTITY_ROLLOUT_INVALID_FRACTION",
     "ENTITY_ROLLOUT_METADATA",
     "ENTITY_ROLLOUT_RRI_ROOT",
     "ENTITY_ROLLOUT_ROOT",
+    "ENTITY_ROLLOUT_SELECTED_POSITION_ID",
+    "ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN",
     "RerunRolloutZarrLogger",
     "SelectedRolloutRows",
     "run_rollout_zarr_inspector",

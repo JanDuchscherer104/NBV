@@ -81,7 +81,7 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     assert manifest["counts"]["steps"] == result.num_steps
     assert manifest["counts"]["candidates"] == result.num_candidates
     assert manifest["counts"]["candidate_diagnostics"] == result.num_candidates
-    assert manifest["counts"]["target_eval_crops"] >= result.num_steps
+    assert manifest["counts"]["target_eval_crops"] == 0
     assert manifest["counts"]["q_h_states"] == result.num_steps
     assert manifest["generation"]["invocation"]["mode"] == "programmatic"
     assert manifest["source_coverage"]["scene_counts"] == {"fixture_box": 3}
@@ -103,6 +103,13 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     assert reader.array("rollouts/root_time_ns").shape == (result.num_rollouts,)
     assert reader.array("rollouts/root_trajectory_index").shape == (result.num_rollouts,)
     assert reader.array("rollouts/root_frame_index").shape == (result.num_rollouts,)
+    assert reader.array("targets/target_projected_area_pixels").tolist() == [512.0, 512.0, 512.0]
+    assert np.allclose(reader.array("targets/target_effective_support_count"), np.asarray([12.0, 12.0, 12.0]))
+    assert reader.array("targets/target_semidense_support_count").tolist() == [7, 7, 7]
+    assert reader.array("targets/target_evl_support_count").tolist() == [5, 5, 5]
+    assert np.allclose(reader.array("targets/target_visibility_score"), np.asarray([0.8, 0.8, 0.8]))
+    assert np.allclose(reader.array("targets/target_support_score"), np.asarray([1.0, 1.0, 1.0]))
+    assert np.allclose(reader.array("targets/target_deficit_score"), np.asarray([0.9, 0.9, 0.9]))
 
     deleted_candidate_arrays = {
         "candidate_valid_mask",
@@ -118,12 +125,15 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     selection_probabilities = reader.array("candidates/selection_probabilities")
     assert np.all(selection_probabilities[~candidate_valid] == 0.0)
     assert np.all(reader.array("candidates/selected_mask") <= candidate_valid)
-    diagnostics = reader.root["candidate_diagnostics"]
     assert np.array_equal(
         reader.array("candidate_diagnostics/candidate_row_id"),
         reader.array("candidates/candidate_row_id"),
     )
-    assert reader.array("candidate_diagnostics/position_id").shape == (result.num_candidates,)
+    assert reader.array("candidates/position_id").shape == (result.num_candidates,)
+    assert np.array_equal(
+        reader.array("candidate_diagnostics/position_id"),
+        reader.array("candidates/position_id"),
+    )
     assert reader.array("candidate_diagnostics/path_collision_mask").dtype == np.dtype(np.bool_)
     for diagnostic_name in (
         "mesh_distance_m",
@@ -144,7 +154,7 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     assert selected_depth.attrs["codec"] == "blosc:zstd:clevel=5:bitshuffle"
     assert selected_depth.attrs["renderer"] == "Pytorch3DDepthRenderer"
     assert selected_depth.attrs["source_resolution"] == "exact_output_size"
-    assert reader.root.attrs["selected_depth_role"] == "q_h_history_only"
+    assert reader.root.attrs["selected_depth_role"] == "selected_successor_state_history"
     assert reader.root.attrs["selected_depth_znear_m"] == pytest.approx(0.001)
     assert reader.root.attrs["selected_depth_zfar_m"] == pytest.approx(20.0)
     assert selected_depth["depth_m"].dtype == np.dtype(np.float16)
@@ -158,6 +168,8 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
         reader.array("steps/selected_candidate_row_id"),
     )
     target_eval_crops = reader.root["target_eval_crops"]
+    assert target_eval_crops.attrs["enabled"] is False
+    assert target_eval_crops.attrs["retention"] == "disabled_training_core"
     assert target_eval_crops.attrs["role"] == "oracle_eval_only"
     assert target_eval_crops.attrs["coordinate_frame"] == "world"
     assert target_eval_crops.attrs["max_points"] == 50_000
@@ -165,12 +177,7 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     assert crop_rows == manifest["counts"]["target_eval_crops"]
     assert target_eval_crops["points_world"].shape == (crop_rows, 50_000, 3)
     assert target_eval_crops["mask"].shape == (crop_rows, 50_000)
-    assert np.array_equal(
-        np.asarray(target_eval_crops["mask"]).sum(axis=1).astype(np.int32),
-        np.asarray(target_eval_crops["lengths"]),
-    )
-    assert set(np.asarray(target_eval_crops["source_role_id"]).tolist()) == {0, 1}
-    assert np.any(np.asarray(target_eval_crops["candidate_row_id"]) == -1)
+    assert crop_rows == 0
 
     q_h = reader.q_h_view()
     q_h_group = reader.root["q_h"]
@@ -196,6 +203,7 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
     assert np.all(q_train_mask <= valid_action_mask)
     assert "q_target_target_rri" not in q_h
     assert "one_step_target_root_gain" in q_h
+    assert "position_id" in q_h
     assert "td_reward" in q_h
     assert np.isfinite(q_h["one_step_target_root_gain"][q_train_mask]).all()
     assert np.isfinite(q_h["td_reward"]).all()
@@ -221,10 +229,36 @@ def test_rollout_zarr_rejects_stale_schema_version(tmp_path) -> None:
 
     validation = validate_rollout_zarr_store(result.store_dir)
     assert not validation.ok
-    assert any("0.8-global-target-rows" in error and ROLLOUT_ZARR_SCHEMA_VERSION in error for error in validation.errors)
+    assert any(
+        "0.8-global-target-rows" in error and ROLLOUT_ZARR_SCHEMA_VERSION in error for error in validation.errors
+    )
 
 
-def test_rollout_zarr_candidate_diagnostics_fallback_to_nan_when_unavailable(tmp_path) -> None:
+def test_rollout_zarr_can_persist_target_eval_crops_for_audit_profile(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=33)[:1]
+
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_eval_crops_enabled=True)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    target_eval_crops = reader.root["target_eval_crops"]
+    assert reader.root.attrs["target_eval_crops_enabled"] is True
+    assert target_eval_crops.attrs["enabled"] is True
+    assert target_eval_crops.attrs["retention"] == "sampled_audit"
+    crop_rows = int(target_eval_crops["crop_row_id"].shape[0])
+    assert crop_rows >= result.num_steps
+    assert target_eval_crops["points_world"].shape == (crop_rows, 50_000, 3)
+    assert target_eval_crops["mask"].shape == (crop_rows, 50_000)
+    assert np.array_equal(
+        np.asarray(target_eval_crops["mask"]).sum(axis=1).astype(np.int32),
+        np.asarray(target_eval_crops["lengths"]),
+    )
+    assert set(np.asarray(target_eval_crops["source_role_id"]).tolist()) == {0, 1}
+    assert np.any(np.asarray(target_eval_crops["candidate_row_id"]) == -1)
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=31)[:1]
     for step in _steps(records[0]):
         step.candidates.position_id = None
@@ -238,6 +272,7 @@ def test_rollout_zarr_candidate_diagnostics_fallback_to_nan_when_unavailable(tmp
         reader.array("candidates/candidate_row_id"),
     )
     assert np.all(reader.array("candidate_diagnostics/position_id") == -1)
+    assert np.all(reader.array("candidates/position_id") == -1)
     assert not reader.array("candidate_diagnostics/path_collision_mask").any()
     for name in (
         "mesh_distance_m",
@@ -253,7 +288,8 @@ def test_rollout_zarr_candidate_diagnostics_fallback_to_nan_when_unavailable(tmp
         assert np.isnan(reader.array(f"candidate_diagnostics/{name}")).all()
 
     validation = validate_rollout_zarr_store(result.store_dir)
-    assert validation.ok, validation.errors
+    assert not validation.ok
+    assert any("position_id" in error for error in validation.errors)
 
 
 def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tmp_path) -> None:
@@ -542,6 +578,7 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     for step in _steps(records[0]):
         n = int(step.candidates.mask_valid.shape[0])
         step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
+        step.candidates.position_id = torch.arange(n, dtype=torch.int64) % 3
         step.candidates.mixture_id = torch.arange(n, dtype=torch.int64) % 2
         step.candidates.sampler_probability = torch.full((n,), 1.0 / float(n), dtype=torch.float32)
 
@@ -662,6 +699,7 @@ def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp
 
     actor_rows = reader.array("candidates/actor_action_mask")
     assert np.all(reader.array("candidates/strategy_id")[actor_rows] >= 0)
+    assert np.all(reader.array("candidates/position_id")[actor_rows] >= 0)
     assert np.all(reader.array("candidates/mixture_id")[actor_rows] >= 0)
     assert np.isfinite(reader.array("candidates/sampler_probability")[actor_rows]).all()
 
