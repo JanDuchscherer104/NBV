@@ -153,10 +153,10 @@ def test_default_mixture_uses_realistic_position_families_without_free_shell() -
             update={
                 "position_mode": CandidatePositionMode.FORWARD_LOCAL,
                 "enforce_motion_realism": True,
-                "max_step_distance_m": 1.25,
-                "max_height_delta_m": 0.6,
-                "max_backward_step_m": 0.35,
-                "max_yaw_delta_deg": 100.0,
+                "max_step_distance_m": 1.0,
+                "max_height_delta_m": 0.25,
+                "max_backward_step_m": 0.25,
+                "max_yaw_delta_deg": 70.0,
                 "collect_debug_stats": True,
             }
         )
@@ -164,12 +164,37 @@ def test_default_mixture_uses_realistic_position_families_without_free_shell() -
 
     result = _run_generate(cfg)
 
+    assert cfg.total_count == 60
+    assert [component.name for component in cfg.components] == [
+        "forward_local",
+        "target_bearing_local",
+        "lateral_target_bypass",
+    ]
+    assert [component.count for component in cfg.components] == [24, 24, 12]
+    assert cfg.base.max_step_distance_m == pytest.approx(1.0)
+    assert cfg.base.max_height_delta_m == pytest.approx(0.25)
+    assert cfg.base.max_backward_step_m == pytest.approx(0.25)
+    assert cfg.base.max_yaw_delta_deg == pytest.approx(70.0)
     assert result.position_id is not None
     assert CandidatePositionMode.UPPER_BOUND_FREE_SHELL.value not in set(result.component_name or ())
+    assert candidate_position_id(CandidatePositionMode.FORWARD_LOCAL) in result.position_id.tolist()
     assert candidate_position_id(CandidatePositionMode.TARGET_BEARING_LOCAL) in result.position_id.tolist()
     assert candidate_position_id(CandidatePositionMode.LATERAL_TARGET_BYPASS) in result.position_id.tolist()
     assert "motion_step_length_m" in result.extras
     assert "target_bearing_yaw_rad" in result.extras
+
+
+def test_rich_local_five_family_is_named_ablation() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig.rich_local_five_family()
+
+    assert [component.name for component in cfg.components] == [
+        "target_bearing_local",
+        "forward_local",
+        "lateral_target_bypass",
+        "local_refinement",
+        "revisit_backtrack",
+    ]
+    assert [component.count for component in cfg.components] == [18, 18, 12, 6, 6]
 
 
 def test_upper_bound_free_shell_ablation_is_explicit() -> None:

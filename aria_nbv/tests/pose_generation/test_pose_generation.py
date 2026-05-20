@@ -167,7 +167,7 @@ def test_min_distance_rule_rejects_near_mesh(monkeypatch):
     )
     rule(ctx)
     assert torch.equal(ctx.mask_valid, torch.tensor([False, True]))
-    assert torch.allclose(ctx.debug["min_distance_to_mesh"], torch.tensor([0.1, 0.5]))
+    assert torch.allclose(ctx.debug["min_distance_to_mesh"], torch.tensor([0.2, 0.8]), atol=1e-6)
 
 
 def test_path_collision_rule_records_p3d_min_clearance(monkeypatch):

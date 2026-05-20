@@ -1,10 +1,10 @@
 r"""Actor-visible target selection for target-conditioned ARIA-NBV.
 
 This module implements the V1 `OBS-SEL / PRED-Q / GT-EVAL` target contract.
-V1 ranks observed or predicted OBB records by actor-visible evidence only: OBB
-confidence, projected area, semidense support, EVL support, and support deficit.
-GT OBBs are allowed only in explicit V0 sanity/upper-bound mode or after
-selection for label/evaluation matching.
+V1 resolves observed or predicted OBB records by actor-visible evidence only:
+OBB confidence, clipped projected visible area, semidense support, EVL support,
+and support deficit. GT OBBs are allowed only in explicit V0
+sanity/upper-bound mode or after selection for label/evaluation matching.
 
 The selector stores both actor-facing descriptors and oracle-side audit fields.
 Target matching is accepted only when the best GT match passes configured IoU
@@ -13,22 +13,15 @@ ambiguous, empty-crop, or no-source cases are target-invalid states, not low
 target-RRI examples.
 
 Theory:
-    The actor-visible support count is
-    $n_e^{\mathrm{eff}}=n_e^{\mathrm{semi}}+
-    w_{\mathrm{EVL}}n_e^{\mathrm{EVL}}$. The selector forms support,
-    deficit, and projected-visibility factors,
-    $s_e^{\mathrm{sup}}$, $s_e^{\mathrm{def}}$, and
-    $s_e^{\mathrm{vis}}$, then scores rows as
-    $S_e=p_e s_e^{\mathrm{vis}}s_e^{\mathrm{sup}}s_e^{\mathrm{def}}$.
-    Greedy top-K sorts eligible rows by this score. Temperature-softmax top-K
-    samples without replacement using $\exp(S_e/\tau)$ over the remaining
-    eligible set.
-
-    After actor-visible selection, GT matching computes
-    $G(e,g)=\operatorname{IoU}(\mathrm{OBB}_e,\mathrm{OBB}_g)
-    \operatorname{clip}(s_e^{\mathrm{sup}}s_e^{\mathrm{vis}},0,1)$ and
-    accepts only semantic, IoU, score, and ambiguity-consistent matches. These
-    match fields are oracle/evaluation audit fields, not V1 actor inputs.
+    Target handling is a three-stage contract. First, hard eligibility checks
+    confidence, finite OBB geometry, clipped projected visibility policy, and
+    effective actor-visible support. Second, an interest score ranks or samples
+    eligible rows; the current baseline interest remains
+    $S_e=p_e s_e^{\mathrm{vis}}s_e^{\mathrm{sup}}s_e^{\mathrm{def}}$ while
+    stratified target sampling is deferred to scale audits. Third, GT matching
+    is a deterministic oracle/evaluation association based on semantic
+    compatibility, 3D IoU, and top-1/top-2 ambiguity. Support and visibility
+    are eligibility/audit fields, not GT-match ranking multipliers.
 """
 
 from __future__ import annotations
@@ -239,13 +232,19 @@ class TargetSelectorConfig(TargetConfig["ActorVisibleTargetSelector"]):
     """Minimum observed/predicted OBB confidence for V1 eligibility."""
 
     min_projected_area_pixels: float = Field(default=16.0, gt=0.0)
-    """Minimum max projected 2D area over RGB/SLAM OBB boxes."""
+    """Minimum clipped visible 2D area over RGB/SLAM OBB boxes."""
 
     require_projected_visibility: bool = False
     """Whether missing 2D OBB boxes hard-mask otherwise supported 3D target records."""
 
     projected_area_normalizer_pixels: float = Field(default=240.0 * 240.0, gt=0.0)
     """Image-area normalizer used for projected-area fractions."""
+
+    projected_area_image_width_px: float = Field(default=240.0, gt=0.0)
+    """Image width used to clip projected OBB boxes for visibility scoring."""
+
+    projected_area_image_height_px: float = Field(default=240.0, gt=0.0)
+    """Image height used to clip projected OBB boxes for visibility scoring."""
 
     projected_area_full_score_fraction: float = Field(default=0.05, gt=0.0)
     """Projected-area fraction that saturates the visibility score."""
@@ -275,7 +274,7 @@ class TargetSelectorConfig(TargetConfig["ActorVisibleTargetSelector"]):
     """Minimum sampled 3D OBB IoU for a GT target match."""
 
     min_gt_match_score: float = Field(default=0.05, ge=0.0)
-    """Minimum combined GT-match reliability score for V1 label acceptance."""
+    """Minimum geometry-only GT match score for V1 label acceptance."""
 
     gt_iou_samples: int = Field(default=8, ge=1)
     """Samples per dimension for EFM's sampled OBB IoU fallback."""
@@ -417,7 +416,7 @@ class ActorVisibleTargetSelector:
             center_t = obb.bb3_center_world.detach().cpu().reshape(-1).to(dtype=torch.float32)
             pose_world = obb.T_world_object.tensor().detach().cpu().reshape(-1).to(dtype=torch.float32)
             relative_pose = (reference_pose.inverse() @ obb.T_world_object).tensor().detach().cpu().reshape(-1)
-            projected_area = _max_projected_area(obb)
+            projected_area = _max_projected_area(obb, config=self.config)
             projected_fraction = projected_area / float(self.config.projected_area_normalizer_pixels)
             visibility_score = _visibility_score(
                 projected_area=projected_area,
@@ -576,7 +575,7 @@ class ActorVisibleTargetSelector:
                 if int(gt.sem_id.reshape(-1)[0].item()) != row.sem_id:
                     continue
                 iou = _safe_obb_iou(pred, gt, samples=self.config.gt_iou_samples)
-                match_score = _gt_match_score(iou=iou, row=row)
+                match_score = _gt_match_score(iou=iou)
                 if iou >= self.config.min_gt_iou and match_score >= self.config.min_gt_match_score:
                     candidate_matches.append((gt_index, iou, match_score))
             candidate_matches.sort(key=lambda item: item[2], reverse=True)
@@ -798,14 +797,19 @@ def _points_inside_count(obb: ObbTW, points: Tensor, *, scale: float, positive_c
     return int(inside.sum().item())
 
 
-def _max_projected_area(obb: ObbTW) -> float:
+def _max_projected_area(obb: ObbTW, *, config: TargetSelectorConfig) -> float:
     areas: list[float] = []
+    image_width = float(config.projected_area_image_width_px)
+    image_height = float(config.projected_area_image_height_px)
     for camera_id in range(3):
         bb2 = obb.bb2(camera_id).detach().cpu().reshape(-1, 4).to(dtype=torch.float32)
-        visible = torch.all(bb2 > 0, dim=-1)
-        width = (bb2[:, 1] - bb2[:, 0]).clamp_min(0)
-        height = (bb2[:, 3] - bb2[:, 2]).clamp_min(0)
-        area = torch.where(visible, width * height, torch.zeros_like(width))
+        x1 = bb2[:, 0].clamp(min=0.0, max=image_width)
+        x2 = bb2[:, 1].clamp(min=0.0, max=image_width)
+        y1 = bb2[:, 2].clamp(min=0.0, max=image_height)
+        y2 = bb2[:, 3].clamp(min=0.0, max=image_height)
+        width = (x2 - x1).clamp_min(0)
+        height = (y2 - y1).clamp_min(0)
+        area = width * height
         if area.numel():
             areas.append(float(area.max().item()))
     return max(areas) if areas else 0.0
@@ -825,11 +829,16 @@ def _visibility_score(
     return float(normalized * normalized * (3.0 - 2.0 * normalized))
 
 
-def _gt_match_score(*, iou: float, row: TargetCandidateRow) -> float:
-    """Combine geometric overlap and observed support into a match reliability score."""
+def _gt_match_score(*, iou: float) -> float:
+    """Return the geometry-only GT association score.
 
-    support_visibility = max(0.0, min(float(row.support_score * row.visibility_score), 1.0))
-    return float(max(0.0, iou) * support_visibility)
+    Target support and projected visibility decide whether an actor-visible row
+    is labelable and interesting. Once selected, GT association is kept as
+    class-compatible 3D IoU so labelability failures are not conflated with
+    geometric mismatch.
+    """
+
+    return float(max(0.0, iou))
 
 
 def _target_reason_bitset(

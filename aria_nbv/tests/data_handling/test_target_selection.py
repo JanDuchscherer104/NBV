@@ -39,13 +39,18 @@ def _obb_block(
     inst_ids: list[int] | None = None,
     probs: list[float] | None = None,
     box_size: float = 100.0,
+    bb2: torch.Tensor | None = None,
 ) -> CompactObbBlock:
     count = len(centers)
     sem = sem_ids or [0] * count
     inst = inst_ids or list(range(count))
     conf = probs or [0.9] * count
     bb3 = torch.tensor([[-0.5, 0.5, -0.5, 0.5, -0.5, 0.5]] * count, dtype=torch.float32)
-    bb2 = torch.tensor([[10.0, 10.0 + box_size, 10.0, 10.0 + box_size]] * count, dtype=torch.float32)
+    bb2 = (
+        bb2.to(dtype=torch.float32)
+        if bb2 is not None
+        else torch.tensor([[10.0, 10.0 + box_size, 10.0, 10.0 + box_size]] * count, dtype=torch.float32)
+    )
     obbs = ObbTW.from_lmc(
         bb3_object=bb3,
         bb2_rgb=bb2,
@@ -293,7 +298,7 @@ def test_selected_target_matches_compatible_gt_obb() -> None:
     assert np.isclose(row.gt_match_score, 1.0)
 
 
-def test_gt_match_score_keeps_iou_distinct_from_observed_reliability() -> None:
+def test_gt_match_score_is_geometry_only_after_target_eligibility() -> None:
     detected = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[10], box_size=0.0)
     gt = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
     sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0]])
@@ -302,8 +307,21 @@ def test_gt_match_score_keeps_iou_distinct_from_observed_reliability() -> None:
 
     assert row.gt_label_valid
     assert row.gt_match_iou == pytest.approx(1.0)
-    assert row.gt_match_score == pytest.approx(row.visibility_score * row.support_score)
-    assert row.gt_match_score < row.gt_match_iou
+    assert row.visibility_score < 1.0
+    assert row.gt_match_score == pytest.approx(row.gt_match_iou)
+
+
+def test_projected_area_is_clipped_visible_image_overlap() -> None:
+    boxes = torch.tensor([[-20.0, 20.0, -10.0, 30.0]], dtype=torch.float32)
+    sample = _sample(
+        detected_obbs=_obb_block([[0.0, 0.0, 0.0]], bb2=boxes),
+        points=[[0.0, 0.0, 0.0]],
+    )
+
+    row = _selector(k=1).select(sample).selected_rows[0]
+
+    assert row.projected_area_pixels == pytest.approx(20.0 * 30.0)
+    assert row.projected_area_fraction == pytest.approx((20.0 * 30.0) / (240.0 * 240.0))
 
 
 def test_duplicate_predicted_targets_make_gt_match_ambiguous() -> None:

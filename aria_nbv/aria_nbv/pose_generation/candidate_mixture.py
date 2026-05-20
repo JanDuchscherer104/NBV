@@ -15,9 +15,9 @@ but not on GT target geometry.
 
 Theory:
     The default target-conditioned mixture has 60 full-shell rows:
-    `target_bearing_local` 18, `forward_local` 18,
-    `lateral_target_bypass` 12, `local_refinement` 6, and
-    `revisit_backtrack` 6. Each row records stable `position_id`,
+    `forward_local` 24, `target_bearing_local` 24, and
+    `lateral_target_bypass` 12. Richer local-refinement, revisit-backtrack,
+    and free-shell components are explicit ablations. Each row records stable `position_id`,
     `strategy_id`, `mixture_id`, component name, and
     `sampler_probability = 1/N`. These provenance arrays let rollout/Q_H
     stores audit which finite-action family produced each candidate without
@@ -138,10 +138,10 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
             delta_azimuth_deg=120.0,
             kappa=8.0,
             enforce_motion_realism=True,
-            max_step_distance_m=1.25,
-            max_height_delta_m=0.6,
-            max_backward_step_m=0.35,
-            max_yaw_delta_deg=85.0,
+            max_step_distance_m=1.0,
+            max_height_delta_m=0.25,
+            max_backward_step_m=0.25,
+            max_yaw_delta_deg=70.0,
             collect_debug_stats=True,
         )
     )
@@ -150,18 +150,18 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
     components: list[CandidateMixtureComponentConfig] = Field(
         default_factory=lambda: [
             CandidateMixtureComponentConfig(
-                name="target_bearing_local",
-                count=18,
-                view_mode=ViewDirectionMode.TARGET_POINT,
-                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                name="forward_local",
+                count=24,
+                view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.FORWARD_LOCAL,
                 view_max_azimuth_deg=0.0,
                 view_max_elevation_deg=0.0,
             ),
             CandidateMixtureComponentConfig(
-                name="forward_local",
-                count=18,
-                view_mode=ViewDirectionMode.FORWARD_RIG,
-                position_mode=CandidatePositionMode.FORWARD_LOCAL,
+                name="target_bearing_local",
+                count=24,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                 view_max_azimuth_deg=0.0,
                 view_max_elevation_deg=0.0,
             ),
@@ -170,26 +170,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 count=12,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
-            ),
-            CandidateMixtureComponentConfig(
-                name="local_refinement",
-                count=6,
-                view_mode=ViewDirectionMode.RADIAL_TOWARDS,
-                position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
-                min_radius=0.2,
-                max_radius=0.7,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
-            ),
-            CandidateMixtureComponentConfig(
-                name="revisit_backtrack",
-                count=6,
-                view_mode=ViewDirectionMode.FORWARD_RIG,
-                position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
-                min_radius=0.25,
-                max_radius=0.9,
                 view_max_azimuth_deg=0.0,
                 view_max_elevation_deg=0.0,
             ),
@@ -222,6 +202,67 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     view_mode=ViewDirectionMode.RADIAL_AWAY,
                     position_mode=CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
                 )
+            ],
+        )
+
+    @classmethod
+    def rich_local_five_family(cls) -> "CandidateMixtureViewGeneratorConfig":
+        """Build the previous five-family local sampler for ablation runs."""
+
+        return cls(
+            base=cls().base.model_copy(
+                update={
+                    "max_step_distance_m": 1.25,
+                    "max_height_delta_m": 0.6,
+                    "max_backward_step_m": 0.35,
+                    "max_yaw_delta_deg": 85.0,
+                }
+            ),
+            components=[
+                CandidateMixtureComponentConfig(
+                    name="target_bearing_local",
+                    count=18,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="forward_local",
+                    count=18,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.FORWARD_LOCAL,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="lateral_target_bypass",
+                    count=12,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="local_refinement",
+                    count=6,
+                    view_mode=ViewDirectionMode.RADIAL_TOWARDS,
+                    position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
+                    min_radius=0.2,
+                    max_radius=0.7,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="revisit_backtrack",
+                    count=6,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    min_radius=0.25,
+                    max_radius=0.9,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
             ],
         )
 

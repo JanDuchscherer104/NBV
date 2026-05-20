@@ -536,6 +536,40 @@ def _valid_metric_values(step: object, metric_name: str) -> np.ndarray:
     return values_np[np.isfinite(values_np)].astype(float, copy=False)
 
 
+def _valid_candidate_values(step: object, metric_name: str) -> np.ndarray | None:
+    """Return one value per compact valid candidate for coloring."""
+
+    candidates = getattr(step, "candidates", None)
+    if candidates is None:
+        return None
+    mask_valid = getattr(candidates, "mask_valid", None)
+    if mask_valid is None:
+        return None
+    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    valid_count = int(mask.sum())
+    if valid_count == 0:
+        return None
+
+    if metric_name == "selection_probability":
+        values = getattr(step, "selection_probabilities", None)
+    elif metric_name == "position_family":
+        values = getattr(candidates, "position_id", None)
+    else:
+        vectors = getattr(step, "metric_vectors", {})
+        values = vectors.get(metric_name)
+        if values is None and metric_name == "target_rri":
+            values = vectors.get("rri")
+    if values is None:
+        return None
+
+    values_np = values.detach().cpu().numpy().reshape(-1).astype(float, copy=False)
+    if values_np.shape[0] == mask.shape[0]:
+        values_np = values_np[mask]
+    if values_np.shape[0] != valid_count:
+        return None
+    return values_np
+
+
 def _trajectory_name(
     trajectory: "CounterfactualTrajectory",
     *,
@@ -787,6 +821,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         max_frustums: int | None = 16,
         include_rejected: bool = False,
         color_frusta_by_target_rri: bool = True,
+        candidate_color_metric: str = "target_rri",
     ) -> Self:
         """Plot one rollout step's candidate shell within the snippet scene."""
 
@@ -813,12 +848,23 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
                 )
 
         self.attach_candidate_results(step.candidates)
-        colorbar_title = _pretty_metric_label(step.selection_score_label)
-        if step.selection_scores is not None:
+        colorbar_title = _pretty_metric_label(candidate_color_metric)
+        candidate_values = _valid_candidate_values(step, candidate_color_metric)
+        if candidate_values is not None:
+            self.add_candidate_points(
+                use_valid=True,
+                color=candidate_values,
+                colorbar_title=colorbar_title,
+                name=f"Step {step_index + 1} candidates",
+                size=4,
+                opacity=0.8,
+                mark_reference=True,
+            )
+        elif step.selection_scores is not None:
             self.add_candidate_points(
                 use_valid=True,
                 color=step.selection_scores.detach().cpu().numpy(),
-                colorbar_title=colorbar_title,
+                colorbar_title=_pretty_metric_label(step.selection_score_label),
                 name=f"Step {step_index + 1} candidates",
                 size=4,
                 opacity=0.8,
@@ -829,7 +875,9 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         if include_rejected:
             self.add_rejected_cloud()
         if show_frusta:
-            metric_values = _valid_metric_values(step, "target_rri")
+            metric_values = _valid_candidate_values(step, candidate_color_metric)
+            if metric_values is None:
+                metric_values = _valid_metric_values(step, "target_rri")
             if color_frusta_by_target_rri and metric_values.size:
                 poses = self._pose_list_from_input(step.candidates.poses_world_cam())
                 indices = np.arange(len(poses))
@@ -844,7 +892,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
                         poses=[poses[int(local_idx)]],
                         scale=frustum_scale,
                         color=_metric_color(value, finite_values, default="crimson", colorscale="Viridis"),
-                        name=f"Step {step_index + 1} frustum {local_idx} target_rri={label}",
+                        name=f"Step {step_index + 1} frustum {local_idx} {candidate_color_metric}={label}",
                         max_frustums=None,
                         include_axes=False,
                         include_center=False,

@@ -53,3 +53,21 @@ def _candidate_result_for_pose(pose: PoseTW) -> CandidateSamplingResult:
         masks={},
         shell_poses=pose,
     )
+
+
+def test_candidate_panel_color_payloads_decode_full_shell_provenance() -> None:
+    result = _candidate_result_for_pose(PoseTW.from_Rt(torch.eye(3), torch.zeros(3)))
+    result.position_id = torch.tensor([1])
+    result.strategy_id = torch.tensor([3])
+    result.extras["target_distance_m"] = torch.tensor([2.5])
+
+    position_values, position_label = candidates_panel._color_payload_np(result, "position_family")
+    strategy_values, strategy_label = candidates_panel._color_payload_np(result, "strategy")
+    target_values, target_label = candidates_panel._color_payload_np(result, "target_distance")
+
+    assert position_label == "position_id"
+    assert position_values.tolist() == [1.0]
+    assert strategy_label == "strategy_id"
+    assert strategy_values.tolist() == [3.0]
+    assert target_label == "target_distance_m"
+    assert target_values.tolist() == [2.5]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+import plotly.graph_objects as go
 import streamlit as st
 import torch
 
@@ -31,6 +33,8 @@ from ...pose_generation.utils import (
     summarise_dirs_ref,
     summarise_offsets_ref,
 )
+from ...rollouts import decode_position_id, decode_strategy_id
+from ...rollouts.trace import _candidate_invalid_reasons
 from ...utils.frames import world_up_tensor
 
 if TYPE_CHECKING:
@@ -40,6 +44,160 @@ if TYPE_CHECKING:
     from ...pose_generation import CandidateViewGeneratorConfig
     from ...pose_generation.types import CandidateSamplingResult
 from .common import _info_popover, _pretty_label
+
+
+def _target_point_from_config(cand_cfg: CandidateViewGeneratorConfig | None) -> torch.Tensor | None:
+    """Return configured actor-visible target point for display overlays."""
+
+    if cand_cfg is None:
+        return None
+    target = cand_cfg.position_target_point_world
+    if target is None:
+        target = cand_cfg.view_target_point_world
+    if target is None:
+        return None
+    return torch.as_tensor(target, dtype=torch.float32).reshape(3)
+
+
+def _add_target_context_overlay(
+    builder: CandidatePlotBuilder,
+    candidates: CandidateSamplingResult,
+    target_world: torch.Tensor | None,
+) -> CandidatePlotBuilder:
+    """Overlay target center and reference-to-target bearing when available."""
+
+    if target_world is None:
+        return builder
+    target_np = target_world.detach().cpu().numpy().reshape(3)
+    ref_np = candidates.reference_pose.t.detach().cpu().numpy().reshape(3)
+    builder.add_points(
+        target_np.reshape(1, 3),
+        name="Actor-visible target center",
+        color="gold",
+        size=8,
+        opacity=0.95,
+        symbol="diamond",
+    )
+    builder.fig.add_trace(
+        go.Scatter3d(
+            x=[ref_np[0], target_np[0]],
+            y=[ref_np[1], target_np[1]],
+            z=[ref_np[2], target_np[2]],
+            mode="lines",
+            line={"color": "gold", "width": 5},
+            name="Target bearing",
+        )
+    )
+    return builder
+
+
+def _full_shell_color_payload(candidates: CandidateSamplingResult, mode: str) -> tuple[torch.Tensor | None, str | None]:
+    """Return full-shell candidate color values and colorbar label."""
+
+    mask_valid = candidates.mask_valid.detach().cpu().reshape(-1)
+    if mode == "validity":
+        return mask_valid.to(dtype=torch.float32), "valid"
+    if mode == "position_family" and candidates.position_id is not None:
+        return candidates.position_id.detach().cpu().to(dtype=torch.float32).reshape(-1), "position_id"
+    if mode == "strategy" and candidates.strategy_id is not None:
+        return candidates.strategy_id.detach().cpu().to(dtype=torch.float32).reshape(-1), "strategy_id"
+    if mode == "invalid_reason":
+        _bitset, primary = _candidate_invalid_reasons(candidates)
+        return primary.detach().cpu().to(dtype=torch.float32).reshape(-1), "invalid_reason_id"
+    extras = candidates.extras if hasattr(candidates, "extras") else {}
+    if mode == "target_distance" and torch.is_tensor(extras.get("target_distance_m")):
+        return extras["target_distance_m"].detach().cpu().to(dtype=torch.float32).reshape(-1), "target_distance_m"
+    if mode == "target_bearing_yaw" and torch.is_tensor(extras.get("target_bearing_yaw_rad")):
+        return torch.rad2deg(extras["target_bearing_yaw_rad"].detach().cpu().to(dtype=torch.float32).reshape(-1)), (
+            "target_bearing_yaw_deg"
+        )
+    return None, None
+
+
+def _color_payload_np(candidates: CandidateSamplingResult, mode: str) -> tuple[np.ndarray | None, str | None]:
+    """Return NumPy color values aligned with the full candidate shell."""
+
+    values, label = _full_shell_color_payload(candidates, mode)
+    if values is None:
+        return None, None
+    return values.detach().cpu().numpy().reshape(-1), label
+
+
+def _candidate_provenance_preview(candidates: CandidateSamplingResult) -> list[dict[str, object]]:
+    """Return decoded provenance counts for target-aware candidate mixtures."""
+
+    rows: list[dict[str, object]] = []
+    mask_valid = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    if candidates.position_id is not None:
+        position = candidates.position_id.detach().cpu().numpy().reshape(-1)
+        for value in sorted({int(item) for item in position.tolist()}):
+            mask = position == value
+            rows.append(
+                {
+                    "kind": "position",
+                    "name": decode_position_id(value),
+                    "total": int(mask.sum()),
+                    "valid": int((mask & mask_valid).sum()),
+                }
+            )
+    if candidates.strategy_id is not None:
+        strategy = candidates.strategy_id.detach().cpu().numpy().reshape(-1)
+        for value in sorted({int(item) for item in strategy.tolist()}):
+            mask = strategy == value
+            rows.append(
+                {
+                    "kind": "strategy",
+                    "name": decode_strategy_id(value),
+                    "total": int(mask.sum()),
+                    "valid": int((mask & mask_valid).sum()),
+                }
+            )
+    return rows
+
+
+def _motion_threshold_rows(
+    candidates: CandidateSamplingResult,
+    cand_cfg: CandidateViewGeneratorConfig | None,
+) -> list[dict[str, object]]:
+    """Return configured rule thresholds with observed diagnostic ranges."""
+
+    if cand_cfg is None:
+        return []
+    extras = candidates.extras if hasattr(candidates, "extras") else {}
+    specs = [
+        ("min_distance_to_mesh", "min", "m", cand_cfg.min_distance_to_mesh, "min_distance_to_mesh"),
+        ("path_clearance", "min", "m", cand_cfg.step_clearance, "path_min_clearance_m"),
+        ("step_length", "max", "m", cand_cfg.max_step_distance_m, "motion_step_length_m"),
+        ("height_delta", "max_abs", "m", cand_cfg.max_height_delta_m, "motion_height_delta_m"),
+        ("backward_step", "max", "m", cand_cfg.max_backward_step_m, "motion_backward_step_m"),
+        ("yaw_delta", "max_abs", "deg", cand_cfg.max_yaw_delta_deg, "motion_yaw_delta_rad"),
+    ]
+    rows: list[dict[str, object]] = []
+    for name, comparator, unit, threshold, debug_key in specs:
+        if threshold is None:
+            continue
+        observed_min: float | None = None
+        observed_max: float | None = None
+        values = extras.get(debug_key)
+        if torch.is_tensor(values):
+            flat = values.detach().cpu().to(dtype=torch.float32).reshape(-1)
+            if debug_key == "motion_yaw_delta_rad":
+                flat = torch.rad2deg(flat)
+            finite = flat[torch.isfinite(flat)]
+            if finite.numel() > 0:
+                observed_min = float(finite.min().item())
+                observed_max = float(finite.max().item())
+        rows.append(
+            {
+                "rule": name,
+                "comparator": comparator,
+                "threshold": float(threshold),
+                "unit": unit,
+                "observed_min": observed_min,
+                "observed_max": observed_max,
+            }
+        )
+    return rows
 
 
 def _shell_offsets_dirs_ref(
@@ -143,6 +301,19 @@ def _render_live_candidates_page(
 
     cam_label = cand_cfg.camera_label if cand_cfg is not None else "cached"
     has_snippet = sample is not None
+    target_world = _target_point_from_config(cand_cfg)
+
+    mode_options = ["raw candidate generator", "target-conditioned mixture / provenance"]
+    inspection_mode = st.radio(
+        "Inspection mode",
+        options=mode_options,
+        horizontal=True,
+        key="cand_inspection_mode",
+    )
+    if inspection_mode == mode_options[1] and candidates.position_id is None and target_world is None:
+        st.info(
+            "This candidate result does not carry target-conditioned mixture provenance or a configured target point."
+        )
 
     with st.expander("Frame orthonormality", expanded=False):
         _info_popover(
@@ -171,17 +342,43 @@ def _render_live_candidates_page(
             "axes show the sampling frame (gravity-aligned when enabled) to "
             "stay symmetric with the candidate cloud.",
         )
+        color_mode = st.selectbox(
+            "Color candidates by",
+            options=[
+                "validity",
+                "position_family",
+                "strategy",
+                "invalid_reason",
+                "target_distance",
+                "target_bearing_yaw",
+            ],
+            index=0,
+            key="cand_position_color_mode",
+        )
+        color_values, color_title = _color_payload_np(candidates, color_mode)
         if has_snippet:
-            cand_fig = (
-                CandidatePlotBuilder.from_candidates(
-                    sample,
-                    candidates,
-                    title=_pretty_label(f"Candidate positions ({cam_label})"),
+            builder = CandidatePlotBuilder.from_candidates(
+                sample,
+                candidates,
+                title=_pretty_label(f"Candidate positions ({cam_label})"),
+            ).add_mesh()
+            if color_values is None:
+                builder.add_candidate_cloud(use_valid=True, color="royalblue", size=4, opacity=0.7)
+            else:
+                builder.add_candidate_points(
+                    use_valid=False,
+                    color=color_values,
+                    colorbar_title=color_title,
+                    name="Full candidate shell",
+                    size=4,
+                    opacity=0.72,
+                    mark_reference=True,
                 )
-                .add_mesh()
-                .add_candidate_cloud(use_valid=True, color="royalblue", size=4, opacity=0.7)
+            cand_fig = (
+                _add_target_context_overlay(builder, candidates, target_world)
                 .add_reference_axes(display_rotate=True)
-            ).finalize()
+                .finalize()
+            )
             st.plotly_chart(cand_fig, width="stretch")
         else:
             st.warning("EFM snippet not attached; rendering candidates without mesh.")
@@ -192,6 +389,10 @@ def _render_live_candidates_page(
                 ),
                 width="stretch",
             )
+        provenance_rows = _candidate_provenance_preview(candidates)
+        if provenance_rows:
+            with st.expander("Position / strategy provenance", expanded=False):
+                st.dataframe(provenance_rows, width="stretch", hide_index=True)
 
     offsets_ref, dirs_ref = candidates.get_offsets_and_dirs_ref(display_rotate=False)
     shell_data = _shell_offsets_dirs_ref(candidates)
@@ -228,7 +429,7 @@ def _render_live_candidates_page(
                 )
 
             if has_snippet:
-                frust_fig = (
+                frust_builder = (
                     CandidatePlotBuilder.from_candidates(
                         sample,
                         candidates,
@@ -250,8 +451,12 @@ def _render_live_candidates_page(
                         include_center=False,
                         display_rotate=False,
                     )
+                )
+                frust_fig = (
+                    _add_target_context_overlay(frust_builder, candidates, target_world)
                     .add_reference_axes(display_rotate=True)
-                ).finalize()
+                    .finalize()
+                )
                 st.plotly_chart(frust_fig, width="stretch")
             else:
                 st.warning("EFM snippet not attached; rendering frusta without mesh.")
@@ -499,6 +704,10 @@ def _render_live_candidates_page(
                 )
 
             st.plotly_chart(plot_rule_rejection_bar(candidates), width="stretch")
+            threshold_rows = _motion_threshold_rows(candidates, cand_cfg)
+            if threshold_rows:
+                st.markdown("**Motion and clearance thresholds**")
+                st.dataframe(threshold_rows, width="stretch", hide_index=True)
 
         with diag_rejected:
             _info_popover(

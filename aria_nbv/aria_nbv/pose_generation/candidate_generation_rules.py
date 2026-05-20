@@ -261,17 +261,21 @@ class FreeSpaceRule(RuleBase):
             lower = torch.stack((xmin - p[:, 0], ymin - p[:, 1], zmin - p[:, 2]), dim=1).clamp_min(0.0)
             upper = torch.stack((p[:, 0] - xmax, p[:, 1] - ymax, p[:, 2] - zmax), dim=1).clamp_min(0.0)
             outside_distance = torch.linalg.norm(lower + upper, dim=1)
-            inside_margin = torch.stack(
-                (
-                    p[:, 0] - xmin,
-                    xmax - p[:, 0],
-                    p[:, 1] - ymin,
-                    ymax - p[:, 1],
-                    p[:, 2] - zmin,
-                    zmax - p[:, 2],
-                ),
-                dim=1,
-            ).min(dim=1).values
+            inside_margin = (
+                torch.stack(
+                    (
+                        p[:, 0] - xmin,
+                        xmax - p[:, 0],
+                        p[:, 1] - ymin,
+                        ymax - p[:, 1],
+                        p[:, 2] - zmin,
+                        zmax - p[:, 2],
+                    ),
+                    dim=1,
+                )
+                .min(dim=1)
+                .values
+            )
             ctx.mark_debug("free_space_margin_m", torch.where(in_box, inside_margin, -outside_distance))
         ctx.mask_valid = ctx.mask_valid & in_box
 
