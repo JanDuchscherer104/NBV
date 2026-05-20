@@ -228,7 +228,7 @@ $
 
 In this descriptor, $hat(bold(B))_e$ is observed or predicted OBB geometry; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(p)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and EVL support counts; and $bold(T)_e^"rel"$ is relative target pose. The OBB-level descriptor is paired with an actor-visible crop ablation that pools spatial feature fields inside $hat(bold(B))_e$.
 
-#emph[Target selection] and #emph[target-to-GT matching] are different operations. For training/root diversity, OBS-SEL may sample actor-visible target hypotheses by top-$K$ or temperature-softmax over selector scores:
+#emph[Target selection] and #emph[target-to-GT matching] are different operations. The current thesis contract separates hard actor-visible eligibility, target-interest ranking or sampling, and deterministic GT matching. For training/root diversity, OBS-SEL may sample actor-visible target hypotheses by top-$K$, temperature-softmax, or a later stratified target sampler over support/visibility/distance/class strata:
 
 $
   P(hat(e)_j | #symb.rl.s_hist)
@@ -238,14 +238,14 @@ $
   (sum_(l in cal(E)_t^"obs") exp(beta u_(t,l)^"tar")).
 $
 
-After a target hypothesis $hat(e)$ is selected, GT-EVAL deterministically matches it to a GT target for labels and evaluation. In the match score, $kappa$ is class compatibility and $sigma$ is an observed-support compatibility term over projected area, semidense support, and EVL support:
+After a target hypothesis $hat(e)$ is selected, GT-EVAL deterministically matches it to a GT target for labels and evaluation. The scale contract keeps support and projected visibility as eligibility/audit fields; GT association itself is class-compatible 3D IoU with an ambiguity gap:
 
 $
-  #eqs.entity.target_match_score
-$
-
-$
-  #eqs.entity.target_match_selection
+  mu(hat(e), e)
+  =
+  kappa(hat(y)_(hat(e)), y_e)
+  dot
+  op("IoU")_3D(hat(B)_(hat(e)), B_e^"GT")
 $
 
 Here $mu_1$ is the best match score, $mu_2$ the runner-up score, and $g_mu$ the top-1/top-2 gap. The validated target subset is defined by symbolic acceptance filters:
@@ -254,9 +254,9 @@ $
   #eqs.entity.target_match_acceptance
 $
 
-The numeric values of $tau_mu$, $tau_"gap"$, and $tau_"support"$ remain advisor-level protocol parameters. Unmatched, unsupported, or ambiguous targets are target-invalid protocol cases rather than low target-specific #RRI examples.
+The numeric values of $tau_mu$, $tau_"gap"$, and target eligibility thresholds remain advisor-level protocol parameters. Unmatched, unsupported, or ambiguous targets are target-invalid protocol cases rather than low target-specific #RRI examples. Projected target feasibility uses clipped visible image-overlap area, not raw projected extents outside the image.
 
-Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated points to the matched target region. The target error is the target-cropped version of the VIN-NBV #RRI objective @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness on the crop. Area weighting or uniformly sampled target-surface points prevent target-specific #RRI from reflecting mesh tessellation density. For reproducibility, the current implementation computes the point-mesh distances through `OracleRRI.score` and `chamfer_point_mesh_batched`, while `aria_nbv.pose_generation.target_counterfactuals` owns the target crop.
+Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated points to the matched target region. The target error is the target-cropped version of the VIN-NBV #RRI objective @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness on the crop. Area weighting or uniformly sampled target-surface points prevent target-specific #RRI from reflecting mesh tessellation density. For reproducibility, the current implementation computes the point-mesh distances through `OracleRRI.score` and `chamfer_point_mesh_batched`, while `aria_nbv.pose_generation.target_counterfactuals` owns the target crop. Rollout ranking and #symb.rl.qh training use root-normalized target gain; scene-level #RRI is a diagnostic bridge to the older seminar oracle pipeline, not the optimized reward.
 
 $
   #eqs.entity.target_error
@@ -282,7 +282,7 @@ $
 
 == Candidate Transitions
 
-Selecting a candidate means choosing a valid index $a_t=i in cal(A)_t$ and then rendering or retrieving only $q_(t,i)$ for the transition. Oracle rendering follows the repository's PyTorch3D depth-rendering path, so camera-frame and rasterizer conventions are part of the label contract rather than model input @PyTorch3D-Cameras-2025. The current rollout writer keeps the all-candidate #RRI scoring render low-resolution and then re-renders only materialized selected actions as losslessly compressed high-resolution depth in `rollouts.zarr`. These selected-depth rasters become the durable actor-history observation for #symb.rl.qh/history encoders, while #symb.vin.field_evl_0 stays frozen for the first value-learning path. Greedy selection chooses the highest current score; temperature-softmax widens rollout support over valid candidate scores; Gumbel-Top-$K$ is a deferred diversity method if temperature-softmax produces insufficient branch diversity:
+Selecting a candidate means choosing a valid index $a_t=i in cal(A)_t$ and then rendering or retrieving only $q_(t,i)$ for the transition. Oracle rendering follows the repository's PyTorch3D depth-rendering path, so camera-frame and rasterizer conventions are part of the label contract rather than model input @PyTorch3D-Cameras-2025. The rollout writer keeps all-candidate renders oracle-only for scoring and persists only materialized selected/parent depth at a canonical configured resolution as actor-history state for successor #symb.rl.qh encoders. Target-eval crop point payloads are sampled/audit retention; scalar target distances, support counts, and gains are training-core facts. Greedy selection chooses the highest current score; temperature-softmax widens rollout support over valid candidate scores; Gumbel-Top-$K$ is a deferred diversity method if temperature-softmax produces insufficient branch diversity:
 
 $
   P(a_t = i | s_t)
@@ -362,6 +362,18 @@ The value-model hypothesis is that a masked finite-candidate model can recover p
 == Design Principle: Symmetries of the Decision Problem
 
 The model class follows the structure of the decision problem. The action space is a masked finite set of candidate views, each defined relative to a target, selected history, and partially observed geometry. Geometric deep learning supplies vocabulary for these regularities without committing the thesis to a full equivariant tensor network @GeometricDeepLearning-bronstein2021. #emph[candidate-row permutation] requires equivariant per-candidate outputs; #emph[local camera and target frames] reduce dependence on global coordinates; #emph[$bb(S)^2$ visibility memory] records where the target has already been observed; and the #emph[target record] acts as the query that determines which reconstruction errors matter.
+
+The architectural reason to model candidates jointly is that, for a fixed state and target, immediate target-specific #RRI is a sampled utility field over feasible poses, not only an unrelated list of labels. A local view of this field is
+
+$
+  F_(s,e): op("SE")(3) -> bb(R)
+$
+
+$
+  F_(s,e)(q) = op("RRI")_e(s,q)
+$
+
+Nearby candidates can be compared with $xi_(i j)=op("Log")(q_i^(-1) q_j)$, so within a stable visibility regime $F_(s,e)(q_i op("Exp")(xi)) approx F_(s,e)(q_i) + nabla_xi F_(s,e)(q_i)^top xi$. This is only a #emph[piecewise] smoothness assumption: occlusion changes, frustum boundaries, collision/validity changes, and target-support loss can create sharp discontinuities. The set model is therefore justified as a way to learn local correlation, redundancy, and regime boundaries, not as a license to smooth RRI across invalid or unsupported views. FisherRF strengthens the same intuition by treating views as overlapping information sources with diminishing returns @FisherRF-jiang2024; set models provide the permutation-equivariant machinery for the unordered candidate table @DeepSets-zaheer2017 @SetTransformer-lee2019.
 
 #figure(
   table(
@@ -486,6 +498,19 @@ $
 
 No-interaction candidate MLP scoring and pooled DeepSets aggregation are required baselines before attributing gains to masked Set Transformer interaction or QCNet-style RPE.
 
+For immediate target-specific #RRI, the physical oracle label of candidate $q_i$ does not change when unrelated rows are added to $cal(Q)_t$. Candidate interaction can therefore corrupt absolute calibration if it replaces the independent scorer. The safer myopic ablation uses candidate context only as a zero-mean relative advantage correction:
+
+$
+  hat(r)_i^"set" =
+    hat(r)_i^"ind"
+    + lambda (
+      A_i^"set"
+      - (1) / (abs(cal(A)_t)) sum_(j in cal(A)_t) A_j^"set"
+    )
+$
+
+This tests whether the candidate population improves ranking while preserving the independent path as the calibrated absolute RRI estimate. The case for set interaction is stronger for #symb.rl.qh because finite-horizon value genuinely depends on successor candidate tables, masks, branch support, and the candidate generator.
+
 The value head is a dueling residual decomposition over valid actions @DuelingDQN-wang2016. $hat(r)_psi^e$ is the calibrated myopic base; $V_theta$ is shared scene-target-history value; $A_(theta,i)^H$ is candidate-specific finite-horizon advantage; and the mean advantage is subtracted only over #symb.rl.action_set_t. The decomposition fits finite candidate tables because many candidate views can be near-duplicates in value while still requiring candidate-specific corrections:
 
 $
@@ -504,7 +529,10 @@ $
     [Required controls], [independent candidate MLP and pooled DeepSets context over valid candidate rows],
 
     [Ablations],
-    [QCNet-style candidate-local RPE, $bb(S)^2$ memory variants, EGNN-style candidate graph, privileged-teacher distillation, distributional #symb.rl.qh heads],
+    [QCNet-style candidate-local RPE, Fisher/SCONE support-overlap attention bias, $bb(S)^2$ memory variants, EGNN-style candidate graph, privileged-teacher distillation, distributional #symb.rl.qh heads],
+
+    [Architecture ladder],
+    [A0 independent scorer; A1 pooled DeepSets context; A2 masked Set Transformer; A3 Set Transformer with $op("SE")(3)$ relative bias; A4 Fisher/SCONE overlap bias; A5 residual dueling #symb.rl.qh],
 
     [Bridges],
     [Hestia-style target-then-pose policies, online discrete interaction, external mesh/oracle-compatible simulators, sparse/point backbones],
@@ -555,7 +583,7 @@ The learned one-step target scorer is the myopic control for #symb.rl.qh. Its ev
     [held-out rank correlation, top-$k$ oracle hit, calibration, stage-shift diagnostics, selected-candidate oracle #RRI, target visibility, Rerun success/failure examples],
 
     [Candidate and replay],
-    [strategy provenance, path increments, scene/target support fields, validity masks, reason codes, with/without-mask rank metrics, policy metadata, seed metadata, shuffled-candidate evaluation],
+    [strategy provenance, path increments, scene/target support fields, validity masks, reason codes, with/without-mask rank metrics, policy metadata, seed metadata, shuffled-candidate evaluation, duplicate-row robustness, valid-count sensitivity],
 
     [Scale and storage],
     [scene-level splits, paired policy comparisons, bootstrap confidence intervals, per-scene win rates, no silent coverage changes, scale axes reported separately, Zarr asset references, LRZ/Slurm/DSS/resume/storage gates],
