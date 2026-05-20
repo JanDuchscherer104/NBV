@@ -1,0 +1,95 @@
+\section{Technical Approach} \label{sec:method}
+
+
+In this section, we first introduce how we use Fisher Information in Sec.~\ref{sec:fisher-render}. By leveraging Fisher Information, we demonstrate how to select the next best view and next best batch of views in Sec.~\ref{sec:nbvs} and Sec.~\ref{sec:batch}. We then extend our method to large-scale scenes with active mapping. Finally, we showcase that our method could quantify the pixel-wise uncertainties in Sec.~\ref{sec:pixel-uncern}.
+\subsection{Fisher Information in Volumetric Rendering}\label{sec:fisher-render}
+Fisher Information is a measurement of information that an observation $(\bx, \by)$ carries about the unknown parameters $\bw$ that model $p(\by|\bx; \bw)$. In the problem of novel view synthesis,  $(\bx, \by)$ are the camera pose $\bx$ and image observation $\by$ at pose $\bx$, respectively, whereas $\bw$ are the parameters of the radiance field.
+The objective of neural rendering is equivalent to minimizing the negative log likelihood~(NLL) between rendered images and ground truth images on the holdout set, which inherently represents the quality of scene reconstruction
+\begin{equation}\label{logp}
+   - \log p(\by|\bx, \bw) = \left(\by - f(\bx, \bw)\right)^T \left(\by - f(\bx, \bw)\right)
+\end{equation}
+where $f(\bx, \bw)$ is our rendering model. 
+Under regularity conditions~\cite{schervish2012theory}, the Fisher Information of the model $\log p(\by|\bx; \bw)$ is the Hessian of the log-likelihood function with respect to the model parameters $\bw$:
+\begin{equation}
+     \mathcal{I}(\bw) = - \mathbb{E}_{\log p(\by|\bx, \bw)} \big[\frac{\partial^2 \log p(\by|\bx, \bw)}{\partial \bw^2} \big| \bw \big] = \bH''[\by|\bx, \bw]
+\end{equation}
+where $\bH''[\by|\bx, \bw]$ is the Hessian matrix of Eq.~(\ref{logp}).
+
+\subsection{Next Best View Selection Using Fisher Information}\label{sec:nbvs}
+In the active view selection problem, we start with a training set $D^{train}$ and have an initial estimation of parameters $\bw^*$ using $D^{train}$. The aim is to select the next best view that maximizes the Information Gain~\cite{lindleyEIG, HoulsbyBAL,KirschBatchBALD} between candidates views $\bxa \in D^{pool}$ and $D^{train}$, where $D^{pool}$ is the pool of candidate views:
+\begin{align}
+    & \mathcal{I}[\bw^*; \{\bya\}|\{\bxa\}] \nonumber \\
+    & = \mathbb{H}[\bw^* | D^{train}] - \mathbb{H} [\bw^*| \{\bya\}, \{\bxa\}, D^{train}] 
+    \label{eq:entropy-acq}
+\end{align}
+where $H[\cdot]$ is the entropy~\cite{kirsch2022unifying}.
+
+When the log-likelihood has the form of Eq.~(\ref{logp}), in our case, the rendering error, the difference of the entropies in the R.H.S. of Eq.~(\ref{eq:entropy-acq}) can be approximated as~\cite{kirsch2022unifying}: 
+\begin{align}\label{eq:entropy-log}
+ \frac{1}{2} \log \det \left(\bH''[\{\bya\}|\{\bxa\}, \bw^*]\; \bH''[\bw^*| D^{train}]^{-1} + I \right) \nonumber\\
+    \leq \frac{1}{2}  \tr\left( \bH''[\{\bya\}|\{\bxa\}, \bw^*]\; \bH''[\bw^*| D^{train}]^{-1}\right).
+\end{align}
+As Fisher Information is additive, $\bH''[\bw^*| D^{train}]^{-1}$ can be computed by summing the Hessians of model parameters across all different views in $\{D_{train}\}$ before inverting. We can choose the next best view $\bxa$ by optimizing
+\begin{equation}\label{eq:opt}
+    \argmax_{\bxa} \tr\left( \bH''[\bya | \bxa, \bw^*] \; \bH''[\bw^*| D^{train}]^{-1}\right).
+\end{equation}
+The Hessian $\bH''[\by|\bx, \bw^*]$ of our model can be computed as:
+\begin{equation}\label{eq:hessian-full}
+    \bH''[\by|\bx, \bw^*] = \nabla_\bw f(\bx; \bw^*) ^T \nabla_{f(\bx;\bw^*)}^2 H[\by| f(\bx;\bw^*)] \nabla_\bw f(\bx; \bw^*)
+\end{equation}
+where $\bH''[\by| \bx,\bw^*]$ in our case is equal to the covariance of the RGB measurement that we set equal to one.
+Hence, the Hessian matrix can be computed just from the Jacobian matrix of $f(\bx, \bw)$
+\begin{equation}\label{eq:hessian-simpilifed}
+    \bH''[\by|\bx, \bw^*] = \nabla_\bw f(\bx; \bw^*) ^T \nabla_\bw f(\bx; \bw^*).
+\end{equation}
+We can optimize the objective in Eq.~(\ref{eq:opt}) without knowing the ground truth of candidate views $\{\bya\}$, which was expected since the Fisher Information never depends on the observations themselves.
+The Hessian in~(\ref{eq:hessian-simpilifed})
+has only a limited number of off-diagonal elements because each pixel is considered independent in $- \log p(\by|\bx, \bw)$.
+Furthermore, recent NeRF models~\cite{plenoxels,mueller2022instant, reiser2021kilonerf,sun2021direct} typically employ structured local parameters that each parameter only contributes to the radiance and density of a limited spatial region for faster convergence and rendering. Therefore, only parameters that contribute to the color of the pixels would share non-zero values in the Hessian matrix $ \bH''[\by|\bx, \bw^*]$. 
+However, the number of optimizable parameters is typically more than 200 million, which means it is impossible to compute without sparsification or approximation. 
+In practice, we apply Laplace approximation~\cite{laplace2021, bayesian-interpolation} that approximates the Hessian matrix with its diagonal values plus a log-prior regularizer $\lambda I$
+\begin{equation}\label{eq:hessian-reg}
+    \bH''[\by|\bx, \bw^*] \simeq \diag(\nabla_\bw f(\bx, \bw^*) ^T \nabla_\bw f(\bx, \bw^*)) + \lambda I.
+\end{equation}
+\subsection{Batch Active View Selection}
+\label{sec:batch}
+Selecting multiple views to capture new images is useful for its possible applications, such as view planning and scene reconstruction. 
+If we simply use Eq.~(\ref{eq:opt}) to select a batch of acquisition samples $\{\bxa\}$, we could possibly select very similar views inside the acquisition set $\{\bxa\}$ as we do not consider the mutual information between our selections. 
+However, we would face a combinatorial explosion if we directly attempt to maximize the expected information gain between training and acquisition samples and simultaneously minimize the mutual information across acquisition samples. Therefore, we employ a greedy optimization algorithm as illustrated in Alg.~\ref{alg:batch}, which is $\nicefrac{1}{e}$-approximate in Fisher Information~\cite{nemhauser1978analysis}. When batch size $B$ is 1, our algorithm is equivalent to Eq.~(\ref{eq:opt}). 
+Please note that we focus on batch active view selection instead of dataset subsampling as it is more related to real-world scenarios where we wish to plan a trajectory for an agent to acquire more training views. 
+
+\begin{algorithm}\caption{Batch Active Views Selection}\label{alg:batch}
+	\LinesNumbered
+	\KwIn{$\{\bH''[\bw^*|\bxa]\}$, $\bH''[\bw^*| D^{train}]$, number of views to select $B$}
+	\KwOut{Selected Views $S_B$}
+
+        $S_0 \leftarrow \emptyset$ \;
+        $H_0 \leftarrow \bH''[\bw^*| D^{train}]$\;
+
+	\For { $b \leftarrow 1$ \KwTo $B$}{
+ 	$i \leftarrow \argmax_{ \bxa \in  D^{pool}] \setminus S_{b-1} } \tr\left( \bH''[\bya | \bxa, \bw^*] \; H_{b-1}^{-1}\right)$\;
+            $S_{b} \leftarrow S_{b-1} \cup \{ i \}$   \;
+            $H_{b} \leftarrow H_{b-1} +  \bH''[\bya | \bxa, \bw^*] $  \;
+        }
+\end{algorithm}
+\subsection{Active Mapping with 3D Gaussian Splatting}
+\label{sec:mapping}
+\input{figures/pipeline}
+With the batch selection algorithm discussed in Sec.~\ref{sec:batch}, our method can be extended as an active mapping algorithm. By maximizing the EIG from candidate trajectories $\{\mathcal{P}_j\}$, we can determine the most informative path for exploration: 
+\begin{equation}\label{eq:path}
+    \argmax_{\mathcal{P}_j} \tr\left( \left( \sum_{\bxa \in \mathcal{P}_j} \bH''[\bya | \bxa, \bw^*]\right) \; \bH''[\bw^*| D^{train}]^{-1}\right).
+\end{equation}
+We build our active mapping system on top of existing passive mapping architecture SplaTAM~\cite{keetha2023splatam} that uses 3D Gaussians as basic data representation.
+We employ frontier-based exploration~\cite{yamauchi1997frontier} to propose path candidates and sample cameras along the path concerning the mobility of the agent. 
+The pipeline is illustrated in Fig. \ref{fig:pipeline}.
+Our path selection algorithm is compatible with other active mapping systems and can be used as an extension to select the most informative path. 
+\subsection{Pixel-wise Uncertainty with Volumetric Rendering}\label{sec:pixel-uncern}
+Previously, we discussed quantifying the Information Gain for any camera views. Our model can also be adapted to obtain pixel-wise uncertainties.
+As we have discussed in Sec.~\ref{sec:nbvs}, we can approximate the uncertainty on each parameter with the diagonal elements of the hessian matrix $\bH''[\bya | \bxa, \bw^*]$. In recent Radiance Field models~\cite{kerbl3Dgaussians, plenoxels}, the parameters directly correspond to a spatial location in the scene.
+Therefore, we can compute the uncertainty in our rendered pixels by examining the diagonal Hessians along the casted ray for volumetric rendering
+\begin{equation}
+\label{eq:render-uncern}
+\mathbf{U}(\text{r}) = \sum_{n=1}^{N_s} T_i \left(1-\exp(-\sigma_n \delta_n) \right) tr({\bf G}_n)
+\end{equation}
+where ${\bf G}_n$ is the submatrix of $\bH''[\bw^*| D^{train}]$ containing the rows and columns that correspond to parameters at location $n$.
+Please note that this is a relative uncertainty derived from the observed information on the model parameters, which does not involve metric scales. If we wish to estimate absolute uncertainties on predictions like depth maps, we need to denormalize the uncertainty in each term by its depth $d_n$.

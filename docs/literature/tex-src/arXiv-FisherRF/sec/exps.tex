@@ -1,0 +1,61 @@
+\section{Experiments} \label{sec:exps}
+In this Section, we present the empirical evaluation of our approach.
+The running time analysis for our customized CUDA kernel and other implementation details can be found in the supplementary.
+We first focus on the experiments of active view selection and compare our method quantitatively and qualitatively against the previous method (Subsection~\ref{sec:view-exp}).
+We further present our results on active mapping (Subsection~\ref{sec:mapping-exp}).
+Finally, we present more results of our method on uncertainty quantification results (Subsection~\ref{sec:exp_uncern}).
+
+\subsection{Active View Selection}\label{sec:view-exp}
+We conducted extensive experiments on view selections to demonstrate that our expected information gain could help the model find the next best views. Here, we first introduce the dataset we use and detailed experimental settings. Then, we compare our method with random baselines and previous state-of-the-art ActiveNeRF~\cite{pan2022activenerf} quantitatively and qualitatively.
+\paragraph{Datasets} Our approach is extensively evaluated on two common benchmark datasets: Blender Dataset~\cite{mildenhall2020nerf} and the challenging real-world Mip-NeRF360 dataset~\cite{barron2022mipnerf360}. The Blender dataset comprises eight synthetic objects with intricate geometry and realistic non-Lambertian materials. Each scene in this dataset includes 100 training and 200 test views, all with a resolution of $800\times800$. Our method uses the 100 training views as a candidate pool to select training views, and we evaluate all the models on the full 200-view test set.
+We use the default training configuration as in 3D Gaussian and Plenoxels for this dataset.
+Mip-NeRF360~\cite{barron2022mipnerf360} is a real-world $360^\circ$ dataset captured for nine different scenes. It has been widely used as a quality benchmark for novel view synthesis models~\cite{barron2023zipnerf, multinerf2022}. We train our models at the resolution of $1066\times1600$ following 3D Gaussian Splatting~\cite{kerbl3Dgaussians}.
+\paragraph{Metrics} Our evaluations utilize image quality metrics such as peak signal-to-noise ratio~(PSNR) and structural similarity index~(SSIM)~\cite{wang2003multiscale}. Additionally, we incorporate LPIPS \cite{zhang2018unreasonable}, which provides a more accurate reflection of human perception.
+\paragraph{Baselines} 
+We quantitatively and qualitatively compare our method against the current state-the-art ActiveNeRF~\cite{pan2022activenerf} and random selection baseline.
+To make a fair comparison with  ActiveNeRF~\cite{pan2022activenerf},
+We re-implemented a similar variance estimation algorithm in 3D Gaussian Splatting and Plenoxels in CUDA. We assign each 3D Gaussian (or grid cell in Plenoxels) a variance parameter and use volumetric rendering to render a variance map. The supplementary materials provide more details about our re-implementation. 
+To show the difference between EIG and uncertainty, we adapt the uncertainty estimation method BayesRays~\cite{goli2023} into the view selection algorithm by directly using the rendered uncertainty value on each candidate view as a metric for view selection. 
+\input{figures/mip}
+\input{figures/blender_comb}
+\paragraph{Experiment Settings} We experiment with our model with 3D Gaussian Splatting backend on both the next view selection and the next batch of view selections across both the Blender and Mip360 Dataset. Each model is initialized with the same random seed and was trained on the same four uniform views. Each model is trained for 30,000 iterations following the default configurations of 3D Gaussian Splatting~\cite{kerbl3Dgaussians}. Similar to the training program of Gaussian Splatting, we reset the opacity every time we select new views to avoid degeneration of the training procedure. 
+All the external settings in the experiment are kept the same except for the view selection algorithms.
+
+Similarly, we also showcase the implementations of our active view selection algorithm on Plenoxels in the Blender Dataset. The experimental settings for initial views and view selection schedules are the same, except view selection was made every four epochs.
+\noindent
+\begin{itemize}
+    \item Sequential Active View Selection: 1 new view is selected every 100 epochs till the model has 20 training views. 
+    \item Batch Active View Selection: 4 new views are selected every 300 epochs till the model has 20 training views.
+\end{itemize}
+\input{tables/blender2tabs}
+\input{tables/mip_table}
+\noindent
+The quantitative results of active view selections can be found in Table.~\ref{tab:blender20}, Table.~\ref{tab:blender-batch} and Table.~\ref{tab:mip360}. As can be seen, our method achieved better results across different metrics and datasets. We also compare our method qualitatively on the Blender and Mip-NeRF360 datasets in Fig.~\ref{fig:mip} and Fig.~\ref{fig:qual-blender}.
+Our method demonstrates superior results in both single-view selection and batch-view selection.
+Moreover, our method achieved better performance improvements compared to the random backbone compared to BayesRays. This further renders the importance of using EIG rather than uncertainty as the metric for view selection.
+Furthermore, we experimented with our model with the challenging ten-view selection task on the Blender Dataset. Each model is initialized with the same random seed and two uniform initial views. Each new view is added after every 100 epochs till the model has ten training views. The quantitative and qualitative results are in Table.~\ref{tab:blender10} and Fig.~\ref{fig:qual-blender}. Again, our method selects necessary views given the extremely limited observations and preserves fine details of reconstructed objects. 
+\subsection{Active Mapping}\label{sec:mapping-exp}
+\label{sec:active-map}
+We experimented with our active mapping system on room-scale scene dataset Matterport3D~\cite{Matterport3D} and Gibson~\cite{xia2018gibson} through the Habitat Simulator~\cite{habitat19iccv, ramakrishnan2021hm3d}.
+Our active mapping system takes posed RGB-D images as input and uses the same configurations for the simulator as previous approaches~\cite{yan2023active-neural-mapping, upen}.
+We turn our 3D Gaussian representation into a point cloud using only the mean $\mathbf{\mu} \in R^3$ of each 3D Gaussian as the previous evaluation benchmark is designed for point cloud or 3D mesh. 
+We use the following evaluation metric to evaluate the quality of our active mapping system.
+
+\noindent\textbf{Comp.}~The completeness metric quantifies the completeness of the active exploration algorithm in 3D space by computing the per-point nearest distance between points sampled from the ground truth mesh and the final reconstruction of the scene. We calculate both the percentage of points within a 5cm threshold (Comp. (\%)) and the average nearest distance (Comp. ($cm$)).
+
+\noindent\textbf{PSNR \& Depth MAE}~We uniformly sample 1000 navigable poses in the scene and render color and depth images at the sampled poses and compute average PSNR and Mean Absolute Error (MAE) for rendered color and depth images, respectively.
+\input{figures/mp3d}
+\input{tables/ActiveMapping}
+We compare with previous state-of-the-art in Table.~\ref{tab:mapping} and Figure.~\ref{fig:mp3d}. 
+Our active mapping system outperformed previous methods by a large margin on both geometry and rendering quality.
+Notably, we are the first active mapping system to capture fine-grained details and high-quality textures, thanks to our view selection objectives, which aim to improve rendering quality when measuring the EIG. 
+In Figure \ref{fig:mp3d}, we demonstrate the qualitative comparison between our method and Active-INR \cite{yan2023active-neural-mapping}. 
+In Table \ref{tab:mapping}, our method outperforms Active-INR by a large margin in Comp. metric, showing the superiority of the active mapping algorithm. To compare the rendering quality with previous methods, we train a 3D Gaussian Splatting model using the trajectory from UPEN~\cite{upen} and Active-INR~\cite{yan2023active-neural-mapping} and evaluate the render quality at the same holdout set. The result is summarized in Table \ref{table:render}. Our method efficiently selects the most informative path and outperforms other methods when using the same backbone model. We also notice that UPEN is worse than Active Neural Mapping in Table \ref{tab:mapping} but better than the other in \ref{table:render} when evaluated using the 3D Gaussian Splatting model. We ascribe this gap in UPEN to the difference in the scene representations and the evaluation protocol.
+ 
+\subsection{Uncertainty Quantification}
+\label{sec:exp_uncern}
+\input{figures/uncern}
+As discussed in Sec.~\ref{sec:pixel-uncern}, our model can be extended to compute pixel-wise uncertainties on training views. 
+Following previous methods on uncertainty estimation~\cite{CF-NeRF, shen2021snerf}, we evaluate our method on the Light Field~(LF) Dataset~\cite{lf-dataset} using the Area Under Sparsification Error (AUSE) metric. The pixels are filtered twice, once using the absolute error with ground truth depth and once using the uncertainty. The difference in the mean absolute error on the remaining pixels between the two sparsification processes produces two different error curvatures, where the area between those two curvatures is the AUSE, which evaluates the correlation between uncertainties and the predicted error. 
+A low AUSE indicates our model is confident in the correctly estimated depths and could predict a high uncertainty in the regions where we are likely to have larger errors.
+As seen in Table~\ref{tab:ucnern-gaussian} and Fig.~\ref{fig:uncern}, our model exhibited a better correlation between our uncertainty estimation and depth error than the previous state-of-the-art CF-NeRF~\cite{CF-NeRF}. More quantitative results and visualizations on uncertainty estimation can be found in our supplementary materials. 

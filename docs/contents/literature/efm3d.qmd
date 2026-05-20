@@ -13,20 +13,20 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-EFM3D/main.tex), [`method.tex`](../../literature/tex-src/arXiv-EFM3D/method.tex), [`experiments.tex`](../../literature/tex-src/arXiv-EFM3D/experiments.tex), and [`supplemental_text.tex`](../../literature/tex-src/arXiv-EFM3D/supplemental_text.tex).
 
-**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [ASE dataset](../ase_dataset.qmd), [VIN model API](../../reference/vin.model_v3.qmd), and [VIN feature contracts](../../reference/vin.types.qmd).
+**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [ASE dataset](../ase_dataset.qmd), [EFM3D scene embeddings](../theory/efm3d_scene_embeddings.qmd), [VIN model API](../../reference/vin.model_v3.qmd), and [VIN feature contracts](../../reference/vin.types.qmd).
 
 ### Core contribution
 
 {{< gls egocentric-foundation-model-3d >}} supplies the actor-visible 3D representation that ARIA-NBV builds on. Its {{< gls egocentric-voxel-lifting >}} architecture lifts frozen 2D image features from posed, calibrated {{< gls project-aria >}} streams into a local gravity-aligned voxel grid and trains heads for 3D surface regression and {{< gls oriented-bounding-box >}} detection [@EFM3D-straub2024].
 
-For ARIA-NBV, EFM3D is not a planner. It is the scene-state backbone that turns egocentric snippets, poses, calibration, and semi-dense points into occupancy, object, and evidence tensors suitable for candidate scoring.
+For ARIA-NBV, EFM3D is not a planner and its final voxel heads are not the whole scene memory. It is an actor-visible evidence and target-support provider: local EVL features, head outputs, and predicted OBBs can be combined with broader semidense or fused point evidence for target-conditioned candidate scoring.
 
 ### Verified paper signals
 
 | signal | source-backed detail | ARIA-NBV relevance |
 |---|---|---|
 | Egocentric inputs | EVL consumes synchronized RGB/SLAM camera snippets, camera calibration, poses, and semi-dense point evidence. | Defines the actor-visible evidence contract for scoring candidate views. |
-| Voxel lifting | Frozen DINOv2.5 features are lifted into a local gravity-aligned voxel grid anchored to the snippet pose. | Provides a fixed local scene field for VIN-style scoring, with known local-extent limits. |
+| Voxel lifting | Frozen DINOv2.5 features are lifted into a local gravity-aligned voxel grid anchored to the snippet pose. | Provides local evidence and target support, with known local-extent limits. |
 | Geometry priors | Semi-dense point and free-space masks are injected into the voxel representation. | Gives interpretable known-surface, known-free, and observation-support channels for NBV diagnostics. |
 | Surface head | The surface-regression head predicts voxel occupancy/surface evidence. | Useful as a compact reconstruction proxy for scene context. |
 | OBB head | The detection head predicts centerness, 7-DoF boxes, class scores, and sparse post-processed OBBs. | Supports observed/predicted target selection without exposing GT boxes to the actor. |
@@ -34,7 +34,8 @@ For ARIA-NBV, EFM3D is not a planner. It is the scene-state backbone that turns 
 
 ### ARIA-NBV adoption
 
-- **Core substrate:** use EVL/EFM3D outputs as frozen scene evidence for one-step RRI scoring, rollout state summaries, and target-conditioned candidate ranking.
+- **Core substrate:** use EVL/EFM3D outputs as local actor-visible evidence and target support for one-step RRI scoring, rollout state summaries, and target-conditioned candidate ranking.
+- **Scene memory hypothesis:** test semidense/fused points with compressed DINO features as the broader queryable scene embedding.
 - **Target contract:** use predicted or observed {{< gls oriented-bounding-box >}} support as actor-visible target input; keep GT meshes and GT target crops for offline labels/evaluation only.
 - **Diagnostics:** preserve frame lineage, voxel extent, camera stream identity, calibration, and {{< gls machine-perception-services >}} / ASE point-source metadata in offline stores.
 
@@ -44,6 +45,7 @@ $$
 s_t =
 \left(
   P_t^{\mathrm{semi}},
+  F_t^{\mathrm{DINO@pt}},
   V_t^{\mathrm{EVL}},
   O_t^{\mathrm{pred}},
   \mathcal{Q}_t,
@@ -51,12 +53,12 @@ s_t =
 \right),
 $$
 
-where $P_t^{\mathrm{semi}}$ is the semi-dense reconstruction proxy, $V_t^{\mathrm{EVL}}$ is the local voxel/evidence field, $O_t^{\mathrm{pred}}$ are actor-visible detections or target hypotheses, $\mathcal{Q}_t$ is the finite candidate set, and $h_t$ is rollout history.
+where $P_t^{\mathrm{semi}}$ is the semi-dense reconstruction proxy, $F_t^{\mathrm{DINO@pt}}$ is an optional compressed image-foundation feature bank attached to points, $V_t^{\mathrm{EVL}}$ is the local voxel/evidence field, $O_t^{\mathrm{pred}}$ are actor-visible detections or target hypotheses, $\mathcal{Q}_t$ is the finite candidate set, and $h_t$ is rollout history.
 
 ### Do not adopt
 
 - Do not treat EVL predictions as ground truth; they are actor-visible evidence.
-- Do not ignore the fixed local voxel extent. Candidates can be partially out of bounds even when valid in the scene.
+- Do not treat EVL's fixed local voxel extent as the complete scene extent. Candidates can be partially out of bounds even when valid in the scene.
 - Do not mix offline GT meshes/OBBs into target selection or scorer inputs for the main protocol.
 - Do not keep implementation debug dictionaries in this literature page; feature-selection details belong in generated VIN API docs and code docstrings.
 

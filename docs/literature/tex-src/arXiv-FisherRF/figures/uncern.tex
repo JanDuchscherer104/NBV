@@ -1,0 +1,40 @@
+\begin{figure}[t]
+\vspace{-3mm}
+ \resizebox{\textwidth}{!}{
+\vspace{-7mm}
+\begin{tabular}{cc|cc|cc}
+\hline
+\hline
+\multicolumn{2}{c|}{CF-NeRF} & \multicolumn{2}{c|}{BayesRays} & \multicolumn{2}{c}{Ours}  \\
+\hline
+Uncertainty & Depth Err. &  Uncertainty & Depth Err. &  Uncertainty & Depth Err. \\
+\hline
+\hline
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_statue_3_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_statue_3_depth_error.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_statue_3_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_statue_3_depth_error.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/gaussian_statue_3_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/gaussian_statue_3_depth_error.png} \\
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_africa_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_africa_2_depth_error.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_africa_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_africa_2_depth_error.png} &  \includegraphics[width=.3\linewidth]{figures/LF/gaussian_africa_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/gaussian_africa_2_depth_error.png} \\
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_torch_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/cfnerf_torch_2_depth_error.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_torch_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/BayesRays_torch_2_depth_error.png} &  
+\includegraphics[width=.3\linewidth]{figures/LF/gaussian_torch_2_uncern.png} & 
+\includegraphics[width=.3\linewidth]{figures/LF/gaussian_torch_2_depth_error.png}\\
+\hline
+\hline
+\end{tabular}
+}
+\vspace{-2mm}
+\caption{{\bf Visualizations for Uncertainty on Depth Prediction the LF Dataset}
+We compare the per-pixel uncertainty maps from CF-NeRF~\cite{CF-NeRF}, BayesRays~\cite{goli2023}, and ours. Our per-pixel uncertainty maps demonstrate a strong correlation with the actual depth error.
+\vspace{-6mm}
+}
+ \label{fig:uncern}
+\end{figure}

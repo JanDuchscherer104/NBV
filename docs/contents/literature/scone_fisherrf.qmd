@@ -1,0 +1,528 @@
+---
+title: "SCONE And FisherRF"
+phase: thesis
+audience: public
+status: current
+owner: jan
+format: html
+---
+
+## SCONE And FisherRF {#scone-fisherrf-literature}
+
+**Primary sources.** SCONE [@SCONE-guedon2022] and FisherRF [@FisherRF-jiang2024].
+
+**External pointers.** SCONE: [arXiv 2208.10449](https://arxiv.org/abs/2208.10449), [NeurIPS 2022 abstract](https://proceedings.neurips.cc/paper_files/paper/2022/hash/828c6d69bdf91fca7f2b97c4dc214e94-Abstract-Conference.html). FisherRF: [arXiv 2311.17874](https://arxiv.org/abs/2311.17874). See also [NeRF](https://arxiv.org/abs/2003.08934) [@NeRF-mildenhall2020], [3D Gaussian Splatting](https://doi.org/10.1145/3592433) [@GaussianSplatting-kerbl2023], and the [e3nn spherical-harmonics reference](https://docs.e3nn.org/en/stable/api/o3/o3_sh.html) [@e3nn-SphericalHarmonics-2025] for the representation families touched by these papers.
+
+**Local source mirrors.** SCONE source: [`camera_ready.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready.tex), [`camera_ready_2_approach.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready_2_approach.tex), and [`camera_ready_6_appendix.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready_6_appendix.tex). FisherRF source: [`main.tex`](../../literature/tex-src/arXiv-FisherRF/main.tex), [`sec/method.tex`](../../literature/tex-src/arXiv-FisherRF/sec/method.tex), and [`sec/exps.tex`](../../literature/tex-src/arXiv-FisherRF/sec/exps.tex). The manifest entries live in [`sources.jsonl`](../../literature/sources.jsonl).
+
+**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [active 3DGS and targeted NBV](active_3dgs_nbv.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../thesis/questions.qmd).
+
+### Executive Takeaway
+
+SCONE and FisherRF are useful for ARIA-NBV, but not as replacement objectives.
+
+- SCONE contributes a principled coverage-support view: infer where unseen surface likely exists, estimate whether a candidate can see it, and integrate visibility over proxy volume points.
+- FisherRF contributes a principled information view: score views by expected information gain about a scene representation, using Fisher information rather than only heuristic uncertainty maps.
+- ARIA-NBV should use both as actor-visible auxiliary channels for candidate tokens, candidate diagnostics, rollout branch diversity, and support-coverage checks.
+- The thesis utility remains target-specific {{< gls relative-reconstruction-improvement >}} and endpoint target reconstruction quality. Coverage, uncertainty, semantics, simulators, and continuous-control policies stay bridges or diagnostics until calibrated against target-RRI.
+
+The shortest thesis-safe synthesis is:
+
+$$
+\text{Target-RRI is the label and evaluation target,}
+\qquad
+\text{SCONE/FisherRF provide support and information features.}
+$$
+
+### Conceptual Comparison
+
+| dimension | SCONE | FisherRF | ARIA-NBV usage |
+|---|---|---|---|
+| Primary quantity | Surface coverage gain. | Model-parameter information gain. | Target-RRI remains primary. |
+| Scene representation | Probabilistic occupancy plus proxy points. | Radiance-field parameters and Hessian/Fisher information. | EVL, semi-dense points, target crops, and support cells. |
+| View value | Expected newly visible surface. | Expected entropy reduction. | Auxiliary support/information features and diagnostics. |
+| Unknown geometry handling | Occupancy probability plus Monte Carlo integration. | Parameter uncertainty plus rendering Jacobians. | Actor-visible support proxies, not oracle future labels. |
+| History representation | Camera history around proxy points on a sphere. | Accumulated information matrix. | $\mathbb S^2$ directional memory plus support counts. |
+| Main risk | Coverage can miss reconstruction quality. | Information gain can miss geometry quality. | Never replace target-RRI. |
+
+The unifying distinction is:
+
+$$
+\begin{aligned}
+\text{SCONE} &:\quad \mathbb E[\text{new visible surface}],\\
+\text{FisherRF} &:\quad \mathbb E[\text{uncertainty reduction}],\\
+\text{ARIA-NBV} &:\quad \mathbb E[\text{target reconstruction-quality improvement}].
+\end{aligned}
+$$
+
+### SCONE: Surface Coverage As Support
+
+SCONE starts from the classic NBV coverage goal: choose a pose $q$ that observes the largest amount of previously unseen surface. If the true surface $S$ were known, the gain could be written as:
+
+$$
+G_{\mathrm{surf}}(q)
+=
+\int_{x \in S}
+\mathbf 1[x \text{ visible from } q]
+\mathbf 1[x \text{ not previously observed}]
+\, dA(x).
+$$
+
+The problem is that $S$ is unknown. Extracting a surface from a probabilistic occupancy field is brittle because a surface is a zero-measure set in a 3D volume. SCONE's theoretical move is to replace the surface integral with a volumetric integral over a thin neighborhood around the surface. Its source derives that, under regularity assumptions and for small neighborhood thickness $\mu$, the volume integral is asymptotically proportional to the surface coverage gain:
+
+$$
+\left|
+\frac{1}{|\chi|_V}
+\int_{\chi} g_c^H(\mu; x)\,dx
+-
+\mu \frac{|\partial \chi|_S}{|\chi|_V} G_H(c)
+\right|
+\leq
+M\mu^2.
+$$
+
+Conceptually:
+
+$$
+\text{surface coverage}
+\quad \approx \quad
+\text{volume integral of occupancy-weighted visibility gain}.
+$$
+
+SCONE therefore asks which sampled volume points are likely near an unobserved surface and visible from a candidate pose, rather than requiring a clean mesh first.
+
+### SCONE Architecture Details
+
+SCONE has two learned modules that should be understood as inspiration, not thesis-core dependencies.
+
+| module | paper mechanism | ARIA-NBV transfer |
+|---|---|---|
+| Occupancy probability | A deep implicit function predicts occupancy from the partial point cloud and query point features. It uses local multi-scale neighborhoods, attention over centered neighbor sequences, pooling, and spatial cells for scalability. | Replace full-scene learned occupancy with target-local support probability from EVL, semi-dense points, predicted/observed target crops, and support counts. |
+| Visibility gain | Proxy points are sampled from predicted occupancy, filtered by candidate frustum, encoded with occupancy and coordinates, processed with self-attention for occlusion effects, augmented with camera-history features on a sphere, and decoded into spherical-harmonic visibility coefficients. | Use candidate-frustum, ray/depth, and directional-memory features as transparent candidate support channels. |
+
+The ARIA-relevant detail is the camera-history encoding around each proxy point. SCONE represents where previous cameras were relative to a point on a sphere. ARIA-NBV can use a simpler second-moment directional memory:
+
+$$
+d_k(v)
+=
+\frac{c_k-v}{\|c_k-v\|},
+\qquad
+M_{\mathrm{dir}}(v)
+=
+\sum_{k<t} w_k(v)d_k(v)d_k(v)^\top.
+$$
+
+This supports the design rule that view history should be represented directionally around target-local points, not only as a sequence of global poses.
+
+### SCONE Transfer To ARIA-NBV
+
+The target-local analogue of SCONE's surface integral is:
+
+$$
+G_{\mathrm{target\mbox{-}vis}}(q,e)
+=
+\int_{v \in \Omega_e}
+p_{\mathrm{target\mbox{-}surface}}(v)
+p_{\mathrm{visible}}(v,q)
+p_{\mathrm{not\mbox{-}yet\mbox{-}observed}}(v)
+\,dv.
+$$
+
+Here $\Omega_e$ is the actor-visible target region, such as an observed or predicted {{< gls oriented-bounding-box >}} crop. The target-surface term can come from EVL, semi-dense support, object confidence, and target support counts; visibility can come from frustum/ray/depth approximations; and not-yet-observed evidence can come from $\mathbb S^2$ directional memory.
+
+A direct Monte Carlo candidate feature is:
+
+$$
+u_{\mathrm{SCONE}}(q,e)
+=
+\frac{1}{M}
+\sum_{m=1}^{M}
+\hat p_{\mathrm{surf}}(v_m)
+\hat p_{\mathrm{vis}}(v_m,q)
+\hat n_{\mathrm{dir}}(v_m,q),
+\qquad
+v_m \sim \Omega_e.
+$$
+
+A more factual, implementation-first support integral is:
+
+$$
+\hat U(q,e)
+=
+\frac{1}{M}
+\sum_{v_m \in \Omega_e}
+w(v_m)
+\mathbf 1[v_m \in \mathrm{Frustum}(q)]
+\mathbf 1[\text{ray not blocked}]
+\mathbf 1[\text{direction novel}].
+$$
+
+This is valuable because the failure modes are inspectable:
+
+- candidate cannot see target support,
+- target crop is empty,
+- candidate support is too low,
+- direction is not novel,
+- free-space or collision validity failed,
+- learned scorer disagrees with oracle target-RRI.
+
+SCONE also suggests a target support probability rather than full-scene occupancy:
+
+$$
+\hat p_{\mathrm{target\mbox{-}surface}}(v)
+=
+f_{\mathrm{support}}
+\left(
+F^{\mathrm{EVL}}_0(v),
+P_t(v),
+\hat B_e,
+\hat y_e
+\right).
+$$
+
+For the thesis core, this can start as a transparent hand-built proxy:
+
+$$
+\hat p_{\mathrm{target\mbox{-}surface}}(v)
+=
+\mathbf 1[v \in \hat B_e]
+\operatorname{clip}
+\left(
+\alpha\,\mathrm{EVL\mbox{-}support}(v)
++
+\beta\,\mathrm{semidense\mbox{-}support}(v),
+0,1
+\right).
+$$
+
+A learned target-local occupancy/support head is a later ablation, not an M1-M3 prerequisite.
+
+### Support Coverage Before Q_H
+
+SCONE reinforces the support-coverage gate before interpreting a learned value model. Before comparing one-step scorers, oracle lookahead, or $Q_H$, ARIA-NBV should know whether the finite candidate set contains enough valid target/candidate support.
+
+Report candidate support by family:
+
+$$
+\mathrm{valid\ support}(q,e)
+=
+\sum_{v \in \Omega_e}
+\hat p_{\mathrm{surf}}(v)
+\hat p_{\mathrm{vis}}(v,q).
+$$
+
+The relevant strata are:
+
+- `forward_local`
+- `target_bearing_local`
+- `lateral_target_bypass`
+- `upper_bound_free_shell`
+
+If `upper_bound_free_shell` has high target support but realistic families do not, the bottleneck is candidate generation, not $Q_H$.
+
+### FisherRF: Information Gain For Views
+
+FisherRF selects views that maximize expected information gain about a radiance-field model's parameters. It is relevant because it provides a principled uncertainty-reduction channel, not because ARIA-NBV should train a radiance field as its core scene state.
+
+For model parameters $\theta$ and candidate observation $y_q$, Fisher information is:
+
+$$
+\mathcal I_q(\theta)
+=
+\mathbb E_{y_q}
+\left[
+\nabla_\theta \log p(y_q \mid q,\theta)
+\nabla_\theta \log p(y_q \mid q,\theta)^\top
+\right].
+$$
+
+Under regularity conditions, this is equivalent to the Hessian of the negative log-likelihood. In FisherRF's volumetric-rendering setting, the Hessian can be computed from rendering Jacobians:
+
+$$
+H''[y \mid x,\theta]
+=
+\nabla_\theta f(x;\theta)^\top
+\nabla_\theta f(x;\theta).
+$$
+
+The key point for active view selection is that Fisher information does not require the unknown future RGB observation. It depends on how sensitive the rendered observation would be to scene parameters.
+
+If $F_t$ is the information accumulated from existing views and $F_q$ is the candidate information, expected information gain can be written as entropy reduction:
+
+$$
+\mathrm{EIG}(q)
+=
+H(\theta \mid D_t)
+-
+H(\theta \mid D_t \cup q).
+$$
+
+Under a Gaussian/Laplace approximation:
+
+$$
+\mathrm{EIG}(q)
+\approx
+\frac{1}{2}
+\log\det(F_t+F_q+\Lambda)
+-
+\frac{1}{2}
+\log\det(F_t+\Lambda).
+$$
+
+Because full radiance-field Hessians are enormous, FisherRF uses a diagonal/Laplace-style approximation plus regularization. The diagonal intuition is:
+
+$$
+\mathrm{EIG}(q)
+\approx
+\frac{1}{2}
+\sum_j
+\log\left(
+1+
+\frac{f_{q,j}}{f_{t,j}+\lambda}
+\right).
+$$
+
+This says a candidate is valuable when it provides information about parameters or regions that are still uncertain, not when it repeats already well-constrained evidence.
+
+### FisherRF Transfer To ARIA-NBV
+
+ARIA-NBV should not ask "what RGB image will this candidate observe?" as an oracle input. The Fisher-style actor-visible question is:
+
+$$
+\text{Which uncertain target-local variables would this candidate constrain?}
+$$
+
+Candidate-constrained variables can include:
+
+- target occupancy,
+- target surface support,
+- target {{< gls oriented-bounding-box >}} geometry,
+- target completeness,
+- target-local directional visibility,
+- EVL occupancy/evidence logits,
+- semi-dense support gaps,
+- learned target-quality latent features.
+
+A target-local Fisher-like channel is:
+
+$$
+u_{\mathrm{Fisher}}(q,e)
+=
+\sum_{v \in \Omega_e}
+\log\left(
+1+
+\frac{f_q(v)}{f_t(v)+\lambda}
+\right),
+$$
+
+where $f_t(v)$ is current information/support and $f_q(v)$ is candidate-provided information/support. A simple non-differentiable ARIA version is:
+
+$$
+f_t(v)
+=
+n_t(v)+\lambda_{\mathrm{dir}}\operatorname{tr}M_{\mathrm{dir}}(v),
+\qquad
+f_q(v)
+=
+\mathbf 1[v \in \mathrm{Frustum}(q)]
+\hat p_{\mathrm{visible}}(v,q)
+\hat p_{\mathrm{target\mbox{-}surface}}(v).
+$$
+
+Then:
+
+$$
+u_{\mathrm{info}}(q,e)
+=
+\sum_{v \in \Omega_e}
+\log\left(
+1+
+\frac{
+\hat p_{\mathrm{visible}}(v,q)
+\hat p_{\mathrm{surf}}(v)
+}{
+n_t(v)+
+\lambda_{\mathrm{dir}}\operatorname{tr}M_{\mathrm{dir}}(v)+
+\lambda
+}
+\right).
+$$
+
+This is a target-local uncertainty-reduction feature. It should not replace RRI, but it can become a candidate-token feature for the one-step scorer and $Q_H$.
+
+### Directional Novelty And Batch Diversity
+
+SCONE's spherical history and FisherRF's diminishing returns combine into a concrete directional novelty term:
+
+$$
+\hat p_{\mathrm{unseen\mbox{-}dir}}(v,q_i)
+=
+1-
+\frac{
+d_i(v)^\top M_{\mathrm{dir}}(v)d_i(v)
+}{
+\operatorname{tr}M_{\mathrm{dir}}(v)+\epsilon
+}.
+$$
+
+Use it in the support channel:
+
+$$
+u_{\mathrm{vis}}(q_i,e)
+=
+\sum_{v \in \Omega_e}
+\hat p_{\mathrm{surf}}(v)
+\hat p_{\mathrm{frustum}}(v,q_i)
+\hat p_{\mathrm{unseen\mbox{-}dir}}(v,q_i).
+$$
+
+FisherRF also gives a cleaner branch-diversity rule than only sibling distance/yaw guards. Greedily select rollout branches by marginal information:
+
+$$
+q_1 = \arg\max_q u(q),
+\qquad
+q_k =
+\arg\max_q
+\Delta u(q \mid q_1,\ldots,q_{k-1}).
+$$
+
+In diagonal target-support form:
+
+$$
+\Delta u(q \mid B,e)
+=
+\frac{1}{2}
+\sum_{v \in \Omega_e}
+\log\left(
+1+
+\frac{f_q(v)}
+{f_t(v)+\sum_{b \in B} f_b(v)+\lambda}
+\right).
+$$
+
+This discourages selecting several rollout siblings that constrain the same target-local cells from the same directions.
+
+### Candidate Tokens And Training Hierarchy
+
+SCONE/Fisher features should enter ARIA-NBV as explicit candidate-token channels:
+
+$$
+x_{q,e}
+=
+\left[
+\text{pose features},
+\text{target features},
+\text{current support},
+\text{candidate target support},
+u_{\mathrm{SCONE}}(q,e),
+u_{\mathrm{info}}(q,e),
+\text{directional novelty},
+\text{validity reason}
+\right].
+$$
+
+The training/evaluation hierarchy should remain:
+
+1. Cheap actor-visible support features: $u_{\mathrm{vis}}$, $u_{\mathrm{info}}$, and directional novelty.
+2. Learned one-step scorer: $\hat r_\psi^e(s,q)$.
+3. Learned finite-horizon value model: $Q_H(s,e,q)$.
+4. Oracle evaluation: $J_e^{(H)}$ and endpoint target quality.
+
+SCONE/Fisher features help the model and the data-generation diagnostics. They do not define success.
+
+### Concrete Feature Proposal
+
+The minimal implementation implied by the distillation is a `target_support_features` module with three per-candidate features:
+
+$$
+\phi_{\mathrm{support}}(q_i,e)
+=
+\left[
+u_{\mathrm{vis}}(q_i,e),
+u_{\mathrm{info}}(q_i,e),
+u_{\mathrm{dir}}(q_i,e)
+\right].
+$$
+
+The three components can be:
+
+$$
+u_{\mathrm{vis}}
+=
+\sum_v
+\hat p_{\mathrm{surf}}(v)
+\hat p_{\mathrm{frustum}}(v,q_i),
+$$
+
+$$
+u_{\mathrm{info}}
+=
+\sum_v
+\log\left(
+1+
+\frac{
+\hat p_{\mathrm{surf}}(v)
+\hat p_{\mathrm{frustum}}(v,q_i)
+}{
+n_t(v)+\lambda
+}
+\right),
+$$
+
+$$
+u_{\mathrm{dir}}
+=
+\sum_v
+\hat p_{\mathrm{surf}}(v)
+\hat p_{\mathrm{frustum}}(v,q_i)
+\left[
+1-
+\frac{
+d_i(v)^\top M_{\mathrm{dir}}(v)d_i(v)
+}{
+\operatorname{tr}M_{\mathrm{dir}}(v)+\epsilon
+}
+\right].
+$$
+
+This is deliberately much smaller than implementing SCONE or FisherRF literally. It is enough to test whether coverage-support and information-style channels help target-RRI ranking.
+
+### Diagnostics And Experiments
+
+Initial experiments should test the auxiliary channels without changing the reward:
+
+| check | purpose |
+|---|---|
+| Spearman(`u_vis`, target-RRI) | Does actor-visible support correlate with oracle target improvement? |
+| Spearman(`u_info`, target-RRI) | Does diminishing-returns support identify useful target views? |
+| Spearman(`u_dir`, target-RRI) | Does directional novelty help beyond support count? |
+| top-k oracle hit using support features alone | Do auxiliary channels shortlist high-RRI candidates? |
+| per-candidate-family support histograms | Is the bottleneck candidate generation, validity, support, or learned ranking? |
+| selected-family distribution under oracle-1 and oracle-lookahead | Do oracle policies prefer different candidate families than the learned scorer? |
+| support overlap among rollout branches | Are stochastic branches collapsing to duplicates? |
+
+The key question is:
+
+$$
+\text{Do SCONE/Fisher-inspired actor-visible support features correlate with target-RRI,}
+\quad
+\text{and do they improve the learned scorer or } Q_H?
+$$
+
+If not, they remain diagnostics. If yes, they become scientifically grounded candidate-token features.
+
+### Do Not Adopt
+
+- Do not replace target-RRI with SCONE coverage. Coverage can be high while target geometry quality remains poor.
+- Do not require a radiance field, NeRF, or 3DGS state for thesis-core ARIA-NBV experiments.
+- Do not make uncertainty reduction the reward unless it is calibrated against target-RRI.
+- Do not add SCONE's full learned occupancy/visibility modules before the finite-candidate target-RRI store, support diagnostics, and rollout/Q_H contracts are stable.
+- Do not interpret poor $Q_H$ results until candidate support, validity masks, reason codes, and candidate-family support strata are audited.
+
+### Thesis Wording
+
+SCONE helps ARIA-NBV say: candidate generation is not only pose sampling; it must measure actor-visible target-local support and directional novelty, inspired by volumetric surface-coverage integration.
+
+FisherRF helps ARIA-NBV say: novelty should not be a pure heuristic; candidates that constrain already well-supported target cells are less useful than candidates that constrain uncertain or under-observed target cells.
+
+Together, they support a finite-candidate value model whose candidate token contains pose, target relation, validity, RRI baseline score, SCONE-like visibility support, Fisher-like information gain, and $\mathbb S^2$ directional novelty. The final claim is still evaluated by oracle target-RRI and endpoint target reconstruction quality.

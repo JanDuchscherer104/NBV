@@ -1,0 +1,16 @@
+ 
+\begin{figure*}[!t]
+\setlength{\tabcolsep}{0pt}
+	\centering
+\begin{tabular}{p{0.3cm}ccccc}
+\rotatebox[origin=c]{90}{\parbox{\widthof{AcNeRF\ }}{ACNeRF}} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/ac-counter-4.png}} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/ac-flower-2.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/ac-garden-0.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/ac-kitchen-3.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/ac-room2.png}} \\
+\rotatebox[origin=c]{90}{Random} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/rand-coutner-4.png}} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/rand-flower-2.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/rand-garden-0.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/rand-kitchen-3.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/rand-room-2.png}} \\
+\rotatebox[origin=c]{90}{Ours} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/our-counter-4.png}} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/our-flower-2.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/our-garden-0.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/our-kitchen-3.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/our-room-2.png}} \\
+\rotatebox[origin=c]{90}{GT} & \raisebox{-0.5\height}{\includegraphics[width=0.19\linewidth]{figures/mip/gt-counter-4.png}} & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/gt-flower-2.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/gt-garden-0.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/gt-kitchen-3.png}}  & \raisebox{-0.5\height} {\includegraphics[width=0.19\linewidth]{figures/mip/gt-room-2.png}} \\
+\end{tabular}
+	\vspace{-2mm}
+	\caption{{\bf Qualitative Study of our method on Mip360 Dataset} From the top to bottom are results from ActiveNeRF, random baseline, our method, and the ground truth. All the models in this figure are implemented on top of 3D Gaussian Splatting~\cite{kerbl3Dgaussians} for better performance on this challenging dataset. We could see baseline models exhibited artifacts in some renderings due to their lack of constraints from nearby training views.  
+}
+\label{fig:mip}
+\vspace{-5mm}
+\end{figure*}

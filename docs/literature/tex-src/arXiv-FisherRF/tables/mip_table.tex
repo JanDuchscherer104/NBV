@@ -1,0 +1,47 @@
+\begin{table}
+\begin{minipage}{0.47\textwidth}
+    \centering
+    \caption{{\bf Active View Selections on Mip-NeRF360 Dataset} We compare our method on real-world dataset Mip360. $\dag$: batch active view selection setting. Our method outperformed previous state-of-the-art with a clear margin.} \label{tab:mip360}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{l|ccc}
+    Method & PSNR	 $\uparrow$ &	SSIM  $\uparrow$	&	LPIPS $\downarrow$\\
+    \hline
+    
+3D Gaussian + Random         &                      17.914 &                      0.564 &                      0.430  \\
+3D Gaussian + Random\dag     &  \cellcolor{tabthird}19.542 &  \cellcolor{tabthird}0.568 &  \cellcolor{tabthird}0.376  \\
+3D Gaussian + ActiveNeRF     &                      17.889 &                      0.533 &                      0.414  \\
+3D Gaussian + ActiveNeRF\dag &                      18.303 &                      0.539 &                      0.406  \\
+\hline
+3D Gaussian + Ours           & \cellcolor{tabsecond}20.351 & \cellcolor{tabsecond}0.601 &  \cellcolor{tabfirst}0.361  \\
+3D Gaussian + Ours\dag       &  \cellcolor{tabfirst}20.568 &  \cellcolor{tabfirst}0.608 & \cellcolor{tabsecond}0.365 
+
+
+    \end{tabular}
+    }
+\end{minipage}
+    ~
+\begin{minipage}{0.47\textwidth}
+    \centering
+    \caption{{\bf Scene Coverage on Gibson and MP3D dataset}
+    Our method outperformed previous methods by a large margin when evaluating the coverage metric. 
+    Numbers for other methods are taken from Active Nerual Mapping~\cite{yan2023active-neural-mapping}.
+    }\label{tab:mapping}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{lcccc}
+    \toprule
+\multirow{2}{*}{Method} & \multicolumn{2}{c}{Gibson} & \multicolumn{2}{c}{MP3D} \\ 
+            \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+            & Comp. (\%) $\uparrow$  & Comp. (cm) $\downarrow$ & Comp. (\%)$\uparrow$   & Comp. (cm)  $\downarrow$\\
+            \toprule
+            Random &   45.80     &   34.48    &    45.67   &   26.53   \\
+            FBE    & \cellcolor{tabthird}  68.91     & \cellcolor{tabthird}  14.42     &   71.18     &  9.78    \\
+            UPEN   &   63.30     &   21.09     &   69.06     &   10.60     \\
+            OccAnt &  61.88      &  23.25     &   \cellcolor{tabthird} 71.72    & \cellcolor{tabthird}   9.40   \\
+            Active Neural Mapping & \cellcolor{tabsecond} 80.45 & \cellcolor{tabsecond} 7.44 & \cellcolor{tabsecond} 73.15 & \cellcolor{tabsecond} 9.11 \\
+            \midrule
+            Ours  &   \cellcolor{tabfirst} 92.89  & \cellcolor{tabfirst} 5.64 & \cellcolor{tabfirst} 89.41 & \cellcolor{tabfirst} 2.91    \\
+            \bottomrule
+\end{tabular}
+    }
+\end{minipage}
+\end{table}

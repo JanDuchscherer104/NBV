@@ -1,0 +1,41 @@
+\section{Introduction}
+\label{sec:intro}
+\begin{figure}
+    \centering
+ \includegraphics[width=\textwidth]{figures/eccv-teaser.pdf}
+    \caption{{\bf A brief overview of our method} Given a Radiance Field that was trained with a limited number of views, our method could find the next best view that could maximize information gain by computing the Fisher Information of the radiance field. We illustrate the Information Gain as a heat map on the viewing sphere and show four of the candidate views. Our model can quantify pixel-wise uncertainty, visualized at the bottom left,  by examining the Fisher Information on the related parameters of the ray. Our algorithm can be also adapted into an active mapping system, as showcased at the right, that could actively explore and reconstruct the environment.}
+    \label{fig:teaser}
+\end{figure}
+
+
+\replaced{Neural Radiance Fields brought back image rendering and reconstruction from multiple views to the center of attention in the field of computer vision. Novel volumetric representations of radiance fields and differentiable volumetric rendering enabled unprecedented advances in image-based rendering of complex scenes both in terms of perceptual quality and speed.}
+{Neural Radiance Fields (NeRF) have recently garnered significant attention in the field of Computer Vision and have seen enhancements for faster rendering and training, larger-scale reconstruction, dynamic modeling, and generative capabilities.} 
+
+Recently, 3D Gaussian Splatting~\cite{kerbl3Dgaussians} has demonstrated distinct advantages in real-time rendering and explicit point-based parameterizations without neural representations.
+However, to achieve satisfactory rendering quality, numerous viewpoints are required to train a radiance field, especially in large-scale scenarios. 
+It is crucial to establish a criterion for selecting information-maximizing views before obtaining image observations at those locations.
+Quantifying the observed information of a Radiance Field model is challenging, given that Radiance Field models are typically regression-based and scene-specific. The challenge intensifies when we aim to leverage quantified observed information for active view selection and mapping, especially when the selection candidates are only $SE(3)$ camera poses for acquiring new observations, a.k.a capturing new images.
+
+Previous approaches select viewpoints by quantifying the uncertainty in Radiance Fields. They can be broadly categorized into two groups: variational white-box models and black-box models. White-box models integrate conventional NeRF architectures with Bayesian models, such as reparameterization~\cite{pan2022activenerf,martinbrualla2020nerfw,Ran2023neurar} and Normalizing Flows~\cite{CF-NeRF}. Black-box methods, on the other hand, do not modify the existing model architecture but seek to quantify predictive uncertainty by examining the distribution of predicted outcomes~\cite{zhan2022activermap,lee2022uncertainty, yan2023active-neural-mapping,pan2022activenerf}.
+White-box models depend on specific model architectures and are often characterized by slower training times due to the challenges associated with probabilistic learning. Conversely, existing black-box models either focus solely on studying the uncertainty on NeRF-style query points through network prediction \cite{pan2022activenerf} or hypothetical perturbation field \cite{goli2023}, or rely on Monte Carlo sampling techniques~\cite{yan2023active-neural-mapping} to quantify the uncertainty at the candidate views.
+
+In this study, our primary objective is to quantify the observed information of a Radiance Field model and utilize it to select the optimal view with the highest information gain for downstream tasks, Fig. \ref{fig:teaser}. To achieve this, we propose using Fisher Information, which represents the expectation of observation information. This quantity is directly linked to the second-order derivatives or Hessian matrix of the loss function involved in optimizing Radiance Field models. 
+Importantly, the Hessian of the objective function in volumetric rendering is independent of ground truth data or the actual image measurement. This property allows us to compute the information gain between the training dataset and the candidate viewpoint pool using only the camera parameters of the candidate views. This capability facilitates an efficient next-best-view selection algorithm.
+In addition to the formulation of Information Gain, the Hessian of the loss function has an intuitive interpretation: the perturbation at flat minima of the loss function. From an intuitive standpoint, one can perceive the Fisher Information matrix as a metric of the curvature of the log-likelihood function at specific parameter instantiations denoted as $\bw^*$.
+Lower Fisher Information suggests that the log-likelihood function exhibits a flatter profile around $\bw^*$, implying that the loss is less prone to changes when $\bw^*$ is perturbed. The flat minimum interpretation has attracted substantial attention and research within various domains of machine learning \cite{Hinton1993, kirsch2022unifying, HochreiterFlat, SmithSGD, macdonald2023progressive}.
+Moreover, as we have estimated the Fisher information for the model's parameters, which correspond to specific 3D locations in recent Radiance Field models such as 3D Gaussian Splatting~\cite{kerbl3Dgaussians} and Plenoxels~\cite{plenoxels}, we can derive pixel-wise uncertainty in the model's predictions by examing the Fisher Information on parameters that contribute to the prediction for each pixel.
+
+We implement the computation of Fisher Information on top of two types of Radiance Field models: point-based 3D Gaussian Splatting~\cite{kerbl3Dgaussians} and Plenoxels~\cite{plenoxels}. 
+In 3D Gaussian Splatting, we compute the Hessians of the parameters on each 3D Gaussian with respect to the negative log-likelihood. 
+As Fisher Information is additive, we further extend our view selection algorithm into batch selection and path selection, which are closer to real-world applications.
+To make the computation of information gain tractable, we use an approximation of the decrease in entropy by its upper bound, which is the trace of the product of the Hessian of the candidate view times the Hessian with respect to all previous views. These matrices are highly sparse due to the disentangling of scene parameters with respect to disparate rays. The sparsity allows us a computation of the matrix trace above that is as cost-effective as back-propagation, enabling us to evaluate views at 70 fps when we use 3D Gaussian Splatting. 
+We carried out extensive evaluations in different benchmarks, including active view selection, active mapping, and uncertainty quantification. 
+The quantitative and qualitative results unequivocally demonstrate that our approach surpasses previous methods and heuristic baseline by a significant margin.
+\noindent
+To summarize, our main contributions are as follows:
+\begin{itemize}
+  \item A novel formulation to quantify the observed information and Information Gain for Radiance Fields.
+  \item An effective and efficient view selection method exploiting the sparse structure of the scene rendering problem.
+  \item An efficient pixel-wise uncertainty quantification and visualization method for 3D Gaussian Splatting.
+  \item Extensive comparative study showing that our method outperforms existing active approaches on view selection, active mapping, and uncertainty quantification. 
+\end{itemize}

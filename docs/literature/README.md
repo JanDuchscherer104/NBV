@@ -22,6 +22,7 @@ This directory stores extracted arXiv LaTeX source bundles for papers that direc
 - [Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345): Casts offline RL as return-conditioned sequence modeling with a Transformer. Local source tree: `arXiv-Decision-Transformer/`.
 - [Reinforcement Learning with Deep Energy-Based Policies](https://arxiv.org/abs/1702.08165): Connects maximum entropy RL with energy-based models to learn expressive, multi-modal policies. Local source tree: `arXiv-Deep-Energy-Based-Policies/`.
 - [Stochastic Beams and Where to Find Them: The Gumbel-Top-k Trick for Sampling Sequences Without Replacement](https://arxiv.org/abs/1903.06059): Introduces the Gumbel-Top-k trick for sampling sequences without replacement from autoregressive models. Local source tree: `arXiv-Gumbel-Top-k/`.
+- [FisherRF: Active View Selection and Uncertainty Quantification for Radiance Fields using Fisher Information](https://arxiv.org/abs/2311.17874): Scores candidate views by expected Fisher information for radiance-field parameters; useful for ARIA-NBV uncertainty/support diagnostics, not as a replacement for target-RRI. Local source tree: `arXiv-FisherRF/`.
 - [Next Best Sense: Guiding Vision and Touch with FisherRF for 3D Gaussian Splatting](https://arxiv.org/abs/2410.04680): Guides multi-modal active sensing (vision and touch) for 3D Gaussian Splatting using Fisher Information (FisherRF). Local source tree: `arXiv-Next-Best-Sense/`.
 - [Finding Optimal Viewpoints for Monocular 3D Human Pose Estimation in Dynamic 3D Gaussian Splatting Space](https://doi.org/10.1109/AVSS65446.2025.11149906): Optimal viewpoint selection for monocular 3D human pose estimation in dynamic 3DGS spaces. (Reference only)
 
@@ -115,6 +116,9 @@ By default the script writes extracted source trees into `docs/literature/tex-sr
 ### Gumbel-Top-k
 - `arXiv-Gumbel-Top-k/main.tex`
 - `arXiv-Gumbel-Top-k/full.tex`
+
+### FisherRF
+- `arXiv-FisherRF/main.tex`
 
 ### Next Best Sense
 - `arXiv-Next-Best-Sense/ms.tex`

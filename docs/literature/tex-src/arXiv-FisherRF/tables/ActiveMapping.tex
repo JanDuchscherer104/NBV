@@ -1,0 +1,42 @@
+\begin{table}[t]
+\begin{minipage}{0.47\textwidth}
+    \centering
+    \caption{{\bf Evaluation for Render Quality on Gibson and MP3D} We also compare our method with previous method
+    on the rendering quality for both color and depth reconstruction.}\label{tab:map-render}
+    \label{table:render}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{lcccc}
+    \toprule
+\multirow{2}{*}{Method} & \multicolumn{2}{c}{Gibson} & \multicolumn{2}{c}{MP3D} \\ 
+            \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+            & PSNR $\uparrow$  & Dpeth MAE (m) $\downarrow$ & PSNR $\uparrow$  & Depth MAE (m) $\downarrow$ \\
+            \toprule
+            FBE &   19.35    &  \cellcolor{tabsecond} 0.1751   & 16.68  & \cellcolor{tabthird} 0.3627   \\
+            UPEN    &  \cellcolor{tabsecond} 21.13 & \cellcolor{tabthird} 0.1893 & \cellcolor{tabsecond}  18.40    &  \cellcolor{tabsecond} 0.2690    \\
+            Active Neural Mapping   & \cellcolor{tabthird} 19.64 &  0.2943   & \cellcolor{tabthird}  17.16  & 0.4621     \\
+            \midrule
+            Ours  &  \cellcolor{tabfirst} 22.58  & \cellcolor{tabfirst} 0.0924 & \cellcolor{tabfirst} 19.96 & \cellcolor{tabfirst} 0.1667 \\
+            \bottomrule
+\end{tabular}
+    }
+\end{minipage}
+    ~
+\begin{minipage}{0.47 \textwidth}
+    \centering
+    \caption{{\bf Uncertainty Estimation on LF Dataset} Numbers are AUSE, the lower the better. The best results are highlighted in red, and the second-best results are in orange color. }\label{tab:ucnern-gaussian}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{l|ccccc}
+   Method & Statue $\downarrow$	&	Africa	 $\downarrow$&	Torch $\downarrow$	&	Basket $\downarrow$ & Average  $\downarrow$\\
+    \hline
+CF-NeRF & 0.54 & \cellcolor{tabthird}0.34 & 0.50 &  \cellcolor{tabfirst}0.14 & 0.38 \\
+\hline
+ ActiveNeRF    &  \cellcolor{tabthird} 0.40 &  0.39 &  \cellcolor{tabfirst} 0.21 &  0.34 &  \cellcolor{tabthird}0.33 \\
+ \hline
+ BayesRays    &  \cellcolor{tabfirst} 0.17 &  \cellcolor{tabsecond} 0.27 &  \cellcolor{tabsecond} 0.22 & \cellcolor{tabthird} 0.28 &  \cellcolor{tabsecond}0.23 \\
+\hline
+ Ours    &  \cellcolor{tabsecond}0.21 &  \cellcolor{tabfirst}0.26 &  \cellcolor{tabthird}0.24 & \cellcolor{tabsecond}0.18 &  \cellcolor{tabfirst}0.22
+    \end{tabular}
+    }
+\end{minipage}
+\end{table}
+\vspace{-5mm}
