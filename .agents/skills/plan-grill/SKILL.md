@@ -70,9 +70,13 @@ Keep the default path concise unless one of these modifiers applies.
   literature/API grounding, diagrams, equations, or advisor-facing rationale,
   read `references/plan-mode-theory-patterns.md`. Ground theory in the source
   ladder, state claim strength, and include option tradeoffs before questions.
-- Use Markdown/KaTeX-compatible equations and conservative Mermaid only when
-  they clarify the decision. For committed `.mmd` assets, hand off to
-  `aria-nbv-mermaid` and validate locally.
+- Use Codex-app-safe Markdown/KaTeX equations when they clarify the decision:
+  write inline equations as `\(...\)`, display equations as `$$...$$` with
+  blank lines before and after, avoid `$...$` inline math because it may not
+  render reliably in Codex chat, and never put equations intended to render in
+  fenced code blocks. Use fenced `mermaid` blocks for diagrams, and keep math
+  out of Mermaid labels unless it is plain text. For committed `.mmd` assets,
+  hand off to `aria-nbv-mermaid` and validate locally.
 - Treat Wikipedia as orientation only. Do not use it as advisor-facing,
   proposal-critical, or thesis-claim evidence.
 

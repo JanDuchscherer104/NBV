@@ -175,3 +175,45 @@ context = ["CounterfactualTargetOracleRriScorer already crops target mesh/curren
 implementation_notes = ["Add a narrow OracleRRI.score_cropped or equivalent internal path that accepts already-cropped gt_verts/gt_faces and skips _crop_mesh_to_aabb.", "Route CounterfactualTargetOracleRriScorer target scoring through the pre-cropped path after its ObbTW any-vertex crop.", "Keep scene_rri on the existing AABB extent path unless a broader crop-policy API is introduced.", "Audit target_gt_aabb_world consumers and either demote it to debug/visualization use or remove it from the public data_handling export once no active training path depends on it.", "Document the target crop policy as GT ObbTW oriented any-vertex v1 and keep empty crops as target-invalid rather than low RRI."]
 acceptance = ["Target-RRI generation no longer derives or passes a target AABB after the GT ObbTW crop.", "Scene-level RRI still uses the existing snippet/occupancy AABB semantics and remains explicitly separate from target_rri.", "target_gt_aabb_world is not presented as the main target-RRI crop API in public exports or docs unless explicitly labeled debug/visualization.", "Regression tests cover rotated target OBBs where AABB cropping would include off-target mesh and verify the target path uses the oriented crop.", "Empty oriented target crops continue to raise or record target-invalid reasons instead of falling back to scene labels."]
 verification = ["cd aria_nbv && uv run pytest tests/rri_metrics tests/pose_generation/test_counterfactuals.py tests/data_handling/test_target_selection.py", "cd aria_nbv && uv run ruff check aria_nbv/rri_metrics aria_nbv/pose_generation aria_nbv/data_handling", "rg -n \"target_gt_aabb_world|extend=.*target|_aabb_from_points\" aria_nbv/aria_nbv aria_nbv/tests"]
+
+[[refactor]]
+id = "refactor-021"
+title = "Streamline rollout Zarr chunking and manifest payload"
+description = "Reduce rollout-store file-count and metadata bloat before schema-1.0 scale generation."
+priority = "high"
+status = "todo"
+labels = ["rollouts", "zarr", "storage", "simplification", "performance"]
+issue_ids = ["issue-032", "issue-018", "issue-022"]
+loc_min = 80
+loc_expected = 240
+loc_max = 620
+context = [
+  "The 2026-05-20 schema-1.0 structural probe produced a 13 MB store for only 600 candidates; candidates/ alone was 10 MB.",
+  "candidates/pose_world_cam and candidates/pose_relative_root each used 600 chunk files and 4.8 MB for roughly 29 KB of raw float payload because _default_chunks chunks 2D arrays as one row per chunk.",
+  "target_eval_crops/ still occupied 120 KB even when target_eval_crops_enabled=false and zero crop rows were stored.",
+  "The manifest embeds repeated resolved PathConfig trees in the writer config; this is useful for audits but noisy and should not be repeated unnecessarily across scale shards when hashes and campaign-level config can own most details.",
+]
+references = [
+  "repo:.agents/work/rollout-scale-readiness/04-zarr-chunking-manifest-plan.md",
+  "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
+  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
+  "repo:aria_nbv/tests/rollouts/test_zarr_store.py",
+]
+implementation_notes = [
+  "Change default rollout table chunking for 2D factual arrays from (1, width) to row blocks sized by configurable row count or approximate byte budget.",
+  "Keep q_h and selected_depth custom chunking separate because their access patterns differ.",
+  "For zero-row optional groups, minimize stored arrays and attrs while preserving reader/validator clarity.",
+  "Consider manifest compaction for shard stores: keep hashes, effective config summary, and invocation metadata in every shard; move full resolved config trees to a campaign/root manifest when available.",
+  "Measure file count, du size, and read speed before/after on a small schema-1.0 rollout probe.",
+]
+acceptance = [
+  "A 600-candidate schema-1.0 probe no longer creates one chunk file per candidate for pose arrays.",
+  "Candidate factual arrays use chunking appropriate for minibatch and scan reads, with chunk policy recorded or inferable.",
+  "Optional zero-row audit groups have negligible footprint and still validate.",
+  "Manifest payload remains auditable without duplicating large resolved path/config trees unnecessarily in every scale shard.",
+]
+verification = [
+  "cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts/test_dataset_writer.py -q",
+  "du -sh <fresh_schema_1_store>.zarr <fresh_schema_1_store>.zarr/candidates/* | sort -h",
+  "find <fresh_schema_1_store>.zarr/candidates/pose_world_cam -type f | wc -l",
+]

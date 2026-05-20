@@ -200,6 +200,51 @@ tags: [codex, workflow, architecture]
   in `docs/typst/shared` temporarily, but their rendered notation must follow
   the locked convention.
 
+### 2026-05-20 Target-First RRI And Rollout Alignment Decisions
+- The thesis objective hierarchy is target-first: rollout ranking, learned
+  `Q_H`, and primary endpoint evaluation use root-normalized target gain.
+  Scene-level RRI remains a diagnostic bridge to the seminar oracle pipeline,
+  not a hidden training or ranking objective.
+- The old seminar scene-RRI computation remains historical implemented
+  evidence. Current thesis labels separate actor-visible semi-dense/EVL state
+  from homogeneous oracle evaluation geometry and use target-specific crops for
+  the optimized reward.
+- Target selection is a three-stage contract: hard actor-visible eligibility,
+  target-interest ranking or sampling, and deterministic class-compatible 3D
+  IoU GT matching. Support and projected visibility are eligibility/audit
+  fields rather than GT-match ranking multipliers.
+- Target projected-area feasibility uses one clipped visible image-overlap
+  field. Raw projected extents outside the image are not part of the main V1
+  target selector/store contract.
+- The thesis-scale target sampling default is deferred until selector coverage
+  audits are available. Stratified target sampling over support, projected
+  visibility, distance, and class is the leading candidate; greedy top-K and
+  robust softmax remain comparison policies.
+- The main candidate-generation profile is `v1_realistic_3family`:
+  `forward_local`, `target_bearing_local`, and `lateral_target_bypass` under
+  stricter local egocentric motion limits. `local_refinement`,
+  `revisit_backtrack`, and `upper_bound_free_shell` are named ablations.
+- Candidate full-shell count remains fixed, but thesis-scale generation gates
+  low-valid-action roots and reports blocked roots, valid counts, invalid
+  reasons, selected counts, and target gain by `position_id`.
+- H>1 rollout traces are the canonical data product. H=1/myopic target labels
+  are derived views over materialized rollout states; H=1-only generation is a
+  smoke/preflight mode, not the thesis-scale artifact.
+- Selected/parent rendered depth becomes actor-visible successor-state history
+  after an action is selected. Training-core stores persist it at canonical
+  configured resolution with renderer lineage; full-resolution depth is an
+  audit/profile option.
+- Target-eval crop point payloads are sampled/audit retention. Training-core
+  stores scalar target distances, supports, root gain/RRI diagnostics, crop
+  policy, fusion/eval-source lineage, masks, and provenance.
+- Thesis-scale rollout generation requires scene-level split manifests before
+  shard grouping. Sample-key splits remain smoke evidence only.
+- Stochastic rollout evidence uses normal torch/numpy/random seeding once per
+  job or shard, plus persisted seed, shard manifest/order identity, and sampled
+  outcomes. Per-step derived seed trees are not required.
+- The next rollout Zarr schema is an incompatible `1.0` target-rollout-core
+  style contract with no migration readers; stale stores are regenerated.
+
 ### 2026-05-11 Transcript-Mined Project Decisions
 - Rollout and `Q_H` stores keep full scene meshes as external
   path/hash/version references and may embed high-detail target mesh crops once
