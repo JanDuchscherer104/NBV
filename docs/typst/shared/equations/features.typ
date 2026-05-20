@@ -45,14 +45,37 @@
     (op("tr") (#symb.vin.dir_moment (bold(v))) + epsilon)
   $,
   qh_scene_memory: $
-    bold(F)_t^"scene"
+    bold(Phi)_t^"scene"
     =
-    op("Conv3D") (
-      bold(F)_0^"EVL",
-      bold(V) (#symb.obs.points_t),
-      bold(V)_"dir" (#symb.obs.points_t),
-      bold(V)_"target" (#symb.entity.target_desc)
+    (
+      bold(X)_t^"pt",
+      bold(F)_t^"DINO@pt",
+      bold(E)_0^"EVL-local",
+      bold(O)_t^"pred",
+      #symb.vin.dir_moment
     )
+  $,
+  point_dino_token: $
+    bold(x)_j^"pt"
+    =
+    op("concat") (
+      bold(p)_j,
+      bold(f)_j^"DINO-comp",
+      sigma_j^(-1),
+      n_j,
+      bold(a)_j^"hist"
+    )
+  $,
+  candidate_query_pools: $
+    bold(z)_e
+    &=
+    op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
+    bold(z)_i^"fr"
+    &=
+    op("Pool")_(bold(p)_j in op("Frustum") (q_(t,i))) bold(x)_j^"pt" \
+    bold(z)_(e,i)^"cap"
+    &=
+    op("Pool")_(bold(p)_j in hat(bold(B))_e inter op("Frustum") (q_(t,i))) bold(x)_j^"pt"
   $,
   qh_target_token: $
     bold(T)_e
@@ -60,7 +83,7 @@
     op("MLP")_phi (
       op("concat") (
         #symb.entity.target_desc,
-        op("ROIAlign3D") (bold(F)_t^"scene", hat(bold(B))_e)
+        phi_"target" (bold(Phi)_t^"scene", hat(bold(B))_e)
       )
     )
   $,
@@ -125,8 +148,9 @@
     bold(g)_(t,i)
     =
     op("concat") (
-      phi_"frustum" (bold(F)_t^"scene", q_(t,i)),
-      phi_"belief" (#symb.obs.points_t, #symb.vin.field_evl_0, q_(t,i)),
+      phi_"frustum" (bold(X)_t^"pt", q_(t,i)),
+      phi_"target-frustum" (bold(X)_t^"pt", #symb.entity.target_desc, q_(t,i)),
+      phi_"EVL-local" (bold(E)_0^"EVL-local", q_(t,i), #symb.entity.target_desc),
       phi_"dir" (#symb.vin.dir_moment, q_(t,i))
     )
   $,

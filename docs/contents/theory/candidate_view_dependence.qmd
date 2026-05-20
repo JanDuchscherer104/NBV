@@ -1,0 +1,421 @@
+---
+title: "Candidate-View Dependence"
+phase: thesis
+audience: public
+status: current
+owner: jan
+format: html
+---
+
+# Candidate-View Dependence {#candidate-view-dependence}
+
+This page owns the theory contract for treating ARIA-NBV candidate views as a structured finite set rather than as independent rows. It extracts the architecture implications of the candidate-view-dependence design note and connects them to [RRI theory](rri_theory.qmd), [candidate sampling](candidate_sampling_target_selection.qmd), [finite-candidate rollout and $Q_H$](rl_planning.qmd), and [SCONE/FisherRF support channels](../literature/scone_fisherrf.qmd).
+
+## Core Claim
+
+For a fixed actor-visible state $s$, target $e$, and candidate-generation process, target-specific RRI can be viewed as a scalar utility field over feasible camera poses:
+
+$$
+F_{s,e}:\mathrm{SE}(3)\rightarrow \mathbb{R},
+\qquad
+F_{s,e}(q)=\mathrm{RRI}_e(s,q).
+$$
+
+The seminar/VIN-style scorer learned point samples of this field independently:
+
+$$
+\hat r_i=f_\theta(s,e,q_i).
+$$
+
+ARIA-NBV should test whether candidate-set context helps by modeling:
+
+$$
+\hat r_i=f_\theta(s,e,q_i,\mathcal Q_t,m_t),
+\qquad
+\mathcal Q_t=\{q_{t,i}\}_{i=1}^{N_q}\subset \mathrm{SE}(3),
+$$
+
+where $m_t$ is the validity mask and candidate metadata. The scientific claim is not that Transformers are universally better. The claim is that a finite candidate table is an unordered sampled view of a local utility field, and its geometry, redundancy, support gaps, and masks can carry information that independent scoring discards.
+
+## Smoothness Caveat
+
+The RRI field is not globally smooth. It can change abruptly when a target surface enters or leaves the frustum, a ray crosses an occlusion boundary, a pose becomes invalid, a target crop loses support, or a wall/collision constraint changes. The correct assumption is:
+
+$$
+\text{RRI is locally structured and often locally smooth only inside stable visibility regimes.}
+$$
+
+For nearby poses in a stable regime, compare candidates by a local Lie-algebra displacement:
+
+$$
+\xi_{ij}=\log(q_i^{-1}q_j)\in \mathfrak{se}(3).
+$$
+
+A first-order local approximation is:
+
+$$
+F(q_i\exp(\xi))
+\approx
+F(q_i)
++
+\nabla_\xi F(q_i)^\top \xi.
+$$
+
+This motivates candidate interaction, but it also forbids blind smoothness losses across occlusion, invalidity, or support-boundary changes.
+
+## Why Independent Candidate Scoring Is Limited
+
+Independent candidate scoring cannot represent these candidate-population facts:
+
+- several candidates are near-duplicates;
+- a candidate lies on the same target-bearing arc as another candidate;
+- the sampled set contains no good target-facing view;
+- a candidate is an outlier relative to the proposal distribution;
+- nearby poses in $\mathrm{SE}(3)$ should often have correlated RRI;
+- one candidate covers target-local support that other candidates miss.
+
+VIN-NBV provides the direct precedent for sampled-view RRI prediction [@VIN-NBV-frahm2025], but ARIA-NBV's additional question is whether the finite candidate table itself contains exploitable structure beyond pointwise scoring.
+
+## Literature Foundations
+
+| foundation | key idea | ARIA-NBV transfer |
+|---|---|---|
+| Deep Sets [@DeepSets-zaheer2017] | Set functions should respect permutation symmetry. | Candidate-row order must not change the semantic output. |
+| Set Transformer [@SetTransformer-lee2019] | Attention can model interactions among set elements while preserving set symmetry. | Masked candidate self-attention is the default interaction test. |
+| FisherRF [@FisherRF-jiang2024] | View utility is expected information gain, and overlapping views have diminishing returns. | Candidate value can depend on target-local information overlap with other candidates and existing evidence. |
+| Multipoint expected improvement [@MultipointEI-marmin2015] | Batch Bayesian optimization treats selected points jointly, not as independent top-$q$ points. | A candidate table is a batch of possible measurements; redundancy and diversity matter. |
+| Adaptive submodularity [@AdaptiveSubmodularity-golovin2011] | Active sensing often has diminishing returns under partial observations. | Support, visibility, and information channels can behave submodularly even when RRI does not. |
+| Conditional Neural Processes [@ConditionalNeuralProcesses-garnelo2018] | A model can infer a latent function from a set of context/query locations. | Candidate coordinates and features reveal the local design distribution sampled from the utility field. |
+| Geometric deep learning [@GeometricDeepLearning-bronstein2021] | Architectures should respect the structure and symmetries of physical data. | Use a permutation-equivariant set model with $\mathrm{SE}(3)$-aware relative geometry and $\mathbb S^2$ visibility memory. |
+
+The resulting model family is:
+
+$$
+x_i=\phi(s,e,q_i),
+\qquad
+\{z_i\}_{i=1}^{N_q}
+=
+\mathrm{SetEncoder}(\{x_i\}_{i=1}^{N_q},m_t),
+\qquad
+\hat r_i=h(z_i).
+$$
+
+The required symmetry is permutation equivariance:
+
+$$
+f(\Pi X)=\Pi f(X),
+$$
+
+where $\Pi$ permutes candidate rows.
+
+## Fisher And SCONE Overlap View
+
+FisherRF makes the redundancy argument explicit. If $F_t$ is accumulated information and $F_q$ is the candidate's Fisher information, then under a diagonal/Laplace approximation:
+
+$$
+\mathrm{EIG}(q)
+\approx
+\frac12
+\sum_j
+\log\left(
+1+
+\frac{f_{q,j}}{f_{t,j}+\lambda}
+\right).
+$$
+
+Two candidates that observe the same uncertain region are not independent:
+
+$$
+U(\{q_i,q_j\})\neq U(q_i)+U(q_j).
+$$
+
+SCONE/Fisher-inspired support vectors can expose that overlap. For candidate $i$, define a target-local support vector:
+
+$$
+f_i(v)
+=
+p_{\mathrm{surf}}(v)
+p_{\mathrm{vis}}(v,q_i)
+p_{\mathrm{novel}}(v,q_i).
+$$
+
+Pairwise redundancy can be summarized as:
+
+$$
+o_{ij}
+=
+\frac{
+\sum_v f_i(v)f_j(v)
+}{
+\sqrt{\sum_v f_i(v)^2}\sqrt{\sum_v f_j(v)^2}+\epsilon
+}.
+$$
+
+This can be an attention bias or diagnostic channel; it should not replace target-RRI labels.
+
+## Candidate Interaction: Where It Helps
+
+The physical one-step label for a candidate is independent of the other sampled candidates:
+
+$$
+r_i=F_{s,e}(q_i).
+$$
+
+Changing other rows in $\mathcal Q_t$ does not change the oracle immediate RRI for $q_i$. This makes set context risky for absolute scalar regression. Candidate interaction can still help in four bounded ways.
+
+| use | mechanism |
+|---|---|
+| Local field shape | Nearby candidates in $\mathrm{SE}(3)$ and support space can share evidence. |
+| Ranking | NBV needs $\arg\max_i r_i$; relative comparisons can be easier than global RRI calibration. |
+| Candidate-set degeneracy | A set model can detect that all candidates are low-support, near-duplicate, or invalid-dominated. |
+| Finite-horizon $Q_H$ | Future value legitimately depends on the candidate-generation process, masks, branch support, and successor candidate tables. |
+
+The case for interaction is therefore strongest for $Q_H$, but it is still worth testing for the myopic scorer as a controlled ablation.
+
+## Recommended Architecture
+
+Use an independent calibrated base plus a zero-mean set residual. This preserves absolute RRI semantics while allowing set context to alter relative ranking:
+
+$$
+\hat r_i^{\mathrm{abs}}
+=
+f_{\mathrm{abs}}(s,e,q_i),
+$$
+
+$$
+\delta_i
+=
+f_{\mathrm{set}}(x_i,\{x_j\}_{j=1}^{N_q},m_t),
+\qquad
+\bar\delta
+=
+\frac{1}{|\mathcal A_t|}
+\sum_{j\in\mathcal A_t}\delta_j,
+$$
+
+$$
+\boxed{
+\hat r_i
+=
+\hat r_i^{\mathrm{abs}}
++
+\lambda(\delta_i-\bar\delta)
+}.
+$$
+
+For $Q_H$, the same pattern becomes the residual dueling value head:
+
+$$
+Q_H(s,e,q_i;\mathcal Q_t,m_t)
+=
+\hat r_\psi^e(s,q_i)
++
+V_\theta(s,e,h_t)
++
+A_{\theta,i}^{H}
+-
+\frac{1}{|\mathcal A_t|}
+\sum_{j\in\mathcal A_t} A_{\theta,j}^{H}.
+$$
+
+The mean is taken only over valid candidate rows.
+
+## Candidate Token And Pairwise Features
+
+Candidate tokens should contain more than pose:
+
+$$
+x_i=
+\left[
+\phi_{\mathrm{pose}}(q_i),
+\phi_{\mathrm{target}}(q_i,e),
+\phi_{\mathrm{support}}(q_i,e),
+\phi_{\mathrm{frustum}}(q_i),
+\phi_{\mathrm{history}}(q_i,h_t),
+\phi_{\mathrm{dir}}(q_i,e),
+\phi_{\mathrm{valid}}(m_i,\rho_i),
+\phi_{\mathrm{strategy}}(i)
+\right].
+$$
+
+Useful absolute pose features include:
+
+$$
+t_i^{\mathrm{rel}},
+\qquad
+t_i-t_e,
+\qquad
+R_i^{6D},
+\qquad
+R_i^\top(t_e-t_i).
+$$
+
+For attention from candidate $i$ to candidate or context item $j$, use relative $\mathrm{SE}(3)$ features:
+
+$$
+\xi_{ij}=\log(q_i^{-1}q_j)\in\mathfrak{se}(3),
+$$
+
+$$
+b_{ij}
+=
+\phi_{\mathrm{rel}}(\xi_{ij},d_{ij},\theta_{ij},o_{ij}),
+$$
+
+as an attention bias:
+
+$$
+\alpha_{ij}
+=
+\operatorname{softmax}_j
+\left(
+\frac{Q_iK_j^\top}{\sqrt d}
++
+b_{ij}
+\right).
+$$
+
+Directional memory gives a complementary $\mathbb S^2$ signal:
+
+$$
+M_{\mathrm{dir}}(v)
+=
+\sum_{k<t} w_k(v)d_k(v)d_k(v)^\top,
+$$
+
+$$
+\nu_i(v)
+=
+1-
+\frac{
+d_i(v)^\top M_{\mathrm{dir}}(v)d_i(v)
+}{
+\operatorname{tr}M_{\mathrm{dir}}(v)+\epsilon
+}.
+$$
+
+Pose relations, support overlap, and directional novelty are different channels and should be logged separately.
+
+## Losses That Use Candidate Structure
+
+Do not rely only on pointwise MSE or CORAL-style ordinal loss.
+
+The absolute loss preserves physical calibration:
+
+$$
+\mathcal L_{\mathrm{abs}}
+=
+\sum_{i\in\mathcal A_t}
+\ell(\hat r_i,r_i).
+$$
+
+The pairwise ranking loss directly trains candidate selection:
+
+$$
+\mathcal L_{\mathrm{rank}}
+=
+\sum_{i,j\in\mathcal A_t}
+\mathbf 1[r_i>r_j]
+\log\left(
+1+\exp(-(\hat r_i-\hat r_j))
+\right).
+$$
+
+A listwise loss compares oracle and predicted soft top-candidate distributions:
+
+$$
+p_i^\star
+=
+\frac{\exp(r_i/\tau)}
+{\sum_{j\in\mathcal A_t}\exp(r_j/\tau)},
+\qquad
+\hat p_i
+=
+\frac{\exp(\hat r_i/\tau)}
+{\sum_{j\in\mathcal A_t}\exp(\hat r_j/\tau)},
+$$
+
+$$
+\mathcal L_{\mathrm{list}}
+=
+\mathrm{KL}(p^\star\|\hat p).
+$$
+
+A smoothness regularizer is valid only within similar visibility regimes:
+
+$$
+w_{ij}
+=
+\exp\left(
+-\frac{\|\log(q_i^{-1}q_j)\|^2}{2\sigma_q^2}
+\right)
+\mathbf 1[\text{similar visibility regime}],
+$$
+
+$$
+\mathcal L_{\mathrm{smooth}}
+=
+\sum_{i,j}w_{ij}(\hat r_i-\hat r_j)^2.
+$$
+
+Do not smooth across invalidity, occlusion, frustum, or target-support boundaries. Weight this loss down when frustum/target overlap is low.
+
+## Invariance And Robustness Tests
+
+Candidate-set models must pass row-level invariance checks before any gain is trusted.
+
+| test | required behavior |
+|---|---|
+| Row shuffle | $f(\Pi X)=\Pi f(X)$. |
+| Duplicate row | $\hat r(q_i;\mathcal Q_t)\approx\hat r(q_i;\mathcal Q_t\cup\{q_i\})$ for the original row. |
+| Mask isolation | Invalid/padded rows must not affect valid outputs except through explicit valid-count features. |
+| Candidate-family robustness | Performance should not collapse when mixture proportions shift. |
+| Valid-count sensitivity | Scores should remain calibrated across different numbers of valid rows. |
+
+The duplicate test is a diagnostic first, not necessarily a hard loss. It catches attention-normalization artifacts that can corrupt absolute RRI semantics.
+
+## Experimental Ladder
+
+Use a staged ladder so gains can be attributed:
+
+| stage | model | purpose |
+|---|---|---|
+| A0 | Independent candidate scorer $\hat r_i=f(x_i)$ | Seminar/VIN-style baseline. |
+| A1 | DeepSets context $g=\rho(\sum_{j\in\mathcal A_t}\phi(x_j))$, $\hat r_i=f(x_i,g)$ | Test whether global candidate-set context helps. |
+| A2 | Masked Set Transformer $Z=\mathrm{SetTransformer}(X,m_t)$, $\hat r_i=h(Z_i)$ | Test candidate-candidate interaction. |
+| A3 | Set Transformer plus $\mathrm{SE}(3)$ relative bias | Test geometric interaction. |
+| A4 | Fisher/SCONE overlap bias $o_{ij}^{\mathrm{target}},o_{ij}^{\mathrm{frustum}},o_{ij}^{\mathrm{dir}}$ | Test information-overlap structure. |
+| A5 | Residual dueling $Q_H$ over finite candidates | Main finite-horizon use case. |
+
+The evaluation should report more than validation loss:
+
+- Spearman rank correlation,
+- Kendall $\tau$,
+- top-1 and top-3 oracle hit,
+- oracle RRI of the selected candidate,
+- expected-RRI calibration,
+- duplicate-row robustness,
+- row-shuffle equivariance,
+- candidate-family robustness,
+- valid-count sensitivity,
+- free-shell versus realistic-sampler split.
+
+For $Q_H$, report endpoint target gain, oracle-lookahead recovery, per-scene win rate, per-target support bin, and per-candidate-family selected frequency.
+
+## Failure Modes And Mitigations
+
+| risk | failure mode | mitigation |
+|---|---|---|
+| Absolute-label contamination | The same candidate receives different predicted immediate RRI depending on unrelated sampled rows. | Keep an independent absolute head and constrain set context to zero-mean residuals. |
+| Generator overfitting | The model learns candidate-mixture quirks rather than geometry. | Vary ordering and mixture proportions; evaluate on held-out candidate generators. |
+| Duplicate instability | Adding duplicate candidates changes scores. | Add duplicate stress tests and inspect attention normalization. |
+| Mask leakage | Invalid rows influence valid scores. | Enforce hard masks in attention, argmax, losses, and bootstrap targets. |
+| Shortcut learning | The model learns strategy priors instead of target-RRI geometry. | Report per-strategy RRI histograms and with/without-strategy ablations. |
+
+## Thesis Framing
+
+The thesis-safe framing is:
+
+> The independent VIN-style scorer estimates point samples of a view-utility field over $\mathrm{SE}(3)$. ARIA-NBV tests whether a permutation-equivariant candidate-set model can exploit the local geometric and information-overlap structure of the sampled candidate population to improve candidate ranking and finite-horizon value prediction.
+
+This is grounded by VIN-NBV's RRI-based sampled-view ranking [@VIN-NBV-frahm2025], FisherRF's expected-information-gain view of candidate measurements [@FisherRF-jiang2024], Deep Sets and Set Transformer set modeling [@DeepSets-zaheer2017; @SetTransformer-lee2019], and geometric deep learning's symmetry principle [@GeometricDeepLearning-bronstein2021]. The implementation should stay conservative: retain the calibrated independent scorer and let candidate-set interaction act as a residual advantage correction unless experiments justify a stronger coupling.

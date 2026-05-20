@@ -131,7 +131,7 @@
 
 = Current State and Thesis Contract
 
-The implemented ARIA-NBV substrate provides #gls("aria-synthetic-environments") snippets with poses, calibration, semidense geometry, #gls("ground-truth") meshes, #gls("egocentric-voxel-lifting") scene encodings, scene-level oracle #gls("relative-reconstruction-improvement") labels, finite candidate tables, and a VIN one-step scorer inspired by quality-driven #gls("next-best-view") ranking @projectaria-engel2023 @ProjectAria-ASE-2025 @EFM3D-straub2024 @EVL-Doc-2025 @VIN-NBV-frahm2025. #ASE supplies Aria-like synthetic sensor trajectories, aligned semi-dense maps, and GT annotations at indoor-scene scale @ProjectAria-ASE-2025. #EVL supplies frozen egocentric voxel evidence and object-support signals for actor-visible target records @EFM3D-straub2024 @EVL-Doc-2025.
+The implemented ARIA-NBV substrate provides #gls("aria-synthetic-environments") snippets with poses, calibration, semidense geometry, #gls("ground-truth") meshes, #gls("egocentric-voxel-lifting") evidence, scene-level oracle #gls("relative-reconstruction-improvement") labels, finite candidate tables, and a VIN one-step scorer inspired by quality-driven #gls("next-best-view") ranking @projectaria-engel2023 @ProjectAria-ASE-2025 @EFM3D-straub2024 @EVL-Doc-2025 @VIN-NBV-frahm2025. #ASE supplies Aria-like synthetic sensor trajectories, aligned semi-dense maps, and GT annotations at indoor-scene scale @ProjectAria-ASE-2025. #EVL supplies frozen local voxel evidence, lifted DINO-derived features, and object-support signals for actor-visible target records @EFM3D-straub2024 @EVL-Doc-2025.
 
 The thesis tests a single planning hypothesis: after target-specific supervision and actor-visible target selection are defined, finite-candidate oracle lookahead should expose whether non-myopic target-specific #RRI headroom exists, and a learned finite-horizon value model should recover part of that headroom under matched oracle re-evaluation. VIN-NBV provides the one-step reconstruction-quality ranking precedent; GenNBV and Hestia motivate continuous and hierarchical #NBV extensions, but their primary objectives remain coverage-like rather than target-specific point-mesh #RRI @VIN-NBV-frahm2025 @GenNBV-chen2024 @Hestia-lu2026.
 
@@ -179,14 +179,15 @@ $
   ).
 $
 
-The symbol #symb.obs.points_t denotes the accumulated fused point-set proxy after selected logged or rendered views. It does not include the frozen EVL tensor, target descriptor, directional $bb(S)^2$ memory, candidate feature table, or learned history tokens. The minimal counterfactual actor state freezes the root EVL field and updates the fused geometry proxy, selected-view history $bold(h)_t$, remaining horizon metadata $b_t$, target descriptor, candidates, masks, and reason codes:
+The symbol #symb.obs.points_t denotes the accumulated fused point-set proxy after selected logged or rendered views. It is the broad actor-visible geometry state and may be paired with an optional lifted image-foundation feature bank $bold(F)_t^"DINO@pt"$ attached to points. The minimal counterfactual actor state keeps local root EVL evidence $bold(E)_0^"EVL-local"$ for target support and local reads, while updating the fused geometry proxy, optional point-feature bank, selected-view history $bold(h)_t$, remaining horizon metadata $b_t$, target descriptor, candidates, masks, and reason codes:
 
 $
   #symb.rl.s_cf0
   =
   (
-    #symb.vin.field_evl_0,
     #symb.obs.points_t,
+    bold(F)_t^"DINO@pt",
+    bold(E)_0^"EVL-local",
     #symb.entity.target_desc,
     bold(h)_t,
     b_t,
@@ -303,7 +304,7 @@ $
   #symb.obs.points_cand_ti.
 $
 
-The next candidate table $cal(Q)_(t+1)$ is regenerated from the updated geometry, selected-view history, and remaining horizon metadata with the same logged mixture families, while #symb.vin.field_evl_0 remains fixed. The initial mixture vocabulary contains #emph[target-point or look-at] candidates from the actor-visible target record, #emph[radial-towards/radial-away] shell candidates for local exploration, #emph[forward-rig] candidates that preserve logged trajectory direction, and #emph[bounded yaw/pitch/roll jitter] with per-row strategy provenance.
+The next candidate table $cal(Q)_(t+1)$ is regenerated from the updated geometry, selected-view history, and remaining horizon metadata with the same logged mixture families, while the root local EVL evidence remains fixed unless a later ablation explicitly recomputes it. The initial mixture vocabulary contains #emph[target-point or look-at] candidates from the actor-visible target record, #emph[radial-towards/radial-away] shell candidates for local exploration, #emph[forward-rig] candidates that preserve logged trajectory direction, and #emph[bounded yaw/pitch/roll jitter] with per-row strategy provenance.
 
 == Research Questions and Headroom
 
@@ -414,13 +415,19 @@ Relative to vanilla `coral-pytorch`, the ARIA-NBV adaptation adds RRI-specific l
 
 Training is staged to preserve the residual interpretation: train and calibrate $hat(r)_psi^e$, then freeze or slow-finetune it while fitting the residual #symb.rl.qh, and finally ablate whether end-to-end fine-tuning improves oracle-evaluated policy performance.
 
-The scene memory uses the frozen EVL field, accumulated actor-visible geometry, target support, and directional memory. The tensors $bold(V)(#symb.obs.points_t)$, $bold(V)_"dir" (#symb.obs.points_t)$, and $bold(V)_"target" (#symb.entity.target_desc)$ denote voxelized accumulated geometry, directional-observation channels, and target-support channels:
+The scene representation is a queryable feature bank rather than only a frozen EVL field. It combines accumulated semidense/fused point tokens, an optional compressed DINO-on-point bank, local EVL evidence, predicted actor-visible object records, and directional memory:
 
 $
   #eqs.features.qh_scene_memory
 $
 
-The target token grounds the descriptor in actor-visible spatial evidence by reading a target-local crop from scene memory. In this equation $hat(bold(B))_e$ is the observed or predicted target OBB, not a GT crop:
+A planned point token uses world position, compressed image-foundation evidence, uncertainty/support, and history metadata. This is a representation ablation, not a current cache schema:
+
+$
+  #eqs.features.point_dino_token
+$
+
+The target token grounds the descriptor in actor-visible spatial evidence by reading a target-local crop from the feature bank. In this equation $hat(bold(B))_e$ is the observed or predicted target OBB, not a GT crop:
 
 $
   #eqs.features.qh_target_token
@@ -476,10 +483,14 @@ $
 
 Directional-memory ablations report endpoint #symb.entity.endpoint_gain and angular diversity around the matched target crop, so representation changes are tied to observable view-selection behavior.
 
-Each candidate row then receives pose, target-relative, frustum, belief-render, directional novelty, mask/reason, and history features. Here $bold(p)_(t,i)$ is pose/target context, $bold(g)_(t,i)$ is geometry/frustum context, $rho_(t,i)$ is the invalid-reason code, and $bold(H)_t$ is a learned selected-history token representation distinct from the horizon scalar $H$:
+Each candidate row then receives pose, target-relative, frustum, target-frustum, local-EVL, directional novelty, mask/reason, and history features. Candidate-query pooling reads the target crop, the candidate frustum, and their intersection:
 
 $
   #eqs.features.candidate_pose_context
+$
+
+$
+  #eqs.features.candidate_query_pools
 $
 
 $
@@ -649,8 +660,8 @@ The literature is used as an evidence ledger, not as a source of additional thes
     [One-step ranking alone does not establish multi-step planning.],
 
     [Project Aria / #ASE / EFM3D @projectaria-engel2023 @ProjectAria-ASE-2025 @EFM3D-straub2024],
-    [Poses, calibration, semidense points, frozen EVL/EFM evidence, OBB predictions.],
-    [GT geometry and GT OBBs are labels/evaluation only.],
+    [Poses, calibration, semidense points, DINO tokens/maps, lifted EVL internals, local head evidence, semidense+DINO representation ablations, and OBB predictions.],
+    [GT geometry and GT OBBs are labels/evaluation only; EVL heads are not the complete scene memory.],
 
     [Greedy sensing @KrauseSensorPlacement2008 @AdaptiveSubmodularity-golovin2011],
     [Diminishing-returns intuition; oracle-lookahead headroom as a required test.],

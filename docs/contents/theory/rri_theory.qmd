@@ -4,53 +4,156 @@ phase: thesis
 audience: public
 status: current
 owner: jan
+format: html
 ---
-<!-- TODO: review, don't write in terms of CD but at first with generic distance metric -->
-The {{< gls relative-reconstruction-improvement >}} metric introduced by VIN-NBV quantifies the expected reconstruction quality gain from capturing a new viewpoint:
 
-$$\text{RRI}(\mathbf{q}) = \frac{\text{d}(\mathcal{P}_t, \mathcal{M}_{\text{GT}}) - \text{d}(\mathcal{P}_{t \cup \mathbf{q}}, \mathcal{M}_{\text{GT}})}{\text{d}(\mathcal{P}_t, \mathcal{M}_{\text{GT}})}$$
+# Relative Reconstruction Improvement (RRI) Theory {#rri-theory}
 
-Where:
+{{< glsfull relative-reconstruction-improvement >}} measures how much a new
+view reduces reconstruction error relative to the error available at a rollout
+root or state. ARIA-NBV now uses a **target-first** RRI contract for thesis
+training and evaluation. The older seminar paper's scene-level oracle RRI
+pipeline remains historical implemented evidence for rendering, unprojection,
+fusion, and point-mesh scoring, but it is no longer the optimized rollout or
+$Q_H$ objective.
 
-- $\mathbf{q} \in SE(3)$: Candidate viewpoint (5DoF pose as roll typically fixed to 0°). Each candidate defines a frustum and a set of visible surfaces.
-- $\mathcal{P}_t$: Current reconstruction point cloud from first $t$ views.
-- $\mathcal{P}_{t \cup \mathbf{q}}$: the reconstruction after fusing the depth from view $\mathbf{q}$ into $\mathcal{P}_t$.
-- $\mathcal{M}_{\text{GT}}$: Ground truth mesh.
-- $\text{d}(\cdot, \cdot)$: a bidirectional surface similarity metric, typically Chamfer distance for PC to PC comparison, defined in [Surface Reconstruction Metrics](surface_metrics.qmd).
+Let $D(\mathcal P,\mathcal M)$ be the point-mesh reconstruction error used by
+the oracle. In implementation this is a bidirectional point-mesh distance with
+point-to-mesh and mesh-to-point terms:
 
-**Properties**:
+$$
+D(\mathcal P,\mathcal M)
+=
+D_{\mathcal P\to\mathcal M}(\mathcal P,\mathcal M)
++
+D_{\mathcal M\to\mathcal P}(\mathcal M,\mathcal P).
+$$
 
-- Range: [0, 1] where higher values indicate better viewpoints
-- Normalized by current error $\rightarrow$ limited independence on point cloud density
-- Directly correlates with reconstruction quality improvement
+Surface metric details live in
+[Surface Reconstruction Metrics](surface_metrics.qmd).
 
-**Issues**:
+## Delta From The Seminar Scene RRI {#delta-from-seminar-scene-rri}
 
-- Requires both PCs to follow the same sampling distribution for valid CD comparison. This is problematic, as a semi-dense point cloud is given as $\mathcal{P}_t$, while extending it with a new view $\mathbf{q}$, requires sampling points from the GT mesh visible from $\mathbf{q}$ that follows the same distribution as $\mathcal{P}_t$.
-- Sampling $\mathcal{P}_q$ as dense PC from the GT mesh visible from $\mathbf{q}$ leads to distribution mismatch with semi-dense $\mathcal{P}_t$.
-- However, we are not interested in $\text{d}(\mathcal{P}_t, \mathcal{P}_{t \cup \mathbf{q}})$, but rather in the improvement w.r.t. the GT mesh $\mathcal{M}_{\text{GT}}$. Also, we are mostly interested in expressing the fitness of different candidate views $\mathbf{q}$, which should not be strongly affected by the exact sampling distribution of $\mathcal{P}_t$ as a dense sampling from $\mathcal{M}_{\text{GT}}$ should lead to similar relative improvements across different candidate views.
+The seminar implementation scored a one-step scene candidate $q$ as:
 
-For more information on surface reconstruction metrics, see [Surface Reconstruction Metrics](surface_metrics.qmd).
+$$
+\mathrm{RRI}_{\mathrm{scene}}(q)
+=
+\frac{
+D(\mathcal P_t,\mathcal M_{\mathrm{GT}})
+-
+D(\mathcal P_t\cup\mathcal P_q,\mathcal M_{\mathrm{GT}})
+}{
+D(\mathcal P_t,\mathcal M_{\mathrm{GT}})+\varepsilon
+}.
+$$
 
-# NBV Task Formulation using RRI
+That scene-level objective was useful for proving the offline oracle substrate,
+but it has two limitations for the thesis-scale target rollout setting.
+First, the original root point cloud was semi-dense SLAM/MPS geometry while
+candidate additions were dense rendered geometry, which biases the first
+counterfactual step relative to later dense-fused steps. Second, whole-scene
+RRI can prefer large easy background surfaces even when the task is to improve
+a selected target.
 
-**Input**:
+The thesis contract separates actor-visible state from oracle evaluation
+geometry. Actor inputs may use MPS semi-dense points, EVL evidence, detected or
+predicted OBBs, and selected-view history. Oracle labels use homogeneous
+evaluation geometry: observed-prefix ASE GT RGB ray-depth for the root, rendered
+candidate depth for counterfactual views, the same canonical fusion path, and a
+matched target crop for target-specific scoring.
 
-- Current partial reconstruction $\mathcal{P}_t$ from $t$ captured views
-- Set of candidate viewpoints at time $t$: $\mathcal{Q}_t = \{\mathbf{q}_1, \mathbf{q}_2, ..., \mathbf{q}_n\}$
-- Current camera trajectory $\mathcal{T}_t = \{\mathbf{c}_1, \mathbf{c}_2, ..., \mathbf{c}_t\}$
+## Target-Specific Error And Gain {#target-specific-error-gain}
 
-**Objective**: Find the next-best viewpoint that maximizes reconstruction improvement:
+Let $e$ be the selected actor-visible target after OBS-SEL and GT-EVAL matching.
+Let $C_e(\mathcal P)$ crop an accumulated point set to the matched target
+evaluation region, and let $\mathcal M_e^{\mathrm{GT}}$ be the oracle-only
+target surface. The target error at rollout step $t$ is:
 
-$$\mathbf{q}^* = \underset{\mathbf{q} \in \mathcal{Q}_t}{\text{argmax}} \; \text{RRI}(\mathbf{q} \mid \mathcal{P}_t, \mathcal{T}_t)$$
+$$
+\Delta_t^e
+=
+D(C_e(\mathcal P_t^{\mathrm{eval}}),\mathcal M_e^{\mathrm{GT}}).
+$$
 
-**Sequential Planning**: For planning a sequence of $k$ views, the optimal camera trajectory $\boldsymbol{\tau}^*_{t+k} = \{\mathbf{q}_1, \mathbf{q}_2, ..., \mathbf{q}_k\}$ is:
+For a valid candidate or selected action that updates the accumulated
+evaluation points to $\mathcal P_{t+1}^{\mathrm{eval}}$, the default immediate
+rollout and $Q_H$ reward is root-normalized target gain:
 
-$$\boldsymbol{\tau}^*_{t+k} = \underset{\boldsymbol{\tau}_{t+k}}{\text{argmax}} \sum_{i=1}^{k} \text{RRI}(\mathbf{q}_i \mid \mathcal{P}_{t+i-1}, \boldsymbol{\tau}_{t+i-1})$$
+$$
+r_{t,\mathrm{root}}^e
+=
+\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_0^e+\varepsilon}.
+$$
 
-Subject to:
+With undiscounted accumulation, this reward telescopes to endpoint target gain:
 
-- **Collision constraints**: $\mathbf{q} \notin \mathcal{O}_{\text{occupied}}$ (candidate poses must be in free space)
-- **Kinematic constraints**: $\|\text{pos}(\mathbf{q}_i) - \text{pos}(\mathbf{q}_{i-1})\| \leq d_{\max}$ (reachability limits)
-- **Field-of-view constraints**: $\mathcal{V}(\mathbf{q}) \cap \mathcal{S} \neq \emptyset$ (scene entities $\mathcal{S}$ must be visible from frustum $\mathcal{V}(\mathbf{q})$)
-- **Resource constraints**: Total trajectory length, time, or number of views within budget
+$$
+\sum_{t=0}^{H-1}r_{t,\mathrm{root}}^e
+=
+\frac{\Delta_0^e-\Delta_H^e}{\Delta_0^e+\varepsilon}.
+$$
+
+This is the main reason root-normalized gain is the rollout and $Q_H$ training
+target: every step is measured against the same rollout root, so cumulative
+reward and endpoint quality gain agree under equal acquisition budget.
+
+The state-relative one-step target RRI remains useful for diagnostics and
+VIN-compatible one-step labels:
+
+$$
+\mathrm{RRI}_{t,\mathrm{state}}^e
+=
+\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_t^e+\varepsilon}.
+$$
+
+It is not the default multi-step training reward because its denominator
+changes with the rollout state, so cumulative values no longer equal endpoint
+gain.
+
+## Scene RRI Role {#scene-rri-role}
+
+Scene-level RRI remains a diagnostic bridge to the seminar pipeline:
+
+$$
+J_{\mathrm{scene}}^{(H)}
+=
+\frac{
+\Delta_0^{\mathrm{scene}}-\Delta_H^{\mathrm{scene}}
+}{
+\Delta_0^{\mathrm{scene}}+\varepsilon
+}.
+$$
+
+It should be reported to expose tradeoffs and failure modes: a target-first
+policy might improve the selected target while doing little for the whole
+scene, or it might reveal a crop-local artifact. Scene RRI is therefore
+reported alongside target gain, acquisition cost, valid-action support, and
+invalidity rates. It is not silently scalarized into the $Q_H$ reward.
+
+## NBV Objective {#nbv-objective}
+
+At a rollout state $s_t$, ARIA-NBV acts over a finite valid candidate set:
+
+$$
+\mathcal A(s_t)=\{i:m_{t,i}=1\},
+\qquad
+q_t=q_{t,a_t}.
+$$
+
+The target-first finite-horizon objective is:
+
+$$
+\tau^*
+=
+\arg\max_{\tau=(a_0,\ldots,a_{H-1})}
+\sum_{t=0}^{H-1}\gamma^t r_{t,\mathrm{root}}^e,
+\qquad
+a_t\in\mathcal A(s_t).
+$$
+
+Invalid candidates are constraints represented by masks and reason codes. They
+are not assigned low RRI. All learned selected actions used for thesis claims
+must be evaluated by the oracle, and all reports must distinguish target
+endpoint gain, cumulative target root gain, diagnostic state-relative target
+RRI, diagnostic scene RRI, and acquisition cost.

@@ -237,7 +237,7 @@
   - *EVL - Egocentric Voxel Lifting*: EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume.
   - *action set - Finite Candidate Action Set*: Masked finite action-index set over sampled candidate views.
   - *Q_H - Finite-Horizon Q Function*: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
-  - *return - Finite-Horizon Return*: H-step discounted return over target-RRI rewards.
+  - *return - Finite-Horizon Return*: H-step discounted return over root-normalized target-gain rewards.
   - *5DoF - Five Degrees of Freedom*: Reduced camera-action parameterization commonly used when roll is fixed or otherwise constrained.
   - *frustum - Frustum*: Truncated pyramidal camera-visible volume bounded by near and far clipping planes plus lateral field-of-view planes.
   - *CF+ state - Geometry-Rich Counterfactual State*: Counterfactual ablation state with selected synthetic geometry observations.
@@ -270,7 +270,7 @@
   - *target - Target of Interest*: Selected entity, object crop, point, region, or surface-deficit hypothesis whose reconstruction quality should be improved.
   - *NBV MDP - Target-Conditioned NBV MDP*: Finite-horizon MDP contract for target-conditioned ARIA-NBV rollouts and fitted Q_H training.
   - *target-conditioned scorer - Target-Conditioned Scorer*: VIN-style candidate scorer that receives scene state, a candidate view, and an encoding of the target of interest.
-  - *reward - Target-RRI Reward*: Quality-only immediate reward equal to target-specific RRI for the selected candidate.
+  - *reward - Target-RRI Reward*: Quality-only immediate reward equal to root-normalized target gain for the selected candidate.
   - *target RRI - Target-Specific RRI*: RRI computed only on the ground-truth and reconstructed geometry associated with a selected target of interest.
   - *track - Track*: Temporal sequence of corresponding image-feature detections across frames, usually carrying per-frame image coordinates, timestamps, and camera IDs.
   - *mask - Validity Mask*: Hard mask that separates feasible candidate actions from invalid candidates.

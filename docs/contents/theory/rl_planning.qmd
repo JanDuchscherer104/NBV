@@ -16,7 +16,13 @@ selection, finite candidate sampler, candidate mixture, and rollout branch
 sampling details are specified in
 [Candidate Sampling And Target Selection](candidate_sampling_target_selection.qmd).
 
-ARIA-NBV should formulate its first non-myopic experiment as finite-horizon planning over discrete candidate views, not as full continuous reinforcement learning. At time $t$, the {{< gls rollout-state >}} contains actor-visible reconstruction state, target descriptor, candidate table, validity masks, selected-view history, and budget state. Oracle labels, GT meshes, all-candidate GT renders, and GT OBB crops define supervision and evaluation; they are not actor-visible inputs.
+ARIA-NBV should formulate its first non-myopic experiment as finite-horizon planning over discrete candidate views, not as full continuous reinforcement learning. At time $t$, the {{< gls rollout-state >}} contains actor-visible reconstruction state, target descriptor, candidate table, validity masks, selected-view history, and budget state. Oracle labels, GT meshes, all-candidate GT renders, and GT OBB crops define supervision and evaluation; they are not actor-visible inputs before action selection.
+
+The canonical data product is an $H>1$ rollout trace. H=1 target-label and
+myopic-training datasets are derived views over materialized rollout states,
+not separate thesis-scale artifacts. H=1-only generation remains a smoke or
+preflight mode for validating target, candidate, mask, and label contracts
+before longer traces are generated.
 
 ## State and Action Space Contract {#state-and-action-space-contract}
 
@@ -34,8 +40,8 @@ $$
 |---|---|---|
 | {{< gls historic-snippet-state >}} $s_t^{\mathrm{hist}}$ | Raw actor-visible state from the logged ASE/Project Aria trajectory. | Camera streams, calibration, timestamps, trajectory/gravity, semidense points with uncertainty/support, EVL/EFM evidence, and detected or predicted OBBs. No GT mesh or GT OBB is an actor input. |
 | {{< gls persisted-offline-state >}} $s_t^{\mathrm{off}}$ | Compact immutable state used by the current VIN offline sample store. | `VinSnippetView`, candidate poses/cameras/counts, oracle metrics as labels, optional depths, compact OBBs, trajectory metadata, and selected EVL numeric fields. It is a training/diagnostic payload, not the full raw snippet. |
-| {{< gls minimal-counterfactual-state >}} $s_t^{\mathrm{cf0}}$ | Main thesis-core actor input for target-conditioned rollouts and $Q_H$. | Frozen root EVL context, fused point proxy $P_t$, selected-view history, actor-visible target descriptor $z_e$, budget, candidate table, validity masks/reason codes, and current-state candidate-query features. EVL is not recomputed after synthetic observations. |
-| {{< gls geometry-rich-counterfactual-state >}} $s_t^{\mathrm{cf+}}$ | Explicit ablation state. | $s_t^{\mathrm{cf0}}$ plus selected prior synthetic observations only: rendered depth, valid mask, backprojected point cloud, and derived local normals/support summaries. Unselected-candidate GT renders remain hidden. |
+| {{< gls minimal-counterfactual-state >}} $s_t^{\mathrm{cf0}}$ | Main thesis-core actor input for target-conditioned rollouts and $Q_H$. | Frozen root EVL context, fused point proxy $P_t$, selected-view history, actor-visible target descriptor $z_e$, budget, candidate table, validity masks/reason codes, current-state candidate-query features, and selected/parent rendered depth at the canonical store resolution. EVL is not recomputed after synthetic observations. |
+| {{< gls geometry-rich-counterfactual-state >}} $s_t^{\mathrm{cf+}}$ | Explicit ablation state. | $s_t^{\mathrm{cf0}}$ plus richer selected prior synthetic observations: full-resolution rendered depth, valid mask, backprojected point cloud, and derived local normals/support summaries. Unselected-candidate GT renders remain hidden. |
 | {{< gls oracle-rollout-state >}} $s_t^{\mathrm{oracle}}$ | Privileged label/evaluation state. | GT mesh and target crops, all-candidate renders/points/normals/mesh-face visibility, RRI/CD metrics, oracle scores, and GT OBBs. This state supports oracle labels, upper bounds, and diagnostics only. |
 
 The finite {{< gls finite-candidate-action-set >}} is an index set over the candidate table:
@@ -58,6 +64,18 @@ o_{t+1}^{\mathrm{sel}}=\mathcal{G}(M_{\mathrm{GT}},q_{t,a_t}),
 P_{t+1}=P_t\cup P(o_{t+1}^{\mathrm{sel}},q_{t,a_t}).
 $$
 
+The selected rendered depth $D_{a_t}$ becomes part of the parent observation for
+successor states and all descendants:
+
+$$
+o_{t+\tau}
+\supset
+\{D_{a_0},\ldots,D_{a_{t+\tau-1}}\}.
+$$
+
+Training-core rollout stores persist selected/parent rendered depth at a
+canonical configured resolution with pose, intrinsics, renderer, near/far, and
+resolution lineage. Full-resolution selected depth is an audit/profile option.
 All-candidate GT renders, GT target crops, root-normalized target gains, and
 all-candidate target-RRI diagnostics remain oracle-only before selection.
 
@@ -156,8 +174,15 @@ A replay row for $Q_H$ training should contain at least:
 | identity and split | scene/snippet identifiers, target identifier, split, rollout seed, rollout policy, horizon, and step index |
 | actor input | $s_t^{\mathrm{cf0}}$ feature references, $z_e$, selected-view history, budget state, and candidate-query features |
 | candidate table | candidate poses/actions, per-candidate validity mask, invalid reason codes, and candidate provenance |
-| selected transition | selected valid action, selected-view synthetic observation reference if retained, $P_t$ and $P_{t+1}$ references or hashes, and next-state feature references |
+| selected transition | selected valid action, selected-view synthetic depth/observation reference, $P_t$ and $P_{t+1}$ references or hashes, and next-state feature references |
 | labels | $r_{t,\mathrm{root}}^e$, $G_t^{(H)}$ or bootstrapped target, terminal/horizon flag, oracle provenance, diagnostic target RRI, and any diagnostic scene-level RRI |
+
+The training-core store keeps scalar target distances, support counts,
+root-normalized target gain, state-relative target RRI diagnostics, selected
+parent depth, masks, and provenance. Fixed target-eval crop point payloads are
+sampled/audit retention because they are oracle-only recomputation evidence,
+not actor inputs. Scene-level RRI is reported as a diagnostic bridge to the
+seminar scene-RRI pipeline, not as a $Q_H$ reward.
 
 A masked DQN-style target is:
 
@@ -238,9 +263,9 @@ Implementation work should satisfy these checks before claiming thesis-grade $Q_
 |---|---|
 | no privileged actor leakage | $s_t^{\mathrm{cf0}}$ and $z_e$ contain actor-visible observed/predicted target descriptors, never GT target crops or all-candidate GT renders |
 | invalidity is separate | invalid candidates carry masks and reason codes and are absent from action selection and bootstrap maximization |
-| replayability | rollout traces reproduce selected actions, rewards, transitions, and candidate masks from stored seeds and lineage |
+| replayability | rollout traces reproduce selected actions, rewards, transitions, and candidate masks from stored torch/numpy/random seeds, fixed shard row order, sampled outcomes, and lineage |
 | baseline parity | random-valid, one-step oracle greedy, bounded oracle lookahead, and learned $Q_H$ use equal acquisition budget and comparable candidate budget |
 | oracle evaluation | learned selected actions are re-evaluated by the oracle, not accepted only from predicted values |
-| support reporting | reports separate scenes, snippets, targets, trajectories, rollout seeds, transitions, invalid gaps, and held-out splits |
+| support reporting | reports separate scenes, snippets, targets, trajectories, rollout seeds, transitions, invalid gaps, low-valid-root gates, and scene-level held-out splits |
 
 The first rollout sources before $Q_H$ are random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax traces. Gumbel-Top-k branching and IQL/actor-critic variants are evidence-gated follow-ups; the paper-specific justification for those choices is on the [literature page](../literature/rl_planning.qmd).

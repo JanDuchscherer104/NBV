@@ -194,8 +194,9 @@
   lookup_rank: 120
   definition_short: Budget consumed to acquire observations, measured by view count, path
     length, elapsed time, invalid-action rate, or a weighted combination.
-  definition_long: The thesis should first report cumulative target RRI and acquisition cost
-    separately, then use scalarized objectives only when the tradeoff is explicit.
+  definition_long: The thesis should first report cumulative root-normalized target gain,
+    diagnostic target RRI, and acquisition cost separately, then use scalarized objectives
+    only when the tradeoff is explicit.
   symbol_refs:
   - rl.acquisition_cost
   internal_links:
@@ -544,10 +545,11 @@
   lookup_rank: 143
   definition_short: Main Q_H actor state for mesh-supervised counterfactual rollouts.
   definition_long: The minimal counterfactual actor state is the default input to target-conditioned
-    Q_H. It contains frozen root EVL context, the accumulated counterfactual point proxy,
-    selected-action history, observed or predicted target descriptor, budget state, finite
-    candidate table, validity masks, reason codes, and current-state candidate-query features.
-    Synthetic observations update the state only after their candidate is selected.
+    Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional
+    lifted image-foundation point features, local root EVL evidence for target support and
+    local reads, selected-action history, observed or predicted target descriptor, budget
+    state, finite candidate table, validity masks, reason codes, and current-state candidate-query
+    features. Synthetic observations update the state only after their candidate is selected.
   notation:
     typst: $s_t^"cf0"$
   symbol_refs:
@@ -556,6 +558,7 @@
   - rl.s_cf0
   internal_links:
   - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/contents/theory/efm3d_scene_embeddings.qmd
   - docs/contents/thesis/questions.qmd#rq4-planning
   related:
   - geometry-rich-counterfactual-state
@@ -732,11 +735,12 @@
   parent: target-specific-rri
   tier: core
   lookup_rank: 170
-  definition_short: Quality-only immediate reward equal to target-specific RRI for the selected
-    candidate.
-  definition_long: The main thesis reward is cumulative target RRI under equal acquisition
-    budget. Log-improvement and episode-normalized variants remain visible follow-up reward
-    ablations, not the default target for the first Q_H result.
+  definition_short: Quality-only immediate reward equal to root-normalized target gain for
+    the selected candidate.
+  definition_long: The main thesis reward is cumulative root-normalized target gain under
+    equal acquisition budget. State-relative target RRI remains a one-step diagnostic and
+    VIN-compatible label; log-improvement variants remain visible follow-up reward ablations,
+    not the default target for the first Q_H result.
   formula:
     label: Target-RRI reward
     tex: r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})
@@ -773,15 +777,16 @@
   aliases:
   - H-step return
   - bounded return
-  - cumulative target RRI
+  - cumulative target root gain
   category: planning.objective
   parent: target-conditioned-nbv-mdp
   tier: core
   lookup_rank: 180
-  definition_short: H-step discounted return over target-RRI rewards.
+  definition_short: H-step discounted return over root-normalized target-gain rewards.
   definition_long: The return definition keeps gamma symbolic so discounted ablations remain
-    possible. The first thesis result should report cumulative target RRI under an equal acquisition
-    budget and treat log-improvement or normalized rewards as follow-up analysis.
+    possible. The first thesis result should report cumulative root-normalized target gain
+    under an equal acquisition budget and treat log-improvement or scalarized rewards as follow-up
+    analysis.
   formula:
     label: Finite-horizon return
     tex: G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e
@@ -827,8 +832,8 @@
     / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes
     the offline support rule that value learning must not query invalid, ungenerated, or unavailable
     actions. Q_H must respect validity masks and beat one-step greedy or model scoring on
-    cumulative target RRI under equal acquisition budget, with bounded oracle lookahead as
-    an upper bound.'
+    cumulative root-normalized target gain under equal acquisition budget, with bounded oracle
+    lookahead as an upper bound.'
   formula:
     label: Finite-horizon candidate value
     tex: Q_H(s_t^{\mathrm{cf0}},a_t,z_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,z_e\right]
@@ -1000,10 +1005,13 @@
   tier: support
   definition_short: EFM3D architecture that lifts synchronized egocentric observations into
     a gravity-aligned 3D voxel feature volume.
-  definition_long: ARIA-NBV uses EVL head outputs and voxel evidence as the frozen scene representation
-    for VIN-style RRI prediction.
+  definition_long: ARIA-NBV uses EVL head outputs, pre-head features, and OBB predictions
+    as local actor-visible evidence and target support for VIN-style RRI prediction. Broader
+    NBV scene embeddings may combine semidense or fused point state with lifted image-foundation
+    features.
   internal_links:
   - docs/contents/literature/efm3d.qmd
+  - docs/contents/theory/efm3d_scene_embeddings.qmd
   - docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd
   - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
   citations:

@@ -735,7 +735,7 @@
     key: "minimal-counterfactual-state",
     short: "CF0 state",
     long: "Minimal Counterfactual Actor State",
-    description: "Main thesis-core actor-visible counterfactual rollout state. It keeps frozen root EVL context, the fused point proxy P_t, selected-view history, target descriptor, budget, candidate table, validity masks and reason codes, and current candidate-query features, without recomputing EVL or exposing all-candidate GT renders.",
+    description: "Main thesis-core actor-visible counterfactual rollout state. It keeps the fused point proxy P_t as broad scene state, optional lifted image-foundation features attached to points, local root EVL evidence for target support, selected-view history, target descriptor, budget, candidate table, validity masks and reason codes, and current candidate-query features, without exposing all-candidate GT renders.",
     group: "Planning",
     custom: (
       anchor: "term-minimal-counterfactual-state",
@@ -747,9 +747,10 @@
       category: "planning.state",
       parent: "rollout-state",
       definition_short: "Main Q_H actor state for mesh-supervised counterfactual rollouts.",
-      definition_long: "The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains frozen root EVL context, the accumulated counterfactual point proxy, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.",
+      definition_long: "The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional lifted image-foundation point features, local root EVL evidence for target support and local reads, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/contents/theory/efm3d_scene_embeddings.qmd",
         "docs/contents/thesis/questions.qmd#rq4-planning",
       ),
       citations: (),
@@ -1351,7 +1352,7 @@
     key: "egocentric-voxel-lifting",
     short: "EVL",
     long: "Egocentric Voxel Lifting",
-    description: "EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume. ARIA-NBV uses EVL head outputs and voxel evidence as the frozen scene representation for VIN-style RRI prediction.",
+    description: "EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume. ARIA-NBV uses EVL head outputs, pre-head features, and OBB predictions as local actor-visible evidence and target support, not as the complete frozen scene representation.",
     group: "Model",
     custom: (
       anchor: "term-egocentric-voxel-lifting",
@@ -1362,9 +1363,10 @@
       category: "model.backbone",
       parent: "egocentric-foundation-model-3d",
       definition_short: "EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume.",
-      definition_long: "ARIA-NBV uses EVL head outputs and voxel evidence as the frozen scene representation for VIN-style RRI prediction.",
+      definition_long: "ARIA-NBV uses EVL head outputs, pre-head features, and OBB predictions as local actor-visible evidence and target support for VIN-style RRI prediction. Broader NBV scene embeddings may combine semidense or fused point state with lifted image-foundation features.",
       internal_links: (
         "docs/contents/literature/efm3d.qmd",
+        "docs/contents/theory/efm3d_scene_embeddings.qmd",
         "docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd",
         "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
       ),

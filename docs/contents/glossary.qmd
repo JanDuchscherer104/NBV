@@ -192,13 +192,13 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 </tr>
 <tr>
 <td><a href="#term-target-rri-reward">reward - Target-RRI Reward</a></td>
-<td>Quality-only immediate reward equal to target-specific RRI for the selected candidate.</td>
+<td>Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_e$</span><code>entity.rri_e</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}_e^{\mathrm{GT}}$</span><code>ase.mesh_target</code></span></div></td>
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-finite-horizon-return">return - Finite-Horizon Return</a></td>
-<td>H-step discounted return over target-RRI rewards.</td>
+<td>H-step discounted return over root-normalized target-gain rewards.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\gamma$</span><code>rl.gamma</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$H$</span><code>rl.H</code></span></div></td>
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></td>
 </tr>
@@ -670,7 +670,7 @@ $$
 
 <p class="glossary-definition">Budget consumed to acquire observations, measured by view count, path length, elapsed time, invalid-action rate, or a weighted combination.</p>
 
-<p class="glossary-detail-text">The thesis should first report cumulative target RRI and acquisition cost separately, then use scalarized objectives only when the tradeoff is explicit.</p>
+<p class="glossary-detail-text">The thesis should first report cumulative root-normalized target gain, diagnostic target RRI, and acquisition cost separately, then use scalarized objectives only when the tradeoff is explicit.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
@@ -850,13 +850,13 @@ $$
 
 <p class="glossary-definition">Main Q_H actor state for mesh-supervised counterfactual rollouts.</p>
 
-<p class="glossary-detail-text">The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains frozen root EVL context, the accumulated counterfactual point proxy, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.</p>
+<p class="glossary-detail-text">The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional lifted image-foundation point features, local root EVL evidence for target support and local reads, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings</a> <a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a></div></div>
 </div>
 </details>
 
@@ -1035,9 +1035,9 @@ $$
 <div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></div>
 </div>
 
-<p class="glossary-definition">Quality-only immediate reward equal to target-specific RRI for the selected candidate.</p>
+<p class="glossary-definition">Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</p>
 
-<p class="glossary-detail-text">The main thesis reward is cumulative target RRI under equal acquisition budget. Log-improvement and episode-normalized variants remain visible follow-up reward ablations, not the default target for the first Q_H result.</p>
+<p class="glossary-detail-text">The main thesis reward is cumulative root-normalized target gain under equal acquisition budget. State-relative target RRI remains a one-step diagnostic and VIN-compatible label; log-improvement variants remain visible follow-up reward ablations, not the default target for the first Q_H result.</p>
 
 ::: {.glossary-formula}
 **Target-RRI reward**
@@ -1078,7 +1078,7 @@ $$
 
 <div class="glossary-aliases">
 <span>Aliases</span>
-<code>H-step return</code> <code>bounded return</code> <code>cumulative target RRI</code>
+<code>H-step return</code> <code>bounded return</code> <code>cumulative target root gain</code>
 </div>
 
 <div class="glossary-card-notation">
@@ -1086,9 +1086,9 @@ $$
 <div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></div>
 </div>
 
-<p class="glossary-definition">H-step discounted return over target-RRI rewards.</p>
+<p class="glossary-definition">H-step discounted return over root-normalized target-gain rewards.</p>
 
-<p class="glossary-detail-text">The return definition keeps gamma symbolic so discounted ablations remain possible. The first thesis result should report cumulative target RRI under an equal acquisition budget and treat log-improvement or normalized rewards as follow-up analysis.</p>
+<p class="glossary-detail-text">The return definition keeps gamma symbolic so discounted ablations remain possible. The first thesis result should report cumulative root-normalized target gain under an equal acquisition budget and treat log-improvement or scalarized rewards as follow-up analysis.</p>
 
 ::: {.glossary-formula}
 **Finite-horizon return**
@@ -1130,7 +1130,7 @@ $$
 
 <p class="glossary-definition">Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</p>
 
-<p class="glossary-detail-text">The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture is a candidate-query Transformer: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, and candidate tokens, then emit one value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative target RRI under equal acquisition budget, with bounded oracle lookahead as an upper bound.</p>
+<p class="glossary-detail-text">The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture is a candidate-query Transformer: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, and candidate tokens, then emit one value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.</p>
 
 ::: {.glossary-formula}
 **Finite-horizon candidate value**
@@ -1867,13 +1867,13 @@ $$
 
 <p class="glossary-definition">EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume.</p>
 
-<p class="glossary-detail-text">ARIA-NBV uses EVL head outputs and voxel evidence as the frozen scene representation for VIN-style RRI prediction.</p>
+<p class="glossary-detail-text">ARIA-NBV uses EVL head outputs, pre-head features, and OBB predictions as local actor-visible evidence and target support for VIN-style RRI prediction. Broader NBV scene embeddings may combine semidense or fused point state with lifted image-foundation features.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-egocentric-foundation-model-3d">EFM3D</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-oriented-bounding-box">OBB</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbone_evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd">EvlBackbone</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbone_evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd">EvlBackbone</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a> <a class="glossary-chip glossary-citation" href="#ref-EVL-Doc-2025">&#64;EVL-Doc-2025</a></div></div>
 </div>
 </details>

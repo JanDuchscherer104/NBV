@@ -1,0 +1,171 @@
+---
+title: "EFM3D Scene Embeddings"
+phase: thesis
+audience: public
+status: current
+owner: jan
+format: html
+bibliography: ../../references.bib
+---
+
+# EFM3D Scene Embeddings {#efm3d-scene-embeddings}
+
+This page is a documentation and theory contract for scene representations that ARIA-NBV can derive from local EFM3D/ATEK assets. It does not define a current Python API, cache writer, dataset schema, or training implementation.
+
+The thesis-facing recommendation is deliberately split by claim strength:
+
+| claim | status | consequence |
+|---|---|---|
+| EFM3D exposes DINO tokens or maps, lifted voxel features, neck features, head outputs, voxel poses/extents, and actor-visible OBB predictions. | implementation fact | These are valid representation ablations and diagnostics. |
+| ATEK/ASE exposes semidense world points, uncertainty, observation support, and scene-scale volume bounds. | implementation fact | These are the broad actor-visible geometry substrate. |
+| Compressed DINO features attached to semidense world points are the best first serious scene embedding for NBV. | hypothesis | Treat this as an ablation to build, not as current code. |
+| Target-specific RRI remains the utility and oracle-evaluation signal. | project decision | Scene embeddings are inputs to target-conditioned RRI and $Q_H$, not replacement objectives. |
+
+Related pages: [EFM3D/EVL literature](../literature/efm3d.qmd), [ASE dataset](../ase_dataset.qmd), [semi-dense point clouds](semi-dense-pc.qmd), [candidate sampling](candidate_sampling_target_selection.qmd), [candidate-view dependence](candidate_view_dependence.qmd), and [finite-candidate rollout / $Q_H$](rl_planning.qmd).
+
+## Local Representation Stack
+
+EFM3D's {{< gls egocentric-voxel-lifting >}} path starts from synchronized egocentric image windows, poses, calibration, and semidense point evidence, then lifts frozen DINO image features into a local gravity-aligned voxel grid [@EFM3D-straub2024]. Local code confirms the following representation layers:
+
+| surface | local keys / paths | useful NBV interpretation |
+|---|---|---|
+| Image foundation features | `rgb/token2d`, `rgb/feat2d_upsampled`; `external/efm3d/efm3d/model/image_tokenizer.py`, `dinov2_utils.py`, `dpt.py` | Dense or patch-level DINO evidence before 3D head compression. |
+| Lifted voxel evidence | `voxel/feat`, `voxel/counts`, `voxel/counts_m`, `voxel/pts_world`, `voxel/T_world_voxel`, `voxel/occ_input`; `external/efm3d/efm3d/model/lifter.py` | Local 3D evidence field that combines lifted image features with point/free-space support. |
+| EVL neck features | `neck/occ_feat`, `neck/obb_feat`; `external/efm3d/efm3d/model/evl.py` | Task-shaped but less collapsed features before occupancy and OBB heads. |
+| EVL head outputs | `occ_pr`, `cent_pr`, `bbox_pr`, `clas_pr`, `voxel_extent`, `obb_pred` | Compact actor-visible surface/object predictions and target hypotheses. |
+| ATEK semidense geometry | `points/p3s_world`, `dist_std`, `inv_dist_std`, observation counts/tracks; ATEK datastore and Project Aria MPS formats [@ATEK-DataStore-2025] | Scene-scale, actor-visible point evidence with uncertainty and visibility support. |
+| ARIA-NBV current VIN features | EVL heads/evidence plus semidense projection statistics; `aria_nbv/aria_nbv/vin/model_v3.py` | Implemented baseline signal for myopic target-RRI scoring. |
+
+The local EVL inference config uses a DINO ViT backbone and a finite local voxel extent. The default extent is much smaller than the whole scene represented by ATEK semidense points. This makes EVL useful as local evidence and target support, but risky as the only long-horizon scene memory.
+
+## Why Final EVL Heads Are Too Lossy As Sole Memory
+
+The final heads are optimized for EFM3D's supervised perception tasks, not for ARIA-NBV's target-conditioned view-utility question. As the only scene memory they lose several signals that matter for NBV:
+
+- **feature collapse:** `occ_pr`, `cent_pr`, `bbox_pr`, and `clas_pr` discard much of the DINO image evidence that may distinguish target texture, clutter, object boundaries, and view-dependent ambiguity;
+- **local extent:** the EVL voxel field is anchored to the snippet/root window, while semidense points and candidate frusta can span a broader region;
+- **head-task bias:** occupancy and OBB heads are useful evidence, but their errors are not the same as RRI errors;
+- **history mismatch:** multi-step NBV needs evidence/support metadata after selected views, while a frozen EVL head tensor only describes the root evidence unless EVL is recomputed.
+
+The correct thesis stance is therefore not "discard EVL." It is:
+
+$$
+\text{EVL} =
+\text{actor-visible target support and local evidence},
+\qquad
+\text{semidense/fused points} =
+\text{broad scene memory}.
+$$
+
+## Semidense + DINO Point Tokens
+
+The most promising first non-head representation is a point-attached feature bank. For each actor-visible semidense or fused point $j$, maintain a token
+
+$$
+x_j^{\mathrm{pt}}
+=
+\left[
+  p_j,\;
+  \tilde f_j^{\mathrm{DINO}},\;
+  \sigma_j^{-1},\;
+  n_j,\;
+  a_j^{\mathrm{hist}}
+\right],
+$$
+
+where $p_j\in\mathbb{R}^3$ is the world point, $\tilde f_j^{\mathrm{DINO}}$ is a compressed DINO descriptor sampled from valid point observations, $\sigma_j^{-1}$ is an uncertainty/confidence signal such as inverse distance standard deviation or a monotone transform of it, $n_j$ is the number of supporting observations, and $a_j^{\mathrm{hist}}$ stores compact history/support metadata.
+
+This is a planned representation candidate, not a current persisted cache schema. A future point-cache row could include:
+
+```text
+point_xyz_world
+inv_dist_std
+obs_count
+dino_feature_compressed
+frame_ids
+projection_validity
+```
+
+Raw 768-dimensional DINO storage should not be the default. Use compression first, for example PCA, random projection, product quantization, or a learned bottleneck trained under the RRI/value task.
+
+## Candidate-Query Pooling
+
+For target-conditioned finite-candidate scoring, the point bank should be queried by both target support and candidate geometry. Let $\mathcal{P}_t=\{x_j^{\mathrm{pt}}\}_{j=1}^{N_t}$, $\hat B_e$ be an observed or predicted target OBB, and $\mathrm{Fr}(q_{t,i})$ be the candidate frustum. The minimum query set is:
+
+$$
+z_e
+=
+\operatorname{Pool}
+\left(
+  \{x_j^{\mathrm{pt}}:\; p_j \in \hat B_e\}
+\right),
+$$
+
+$$
+z_i^{\mathrm{fr}}
+=
+\operatorname{Pool}
+\left(
+  \{x_j^{\mathrm{pt}}:\; p_j \in \mathrm{Fr}(q_{t,i})\}
+\right),
+$$
+
+$$
+z_{e,i}^{\cap}
+=
+\operatorname{Pool}
+\left(
+  \{x_j^{\mathrm{pt}}:\; p_j \in \hat B_e \cap \mathrm{Fr}(q_{t,i})\}
+\right).
+$$
+
+The candidate token can then combine target crop, candidate frustum, target-frustum intersection, local EVL reads, directional memory, mask/reason, and candidate pose features:
+
+$$
+g_{t,i}
+=
+\phi
+\left(
+  z_e,\;
+  z_i^{\mathrm{fr}},\;
+  z_{e,i}^{\cap},\;
+  \operatorname{Read}_{\mathrm{EVL}}(q_{t,i}, \hat B_e),\;
+  m_{t,i}^{\mathrm{dir}}
+\right).
+$$
+
+The pooling operator can be a simple masked mean/max for the first ablation, then a point encoder, sparse convolution, cross-attention query, or Set Transformer as complexity becomes justified.
+
+## Ablation Ladder
+
+Use an ordered ladder so gains can be attributed to representation quality rather than accidental capacity changes:
+
+| rung | representation | purpose |
+|---|---|---|
+| 0 | current EVL heads plus implemented semidense projection statistics | Baseline already closest to current VIN/RRI code. |
+| 1 | semidense-only point state: position, uncertainty, support, history | Test whether broad actor-visible geometry beats local heads. |
+| 2 | semidense + compressed DINO point cache | First serious scene embedding hypothesis. |
+| 3 | local EVL internals: `voxel/feat`, `neck/occ_feat`, `neck/obb_feat`, `rgb/feat2d_upsampled` | Test whether pre-head EFM3D features recover lost evidence. |
+| 4 | point or sparse encoders over the feature bank | Move from hand pooling to learned queryable scene memory. |
+| 5 | external geometry/3D foundation models | Future bridge after the local EFM3D/ATEK evidence stack is exhausted. |
+
+The active utility throughout the ladder is target-specific {{< gls relative-reconstruction-improvement >}} and finite-candidate $Q_H$, not generic reconstruction coverage.
+
+## Leakage Boundaries
+
+Actor inputs may use:
+
+- Project Aria/ASE poses, calibration, timestamps, camera streams, and semidense points;
+- semidense uncertainty, observation/support metadata, and actor-visible fused geometry;
+- EFM3D DINO tokens/maps, lifted voxel features, neck features, head outputs, voxel poses/extents, and predicted/observed OBBs.
+
+Actor inputs must not use:
+
+- GT meshes, GT OBB crops, GT semantic object identities, or all-candidate rendered point clouds;
+- oracle RRI values except as labels, evaluation metrics, or fitted value targets;
+- invalid-action outcomes as soft low-RRI values. Invalidity remains a mask/reason contract.
+
+## Current Documentation Contract
+
+For the advisor narrative, describe EVL as a local evidence and actor-visible target-support provider. Describe broader scene state as semidense/fused point evidence, optionally augmented with lifted image-foundation features. Any point-cache schema must be presented as planned/non-implemented until a writer, manifest, and training reader exist.
+

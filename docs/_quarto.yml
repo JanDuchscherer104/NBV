@@ -103,6 +103,7 @@ website:
                 - contents/literature/pb_nbv.qmd
                 - contents/literature/hestia.qmd
                 - contents/literature/gen_nbv.qmd
+                - contents/literature/scone_fisherrf.qmd
                 - contents/literature/active_3dgs_nbv.qmd
             - section: "ARIA Ecosystem"
               contents:
@@ -130,6 +131,8 @@ website:
             - contents/theory/rri_theory.qmd
             - contents/theory/rl_planning.qmd
             - contents/theory/candidate_sampling_target_selection.qmd
+            - contents/theory/candidate_view_dependence.qmd
+            - contents/theory/efm3d_scene_embeddings.qmd
             - contents/theory/surface_metrics.qmd
             - contents/theory/semi-dense-pc.qmd
         - section: "Architecture Diagrams"
