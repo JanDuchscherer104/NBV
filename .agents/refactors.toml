@@ -200,16 +200,18 @@ references = [
   "repo:aria_nbv/tests/rollouts/test_zarr_store.py",
 ]
 implementation_notes = [
-  "Change default rollout table chunking for 2D factual arrays from (1, width) to row blocks sized by configurable row count or approximate byte budget.",
+  "Change default rollout table chunking for 2D factual arrays from (1, width) to row blocks sized by configurable approximate byte budget plus row-count floor/ceiling.",
+  "Use first targets of 1-8 MB uncompressed chunks for factual candidate/source/target/step arrays where practical and 16k-64k row caps depending on field width.",
+  "Keep q_h chunks state-row oriented, for example 64 or 128 states per chunk, because Q_H loaders read state-action blocks.",
   "Keep q_h and selected_depth custom chunking separate because their access patterns differ.",
-  "For zero-row optional groups, minimize stored arrays and attrs while preserving reader/validator clarity.",
+  "For zero-row optional groups, omit payload arrays when disabled if readers can distinguish disabled from corrupt; otherwise keep only marker attrs or compact zero-length arrays.",
   "Consider manifest compaction for shard stores: keep hashes, effective config summary, and invocation metadata in every shard; move full resolved config trees to a campaign/root manifest when available.",
   "Measure file count, du size, and read speed before/after on a small schema-1.0 rollout probe.",
 ]
 acceptance = [
   "A 600-candidate schema-1.0 probe no longer creates one chunk file per candidate for pose arrays.",
   "Candidate factual arrays use chunking appropriate for minibatch and scan reads, with chunk policy recorded or inferable.",
-  "Optional zero-row audit groups have negligible footprint and still validate.",
+  "Optional zero-row audit groups are omitted or reduced to negligible marker footprint and still validate.",
   "Manifest payload remains auditable without duplicating large resolved path/config trees unnecessarily in every scale shard.",
 ]
 verification = [

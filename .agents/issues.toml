@@ -220,6 +220,7 @@ context = [
   "The production candidate sampler should start from a realistic three-family local egocentric distribution; richer local refinement, revisit backtracking, and free-shell sampling are ablations with per-position diagnostics.",
   "Fresh 2026-05-20 rollout probes exposed scale blockers before broader generation: current path-collision diagnostics can disagree with invalidity bitsets, the three-family sampler collapsed to forward_local on the first inspected scene, candidate table chunking creates row-per-candidate chunk/file bloat, local default stores are stale schema artifacts, and selected target gains can be near numerical noise.",
   "Broader offline generation should wait for a current-schema preflight report that validates stores, reports per-position validity and gains, confirms target-aware families contribute valid actions, summarizes reward distributions, records file/chunk counts, and distinguishes training-core from audit payloads.",
+  "External review of the readiness package also found a review-target mismatch: the accessible GitHub ref stopped at PR #14/74b7be2 and did not contain the local readiness plan pack, issue-032 links, or inspection module. The next review must target a pushed/exposed commit that exactly contains these artifacts.",
 ]
 references = [
   "repo:.agents/work/rollout-scale-readiness/README.md",

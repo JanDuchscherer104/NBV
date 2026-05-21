@@ -25,6 +25,22 @@ The production sampler should remain simple, but it must be measurable:
 - Target-aware families either contribute valid actions or the root/profile is
   blocked with an explicit reason.
 
+Recommended first production thresholds for the plan-grill:
+
+- `num_valid_candidates >= max(12, ceil(0.25 * N_q))`; with `N_q=60`, this is
+  at least 15 valid actions per materialized state.
+- smoke profile: at least one valid non-forward target-aware action per state or
+  explicit warning.
+- production profile: at least three valid non-forward target-aware actions per
+  state, unless the run is deliberately configured as a forward-only ablation.
+- audit subset before retuning: 25 to 50 roots across at least five scenes,
+  covering valid, low-valid, forward-only, target-aware-valid, and flat-gain
+  cases.
+
+Low-valid roots should be skipped or marked non-training before constraints are
+relaxed. Per-root silent relaxation would make the sampled action distribution
+depend on hidden failure recovery logic.
+
 ## Implementation Plan
 
 1. Extend the rollout inspection/preflight path to aggregate by `position_id`:
@@ -58,15 +74,14 @@ The production sampler should remain simple, but it must be measurable:
 ## Open Decisions For Review
 
 1. What minimum valid-action count should production require per state?
-   Recommended: choose after a multi-scene audit rather than locking a number
-   from the single probe.
+   Recommended: use `max(12, ceil(0.25 * N_q))` as the first production gate,
+   then revise only with multi-scene audit evidence.
 2. Should production require at least one valid non-forward target-aware
    candidate per state, or only per rollout/root aggregate? Recommended: per
-   state for Q_H training quality, with an ablation that relaxes this.
+   state for Q_H training quality; use one for smoke and three for production.
 3. How aggressively should realism constraints be relaxed before skipping a
    root? Recommended: skip roots first if the failure is scene/target-specific;
    relax constraints only if many scenes fail.
 4. Should target-root-gain flatness block generation immediately? Recommended:
    report it first, then fail production profiles once a reviewed signal
    threshold is accepted.
-
