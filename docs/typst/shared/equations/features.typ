@@ -67,15 +67,13 @@
     )
   $,
   candidate_query_pools: $
-    bold(z)_e
-    &=
-    op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
-    bold(z)_i^"fr"
-    &=
-    op("Pool")_(bold(p)_j in op("Frustum") (q_(t,i))) bold(x)_j^"pt" \
-    bold(z)_(e,i)^"cap"
-    &=
-    op("Pool")_(bold(p)_j in hat(bold(B))_e inter op("Frustum") (q_(t,i))) bold(x)_j^"pt"
+    // TODO: what is the difference between these potential candidate features? Frustum vs. projected? Pooling over the entire scene vs. just the candidate crop?
+              bold(z)_e & =
+                          op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
+         bold(z)_i^"fr" & =
+                          op("Pool")_(bold(p)_j in op("Frustum") (q_(t,i))) bold(x)_j^"pt" \
+    bold(z)_(e,i)^"cap" & =
+                          op("Pool")_(bold(p)_j in hat(bold(B))_e inter op("Frustum") (q_(t,i))) bold(x)_j^"pt"
   $,
   qh_target_token: $
     bold(T)_e
@@ -91,11 +89,14 @@
     #symb.vin.candidate_pose_feat (q_(t,i))
     =
     op("concat") (
+      // TODO: It's either R6d + bold(t)_(t,i) or the QCNet like decsriptor!
       bold(t)_(t,i),
       bold(R)_(t,i)^"6D",
-      bold(t)_(t,i) - bold(t)_e,
+      norm(bold(t)_(t,i) - bold(t)_e)_2^2,
       alpha_(t,i)^e,
+      // TODO: What is l_(t, i). OBB?
       l_(t,i),
+      // TODO: what is strategy?
       c_(t,i)^"strategy"
     )
   $,

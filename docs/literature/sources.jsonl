@@ -35,3 +35,4 @@
 {"title":"Point Transformer","short_title":"Point Transformer","arxiv_id":"2012.09164","tex_dir":"arXiv-Point-Transformer","pdf_file":"Point-Transformer.pdf"}
 {"title":"Point Transformer V3: Simpler, Faster, Stronger","short_title":"Point Transformer V3","arxiv_id":"2312.10035","tex_dir":"arXiv-Point-Transformer-V3","pdf_file":"Point-Transformer-V3.pdf"}
 {"title":"KPConv: Flexible and Deformable Convolution for Point Clouds","short_title":"KPConv","arxiv_id":"1904.08889","tex_dir":"arXiv-KPConv","pdf_file":"KPConv.pdf","url":"https://openaccess.thecvf.com/content_ICCV_2019/html/Thomas_KPConv_Flexible_and_Deformable_Convolution_for_Point_Clouds_ICCV_2019_paper.html"}
+{"title":"Déjà View: Looping Transformers for Multi-View 3D Reconstruction","short_title":"Déjà View","arxiv_id":"2605.30215","tex_dir":"arXiv-Deja-View","pdf_file":"Deja-View.pdf","url":"https://arxiv.org/abs/2605.30215"}
