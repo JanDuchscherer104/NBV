@@ -182,7 +182,7 @@
       - #code-strong("targets/") -- actor-visible target + GT-EVAL fields #group
         - #code("target_row_id") -- int64[E], target primary key #array_node
         - actor-visible geometry #group
-          - #code("target_center_world") -- $#symb.oracle.center _ e in RR^3$; float32[E,3] #array_node
+          - #code("target_center_world") -- $#symb.oracle.center _e in RR^3$; float32[E,3] #array_node
           - #code("target_extents") -- float32[E,3] #array_node
           - #code("target_pose_world_object") -- PoseTW float32[E,12] #array_node
         - validity and GT-EVAL #group
@@ -274,7 +274,7 @@
         - #code("mesh_ref") -- external $#symb.ase.mesh$ path/hash/version #leaf
       - #code-strong("target/") -- $e, #symb.entity.target_desc$ #group
         - #code("target_row_id") -- int64[1] #array_node
-        - #code("target_center_world") -- $#symb.oracle.center _ e in RR^3$; float32[3] #array_node
+        - #code("target_center_world") -- $#symb.oracle.center _e in RR^3$; float32[3] #array_node
         - #code("observed_obb_world") -- actor-visible OBB payload #array_node
         - #code("support_summary") -- float32[F_aux] #array_node
         - #code("gt_match_score") -- $mu(hat(e), e)$; GT-EVAL only #array_node

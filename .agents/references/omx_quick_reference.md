@@ -49,12 +49,27 @@ Only commit `.codex/*.example.*` templates.
 - `$deep-interview "..."` for vague scope, advisor decisions, or ambiguous
   thesis boundaries.
 - `$ralplan "..."` for approving an implementation plan before broad edits.
+- `$prometheus-strict "..."` for durable multi-surface planning where goals
+  must be persisted before execution.
 - `$team 3:executor "..."` for independent audits or clearly split work.
 - `$ralph "..."` for a persistent single-owner completion loop after the plan
   is approved.
 
 Avoid team execution for geometry/RRI code changes until the relevant targeted
 tests are reliable and the work has a decision-complete plan.
+
+## Scaffold Goal Persistence
+
+For ARIA-NBV scaffold rework, keep the narrative plan under
+`.omx/plans/prometheus-strict/` and the actionable follow-up under
+`make agents-db`. `.omx/` remains operator-local runtime/planning state, so
+checked-in owner surfaces should link the plan only when the path is needed for
+traceability.
+
+Autoresearch and visual interpretation loops integrate through
+`.agents/references/alignment_tools_contract.md`: OMX may orchestrate the loop,
+but the repo owns only the typed adapter boundary, evidence artifacts, and
+verification gates.
 
 ## Hook Interplay
 

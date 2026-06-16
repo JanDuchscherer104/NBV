@@ -51,6 +51,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   `.agents/references/omx_quick_reference.md` only when the task explicitly
   asks for OMX or operator orchestration; do not make OMX required for normal
   repo work.
+- Use `.agents/references/alignment_tools_contract.md` when work crosses OMX,
+  MCP, KG, memory, graph, or autoresearch adapter boundaries; optional tools
+  produce evidence and proposals, not repo-owned truth.
 
 ## Instruction Capture
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.

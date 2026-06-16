@@ -513,11 +513,11 @@ For immediate target-specific #RRI, the physical oracle label of candidate $q_i$
 
 $
   hat(r)_i^"set" =
-    hat(r)_i^"ind"
-    + lambda (
-      A_i^"set"
-      - (1) / (abs(cal(A)_t)) sum_(j in cal(A)_t) A_j^"set"
-    )
+  hat(r)_i^"ind"
+  + lambda (
+    A_i^"set"
+    - (1) / (abs(cal(A)_t)) sum_(j in cal(A)_t) A_j^"set"
+  )
 $
 
 This tests whether the candidate population improves ranking while preserving the independent path as the calibrated absolute RRI estimate. The case for set interaction is stronger for #symb.rl.qh because finite-horizon value genuinely depends on successor candidate tables, masks, branch support, and the candidate generator.

@@ -23,6 +23,9 @@ Use this reference when a task needs current project truth or sources disagree.
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.
 - Operator aids and long conventions: `.agents/references/`.
+- Optional tool and adapter boundaries:
+  `.agents/references/alignment_tools_contract.md`. KG/backend operational
+  details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
 
 ## Conflict Rule
 
@@ -39,3 +42,4 @@ implemented evidence. Do not promote planned work to implemented results.
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
+- Optional tool boundary: `.agents/references/alignment_tools_contract.md`.
