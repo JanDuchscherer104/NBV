@@ -1,0 +1,28 @@
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}[t]{\linewidth}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figures/overall_convergence_metrics.png}
+        \caption{%
+            \textbf{Task quality across recurrent iterations.}
+            Decoding the residual stream $\z_k$ at every iteration $k\!\in\!\{1,\dots,16\}$ yields monotone improvement of pose and pointmap metrics across the trained step range.%
+        }
+        \label{fig:refinement-metrics}
+    \end{subfigure}
+    \begin{subfigure}[t]{\linewidth}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figures/overall_convergence.pdf}
+        \caption{%
+            \textbf{Residual-stream convergence.}
+            \emph{Left:} cosine similarity between $\z_k$ and the final $\z_{16}$. \emph{Middle:} relative update norm $\lVert \Delta \z_k \rVert / \lVert \z_k \rVert$. \emph{Right:} feature norm $\lVert \z_k \rVert_{2}$.%
+        }
+        \label{fig:refinement-convergence}
+    \end{subfigure}
+    \caption{%
+        \textbf{Iterative refinement of the residual stream.}
+        Per-iteration analysis of \methodname's recurrent block, averaged across the five benchmarks of \cref{tab:comparison_sota_pmap,tab:comparison_sota_pose}.
+        Task quality improves monotonically with the iteration count \textbf{(top)}. The recurrence does not contract to a fixed point in feature space (the state norm grows) but its direction stabilizes, with cosine similarity to the final state approaching $1$ and the relative update norm decaying by roughly $5{\times}$ \textbf{(bottom)}. The decoder's input LayerNorm absorbs the norm growth, so the decoded representation effectively converges in direction.%
+    }
+    \label{fig:refinement}
+    \vspace{-4mm}
+\end{figure}

@@ -1,0 +1,37 @@
+
+
+\begin{table}[t]
+    \caption{
+        \textbf{Model efficiency and quality.}
+        Parameter count, forward-pass FLOPs (total and per-image), peak inference GPU memory, and average IR / AUC@$30^{\circ}$ across the five benchmarks of \cref{tab:comparison_sota_pmap,tab:comparison_sota_pose}, measured on a single A100 with $24$ input views.
+        For MASt3R~\citep{leroy2025grounding} (\texttt{swin-5}, 120 pairs) and MASt3R-SfM~\citep{duisterhof2024mast3rsfm} (retrieval-20-10, 273 pairs), the reported FLOPs cover only the pair-network forward passes, excluding the iterative global alignment that follows. Their lower peak memory comes from processing pairs sequentially.
+        \methodname{} leads on average IR and AUC@$30^{\circ}$ at the smallest parameter count.
+    }
+    \label{tab:comparison_efficiency}
+    \footnotesize
+    \setlength{\tabcolsep}{5pt}
+
+    \centering
+    \noindent\makebox[0.85\linewidth][c]{%
+    \begin{tabular}{l rrrr|rr}
+        \toprule
+        \multirow{2}{*}{\textbf{Method}}
+            & \textbf{Params} & \textbf{Compute} & \textbf{Compute / Img} & \textbf{Peak Mem}
+            & \textbf{IR} & \textbf{AUC@30} \\
+        & (M)~$\downarrow$ & (TFLOPs)~$\downarrow$ & (TFLOPs)~$\downarrow$ & (GiB)~$\downarrow$
+        & (\%)~$\uparrow$ & (\%)~$\uparrow$ \\
+        \midrule
+        MASt3R~\citep{leroy2025grounding}                       & \cellcolor{tabyellow}689 & 500.0 & 20.8 & \cellcolor{taborange}4.4 & 38.3 & 63.3 \\
+        MASt3R-SfM~\citep{duisterhof2024mast3rsfm}              & 690 & 1150.1 & 47.9 & \cellcolor{tabred}3.4 & 60.8 & 82.5 \\
+        MapAnything~\citep{keetha2026mapanything}               & 1228 & 148.4 & 6.2 & 20.1 & 69.0 & 83.3 \\
+        Pi3~\citep{wang2025pi}                                  & 959 & 153.8 & 6.4 & 6.6 & \cellcolor{taborange}77.4 & \cellcolor{tabyellow}88.6 \\
+        VGGT~\citep{vggt}                                       & 1257 & 190.0 & 7.9 & 14.7 & 66.0 & 84.0 \\
+        VGGT-$\Omega$-1B~\citep{vggt_omega}                        & 1144 & \cellcolor{tabyellow}99.8 & \cellcolor{tabyellow}4.2 & 7.9 & \cellcolor{tabyellow}74.8 & \cellcolor{taborange}90.7 \\
+        DA3-L~\citep{lin2025depth}                              & \cellcolor{taborange}356 & \cellcolor{tabred}71.4 & \cellcolor{tabred}3.0 & 7.3 & 58.3 & 79.7 \\
+        DA3-G~\citep{lin2025depth}                              & 1201 & 178.7 & 7.4 & 13.0 & 66.5 & 84.7 \\
+        \midrule
+        \textbf{Ours}                                           & \cellcolor{tabred}\textbf{117} & \cellcolor{taborange}\textbf{75.9} & \cellcolor{taborange}\textbf{3.2} & \cellcolor{tabyellow}\textbf{4.9} & \cellcolor{tabred}\textbf{80.3} & \cellcolor{tabred}\textbf{91.8} \\
+        \bottomrule
+    \end{tabular}}
+    \vspace{-4mm}
+\end{table}

@@ -1,0 +1,9 @@
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/method_overview_v3.pdf}
+    \caption{\textbf{Method overview.} $V$ input images are encoded by a shared DINOv2~\citep{oquab2023dinov2} backbone. A single looped transformer block with frame-wise and global attention sub-blocks is then applied recurrently to the resulting tokens for $K$ steps, with $K$ sampled per batch from $[K_\text{min}, K_\text{max}]$ during training. Two heads decode the final tokens into per-view depth and ray predictions.}
+  \label{fig:method_overview}
+  \vspace{-4mm}
+\end{figure*}
+
+

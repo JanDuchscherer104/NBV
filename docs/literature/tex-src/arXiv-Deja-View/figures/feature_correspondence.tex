@@ -1,0 +1,16 @@
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/feature_match.pdf}
+    \caption{
+        \textbf{Emergent iterative correspondence search.}
+        For two example query patches (\textcolor{green}{green square}) 
+        we visualize the head-averaged global self-attention
+        sub-block weights induced by that query at each iteration of
+        the loop, overlaid on the corresponding target view.
+        Iterations advance left-to-right, the attention starts diffuse
+        and progressively concentrates on the corresponding counterpart of
+        the queried patch, despite the absence of any explicit feature matching
+        supervision during training.
+    }
+    \label{fig:feature_correspondence}
+\end{figure*}

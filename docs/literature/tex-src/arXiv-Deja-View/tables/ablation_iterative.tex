@@ -1,0 +1,31 @@
+\begin{table}[!t]
+    \caption{
+        \textbf{Step-count analysis.}
+        Fixed-$K$ baselines train and run with a constant step count. Our variable-$K$ model trains with $K \sim \text{Beta}(2, 1)$ on $[8, 16]$ and is evaluated at $K_\text{inf}{=}12$ and $K_\text{inf}{=}16$. Metrics are averaged across the five benchmarks of \cref{tab:comparison_sota_pmap,tab:comparison_sota_pose}.
+        \methodname's variable-$K$ training stays within $\sim$2\% of Fixed $K{=}16$ at $K_\text{inf}{=}16$ and $\sim$3\% of Fixed $K{=}12$ at $K_\text{inf}{=}12$, so a single checkpoint covers both inference budgets at near-zero quality cost.
+    }
+    \label{tab:diag_iterative}
+    \footnotesize
+    \setlength{\tabcolsep}{6pt}
+    \centering
+    \noindent\makebox[0.85\linewidth][c]{%
+    \begin{tabular}{l|cc|rrrr}
+        \toprule
+        \multirow{2}{*}{\textbf{Variant}}
+            & \multirow{2}{*}{\makecell{Training\\ $K$-sampler}}
+            & \multirow{2}{*}{\makecell{$K_\text{inf}$}}
+            & \multirow{2}{*}{\textbf{Rel.~L2} $\downarrow$}
+            & \multirow{2}{*}{\textbf{IR} $\uparrow$}
+            & \multirow{2}{*}{\textbf{AUC@3} $\uparrow$}
+            & \multirow{2}{*}{\textbf{AUC@30} $\uparrow$} \\
+            & & & & & & \\
+        \midrule
+            Fixed $K{=}12$ & fixed & 12 & 0.044 & 67.6 & 30.4 & 85.5 \\
+            \textbf{Ours} (Variable, $K_\text{max}{=}16$) & Beta on $[8, 16]$ & 12 & 0.043 & 66.7 & 29.6 & 85.4 \\
+        \midrule
+            Fixed $K{=}16$ & fixed & 16 & 0.041 & 69.6 & 33.8 & 86.8 \\
+            \textbf{Ours} (Variable, $K_\text{max}{=}16$) & Beta on $[8, 16]$ & 16 & 0.040 & 69.2 & 33.3 & 86.9 \\
+        \bottomrule
+    \end{tabular}}
+    \vspace{-4mm}
+\end{table}

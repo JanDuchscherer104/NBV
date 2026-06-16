@@ -1,0 +1,23 @@
+\begin{table}[t]
+    \caption{%
+        \textbf{Stage 2 finetuning.} Finetuning our stage 1 model (linear head + $\ell_2$ depth loss) with the convolutional head and confidence-weighted loss (stage 2) yields a small, consistent gain in Inlier Ratio while leaving the pose metrics unchanged.
+    }
+    \label{tab:suppl_full_recipe_two_stage}
+    \footnotesize
+    \setlength{\tabcolsep}{6pt}
+
+    \noindent\makebox[\linewidth][c]{%
+    \begin{tabular}{l rrrr}
+        \toprule
+        \textbf{Variant}
+            & \textbf{AUC@$3^{\circ}$}~$\uparrow$
+            & \textbf{AUC@$30^{\circ}$}~$\uparrow$
+            & \textbf{IR}~$\uparrow$
+            & \textbf{AbsRel}~$\downarrow$ \\
+        \midrule
+        Linear head + $\ell_2$ (stage 1, full recipe) & \textbf{56.8} & \textbf{91.8} & 79.8 & \textbf{0.031} \\
+        \midrule
+        \textbf{Conv. head + conf. loss (stage 2 finetune)} & \textbf{56.8} & \textbf{91.8} & \textbf{80.3} & \textbf{0.031} \\
+        \bottomrule
+    \end{tabular}}
+\end{table}

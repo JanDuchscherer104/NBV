@@ -1,0 +1,24 @@
+\begin{table}[t]
+    \caption{%
+        \textbf{End-to-end vs.\ two-stage training.}
+        Training the final pipeline configuration end-to-end (top, convolutional head with confidence loss) consistently underperforms the first stage of our recipe (bottom, linear head with $\ell_2$ depth loss) on every metric.
+    }
+    \label{tab:suppl_two_stage_ablation}
+    \footnotesize   
+    \setlength{\tabcolsep}{6pt}
+
+    \noindent\makebox[\linewidth][c]{%
+    \begin{tabular}{l rrrr}
+        \toprule
+        \textbf{Variant}
+            & \textbf{AUC@$3^{\circ}$}~$\uparrow$
+            & \textbf{AUC@$30^{\circ}$}~$\uparrow$
+            & \textbf{IR}~$\uparrow$
+            & \textbf{AbsRel}~$\downarrow$ \\
+        \midrule
+        Convolutional head + confidence loss (end-to-end) & 23.0 & 77.1 & 56.5 & 0.152 \\
+        \midrule
+        \textbf{Linear head + $\ell_2$ (our stage 1)}     & \textbf{31.0} & \textbf{80.6} & \textbf{59.2} & \textbf{0.125} \\
+        \bottomrule
+    \end{tabular}}
+\end{table}

@@ -1,0 +1,32 @@
+\begin{table}[t]
+    \caption{
+        \textbf{Block design ablation.}
+        We progressively add the components of our looped block.
+        Weight sharing constrains the recurrence to a single looped block, the time-conditioned residual gates modulate the attention and MLP branches, and the state gate modulates the residual stream.
+        We report metrics averaged across the five benchmarks of \cref{tab:comparison_sota_pmap,tab:comparison_sota_pose}.
+    }
+    \label{tab:diag_block}
+    \footnotesize
+    \setlength{\tabcolsep}{6pt}
+    \centering
+    \noindent\makebox[0.85\linewidth][c]{%
+    \begin{tabular}{l|ccc|rrrr}
+        \toprule
+        \multirow{2}{*}{\textbf{Variant}}
+            & \makecell{Weight \\ sharing}
+            & \makecell{Residual gates \\ ($\mathbf{s}_\text{attn}, \mathbf{s}_\text{mlp}$)}
+            & \makecell{State gate \\ ($\mathbf{s}_\text{out}$)}
+            & \multirow{2}{*}{\textbf{Rel.~L2} $\downarrow$}
+            & \multirow{2}{*}{\textbf{IR} $\uparrow$}
+            & \multirow{2}{*}{\textbf{AUC@3} $\uparrow$}
+            & \multirow{2}{*}{\textbf{AUC@30} $\uparrow$} \\
+        \midrule
+        Decoupled & \xmark & \xmark & \xmark & 0.056 & 61.1 & 23.0 & 82.0 \\
+        Shared & \cmark & \xmark & \xmark & \cellcolor{tabyellow}0.045 & \cellcolor{tabyellow}66.4 & \cellcolor{tabyellow}30.2 & \cellcolor{tabyellow}84.8 \\
+        Shared + residual gates & \cmark & \cmark & \xmark & \cellcolor{taborange}0.042 & \cellcolor{taborange}67.0 & \cellcolor{taborange}31.5 & \cellcolor{taborange}85.9 \\
+        \midrule
+        \textbf{Shared + state gate} & \cmark & \cmark & \cmark & \cellcolor{tabred}0.040 & \cellcolor{tabred}69.2 & \cellcolor{tabred}33.3 & \cellcolor{tabred}86.9 \\
+        \bottomrule
+    \end{tabular}}
+    \vspace{-4mm}
+\end{table}

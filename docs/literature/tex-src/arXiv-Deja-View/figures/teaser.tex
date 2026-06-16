@@ -1,0 +1,8 @@
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=\linewidth]{figures/teaser_figure.pdf}
+  \caption{
+    \textbf{\methodname.} Given multiple input views \textbf{(top-left)}, \methodname{} reconstructs camera poses and consistent depth by repeatedly applying the \emph{same} transformer block, with the number of refinement steps $K$ exposed as an inference-time compute knob. Decoding the intermediate state of a single $K{=}16$ forward pass at iterations $k \in \{2, 4, 8, 16\}$ shows progressively sharper geometry and more accurate camera poses (\textbf{right}; frustums are colored by per-camera error). Across five benchmarks \textbf{(bottom-left)}, \methodname{} matches or surpasses much larger feed-forward baselines at a small fraction of their parameter count (dot area).
+  }
+  \label{fig:teaser}
+\end{figure}

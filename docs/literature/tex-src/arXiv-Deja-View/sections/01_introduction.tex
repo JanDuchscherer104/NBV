@@ -1,0 +1,39 @@
+
+\section{Introduction}
+\label{sec:intro}
+
+
+
+
+
+
+
+
+Recovering 3D structure from images has traditionally relied on a Structure-from-Motion (SfM) pipeline~\citep{schoenberger2016sfm,pan2024global}. These systems decompose reconstruction into feature extraction and matching, pose estimation, triangulation, and global bundle adjustment, yielding an inherently iterative process that alternates between registering new views and re-adjusting previous estimates.
+
+More recently, feed-forward methods~\citep{dust3r,leroy2025grounding,vggt,lin2025depth,wang2025pi,keetha2026mapanything,vggt_omega} have replaced this pipeline with an end-to-end transformer that regresses 3D geometry from images in a single forward pass.
+Their gains, in line with the broader trend in computer vision~\citep{dosovitskiy2021image,zhai2022scaling,radford2021clip,oquab2023dinov2,kirillov2023sam}, have largely been driven by scaling model capacity through backbone depth and width~\citep{lin2025depth}.
+
+Yet iteration may not have disappeared at all --- it may simply have been absorbed into network depth.
+\citet{jacobs2025raptor} show that for some applications the $L$ layers of a Vision Transformer (ViT) can be replaced with $K \ll L$ recurrent applications of a looped block with little loss in accuracy.
+\citet{stary2025understanding} further probe the decoder of DUSt3R~\citep{dust3r} layer-by-layer and find that its pointmap predictions are themselves iteratively refined across depth, despite the layers being independently parameterized.
+
+Together, these observations suggest that part of the benefit of depth in modern reconstruction transformers arises from implicit iterative refinement, at the cost of redundant layer-specific parameters.
+
+
+
+We therefore make this iterative process explicit in the architecture, rather than relying on model depth to realize it implicitly. Starting from per-view DINOv2~\citep{oquab2023dinov2} features, we apply a single looped transformer block recurrently for $K$ refinement steps. By sampling $K$ from $[K_\text{min}, K_\text{max}]$ during training, a single checkpoint exposes $K$ as an inference-time compute knob without retraining. Analyzing the trained recurrence reveals that it does not converge to a fixed point. Instead, each step progressively aligns the state's direction toward its endpoint, a regime we call \emph{directional refinement}.
+
+
+
+The resulting model, \methodname, matches or surpasses much larger feed-forward baselines across five reconstruction benchmarks spanning indoor, outdoor, object-centric, and driving scenes, at a small fraction of their parameters and comparable or lower compute. Importantly, we show that our looping formulation with shared weights significantly outperforms an otherwise identical variant with independent per-step parameters under the same training data and compute budget. We take this as evidence that iterative refinement with shared weights is a viable alternative to parameter scaling for 3D reconstruction.
+
+We summarize our contributions as follows:
+\begin{itemize}
+    \item \methodname, a looping transformer for multi-view 3D reconstruction that applies a single shared block recurrently to a DINOv2-initialized state, with each step conditioned on a continuous time interval.
+    \item A variable-$K$ training recipe in which the step count is sampled per batch from $[K_\text{min}, K_\text{max}]$, yielding a single checkpoint that exposes compute as an inference-time knob.
+    \item State-of-the-art reconstruction quality across five challenging benchmarks, at a small fraction of the parameters and comparable or lower compute.
+\end{itemize}
+
+
+

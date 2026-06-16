@@ -1,0 +1,152 @@
+
+\FloatBarrier
+
+\begin{center}
+    {\Large \textbf{Supplementary Material for Déjà View}}
+\end{center}
+
+
+
+\section{Training Datasets}
+\label{sec:training_datasets}
+We train on a mixture of 29 publicly available datasets that span synthetic
+renderings, indoor and outdoor real captures, multi-view object scans, and
+driving footage. The corpus is highly imbalanced: per-dataset image counts
+$N_i$ span more than three orders of magnitude (from $\sim$10\,k for
+Spring to $\sim$11.8\,M for Aria Synthetic Environments), so naive
+proportional sampling would let a handful of large datasets dominate
+training, while uniform sampling would massively oversample the smallest
+ones. In LLM literature, multilingual training faces the same imbalance across high- and
+low-resource languages, which is addressed with temperature sampling
+\citep{arivazhagan2019massively}. We adopt
+the same recipe, treating each dataset as a ``language'' with token
+budget $N_i$: the probability of drawing a training
+example from dataset $i$ is set to
+\[
+    p_i \;=\; \frac{N_i^{\alpha}}{\sum_j N_j^{\alpha}},
+    \qquad \alpha = 0.5,
+\]
+i.e.\ proportional to $\sqrt{N_i}$, which flattens the head of the
+distribution while still favouring the larger, more diverse corpora.
+The realised epoch share for each dataset is reported in
+Table~\ref{tab:training_datasets}.
+
+\FloatBarrier
+\begin{table}[t]
+    \centering
+    \footnotesize
+    \caption{Per-epoch training-mixture share for the 29 datasets, sorted
+    by share. By construction, mix\,\% $= p_i \propto \sqrt{N_i}$ where
+    $N_i$ is the total number of training images in dataset $i$.}
+    \label{tab:training_datasets}
+    \input{tables/training_datasets}
+\end{table}
+
+
+\section{Two-Stage Depth Training}
+\label{sec:suppl_two_stage}
+
+
+The linear pixel-shuffle head maps patch tokens to per-pixel depth via pixel shuffling. For ray directions, this is acceptable as patch-border gradients are within $\sim$10\% of intra-patch values. For depth, the same gradients are roughly an order of magnitude larger, producing visible block artifacts at patch boundaries (\cref{fig:suppl_grid_artifacts}).
+
+We address this with two-stage training (\cref{sec:method_training}). The first stage trains the model end-to-end with a linear pixel-shuffle depth head and plain $\ell_2$ depth loss. Training the final pipeline configuration (convolutional head with confidence loss) end-to-end instead yields worse metrics across our benchmarks (\cref{tab:suppl_two_stage_ablation}). The second stage swaps it in, freezes the rest of the network, and finetunes the depth decoder with a confidence-weighted loss. Its convolutions smooth across patch boundaries, eliminating the block pattern (\cref{fig:suppl_grid_artifacts}) and yielding a slight improvement in Inlier Ratio (\cref{tab:suppl_full_recipe_two_stage}). As a result, we also obtain a depth confidence channel that can be used downstream to filter regions with uncertain reconstruction.
+
+\input{tables/ablation_two_stage}
+\input{tables/ablation_two_stage_2}
+
+
+\begin{figure}[t]
+    \centering
+    \begin{tabular}{@{}c@{\hspace{0.02\linewidth}}c@{\hspace{0.02\linewidth}}c@{}}
+        \textbf{Input} & \textbf{Linear Head} & \textbf{Convolutional Head} \\[2pt]
+        \includegraphics[width=0.32\linewidth]{figures/block_artifacts_rgb.png} &
+        \includegraphics[width=0.32\linewidth]{figures/block_artifacts_stage1.png} &
+        \includegraphics[width=0.32\linewidth]{figures/block_artifacts_stage2.png}
+    \end{tabular}
+    \caption{%
+        \textbf{Block artifacts.}
+        Depth predicted by the first-stage linear head \textbf{(center)} shows visible block artifacts aligned with the DINOv2 patch grid. The second-stage finetune with the convolutional head \textbf{(right)} eliminates them and improves Inlier Ratio.
+    }
+    \label{fig:suppl_grid_artifacts}
+\end{figure}
+
+\section{Emergent Iterative Correspondence Search}
+\label{sec:emergent_correspondence}
+
+\input{figures/feature_correspondence}
+
+We probe the global attention sub-block of our recurrent layer to investigate how its attention pattern evolves across iterations. For a query patch in view~0, at each iteration $t$ we read the per-head queries and keys $Q^{(t)}_h, K^{(t)}_h$ post $q$ -/ $k$ -LayerNorm and visualize the head-averaged scaled-dot-product attention weights
+\[
+    \bar a^{(t)} \;=\;
+    \tfrac{1}{H} \sum_{h=1}^{H} \operatorname{softmax}\!\left(
+        q^{(t)}_h\, K^{(t)\top}_h \big/ \sqrt{d_h}
+    \right),
+\]
+sliced to the patch tokens of each target view and shown as a $H_p \times W_p$ heatmap. 
+\cref{fig:feature_correspondence} illustrates that the attention starts diffuse and progressively concentrates on the corresponding counterpart of the queried patch, correctly resolving symmetries and attending to all geometrically equivalent patches. This suggests that the recurrent loop implements an emergent iterative correspondence search, despite the model being supervised only on 3D reconstruction and pose estimation losses.
+
+
+\section{Scaling Beyond $K_{\max}$}
+\label{sec:beyond_kmax}
+
+\input{figures/beyond_kmax}
+
+DéjàView is trained with an iteration count sampled per-batch as $K \sim \mathrm{Beta}(2,1)$
+scaled to $[K_{\min}, K_{\max}]$ with $K_{\max}=16$. We sweep $K_{\inf}$ at test time beyond $K_{\max}$ and observe that Pose~AUC@$3^\circ$ peaks
+near the trained budget, then starts to degrade after. Pose~AUC@$30^\circ$ and Pointmap Rel.~L2
+remain stable up to approximately $K_{\inf}=30$ but eventually collapse. \cref{fig:beyond_kmax} shows that model iterations cannot be pushed arbitrarily far. 
+
+Our analysis shows that this occurs because some feature channels grow unbounded as we scale beyond $K_{\max}$. The mechanism is already visible inside the trained range (\cref{fig:refinement}b): while cosine similarity to
+$\mathbf{z}_{K_{\max}}$ saturates near $1$ and the relative feature update decays, the state norm $\|\mathbf{z}_k\|_2$ keeps growing monotonically through $K_{\max}$ after a short initial contraction. Iterating beyond $K_{\max}$ simply extrapolates this persistent drift: a handful of channels grow without bounds, producing the observed collapse.
+
+\section{Scaling Below $K_{\max}$}
+A sub-$K_{\max}$ compute allows two strategies: a full $K_{\inf}$-step forward
+with uniform time interval conditioning calibrated for that budget, or early-stopping a
+$K_{\max}$-step rollout by reading $\mathbf{z}_k$ at $k=K_{\inf}$.
+\cref{fig:kinf_intermediate} shows the full pass strictly dominates
+early-stopping for every $k<K_{\max}$, with the largest gap at the smallest
+budget. At $K_{\inf}=8$, Pose~AUC@$3^\circ$ rises from $0.31$ to $0.44$
+($\sim\!43\%$ relative improvement).
+
+
+\input{figures/kinf_intermediate_comparison}
+
+
+\section{Baseline Configurations}
+\label{sec:suppl_baselines}
+
+We run all baselines through our evaluation framework using their official code releases and checkpoints, and apply the same Sim(3) alignment to predicted pointmaps before computing metrics (\cref{sec:sota}). For Rel.~L2 and IR we use each method's primary 3D output: depth-unprojected pointmaps for VGGT, DA3, and our model, the direct point-head output for Pi3 and MapAnything, and the SGA-optimized dense pointmap for MASt3R and MASt3R-SfM.
+
+\paragraph{VGGT~\citep{vggt}.}
+The official \texttt{facebook/VGGT-1B} checkpoint at $518$-pixel longest edge with patch size $14$.
+
+\paragraph{VGGT-$\Omega$~\citep{vggt_omega}.}
+The official \texttt{facebook/VGGT-Omega} 1B checkpoint (\texttt{vggt\_omega\_1b\_512.pt}, without text alignment) at $512$-pixel longest edge with patch size $16$. We decode the released 9D camera encoding (translation, quaternion, FoV$_h$, FoV$_w$) via the official \texttt{encoding\_to\_camera} utility and use depth-unprojected pointmaps as the primary 3D output, matching the convention used for VGGT and DA3.
+
+\paragraph{Pi3~\citep{wang2025pi}.}
+The official \texttt{yyfz233/Pi3} checkpoint at $518$-pixel longest edge with patch size $14$. %
+
+\paragraph{MapAnything~\citep{keetha2026mapanything}.}
+The official \texttt{facebook/map-anything} v1.1 checkpoint at $518$-pixel longest edge with patch size $14$.
+
+\paragraph{Depth Anything 3 (DA3)~\citep{lin2025depth}.}
+The official v1.1 checkpoints at two backbone scales (DA3-L: \texttt{depth-anything/DA3-LARGE}, ViT-L, $356$M params; DA3-G: \texttt{depth-anything/DA3-GIANT}, ViT-G, $1.2$B params), both at $504$-pixel longest edge with patch size $14$. We decode camera pose from predicted rays.
+
+\paragraph{MASt3R~\citep{leroy2025grounding}.}
+The official \texttt{MASt3R\_ViTLarge\_BaseDecoder\allowbreak\_512\_catmlpdpt\_metric} (metric-scale) checkpoint at $512$-pixel longest edge with patch size $16$, using DUSt3R-style image normalization (mean and std $0.5$). Pair selection is adaptive on scene size: \texttt{complete} (all pairs) for scenes with $N \le 8$ views, and \texttt{swin-5} (sliding window of $5$) otherwise. The efficiency measurement at $N{=}24$ uses the swin-5 branch ($120$ pairs). The sparse global alignment uses the published defaults: $300$ iterations of coarse alignment at learning rate $0.07$ followed by $300$ iterations of refinement at $0.01$, with per-pixel depth optimization enabled (\texttt{optim\_level=refine+depth}) and matching-confidence threshold $5.0$. Camera intrinsics are shared across views for the single-camera benchmarks (7-Scenes, ScanNet++, nuScenes, DTU) and estimated per-view otherwise (ETH3D).
+
+\paragraph{MASt3R-SfM~\citep{duisterhof2024mast3rsfm}.}
+The same MASt3R checkpoint paired with the official training-free retrieval model (\texttt{MASt3R\_ViTLarge\_BaseDecoder\_512\_catmlpdpt\_metric\_retrieval\_trainingfree}). Scene graphs are built via top-$20$ retrieval anchors with top-$10$ retrieved neighbors per anchor (\texttt{retrieval-20-10}), yielding $273$ pairs at $N{=}24$. The sparse global alignment uses the same hyperparameters as MASt3R, including the same per-dataset shared-intrinsics policy.
+
+
+\section{Societal Impact}
+\label{sec:suppl_societal_impact}
+\methodname{} reconstructs 3D geometry and camera poses from images. While this capability is not new, our work brings strong reconstruction quality within reach at a smaller scale than recent feed-forward baselines, lowering the overall cost of deployment. Because the model outputs geometry rather than photorealistic imagery, the direct risk of deceptive media generation is lower than for image or video synthesis models, though deployments that combine reconstruction with generative rendering should still consider provenance signals such as watermarking~\citep{wen2023treering}. From an environmental perspective, our ViT-B model is trained on 128 H100 GPUs, comparable to other recent feed-forward reconstruction methods. At inference, however, it operates with roughly an order of magnitude fewer parameters and a memory footprint of under 5 GiB at $24$ input views, reducing the per-query resource cost of deployment relative to the larger baselines we evaluate.
+
+\input{figures/qualitative2}
+
+
+
+
+
+

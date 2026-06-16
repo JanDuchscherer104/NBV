@@ -1,0 +1,8 @@
+
+
+\section{Discussion}
+\label{sec:conclusion}
+
+Modern 3D reconstruction transformers have improved primarily by scaling. We presented \methodname, which instead applies a single shared block recurrently to a DINOv2-initialized state, sampling the step count at training so that one checkpoint covers a range of inference budgets. It matches or surpasses much larger feed-forward baselines across five reconstruction benchmarks at a fraction of their parameters and comparable or lower compute, suggesting that parameter scaling is not the only path forward for 3D reconstruction.
+
+\methodname{} has three main limitations\label{sec:limitations}. First, the trained recurrence does not extrapolate beyond its step range: a few channels diverge once $K_\text{inf}$ exceeds $K_\text{max}$. Our preliminary attempts with looped-transformer stabilization~\citep{yang2024looped} suggest such recipes plateau past the trained budget rather than continuing to improve, at significant additional training cost. Second, variable-$K$ training matches rather than exceeds fixed-$K$ at the same inference budget, trading raw quality for flexibility across budgets from one checkpoint. Finally, \methodname{} does not explicitly handle dynamic scenes.

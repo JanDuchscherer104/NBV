@@ -1,0 +1,76 @@
+\section{Experiments}
+\label{sec:experiments}
+
+
+\parsection{Implementation.}
+We implement our method in PyTorch~\citep{paszke2019pytorch} and train on 128 H100 GPUs with $V \in [2, 18]$ views per scene at 504-pixel longest-edge resolution. Each training step uses up to $4{,}608$ images and a fixed tokens budget ($\approx$2.5M tokens).
+We use a DINOv2 ViT-B encoder with embedding dimension $768$, patch size $P{=}14$, and $R{=}4$ register tokens. The ray and depth decoders each use embedding dimension $384$ and two transformer blocks.
+We sample $K \sim \text{Beta}(2, 1)$ scaled into $[8, 16]$ during training so that a single checkpoint supports any step count in this range (\cref{tab:diag_iterative}). We run $K_\text{inf} = 16$ steps at inference.
+We optimize with AdamW~\citep{loshchilov2018decoupled} at a base learning rate of $3 \times 10^{-4}$, weight decay $0.05$, and a cosine decay schedule without warmup in the first stage, applying a $0.1\times$ multiplier to the DINOv2 backbone.
+The first stage trains end-to-end for 200K iterations. The second stage finetunes the depth decoder (see \cref{sec:method_training}) for 40K iterations at $1 \times 10^{-4}$ with a 500-step linear warmup and a confidence regularizer weight of $\lambda_c = 0.2$.
+The depth, ray, pointmap, and camera losses are weighted equally, and within the camera loss, the translation, rotation, and field-of-view terms are weighted $(1, 1, 0.5)$. 
+We apply the depth-gradient term only on synthetic data, where ground-truth depth is dense enough for reliable gradient supervision. We train on a mixture of 29 public datasets and list them in the supplemental material.
+
+\subsection{Comparison with State of the Art}
+\label{sec:sota}
+
+\parsection{Evaluation datasets.}
+We evaluate on a set of diverse benchmarks that span indoor, outdoor, object-centric, and driving scenes:
+DTU~\citep{jensen2014dtu},
+ETH3D~\citep{schops2017eth3d},
+7-Scenes~\citep{shotton2013scene},
+ScanNet++~\citep{yeshwanth2023scannetpp},
+and nuScenes~\citep{caesar2020nuscenes}. For ScanNet++, which serves as a training dataset for multiple baselines~\citep{lin2025depth, wang2025pi, keetha2026mapanything, duisterhof2024mast3rsfm, leroy2025grounding, vggt_omega} and our model, we enforce a clean scene-level split between the training and evaluation data.
+
+\parsection{Evaluation metrics.}
+We evaluate reconstruction quality with two metrics computed on the global pointmap after a Sim(3) alignment of the predicted points to the ground truth. Both are derived from the per-point relative error $r_i = \lVert \mathbf{X}_{\theta,i} - \mathbf{X}_{\text{gt},i}\rVert / \lVert \mathbf{X}_{\text{gt},i}\rVert$: the relative $\ell_2$ distance (\textbf{Rel.~L2}~$\downarrow$) is its mean over valid points, and the inlier ratio (\textbf{IR}~$\uparrow$) is the fraction of points with $r_i < 3\%$.
+For camera pose accuracy, we report the area under the cumulative error curve at angular thresholds of $3^{\circ}$ and $30^{\circ}$ (\textbf{AUC@3}~$\uparrow$ and \textbf{AUC@30}~$\uparrow$), where the per-pair error is the maximum of the rotation and translation angle errors.
+
+\parsection{Baselines.}
+We compare against state-of-the-art feed-forward 3D reconstruction methods: VGGT~\citep{vggt}, Pi3~\citep{wang2025pi}, MapAnything~\citep{keetha2026mapanything}, and Depth Anything 3 (DA3)~\citep{lin2025depth}. We also include MASt3R~\citep{leroy2025grounding} and MASt3R-SfM~\citep{duisterhof2024mast3rsfm}, which combine pairwise prediction with sparse global alignment. In addition, we report numbers for the concurrent work VGGT-$\Omega$~\citep{vggt_omega} for completeness. We run all baselines through our evaluation framework using their official released checkpoints, with MapAnything and DA3 at their v1.1 releases, VGGT-$\Omega$ at the 1B-512 release, and DA3 reported at two backbone scales (ViT-L and ViT-G). Per-baseline configurations are detailed in \cref{sec:suppl_baselines}.
+
+
+
+\input{tables/comparison_efficiency}
+
+
+\parsection{Results.}
+At $117$M parameters and $75.9$ TFLOPs of compute (\cref{tab:comparison_efficiency}), \methodname{} matches or exceeds much larger feed-forward methods while running in under $5$ GiB of peak memory at $24$ input views.
+Among prior work, Pi3~\citep{wang2025pi} is the closest competitor, leading on indoor pointmap accuracy at $8{\times}$ our parameters and $2{\times}$ our compute. VGGT~\citep{vggt} retains its lead on DTU pose at $10{\times}$ our parameters, with its lead concentrated at the tightest AUC@$3^{\circ}$ threshold ($96.5$ vs $83.2$) and shrinking to within $1.0$ point at AUC@$30^{\circ}$.
+The concurrent VGGT-$\Omega$~\citep{vggt_omega} edges \methodname{} on outdoor pointmap Rel.~L2 (ETH3D, nuScenes) and on 7-Scenes pose at $10{\times}$ our parameters, but trails on every other benchmark and on the average IR and AUC@$30^{\circ}$ at the bottom of \cref{tab:comparison_efficiency}; on ScanNet++ in particular, \methodname{} leads VGGT-$\Omega$ by nearly $50$ points at AUC@$3^{\circ}$ and over $10$ points at AUC@$30^{\circ}$.
+MASt3R-SfM~\citep{duisterhof2024mast3rsfm} is competitive on indoor sequences but at or near the bottom of every nuScenes metric, at $15{\times}$ our forward-pass cost. Overall, our method achieves top average performance across benchmarks, the highest parameter efficiency, and remains highly competitive in compute and memory cost.
+
+\input{figures/qualitative}
+
+
+\subsection{Analysis}
+\label{sec:analysis}
+
+We diagnose two axes of our recurrent backbone: architectural choices in the block (\cref{tab:diag_block}), and the step count at training and inference (\cref{tab:diag_iterative}).
+All variants use a ViT-B encoder and are trained for 100K iterations on the same data, and differ only along the examined axis.
+
+
+\parsection{Block design.}
+We progressively add the components of our recurrent design in \cref{tab:diag_block}, starting from a fully decoupled variant in which each of the 16 recurrent steps has its own block (no weight sharing, no time conditioning).
+Weight sharing collapses the 16 independent blocks into a single shared block applied recurrently. The time-conditioned residual gates ($\mathbf{s}_\text{attn}, \mathbf{s}_\text{mlp}$) modulate the block's attention and MLP branches, and the state gate ($\mathbf{s}_\text{out}$) yields our full method.
+Each component improves every metric monotonically. Notably, weight sharing alone already outperforms the decoupled architecture despite having $16{\times}$ fewer parameters.
+\input{tables/ablation_block}
+
+\parsection{Step-count.}
+We vary the recurrent step count at training and inference in \cref{tab:diag_iterative}. The fixed-$K$ baselines train and run with a constant step count. Our variable-$K$ model trains with $K \sim \text{Beta}(2, 1)$ on $[8, 16]$ and is evaluated at $K_\text{inf}{=}12$ and $K_\text{inf}{=}16$.
+At $K_\text{inf}{=}16$, variable-$K$ training matches Fixed $K{=}16$ within $\sim$2\% on every metric. The same checkpoint, evaluated at $K_\text{inf}{=}12$, stays within $\sim$3\% of Fixed $K{=}12$ across all metrics.
+
+
+\input{tables/ablation_iterative}
+
+
+
+
+
+
+
+
+
+
+
+

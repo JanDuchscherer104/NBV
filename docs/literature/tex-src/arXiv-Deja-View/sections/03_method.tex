@@ -1,0 +1,150 @@
+
+
+
+
+
+
+
+
+\section{Method}
+\label{sec:method}
+
+
+
+\subsection{Problem setup}
+\label{sec:method_problem}
+Given a set of $V$ input images $\{\im_i\}_{i=1}^{V}$ with $\im_i \in \real^{H \times W \times 3}$, our goal is to recover the underlying 3D scene geometry, expressed in the coordinate frame of the first view. We adopt a depth-ray representation: for each image $\im_i$, the model predicts a per-pixel depth map $\depthmap_i \in \real^{H \times W}$ and a dense ray map $\raymap_i \in \real^{H \times W \times 6}$.
+Each pixel of the ray map encodes a 3D origin $\raymap^o \in \real^3$ and an unnormalized direction $\raymap^d \in \real^3$, so that a 3D point in world coordinates is obtained as $\mathbf{X} = \raymap^o + \depthmap(u,v) \cdot \raymap^d$.
+Per-view camera-to-world rotations $\mathbf{R}_i \in SO(3)$, translations $\mathbf{t}_i \in \real^3$, and intrinsic matrices $\mathbf{K}_i \in \real^{3 \times 3}$ are recovered from the predicted ray maps following~\citet{lin2025depth}.
+
+
+\subsection{Hypothesis}
+\label{sec:hypothesis}
+
+Two recent analyses motivate our approach.
+First, \citet{jacobs2025raptor} show via post-hoc distillation that the $L$ layers of a trained ViT can be accurately approximated by a few looped blocks.
+Second, \citet{stary2025understanding} probe DUSt3R~\citep{dust3r} layer by layer and show that its predicted pointmaps progressively refine across decoder depth, revealing iterative refinement of geometry inside multi-view transformers even though their layers do not share weights.
+
+We hypothesize that this structure can be made explicit by applying a looped block to an evolving state, and that the resulting recurrence performs \emph{directional refinement} of the state, where the direction of $\z_k$ converges to the endpoint direction over the trained step range
+(\cref{sec:method_recurrence,sec:analysis}).
+In contrast to task-space iterative refinement methods such as RAFT~\citep{RAFT,lipson2021raft}, which decode after every step and apply a sequence loss on the output, we refine an internal state with a looped block and supervise only at the final step. This avoids running the decoder and computing a loss at every intermediate step, sparing $(K{-}1)$ decoder forward and backward passes per training iteration.
+
+We model the recurrence as a time-conditioned discrete update over the partition $0 = t_0 < t_1 < \cdots < t_K = 1$ of the unit interval:
+\begin{equation}
+    \z_{k+1} = f_\theta(\z_k,\, t_k,\, t_{k+1})\,,
+\label{eq:discrete_recurrence}
+\end{equation}
+where $f_\theta$ is a looped block conditioned on the continuous time interval $(t_k, t_{k+1})$.
+Conditioning on continuous time, rather than on a discrete step index as in prior weight-tied transformers~\citep{dehghani2019universal}, decouples the block from any specific value of $K$ and lets a single set of weights cover a range of step counts at inference.
+\Cref{sec:method_recurrence} instantiates $f_\theta$ as a shared transformer block with frame and global attention.
+
+\input{figures/method_overview}
+
+\subsection{Architecture}
+\label{sec:method_arch}
+
+\parsection{Patch encoder and tokens.}
+We initialize the per-view state $\z_0$ from a pretrained DINOv2~\citep{oquab2023dinov2} encoder, which maps each input image to an $\frac{H}{P} \times \frac{W}{P}$ grid of patch tokens.
+We prepend a per-view copy of $R$ learnable register tokens~\citep{darcet2024vision} and of a learnable camera token to each view's token sequence, with the underlying parameters tied across views. The camera token uses two parameter sets: one for the reference (first) view, and one tied across all other views.
+We encode patch positions with 2D rotary position embeddings~\citep{heo2024ropevit} and assign special tokens a sentinel position outside the patch grid.
+We then apply a looped transformer block $K$ times to $\z_0$, with $K$ randomly sampled per training batch (\cref{sec:method_recurrence}), yielding the final state $\z_K$ passed to the decoder heads.
+
+\parsection{Decoder heads.}
+We pass $\z_K$ through two parallel decoder branches, each comprising a shallow transformer followed by an output head.
+Each decoder transformer uses the same pre-norm $\text{Attn}+\text{MLP}$ block design as the shared recurrent block (\cref{sec:method_recurrence}), but without LayerScale.
+The ray decoder uses a linear pixel-shuffle head to produce the per-pixel ray map $\raymap_\theta \in \real^{H \times W \times 6}$.
+The depth decoder uses a convolutional depth head following~\citet{wang2025moge} to avoid block artifacts at patch boundaries (\cref{sec:suppl_two_stage}), and produces the depth map $\depthmap_\theta \in \real^{H \times W}$ and a depth confidence map $c_\depthmap \in \real^{H \times W}$.
+Following \citet{lin2025depth}, we additionally include a camera MLP head that decodes a tuple $\mathbf{c}_\theta = (\mathbf{t}_\theta, \mathbf{q}_\theta, \mathbf{f}_\theta) \in \real^3 \times \mathbb{S}^3 \times \real^2$, comprising translation, unit rotation quaternion, and field of view, from the per-view camera tokens at the output of the ray decoder (\cref{sec:method_training}). It provides a faster alternative to the rays-derived recovery of \cref{sec:method_problem}, which remains our default at inference.
+We obtain world points analytically as $\mathbf{X}_\theta = \raymap_\theta^o + \depthmap_\theta \cdot \raymap_\theta^d$.
+
+\input{figures/refinement}
+
+
+\subsection{Looped Block}
+\label{sec:method_recurrence}
+
+\parsection{Block design.}
+The looped block consists of two attention sub-blocks applied in sequence, following the alternating frame/global design of VGGT~\citep{vggt}.
+The first is a frame attention that processes each view independently with 2D rotary position embeddings.
+The second is a global attention that operates over the joint sequence of all tokens across all views.
+Each sub-block uses a standard pre-norm $\text{Attn}+\text{MLP}$ design with LayerScale~\citep{touvron2021going}.
+
+We condition the block on the time interval $(t_k, t_{k+1})$.
+Three channel-wise scale vectors $(\mathbf{s}_\text{attn}, \mathbf{s}_\text{mlp}, \mathbf{s}_\text{out})$ control the block update:
+\begin{equation}
+\begin{aligned}
+    & \z' && = \z_k + \mathbf{s}_\text{attn} \odot \text{LS}_1(\text{Attn}(\text{LN}_1(\z_k)))\,, \\
+    & \z'' && = \z' + \mathbf{s}_\text{mlp} \odot \text{LS}_2(\text{MLP}(\text{LN}_2(\z')))\,, \\
+    & \z_{k+1} && = \mathbf{s}_\text{out} \odot \z''\,,
+\end{aligned}
+\label{eq:gated_block}
+\end{equation}
+where $\text{LN}$ is layer normalization, $\text{LS}$ is LayerScale, and $\odot$ is channel-wise multiplication broadcast over the sequence dimension.
+We compute the scales via a zero-initialized MLP such that $\mathbf{s} = \mathbf{1} + \text{MLP}(\gamma(t_k, t_{k+1}))$, where $\gamma$ concatenates the sinusoidal embeddings of $t_k$ and $t_{k+1}$.
+We ablate simpler variants of this block (no $\mathbf{s}_\text{out}$, no time conditioning, and untied per-step blocks) in \cref{sec:analysis}.
+
+
+
+\parsection{Variable step count.}
+We train a single set of weights to serve as a 
+$K$-elastic
+family: the same block supports a range of step counts $K$ at inference, exposed as a compute knob.
+Specifically, we sample $K \sim \text{Beta}(\alpha, \beta)$ per batch, scaled and rounded into $[K_\text{min}, K_\text{max}]$, and apply the block $K$ times along the uniform partition $0 = t_0 < t_1 < \cdots < t_K = 1$ with $t_k = k/K$,
+where the application from $\z_k$ to $\z_{k+1}$ is conditioned on the interval $(t_k, t_{k+1})$.
+At inference, we run the block on a uniform grid of $K_\text{inf}$ steps; varying $K_\text{inf}$ trades compute for accuracy within the trained range $[K_\text{min}, K_\text{max}]$, with degradation observed when $K_\text{inf}$ is pushed substantially outside it (\cref{sec:analysis}, \cref{sec:beyond_kmax}).
+
+
+\parsection{Directional refinement.}
+Unlike deep equilibrium networks~\citep{bai2019deep}, our recurrence does not converge to a fixed point in feature space. Instead, the state norm $\|\z_k\|$ grows monotonically with $k$.
+However, two empirical signatures characterize its dynamics within the trained step range (\cref{fig:refinement}).
+First, $\cos(\z_k, \z_K)$ rises monotonically toward $1$ as $k \to K$, which means that each step moves the state closer in direction to the endpoint.
+Second, the relative update magnitude $\|\Delta \z_k\|/\|\z_k\|$ decays from $\sim 0.5$ at the first step to $\sim 0.1$ at the last, indicating a genuine slowdown of motion rather than a constant rescaling.
+Because each decoder branch is pre-norm (\cref{sec:method_arch}), the LayerNorm at the start of its first transformer block absorbs the component of $\Delta \z_k$ parallel to $\z_k$ that drives the norm growth, and the decoded representation effectively converges in direction. 
+We refer to this behavior as \emph{directional refinement}, distinct from RAFT-style task-space refinement~\citep{RAFT} that operates on the output and contracts in absolute magnitude.
+
+
+
+
+\subsection{Training}
+\label{sec:method_training}
+
+\parsection{Losses.}
+We supervise the model directly on the predicted geometry with five complementary
+loss terms
+covering depth, rays, world points, and camera parameters.
+Following DUSt3R~\citep{dust3r}, predictions and ground truth are independently normalized prior to loss computation: given valid 3D points $\{\mathbf{X}_j\}_{j \in \Omega}$, we define the inverse normalization scale
+\begin{equation}
+    s = \left(\frac{1}{|\Omega|} \sum_{j \in \Omega} \lVert \mathbf{X}_j \rVert_2\right)^{\!-1}\,,
+\label{eq:normalization_scale}
+\end{equation}
+computed separately for the predicted ($\hat{s}$) and ground-truth ($\bar{s}$) point clouds.
+The per-sample training loss is then:
+\begin{equation}
+\begin{split}
+    \loss ={} & \lVert \hat{s}\,\depthmap_\theta - \bar{s}\,\depthmap \rVert_2 + \loss_\text{grad}(\hat{s}\,\depthmap_\theta, \bar{s}\,\depthmap) + \lVert \hat{s}\,\raymap_\theta - \bar{s}\,\raymap \rVert_1 \\
+    & + \lVert \hat{s}\,\mathbf{X}_\theta - \bar{s}\,\mathbf{X} \rVert_2 + \loss_\text{cam}(\mathbf{c}_\theta, \mathbf{c})\,,
+\end{split}
+\label{eq:total_loss}
+\end{equation}
+where $\mathbf{X}_\theta = \raymap_\theta^o + \depthmap_\theta \cdot \raymap_\theta^d$ is the analytically derived predicted point cloud, $\loss_\text{grad}$ is a multi-scale $\ell_1$ loss on horizontal and vertical depth gradients~\citep{Hu2019RevisitingSI, lin2025depth}, and $\loss_\text{cam}$ decomposes into separately weighted $\ell_1$ terms on the translation, rotation, and field-of-view components of $\mathbf{c}_\theta$.
+The pointmap term ties the depth and ray heads through a joint geometric signal. %
+
+\input{tables/comparison_sota}
+
+\parsection{Optimization.}
+Training proceeds in two stages.
+The first stage trains the model end-to-end with all loss terms, using plain $\ell_2$ regression on the depth and pointmap terms and a linear pixel-shuffle depth head.
+The second stage swaps in the convolutional depth head described in \cref{sec:method_arch} and finetunes the depth decoder while freezing all other parameters. The ray and camera losses are disabled in the second stage. The depth term applies DUSt3R-style confidence weighting~\citep{dust3r}, $\loss_\text{unc}(c, \mathbf{a}, \mathbf{b}) = c \lVert \mathbf{a} - \mathbf{b} \rVert_2 - \lambda_c \log c$, parameterized by the predicted per-pixel uncertainty $c_\depthmap$, while the pointmap term remains plain $\ell_2$ on the analytically derived points.
+
+
+
+
+
+
+
+
+
+
+
+
+

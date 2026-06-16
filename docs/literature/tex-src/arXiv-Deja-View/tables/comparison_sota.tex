@@ -1,0 +1,70 @@
+\begin{table}[t]
+    \caption{%
+        \textbf{Pointmap accuracy.} Relative $\ell_2$ distance (\textbf{Rel.~L2}~$\downarrow$) and inlier ratio (\textbf{IR}~$\uparrow$) on the global pointmap after a Sim(3) alignment to the ground truth, across five benchmarks. The \colorbox{tabred}{best}, \colorbox{taborange}{second}, and \colorbox{tabyellow}{third} ranked results are highlighted. VGGT-$\Omega$~\citep{vggt_omega} is concurrent work, reported here for completeness.
+    }
+    \label{tab:comparison_sota_pmap}
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \centering
+    \noindent\makebox[0.85\linewidth][c]{%
+    \begin{tabular}{l rr rr rr rr rr}
+        \toprule
+        \multirow{2}{*}[-4pt]{\textbf{Method}}
+            & \multicolumn{2}{c}{\textbf{DTU}} & \multicolumn{2}{c}{\textbf{ETH3D}} & \multicolumn{2}{c}{\textbf{7-Scenes}} & \multicolumn{2}{c}{\textbf{ScanNet++}} & \multicolumn{2}{c}{\textbf{nuScenes}} \\
+        \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+            & Rel.~L2 & IR & Rel.~L2 & IR & Rel.~L2 & IR & Rel.~L2 & IR & Rel.~L2 & IR \\
+        \midrule
+        MASt3R~\citep{leroy2025grounding}                       & \cellcolor{tabyellow}0.011 & 94.9 & 0.340 & 29.1 & 0.076 & 41.7 & 0.251 & 14.5 & 0.360 & 11.4 \\
+        MASt3R-SfM~\citep{duisterhof2024mast3rsfm}              & \cellcolor{tabred}0.009 & 96.9 & 0.095 & 54.1 & 0.051 & 64.7 & 0.042 & 69.7 & 0.311 & 18.4 \\
+        MapAnything~\citep{keetha2026mapanything}               & 0.014 & 95.2 & 0.227 & 40.6 & 0.044 & 67.9 & \cellcolor{tabyellow}0.019 & \cellcolor{tabyellow}89.2 & 0.089 & \cellcolor{tabyellow}51.9 \\
+        Pi3~\citep{wang2025pi}                                  & \cellcolor{tabred}0.009 & \cellcolor{tabred}97.3 & \cellcolor{tabyellow}0.034 & \cellcolor{tabyellow}66.8 & \cellcolor{tabred}0.032 & \cellcolor{tabred}77.8 & \cellcolor{tabred}0.014 & \cellcolor{tabred}94.3 & \cellcolor{tabyellow}0.078 & 51.0 \\
+        VGGT~\citep{vggt}                                       & \cellcolor{taborange}0.010 & 95.8 & 0.053 & 52.6 & 0.042 & 70.8 & 0.034 & 68.4 & 0.081 & 42.3 \\
+        VGGT-$\Omega$-1B~\citep{vggt_omega}                        & \cellcolor{tabred}0.009 & \cellcolor{taborange}97.2 & \cellcolor{tabred}0.024 & \cellcolor{tabred}78.6 & 0.039 & 65.3 & 0.032 & 70.6 & \cellcolor{tabred}0.055 & \cellcolor{tabred}62.3 \\
+        DA3-L~\citep{lin2025depth}                              & \cellcolor{taborange}0.010 & \cellcolor{tabyellow}97.1 & 0.211 & 49.9 & 0.039 & 69.6 & 0.051 & 48.1 & 0.141 & 27.0 \\
+        DA3-G~\citep{lin2025depth}                              & \cellcolor{taborange}0.010 & \cellcolor{tabyellow}97.1 & 0.129 & 64.7 & \cellcolor{tabyellow}0.037 & \cellcolor{tabyellow}71.1 & 0.041 & 57.8 & 0.080 & 42.0 \\
+        \midrule
+        \textbf{Ours}                                           & \cellcolor{tabred}0.009 & \cellcolor{tabyellow}97.1 & \cellcolor{taborange}0.026 & \cellcolor{taborange}78.3 & \cellcolor{taborange}0.035 & \cellcolor{taborange}74.2 & \cellcolor{taborange}0.015 & \cellcolor{taborange}93.3 & \cellcolor{taborange}0.067 & \cellcolor{taborange}58.5 \\
+        \bottomrule
+    \end{tabular}}
+\end{table}
+
+
+
+\begin{table}[t]
+    \caption{%
+        \textbf{Camera pose accuracy.} Area under the cumulative pose-error curve at $3^{\circ}$ (\textbf{AUC@3}~$\uparrow$) and $30^{\circ}$ (\textbf{AUC@30}~$\uparrow$), across five benchmarks.         VGGT-$\Omega$~\citep{vggt_omega} is concurrent work, reported here for completeness. \methodname{} ranks first or second on nine of ten cells and is in the top three on every cell.
+    }
+    \label{tab:comparison_sota_pose}
+    \footnotesize
+    \setlength{\tabcolsep}{6pt}
+    \centering
+    \noindent\makebox[0.85\linewidth][c]{%
+    \begin{tabular}{l rr rr rr rr rr}
+        \toprule
+        \multirow{2}{*}[-4pt]{\textbf{Method}}
+            & \multicolumn{2}{c}{\textbf{DTU}} & \multicolumn{2}{c}{\textbf{ETH3D}} & \multicolumn{2}{c}{\textbf{7-Scenes}} & \multicolumn{2}{c}{\textbf{ScanNet++}} & \multicolumn{2}{c}{\textbf{nuScenes}} \\
+        \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+        \multicolumn{1}{r}{\normalfont AUC}
+            & @3 & @30 & @3 & @30 & @3 & @30 & @3 & @30 & @3 & @30 \\
+        \midrule
+        MASt3R~\citep{leroy2025grounding}                       & 21.6 & 81.7 & 35.2 & 57.6 & 9.3 & 70.6 & 15.5 & 43.9 & 9.4 & 62.7 \\
+        MASt3R-SfM~\citep{duisterhof2024mast3rsfm}              & 40.2 & 91.4 & 52.8 & \cellcolor{taborange}85.0 & \cellcolor{taborange}16.4 & 80.3 & 38.7 & 85.0 & 9.1 & 70.9 \\
+        MapAnything~\citep{keetha2026mapanything}               & 18.1 & 88.8 & 37.1 & 73.8 & 8.2 & 74.6 & \cellcolor{tabyellow}70.6 & \cellcolor{tabyellow}96.7 & 37.8 & 82.8 \\
+        Pi3~\citep{wang2025pi}                                  & 70.2 & 97.3 & 43.2 & \cellcolor{tabyellow}84.9 & 11.3 & \cellcolor{tabyellow}81.3 & \cellcolor{taborange}76.5 & \cellcolor{taborange}97.3 & 24.8 & 82.4 \\
+        VGGT~\citep{vggt}                                       & \cellcolor{tabred}96.5 & \cellcolor{tabred}99.8 & 35.4 & 82.8 & 11.1 & 79.1 & 15.1 & 74.7 & \cellcolor{tabyellow}39.2 & \cellcolor{tabyellow}83.8 \\
+        VGGT-$\Omega$-1B~\citep{vggt_omega}                        & \cellcolor{tabyellow}77.4 & \cellcolor{tabyellow}98.1 & \cellcolor{taborange}64.1 & \cellcolor{tabred}95.4 & \cellcolor{tabred}21.3 & \cellcolor{tabred}87.0 & 29.9 & 87.3 & \cellcolor{taborange}42.4 & \cellcolor{tabred}85.5 \\
+        DA3-L~\citep{lin2025depth}                              & 69.2 & 97.3 & 38.8 & 75.3 & 11.8 & 79.7 & 7.6 & 71.8 & 11.0 & 74.7 \\
+        DA3-G~\citep{lin2025depth}                              & 74.9 & 97.9 & \cellcolor{tabyellow}55.4 & 82.4 & 12.0 & 80.9 & 26.4 & 80.2 & 37.7 & 82.0 \\
+        \midrule
+        \textbf{Ours}                                           & \cellcolor{taborange}83.2 & \cellcolor{taborange}98.8 & \cellcolor{tabred}66.0 & \cellcolor{tabred}95.4 & \cellcolor{tabyellow}13.9 & \cellcolor{taborange}81.7 & \cellcolor{tabred}79.4 & \cellcolor{tabred}98.0 & \cellcolor{tabred}43.4 & \cellcolor{taborange}85.3 \\
+        \bottomrule
+    \end{tabular}}
+\end{table}
+
+
+
+
+
+
+
+
