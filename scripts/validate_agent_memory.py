@@ -11,11 +11,55 @@ This checker intentionally stays narrow:
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
+ALIGNMENT_CONTRACT = REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
+ALIGNMENT_LINK_TARGETS = (
+    (
+        REPO_ROOT / "AGENTS.md",
+        ".agents/references/alignment_tools_contract.md` when work crosses OMX,",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "source_order.md",
+        "- Optional tool boundary: `.agents/references/alignment_tools_contract.md`.",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
+        "`alignment_tools_contract.md` links and forbidden tracked runtime state.",
+    ),
+)
+SCAFFOLD_REQUIRED_SNIPPETS = (
+    (
+        REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md",
+        "## Autoresearch Adapter",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md",
+        "## Visual And UI Gates",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
+        "## Autoresearch Adapter Contracts",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
+        "## CLI, Streamlit, Rerun, And Visual Gates",
+    ),
+    (
+        REPO_ROOT / ".agents" / "refactors.toml",
+        "agent-scaffold-goals-20260610.md",
+    ),
+)
+FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (".omx/",)
+FORBIDDEN_TRACKED_RUNTIME_PATHS = {
+    ".omx",
+    ".codex/config.toml",
+    ".codex/hooks.json",
+}
 
 REQUIRED_NATIVE_KEYS = {
     "id",
@@ -140,8 +184,58 @@ def check_history_records() -> list[str]:
     return errors
 
 
+def check_scaffold_alignment() -> list[str]:
+    errors: list[str] = []
+
+    if not ALIGNMENT_CONTRACT.exists():
+        errors.append(
+            "missing alignment tools contract: "
+            f"{ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}"
+        )
+
+    for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if not path.exists():
+            errors.append(f"missing scaffold alignment link target: {rel}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if expected_snippet not in text:
+            errors.append(f"{rel}: missing expected alignment contract link")
+
+    for path, expected_snippet in SCAFFOLD_REQUIRED_SNIPPETS:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if not path.exists():
+            errors.append(f"missing scaffold ownership target: {rel}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if expected_snippet not in text:
+            errors.append(f"{rel}: missing scaffold ownership snippet: {expected_snippet}")
+
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        suffix = f": {stderr}" if stderr else ""
+        errors.append(f"git ls-files failed while checking tracked runtime state{suffix}")
+        return errors
+
+    tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    for tracked_path in tracked_paths:
+        if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS or any(
+            tracked_path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_RUNTIME_PREFIXES
+        ):
+            errors.append(f"runtime state must not be tracked: {tracked_path}")
+
+    return errors
+
+
 def main() -> int:
-    errors = [*check_codex_notes(), *check_history_records()]
+    errors = [*check_codex_notes(), *check_history_records(), *check_scaffold_alignment()]
     if not errors:
         print("agent memory validation passed")
         return 0
