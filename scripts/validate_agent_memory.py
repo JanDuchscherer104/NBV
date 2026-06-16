@@ -43,15 +43,15 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## Lane Selection And Debug Pointers",
+        "## Streamlit, Rerun, Offline, And Rollouts",
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## Autoresearch Adapter Contracts",
+        "## KG And Optional Tooling",
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## CLI, Streamlit, Rerun, And Visual Gates",
+        "## Python Package",
     ),
 )
 FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (".omx/",)

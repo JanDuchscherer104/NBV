@@ -8,6 +8,7 @@ metadata:
     - "pure source localization with no failure"
     - "reviewing concrete diffs rather than reproducing a symptom"
   handoff_to:
+    - "omx:analyze for domain-agnostic read-only causal ranking before mutation"
     - "plan-grill for broad planning without a concrete symptom"
     - "aria-nbv-context for localizing an unknown failure surface"
     - "code-review for diff review"
@@ -34,6 +35,18 @@ metadata:
 
 # Diagnose ARIA
 
+## Role Split With OMX
+
+OMX owns orchestration, autonomy, goals, loops, and handoffs. Use
+`omx:analyze` for domain-agnostic read-only causal ranking when no concrete
+failing command, artifact, metric, or runtime symptom is known yet.
+
+`diagnose-aria` is the ARIA-NBV sidecar for concrete debugging tactics. Use it
+to pick the local reproducer, inspection command, or domain verification loop
+for an existing symptom. It should name the exact tool loop to run, including
+command, expected signal, and passing loop; it must not replace OMX workflow
+control.
+
 ## When To Use
 
 Use this skill for hard bugs or regressions in:
@@ -43,6 +56,56 @@ Use this skill for hard bugs or regressions in:
 - Streamlit panels, Quarto / Typst renders, KG ingestion, or CLI failures
 - metric drift, calibration collapse, performance regressions, or flaky tests
 
+## Local Command Toolbelt
+
+Use the smallest tool that can reproduce or inspect the symptom.
+
+- Streamlit entrypoint:
+  `cd aria_nbv && uv run nbv-st --server.port <port>`
+  The wrapper disables Streamlit file watching by default; pass
+  `--server.fileWatcherType=<mode>` before `--` only when watcher behavior is
+  the suspected issue.
+- Streamlit smoke and panel tests:
+  `cd aria_nbv && uv run pytest tests/test_streamlit_entry.py tests/app`
+  Start with entrypoint or panel-specific tests before live UI inspection.
+- Offline VIN store inspection:
+  `make offline-info`, `make offline-tree`, `make offline-samples`, and
+  `make offline-sample-rerun-random`.
+- Rollout store inspection:
+  `make rollouts-info`, `make rollouts-stats`, and
+  `make rollouts-rerun-random`.
+- Rerun inspector:
+  `cd aria_nbv && uv run nbv-rerun-inspect ...`.
+  Hand off to `rerun-nbv-inspector` for visual, frame-coordinate, depth/RGB,
+  OBB, frustum, or `.rrd` entity-tree issues.
+- KG and docs failures:
+  `make kg-status`, `make kg-route KG_TASK="<task>"`,
+  `make kg-claim-check KG_CLAIM="<claim>"`, `make qmd-frontmatter-check`,
+  and focused Quarto or Typst renders for the touched page.
+- Package behavior:
+  `cd aria_nbv && uv run pytest <focused-test>`, then targeted
+  `cd aria_nbv && uv run ruff check <path>` only for touched Python surfaces.
+
+## Optional Interactive App Inspection
+
+Use browser automation tools when available for live Streamlit symptoms that
+cannot be understood from panel tests or CLI artifacts alone. Treat this as a
+runtime evidence loop, not a repo-owned dependency.
+
+- Start from `cd aria_nbv && uv run nbv-st --server.port <port>`, then open the
+  served app URL with the available browser tool.
+- Capture an accessibility snapshot before screenshots; prefer labels, roles,
+  and visible text for deterministic inspection.
+- Click or type only through stable labels, roles, or unique visible controls.
+  Record the URL, viewport, action sequence, expected signal, and observed
+  signal.
+- Use screenshots only for visual layout, plot, or rendered-state evidence.
+  Store or report the screenshot/snapshot artifact path when one is used.
+- If browser tools are unavailable, fall back to Streamlit panel tests,
+  offline/rollout CLI inspection, and Rerun artifacts.
+- Reduce every live-UI finding to a focused test, CLI/Rerun artifact, or an
+  explicit note explaining why no durable test seam exists.
+
 ## Feedback Loop First
 
 Build the smallest deterministic loop that reproduces the user-visible symptom:
@@ -51,7 +114,7 @@ Build the smallest deterministic loop that reproduces the user-visible symptom:
 - CLI/data path: `cd aria_nbv && uv run nbv-summary --config-path <config>`
 - immutable store: manifest/sample-index read plus
   `tests/data_handling/test_vin_offline_store.py`
-- Streamlit panel: import/dispatcher test before manual UI inspection
+- Streamlit panel: entrypoint or panel test before manual UI inspection
 - docs: `cd docs && quarto render <page>` or
   `typst compile typst/seminar_slides/<file>.typ --root .`
 - KG: the narrowest `make kg-*` command that owns the failing artifact
