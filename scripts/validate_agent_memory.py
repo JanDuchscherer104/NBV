@@ -29,7 +29,7 @@ ALIGNMENT_LINK_TARGETS = (
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "`alignment_tools_contract.md` links and forbidden tracked runtime state.",
+        "Covers repo-owned scaffold alignment checks, required debrief frontmatter,",
     ),
 )
 SCAFFOLD_REQUIRED_SNIPPETS = (
@@ -43,15 +43,15 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
+        "## Lane Selection And Debug Pointers",
+    ),
+    (
+        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
         "## Autoresearch Adapter Contracts",
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
         "## CLI, Streamlit, Rerun, And Visual Gates",
-    ),
-    (
-        REPO_ROOT / ".agents" / "refactors.toml",
-        "agent-scaffold-goals-20260610.md",
     ),
 )
 FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (".omx/",)

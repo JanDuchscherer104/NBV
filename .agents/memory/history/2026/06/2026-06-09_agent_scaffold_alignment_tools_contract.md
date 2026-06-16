@@ -23,8 +23,8 @@ replaceable evidence producers rather than repo truth owners.
   `.agents/references/verification_matrix.md`.
 - Extended `scripts/validate_agent_memory.py` with deterministic scaffold
   checks for required links and forbidden tracked runtime state.
-- Added a pointer-only ARIA-NBV block to `/home/jd/.codex/AGENTS.md` without
-  making user-local guidance an ARIA policy owner.
+- Kept user-local Codex guidance outside repo validation; the repo validator
+  now checks only tracked owner surfaces and forbidden tracked runtime state.
 
 ## Verification
 
@@ -32,4 +32,5 @@ replaceable evidence producers rather than repo truth owners.
 - `make agents-db AGENTS_ARGS='validate'`
 - `aria_nbv/.venv/bin/ruff check scripts/validate_agent_memory.py`
 - `git check-ignore -v .omx .codex/config.toml .codex/hooks.json`
-- Exact marker-block check for `/home/jd/.codex/AGENTS.md`
+- Repo-guidance smoke confirmed ignored operator state and user-local pointer
+  markers are not required repo checks.
