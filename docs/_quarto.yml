@@ -146,8 +146,6 @@ website:
               file: typst/seminar_slides/slides_2.pdf
             - text: "Project Slides 4"
               file: typst/seminar_slides/slides_4.pdf
-            - text: "MSc Slides 01 (outlook)"
-              file: typst/thesis_slides/slides_thesis_outlook.pdf
 
   page-footer:
     left: ""

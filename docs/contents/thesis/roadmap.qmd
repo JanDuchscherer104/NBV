@@ -27,9 +27,10 @@ ground-truth meshes [@ProjectAria-ASE-2025], frozen EVL/EFM3D features
 [@VIN-NBV-frahm2025], an ASE mesh/oracle counterfactual rollout loop, and a
 target-conditioned finite-candidate $Q_H$ value model, first implemented as a
 candidate-query Transformer over finite candidate sets.
-Online discrete $Q_H$, external mesh/oracle-compatible substrates, and
-continuous target-then-pose actor-critic policies are lower-priority scaling and
-escalation RQs after the finite-candidate evidence, not substitutes for the M5
+External mesh/oracle-compatible substrates are RQ4 support and scale evidence.
+Online discrete $Q_H$ is the RQ5 bridge after offline finite-candidate evidence,
+and continuous target-then-pose actor-critic policies are RQ6 headroom tests
+after finite-candidate and online-discrete evidence, not substitutes for the M5
 $Q_H$ result.
 See the
 [research questions](questions.qmd), the
@@ -40,8 +41,9 @@ See the
 [generated implementation contracts](../../reference/index.qmd), and the
 [M1 contract report](m1_contract_report.qmd) for the main connected nodes. The
 advisor-facing proposal is maintained in
-`docs/typst/thesis/proposal.typ`; the seminar paper is historical implemented
-evidence, not the current thesis contract.
+`docs/typst/thesis/main.typ`; archived proposal/advisor Typst handouts under
+`.agents/archive/docs/typst/thesis/` are provenance only. The seminar paper is
+historical implemented evidence, not the current thesis contract.
 
 ## Thesis Outcome {#roadmap-thesis-outcome}
 
@@ -64,9 +66,10 @@ The September deliverable is a reproducible target-aware
 - final experiments scaled toward the full 100 GT-mesh ASE scenes and 4,608
   snippet windows after small-subset correctness passes, or a scene-level
   held-out subset with explicit coverage reporting if full coverage is blocked;
-- a scaling analysis that preserves mesh/oracle target-RRI supervision across
-  ASE-wide, external-compatible, and online-discrete settings before considering
-  time-permitting continuous policies.
+- RQ4 support and scale analysis that preserves mesh/oracle target-RRI
+  supervision across ASE-wide and external-compatible settings;
+- an RQ5 online-discrete bridge before considering time-permitting RQ6
+  continuous policies.
 
 M5 first measures non-myopic headroom:
 bounded oracle lookahead selects actions by the same root-normalized target-gain
@@ -78,8 +81,8 @@ target root gain, diagnostic target RRI under matched budgets, and by recovered 
 one-step target-conditioned scorer. If headroom is near zero, the thesis reports
 no measurable non-myopic headroom for the evaluated split, target set, horizon,
 branch factor, and candidate distribution. Scaling then tests whether more
-coverage, broader mesh/oracle-compatible substrates, or online discrete
-interaction changes that conclusion before continuous action spaces are
+coverage, broader mesh/oracle-compatible substrates, or RQ5 online-discrete
+interaction changes that conclusion before RQ6 continuous action spaces are
 attempted. Full continuous control, VLM/global planning,
 SceneScript-style memory, and real-device deployment remain lower-priority
 escalations or future work unless the finite-candidate and scaling evidence
@@ -165,19 +168,26 @@ $$
 \{i\in\{1,\ldots,N_t\}:m_{t,i}=1\}.
 $$
 
-The V1 target protocol is OBS-SEL / PRED-Q / GT-EVAL:
+Rollout/data generation uses an oracle target-task protocol first: GT OBBs
+define identity-valid target tasks, ambiguity checks, target crops, and labels.
+Actor-visible target selection remains a separate V1 protocol for later
+deployable claims:
 
 $$
-z_e =
-\psi_{\mathrm{obs}}\!\left(O_t^{\mathrm{pred}}, P_t^{\mathrm{semi}}, F_t^{\mathrm{EVL}}, I_{1:t}\right),
+z_e^{\mathrm{oracle}}
+=
+\psi_{\mathrm{task}}\!\left(O_{\mathrm{GT}}, P_t^{\mathrm{semi}}, F_t^{\mathrm{EVL}}, I_{1:t}\right),
 \qquad
 M_e =
-\operatorname{crop}\!\left(M_{\mathrm{GT}}, \operatorname{match}(z_e,O_{\mathrm{GT}})\right).
+\operatorname{crop}\!\left(M_{\mathrm{GT}}, e\right).
 $$
 
-`z_e` may contain predicted/observed OBB center, orientation, extents, class,
-confidence, projected area, semi-dense support, EVL support, and relative pose.
-`M_e` is hidden from the actor and used only for labels and endpoint metrics.
+`z_e^{\mathrm{oracle}}` may contain OBB center, orientation, extents, class,
+confidence, projected area, semi-dense support, EVL support, relative pose, and
+identity-gate diagnostics. `M_e` is used only for labels and endpoint metrics.
+The V1 OBS-SEL / PRED-Q / GT-EVAL path later replaces GT target-task input with
+observed or predicted target descriptors and keeps GT crops hidden from the
+actor.
 
 Candidate generation is modeled as a logged finite mixture:
 
@@ -213,15 +223,20 @@ candidate,
 $$
 P_{t+1}=P_t\cup P_{q_{t,a_t}},
 \qquad
-r_t^e =
-\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_t^e+\varepsilon}.
+r_{t,\mathrm{root}}^e =
+\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_0^e+\varepsilon}.
 $$
+
+The state-relative diagnostic
+$(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_t^e+\varepsilon)$ remains a
+VIN-compatible label and one-step analysis signal, not the default rollout or
+$Q_H$ training reward.
 
 The additive value-learning return and endpoint reporting metric are kept
 separate:
 
 $$
-G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e,
+G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k,\mathrm{root}}^e,
 \qquad
 J_{e,\Delta}^{(H)}
 =
@@ -300,7 +315,8 @@ before they become thesis evidence.
 flowchart LR
   ASE["ASE / Project Aria snippet<br/>RGB, poses, calibration, semidense points"] --> EVL["Frozen EFM3D / EVL<br/>local voxel evidence + OBB predictions"]
   ASE --> OracleMesh["GT mesh + GT OBBs<br/>oracle and evaluation only"]
-  EVL --> TargetSel["OBS-SEL<br/>actor-visible target selection"]
+  OracleMesh --> TargetSel["Oracle target-task sampler<br/>identity-valid GT target tasks"]
+  EVL -. "audit descriptors" .-> TargetSel
   TargetSel --> CandidateGen["Mixed finite candidates<br/>target-centric + exploration"]
   CandidateGen --> Validity["Validity masks + reasons<br/>collision, bounds, no-depth, support"]
   OracleMesh --> RRIOracle["Oracle scene + target RRI<br/>render, fuse, crop, score"]
@@ -374,9 +390,8 @@ Rerun offline inspector, and the available VIN offline store.
   generated `contentReference` comments, no Wikipedia support for
   proposal-critical claims, primary metadata for cited papers/datasets, and
   any legacy duplicate aliases explicitly quarantined;
-- render the approximately 2.5 content-page proposal contract with
-  `make proposal-pdf` and track the generated proposal PDF once the
-  advisor-facing text is frozen;
+- render the active thesis seed with `make thesis-pdf` and keep archived
+  proposal/advisor handouts as provenance rather than active source owners;
 - align proposal, roadmap, and questions on the six-RQ thesis boundary:
   objective/metric split, target and matching protocol, candidate and rollout
   support, headroom-gated $Q_H$, scaling, and online/continuous escalation;
@@ -388,7 +403,7 @@ Rerun offline inspector, and the available VIN offline store.
 - record KG-friendly authoring rules in this roadmap and use them in new public
   docstrings;
 - keep thesis scope aligned with [RQ1](questions.qmd#rq1-objective) through
-  [RQ6](questions.qmd#rq6-escalation) and the
+  [RQ6](questions.qmd#rq6-continuous) and the
   [shared evidence protocol](questions.qmd#rq-evidence-protocol).
 
 ### M1 - Data, Cache, Oracle Correctness {#roadmap-m1}
@@ -445,18 +460,21 @@ Lightning training surface, W&B/Optuna reports, and Streamlit diagnostics.
 **Primary question:** Can the oracle measure improvement for a selected target,
 not only the whole scene?
 
-**Implementation surfaces:** GT OBBs from ASE/EFM views, target selection logic,
-cropped point/mesh RRI, and diagnostics linking target-level and scene-level
-metrics.
+**Implementation surfaces:** GT OBBs from ASE/EFM views, oracle target-task
+sampling, cropped point/mesh RRI, and diagnostics linking target-level and
+scene-level metrics. The V1 actor-visible selector is a separate deployable
+input protocol after the oracle label path is trusted.
 
 **Exit checks:**
 
-- V0 target contract: GT OBB input plus GT crop/evaluation for sanity and
-  upper-bound runs;
-- V1 main contract: observed/predicted OBB input matched to GT OBB
-  target-RRI labels under OBS-SEL / PRED-Q / GT-EVAL;
-- observed-only target eligibility policy based on predicted OBBs/classes,
-  confidence, projected area, and semidense/EVL point support;
+- oracle target-task contract: identity-valid GT OBB tasks, GT crop/evaluation,
+  explicit ambiguity diagnostics, and target-RRI labels for rollout/data
+  generation;
+- V1 deployable-input contract: observed/predicted OBB descriptors matched to
+  GT OBB target-RRI labels under OBS-SEL / PRED-Q / GT-EVAL before
+  actor-visible main-result claims;
+- observed-target eligibility policy based on predicted OBBs/classes,
+  confidence, projected area, and semidense/EVL point support for the V1 path;
 - GT-OBB cropped target RRI on a small trusted subset, then full-scale label
   generation only after the LRZ/Zarr gate passes;
 - diagnostics showing current points, candidate points, cropped mesh, target
@@ -531,30 +549,32 @@ the [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd).
   failure;
 - visualize representative successes and failures.
 
-### M6 - Scaling and Online/Continuous Escalation {#roadmap-m6}
+### M6 - RQ5 Online and RQ6 Continuous Escalation {#roadmap-m6}
 
-**Primary question:** Which scaling or online/continuous escalation is justified
-after the mandatory finite-candidate $Q_H$ result?
+**Primary question:** Which online-discrete or continuous escalation is
+justified after the mandatory offline finite-candidate $Q_H$ result and RQ4
+support evidence?
 
 **Implementation surfaces:** the
 [counterfactual RL API](../../reference/aria_nbv.pose_generation.CounterfactualRolloutResult.qmd),
-transition datasets, external mesh/oracle-compatible substrate notes, online
-discrete $Q_H$ in the ASE mesh/oracle loop, and actor-critic or
-continuous-control design notes.
+transition datasets, online discrete $Q_H$ in the ASE mesh/oracle loop, and
+actor-critic or continuous-control design notes. External mesh/oracle-compatible
+substrate notes remain RQ4 support evidence unless the task explicitly targets
+online interaction.
 
 **Exit checks:**
 
-- require M5 $Q_H$ evidence before spending time on quantitative online or
-  continuous-control work;
-- decide whether the first scale extension is more ASE coverage, an external
-  mesh/oracle-compatible substrate, or online discrete $Q_H$ in the current ASE
-  mesh/oracle loop;
+- require M5 $Q_H$ evidence before spending time on quantitative RQ5 online or
+  RQ6 continuous-control work;
+- decide the exact RQ5 scope for online discrete $Q_H$ in the current ASE
+  mesh/oracle loop: bridge design only, smoke experiment, or quantitative
+  comparator;
 - preserve target-specific point-mesh supervision for thesis-grade scaling
   evidence; proxy coverage, uncertainty, or semantic rewards remain contrast
   signals;
-- document how a future actor would propose continuous target-then-pose actions
-  and handle feasibility after online training evidence exists, but do not
-  require a quantitative continuous baseline;
+- document how an RQ6 actor would propose continuous target-then-pose actions
+  and handle feasibility after online finite-candidate evidence exists, but do
+  not require a quantitative continuous baseline;
 - defer imitation-learning variants beyond the planned RRI + $Q_H$ approach;
 - defer SB3/DQN/PPO/SAC until an online Gymnasium-style simulator with
   mesh/oracle target-RRI evaluation exists;
@@ -611,7 +631,7 @@ architecture toggles.
 | Invalidity | hard mask; hard mask plus validity head; scalar penalty only after masks work | invalid-action rate, value leakage, invalid-reason distribution |
 | Ordinal/scalar loss | CORAL; balanced CORAL; focal threshold; auxiliary Huber | calibration, Spearman correlation, top-k hit, confusion structure |
 | State richness | CF0 geometry-only; selected synthetic observations; optional directional observability | planning improvement, support gap, overfitting gap |
-| Scale | small trusted subset; scene-level held-out subset; full 100 GT-mesh scenes; external mesh/oracle-compatible substrate; online discrete $Q_H$ | confidence intervals, coverage report, oracle throughput, recovered headroom under matched budgets |
+| Scale and online bridge | small trusted subset; scene-level held-out subset; full 100 GT-mesh scenes; external mesh/oracle-compatible substrate; RQ5 online discrete $Q_H$ | confidence intervals, coverage report, oracle throughput, recovered headroom under matched budgets |
 
 ## Evidence Reporting Contract {#roadmap-evidence-contract}
 

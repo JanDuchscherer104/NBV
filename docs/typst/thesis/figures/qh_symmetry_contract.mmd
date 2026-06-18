@@ -1,0 +1,96 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  flowchart:
+    htmlLabels: true
+    nodeSpacing: 20
+    rankSpacing: 32
+    curve: basis
+  layout: elk
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
+    fontSize: "18px"
+    primaryTextColor: "#1f2937"
+    lineColor: "#64748b"
+  themeCSS: |
+    .nodeLabel { font-size: 18px; }
+    .edgeLabel { font-size: 16px; }
+    .cluster-label { font-size: 18px; font-weight: 700; }
+---
+flowchart TB
+  Hist["$$\begin{array}{c}\textbf{Actor-visible history}\\ \boldsymbol{\mathcal{P}}_{t},\ \mathbf{T}^{w}_{\mathrm{rig}}(t)\end{array}$$"]
+  Target["$$\begin{array}{c}\textbf{Target query}\\ \mathbf{z}_{e},\ \hat{\mathbf{B}}_{e}\end{array}$$"]
+  Cand["$$\begin{array}{c}\textbf{Unordered candidate table}\\ q_{t,i},\ m_{t,i},\ i=1,\ldots,N_q\end{array}$$"]
+  Oracle["$$\begin{array}{c}\textbf{Oracle-only assets}\\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}},\ M_e\end{array}$$"]
+
+  subgraph Frames["Frame and provenance contract"]
+    direction TB
+    LocalFrames["$$\begin{array}{c}\textbf{Local-frame features}\\ \mathbf{T}^{r}_{c_q},\ q_{t,i}\rightarrow e\end{array}$$"]
+    Provenance["$$\begin{array}{c}\textbf{Provenance gate}\\ \texttt{actor}\ /\ \texttt{oracle}\end{array}$$"]
+    Gravity["$$\begin{array}{c}\textbf{Gravity-aware symmetry}\\ \text{not full }SO(3)\text{ invariance}\end{array}$$"]
+  end
+
+  subgraph Direction["Directional visibility memory"]
+    direction TB
+    DirIn["$$\begin{array}{c}\textbf{Selected directions}\\ d_k(v)\in\mathbb{S}^{2}\end{array}$$"]
+    DirMem["$$\begin{array}{c}\textbf{Target-local memory}\\ \mathbf{V}_{\mathrm{dir}}\ \text{or }M_{\mathrm{dir}}(v)\end{array}$$"]
+    Novelty["$$\begin{array}{c}\textbf{Directional novelty}\\ \phi_{\mathrm{dir}}(q_{t,i},\mathbf{z}_{e})\end{array}$$"]
+  end
+
+  subgraph SetModel["Mask-safe candidate set model"]
+    direction TB
+    Tokens["$$\begin{array}{c}\textbf{Candidate row tokens}\\ X_t\in\mathbb{R}^{B\times N_q\times F}\end{array}$$"]
+    Mask["$$\begin{array}{c}\textbf{Hard mask isolation}\\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
+    Encoder["$$\begin{array}{c}\textbf{Permutation-equivariant encoder}\\ f_{\theta}(\Pi X_t,m_t)=\Pi f_{\theta}(X_t,m_t)\end{array}$$"]
+    Values["$$\begin{array}{c}\textbf{Per-candidate values}\\ Q_{H,\theta}(s_t,e,q_{t,i})\end{array}$$"]
+  end
+
+  subgraph Tests["Required stress tests"]
+    direction TB
+    Shuffle["$$\begin{array}{c}\textbf{Row shuffle}\\ \text{outputs permute with rows}\end{array}$$"]
+    Isolation["$$\begin{array}{c}\textbf{Mask isolation}\\ \text{invalid rows cannot steer scores}\end{array}$$"]
+    Count["$$\begin{array}{c}\textbf{Valid-count robustness}\\ \text{calibration across }N_{\mathrm{valid}}\end{array}$$"]
+  end
+
+  Select["$$\begin{array}{c}\textbf{Masked NBV action}\\ \operatorname*{arg\,max}_{i:m_{t,i}=1}Q_{H,\theta}\end{array}$$"]
+
+  Hist --> LocalFrames
+  Target --> LocalFrames
+  Cand --> LocalFrames
+  Oracle --> Provenance
+  Provenance --> LocalFrames
+  LocalFrames --> Gravity
+
+  Hist --> DirIn
+  Cand --> DirIn
+  DirIn --> DirMem
+  DirMem --> Novelty
+
+  Gravity --> Tokens
+  Novelty --> Tokens
+  Cand --> Mask
+  Mask --> Encoder
+  Tokens --> Encoder
+  Encoder --> Values
+  Values --> Select
+
+  Encoder --> Shuffle
+  Mask --> Isolation
+  Values --> Count
+
+  classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
+
+  class Hist,Target,Cand,Oracle input;
+  class LocalFrames,Provenance,Gravity,DirIn,Novelty,Encoder,Values compute;
+  class DirMem,Tokens,Mask data;
+  class Select,Shuffle,Isolation,Count output;
+
+  style Frames fill:#f0fbff,stroke:#8fd0ff,stroke-width:2px,rx:12,ry:12
+  style Direction fill:#f1fff6,stroke:#97ddb5,stroke-width:2px,rx:12,ry:12
+  style SetModel fill:#f7f3ff,stroke:#cdb2ff,stroke-width:2px,rx:12,ry:12
+  style Tests fill:#fffaf0,stroke:#fbbf24,stroke-width:2px,rx:12,ry:12

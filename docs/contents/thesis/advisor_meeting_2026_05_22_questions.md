@@ -14,11 +14,11 @@ Meeting goal: align the thesis scope, research questions, and the next rollout /
 
 ## Questions To Show In The Deck
 
-1. **RQ1 objective:** Confirm \(H\), \(\gamma\), \(\varepsilon\), clipping, near-solved target policy, and whether log gain is a primary companion metric or only a diagnostic.
-2. **RQ2 representations:** Confirm that RQ2 owns the full actor-visible representation ladder: semidense geometry, semidense+DINO point bank, EVL local/OBB evidence, target descriptors, \(S^2\) visibility memory, candidate-view features, and candidate-query pooling.
-3. **RQ2 minimum path:** Which representation ablations are mandatory before interpreting \(Q_H\): semidense+DINO, target crop descriptor, \(S^2\) visibility memory, candidate-query pooling, or only a smaller first subset?
-4. **RQ3 candidate support:** Confirm the production candidate preflight: valid-count gate, target-aware family contribution, mixed target-centric/exploration support, regeneration after selected actions, and flat-reward blocker.
-5. **RQ4 offline \(Q_H\):** Confirm the success bar: positive oracle-lookahead headroom, recovered-headroom threshold \(\eta_Q\), and matched oracle re-evaluation of learned selected actions.
+1. **RQ1 method:** Confirm the target-RRI objective, \(H\), \(\gamma\), \(\varepsilon\), clipping, near-solved target policy, and whether log gain is a primary companion metric or only a diagnostic.
+2. **RQ2 offline \(Q_H\):** Confirm the success bar: positive oracle-lookahead headroom, recovered-headroom threshold \(\eta_Q\), matched oracle re-evaluation of learned selected actions, and fixed vs variable horizon.
+3. **RQ3 representations:** Confirm that RQ3 owns the full actor-visible representation ladder: semidense geometry, semidense+DINO point bank, EVL local/OBB evidence, target descriptors, \(S^2\) visibility memory, candidate-view features, and candidate-query pooling.
+4. **RQ3 minimum path:** Which representation ablations are mandatory before interpreting \(Q_H\): semidense+DINO, target crop descriptor, \(S^2\) visibility memory, candidate-query pooling, or only a smaller first subset?
+5. **RQ4 support:** Confirm the production candidate and rollout-support preflight: valid-count gate, target-aware family contribution, mixed target-centric/exploration support, regeneration after selected actions, scale support, and flat-reward blocker.
 6. **RQ5 online discrete:** Confirm whether online discrete training over the same finite-candidate action contract is a gated follow-up after stable offline \(Q_H\), not a replacement for the offline evidence.
 7. **RQ6 continuous headroom:** Confirm that continuous target-then-pose or hierarchical action spaces are tested only after discrete evidence and only for headroom over the best finite-candidate policy.
 8. **Shared evidence protocol:** Confirm scene-level split / fallback, target matching thresholds, ambiguity handling, hard invalidity masks with reason codes, LRZ/Zarr preflight, and no GT actor-visible input.

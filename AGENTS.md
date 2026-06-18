@@ -43,8 +43,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   documentation surfaces.
 - Do not treat V0 GT actor-visible target runs as main V1 performance.
 - Invalidity is a hard mask/reason contract, not low RRI.
-- Gymnasium/SB3/online simulator work is stretch or M6 bridge work unless the
-  task explicitly targets that gate.
+- Generic Gymnasium/SB3 or external online-simulator work is stretch or M6
+  bridge work unless the task explicitly targets that gate. Online discrete
+  `Q_H` over the existing finite-candidate ASE mesh/oracle loop is the
+  advisor-facing RQ5 bridge after offline `Q_H` evidence is stable.
 
 ## Optional Operator Tools
 - OMX remains optional operator orchestration. Use

@@ -9,7 +9,9 @@ Apply this file when working under `docs/`.
 - Current terminology lives in `docs/typst/shared/glossary.typ`; the Quarto
   glossary is generated output.
 - `docs/contents/ideas.qmd` is read-only archive/scratch.
-- `docs/typst/thesis/proposal.typ` owns advisor proposal wording.
+- `docs/typst/thesis/main.typ` and its included sections own the active
+  master's-thesis seed. Archived proposal/advisor Typst sources under
+  `.agents/archive/docs/typst/thesis/` are provenance only.
 - `docs/typst/seminar_paper/main.typ` is historical implemented evidence.
 - Keep Quarto docs aligned to the correct source role instead of introducing
   competing top-level narratives.
@@ -42,7 +44,7 @@ Apply this file when working under `docs/`.
 - Quarto preview: `cd docs && quarto preview`
 - Quarto check: `quarto check`
 - Typst paper: `cd docs && typst compile typst/seminar_paper/main.typ --root .`
-- Typst proposal: `cd docs && typst compile typst/thesis/proposal.typ --root .`
+- Typst thesis: `cd docs && typst compile typst/thesis/main.typ --root .`
 - Typst slides: `cd docs && typst compile typst/seminar_slides/<file>.typ --root .`
 - QMD tree: `make context-qmd-tree`
 - Outline-first routing: `scripts/nbv_qmd_outline.sh`, `scripts/nbv_typst_includes.py`

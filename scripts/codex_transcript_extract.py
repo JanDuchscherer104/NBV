@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Extract ARIA-NBV user intent from local Codex session JSONL files.
+"""Extract ARIA-NBV transcript evidence from local Codex session JSONL files.
 
-The extractor keeps full raw Codex transcripts out of repo memory. It writes
-only high-signal user-authored records and candidate distillates that LitKG can
-index through the existing `.configs/litkg.toml` transcript source globs.
+The extractor keeps full raw Codex runtime transcripts out of repo memory. It
+writes chat-only user/assistant transcript records, high-signal user-authored
+records, and candidate distillates that LitKG can index through the existing
+`.configs/litkg.toml` transcript source globs.
 """
 
 from __future__ import annotations
@@ -92,6 +93,7 @@ class SessionState:
     mode: str | None = None
     matched_by_cwd: bool = False
     matched_by_marker: bool = False
+    chat_messages: list[dict[str, Any]] = field(default_factory=list)
     user_messages: list[dict[str, Any]] = field(default_factory=list)
     plan_answers: list[dict[str, Any]] = field(default_factory=list)
     pending_questions: dict[str, PendingQuestion] = field(default_factory=dict)
@@ -255,6 +257,46 @@ def record_user_message(
     )
 
 
+def record_chat_message(
+    state: SessionState,
+    *,
+    role: str,
+    text: str,
+    timestamp: str | None,
+    line_no: int,
+    path: Path,
+    roots: list[Path],
+    phase: str | None = None,
+) -> None:
+    if role not in {"user", "assistant"}:
+        return
+    if is_bootstrap_or_context_dump(text):
+        return
+    if any(marker in text for marker in PROJECT_MARKERS):
+        state.matched_by_marker = True
+    normalized = normalize_text(text)
+    if not normalized:
+        return
+    state.chat_messages.append(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "chat_message",
+            "role": role,
+            "timestamp": timestamp,
+            "session_id": state.session_id,
+            "session_timestamp": state.session_timestamp,
+            "cwd": state.cwd,
+            "turn_id": state.turn_id,
+            "mode": state.mode,
+            "phase": phase,
+            "text": text.strip(),
+            "normalized_text": normalized,
+            "content_hash": sha256_text(normalized),
+            "source": build_source(path, line_no, roots),
+        }
+    )
+
+
 def parse_request_questions(arguments: str) -> dict[str, dict[str, Any]]:
     try:
         payload = json.loads(arguments or "{}")
@@ -366,9 +408,19 @@ def extract_session(
                 state.turn_id = payload.get("turn_id") or state.turn_id
                 state.mode = payload.get("collaboration_mode_kind") or state.mode
             elif event_type == "user_message":
+                message = str(payload.get("message") or "")
+                record_chat_message(
+                    state,
+                    role="user",
+                    text=message,
+                    timestamp=timestamp,
+                    line_no=line_no,
+                    path=path,
+                    roots=roots,
+                )
                 record_user_message(
                     state,
-                    text=str(payload.get("message") or ""),
+                    text=message,
                     timestamp=timestamp,
                     line_no=line_no,
                     path=path,
@@ -380,15 +432,31 @@ def extract_session(
             continue
 
         payload_type = payload.get("type")
-        if payload_type == "message" and payload.get("role") == "user":
-            record_user_message(
+        if payload_type == "message" and payload.get("role") in {
+            "user",
+            "assistant",
+        }:
+            role = str(payload.get("role") or "")
+            text = content_text_from_message(payload)
+            record_chat_message(
                 state,
-                text=content_text_from_message(payload),
+                role=role,
+                text=text,
                 timestamp=timestamp,
                 line_no=line_no,
                 path=path,
                 roots=roots,
+                phase=payload.get("phase"),
             )
+            if role == "user":
+                record_user_message(
+                    state,
+                    text=text,
+                    timestamp=timestamp,
+                    line_no=line_no,
+                    path=path,
+                    roots=roots,
+                )
             continue
 
         if (
@@ -419,6 +487,15 @@ def extract_session(
                 roots=roots,
             )
 
+    state.chat_messages = [
+        record
+        for record in state.chat_messages
+        if record_allowed_for_project(
+            record,
+            project_root,
+            session_marker_context=state.matched_by_marker,
+        )
+    ]
     state.user_messages = [
         record
         for record in state.user_messages
@@ -439,7 +516,7 @@ def extract_session(
     ]
     if not (state.matched_by_cwd or state.matched_by_marker):
         return None
-    if not (state.user_messages or state.plan_answers):
+    if not (state.chat_messages or state.user_messages or state.plan_answers):
         return None
     return state
 
@@ -456,6 +533,33 @@ def dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         ),
     ):
         key = f"{record.get('kind')}:{record.get('content_hash')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+    return deduped
+
+
+def dedupe_chat_messages(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for record in sorted(
+        records,
+        key=lambda item: (
+            str(item.get("timestamp") or ""),
+            str((item.get("source") or {}).get("session_path") or ""),
+            str((item.get("source") or {}).get("line") or ""),
+        ),
+    ):
+        key = ":".join(
+            [
+                str(record.get("kind") or ""),
+                str(record.get("role") or ""),
+                str(record.get("session_id") or ""),
+                str(record.get("timestamp") or ""),
+                str(record.get("content_hash") or ""),
+            ]
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -705,8 +809,11 @@ def review_distillates(
 def gather_records(
     roots: list[Path],
     project_root: Path,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Counter[str]]:
+) -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], Counter[str]
+]:
     counter: Counter[str] = Counter()
+    all_chat_messages: list[dict[str, Any]] = []
     all_user_messages: list[dict[str, Any]] = []
     all_plan_answers: list[dict[str, Any]] = []
 
@@ -726,16 +833,20 @@ def gather_records(
                 counter["sessions_matched_by_marker"] += 1
             if state.mode == "plan" or state.plan_answers:
                 counter["sessions_with_plan_mode"] += 1
+            all_chat_messages.extend(state.chat_messages)
             all_user_messages.extend(state.user_messages)
             all_plan_answers.extend(state.plan_answers)
 
+    chat_messages = dedupe_chat_messages(all_chat_messages)
     user_messages = dedupe_records(all_user_messages)
     plan_answers = dedupe_records(all_plan_answers)
+    counter["chat_messages_raw"] = len(all_chat_messages)
+    counter["chat_messages_deduped"] = len(chat_messages)
     counter["user_messages_raw"] = len(all_user_messages)
     counter["user_messages_deduped"] = len(user_messages)
     counter["plan_answers_raw"] = len(all_plan_answers)
     counter["plan_answers_deduped"] = len(plan_answers)
-    return user_messages, plan_answers, counter
+    return chat_messages, user_messages, plan_answers, counter
 
 
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
@@ -743,6 +854,13 @@ def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def output_path_label(path: Path) -> str:
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def default_roots() -> list[Path]:
@@ -770,7 +888,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--output-root",
         type=Path,
         default=TRANSCRIPT_ROOT,
-        help="Output root for user and distilled transcript JSONL.",
+        help="Output root for raw, user, and distilled transcript JSONL.",
     )
     parser.add_argument(
         "--decisions-file",
@@ -792,7 +910,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Write transcript user extracts and distillates. Without this, only print counts.",
+        help="Compatibility flag. Writes are now the default; use --dry-run to only print counts.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only print counts; do not write transcript artifacts.",
     )
     return parser.parse_args(argv)
 
@@ -803,7 +926,9 @@ def main(argv: list[str] | None = None) -> int:
         root.expanduser().resolve() for root in (args.sessions_root or default_roots())
     ]
     project_root = args.project_root.expanduser().resolve()
-    user_messages, plan_answers, counter = gather_records(roots, project_root)
+    chat_messages, user_messages, plan_answers, counter = gather_records(
+        roots, project_root
+    )
     distillates = distill_records(user_messages, plan_answers)
     canonical_text = (
         args.decisions_file.read_text(encoding="utf-8")
@@ -840,12 +965,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    if not args.write:
+    if args.dry_run:
         return 0
 
     batch = str(args.date)
+    raw_root = args.output_root / "raw" / batch
     user_root = args.output_root / "user" / batch
     distilled_root = args.output_root / "distilled" / batch
+    write_jsonl(raw_root / "chat_messages.jsonl", chat_messages)
     write_jsonl(user_root / "user_messages.jsonl", user_messages)
     write_jsonl(user_root / "plan_mode_answers.jsonl", plan_answers)
     write_jsonl(distilled_root / "candidate_decisions.jsonl", distillates)
@@ -857,14 +984,11 @@ def main(argv: list[str] | None = None) -> int:
         "project_root": project_root.as_posix(),
         "counts": dict(counter),
         "outputs": [
-            (user_root / "user_messages.jsonl").relative_to(REPO_ROOT).as_posix(),
-            (user_root / "plan_mode_answers.jsonl").relative_to(REPO_ROOT).as_posix(),
-            (distilled_root / "candidate_decisions.jsonl")
-            .relative_to(REPO_ROOT)
-            .as_posix(),
-            (distilled_root / "reviewed_decisions.jsonl")
-            .relative_to(REPO_ROOT)
-            .as_posix(),
+            output_path_label(raw_root / "chat_messages.jsonl"),
+            output_path_label(user_root / "user_messages.jsonl"),
+            output_path_label(user_root / "plan_mode_answers.jsonl"),
+            output_path_label(distilled_root / "candidate_decisions.jsonl"),
+            output_path_label(distilled_root / "reviewed_decisions.jsonl"),
         ],
     }
     (distilled_root / "manifest.json").write_text(

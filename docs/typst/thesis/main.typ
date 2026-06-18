@@ -2,12 +2,16 @@
 #import "metadata.typ": *
 #import "../shared/macros.typ": *
 #import "../shared/glossary.typ": *
+#import "draft_markers.typ": *
+#import "@preview/booktabs:0.0.4": *
 
 #set document(title: titleEnglish, author: author)
 #set text(font: "New Computer Modern")
 
+#show: booktabs-default-table-style
 #show: make-glossary.with(link: false)
 #register-aria-glossary()
+#load-aria-glossary-references()
 
 #show: thesis.with(
   title: titleEnglish,
@@ -31,16 +35,16 @@
   submissionDate: submissionDate,
   submissionDateText: submissionDateText,
   abstract_en: [
-    This thesis investigates quality-driven #gls("next-best-view") planning for egocentric 3D reconstruction in #gls("aria-synthetic-environments"). It builds on the ARIA-NBV seminar paper and frames #gls("relative-reconstruction-improvement") as the central supervision and evaluation signal for choosing informative future views.
+    This thesis investigates target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It uses target-specific @relative-reconstruction-improvement as the supervision and evaluation signal for finite candidate view selection, measures bounded oracle-lookahead headroom, and tests whether an actor-visible finite-horizon value model can recover part of that headroom under matched oracle re-evaluation.
   ],
   abstract_de: [
-    TODO: Deutsche Zusammenfassung ergaenzen.
+    #question_todo([Write the German abstract after the English thesis claim and final evidence scale are stable.], source: [main thesis seed])
   ],
   acknowledgement: [
-    TODO: Acknowledgements.
+    #question_todo([Fill acknowledgements close to submission.], source: [main thesis seed])
   ],
   transparency_ai_tools: [
-    TODO: Document AI tools used during thesis writing and implementation according to the final institutional requirements.
+    AI-assisted tools were used to organize literature notes, check consistency across repository documentation, and draft parts of the thesis seed. The author remains responsible for the final research scope, technical claims, citations, implementation, experiments, and submitted document. #validation_todo([Update this statement against final institutional requirements before submission.], source: [proposal transparency text])
   ],
 )
 

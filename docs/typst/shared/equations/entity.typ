@@ -29,7 +29,7 @@
     mu(hat(e), e)
     =
     kappa(hat(y)_(hat(e)), y_e)
-    dot op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e^"GT")
+    dot op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e)
     dot sigma(A_(hat(e))^"proj", n_(hat(e))^"semi", n_(hat(e))^"EVL")
   $,
   target_match_selection: $
@@ -63,6 +63,13 @@
   $,
   target_rri_reward: $
     #symb.entity.target_reward
+    =
+    (#symb.entity.target_error - #symb.entity.target_error_next)
+    /
+    (#symb.entity.target_error_0 + epsilon)
+  $,
+  state_relative_rri: $
+    r_(t,"state")^e
     =
     (#symb.entity.target_error - #symb.entity.target_error_next)
     /

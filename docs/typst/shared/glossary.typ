@@ -3,16 +3,11 @@
 
 #import "@preview/glossarium:0.5.10": (
   make-glossary,
-  gls as glossarium-gls,
-  glspl as glossarium-glspl,
   print-glossary,
   register-glossary,
 )
 #import "symbols.typ": symb
 #import "equations.typ": eqs
-
-#let gls(key, link: false, ..args) = glossarium-gls(key, link: link, ..args)
-#let glspl(key, link: false, ..args) = glossarium-glspl(key, link: link, ..args)
 
 // Rich `description` fields may use Typst content, including #symb and #eqs.
 // Keep `custom` fields machine-readable so `typst query` can feed Quarto and litkg-rs.
@@ -2560,6 +2555,11 @@
 
 #let register-aria-glossary() = register-glossary(aria-glossary-entries)
 #let print-aria-glossary(..args) = print-glossary(aria-glossary-entries, ..args)
+#let load-aria-glossary-references(..args) = hide(print-aria-glossary(
+  show-all: true,
+  disable-back-references: true,
+  ..args,
+))
 
 #for entry in aria-glossary-entries [
   #metadata(aria-glossary-metadata(entry)) <aria-glossary-term>

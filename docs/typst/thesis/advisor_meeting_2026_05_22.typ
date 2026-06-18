@@ -4,12 +4,20 @@
 #import "../shared/slide-template.typ": *
 #import "@preview/muchpdf:0.1.1": muchpdf
 #import "@preview/booktabs:0.0.4": *
+#import "@preview/dashy-todo:0.1.3": todo as dashy_todo
 #show: booktabs-default-table-style
 
 #import "../shared/macros.typ": *
 
 #let fig_path = "../../figures/"
 #let thesis_fig_path = "figures/"
+#let hestia_url = "https://johnnylu305.github.io/hestia_web"
+#let gymnasium_url = "https://gymnasium.farama.org/"
+#let sb3_url = "https://stable-baselines3.readthedocs.io/"
+#let isaac_sim_url = "https://developer.nvidia.com/isaac/sim"
+#let habitat_sim_url = "https://aihabitat.org/"
+#let ai2thor_url = "https://ai2thor.allenai.org/"
+#let procthor_url = "https://ai2thor.allenai.org/procthor/"
 
 #set document(
   title: [ARIA-NBV: Target-Conditioned NBV Planning in Egocentric Scenarios],
@@ -48,7 +56,7 @@
 #show figure.caption: set text(size: 12pt, weight: "medium", fill: theme_color_footer.darken(40%))
 #show grid: set grid(columns: (1fr, 1fr), gutter: 0.8cm)
 #show cite: set text(size: 10pt)
-#show bibliography: set text(size: 14pt)
+#show bibliography: set text(size: 7pt)
 #show link: set text(fill: blue)
 #show link: it => underline(it)
 
@@ -104,7 +112,138 @@
   ]
 ]
 
+#let todo_marker(kind, body, stroke: orange, sources: none) = text(size: 8.6pt)[
+  #dashy_todo(position: "inline", stroke: stroke)[
+    *#kind:* #body
+    #if sources != none [
+      \
+      #text(size: 7.4pt, fill: theme_color_footer.darken(45%))[Sources: #sources]
+    ]
+  ]
+]
+
+#let conflict_todo(body, sources: none) = todo_marker([Conflict], body, stroke: red, sources: sources)
+#let decision_todo(body, owner: [advisor], sources: none) = todo_marker(
+  [Open decision (#owner)],
+  body,
+  stroke: orange,
+  sources: sources,
+)
+#let necessary_todo(body, gate: none, sources: none) = todo_marker(
+  [WIP necessary],
+  [
+    #body
+    #if gate != none [
+      \
+      #text(size: 7.4pt, fill: theme_color_footer.darken(45%))[Gate: #gate]
+    ]
+  ],
+  stroke: blue,
+  sources: sources,
+)
+#let optional_todo(body, sources: none) = todo_marker([Optional ablation], body, stroke: purple, sources: sources)
+#let prune_todo(body, sources: none) = todo_marker([Prune candidate], body, stroke: gray, sources: sources)
+
 #title-slide()
+
+#slide(title: [Source Governance / Highest Truth])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.5cm,
+    [
+      #color-block(title: [Owner after this consolidation], spacing: 0.4em)[
+        #slide-small[
+          This deck is the _advisor-facing thesis contract_: it owns current RQ order, target-RRI/$Q_H$ scope, state boundaries, evidence gates, and open advisor locks.
+
+          #v(0.2em)
+          Public mirrors should follow it: #link("contents/thesis/questions.qmd")[questions], #link("contents/thesis/roadmap.qmd")[roadmap], and canonical memory. Historical seminar and outlook decks remain evidence, not priority.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Conflict rule], spacing: 0.4em)[
+        #slide-small[
+          - Current deck claim beats historical seminar/outlook wording.
+          - Current code and generated API pages beat planned implementation claims.
+          - `OPEN_QUESTIONS.md` remains the mirror for unresolved advisor decisions.
+          - Any imported historical claim must be marked as conflict, WIP, optional, or prune.
+        ]
+      ]
+      #v(0.18em)
+      #decision_todo(
+        [After advisor acceptance, mirror this owner promotion into source-order docs, roadmap/questions, and memory.],
+        sources: [`source_order.md`; autoresearch report],
+      )
+    ],
+  )
+]
+
+#slide(title: [State Matrix For The Thesis Contract])[
+  #figure(
+    kind: "table",
+    supplement: [Table],
+    caption: [Classification used by this deck to separate implemented evidence, current claims, WIP, and open advisor locks.],
+    text(size: 8.9pt)[
+      #table(
+        columns: (0.72fr, 1.58fr, 1.2fr),
+        align: (left, left, left),
+        toprule(),
+        table.header([State], [Meaning], [Owner / action]),
+        midrule(), [Implemented substrate], [Code, data paths, diagnostics, or historical results already present.],
+        [deck summary plus code/API/seminar links],
+        [Current thesis core],
+        [Required claim path for thesis success: target-RRI, finite candidates, offline $Q_H$.],
+
+        [this deck], [WIP necessary], [Must land before thesis-grade quantitative claims.],
+        [roadmap/backlog mirror], [Optional ablation], [Useful only if schedule/support allows.],
+        [appendix or roadmap], [Open decision], [Advisor-facing unresolved choice.],
+        [`OPEN_QUESTIONS.md` mirror],
+        [Conflict / historical],
+        [Older source that contradicts the current contract unless demoted.],
+
+        [typed TODO or archive note], [Prune candidate], [Operational detail that should leave the main flow.],
+        [appendix/backlog/debrief], bottomrule(),
+      )
+    ],
+  )
+]
+
+#slide(title: [Todo Flavor Legend])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.5cm,
+    [
+      #color-block(title: [Decision markers], spacing: 0.4em)[
+        #slide-small[
+          #decision_todo(
+            [Advisor must choose or accept the contract before this becomes thesis-grade truth.],
+            sources: [deck; `OPEN_QUESTIONS.md`],
+          )
+          #v(0.25em)
+          #conflict_todo(
+            [A historical source disagrees with the current deck or code and must be demoted, rewritten, or archived.],
+            sources: [seminar / outlook / memory],
+          )
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Work markers], spacing: 0.4em)[
+        #slide-small[
+          #necessary_todo(
+            [Required before quantitative advisor-facing claims.],
+            gate: [roadmap milestone],
+            sources: [roadmap; backlog],
+          )
+          #v(0.25em)
+          #optional_todo([Useful ablation if support, time, or compute allows.])
+          #v(0.25em)
+          #prune_todo([Operational detail that should leave the main deck flow.])
+        ]
+      ]
+    ],
+  )
+]
 
 #slide(title: [Central Research Question])[
   #grid(
@@ -118,18 +257,13 @@
       ]
       #text(size: 12.8pt)[
         $
-          Delta_0^e
-          =
-          d(C_e (cal(P)_0), cal(M)_e^"GT")
-          quad
-          Delta_H^e
-          =
-          d(C_e (cal(P)_0 union cal(P)_1 union dots.c union cal(P)_H), cal(M)_e^"GT")
+          #eqs.entity.target_error
           \
-          J_e^((H))(tau)
-          =
-          (Delta_0^e - Delta_H^e) / (Delta_0^e + epsilon)
+          #eqs.entity.endpoint_gain
         $
+      ]
+      #text(size: 9.4pt, fill: theme_color_footer.darken(35%))[
+        Substrate and objective anchors: Project Aria / ASE @projectaria-engel2023 @ProjectAria-ASE-2025, VIN-NBV quality-driven RRI @VIN-NBV-frahm2025, EFM3D/EVL actor-visible state @EFM3D-straub2024 @EVL-Doc-2025.
       ]
     ],
     [
@@ -138,6 +272,9 @@
           #table(
             columns: (0.55fr, 2.08fr),
             align: (left, left),
+            toprule(),
+            table.header([RQ], [Question]),
+            midrule(),
 
             [*RQ1 Method*],
             [Which target-RRI objective, RL methodology and offline finite-candidate $Q_H$ formulation are most idiomatic? Fixed vs variable horizon?
@@ -158,7 +295,211 @@
 
             [*RQ6 Cont.*],
             [Do continuous/hierarchical target-then-pose policies, e.g. actor-critic, yield headroom over the best finite-candidate policy under the same target-RRI objective?],
+            bottomrule(),
           )
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Implemented Substrate vs Current Thesis Core])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.5cm,
+    [
+      #color-block(title: [Implemented substrate], spacing: 0.35em)[
+        #slide-small[
+          - ASE/Project-Aria data plumbing, calibrated poses, mesh/oracle assets, and offline cache operations are available as the supervised substrate.
+          - Oracle target/scene RRI, VIN-style one-step scoring, feature/cache diagnostics, Streamlit, and Rerun/offline-store inspection already exist as evidence surfaces.
+          - Seminar paper and older slides document this implemented substrate historically; they do not set current thesis priority.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Current thesis core], spacing: 0.35em)[
+        #slide-small[
+          1. Define target-conditioned root-normalized endpoint gain.
+          2. Trust actor-visible target/candidate state and hard-valid masks.
+          3. Establish one-step target scorer and rollout support.
+          4. Train/evaluate finite-candidate offline fitted $Q_H$.
+          5. Gate online discrete $Q_H$ and continuous target-then-pose policies only after offline evidence.
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Advisor Decisions From Outlook])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Operational locks], spacing: 0.36em)[
+        #slide-small[
+          - Compute first: LRZ/Slurm and storage gates before broad generation; if local, keep the stack reproducible under WSL/workstation constraints.
+          - Access now: Project Aria Gen2 and ASE/generation-stack availability determine whether the thesis remains mesh-backed or needs a simulator sidecar.
+          - Core stays ASE / mesh-backed until target-specific RRI, finite candidates, and offline $Q_H$ are interpretable.
+          - Semantic-global VLA/VLM planning remains outside thesis core.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [VIN and method budget], spacing: 0.36em)[
+        #slide-small[
+          - Prefer the minimum single-step VIN work needed for trust: calibration, CORAL/binning, auxiliary loss, and key-input ablations.
+          - Avoid broad VIN-v4/backbone search before the multi-step target-RRI protocol and support gates pass.
+          - Phase 1 stays discrete finite-candidate: beam/MPC/close-greedy/offline $Q_H$ before continuous actor-critic.
+          - Candidate rules are hard masks/reasons first; learned feasibility or rule-violation prediction is an optional extension.
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Formal State Split])[
+  #grid(
+    columns: (0.92fr, 1.08fr),
+    gutter: 0.45cm,
+    [
+      #color-block(title: [Three visibility regimes], spacing: 0.35em)[
+        #text(size: 10.55pt)[
+          #table(
+            columns: (0.38fr, 1.34fr, 1.22fr),
+            align: (left, left, left),
+            toprule(),
+            table.header([State], [Contains], [Allowed use]),
+            midrule(),
+            [#symb.rl.s_hist],
+            [logged RGB/pose, semidense history, root EVL, observed or predicted target hypotheses],
+            [target selection and root descriptor construction],
+
+            [#symb.rl.s_cf0],
+            [accumulated counterfactual geometry, fixed root EVL/local evidence, target descriptor, selected-view history, candidate table, masks/reasons],
+            [actor-visible scorer and $Q_H$ input],
+
+            [#symb.rl.s_oracle],
+            [#symb.rl.s_cf0 plus GT mesh, matched target mesh, all-candidate renders, oracle labels],
+            [labels, upper bounds, matching checks, evaluation only],
+            bottomrule(),
+          )
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Shared notation anchors], spacing: 0.28em)[
+        #text(size: 10.2pt)[
+          $
+            #eqs.rl.s_hist
+            \
+            #eqs.rl.s_cf0
+            \
+            #eqs.rl.s_oracle
+          $
+        ]
+        #v(0.15em)
+        #good-note[
+          #text(size: 10.8pt)[
+            The leak boundary is symbolic: GT OBBs, target meshes, all-candidate renders, and oracle scores never become V1 actor-visible policy inputs.
+          ]
+        ]
+        #v(0.16em)
+        #necessary_todo(
+          [Mirror this split in any remaining proposal/roadmap text that still conflates logged state, counterfactual actor state, and privileged oracle state.],
+          gate: [source-truth cleanup],
+          sources: [`main.typ`; archived advisor handout; shared symbols/equations],
+        )
+      ]
+    ],
+  )
+]
+
+#slide(title: [Target Selection And GT-EVAL Contract])[
+  #grid(
+    columns: (0.94fr, 1.06fr),
+    gutter: 0.45cm,
+    [
+      #color-block(title: [Protocol variants], spacing: 0.34em)[
+        #text(size: 10.7pt)[
+          #table(
+            columns: (0.38fr, 1.5fr, 1.08fr),
+            align: (left, left, left),
+            toprule(),
+            table.header([Mode], [Meaning], [Status]),
+            midrule(),
+            [V0], [GT OBB target input], [diagnostic upper bound],
+            [V1], [actor-visible target hypotheses only], [main thesis protocol],
+            [OBS-SEL], [choose observed/predicted target hypothesis from #symb.rl.s_hist], [selection step],
+            [PRED-Q], [$hat(r)_psi^e$ or $Q_H$ conditions on actor-visible target descriptor], [learned policy input],
+            [GT-EVAL], [GT OBBs/meshes used for labels, deterministic matching, evaluation], [privileged evaluation],
+            bottomrule(),
+          )
+        ]
+      ]
+      #v(0.16em)
+      #text(size: 9.2pt, fill: theme_color_footer.darken(35%))[
+        Target selection and target-to-GT matching are distinct operations. V1 chooses a target without GT; GT-EVAL matches only after selection.
+      ]
+    ],
+    [
+      #color-block(title: [Eligibility and matching], spacing: 0.28em)[
+        #text(size: 9.6pt)[
+          $
+            #eqs.entity.target_descriptor
+            \
+            #eqs.entity.target_match_acceptance
+          $
+        ]
+        #v(0.16em)
+        #slide-small[
+          - Actor-visible eligibility: support, projected visibility, confidence, class, distance, and target-interest sampler.
+          - Deterministic GT match: class-compatible 3D IoU plus top-1/top-2 ambiguity gap.
+          - Target-invalid cases: unmatched, unsupported, or ambiguous targets are excluded/reportable protocol failures, not low-RRI training samples.
+          - Projected target feasibility uses clipped image-overlap area, not raw extents outside the image.
+        ]
+        #decision_todo(
+          [Lock numeric acceptance thresholds, ambiguity gap, and target-interest sampling policy.],
+          sources: [`main.typ`; archived advisor handout; `OPEN_QUESTIONS.md`],
+        )
+      ]
+    ],
+  )
+]
+
+#slide(title: [RQ Dependency Chain])[
+  #grid(
+    columns: (0.74fr, 1.26fr),
+    gutter: 0.45cm,
+    [
+      #color-block(title: [Dependency order], spacing: 0.28em)[
+        #text(size: 11.5pt)[
+          #mini-flow((
+            [objective + metrics],
+            [target + matching],
+            [candidate + replay],
+          ))
+          #v(0.22em)
+          #mini-flow((
+            [headroom + $Q_H$],
+            [scale],
+            [escalation],
+          ))
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Interpretation rule], spacing: 0.35em)[
+        #slide-small[
+          Objective and target matching are prerequisites for every downstream claim. Candidate support is the prerequisite for headroom. Headroom is the prerequisite for interpreting $Q_H$ recovery. Scale and online/continuous extensions are meaningful only after the finite-candidate contract is stable.
+
+          #v(0.2em)
+          This dependency DAG is stricter than a meeting agenda: a later RQ can be deferred without weakening the core thesis if the upstream evidence is clean.
+        ]
+      ]
+      #v(0.16em)
+      #good-note[
+        #text(size: 10.8pt)[
+          RQ5 online discrete $Q_H$ and RQ6 continuous target-then-pose remain gated extensions, not substitutes for offline finite-candidate evidence.
         ]
       ]
     ],
@@ -258,6 +599,11 @@
             #eqs.features.candidate_pose_features
           $
         ]
+        #v(0.12em)
+        #decision_todo(
+          [Lock candidate-pose descriptor: R6D plus translation/bearing features, or a query-centric QCNet-style relative descriptor.],
+          sources: [shared feature equations; RQ3 representation text],
+        )
       ]
     ],
     [
@@ -270,6 +616,43 @@
       #text(size: 10.4pt, fill: theme_color_footer.darken(35%))[
         Conservative rule: feature channels and set interaction stay ablations until myopic calibration, masks, replay support, and oracle-rescored selected actions are trusted.
       ]
+    ],
+  )
+]
+
+#slide(title: [Candidate Transition Contract])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.45cm,
+    [
+      #color-block(title: [One selected candidate transitions state], spacing: 0.35em)[
+        #slide-small[
+          - Action is a valid candidate row index: choose $a_t=i in cal(A)_t$.
+          - Oracle rendering/retrieval materializes only selected $q_(t,i)$ for the transition.
+          - Acquired geometry updates the counterfactual point proxy; scalar target distances, support counts, masks, and gains are training-core facts.
+          - All-candidate renders remain oracle-only labels or audit payloads.
+
+          #v(0.16em)
+          $
+            #eqs.rl.finite_action_set
+          $
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Successor table semantics], spacing: 0.35em)[
+        #slide-small[
+          - Regenerate $cal(Q)_(t+1)$ from updated geometry, selected-view history, remaining horizon, and the same mixture families.
+          - Keep root local EVL fixed unless an explicit ablation recomputes it.
+          - Strategy vocabulary: target/look-at, radial-towards, radial-away, forward-rig, bounded yaw/pitch/roll jitter.
+          - Fixed root EVL and selected-action replay make $Q_H$ rows comparable.
+        ]
+      ]
+      #v(0.18em)
+      #decision_todo(
+        [Lock whether successor candidate regeneration may change anchor/candidate bounds, or must preserve root-level candidate budget exactly.],
+        sources: [`main.typ`; archived advisor handout; rollout contract],
+      )
     ],
   )
 ]
@@ -344,17 +727,20 @@
           )[Why this RQ exists: test the actual planning claim after the myopic control and replay support are trusted.]
         ]
       ]
-      #text(size: 12.0pt)[
+      #text(size: 9.8pt)[
         $
-          Q_(H,theta)
+          #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
           =
-          hat(r)_psi^e + V_theta + A_(theta,i)^H - overline(A)_(theta)^H
-          ,
+          hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+          +
+          V_theta (#symb.rl.s_cf0, #symb.entity.target_desc, bold(H)_t)
+          \
           quad
-          overline(A)_(theta)^H
-          =
-          (1)/(abs(cal(A)_t))
-          sum_(j in cal(A)_t) A_(theta,j)^H
+          +
+          A_(theta,i)^H
+          -
+          (1) / (abs(#symb.rl.action_set_t))
+          sum_(j in #symb.rl.action_set_t) A_(theta,j)^H
         $
       ]
     ],
@@ -383,17 +769,9 @@
       #color-block(title: [Masked Double-Q target], spacing: 0.35em)[
         #text(size: 12.2pt)[
           $
-            i^*
-            =
-            arg max_(i in cal(A)_(t+1))
-            Q_theta (s_(t+1)^"cf0", z_e, q_(t+1,i))
+            #eqs.rl.qh_doubleq_index
             \
-            y_t
-            =
-            r_(t,"root")^e
-            +
-            gamma(1-d_t)
-            Q_(theta^-)(s_(t+1)^"cf0", z_e, q_(t+1,i^*))
+            #eqs.rl.qh_doubleq_target
           $
 
           #v(0.15em)
@@ -413,7 +791,6 @@
     [
       #color-block(title: [Matched policy ladder], spacing: 0.4em)[
         #slide-small[
-          - $pi_"rand"$: random valid lower reference.
           - $pi_"oracle-1"$: one-step oracle greedy upper reference.
           - $pi_"oracle-H"$: bounded oracle lookahead / headroom reference.
           - $pi_"learned-1"$: learned actor-visible myopic scorer.
@@ -442,6 +819,95 @@
           - invalid-action rate and reason distribution;
           - path length, runtime, oracle eval count;
           - coverage gaps and scene-level splits.
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Reward / Q / Critic Boundary])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Current reward contract], spacing: 0.34em)[
+        #slide-small[
+          - Default reward is oracle target-root gain, not VIN; state-relative RRI stays diagnostic/VIN-compatible.
+          - $gamma$ stays symbolic until RQ1/advisor lock; historical low-$gamma$ PPO diagnostics are not current truth.
+          - Hard masks already reject collision, clearance, and bounds failures; invalid rows are constraints, not low-RRI samples.
+          - `rollouts.zarr` owns counterfactual rollout chains and returns; VIN offline-store assets remain immutable source data.
+        ]
+        #v(0.12em)
+        #text(size: 9.2pt)[
+          $
+            #eqs.rl.reward_geom
+            \
+            #eqs.rl.q_backup
+          $
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Open critic / surrogate questions], spacing: 0.34em)[
+        #slide-small[
+          - Make rule penalties explicit in any learned reward or evaluator that goes beyond hard masks.
+          - Add VIN-backed counterfactual evaluation only after oracle target labels and myopic calibration are trusted.
+          - Decide whether a privileged critic may use GT mesh, GT OBB, or segmentation cues while the actor remains V1 actor-visible.
+          - Treat Gymnasium/SB3 PPO as diagnostic scaffolding unless it preserves the finite-candidate target-RRI comparison.
+        ]
+        #decision_todo(
+          [Lock privileged-critic permissions and whether VIN may become a critic/surrogate beyond mesh-backed subsets.],
+          sources: [historical outlook deck; `OPEN_QUESTIONS.md`],
+        )
+      ]
+    ],
+  )
+]
+
+#slide(title: [WIP Necessary Before Claims])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Data and support gates], spacing: 0.38em)[
+        #slide-small[
+          #necessary_todo(
+            [LRZ/Zarr preflight, stale-schema checks, and file-count/chunk budget before broad generation.],
+            gate: [M1/M2 scale readiness],
+            sources: [roadmap; DECISIONS],
+          )
+          #v(0.22em)
+          #necessary_todo(
+            [Scene-level split manifest and coverage tuple before shard grouping or thesis-grade split claims.],
+            gate: [M4/M5 evaluation],
+            sources: [questions; roadmap],
+          )
+          #v(0.22em)
+          #necessary_todo(
+            [Validate H=1 target-label profile before H>1 rollout traces and offline $Q_H$.],
+            gate: [M2 -> M5],
+            sources: [roadmap; rollout contract],
+          )
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Advisor locks that change interpretation], spacing: 0.38em)[
+        #slide-small[
+          #decision_todo(
+            [Pass/fail threshold for positive $Q_H$ recovery and no-headroom interpretation.],
+            sources: [questions; `OPEN_QUESTIONS.md`],
+          )
+          #v(0.22em)
+          #decision_todo(
+            [Horizon, symbolic gamma, clipping, and near-solved-target handling.],
+            sources: [questions; `OPEN_QUESTIONS.md`],
+          )
+          #v(0.22em)
+          #decision_todo(
+            [V1 target matching thresholds and ambiguity policy for observed/predicted targets.],
+            sources: [questions; `OPEN_QUESTIONS.md`],
+          )
         ]
       ]
     ],
@@ -515,42 +981,59 @@
       )
     ],
     [
-      #color-block(title: [Immediate next edits before scale], spacing: 0.42em)[
+      #color-block(title: [Scale-readiness gate], spacing: 0.42em)[
         #slide-small[
-          - Fix all-hard-diagnostic invalidity consistency.
-          - Add production preflight JSON and stale-schema checks.
-          - Require scene-level split manifest before shard grouping.
-          - Retune three-family sampler after per-family validity reports.
-          - Reduce Zarr chunk/file bloat.
-          - Validate H=1 target-label profile, then H>1 rollout traces.
+          #prune_todo(
+            [Operational edit list moved out of thesis truth; keep only milestone gates here and track concrete work in backlog/source docs.],
+            sources: [autoresearch report],
+          )
+          #v(0.2em)
+          Current gate focus: invalidity consistency, production preflight JSON, scene-level split manifest, sampler validity reports, Zarr file budget, and H=1 label profile before H>1 traces.
         ]
       ]
     ],
   )
 ]
 
-#slide(title: [What I Need Feedback On: RQ Locks])[
+#slide(title: [Advisor Locks / Open Decisions])[
   #grid(
     columns: (1fr, 1fr),
     gutter: 0.5cm,
     [
       #color-block(title: [Decisions to lock], spacing: 0.45em)[
         #slide-small[
-          1. Does RQ1 lock objective, fixed-budget evaluation, root-normalized training return, and offline fitted $Q_H$ as first method?
-          2. What pass/fail bar defines positive offline $Q_H$ recovery?
-          3. Which RQ3 ablations are mandatory before $Q_H$: semidense+DINO, target crop, $bb(S)^2$ memory, candidate-query pooling?
-          4. Does RQ4 cover invalidity, candidate diversity, support scale, and the external-data caveat clearly enough?
+          #decision_todo(
+            [Does RQ1 lock objective, fixed-budget evaluation, root-normalized training return, and offline fitted $Q_H$ as first method?],
+            sources: [questions; roadmap],
+          )
+          #v(0.18em)
+          #decision_todo(
+            [Which RQ3 ablations are mandatory before $Q_H$: semidense+DINO, target crop, $bb(S)^2$ memory, candidate-query pooling?],
+            sources: [RQ3; shared features],
+          )
+          #v(0.18em)
+          #decision_todo(
+            [Does RQ4 cover invalidity, candidate diversity, support scale, and the external-data caveat clearly enough?],
+            sources: [RQ4 support contract],
+          )
         ]
       ]
     ],
     [
       #color-block(title: [Evidence protocol to lock], spacing: 0.45em)[
         #slide-small[
-          - Scene-level split and acceptable scale fallback.
-          - Target matching thresholds and ambiguity policy.
-          - Invalidity as hard masks/reasons.
-          - LRZ/Zarr preflight before broad generation.
-          - RQ5/RQ6 extension wording and optional $Q_H$-as-critic bridge.
+          #necessary_todo(
+            [Scene-level split, acceptable scale fallback, and coverage tuple.],
+            gate: [M4/M5],
+            sources: [roadmap],
+          )
+          #v(0.18em)
+          #decision_todo([Target matching thresholds and ambiguity policy.], sources: [`OPEN_QUESTIONS.md`])
+          #v(0.18em)
+          #decision_todo(
+            [RQ5/RQ6 extension wording and optional $Q_H$-as-critic bridge.],
+            sources: [questions; literature bridge pages],
+          )
         ]
       ]
       #good-note[
@@ -558,4 +1041,217 @@
       ]
     ],
   )
+]
+
+#slide(title: [Backup: Failure Interpretation / Validated Subsets])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.5cm,
+    [
+      #color-block(title: [Failure is still a result], spacing: 0.35em)[
+        #slide-small[
+          - If oracle geometry or target labels fail, report validation limits and one-step evidence only.
+          - If target matching is sparse or ambiguous, report validated subsets, unmatched counts, and acceptance filters.
+          - If lookahead headroom is near zero, report a negative planning result for that split, target set, horizon, branch factor, and candidate distribution.
+          - Added model complexity is justified only after target matching, candidate support, and supervision scale are ruled out.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Advisor-facing evidence surfaces], spacing: 0.35em)[
+        #slide-small[
+          - Rollout support: target/candidate strata, valid counts, invalid reasons, successor-table availability, selected-chain diversity.
+          - Scorer evidence: rank correlation, top-$k$ oracle hit, calibration, oracle-rescored selected candidates.
+          - Replay integrity: seed metadata, mask isolation, shuffled-candidate and duplicate-row robustness.
+          - Scale: scene-level splits, paired policy comparison, bootstrap CI, per-scene wins, Zarr asset references.
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Backup: Diagnostic Rollout / RL Scaffold])[
+  #grid(
+    columns: (0.86fr, 1.14fr),
+    gutter: 0.42cm,
+    [
+      #color-block(title: [What the historical outlook contributed], spacing: 0.34em)[
+        #slide-small[
+          - Rollout code reuses the same candidate-shell contract as one-step NBV.
+          - Oracle scorer and plotting surfaces expose incremental/cumulative RRI, horizon, branching, pruning, guards, selected frusta, and trajectory replay.
+          - #link(gymnasium_url)[Gymnasium] and #link(sb3_url)[SB3] are diagnostic tools for the discrete shell, not thesis-grade online evidence by themselves.
+          - Relevant code surfaces: #gh("aria_nbv/aria_nbv/pose_generation/counterfactuals.py"), #gh("aria_nbv/aria_nbv/pose_generation/plotting.py"), #gh("aria_nbv/aria_nbv/rl/counterfactual_env.py"), #gh("aria_nbv/aria_nbv/app/panels/rl.py").
+        ]
+      ]
+    ],
+    [
+      #figure(
+        image(fig_path + "app/multi-step/T5K5.png", width: 100%),
+        caption: [_Diagnostic only_: multi-step counterfactual rollout tree from the implemented app plotting surface.],
+      )
+      #v(0.1cm)
+      #figure(
+        image(fig_path + "app/multi-step/T3-greedy-rl-t3shell.png", width: 100%),
+        caption: [_Diagnostic only_: step-level shell / frusta view from the same figure family.],
+      )
+    ],
+  )
+]
+
+#slide(title: [Backup: Architecture Ladder])[
+  #figure(
+    kind: "table",
+    supplement: [Table],
+    caption: [Hypothesis, controls, and ablations from the advisor distillation source. Escalate only after support and scorer gates pass.],
+    text(size: 8.45pt)[
+      #table(
+        columns: (0.58fr, 1.76fr),
+        align: (left, left),
+        toprule(),
+        table.header([Role], [Candidate design]),
+        midrule(), [A0 control],
+        [independent candidate scorer], [A1 control],
+        [pooled DeepSets context over valid candidate rows], [A2 hypothesis],
+        [masked Set Transformer candidate interaction], [A3 ablation],
+        [QCNet-style query-centric relative pose encoding], [A4 ablation],
+        [Fisher/SCONE-style support-overlap attention bias], [A5 value head],
+        [residual dueling $Q_H$ with hard masks and matched-budget oracle re-scoring], [Deferred bridges],
+        [privileged-teacher distillation, distributional $Q_H$, EGNN candidate graph, Hestia-style target-then-pose],
+        bottomrule(),
+      )
+    ],
+  )
+  #v(0.12em)
+  #optional_todo(
+    [Treat A3+ as attribution ablations, not prerequisites, unless A0-A2 cannot explain observed headroom/recovery.],
+    sources: [`main.typ`; archived advisor handout; literature adoption ledger],
+  )
+]
+
+#slide(title: [Backup: Hestia / VINv4 Bridge])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Transfer from #link(hestia_url)[Hestia]], spacing: 0.34em)[
+        #slide-small[
+          - Adopt directional observability: encode viewing direction, not only seen/unseen state.
+          - Adopt local target-then-pose factorization as a possible RQ6 bridge.
+          - Supervise target/attention separately if a target head is introduced.
+          - Reject coverage reward and monolithic continuous PPO as thesis-core framing.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [VINv4-style bridge, if needed], spacing: 0.34em)[
+        #slide-small[
+          - Predict an intermediate target/look-at latent before pose realization.
+          - Supervise it from expected target-RRI gain, uncertainty, or entity deficit.
+          - Read local EVL/geometry at the target instead of only scoring fixed shell poses.
+          - Route targets through OBBs or SceneScript entities for entity-aware RRI, while keeping the finite-candidate baseline as the control.
+        ]
+        #v(0.12em)
+        #text(size: 10.2pt)[
+          $
+            #eqs.rl.target_pose_factorization
+          $
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Backup: Simulator Contingency])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Candidate substrates], spacing: 0.34em)[
+        #slide-small[
+          - ASE simulator / generation stack: best fit if accessible.
+          - #link(habitat_sim_url)[Habitat-Sim]: fast geometry-first sidecar.
+          - #link(ai2thor_url)[AI2-THOR] / #link(procthor_url)[ProcTHOR]: useful mainly for semantic-global planning.
+          - #link(isaac_sim_url)[Isaac Sim]: broad public multimodal fallback.
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Contingency rule], spacing: 0.34em)[
+        #slide-small[
+          This is a data-contract decision, not just a renderer choice. Do not switch ecosystems before the geometry-first baseline is proven.
+
+          #v(0.18em)
+          Any external substrate must preserve comparable Aria optics or calibration, RGB/SLAM or semidense streams, GT geometry, OBB/semantic target labels, and a plausible EVL/semidense replacement for actor-visible state.
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Backup: Outlook Open Questions Retained])[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 0.48cm,
+    [
+      #color-block(title: [Scientific open questions], spacing: 0.34em)[
+        #slide-small[
+          - How much logged history should the actor observe, and what is critic-only?
+          - Can a privileged critic use GT mesh, OBB, or segmentation cues without weakening the V1 actor-visible claim?
+          - How do we scale beyond mesh-backed scenes while preserving target-specific RRI supervision?
+          - When, if ever, do RGB, semantics, or 3DGS enter the thesis core rather than a bridge study?
+        ]
+      ]
+    ],
+    [
+      #color-block(title: [Operational open questions], spacing: 0.34em)[
+        #slide-small[
+          - Which anchor poses and candidate bounds define the real training distribution?
+          - When do we broaden beyond the current candidate budget, e.g. more than 60 visible/evaluated candidates?
+          - How much VIN-v4 work is justified once the finite-candidate baseline exists?
+          - What is the minimum convincing experiment set for advisor sign-off?
+        ]
+      ]
+    ],
+  )
+]
+
+#slide(title: [Backup: Literature Adopt / Reject Boundaries])[
+  #figure(
+    kind: "table",
+    supplement: [Table],
+    caption: [Literature families used as anchors without promoting them beyond the current ARIA-NBV evidence gate.],
+    text(size: 8.55pt)[
+      #table(
+        columns: (0.82fr, 1.28fr, 1.42fr),
+        align: (left, left, left),
+        toprule(),
+        table.header([Family], [Adopt], [Reject / gate]),
+        midrule(), [VIN-NBV @VIN-NBV-frahm2025], [quality-driven RRI ranking and ordinal scorer precedent],
+        [unqualified transfer of object-centric results],
+        [Project Aria / ASE @projectaria-engel2023 @ProjectAria-ASE-2025],
+        [egocentric streams, poses, meshes, and supervised oracle labels],
+
+        [GT mesh/box leakage into actor-visible policy],
+        [EFM3D / EVL @EFM3D-straub2024 @EVL-Doc-2025],
+        [actor-visible local evidence, OBB support, DINO/voxel features],
+
+        [treating EVL output as GT or full-scene memory],
+        [Double DQN / IQL @DoubleDQN-vanHasselt2015 @IQL-kostrikov2021],
+        [masked selector/evaluator backup and offline support caution],
+
+        [using offline RL to skip finite-candidate support checks],
+        [GenNBV / Hestia / SceneScript @GenNBV-chen2024 @Hestia-lu2026 @SceneScript-avetisyan2024],
+        [continuous, hierarchical, or semantic/global bridge ideas],
+
+        [thesis-core replacement before offline $Q_H$ evidence], bottomrule(),
+      )
+    ],
+  )
+]
+
+#slide(title: [References])[
+  #text(size: 7pt)[
+    #set par(leading: 0.54em)
+    #bibliography("/references.bib", style: "/ieee.csl")
+  ]
 ]

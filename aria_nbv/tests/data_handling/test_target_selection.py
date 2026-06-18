@@ -15,14 +15,19 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import (
+    ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
     ActorVisibleTargetSelector,
     CompactObbBlock,
+    OracleTargetTaskSampler,
+    OracleTargetTaskSamplerConfig,
     TargetSelectionPolicy,
     TargetSelectorConfig,
     TargetSourceMode,
+    TargetTaskIdentityStatus,
     VinSnippetView,
 )
+from aria_nbv.data_handling import _target_selection as target_selection_module
 from aria_nbv.data_handling._offline_dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.vin.types import EvlBackboneOutput
 
@@ -116,6 +121,113 @@ def _sample(
 def _selector(**kwargs: object) -> ActorVisibleTargetSelector:
     config = TargetSelectorConfig(min_support_points=1, support_saturation_points=10, **kwargs)
     return ActorVisibleTargetSelector(config)
+
+
+def _oracle_sampler(**kwargs: object) -> OracleTargetTaskSampler:
+    return OracleTargetTaskSampler(OracleTargetTaskSamplerConfig(**kwargs))
+
+
+def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
+    sample = _sample(
+        gt_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0], [9.0, 0.0, 0.0]],
+            sem_ids=[0, 1, 2, 0],
+            inst_ids=[10, 11, 12, 13],
+        )
+    )
+
+    first = _oracle_sampler(max_targets_per_sample=3, seed=7).sample(sample)
+    second = _oracle_sampler(max_targets_per_sample=3, seed=7).sample(sample)
+
+    assert first.source == ORACLE_TARGET_TASK_SOURCE
+    assert len(first.rows) == 4
+    assert len(first.identity_valid_rows) == 4
+    assert len(first.selected_rows) == 3
+    assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
+    assert all(row.selection_probability == pytest.approx(3.0 / 4.0) for row in first.selected_rows)
+    assert {row.selection_seed for row in first.selected_rows} == {7}
+    assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in first.selected_rows)
+    assert {row.source for row in first.rows} == {ORACLE_TARGET_TASK_SOURCE}
+    assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
+
+
+def test_oracle_target_task_sampler_rejects_ambiguous_duplicate_gt_identity() -> None:
+    sample = _sample(
+        gt_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+            sem_ids=[0, 0, 1],
+            inst_ids=[10, 11, 12],
+        )
+    )
+
+    result = _oracle_sampler(max_targets_per_sample=3, seed=0).sample(sample)
+
+    assert len(result.rows) == 3
+    assert len(result.identity_valid_rows) == 1
+    assert len(result.selected_rows) == 1
+    assert sum(row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value for row in result.rows) == 2
+    assert result.selected_rows[0].source_index == 2
+
+
+def test_oracle_target_task_sampler_rejects_identity_when_iou_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]))
+
+    def _raise_iou(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise RuntimeError("forced iou failure")
+
+    monkeypatch.setattr(target_selection_module, "obb_iou3d", _raise_iou)
+
+    result = _oracle_sampler(max_targets_per_sample=1).sample(sample)
+
+    assert len(result.rows) == 1
+    assert result.rows[0].identity_status == TargetTaskIdentityStatus.UNMATCHED.value
+    assert not result.rows[0].identity_valid
+    assert result.identity_valid_rows == ()
+    assert result.selected_rows == ()
+
+
+def test_oracle_target_task_sampler_threshold_sweep_reports_identity_coverage() -> None:
+    sample = _sample(
+        gt_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
+            sem_ids=[0, 0, 1],
+            inst_ids=[10, 11, 12],
+        )
+    )
+
+    result = _oracle_sampler(
+        identity_iou_thresholds=(0.25,),
+        identity_ambiguity_gaps=(0.0, 0.05),
+    ).sample(sample)
+    cells = result.threshold_sweep()
+
+    assert [(cell.identity_ambiguity_gap, cell.identity_valid_count) for cell in cells] == [(0.0, 1), (0.05, 1)]
+    assert result.diagnostic_summary()["num_ambiguous_identity"] == 2
+
+
+def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_projection_gate() -> None:
+    sample = _sample(
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], probs=[0.05], box_size=0.0),
+        points=[],
+    )
+
+    row = _oracle_sampler(max_targets_per_sample=1).sample(sample).selected_rows[0]
+
+    assert row.identity_valid
+    assert row.projected_area_pixels == 0.0
+    assert row.semidense_support_count == 0
+    assert row.effective_support_count == 0.0
+    assert row.confidence == pytest.approx(0.05)
+    assert row.target_root_error is None
+    assert row.max_candidate_gain is None
+    assert row.headroom_band is None
+
+
+def test_oracle_target_task_sampler_rejects_vin_oracle_batch_input() -> None:
+    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]))
+
+    with pytest.raises(TypeError, match="VinOfflineSample"):
+        _oracle_sampler().sample(sample.to_vin_oracle_batch())
 
 
 def test_greedy_top_k_returns_deterministic_deficit_ranked_rows() -> None:

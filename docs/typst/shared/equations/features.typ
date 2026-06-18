@@ -18,7 +18,7 @@
   direction_unit: $
     bold(d)_k (bold(v))
     =
-    (bold(c)_k - bold(v)) / (norm(bold(c)_k - bold(v)))_2
+    (bold(c)_k - bold(v)) / (norm(bold(c)_k - bold(v))_2)
   $,
   direction_memory_sh: $
     #symb.vin.dir_memory (bold(v))

@@ -122,6 +122,12 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
             "data_handling._offline_dataset",
             "data_handling._target_selection",
         },
+        "rollouts/info_cli.py": {"data_handling.efm_dataset_utils"},
+        "rollouts/zarr_store.py": {"data_handling.efm_dataset_utils"},
+        "rerun_inspector/_cli.py": {"data_handling.efm_dataset_utils"},
+        "rerun_inspector/_metadata.py": {"data_handling.efm_dataset_utils"},
+        "rerun_inspector/_rollout_zarr.py": {"data_handling.efm_dataset_utils"},
+        "rerun_inspector/_sample.py": {"data_handling.efm_dataset_utils"},
     }
     offenders: list[str] = []
     for path in package_root.rglob("*.py"):

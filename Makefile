@@ -29,8 +29,6 @@ TYPST_PAPER ?= $(DOCS_DIR)/typst/seminar_paper/main.typ
 TYPST_PAPER_PDF ?= $(DOCS_DIR)/typst/seminar_paper/main.pdf
 TYPST_THESIS ?= $(DOCS_DIR)/typst/thesis/main.typ
 TYPST_THESIS_PDF ?= $(DOCS_DIR)/typst/thesis/main.pdf
-TYPST_PROPOSAL ?= $(DOCS_DIR)/typst/thesis/proposal.typ
-TYPST_PROPOSAL_PDF ?= $(DOCS_DIR)/typst/thesis/proposal.pdf
 TYPST_SLIDES_DIR ?= $(DOCS_DIR)/typst/seminar_slides
 CI_RENDER_DIR ?= $(CURDIR)/.cache/ci-renders
 SLIDES ?= slides_4.typ
@@ -195,7 +193,7 @@ context-literature-search: ## 🗺️ Search literature sources (set LITERATURE_
 migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into .agents/memory
 	@$(PYTHON_INTERPRETER) scripts/migrate_codex_memory.py $(MIGRATE_CODEX_MEMORY_ARGS)
 
-codex-transcripts: _check_python ## 🧠 Extract ARIA-NBV Codex user transcript memory (set CODEX_TRANSCRIPT_ARGS='--write')
+codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
 
 check-agent-memory: _check_python ## 🗺️ Validate agent memory scaffolding and debrief hygiene
@@ -815,7 +813,7 @@ quarto-preview: ## Preview the Quarto website locally
 #  🧾 Typst builds
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: typst-paper typst-slide thesis-pdf thesis-watch proposal-pdf proposal-watch
+.PHONY: typst-paper typst-slide thesis-pdf thesis-watch
 typst-paper: ## Compile the Typst paper (docs/typst/seminar_paper/main.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PAPER) $(TYPST_PAPER_PDF)
 
@@ -831,12 +829,6 @@ thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
 
 thesis-watch: ## Watch and recompile the Typst thesis
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
-
-proposal-pdf: ## Compile the Typst thesis proposal (docs/typst/thesis/proposal.typ)
-	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PROPOSAL) $(TYPST_PROPOSAL_PDF)
-
-proposal-watch: ## Watch and recompile the Typst thesis proposal
-	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_PROPOSAL) $(TYPST_PROPOSAL_PDF)
 
 docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 

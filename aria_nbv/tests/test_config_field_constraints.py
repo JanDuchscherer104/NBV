@@ -11,6 +11,7 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.app.config import RlPageConfig
 from aria_nbv.data_handling import (
+    OracleTargetTaskSamplerConfig,
     TargetSelectorConfig,
     VinOfflineWriterConfig,
 )
@@ -58,6 +59,9 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
     [
         (TargetSelectorConfig, {"min_confidence": -0.1}),
         (TargetSelectorConfig, {"k": 0}),
+        (OracleTargetTaskSamplerConfig, {"max_targets_per_sample": 0}),
+        (OracleTargetTaskSamplerConfig, {"min_identity_iou": -0.1}),
+        (OracleTargetTaskSamplerConfig, {"identity_iou_thresholds": ()}),
         (_recipe, {"horizon": 0}),
         (_recipe, {"selection_temperature": 0.0}),
         (RolloutDatasetWriterConfig, {"max_samples": 0}),

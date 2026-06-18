@@ -1,0 +1,48 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  flowchart:
+    htmlLabels: true
+    nodeSpacing: 20
+    rankSpacing: 32
+    curve: basis
+  layout: elk
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
+    fontSize: "18px"
+    primaryTextColor: "#1f2937"
+    lineColor: "#64748b"
+  themeCSS: |
+    .nodeLabel { font-size: 18px; }
+    .edgeLabel { font-size: 16px; }
+    .cluster-label { font-size: 18px; font-weight: 700; }
+---
+flowchart LR
+  GT["$$\begin{array}{c}\textbf{ASE GT OBBs}\\\texttt{gt\_obbs},\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}}\end{array}$$"]
+  Gate["$$\begin{array}{c}\textbf{Identity Gate}\\\texttt{IoU}+\texttt{ambiguity\ gap}\end{array}$$"]
+  Pool["$$\begin{array}{c}\textbf{Target-Task Pool}\\\texttt{identity\_valid}=1\end{array}$$"]
+  Sample["$$\begin{array}{c}\textbf{Seeded Uniform Cap}\\\texttt{max\_targets\_per\_sample}\end{array}$$"]
+  Rows["$$\begin{array}{c}\textbf{OracleTargetTaskRow}\\\texttt{target\_id}+\texttt{descriptor/audit}\end{array}$$"]
+  Rollouts["$$\begin{array}{c}\textbf{Rollout Data Generation}\\q\in\boldsymbol{\mathcal{Q}},\ \mathbf{C}_{q}\end{array}$$"]
+  Labels["$$\begin{array}{c}\textbf{GT-EVAL Labels}\\\mathrm{RRI}_{e},\ \texttt{headroom}\end{array}$$"]
+  Actor["$$\begin{array}{c}\textbf{Actor-Visible Selector}\\\texttt{OBS-SEL/PRED-Q}\\\text{diagnostic or later deployable}\end{array}$$"]
+
+  GT --> Gate
+  Gate --> Pool
+  Pool --> Sample
+  Sample --> Rows
+  Rows --> Rollouts
+  Rollouts --> Labels
+  Actor -. "separate contract" .-> Rows
+
+  classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
+
+  class GT input;
+  class Gate,Sample,Rollouts compute;
+  class Pool,Rows,Actor data;
+  class Labels output;

@@ -36,19 +36,22 @@ This project aims to develop an NBV system that integrates VIN-NBV's key insight
 
 - Train an RRI predictor head on top of a frozen EFM backbone that introspects the current reconstruction and a candidate pose via imitation learning on oracle RRIs.
 - Leverage EVL's 3D foundation features—voxel occupancy, centerness, semantic channels, and OBB priors—as state embeddings for RRI estimation and NBV decision making.
+- Entity-aware reconstruction tracking through EVL's OBB detection capabilities.
 
 ## Future Work
 
-- Entity-aware reconstruction tracking through EVL's OBB detection capabilities.
 - Extend towards human-in-the-loop AR guidance, where entity-aware RRI weighting delivers task-specific view suggestions.
 
 # Documentation Navigation
 
-`docs/typst/seminar_paper/main.typ` is the highest-level project ground truth. The Quarto pages below are secondary documentation surfaces and should stay aligned with the paper.
+The current thesis direction is owned by the thesis roadmap, research questions,
+and canonical project memory. The seminar paper records historical implemented
+evidence from the earlier project phase and should not override the current
+thesis contract.
 
 ## Paper
 
-- [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Ground truth for the project narrative and technical framing.
+- [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Historical implemented evidence from the earlier project phase.
 
 ## Project Slides
 
@@ -57,10 +60,6 @@ This project aims to develop an NBV system that integrates VIN-NBV's key insight
 - [Presentation 01](typst/seminar_slides/slides_1.pdf), [typst-src](typst/seminar_slides/slides_1.typ)
 - [Presentation 02](typst/seminar_slides/slides_2.pdf), [typst-src](typst/seminar_slides/slides_2.typ)
 - [Presentation 04](typst/seminar_slides/slides_4.pdf), [typst-src](typst/seminar_slides/slides_4.typ): Final presentation of the earlier project phase.
-
-### Master's Thesis
-
-- [Outlook Presentation](typst/thesis_slides/slides_thesis_outlook.pdf), [typst-src](typst/thesis_slides/slides_thesis_outlook.typ): Future research directions and thesis proposal presentation.
 
 ## Setup & Installation
 

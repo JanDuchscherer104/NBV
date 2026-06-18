@@ -12,7 +12,7 @@ format: html
 This page states the research questions for the master's thesis phase of
 **ARIA-NBV**. The central question is:
 
-> Can ARIA-NBV perform target-conditioned, RRI-based multi-step NBV by training
+> Can ARIA-NBV perform target-conditioned, RRI-based **multi**-step NBV by training
 > a finite-candidate value model $Q_{H,\theta}$ that predicts bounded
 > cumulative target-specific RRI for a target of interest and improves endpoint
 > target reconstruction quality, after first measuring oracle-lookahead
@@ -47,11 +47,11 @@ The advisor-facing contract is deliberately compact:
 - train $Q_{H,\theta}$ as a finite-candidate value model, first implemented as
   a candidate-query Transformer over scene, target, history, and candidate
   tokens;
-- scale evidence from small trusted subsets toward ASE-wide, external
-  mesh/oracle-compatible, and online-discrete settings without replacing target
-  RRI by proxy objectives;
-- treat continuous target-then-pose actor-critic as a lower-priority extension
-  that requires online training evidence first;
+- treat scale as an RQ4 support and evidence protocol: move from small trusted
+  subsets toward ASE-wide and external mesh/oracle-compatible settings without
+  replacing target RRI by proxy objectives;
+- treat online discrete $Q_H$ as RQ5 after stable offline $Q_H$, and continuous
+  target-then-pose actor-critic as RQ6 after online finite-candidate evidence;
 - evaluate all learned selected actions with the oracle;
 - report scenes, snippets, targets, trajectories, rollout seeds, transitions,
   invalid gaps, and coverage gaps separately as shared evidence constraints for
@@ -89,9 +89,10 @@ continuous-control or real-device RL policy before the evidence exists.
 |---|---|
 | Already implemented substrate | Scene-level oracle RRI, immutable VIN offline-store paths, VINv3-style one-step scoring, candidate generation, rollout scaffolding, rollout Zarr record/store path, and Rerun offline inspection. |
 | Prerequisite and evidence protocol | Proposal freeze, M1 contract report, V0/V1 target contracts, candidate-label/frame guards, invalidity masks/reasons, rollout/Q storage schema, LRZ deterministic sharding/storage gates, scene-level splits, coverage reporting, and ablation reporting. |
-| Hard quantitative thesis core | Observed-only automatic target selector; OBS-SEL / PRED-Q / GT-EVAL protocol; target-conditioned learned one-step scorer as the myopic control; mixed observed candidate sets; random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax rollouts; finite-candidate $Q_{H,\theta}$ value model, first implemented as a candidate-query Transformer; explicit scale reporting. |
-| Scaling research | ASE-wide finite-candidate offline scale; external mesh/oracle-compatible expansion; online discrete $Q_H$ only after finite-candidate evidence is trusted. |
-| Lower-priority escalation | Continuous target-then-pose actor-critic and simulator-backed control after online training evidence exists; quantitative continuous-control results are time-permitting, not required for the finite-candidate thesis result. |
+| Hard quantitative thesis core | Oracle target-task sampling for rollout/data-generation labels; target-conditioned learned one-step scorer as the myopic control; mixed target-aware candidate sets; random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax rollouts; finite-candidate $Q_{H,\theta}$ value model, first implemented as a candidate-query Transformer; explicit scale reporting. |
+| RQ4 support and scale research | Candidate/rollout support, ASE-wide finite-candidate offline scale, and external mesh/oracle-compatible expansion only when target-RRI supervision is preserved. |
+| RQ5 online bridge | Online discrete $Q_H$ over the same finite-candidate action contract after offline $Q_H$ is trusted. |
+| RQ6 lower-priority escalation | Continuous target-then-pose actor-critic and simulator-backed control after online finite-candidate evidence exists; quantitative continuous-control results are time-permitting, not required for the finite-candidate thesis result. |
 | Future-work extensions | Gumbel-Top-k as preferred later rollout-diversity evidence when time permits, SceneScript-style semantic memory, VLM/global planning, real-device guidance, human-in-the-loop AR, imitation-learning variants beyond planned RRI + $Q_H$, and proxy-objective comparisons. |
 
 ## Proposal Freeze Gate {#rq-proposal-freeze-gate}
@@ -101,22 +102,23 @@ pages must state the same advisor-facing contract:
 
 - ARIA-NBV uses target-specific RRI as the thesis utility signal, with scene
   RRI and acquisition cost reported separately;
-- V1 OBS-SEL / PRED-Q / GT-EVAL is mandatory for the main result, while V0 GT
-  OBB input is only a sanity or upper-bound path;
+- oracle target-task sampling owns the first rollout/data-generation target
+  pools and labels; V1 OBS-SEL / PRED-Q / GT-EVAL is mandatory before making
+  actor-visible deployable-input claims;
 - target-conditioned finite-candidate $Q_H$ value learning is a hard thesis
   deliverable after the M1/M3/M4 gates, with the candidate-query Transformer as
   the first implementation; any blocker must be documented explicitly;
 - scaling beyond the current ASE mesh subset must preserve mesh/oracle
   target-RRI supervision for thesis-grade evidence; proxy objectives remain
   contrast or discussion signals;
-- online discrete $Q_H$ and continuous target-then-pose actor-critic are valid
-  lower-priority RQs after finite-candidate evidence, not substitutes for the
-  M5 $Q_H$ result;
+- RQ5 online discrete $Q_H$ is the first bridge after stable offline
+  finite-candidate evidence; RQ6 continuous target-then-pose actor-critic is a
+  later headroom test, not a substitute for the M5 $Q_H$ result;
 - proposal-critical citations must resolve through `docs/references.bib` to
   primary paper, dataset, or library metadata rather than generated comments or
   Wikipedia references.
 
-## RQ1 - Objective and Metrics {#rq1-objective}
+## RQ1 - Method Objective and Reward Contract {#rq1-objective}
 
 **Question.** Can ARIA-NBV learn target-conditioned, finite-candidate,
 RRI-based multi-step NBV in complex indoor ASE scenes, improving endpoint
@@ -207,18 +209,129 @@ $\gamma$, $\varepsilon$, clipping policy, near-solved-target eligibility rule,
 and scalarized ablation such as $G_0^{(H)}(\tau)-\lambda C(\tau)$ remain
 supervisor-facing open details.
 
-**Evaluation nodes.** Report endpoint target-quality gain, cumulative target
-RRI, optional log target-error gain, scene RRI, view count, path length,
+**Evaluation nodes.** Report endpoint target-quality gain, cumulative
+target-root gain, diagnostic target RRI, optional log target-error gain, scene
+RRI, view count, path length,
 invalid-action rate, and runtime. Different view budgets should be compared by
 fixed-budget tables or quality-cost curves rather than raw endpoint gain alone.
 
-## RQ2 - Actor-Visible Target Representation {#rq2-target-encoding}
+## RQ2 - Offline Finite-Candidate Q_H Planning {#rq2-offline-qh}
+
+<span id="rq4-planning"></span><span id="rq4-model"></span><span id="rq5-planning"></span><span id="rq5-argtopk-rollout-sequence"></span>
+
+**Question.** How does the trained finite-candidate value model
+$Q_{H,\theta}$, first implemented as a candidate-query Transformer, perform
+against learned one-step target scoring, oracle greedy/lookahead planning, and
+oracle-scored stochastic rollout references under the same acquisition and
+candidate budgets?
+
+**Working hypothesis.** Bounded planning should improve target endpoint gain
+especially when the locally best target view is not the best first step, for
+example around occlusion, future invalidity, history-dependent candidate
+regeneration, or when the target becomes visible after an intermediate move. M5
+therefore first estimates oracle-lookahead headroom:
+
+$$
+\Delta_{\mathrm{look}}
+=
+J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}look}})
+-
+J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}1}}).
+$$
+
+Here $\pi_{\mathrm{oracle\text{-}look}}$ selects the first action of a bounded
+$H$-step oracle search that maximizes the same root-normalized return used
+for $Q_H$ training; endpoint gain evaluates the resulting trajectory. If
+$\Delta_{\mathrm{look}}\approx 0$, the thesis reports no measurable non-myopic
+headroom for the evaluated candidate distribution, horizon, branch factor,
+target set, and split. This is a setup-specific negative result, not a general
+claim that target-specific RRI is myopic. If $\Delta_{\mathrm{look}}>0$,
+$Q_{H,\theta}$ should learn enough bounded return structure from ASE oracle
+rollout traces to recover measurable headroom over the learned one-step
+target-conditioned scorer.
+
+**Q_H formulation.** $Q_H$ is the glossary-level concept; the learned network in
+the thesis is the finite-candidate value model
+$Q_{H,\theta}(s_t^{\mathrm{cf0}},z_e,q_{t,i})$, first implemented as a compact
+candidate-query Transformer. The first actor-visible rollout state is
+$s_t^{\mathrm{cf0}}=(F_0^{\mathrm{EVL}},\mathcal{P}_t,\mathcal{Q}_t,m_t,\rho_t,z_e,h_t,b_t)$:
+frozen logged EVL context, accumulated counterfactual points, finite candidate
+table, validity mask, invalid-reason metadata, actor-visible target descriptor,
+selected-view history, and remaining budget. GT meshes, GT crops, and oracle
+RRI values are supervision and evaluation only. The model applies hard validity
+masks and emits one bounded-horizon value per finite candidate-table action.
+The formal ArgTopK recursion, branch-factor schedule, replay row fields, and
+DQN/Double-DQN backup shapes live on the
+[finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd), while
+ArgTopK, beam, and stochastic branching knobs are treated as RQ4 rollout-support
+controls.
+
+**Required comparisons.**
+
+- random-valid selection as a lower reference;
+- one-step oracle greedy and bounded oracle-RRI lookahead under equal candidate
+  and view budget;
+- learned one-step target-conditioned scorer as the required myopic model
+  control;
+- oracle-scored temperature-softmax traces for rollout data diversity;
+- Gumbel-Top-k traces as preferred later diversity evidence when schedule
+  permits;
+- $Q_{H,\theta}$ trained from ASE oracle rollout traces, with all selected
+  actions oracle-evaluated.
+
+**Gate ordering.** Deterministic oracle-greedy and bounded oracle-lookahead
+rollouts must be trusted before stochastic branching is used as training data.
+Random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax
+traces are mandatory before the first $Q_{H,\theta}$ training run. Gumbel-Top-k,
+CQL [@CQL-kumar2020], BCQ [@BCQ-fujimoto2019], Decision Transformer
+[@DecisionTransformer-chen2021], and IQL [@IQL-kostrikov2021] remain later
+evidence or ablation references unless the M5 result is stable.
+
+**One-step scorer evidence gate.** Before $Q_{H,\theta}$ is interpreted as a
+planning result, the learned one-step target-conditioned scorer must have
+held-out ranking evidence, oracle-evaluated model-selected rollouts,
+calibration and stage-shift diagnostics, and Rerun visualizations of
+representative successes and failures. This scorer is not the final thesis
+claim, but it is the required myopic control.
+
+**Success bar.** Learned $Q_{H,\theta}$ selected actions must be
+oracle-evaluated under equal acquisition and candidate budgets. The primary
+comparison is endpoint target-quality gain; the secondary training-aligned
+comparison is cumulative root-normalized target gain. When $\Delta_{\mathrm{look}}>0$,
+$Q_{H,\theta}$ should beat the learned one-step target-conditioned scorer and
+one-step model/greedy selection, while bounded oracle lookahead remains the
+upper reference and random-valid remains the lower reference. Also report the
+recovered headroom fraction:
+
+$$
+\eta_Q
+=
+\frac{
+J_{e,\Delta}^{(H)}(\pi_Q)
+-
+J_{e,\Delta}^{(H)}(\pi_{\mathrm{learned\text{-}1}})
+}{
+J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}look}})
+-
+J_{e,\Delta}^{(H)}(\pi_{\mathrm{learned\text{-}1}})
++\varepsilon
+}.
+$$
+
+Report $\eta_Q$ only when the denominator is positive and larger than a
+predefined minimum effect threshold; otherwise report raw endpoint gains and
+classify the comparison as no measurable headroom. The exact effect-size
+threshold remains an advisor-facing open decision.
+
+## RQ3 - Actor-Visible Target Representation {#rq3-representation}
+
+<span id="rq2-target-encoding"></span>
 
 **Question.** Which actor-visible target descriptor and matching protocol are
 sufficient for target-conditioned one-step scoring and $Q_{H,\theta}$ without
 leaking ground-truth target annotations into the actor input?
 
-**Working hypothesis.** RQ2 owns target inputs, not the Q-network architecture.
+**Working hypothesis.** RQ3 owns target inputs, not the Q-network architecture.
 The first path should use observed/predicted OBB geometry plus support signals.
 A compact actor-visible crop descriptor is the first planned ablation and may be
 promoted if it is cheap and leakage-safe. Entity tokens remain later ablations.
@@ -228,7 +341,8 @@ promoted if it is cheap and leakage-safe. Entity tokens remain later ablations.
 {{< gls ground-truth-target-evaluation >}}. Target selection and model inputs
 use actor-visible predicted or observed descriptors. GT target crops and GT
 OBBs define labels and evaluation only. V0 may use GT OBB input for sanity or
-upper-bound runs, but V1 is mandatory for the main result.
+upper-bound runs; oracle target-task sampling remains the first rollout label
+path, and V1 is mandatory before deployable actor-input claims.
 
 Actor-visible target hypotheses are sourced from the EFM3D/EVL stack or the
 observed support derived from it: predicted or tracked OBBs, semantic class
@@ -294,11 +408,14 @@ data-handling containers, then flow into the
 $Q_{H,\theta}$ replay rows, and diagnostics rather than through ad hoc
 dictionaries.
 
-## RQ3 - Candidate and Rollout Support {#rq3-candidates}
+## RQ4 - Candidate, Rollout, and Scale Support {#rq4-support}
 
-**Question.** Do mixed target-centric and default exploration candidates, plus
-controlled branch/beam rollout support, improve target-conditioned NBV relative
-to pure generic sampling and pure target-point sampling?
+<span id="rq3-candidates"></span><span id="rq5-scaling"></span>
+
+**Question.** Do mixed target-centric and default exploration candidates,
+controlled branch/beam rollout support, and scale-controlled replay evidence
+improve target-conditioned NBV relative to pure generic sampling and pure
+target-point sampling?
 
 **Working hypothesis.** A mixed sampler should beat both a pure generic shell
 and a pure `TARGET_POINT` sampler when target viewpoints need diversity:
@@ -344,119 +461,28 @@ branching stochastic to widen rollout support without changing the target-RRI
 label. These knobs belong with candidate/action-space evidence because they
 decide which finite action rows the value model can learn from.
 
-## RQ4 - Finite-Candidate Q_H Planning {#rq4-planning}
+**Scale-support ladder.** RQ4 also owns support growth before RQ5 online
+interaction:
 
-<span id="rq4-model"></span><span id="rq5-planning"></span><span id="rq5-argtopk-rollout-sequence"></span>
+- small trusted subset for geometry, target matching, invalidity, and replay
+  correctness;
+- scene-level held-out subset or full ASE GT-mesh subset with exact reporting of
+  scenes, snippets, targets, trajectories, rollout seeds, transitions, and
+  missing coverage gaps;
+- broader external mesh/oracle-compatible datasets or simulator substrates only
+  if they preserve target-specific point-mesh supervision and actor-visible
+  target inputs.
 
-**Question.** How does the trained finite-candidate value model
-$Q_{H,\theta}$, first implemented as a candidate-query Transformer, perform
-against learned one-step target scoring, oracle greedy/lookahead planning, and
-oracle-scored stochastic rollout references under the same acquisition and
-candidate budgets?
+The implementation budget and concrete compute envelope are internal planning
+details. Public evidence must report achieved coverage, missing coverage, split
+boundaries, oracle throughput, and whether comparisons reuse identical roots,
+candidates, and budgets.
 
-**Working hypothesis.** Bounded planning should improve target endpoint gain
-especially when the locally best target view is not the best first step, for
-example around occlusion, future invalidity, history-dependent candidate
-regeneration, or when the target becomes visible after an intermediate move. M5
-therefore first estimates oracle-lookahead headroom:
-
-$$
-\Delta_{\mathrm{look}}
-=
-J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}look}})
--
-J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}1}}).
-$$
-
-Here $\pi_{\mathrm{oracle\text{-}look}}$ selects the first action of a bounded
-$H$-step oracle search that maximizes the same root-normalized return used
-for $Q_H$ training; endpoint gain evaluates the resulting trajectory. If
-$\Delta_{\mathrm{look}}\approx 0$, the thesis reports no measurable non-myopic
-headroom for the evaluated candidate distribution, horizon, branch factor,
-target set, and split. This is a setup-specific negative result, not a general
-claim that target-specific RRI is myopic. If $\Delta_{\mathrm{look}}>0$,
-$Q_{H,\theta}$ should learn enough bounded return structure from ASE oracle
-rollout traces to recover measurable headroom over the learned one-step
-target-conditioned scorer.
-
-**Q_H formulation.** $Q_H$ is the glossary-level concept; the learned network in
-the thesis is the finite-candidate value model
-$Q_{H,\theta}(s_t^{\mathrm{cf0}},z_e,q_{t,i})$, first implemented as a compact
-candidate-query Transformer. The first actor-visible rollout state is
-$s_t^{\mathrm{cf0}}=(F_0^{\mathrm{EVL}},\mathcal{P}_t,\mathcal{Q}_t,m_t,\rho_t,z_e,h_t,b_t)$:
-frozen logged EVL context, accumulated counterfactual points, finite candidate
-table, validity mask, invalid-reason metadata, actor-visible target descriptor,
-selected-view history, and remaining budget. GT meshes, GT crops, and oracle
-RRI values are supervision and evaluation only. The model applies hard validity
-masks and emits one bounded-horizon value per finite candidate-table action.
-The formal ArgTopK recursion, branch-factor schedule, replay row fields, and
-DQN/Double-DQN backup shapes live on the
-[finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd), while
-ArgTopK, beam, and stochastic branching knobs are treated as RQ3 rollout-support
-controls.
-
-**Required comparisons.**
-
-- random-valid selection as a lower reference;
-- one-step oracle greedy and bounded oracle-RRI lookahead under equal candidate
-  and view budget;
-- learned one-step target-conditioned scorer as the required myopic model
-  control;
-- oracle-scored temperature-softmax traces for rollout data diversity;
-- Gumbel-Top-k traces as preferred later diversity evidence when schedule
-  permits;
-- $Q_{H,\theta}$ trained from ASE oracle rollout traces, with all selected
-  actions oracle-evaluated.
-
-**Gate ordering.** Deterministic oracle-greedy and bounded oracle-lookahead
-rollouts must be trusted before stochastic branching is used as training data.
-Random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax
-traces are mandatory before the first $Q_{H,\theta}$ training run. Gumbel-Top-k,
-CQL [@CQL-kumar2020], BCQ [@BCQ-fujimoto2019], Decision Transformer
-[@DecisionTransformer-chen2021], and IQL [@IQL-kostrikov2021] remain later
-evidence or ablation references unless the M5 result is stable.
-
-**One-step scorer evidence gate.** Before $Q_{H,\theta}$ is interpreted as a
-planning result, the learned one-step target-conditioned scorer must have
-held-out ranking evidence, oracle-evaluated model-selected rollouts,
-calibration and stage-shift diagnostics, and Rerun visualizations of
-representative successes and failures. This scorer is not the final thesis
-claim, but it is the required myopic control.
-
-**Success bar.** Learned $Q_{H,\theta}$ selected actions must be
-oracle-evaluated under equal acquisition and candidate budgets. The primary
-comparison is endpoint target-quality gain; the secondary training-aligned
-comparison is cumulative root-normalized target gain. When $\Delta_{\mathrm{look}}>0$,
-$Q_{H,\theta}$ should beat the learned one-step target-conditioned scorer and
-one-step model/greedy selection, while bounded oracle lookahead remains the
-upper reference and random-valid remains the lower reference. Also report the
-recovered headroom fraction:
-
-$$
-\eta_Q
-=
-\frac{
-J_{e,\Delta}^{(H)}(\pi_Q)
--
-J_{e,\Delta}^{(H)}(\pi_{\mathrm{learned\text{-}1}})
-}{
-J_{e,\Delta}^{(H)}(\pi_{\mathrm{oracle\text{-}look}})
--
-J_{e,\Delta}^{(H)}(\pi_{\mathrm{learned\text{-}1}})
-+\varepsilon
-}.
-$$
-
-Report $\eta_Q$ only when the denominator is positive and larger than a
-predefined minimum effect threshold; otherwise report raw endpoint gains and
-classify the comparison as no measurable headroom. The exact effect-size
-threshold remains an advisor-facing open decision.
-
-## RQ5 - Scaling Beyond Small Trusted Subsets {#rq5-scaling}
+## Shared Scale Evidence Beyond Small Trusted Subsets {#rq-scale-evidence}
 
 <span id="rq7-scaling"></span>
 
-**Question.** Which scaling path preserves target-RRI supervision while moving
+**Protocol question.** Which scaling path preserves target-RRI supervision while moving
 from small trusted subsets to thesis-grade evidence and, if needed, beyond the
 100 mesh-supervised ASE scene limit?
 
@@ -464,11 +490,11 @@ from small trusted subsets to thesis-grade evidence and, if needed, beyond the
 finite-candidate offline labels, rollout roots, targets, candidates, and
 transitions inside the ASE mesh-supervised subset. Second, if the 100 GT-mesh
 scene limit becomes the bottleneck, expand only to external substrates that can
-provide comparable mesh/oracle target-RRI labels. Third, use online discrete
-$Q_H$ interaction to test whether additional oracle interaction improves the
-finite-candidate policy. Coverage, uncertainty, or semantic proxy labels are
-valid contrast signals, but they do not replace mesh/oracle target RRI for
-thesis-grade comparisons.
+provide comparable mesh/oracle target-RRI labels. Third, hand off only then to
+RQ5 online discrete $Q_H$ interaction to test whether additional oracle
+interaction improves the finite-candidate policy. Coverage, uncertainty, or
+semantic proxy labels are valid contrast signals, but they do not replace
+mesh/oracle target RRI for thesis-grade comparisons.
 
 **Scale ladder.**
 
@@ -480,8 +506,8 @@ thesis-grade comparisons.
 - broader external mesh/oracle-compatible datasets or simulator substrates if
   they preserve target-specific point-mesh supervision and actor-visible target
   inputs;
-- online discrete $Q_H$ in the ASE or external mesh/oracle loop after offline
-  finite-candidate evidence is stable.
+- RQ5 online discrete $Q_H$ in the ASE or external mesh/oracle loop after
+  offline finite-candidate evidence is stable.
 
 The implementation budget and concrete compute envelope are internal planning
 details. Public evidence must instead report achieved coverage, missing
@@ -493,28 +519,48 @@ snippet, rollout seeds, transitions, and stage/calibration bins.
 Architecture, rollout, scorer, or $Q_H$ conclusions must not be compared across
 runs that silently change scene, snippet, target, or candidate coverage.
 
-## RQ6 - Online and Continuous Escalation {#rq6-escalation}
+## RQ5 - Online Discrete Q_H Bridge {#rq5-online}
 
-<span id="rq5-bridge"></span><span id="rq8-extensions"></span>
+<span id="rq6-escalation"></span><span id="rq5-bridge"></span>
 
-**Question.** After the planned RRI + finite-candidate $Q_H$ result, when is it
-scientifically justified to move to online training and continuous
-target-then-pose policies?
+**Question.** After the planned offline finite-candidate $Q_H$ result, does
+online interaction over the same discrete finite-candidate action contract
+improve endpoint gain or recovered headroom enough to justify the extra data
+collection loop?
+
+**Working hypothesis.** Online discrete $Q_H$ is the first post-offline bridge
+because it preserves the finite action table, hard masks, target-RRI reward,
+and oracle re-evaluation contract. It is an RQ5 extension after stable offline
+$Q_H$, not a replacement for the offline evidence gate.
+
+**Online-discrete gate.**
+
+- online discrete $Q_H$ with the same finite action contract and oracle
+  re-evaluation;
+- compare offline fitted $Q_H$ against online-updated finite-candidate policy
+  under matched roots, targets, candidates, and acquisition budget;
+- report whether online interaction changes endpoint gain, cumulative
+  root-normalized target gain, invalid-action handling, or recovered headroom.
+
+## RQ6 - Continuous and Simulator Escalation {#rq6-continuous}
+
+<span id="rq8-extensions"></span>
+
+**Question.** After finite-candidate and online-discrete evidence, do
+continuous or hierarchical target-then-pose policies have measurable headroom
+over the best finite-candidate policy under the same target-RRI objective?
 
 **Working hypothesis.** Continuous action spaces require online training first.
-The lower-priority escalation is therefore online discrete $Q_H$ before
-continuous target-then-pose actor-critic. Continuous policies are a plausible
-improvement over simple algorithmic candidate generation because they are not
-restricted to the hand-designed finite candidate table, but they should not be
-used to rescue a failed target-RRI, rollout, or $Q_H$ contract. Hestia-style
+Continuous policies are plausible improvements over simple algorithmic
+candidate generation because they are not restricted to the hand-designed
+finite candidate table, but they should not be used to rescue a failed
+target-RRI, rollout, offline $Q_H$, or online-discrete contract. Hestia-style
 hierarchy [@Hestia-lu2026] and GenNBV-style continuous control
 [@GenNBV-chen2024] are relevant design references. Imitation-learning variants
 are deferred beyond the planned RRI + $Q_H$ approach.
 
 **Escalation ladder.**
 
-- online discrete $Q_H$ with the same finite action contract and oracle
-  re-evaluation;
 - continuous target-then-pose actor-critic only after online interaction,
   reward speed, invalid-action handling, and evaluation are thesis-grade;
 - simulator-backed online RL with Habitat, Isaac, or external datasets only if
@@ -525,11 +571,11 @@ are deferred beyond the planned RRI + $Q_H$ approach.
 
 ## Shared Evidence and Protocol Constraints {#rq-evidence-protocol}
 
-<span id="rq6-feasibility"></span><span id="rq7-scaling"></span>
+<span id="rq6-feasibility"></span>
 
 Invalidity remains a shared constraint that makes every empirical answer
-interpretable. Scale is now a research question, but coverage reporting remains
-a shared evidence contract across all empirical RQs.
+interpretable. Scale support is part of RQ4, but coverage reporting remains a
+shared evidence contract across all empirical RQs.
 
 **Invalidity protocol.** Collision, out-of-bounds poses, no-depth cases, bad
 frusta, outside-EVL-extent cases, and candidates that cannot produce a meaningful
@@ -581,11 +627,11 @@ large-scale generation.
 | Question | Roadmap gate | Primary evidence | Main linked surface |
 |---|---|---|---|
 | [RQ1](#rq1-objective) | M1, M5 | endpoint target-quality gain, cumulative target-root gain, diagnostic target RRI, acquisition-cost curves | [RRI theory](../theory/rri_theory.qmd) |
-| [RQ2](#rq2-target-encoding) | M3, M4 | actor-visible target encoding and crop-descriptor ablation | [EVL notes](../literature/efm3d.qmd) |
-| [RQ3](#rq3-candidates) | M3, M5 | mixed candidate sampler, branch/beam support, stochastic rollout diversity, and validity statistics | [Candidate API](../../reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd) |
-| [RQ4](#rq4-planning) | M4, M5 | one-step scorer evidence gate, oracle lookahead, rollout traces, endpoint gain, cumulative target-root gain, diagnostic target RRI, and $Q_{H,\theta}$ success bar | [Rollout/Q_H contract](../theory/rl_planning.qmd) |
-| [RQ5](#rq5-scaling) | M2 to M7 | ASE scale, external mesh/oracle-compatible expansion, online discrete scale, and coverage reports | [M1 contract report](m1_contract_report.qmd) |
-| [RQ6](#rq6-escalation) | M6 | online discrete Q_H and time-permitting continuous target-then-pose policy escalation | [Roadmap M6](roadmap.qmd#roadmap-m6) |
+| [RQ2](#rq2-offline-qh) | M4, M5 | one-step scorer evidence gate, oracle lookahead, rollout traces, endpoint gain, cumulative target-root gain, diagnostic target RRI, and $Q_{H,\theta}$ success bar | [Rollout/Q_H contract](../theory/rl_planning.qmd) |
+| [RQ3](#rq3-representation) | M3, M4 | actor-visible target encoding and crop-descriptor ablation | [EVL notes](../literature/efm3d.qmd) |
+| [RQ4](#rq4-support) | M2 to M7 | mixed candidate sampler, branch/beam support, stochastic rollout diversity, validity statistics, ASE scale, external mesh/oracle-compatible expansion, and coverage reports | [Candidate API](../../reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd) |
+| [RQ5](#rq5-online) | M6 | online discrete Q_H over the same finite-candidate action contract after offline $Q_H$ is trusted | [Roadmap M6](roadmap.qmd#roadmap-m6) |
+| [RQ6](#rq6-continuous) | M6 | time-permitting continuous target-then-pose policy, hierarchy, or simulator escalation after finite-candidate and online-discrete evidence | [Roadmap M6](roadmap.qmd#roadmap-m6) |
 | [Protocol](#rq-evidence-protocol) | M1 to M7 | invalidity masks/reason metrics, scene-level splits, no sample leakage, coverage reports, calibration/stage-shift diagnostics, Zarr/LRZ gates, and ablation tables | [M1 contract report](m1_contract_report.qmd) |
 
 ## KG-Friendly Question Writing {#rq-kg-writing}
