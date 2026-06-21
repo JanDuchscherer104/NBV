@@ -17,16 +17,22 @@ encoded as low target RRI.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 import torch
 from pydantic import Field, field_validator
 
 from ..data_handling._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ..data_handling._target_selection import (
+    TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
     ActorVisibleTargetSelector,
+    OracleTargetTaskRow,
+    OracleTargetTaskSampler,
+    OracleTargetTaskSamplerConfig,
     TargetCandidateRow,
     TargetSelectorConfig,
+    TargetTaskIdentityStatus,
 )
 from ..pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -182,6 +188,13 @@ class SelectedDepthRetentionConfig(BaseConfig):
         )
 
 
+class RolloutTargetSource(StrEnum):
+    """Target source protocol used by the rollout writer."""
+
+    ORACLE_TARGET_TASK_SAMPLER = "oracle_target_task_sampler"
+    ACTOR_VISIBLE_SELECTOR = "actor_visible_selector"
+
+
 class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Configuration for building standalone target-RRI rollout Zarr stores.
 
@@ -212,7 +225,13 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """VIN strict-v7 source reader; must return samples with live snippet and GT mesh."""
 
     target_selector: TargetSelectorConfig = Field(default_factory=TargetSelectorConfig)
-    """Actor-visible target selector used before GT-only label matching."""
+    """Actor-visible target selector used only for V1 diagnostic/deployable-input rollout profiles."""
+
+    oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
+    """Oracle GT target-task sampler used by default for rollout data generation."""
+
+    target_source: RolloutTargetSource = RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER
+    """Target source policy: oracle target tasks for data generation, actor-visible selector for V1 diagnostics."""
 
     candidate_mixture: CandidateMixtureViewGeneratorConfig = Field(default_factory=CandidateMixtureViewGeneratorConfig)
     """Fixed-count mixed finite-candidate generator regenerated at every rollout step."""
@@ -239,7 +258,7 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     max_samples: int | None = Field(default=None, ge=1)
     """Optional local smoke cap on source samples."""
 
-    max_targets_per_sample: int | None = Field(default=None, ge=1)
+    max_targets_per_sample: int | None = None
     """Optional local smoke cap on selected targets rolled out per source sample."""
 
     log_timing: bool = False
@@ -259,22 +278,28 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
 
+    @field_validator("max_targets_per_sample")
+    @classmethod
+    def _validate_max_targets_per_sample(cls, value: int | None) -> int | None:
+        """Preserve ``None`` as no per-sample target cap while rejecting non-positive caps."""
+
+        if value is not None and int(value) < 1:
+            raise ValueError("max_targets_per_sample must be >= 1 when set.")
+        return value
+
     def _propagate_to_child(self, parent_field: str, child_config: BaseConfig) -> None:
         """Avoid propagating rollout Zarr ``store`` into the VIN source config."""
 
+        excluded = {"max_targets_per_sample", parent_field, "propagated_fields", "target", "target_type"}
         if parent_field == "source":
-            shared_fields = {
-                name: value
-                for name, value in self
-                if name in child_config.__class__.model_fields
-                and name not in {"store", parent_field, "propagated_fields", "target"}
-            }
-            for name, value in shared_fields.items():
-                if getattr(child_config, name, None) != value:
-                    setattr(child_config, name, value)
-                    child_config.propagated_fields[name] = value
-            return
-        super()._propagate_to_child(parent_field, child_config)
+            excluded.add("store")
+        shared_fields = {
+            name: value for name, value in self if name in child_config.__class__.model_fields and name not in excluded
+        }
+        for name, value in shared_fields.items():
+            if getattr(child_config, name, None) != value:
+                setattr(child_config, name, value)
+                child_config.propagated_fields[name] = value
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,6 +380,17 @@ class _RolloutSourceLineageBuilder:
         return f"mesh-v={len(snippet.mesh.vertices)}-f={len(snippet.mesh.faces)}"
 
 
+@dataclass(frozen=True, slots=True)
+class _RolloutTargetSelectionResult:
+    """Target rows selected for rollout generation plus source diagnostics."""
+
+    rows: tuple[TargetCandidateRow, ...]
+    selected_rows: tuple[TargetCandidateRow, ...]
+    source: str | None
+    warnings: tuple[str, ...] = ()
+    empty_reason: str = "no_target_tasks"
+
+
 class RolloutDatasetWriter:
     """Generate target-RRI rollout records and write a standalone Zarr store.
 
@@ -397,6 +433,7 @@ class RolloutDatasetWriter:
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
         selector = ActorVisibleTargetSelector(self.config.target_selector)
+        oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
         max_samples = (
             len(dataset)
             if shard_entry is not None or self.config.max_samples is None
@@ -416,13 +453,9 @@ class RolloutDatasetWriter:
                 self.stats.samples_without_snippet_or_mesh += 1
                 self.stats.skip("missing_snippet_or_mesh")
                 continue
-            target_result = selector.select(sample)
+            target_result = self._select_targets(sample, selector=selector, oracle_sampler=oracle_sampler)
             if not target_result.selected_rows:
-                reason = (
-                    "no_ranked_targets"
-                    if target_result.rows and not target_result.ranked_rows
-                    else "no_actor_visible_targets"
-                )
+                reason = target_result.empty_reason
                 self.stats.skip(reason)
                 self.console.warn(
                     f"Skipping sample scene={sample.scene_id} snippet={sample.snippet_id}: {reason}; "
@@ -651,7 +684,7 @@ class RolloutDatasetWriter:
                         selection_rng_state_hash=(
                             f"seed-once:{recipe.seed}:split-manifest:{source_lineage.split_manifest_hash}"
                         ),
-                        target_selection_policy=self.config.target_selector.policy.value,
+                        target_selection_policy=self._target_selection_policy(),
                         target_selection_rank=target.selected_rank if target.selected_rank is not None else target_rank,
                         target_selection_score=target.score,
                         target_selection_probability=target.selection_probability,
@@ -684,8 +717,39 @@ class RolloutDatasetWriter:
                         gt_match_status=target.gt_match_status,
                     ),
                 )
-        )
+            )
         return records
+
+    def _select_targets(
+        self,
+        sample: VinOfflineSample,
+        *,
+        selector: ActorVisibleTargetSelector,
+        oracle_sampler: OracleTargetTaskSampler,
+    ) -> _RolloutTargetSelectionResult:
+        """Return rollout-ready target rows for the configured target-source policy."""
+
+        if self.config.target_source == RolloutTargetSource.ACTOR_VISIBLE_SELECTOR:
+            result = selector.select(sample)
+            reason = "no_ranked_targets" if result.rows and not result.ranked_rows else "no_actor_visible_targets"
+            return _RolloutTargetSelectionResult(
+                rows=result.rows,
+                selected_rows=result.selected_rows,
+                source=result.source,
+                warnings=result.warnings,
+                empty_reason=reason,
+            )
+
+        result = oracle_sampler.sample(sample)
+        selected = tuple(_oracle_target_task_to_candidate_row(row) for row in result.selected_rows)
+        reason = "no_identity_valid_oracle_target_tasks" if result.rows else "no_oracle_target_tasks"
+        return _RolloutTargetSelectionResult(
+            rows=tuple(_oracle_target_task_to_candidate_row(row) for row in result.rows),
+            selected_rows=selected,
+            source=result.source,
+            warnings=result.warnings,
+            empty_reason=reason,
+        )
 
     def _low_valid_root_reason(self, result: CounterfactualRolloutResult) -> str | None:
         """Return a skip reason when the root step falls below the valid-action gate."""
@@ -743,9 +807,16 @@ class RolloutDatasetWriter:
                 step.selected_depth_image_size_hw = (int(size_wh[1].item()), int(size_wh[0].item()))
 
     def _target_selection_temperature(self) -> float | None:
+        if self.config.target_source == RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER:
+            return None
         if self.config.target_selector.policy.value == "temperature_softmax_top_k":
             return float(self.config.target_selector.temperature)
         return None
+
+    def _target_selection_policy(self) -> str:
+        if self.config.target_source == RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER:
+            return "oracle_identity_valid_uniform"
+        return self.config.target_selector.policy.value
 
 
 def _lineage_split(*, records: list[object], fallback: str) -> str:
@@ -755,10 +826,66 @@ def _lineage_split(*, records: list[object], fallback: str) -> str:
     return next(iter(splits)) if len(splits) == 1 else str(fallback)
 
 
+def _oracle_target_task_to_candidate_row(row: OracleTargetTaskRow) -> TargetCandidateRow:
+    """Adapt an oracle GT target-task row to the rollout target lineage DTO."""
+
+    reason_bitset, primary_reason = _oracle_target_invalidity(row)
+    gt_valid = row.identity_status == TargetTaskIdentityStatus.MATCHED.value
+    return TargetCandidateRow(
+        scene_id=row.scene_id,
+        snippet_id=row.snippet_id,
+        source=row.source,
+        source_index=row.source_index,
+        target_row_id=row.target_row_id,
+        target_id=row.target_id,
+        sem_id=row.sem_id,
+        inst_id=row.inst_id,
+        class_name=row.class_name,
+        confidence=row.confidence,
+        center_world=row.center_world,
+        extents=row.extents,
+        pose_world_object=row.pose_world_object,
+        relative_pose_reference_object=row.relative_pose_reference_object,
+        projected_area_pixels=row.projected_area_pixels,
+        projected_area_fraction=row.projected_area_fraction,
+        semidense_support_count=row.semidense_support_count,
+        evl_support_count=row.evl_support_count,
+        effective_support_count=row.effective_support_count,
+        visibility_score=1.0,
+        support_score=1.0,
+        deficit_score=0.0,
+        score=float(row.identity_iou) if row.identity_iou is not None else float("nan"),
+        eligible=gt_valid,
+        invalid_reason_bitset=reason_bitset,
+        primary_invalid_reason=primary_reason,
+        selected_rank=row.selected_rank,
+        selection_probability=row.selection_probability,
+        gt_label_valid=gt_valid,
+        gt_target_row_id=row.source_index if gt_valid else None,
+        gt_target_id=row.target_id if gt_valid else None,
+        gt_match_iou=row.identity_iou,
+        gt_match_score=row.identity_iou,
+        gt_match_status="matched" if gt_valid else row.identity_status,
+    )
+
+
+def _oracle_target_invalidity(row: OracleTargetTaskRow) -> tuple[int, int]:
+    if row.identity_status == TargetTaskIdentityStatus.MATCHED.value:
+        return 1 << TARGET_INVALID_REASON_CODES["VALID"], TARGET_INVALID_REASON_CODES["VALID"]
+    if row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value:
+        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"]
+    elif row.identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value:
+        reason = TARGET_INVALID_REASON_CODES["OBB_EXTENT_INVALID"]
+    else:
+        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
+    return 1 << reason, reason
+
+
 __all__ = [
     "RolloutDatasetWriter",
     "RolloutDatasetWriterConfig",
     "RolloutDatasetWriterStats",
+    "RolloutTargetSource",
     "RolloutRecipeConfig",
     "SelectedDepthRetentionConfig",
 ]

@@ -86,6 +86,6 @@ Every new or changed displayed equation must be checked by at least one compile
 and rendered-page inspection pass:
 
 ```bash
-cd docs && typst compile typst/thesis/proposal.typ /tmp/check.pdf --root .
+cd docs && typst compile typst/thesis/main.typ /tmp/check.pdf --root .
 .agents/skills/typst-authoring/scripts/render_png.sh -i path/to/file.typ -o /tmp/renders --root docs --pages <page>
 ```

@@ -28,6 +28,17 @@ metadata:
     - "AGENTS.md"
     - ".agents/skills/agent-behavior/SKILL.md"
     - ".agents/skills/simplification/references/redundancy-discovery.md"
+  canonical_sources:
+    - "AGENTS.md"
+    - ".agents/references/source_order.md#capture-rule"
+    - ".agents/references/skill_style_guide.md#style-rules"
+    - ".agents/skills/simplification/references/redundancy-discovery.md"
+    - ".agents/skills/simplification/references/tool-decision-tree.md"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__MCP_DOCKER.analyze_python_file"
+    - "mcp__MCP_DOCKER.get_package_metrics"
+    - "mcp__MCP_DOCKER.get_extraction_guidance"
   verification:
     - "focused tests for the changed surface"
     - "ruff format <file> and ruff check <file> for Python changes"

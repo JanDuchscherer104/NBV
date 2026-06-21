@@ -38,7 +38,10 @@
     This thesis investigates target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It uses target-specific @relative-reconstruction-improvement as the supervision and evaluation signal for finite candidate view selection, measures bounded oracle-lookahead headroom, and tests whether an actor-visible finite-horizon value model can recover part of that headroom under matched oracle re-evaluation.
   ],
   abstract_de: [
-    #question_todo([Write the German abstract after the English thesis claim and final evidence scale are stable.], source: [main thesis seed])
+    #question_todo(
+      [Write the German abstract after the English thesis claim and final evidence scale are stable.],
+      source: [main thesis seed],
+    )
   ],
   acknowledgement: [
     #question_todo([Fill acknowledgements close to submission.], source: [main thesis seed])

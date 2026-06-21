@@ -5,19 +5,24 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import torch
+import zarr
 from efm3d.aria import CameraTW
 from efm3d.aria.pose import PoseTW
+from streamlit.testing.v1 import AppTest
 
+from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
 from aria_nbv.app.config import RlPageConfig
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
+from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
@@ -32,6 +37,55 @@ from aria_nbv.pose_generation import (
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+_PATH_CONFIG_FIELDS = (
+    "root",
+    "data_root",
+    "data_root_massive",
+    "checkpoints",
+    "external_checkpoints",
+    "wandb",
+    "optuna",
+    "configs_dir",
+    "url_dir",
+    "metadata_cache",
+    "offline_cache_dir",
+    "ase_meshes",
+    "processed_meshes",
+    "external_dir",
+)
+
+
+@pytest.fixture
+def isolated_path_config(tmp_path):
+    original = PathConfig()
+    original_values = {field: getattr(original, field) for field in _PATH_CONFIG_FIELDS}
+    (tmp_path / ".configs").mkdir()
+    (tmp_path / ".configs" / "rerun_offline.toml").write_text("", encoding="utf-8")
+    cfg = PathConfig(
+        root=tmp_path,
+        data_root=tmp_path / ".data",
+        configs_dir=tmp_path / ".configs",
+        offline_cache_dir=Path("offline_cache"),
+    )
+    try:
+        yield cfg
+    finally:
+        PathConfig(**original_values)
+
+
+def _stored_rollouts_app(tmp_path: Path) -> AppTest:
+    script = tmp_path / "render_stored_rollouts_panel.py"
+    script.write_text(
+        "from aria_nbv.app.panels.stored_rollouts import render_stored_rollouts_panel\n"
+        "render_stored_rollouts_panel()\n",
+        encoding="utf-8",
+    )
+    return AppTest.from_file(str(script), default_timeout=15)
+
+
+def _metric_values(app: AppTest) -> dict[str, str]:
+    return {metric.label: metric.value for metric in app.metric}
 
 
 def _dummy_camera() -> CameraTW:
@@ -237,6 +291,86 @@ def test_format_rollout_option_includes_context_and_nan_beam() -> None:
     )
 
 
+def test_format_rollout_store_option_includes_schema_validation_and_counts(tmp_path) -> None:
+    row = {
+        "path": (tmp_path / "rollouts_v1_smoke.zarr").as_posix(),
+        "schema_status": "stale",
+        "validation_ok": False,
+        "observed_rollouts": 18,
+        "observed_steps": 54,
+        "observed_candidates": 270,
+    }
+
+    label = stored_rollouts_panel.format_rollout_store_option(row, root=tmp_path)
+
+    assert label == "rollouts_v1_smoke.zarr · stale · FAILED · R/S/C=18/54/270"
+
+
+def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:
+    write_rollout_zarr_store(
+        isolated_path_config.offline_cache_dir / "current.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=47)[:1],
+    )
+
+    app = _stored_rollouts_app(tmp_path).run()
+
+    assert not app.exception
+    assert [header.value for header in app.header] == ["Stored Rollout Zarr"]
+    assert "Rollout Stores" in [subheader.value for subheader in app.subheader]
+    assert "Selected Rollout Row" in [subheader.value for subheader in app.subheader]
+    assert _metric_values(app)["Validation"] == "OK"
+    assert _metric_values(app)["Rollouts"] == "1"
+    assert _metric_values(app)["Steps"] == "1"
+    assert _metric_values(app)["Candidates"] == "12"
+    assert _metric_values(app)["Q-train candidates"] == "12"
+    assert {selectbox.label for selectbox in app.selectbox} >= {
+        "rollouts.zarr store",
+        "Geometry / label metric",
+        "Color / split by",
+        "Rollout row",
+    }
+    assert {text_input.label for text_input in app.text_input} >= {
+        "Manual rollouts.zarr path",
+        "Rerun inspector config",
+        "RRD save directory",
+    }
+    assert {number_input.label for number_input in app.number_input} >= {
+        "Rerun web-viewer port",
+        "Rerun gRPC/proxy port",
+        "Candidate audit row limit (0 = all)",
+        "Min valid fanout",
+    }
+    assert {slider.label for slider in app.slider} >= {
+        "Dominant invalid fraction",
+        "High target score",
+        "Max selected step (m)",
+    }
+    assert {button.label for button in app.button} >= {"Open in Native Rerun", "Open in Rerun Web Viewer"}
+    assert len(app.get("plotly_chart")) >= 8
+    assert len(app.dataframe) >= 10
+    assert not app.error
+
+
+def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config, tmp_path) -> None:
+    stale_path = isolated_path_config.offline_cache_dir / "stale.zarr"
+    stale_root = zarr.open_group(stale_path, mode="w")
+    stale_root.attrs["schema_version"] = "0.6-rollout-core"
+    stale_root.create_group("rollouts").create_array("rollout_row_id", data=np.arange(2, dtype=np.int64))
+    stale_root.create_group("steps").create_array("step_row_id", data=np.arange(4, dtype=np.int64))
+    stale_root.create_group("candidates").create_array("candidate_row_id", data=np.arange(8, dtype=np.int64))
+
+    app = _stored_rollouts_app(tmp_path).run()
+
+    assert not app.exception
+    assert _metric_values(app)["Validation"] == "FAILED"
+    assert _metric_values(app)["Rollouts"] == "2"
+    assert _metric_values(app)["Steps"] == "4"
+    assert _metric_values(app)["Candidates"] == "8"
+    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+    assert any("requires a store that passes" in info.value for info in app.info)
+    assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
+
+
 def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
@@ -249,6 +383,10 @@ def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> No
     assert rows[0]["strategy"] != ""
     assert rows[0]["position"] == "forward_local"
     assert rows[0]["mixture"] != ""
+
+
+def test_stored_rollouts_panel_is_publicly_exported() -> None:
+    assert stored_rollouts_panel.render_stored_rollouts_panel is panel_dispatcher.render_stored_rollouts_panel
 
 
 def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:

@@ -15,7 +15,7 @@ Options:
 
 Examples:
   .agents/skills/typst-authoring/scripts/render_png.sh -i figure.typ
-  .agents/skills/typst-authoring/scripts/render_png.sh -i docs/typst/thesis/proposal.typ -o /tmp/renders --root docs --ppi 600 --pages 1
+  .agents/skills/typst-authoring/scripts/render_png.sh -i docs/typst/thesis/main.typ -o /tmp/renders --root docs --ppi 600 --pages 1
   .agents/skills/typst-authoring/scripts/render_png.sh -i .agents/skills/typst-authoring/assets/fixtures/attachments-and-operators.typ -o /tmp/fixtures --root . --pages 1
 EOF
 }

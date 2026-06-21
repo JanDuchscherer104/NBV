@@ -1,5 +1,6 @@
 max_samples = 1
 max_targets_per_sample = 1
+target_source = "oracle_target_task_sampler"
 require_label_valid = true
 log_timing = true
 verbosity = 1

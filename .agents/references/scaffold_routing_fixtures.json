@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "purpose": "Minimal routing fixtures for scaffold-audit. These fixtures protect owner selection before any skill deletion or router merge.",
+  "fixtures": [
+    {
+      "id": "local-file-lookup",
+      "task": "Find where a cross-surface ARIA-NBV symbol or document owner lives.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not use KG as the default source of truth for a localized lookup."]
+    },
+    {
+      "id": "kg-claim-check",
+      "task": "Check an advisor-facing thesis or literature claim against source-backed evidence.",
+      "expected_skills": ["agent-behavior", "aria-litkg-memory"],
+      "non_goals": ["Do not promote retrieved evidence without inspecting canonical sources."]
+    },
+    {
+      "id": "entity-rri-implementation",
+      "task": "Change target-specific RRI labels, GT OBB crop support, target validity reasons, or target-conditioned VIN fields.",
+      "expected_skills": ["agent-behavior", "entity-aware-rri"],
+      "non_goals": ["Do not route target/RRI implementation ownership through the generic context router."]
+    },
+    {
+      "id": "geometry-frame-implementation",
+      "task": "Change pose, camera, coordinate-frame, CW90, PyTorch3D projection, depth backprojection, or candidate-frustum contracts.",
+      "expected_skills": ["agent-behavior", "nbv-geometry-contracts"],
+      "non_goals": ["Do not route geometry contract changes through entity-aware RRI unless target crop semantics are touched."]
+    },
+    {
+      "id": "context7-pytorch3d-conceptual-plan",
+      "task": "Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence.",
+      "expected_skills": ["agent-behavior", "plan-grill"],
+      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
+      "non_goals": ["Do not let Context7 replace local geometry owners or the nbv-geometry-contracts evidence loop."]
+    },
+    {
+      "id": "context7-not-needed-target-rri-section",
+      "task": "Find the source family and thesis target-RRI section owner for a local wording check.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "forbidden_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
+      "non_goals": ["Do not use KG, Context7, or external library docs for local source family lookup."]
+    },
+    {
+      "id": "literature-finite-candidate-double-q",
+      "task": "Check an advisor-facing finite-candidate Double-Q literature claim against source-backed evidence.",
+      "expected_skills": ["agent-behavior", "aria-litkg-memory"],
+      "non_goals": ["Do not promote retrieved literature evidence without inspecting Quarto, BibTeX, and source-order owners."]
+    },
+    {
+      "id": "local-source-mirror-vin-nbv-methods",
+      "task": "Locate the local literature source family for a narrow VIN-NBV methods claim before writing thesis prose.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not use KG as the default owner for deterministic local source family discovery."]
+    },
+    {
+      "id": "code-index-frustum-rendering",
+      "task": "Locate the implementation of candidate frustum rendering with source family and code-index evidence.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "expected_tool_refs": ["mcp__code_index.search_code_advanced"],
+      "non_goals": ["Do not start with browser tools or KG when local code-index and rg can localize the source."]
+    },
+    {
+      "id": "planned-thesis-detail",
+      "task": "Place planned but unimplemented target-RRI, rollout, or Q_H research details in canonical thesis or Quarto owners.",
+      "expected_skills": ["agent-behavior", "docs-curator"],
+      "non_goals": ["Do not store planned implementation detail in a skill body."]
+    },
+    {
+      "id": "package-contract-owner",
+      "task": "Localize the nearest aria_nbv package AGENTS.md owner before changing Python API contracts or generated implementation docs.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not store package API contract detail in a skill body."]
+    },
+    {
+      "id": "skill-truth-leakage-review",
+      "task": "Simplify scaffold skills by reviewing skill bodies for duplicated formulas, roadmap claims, future-work plans, or implementation contracts.",
+      "expected_skills": ["agent-behavior", "simplification"],
+      "non_goals": ["Do not merge or delete a skill before replacement-owner evidence and routing fixtures pass."]
+    },
+    {
+      "id": "concrete-failure",
+      "task": "Diagnose a failing command, traceback, suspicious metric, or bad runtime output.",
+      "expected_skills": ["agent-behavior", "diagnose-aria"],
+      "non_goals": ["Do not patch by guesswork before a reproducer or explicit blocker exists."]
+    },
+    {
+      "id": "code-review",
+      "task": "Review ARIA-NBV working-tree or PR diffs and produce severity-ranked findings.",
+      "expected_skills": ["agent-behavior", "code-review-aria-nbv"],
+      "non_goals": ["Do not substitute a generic review harness for ARIA-NBV domain routing."]
+    },
+    {
+      "id": "python-docstring-contract",
+      "task": "Write or refactor docstrings for Python public API contracts.",
+      "expected_skills": ["agent-behavior", "python-docstrings"],
+      "non_goals": ["Do not remove the docstring skill until its rules are migrated and routing fixtures still pass."]
+    },
+    {
+      "id": "typst-thesis-edit",
+      "task": "Edit Typst thesis prose, shared notation, citations, figures, or rendered-page QA.",
+      "expected_skills": ["agent-behavior", "typst-authoring"],
+      "non_goals": ["Do not route pure Quarto navigation work through Typst authoring."]
+    },
+    {
+      "id": "docs-literature-no-browser",
+      "task": "Plan a Quarto literature navigation cleanup with local bibliography and source-order evidence.",
+      "expected_skills": ["agent-behavior", "docs-curator"],
+      "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
+      "non_goals": ["Do not route docs literature planning through diagnose-aria live browser app diagnosis."]
+    },
+    {
+      "id": "typst-prose-no-python-analyzer",
+      "task": "Polish Typst thesis prose and citations without changing Python implementation code.",
+      "expected_skills": ["agent-behavior", "typst-authoring"],
+      "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
+      "non_goals": ["Do not use simplification Python analyzer tools for pure Typst prose and citation edits."]
+    },
+    {
+      "id": "scaffold-cleanup",
+      "task": "Prune or simplify scaffold skills, metadata, or references while preserving behavior.",
+      "expected_skills": ["agent-behavior", "simplification"],
+      "non_goals": ["Do not delete or merge skills without replacement-owner evidence."]
+    }
+  ]
+}

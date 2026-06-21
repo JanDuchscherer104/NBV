@@ -2,6 +2,20 @@
 name: lrz-ai-systems
 description: "Use when working with LRZ AI Systems remote compute for ARIA-NBV: SSH/login.ai.lrz.de, DSS storage, Slurm GPU/CPU allocations, Enroot/Pyxis containers, dataset/cache/training batch jobs, or debugging remote job failures."
 metadata:
+  mode: maintenance
+  not_when:
+    - "local-only package, docs, or scaffold work with no LRZ execution surface"
+    - "experiment design before a concrete remote resource or batch need exists"
+    - "credential, quota, or production action that lacks user authority"
+  handoff_to:
+    - "dataset-cache-ops for ASE shards, offline stores, and data smoke contracts"
+    - "counterfactual-rollout-planner for rollout/Q_H workload semantics"
+    - "diagnose-aria for concrete failed job logs or suspicious remote output"
+    - "agents-db for durable blocked access, quota, or remote-run debt"
+  evidence_required:
+    - "target LRZ partition, DSS/container path policy, and intended workload class"
+    - "dry-run, syntax check, or exact Slurm/job log excerpt"
+    - "explicit credential/access blocker when remote verification cannot run"
   applies_to:
     - ".configs/lrz/**"
     - "scripts/templates/**"
@@ -16,12 +30,25 @@ metadata:
     - ".agents/skills/lrz-ai-systems/references/cheatsheet.md"
     - ".agents/skills/lrz-ai-systems/references/storage-dss.md"
     - ".agents/skills/lrz-ai-systems/references/slurm-partitions.md"
+  canonical_sources:
+    - ".agents/skills/lrz-ai-systems/references/cheatsheet.md"
+    - ".agents/skills/lrz-ai-systems/references/storage-dss.md"
+    - ".agents/skills/lrz-ai-systems/references/slurm-partitions.md"
+    - ".agents/skills/lrz-ai-systems/references/containers-pyxis.md"
+    - ".agents/skills/lrz-ai-systems/templates/sbatch_single_gpu_aria.sh"
   verification:
     - "shellcheck or dry-run checks for changed scripts where available"
     - "make check-agent-memory for LRZ guidance changes"
 ---
 
 # LRZ AI Systems
+
+## OMX Integration
+
+OMX may plan or supervise remote work, but this skill only provides ARIA/LRZ
+environment knowledge and evidence loops. It should return concrete command
+shapes, resource constraints, and blockers without assuming credentials,
+submitting jobs, or owning workflow state.
 
 ## Read First
 

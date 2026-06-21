@@ -46,7 +46,7 @@ Coverage and uncertainty remain diagnostics, not the thesis utility. @ground-tru
 
 #figure(
   align(center, image(
-    "../figures/proposal_system_flow.png",
+    "../figures/proposal_system_flow.pdf",
     width: 96%,
   )),
   caption: [Evidence chain from actor-visible state and target descriptor to masked candidates, target @relative-reconstruction-improvement:short, lookahead headroom, and the #symb.rl.qh model. Dashed paths are follow-up work.],

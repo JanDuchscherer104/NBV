@@ -8,6 +8,9 @@ compact command index.
 
 - Skill validation:
   `python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/scripts/quick_validate.py" .agents/skills/<skill-dir>`
+- Scaffold audit:
+  `make scaffold-audit`
+  `make scaffold-audit-self-test`
 - Agent memory:
   `make check-agent-memory`
   Covers repo-owned scaffold alignment checks, required debrief frontmatter,
@@ -66,7 +69,7 @@ compact command index.
   `cd docs && quarto render <page.qmd>`
 - Focused Typst render:
   `cd docs && typst compile typst/seminar_paper/main.typ --root .`
-  or `cd docs && typst compile typst/thesis/proposal.typ --root .`
+  or `cd docs && typst compile typst/thesis/main.typ --root .`
 
 ## Python Package
 

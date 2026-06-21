@@ -2,7 +2,7 @@
 name: agent-behavior
 description: Use before non-trivial ARIA-NBV work to choose a lane, state assumptions, inspect owners, keep diffs traceable, and verify.
 metadata:
-  mode: scaffold
+  mode: router
   not_when:
     - "obvious one-line answer or command output with no durable edit"
   handoff_to:
@@ -22,6 +22,10 @@ metadata:
     - "memory or guidance edit"
   must_read:
     - "AGENTS.md"
+  canonical_sources:
+    - "AGENTS.md"
+    - ".agents/references/source_order.md#capture-rule"
+    - ".agents/references/skill_style_guide.md#required-frontmatter"
   verification:
     - "surface-specific checks from .agents/references/verification_matrix.md"
     - "make check-agent-memory when agent guidance or memory changes"

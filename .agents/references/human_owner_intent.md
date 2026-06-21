@@ -24,7 +24,7 @@ narrative, not current technical truth, and not a repeatable workflow.
 | Human-owner preference | `.agents/references/human_owner_intent.md` |
 | Current project truth | `.agents/memory/state/*.md` |
 | Actionable defect, todo, or refactor | `.agents/issues.toml`, `.agents/todos.toml`, or `.agents/refactors.toml` |
-| Public thesis narrative | `docs/` Quarto or `docs/typst/thesis/proposal.typ` |
+| Public thesis narrative | `docs/` Quarto or `docs/typst/thesis/main.typ` |
 | Generated routing/context | ignored output under `docs/_generated/context/*.md`, `.agents/generated/`, or `.agents/kg/generated/` with provenance; tracked glossary/KG artifacts are regenerated through the glossary pipeline |
 
 Prefer the smallest surface that can preserve the instruction without creating

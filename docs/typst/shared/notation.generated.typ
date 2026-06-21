@@ -19,7 +19,7 @@
   "rl.G": (tex: "G", typst: "#symb.rl.G"),
   "rl.H": (tex: "H", typst: "#symb.rl.H"),
   "rl.a": (tex: "a", typst: "#symb.rl.a"),
-  "rl.acquisition_cost": (tex: "C(\\tau)", typst: "#symb.rl.b"),
+  "rl.acquisition_cost": (tex: "C(\\tau)", typst: "#symb.rl.acquisition_cost"),
   "rl.action_set": (tex: "\\mathcal{A}(s_t)", typst: "#symb.rl.action_set"),
   "rl.budget": (tex: "b_t", typst: "#symb.rl.budget"),
   "rl.gamma": (tex: "\\gamma", typst: "#symb.rl.gamma"),

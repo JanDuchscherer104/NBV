@@ -5,9 +5,11 @@ available in the local Typst environment.
 
 | Need | Prefer | Notes |
 | --- | --- | --- |
+| Prose glossary terms | `@preview/glossarium:0.5.10` | Owns thesis/proposal term entries and native `@term` / `@term:short` references. |
 | Thesis architecture or process diagrams | Mermaid source rendered to PNG/SVG/PDF | Best for diffable pipeline figures and Quarto/Typst reuse. |
 | Typst-native diagrams | Fletcher | Use when the diagram must inherit Typst styling or math layout. |
-| Result or comparison tables | Typst-native tables | Add `booktabs` only when the style benefit justifies a package. |
+| Result or comparison tables | Typst-native tables with `booktabs` rules | Use `@preview/booktabs:0.0.4` by default for thesis/proposal tables. |
+| Typst slide decks | Local `definitely-not-isec-slides` template with Touying reveal helpers | Read `references/slides.md`; keep shared notation imports explicit. |
 | Simple network schematics | `neural-netz` | Prefer Mermaid/Fletcher for ARIA-NBV pipelines. |
 | Complex external figures | Versioned image/PDF assets | Keep source and render command next to the asset. |
 
@@ -21,3 +23,5 @@ Current package notes:
 - `fletcher.md` and `fletcher-*.typ` - diagram rules and examples.
 - `neural-netz.md` and `neural-netz-example.typ` - simple network schematic
   fallback.
+- `slides.md` - local slide template, Touying reveal controls, and slide QA
+  expectations.

@@ -1,0 +1,3 @@
+{"level":"INFO","event":"start","run":"002","target_count":5}
+{"level":"ERROR","event":"hard_mask","reason":"depth_missing"}
+{"level":"INFO","event":"finish","low_rri":true}

@@ -126,7 +126,7 @@ symbols:
     typst: '#symb.rl.budget'
   rl.acquisition_cost:
     tex: 'C(\tau)'
-    typst: '#symb.rl.b'
+    typst: '#symb.rl.acquisition_cost'
   shape.Nq:
     tex: 'N_q'
     typst: '#symb.shape.Nq'

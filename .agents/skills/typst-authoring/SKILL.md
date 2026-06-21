@@ -21,7 +21,8 @@ metadata:
     - ".agents/skills/typst-authoring/**"
   triggers:
     - "Typst"
-    - "proposal.typ"
+    - "main.typ"
+    - "thesis seed"
     - "thesis Typst"
     - "shared symbols or equations"
     - "scientific prose in thesis/proposal"
@@ -29,6 +30,23 @@ metadata:
     - "AGENTS.md"
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md"
+  canonical_sources:
+    - "docs/AGENTS.md"
+    - ".agents/references/source_order.md#role-split"
+    - "docs/typst/thesis/main.typ"
+    - "docs/typst/shared"
+    - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
+    - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
+  context7_refs:
+    - "/websites/typst_app"
+    - "/websites/quarto"
+  literature_refs:
+    - "docs/references.bib"
+    - "docs/literature/sources.jsonl"
+    - "quality-driven-rri"
+    - "finite-candidate-rl"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
   verification:
     - "skill quick_validate.py when available for skill edits"
     - "make check-agent-memory when agent guidance changes"
@@ -60,122 +78,52 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 
 ## Task Modes
 
-- `notation-edit`: read `references/aria-nbv-notation.md`,
-  `references/math-attachments.md`, `references/notation-migration.md`, and
-  `issues.md`; update shared modules before document-local use; compile a
-  fixture or affected document.
-- `prose-draft`: read `references/thesis-writing.md`,
-  `references/thesis-section-contracts.md`, and
-  `references/claim-citation-discipline.md`; build a claim ledger for
-  non-trivial sections before writing paragraphs.
-- `prose-polish`: preserve claim strength and citations; remove filler,
-  overclaiming, and local terminology drift without changing evidence.
-- `claim-check`: classify claims, verify citations/evidence, and run
-  `make kg-claim-check KG_CLAIM='...'` for advisor-facing literature or
-  thesis claims.
-- `figure-table`: read `references/figures-tables.md`; keep source assets,
-  labels, sizing, captions, and final page rendering aligned.
-- `visual-qa`: compile, render affected pages to PNG, inspect equations and
-  layout, run hygiene checks, and report commands plus skipped checks.
+- `notation-edit`: update shared modules before document-local use; read
+  notation, math-attachment, and migration references.
+- `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
+  claim-discipline references; preserve claim strength and citations.
+- `claim-check`: classify claims and run `make kg-claim-check KG_CLAIM='...'`
+  for advisor-facing literature or thesis claims.
+- `figure-table` / `visual-qa`: read figures/tables and workflow references,
+  render locally, inspect pages, and report skipped checks.
 
 ## Rules
 
-1. Inspect local context first: nearest `AGENTS.md`, target imports, adjacent
-   sections, bibliography style, labels, and `docs/typst/shared/`.
-2. Use shared ARIA-NBV notation before inventing local symbols:
-   `macros.typ`, `symbols.typ`, `equations.typ`, `glossary.typ`, `terms.typ`,
-   and `math.typ`.
-3. Add recurring symbols/equations to `docs/typst/shared` first, then use them
-   from the document. Do not duplicate notation inline across sections.
-4. Use typed notation: `cal(...)` for abstract sets, spaces, candidate sets,
-   point sets, meshes, and geometric collections; `bold(...)` only for
-   coordinate vectors, matrices, tensors, feature fields, embeddings,
-   images/depth maps, voxel tensors, and implementation arrays. Do not write
-   `bold(cal(...))`.
-5. Keep finite-candidate and value notation disjoint: candidate sets are
-   `cal(Q)_t`, candidate poses are `q_(t,i)`, candidate feature tables are
-   `bold(X)_t^"cand"`, and `Q_H` / `Q_(H,theta)` are value functions only.
-6. Keep abstract states non-bold: `s_t^"obs"`, `s_t^"cf0"`,
-   `s_t^"oracle"`. Use `bold(h)_t` or `bold(u)_(t,i)` for learned state and
-   candidate embeddings.
-7. ARIA-NBV thesis RRI equations use point-mesh error `D`, directional
-   components `D_(P -> M)` and `D_(M -> P)`, and target error `Delta_t^e`.
-   Do not reintroduce generic `CD(...)` or `cal(A)` / `cal(C)` as thesis-core
-   component notation.
-8. Handle Typst attachments defensively. After `_` or `^`, insert a space
-   before following arguments when they should not be captured, and group full
-   calls before output indexing: `(op("Transformer")_theta (bold(X)_t))_i`.
-9. Classify every scientific claim as definition, literature claim,
-   implementation fact, design decision, empirical result, limitation, or
-   hypothesis. If it cannot be classified, rewrite it.
-10. For advisor-facing literature or thesis claims, run `make kg-claim-check`
-   and downgrade, cite, or mark as hypothesis when evidence is weak.
-11. If a new durable acronym, term, or recurring noun phrase is introduced,
-   update `docs/typst/shared/glossary.typ` and run `make glossary`.
-12. Final proposal/thesis prose should be flowing paragraphs unless the
-   template explicitly asks for lists. Bullet outlines are planning scaffolds.
-13. In `.typ` prose, do not use source line breaks for visual wrapping; VSCode
-    wraps long lines automatically. Insert line breaks only where the rendered
-    document should have a paragraph, block, list item, table row, equation
-    structure, or other intentional Typst boundary.
-14. Figures and tables must be evidence: use `#figure(...)`, stable labels,
-    explicit sizing, concise captions, and prose that states the claim the
-    visual supports.
-15. Use Typst symbols, math shorthands, or shared macros instead of raw
-    Unicode glyphs or LaTeX commands.
-16. Compile and inspect rendered pages for equations, figures, tables,
-    captions, layout changes, and multi-paragraph thesis prose.
+1. Inspect nearest docs guidance, target imports, adjacent sections,
+   bibliography style, labels, and `docs/typst/shared/`.
+2. Use shared notation, glossary, and equations before inventing local symbols;
+   add recurring terms or equations to shared modules first.
+3. Keep notation policy, math-attachment details, claim discipline, figure/table
+   conventions, and package notes in the referenced files, not this hot path.
+4. Classify advisor-facing claims and run KG claim checks when evidence matters.
+5. Use Glossarium-native `@term` / `@term:short` references for durable terms.
+6. Write final thesis/proposal prose as paragraphs unless the template asks for
+   lists.
+7. Compile and inspect rendered pages for equations, figures, tables, captions,
+   layout changes, and multi-paragraph thesis prose.
 
 ## Workflow
 
 1. Choose the task mode and read only its required references.
 2. If notation changes, check `docs/typst/shared` and update the shared module
    before using the symbol in thesis text.
-3. If prose changes, draft claims/evidence first, then convert to paragraphs.
-4. If figures or Mermaid assets change, render them locally before inclusion.
-5. Compile the document or fixture, render affected pages to PNG, inspect
+3. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
+   read `references/aria-nbv-notation.md`; for package-backed layouts or
+   slide templates, also read `references/packages/index.md` and
+   `references/slides.md` as relevant.
+4. If prose changes, draft claims/evidence first, then convert to paragraphs.
+5. If figures or Mermaid assets change, render them locally before inclusion.
+6. Compile the document or fixture, render affected pages to PNG, inspect
    visually, then fix and repeat.
-6. Report exact compile/render/check commands and any skipped checks.
+7. Report exact compile/render/check commands and any skipped checks.
 
-## Reference Map
+## References And Commands
 
-| Need | Read |
-| --- | --- |
-| Regression examples | `issues.md` |
-| ARIA notation/glossary | `references/aria-nbv-notation.md` |
-| Typst math attachments | `references/math-attachments.md` |
-| Shared-notation migration | `references/notation-migration.md` |
-| Thesis prose | `references/thesis-writing.md` |
-| Section acceptance | `references/thesis-section-contracts.md` |
-| Claims/citations | `references/claim-citation-discipline.md` |
-| Figures/tables/Mermaid | `references/figures-tables.md` |
-| Compile/render loop | `references/workflow.md` |
-| External refresh queries | `references/external-research.md` |
-| Data tables | `references/data-loading.md` |
-| Typst scripting/modules | `references/scripting.md` |
-| Layout/page grids | `references/layout.md` |
-| Raw glyph avoidance | `references/typst-symbols.md` |
-| Typst packages | `references/packages/index.md` |
-| Slides | `references/slides.md` |
+Read only the reference needed for the task: notation, math attachments,
+notation migration, thesis writing, section contracts, claim/citation
+discipline, figures/tables, workflow, external research, data loading, scripting,
+layout, Typst symbols, packages, or slides.
 
-## Fast Commands
-
-```bash
-# Skill validation when the local validator exists.
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/scripts/quick_validate.py" .agents/skills/typst-authoring
-
-# Required for repo-local skill or memory/guidance edits.
-make check-agent-memory
-
-# Primary document builds.
-make proposal-pdf
-make thesis-pdf
-
-# Manual fallback from repo root.
-cd docs && typst compile typst/thesis/proposal.typ /tmp/proposal.pdf --root .
-
-# Fixtures and visual checks.
-typst compile .agents/skills/typst-authoring/assets/fixtures/shared-notation.typ /tmp/shared-notation.pdf --root .
-.agents/skills/typst-authoring/scripts/render_png.sh -i docs/typst/thesis/proposal.typ -o /tmp/proposal-pages --root docs --pages 1-3 --ppi 300
-.agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections/proposal
-```
+Primary checks are `make check-agent-memory` for skill/guidance edits,
+`make thesis-pdf` or focused `typst compile ... --root .` for document edits,
+and the local render/hygiene scripts when visual QA is required.

@@ -10,6 +10,16 @@ The thesis objective is a leakage-safe target-aware @next-best-view stack whose 
 
 The first aim defines target-specific oracle @relative-reconstruction-improvement while keeping target selection and model input actor-visible. V1 uses observed or predicted target descriptors #symb.entity.target_desc. @ground-truth:short crops, boxes, meshes, and all-candidate renders are restricted to labels, upper bounds, and evaluation. The required evidence is target eligibility, match score, unmatched/ambiguous counts, endpoint #symb.entity.endpoint_gain, separate scene @relative-reconstruction-improvement:short, and acquisition cost.
 
+The render-path boundary in @fig:qh-teacher-student-render-path makes this restriction explicit for render-derived training signals.
+
+#figure(
+  align(center, image(
+    "../figures/qh_teacher_student_render_path.pdf",
+    width: 100%,
+  )),
+  caption: [Teacher/student render path for leakage-safe training. The student branch consumes actor-visible state and current-belief render products, while privileged @ground-truth:short meshes, target crops, and dense candidate renders may produce oracle returns, teacher values, or distillation targets only. Dense @ground-truth:short candidate depth is therefore label or teacher evidence, not a V1 actor input.],
+) <fig:qh-teacher-student-render-path>
+
 The second aim trains a VIN-style myopic scorer over the same candidate table that later feeds #symb.rl.qh. The scorer predicts target @relative-reconstruction-improvement:short from actor-visible scene, target, and candidate features. It is the required learned one-step control, evaluated by rank correlation, top-$k$ oracle hit rate, calibration, selected-candidate oracle @relative-reconstruction-improvement:short, target visibility, invalid fraction, and grouped failures.
 
 The third aim first estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
@@ -52,6 +62,8 @@ Success is measured by oracle-rescored selected actions, not predicted values. I
 == Learning Objective and Replay Evidence
 
 The learned value model is interpreted only after the myopic scorer passes ranking, calibration, and oracle-selected rollout checks, and after the replay store passes support, mask, seed, and successor-table checks. These gates make the evaluation contract a scientific guardrail rather than a post-hoc reporting checklist. Seminar-paper diagnostics such as scene-level RRI ranking, CORAL bin behavior, and offline-cache storage are reported as historical substrate evidence unless they are regenerated under the target-task sampler and rollout-store protocol.
+
+The replay pipeline in @fig:qh-rollout-replay-doubleq is the operational boundary for this interpretation: all-candidate labels can train and calibrate the one-step scorer, while #symb.rl.qh evidence comes only from selected-transition rows whose successor state and successor candidate mask are reproducible.
 
 #figure(
   table(
@@ -132,6 +144,14 @@ The replay dataset $cal(D)$ contains selected-action transition rows with state,
 $
   #eqs.rl.qh_loss
 $
+
+#figure(
+  image(
+    "../figures/qh_rollout_replay_doubleq.pdf",
+    width: 100%,
+  ),
+  caption: [Selected-transition replay contract for #symb.rl.qh. All valid candidates can receive one-step oracle target labels, but bootstrapped finite-horizon targets require materialized selected actions, successor counterfactual state, regenerated successor candidate tables, masks, terminal flags, and masked Double-Q targets.],
+) <fig:qh-rollout-replay-doubleq>
 
 == Policy Comparison
 

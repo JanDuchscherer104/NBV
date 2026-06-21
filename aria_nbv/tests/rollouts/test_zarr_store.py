@@ -20,6 +20,7 @@ from aria_nbv.data_handling import (
 )
 from aria_nbv.pose_generation.target_counterfactuals import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
 from aria_nbv.rollouts import (
+    INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
     ROLLOUT_MANIFEST_FILENAME,
     ROLLOUT_ZARR_SCHEMA_VERSION,
@@ -308,6 +309,13 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     validation = validate_rollout_zarr_store(result.store_dir)
     assert validation.ok, validation.errors
+    reader = RolloutZarrStoreReader(result.store_dir)
+    path_bit = 1 << INVALID_REASON_CODES["PATH_SEGMENT_COLLISION"]
+    assert int(reader.array("candidates/invalid_reason_bitset")[collision_shell_index]) & path_bit
+    assert (
+        int(reader.array("candidates/primary_invalid_reason")[collision_shell_index])
+        == INVALID_REASON_CODES["PATH_SEGMENT_COLLISION"]
+    )
 
     root = zarr.open_group(result.store_dir, mode="a")
     root["candidates/invalid_reason_bitset"][collision_shell_index] = np.asarray(1, dtype=np.uint32)

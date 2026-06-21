@@ -26,7 +26,7 @@ tags: [research, nbv, vin, training]
 - Should Q_H use only cumulative root-normalized target gain in the main run, or should path length, motion rules, validity, and diversity penalties receive a small first ablation?
 - Should invalidity remain hard-mask-only for all finite-candidate Q_H experiments, or should a validity head, scalar invalidity penalty, or learned feasibility signal be tried before the continuous-action bridge?
 - What is the exact IQL scope if Q_H is stable: report-only ablation, full comparison, or defer to future work?
-- What exact scope should online discrete Q_H have after offline fitted Q_H: bridge design only, smoke experiment in the ASE mesh/oracle loop, or quantitative comparator before continuous actor-critic work?
+- What exact RQ5 scope should online discrete Q_H have after offline fitted Q_H: bridge design only, smoke experiment in the ASE mesh/oracle loop, or quantitative comparator before RQ6 continuous actor-critic work?
 - When, if ever, should an online Gymnasium/SB3 baseline be created after the candidate-query Q_H path exists?
 
 ## Storage, Scale, and Reporting
@@ -44,7 +44,7 @@ tags: [research, nbv, vin, training]
 ## Recently Locked Decisions
 - The thesis/system name is ARIA-NBV.
 - The thesis core stays within ASE/EFM and the ASE mesh/oracle counterfactual rollout loop; Habitat, Isaac, online simulators, SceneScript, and real-device guidance are stretch or bridge work.
-- V0 uses GT OBB input as sanity/upper-bound; V1 OBS-SEL / PRED-Q / GT-EVAL is mandatory for the main target-conditioned scorer and Q_H result.
+- Oracle target-task sampling from GT OBBs owns the first rollout/data-generation labels; V1 OBS-SEL / PRED-Q / GT-EVAL is mandatory before actor-visible deployable-input claims for the target-conditioned scorer and Q_H result.
 - Invalidity is represented by hard masks and explicit reason codes, not by low RRI labels.
 - Fitted Double-Q / Q_H over finite candidates is a hard M5 deliverable, and IQL is only a second offline-RL ablation after Q_H is stable.
 - Full 100 GT-mesh ASE scenes / 4,608 snippet windows are the final scale bar after small-subset correctness and LRZ/Zarr gates pass.

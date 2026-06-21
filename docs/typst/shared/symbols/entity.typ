@@ -1,5 +1,3 @@
-#import "../terms.typ": RRI
-
 #let entity = (
   // Entity set (objects of interest).
   E: $cal(E)$,
@@ -12,9 +10,9 @@
   // Mixing weight for the scene-level term.
   lambda_scene: $lambda_"scene"$,
   // Weighted objective (global + entity-specific terms).
-  rri_total: $RRI_"total"$,
+  rri_total: $op("RRI")_"total"$,
   // Target/entity-specific RRI.
-  rri_e: $RRI_e$,
+  rri_e: $op("RRI")_e$,
   // Observed or predicted target-hypothesis bundle available to the actor.
   target_hyp_pred_t: $bold(O)_t^"pred"$,
   // Actor-visible target descriptor.

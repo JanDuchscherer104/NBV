@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARIA-NBV Scaffold Alignment Update</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101213;
+      --panel: #181c1f;
+      --panel-2: #20262a;
+      --ink: #f2f5f2;
+      --muted: #b8c0ba;
+      --soft: #83918b;
+      --line: #384046;
+      --accent: #7dd3a7;
+      --accent-2: #78a6ff;
+      --warn: #f0c46b;
+      --bad: #ff8b8b;
+      --good: #78d68f;
+      --code: #d7e8db;
+      --shadow: 0 22px 80px rgba(0, 0, 0, 0.36);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      height: 100%;
+      padding: 54px 72px 74px;
+      overflow: auto;
+      background:
+        linear-gradient(90deg, rgba(125, 211, 167, 0.08), transparent 42%),
+        radial-gradient(circle at 92% 12%, rgba(120, 166, 255, 0.10), transparent 34%),
+        var(--bg);
+    }
+
+    .slide.active {
+      display: grid;
+      align-content: center;
+    }
+
+    .content {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+    }
+
+    .kicker {
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 18px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(42px, 6vw, 82px);
+      line-height: 0.95;
+      max-width: 980px;
+    }
+
+    h2 {
+      font-size: clamp(34px, 4.2vw, 58px);
+      line-height: 1.02;
+      max-width: 980px;
+      margin-bottom: 26px;
+    }
+
+    h3 {
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+
+    p,
+    li {
+      color: var(--muted);
+      font-size: clamp(18px, 1.8vw, 24px);
+      line-height: 1.45;
+    }
+
+    ul {
+      padding-left: 1.25em;
+      margin: 16px 0 0;
+    }
+
+    li + li {
+      margin-top: 10px;
+    }
+
+    code {
+      color: var(--code);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.1em 0.36em;
+      border-radius: 6px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.86em;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px 20px;
+      border-radius: 8px;
+      background: #0b0d0e;
+      border: 1px solid var(--line);
+      color: var(--code);
+      overflow: auto;
+      font-size: 17px;
+      line-height: 1.45;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    .lead {
+      margin-top: 24px;
+      max-width: 920px;
+      font-size: clamp(22px, 2vw, 30px);
+      color: var(--muted);
+    }
+
+    .meta {
+      margin-top: 34px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 14px;
+      font-weight: 690;
+      white-space: nowrap;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: rgba(24, 28, 31, 0.86);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card p,
+    .card li {
+      font-size: 18px;
+    }
+
+    .stat {
+      font-size: 44px;
+      font-weight: 820;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat.warn {
+      color: var(--warn);
+    }
+
+    .stat.good {
+      color: var(--good);
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      font-size: 17px;
+      color: var(--muted);
+    }
+
+    .table th,
+    .table td {
+      border-bottom: 1px solid var(--line);
+      padding: 13px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .table th {
+      color: var(--ink);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .diagram {
+      display: grid;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .node {
+      min-height: 82px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--ink);
+      font-weight: 720;
+      font-size: 16px;
+    }
+
+    .node.source {
+      border-color: rgba(125, 211, 167, 0.8);
+      background: rgba(125, 211, 167, 0.10);
+    }
+
+    .node.evidence {
+      border-color: rgba(120, 166, 255, 0.8);
+      background: rgba(120, 166, 255, 0.10);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .footer {
+      position: fixed;
+      left: 24px;
+      right: 24px;
+      bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--soft);
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    .controls {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--ink);
+      border-radius: 8px;
+      min-width: 38px;
+      min-height: 34px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    .progress {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .small {
+      font-size: 16px;
+      color: var(--soft);
+    }
+
+    .ok {
+      color: var(--good);
+    }
+
+    .warn-text {
+      color: var(--warn);
+    }
+
+    @media (max-width: 860px) {
+      body {
+        overflow: auto;
+      }
+
+      .deck,
+      .slide {
+        min-height: 100vh;
+        height: auto;
+      }
+
+      .slide {
+        padding: 32px 20px 84px;
+      }
+
+      .grid,
+      .grid.three,
+      .split,
+      .flow-row {
+        grid-template-columns: 1fr;
+      }
+
+      .footer {
+        background: rgba(16, 18, 19, 0.9);
+        border-top: 1px solid var(--line);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 10px 14px;
+      }
+    }
+
+    @media print {
+      body {
+        overflow: visible;
+        background: #fff;
+        color: #111;
+      }
+
+      .slide {
+        display: block !important;
+        page-break-after: always;
+        height: auto;
+        min-height: 100vh;
+        background: #fff;
+        color: #111;
+      }
+
+      p,
+      li,
+      .small,
+      .table {
+        color: #222;
+      }
+
+      .footer,
+      .progress {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <section class="slide active">
+      <div class="content">
+        <div class="kicker">ARIA-NBV agent scaffold</div>
+        <h1>Context7, literature, and routing alignment update</h1>
+        <p class="lead">A temporary standalone briefing of the Ralph implementation slice that moved the scaffold toward owner-first truth, thinner skills, and fixture-backed tool routing.</p>
+        <div class="meta">
+          <span class="pill">Generated: 2026-06-21</span>
+          <span class="pill">Artifact: .tmp only</span>
+          <span class="pill">No durable source of truth added</span>
+          <span class="pill">Worktree was already dirty</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Executive summary</div>
+        <h2>What changed</h2>
+        <div class="grid three">
+          <div class="card">
+            <div class="stat good">0</div>
+            <h3>Audit errors</h3>
+            <p><code>make scaffold-audit</code> now validates new horizontal evidence metadata while preserving the source-order ladder.</p>
+          </div>
+          <div class="card">
+            <div class="stat good">13</div>
+            <h3>Self-test probes</h3>
+            <p>Negative tests now cover bad Context7 IDs, missing literature refs, malformed tool refs, and over-triggered MCP tools.</p>
+          </div>
+          <div class="card">
+            <div class="stat warn">16</div>
+            <h3>Residual warnings</h3>
+            <p>Warnings remain intentionally visible: broad routing surfaces, hot-path length, and semantic-drift cleanup candidates.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Problem being solved</div>
+        <h2>Too many truth surfaces, too little routing evidence</h2>
+        <div class="split">
+          <div class="card">
+            <h3>Before</h3>
+            <ul>
+              <li>Skills risked becoming mini-docs, mini-thesis pages, or mini-backlogs.</li>
+              <li>Context7 and MCP tool usage depended on agent memory instead of explicit routing handles.</li>
+              <li>Literature links were discoverable, but not horizontally connected to domain skill activation.</li>
+              <li>Fixture checks protected skill owners, but not tool over-trigger or under-trigger behavior.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>After</h3>
+            <ul>
+              <li>Skills point to owners through compact metadata, not duplicated project truth.</li>
+              <li>Context7 IDs live in one curated file and can be statically validated.</li>
+              <li>Literature routing labels connect skills to Quarto pages, BibTeX keys, and local TeX mirrors.</li>
+              <li>Fixtures can assert required or forbidden MCP tool edges for a task shape.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Theory</div>
+        <h2>Vertical authority vs horizontal evidence</h2>
+        <div class="diagram" role="img" aria-label="Owner first routing diagram">
+          <div class="flow-row">
+            <div class="node">User task</div>
+            <div class="node">Active skill</div>
+            <div class="node source">Owner surface</div>
+            <div class="node">Implementation or docs edit</div>
+            <div class="node">Verification gate</div>
+          </div>
+          <div class="flow-row">
+            <div class="node evidence">Context7 refs</div>
+            <div class="node evidence">Literature refs</div>
+            <div class="node evidence">Tool refs</div>
+            <div class="node evidence">Code index</div>
+            <div class="node evidence">KG claim check</div>
+          </div>
+        </div>
+        <p class="lead">The owner surface decides what is true. The evidence refs decide what to inspect next. That separation is the core anti-drift move.</p>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Source ownership</div>
+        <h2>The new metadata is deliberately thin</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Metadata key</th>
+              <th>Purpose</th>
+              <th>Validation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>context7_refs</code></td>
+              <td>Exact external library doc IDs for tasks where API behavior matters.</td>
+              <td>Must exist in <code>.agents/references/context7_library_ids.md</code>.</td>
+            </tr>
+            <tr>
+              <td><code>literature_refs</code></td>
+              <td>BibTeX keys, local literature paths, or context-map route labels.</td>
+              <td>Must resolve to <code>references.bib</code>, repo paths, or context-map routes.</td>
+            </tr>
+            <tr>
+              <td><code>tool_refs</code></td>
+              <td>Canonical MCP tool handles that a skill may need.</td>
+              <td>Must use <code>mcp__&lt;server&gt;.&lt;tool&gt;</code>; unknown canonical refs warn.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Audit hardening</div>
+        <h2><code>scripts/scaffold_audit.py</code> now owns the gate</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Static schema</h3>
+            <ul>
+              <li>Known metadata keys are enforced.</li>
+              <li>Unsupported values still fail for skill modes and canonical sources.</li>
+              <li>Generated literature indexes are rejected as metadata owners.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Tool registry</h3>
+            <ul>
+              <li>MCP_DOCKER browser, Python, Context7, and paper tools are enumerated.</li>
+              <li>code-index and OpenAI developer docs tools are included.</li>
+              <li>Unknown but well-formed refs warn instead of silently passing as known.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="small">Key implementation areas: optional metadata and registry near <code>scripts/scaffold_audit.py:33</code>; tool-ref validation near <code>:514</code>; fixture tool assertions near <code>:568</code>; self-tests near <code>:777</code>.</p>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Context7</div>
+        <h2>One lookup table, more useful links</h2>
+        <div class="split">
+          <div>
+            <p>The Context7 owner file remains <code>.agents/references/context7_library_ids.md</code>. I normalized and added high-value IDs there instead of creating a second map.</p>
+            <div class="meta">
+              <span class="pill">/pytorch/pytorch</span>
+              <span class="pill">/facebookresearch/pytorch3d</span>
+              <span class="pill">/rerun-io/rerun</span>
+              <span class="pill">/mermaid-js/mermaid</span>
+              <span class="pill">/e3nn/e3nn</span>
+              <span class="pill">/websites/streamlit_io</span>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Routing rule</h3>
+            <p>Use Context7 for external library/API behavior after local project owners have been inspected. Do not let external docs override local contracts, thesis sections, or package source.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Literature</div>
+        <h2>Local literature became easier to route to</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Route label</th>
+              <th>Representative owner path</th>
+              <th>Use case</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>quality-driven-rri</code></td>
+              <td><code>docs/contents/literature/vin_nbv.qmd</code></td>
+              <td>RRI and VIN-NBV claim checks.</td>
+            </tr>
+            <tr>
+              <td><code>egocentric-aria-substrate</code></td>
+              <td><code>project_aria.qmd</code>, <code>efm3d.qmd</code></td>
+              <td>Aria, ASE, EFM3D substrate claims.</td>
+            </tr>
+            <tr>
+              <td><code>finite-candidate-rl</code></td>
+              <td><code>docs/contents/literature/rl_planning.qmd</code></td>
+              <td>Double-Q, offline RL, finite candidate planning.</td>
+            </tr>
+            <tr>
+              <td><code>radiance-field-nbv-bridge</code></td>
+              <td><code>active_3dgs_nbv.qmd</code>, <code>scone_fisherrf.qmd</code></td>
+              <td>NBV bridges beyond the current ARIA path.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="small">These route labels live in <code>.agents/skills/aria-nbv-context/references/context_map.md</code>. They are handles, not summaries.</p>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Fixture coverage</div>
+        <h2>Routing now includes positive and negative tool evidence</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Expected tool refs</h3>
+            <ul>
+              <li><code>context7-pytorch3d-conceptual-plan</code> expects <code>get_library_docs</code>.</li>
+              <li><code>code-index-frustum-rendering</code> expects <code>search_code_advanced</code>.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Forbidden tool refs</h3>
+            <ul>
+              <li><code>context7-not-needed-target-rri-section</code> forbids Context7 docs lookup.</li>
+              <li><code>docs-literature-no-browser</code> forbids browser runtime tooling.</li>
+              <li><code>typst-prose-no-python-analyzer</code> forbids Python analyzer tooling.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="lead">This is the scaffold equivalent of regression tests for routing behavior.</p>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Skill surface</div>
+        <h2>16 skills gained compact evidence links</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Domain-heavy skills</h3>
+            <p><code>nbv-geometry-contracts</code>, <code>entity-aware-rri</code>, <code>counterfactual-rollout-planner</code>, <code>rerun-nbv-inspector</code>, and <code>dataset-cache-ops</code> now point to relevant libraries, literature routes, and code-index/tool handles.</p>
+          </div>
+          <div class="card">
+            <h3>Planning and docs skills</h3>
+            <p><code>plan-grill</code>, <code>docs-curator</code>, <code>typst-authoring</code>, <code>aria-nbv-context</code>, and <code>aria-litkg-memory</code> now expose clearer links into local literature, Context7, and source lookup tools.</p>
+          </div>
+        </div>
+        <p class="small">The important constraint: these refs increase discoverability, but the durable facts still belong to thesis docs, Quarto docs, package source, canonical memory, or source-order references.</p>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Conceptual planning</div>
+        <h2><code>plan-grill --conceptual</code> is now more systematic</h2>
+        <div class="card">
+          <ul>
+            <li>Start from architecture and system boundaries before implementation details.</li>
+            <li>Name vertical truth owners and horizontal evidence sources separately.</li>
+            <li>Include Mermaid diagrams for non-trivial planning work.</li>
+            <li>Link Python-facing plans to local conventions and nearest package <code>AGENTS.md</code>.</li>
+            <li>Use local literature before web search for thesis claims.</li>
+            <li>Use Context7 when external library/API semantics affect the plan.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Verification evidence</div>
+        <h2>Fresh gates from the Ralph slice</h2>
+        <pre><code>make scaffold-audit
+# passed: skills=19 errors=0 warnings=16
+
+make scaffold-audit-self-test
+# passed: passed=13 failures=0
+
+make agents-db AGENTS_ARGS='validate'
+# passed
+
+make check-agent-memory
+# passed
+
+make context-literature-index && git diff --exit-code -- docs/_generated/context/literature_index.md
+# passed, generated literature index unchanged
+
+aria_nbv/.venv/bin/python -m py_compile scripts/scaffold_audit.py
+# passed
+
+git diff --check -- .agents scripts docs
+# passed</code></pre>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Review loop</div>
+        <h2>Architect verdict changed from iterate to approve</h2>
+        <div class="split">
+          <div class="card">
+            <h3 class="warn-text">First pass: ITERATE</h3>
+            <ul>
+              <li><code>tool_refs</code> were only regex-validated.</li>
+              <li>Browser and Python analyzer over-trigger cases were prose-only, not enforced by fixtures.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="ok">Second pass: APPROVE</h3>
+            <ul>
+              <li>Added audit-owned MCP tool registry and unknown-tool warnings.</li>
+              <li>Added expected and forbidden tool refs to fixture validation.</li>
+              <li>Added self-tests for tool-ref and over-trigger behavior.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Residual risk</div>
+        <h2>What is intentionally not solved yet</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Warnings remain</h3>
+            <p>The 16 audit warnings are useful pressure: broad <code>applies_to</code>, hot-path length in a couple of skills, and possible semantic drift in several skill bodies.</p>
+          </div>
+          <div class="card">
+            <h3>No premature merges</h3>
+            <p><code>aria-nbv-context</code>, <code>aria-litkg-memory</code>, <code>entity-aware-rri</code>, and <code>nbv-geometry-contracts</code> remain separate until fixtures prove duplicate activation.</p>
+          </div>
+          <div class="card">
+            <h3>Dirty worktree</h3>
+            <p>The repo already had broad scaffold, memory, and thesis changes. This update preserved unrelated drift instead of forcing a cleanup.</p>
+          </div>
+          <div class="card">
+            <h3>Generated graph deferred</h3>
+            <p>A full symbol-literature-tool graph may be useful later, but the first slice deliberately stayed with curated owner surfaces.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Next logical steps</div>
+        <h2>Best ROI from here</h2>
+        <ol>
+          <li>Reduce the remaining scaffold-audit warnings, starting with hot-path skills and semantic-drift warnings.</li>
+          <li>Add more fixture-backed merge criteria before any router merge or skill deletion.</li>
+          <li>Use the new metadata to make conceptual plans explicitly name source owners, local literature, Context7 docs, and MCP tools.</li>
+          <li>Keep planned details in thesis or Quarto owners, not skill bodies.</li>
+          <li>Only build a generated interlink graph after the curated refs prove useful and stable.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="content">
+        <div class="kicker">Takeaway</div>
+        <h2>The scaffold is now better at deciding what to read, without pretending it owns the truth.</h2>
+        <p class="lead">That is the alignment win: lower drift risk, stronger routing evidence, clearer Context7 and MCP triggers, and verification that catches tool overuse as well as missing links.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="footer">
+    <div>ARIA-NBV scaffold alignment update</div>
+    <div class="controls">
+      <button type="button" id="prev" aria-label="Previous slide">&lt;</button>
+      <span id="counter">1 / 16</span>
+      <button type="button" id="next" aria-label="Next slide">&gt;</button>
+    </div>
+  </div>
+  <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+      var counter = document.getElementById("counter");
+      var bar = document.getElementById("bar");
+      var current = 0;
+
+      function show(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach(function (slide, i) {
+          slide.classList.toggle("active", i === current);
+        });
+        counter.textContent = String(current + 1) + " / " + String(slides.length);
+        bar.style.width = String(((current + 1) / slides.length) * 100) + "%";
+        window.location.hash = "slide-" + String(current + 1);
+      }
+
+      document.getElementById("prev").addEventListener("click", function () {
+        show(current - 1);
+      });
+      document.getElementById("next").addEventListener("click", function () {
+        show(current + 1);
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+          event.preventDefault();
+          show(current + 1);
+        }
+        if (event.key === "ArrowLeft" || event.key === "PageUp") {
+          event.preventDefault();
+          show(current - 1);
+        }
+        if (event.key === "Home") {
+          event.preventDefault();
+          show(0);
+        }
+        if (event.key === "End") {
+          event.preventDefault();
+          show(slides.length - 1);
+        }
+      });
+
+      var match = window.location.hash.match(/slide-(\d+)/);
+      show(match ? Number(match[1]) - 1 : 0);
+    })();
+  </script>
+</body>
+</html>

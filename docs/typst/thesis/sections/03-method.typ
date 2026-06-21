@@ -26,18 +26,23 @@ The central asymmetry is that the historic state is rich and multimodal, while c
     midrule(),
     [OBB-capable target evidence],
     [Target-specific @relative-reconstruction-improvement:short and target-conditioned #symb.rl.qh need a selectable entity hypothesis, not only a scene embedding.],
+
     [Backbones without observed/predicted @oriented-bounding-box:short support are scene-feature ablations, not replacements for @egocentric-voxel-lifting:short target evidence.],
     [Aria / ASE domain fit],
     [Egocentric cameras, gravity alignment, semidense support, synthetic-to-real gaps, and ASE OBB taxonomy are part of the data contract.],
+
     [Prefer @egocentric-foundation-model-3d:short / @egocentric-voxel-lifting:short unless another model is trained or adapted on ARIA/ASE-style data and reports OBB quality.],
     [Reusable conditioning state],
     [#symb.rl.qh must condition on target, selected history, support, visibility, and candidate geometry across many candidate rows.],
+
     [Expose typed query pools rather than one final-pose voxel tensor: target crop, candidate frustum, target-frustum intersection, and directional-history support.],
     [Actor-visible provenance],
     [Historic and counterfactual states have different modality availability.],
+
     [Every token records source role, frame, feature model, support count, uncertainty, and whether it came from logged observation, selected successor depth, or oracle-only evaluation.],
     [Controlled scale],
     [The thesis should not become a large foundation-model replacement project.],
+
     [A smaller or cheaper encoder is desirable, but only after OBB quality, queryability, storage, runtime, and invariance tests pass.],
     bottomrule(),
   ),
@@ -45,6 +50,8 @@ The central asymmetry is that the historic state is rich and multimodal, while c
 ) <tab:thesis-backbone-requirements>
 
 This makes @egocentric-voxel-lifting:short an anchor, not a ceiling. The near-term representation question is whether the current final-pose voxel field hides useful evidence. The first ablations should keep the EFM3D/EVL target detector and add better actor-visible conditioning: semidense/fused point support, compressed DINO-on-point features lifted from logged views, EVL internal or crop reads around target hypotheses, selected-depth successor summaries, and explicit directional visibility memory. These products can give #symb.rl.qh a broader queryable state without claiming that a new model has solved Aria-native OBB detection.
+
+The following table is a design-contract surface: it classifies representation candidates and their entry gates, rather than reporting final experimental rankings.
 
 #figure(
   table(
@@ -54,24 +61,31 @@ This makes @egocentric-voxel-lifting:short an anchor, not a ceiling. The near-te
     midrule(),
     [@egocentric-foundation-model-3d:short / @egocentric-voxel-lifting:short],
     [Default Aria-native target/support anchor: OBB evidence, lifted visual features, occupancy/free-space support, and local voxel reasoning.],
+
     [Do not claim full long-horizon memory; report local-volume extent and final-pose anchoring limits.],
     [Cube R-CNN-style detector @omni3d-cubercnn-brazil2023],
     [Useful detector baseline or historical comparison for single-frame 3D OBB prediction.],
+
     [Not sufficient as scene encoder; must show ARIA/ASE adaptation and OBB quality before replacing EVL target evidence.],
     [Semidense/fused point bank plus compressed DINO-on-point],
     [First serious scene-conditioning ablation: point support, uncertainty, observation lineage, and local visual evidence are queryable by target and candidate geometry.],
+
     [Requires feature-cache provenance, compression policy, point-order tests, and joins by stable sample ids; no raw unbounded feature dumps.],
     [EVL internal/crop reads],
     [Tests whether pre-head voxel, neck, or crop evidence around predicted OBBs carries target support lost in final heads.],
+
     [Must stay actor-visible and store EVL extent, crop frame, grid pose, feature id, and out-of-extent status.],
     [Point/sparse encoders @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019],
     [Late support-encoder ablations when simple target/frustum/intersection pools fail.],
+
     [Need neighborhood, density, serialization, frame-canonicalization, storage, and runtime audits; they do not by themselves provide OBB detections.],
     [Explicit/radiance-field state such as @three-dimensional-gaussian-splatting:short @GaussianSplatting-kerbl2023],
     [Possible bridge for renderable memory, uncertainty, or missing counterfactual modalities.],
+
     [Not thesis-core unless trained, stored, and evaluated as actor-visible state rather than oracle target leakage.],
     [Deja View-style looped refinement],
     [Useful recurrence, compute-depth, and failure-diagnostic template for bounded iterative updates.],
+
     [Not a backbone replacement here; adopt the weight-tied refinement idea only after the fixed-depth candidate-set path is stable.],
     bottomrule(),
   ),
@@ -82,56 +96,77 @@ This makes @egocentric-voxel-lifting:short an anchor, not a ceiling. The near-te
 
 The descriptor plan follows from this backbone constraint. #symb.rl.qh should first receive typed, actor-visible query pools rather than a monolithic feature tensor: a target token, selected-history summaries, per-candidate geometry, candidate-target relations, directional visibility memory, and optional feature-bank joins. The storage contract remains canonical: persist IDs, poses, masks, support counts, feature provenance, and oracle labels in replay rows; derive model descriptors in the reader so that new encoders do not rewrite the supervision artifact. This also keeps the historic/counterfactual asymmetry explicit: logged history may contribute lifted visual and semidense evidence, but counterfactual future rows may only use selected successor geometry and validated actor-visible summaries.
 
-#figure(
-  text(size: 8.6pt, table(
-      columns: (0.78fr, 1.1fr, 1.42fr),
-      toprule(),
-      table.header([*Status*], [*Representation*], [*Use and gate*]),
-      midrule(),
-      [Adopt now],
-      [EFM3D/EVL target and support evidence],
-      [Aria/ASE-native OBB and surface-regression substrate with posed egocentric streams, semidense points, and target hypotheses @EFM3D-straub2024 @EVL-Doc-2025. Report extent/confidence/support/failures; never promote V0 GT targets or oracle labels to actor-visible state.],
-      [Adopt now],
-      [Explicit scalar descriptors],
-      [Candidate pose, target-relative translation, bearing, range, elevation, R6D orientation, validity reason, strategy id, support counts, projected visibility, and remaining budget @zhou2019continuity. Row-shuffle, mask-isolation, duplicate-row, and valid-count tests are required.],
-      [Adopt now],
-      [Canonical replay rows with derived descriptors],
-      [Store stable ids, poses, masks, selected transition, reward, successor ids, and provenance; derive descriptor versions in the reader and record source role, frame, feature id, compression, support, and uncertainty.],
-      [Ablate next],
-      [Query-centric relations and directional memory],
-      [Use QCNet-style relative positional encodings for candidate-candidate/history relations and keep target visibility as $bb(S)^2$ memory @zhou2023query @FisherRF-jiang2024 @SCONE-guedon2022 @e3nn-SphericalHarmonics-2025. Credit only after simpler controls are calibrated.],
-      bottomrule(),
-    )
-  ),
-  caption: [Core descriptor plan for #symb.rl.qh. This is a design contract, not an empirical ranking.],
-) <tab:thesis-descriptor-core-plan>
+This core descriptor plan is intentionally marked as a design contract: every adopted block must stay actor-visible and every escalation needs validation evidence before it becomes a thesis-core claim.
 
 #figure(
   text(size: 8.6pt, table(
-      columns: (0.78fr, 1.1fr, 1.42fr),
-      toprule(),
-      table.header([*Status*], [*Representation*], [*Use and gate*]),
-      midrule(),
-      [Ablate next],
-      [Semidense/fused point bank plus compressed DINO-on-point],
-      [Tests broader scene memory than the final EVL volume; EFM3D suggests semidense points and frozen DINO cues matter @EFM3D-straub2024. Require stable point/voxel ids, compression policy, feature hash, density tests, and storage/runtime accounting.],
-      [Ablate next],
-      [EVL internals and target/candidate crop reads],
-      [Reads pre-head voxel, neck, or OBB-crop evidence when final heads hide support. Store crop frame, grid pose, EVL extent, feature id, and out-of-extent flag; never extract features from oracle target meshes.],
-      [Ablate later],
-      [Point and sparse support encoders],
-      [PointNeXt, Point Transformer/PTv3, KPConv, and sparse convolutions are plausible support encoders, not OBB target detectors @PointNeXt-qian2022 @point-transformer-zhao2021 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019. Escalate only after compact query pools bottleneck.],
-      [Defer / bridge],
-      [Renderable explicit state and recurrence],
-      [3DGS-like state may later supply renderable memory, and Deja View-style looped refinement is a compute-depth diagnostic template @GaussianSplatting-kerbl2023 @dejaviewloopingtransformersburzio2026. Deja View is not the #symb.rl.qh planner.],
-      [Diagnostic only],
-      [Cube R-CNN-style OBB detector],
-      [Useful as a single-frame detector reference, but EFM3D reports off-the-shelf Cube R-CNN generalizes poorly to egocentric Aria data @omni3d-cubercnn-brazil2023 @EFM3D-straub2024. It is not reusable scene-conditioning state.],
-      bottomrule(),
-    )
-  ),
+    columns: (0.78fr, 1.1fr, 1.42fr),
+    toprule(),
+    table.header([*Status*], [*Representation*], [*Use and gate*]),
+    midrule(), [Adopt now], [EFM3D/EVL target and support evidence],
+    [Aria/ASE-native OBB and surface-regression substrate with posed egocentric streams, semidense points, and target hypotheses @EFM3D-straub2024 @EVL-Doc-2025. Report extent/confidence/support/failures; never promote V0 GT targets or oracle labels to actor-visible state.],
+    [Adopt now],
+    [Explicit scalar descriptors],
+
+    [Candidate pose, target-relative translation, bearing, range, elevation, R6D orientation, validity reason, strategy id, support counts, projected visibility, and remaining budget @zhou2019continuity. Row-shuffle, mask-isolation, duplicate-row, and valid-count tests are required.],
+    [Adopt now],
+    [Canonical replay rows with derived descriptors],
+
+    [Store stable ids, poses, masks, selected transition, reward, successor ids, and provenance; derive descriptor versions in the reader and record source role, frame, feature id, compression, support, and uncertainty.],
+    [Ablate next],
+    [Query-centric relations and directional memory],
+
+    [Use QCNet-style relative positional encodings for candidate-candidate/history relations and keep target visibility as $bb(S)^2$ memory @zhou2023query @FisherRF-jiang2024 @SCONE-guedon2022 @e3nn-SphericalHarmonics-2025. Credit only after simpler controls are calibrated.],
+    bottomrule(),
+  )),
+  caption: [Core descriptor plan for #symb.rl.qh. This is a design contract, not an empirical ranking.],
+) <tab:thesis-descriptor-core-plan>
+
+The escalation table is likewise a controlled backlog surface inside the method chapter. It names plausible representation families while keeping their gates explicit.
+
+#figure(
+  text(size: 8.6pt, table(
+    columns: (0.78fr, 1.1fr, 1.42fr),
+    toprule(),
+    table.header([*Status*], [*Representation*], [*Use and gate*]),
+    midrule(), [Ablate next], [Semidense/fused point bank plus compressed DINO-on-point],
+    [Tests broader scene memory than the final EVL volume; EFM3D suggests semidense points and frozen DINO cues matter @EFM3D-straub2024. Require stable point/voxel ids, compression policy, feature hash, density tests, and storage/runtime accounting.],
+    [Ablate next],
+    [EVL internals and target/candidate crop reads],
+
+    [Reads pre-head voxel, neck, or OBB-crop evidence when final heads hide support. Store crop frame, grid pose, EVL extent, feature id, and out-of-extent flag; never extract features from oracle target meshes.],
+    [Ablate later],
+    [Point and sparse support encoders],
+
+    [PointNeXt, Point Transformer/PTv3, KPConv, and sparse convolutions are plausible support encoders, not OBB target detectors @PointNeXt-qian2022 @point-transformer-zhao2021 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019. Escalate only after compact query pools bottleneck.],
+    [Defer / bridge],
+    [Renderable explicit state and recurrence],
+
+    [3DGS-like state may later supply renderable memory, and Deja View-style looped refinement is a compute-depth diagnostic template @GaussianSplatting-kerbl2023 @dejaviewloopingtransformersburzio2026. Deja View is not the #symb.rl.qh planner.],
+    [Diagnostic only],
+    [Cube R-CNN-style OBB detector],
+
+    [Useful as a single-frame detector reference, but EFM3D reports off-the-shelf Cube R-CNN generalizes poorly to egocentric Aria data @omni3d-cubercnn-brazil2023 @EFM3D-straub2024. It is not reusable scene-conditioning state.],
+    bottomrule(),
+  )),
   caption: [Escalation candidates for scene encodings and backbone alternatives. Each candidate needs actor-visible training, storage, runtime, and ablation evidence before thesis-core use.],
 ) <tab:thesis-encoder-escalation-plan>
+
+The minimal descriptor schema can be summarized as a typed row vector before the table expands the field roles:
+
+$
+  bold(x)_(t,i)
+  =
+  op("concat")(
+    bold(z)_e,
+    bold(p)_(t,i),
+    bold(g)_(t,i),
+    phi_"valid"(m_(t,i), rho_(t,i)),
+    bold(H)_t
+  ),
+$
+
+with target descriptor $bold(z)_e$, candidate-pose token $bold(p)_(t,i)$, candidate-geometry token $bold(g)_(t,i)$, hard-mask/reason encoding $phi_"valid"$, and selected-history summary $bold(H)_t$. This symbolic view keeps the table below as a provenance checklist rather than the model definition.
 
 #figure(
   table(
@@ -141,18 +176,23 @@ The descriptor plan follows from this backbone constraint. #symb.rl.qh should fi
     midrule(),
     [Target token],
     [Observed or predicted OBB center, extents, orientation, class probabilities, detector confidence, selector rank, projected visibility, semidense/EVL support, and source mode.],
+
     [Separates V1 actor-visible target input from GT-EVAL matching and prevents GT OBB leakage into deployable policy inputs.],
     [Candidate self token],
     [Candidate pose in root, target, and current-camera frames; distance, bearing, elevation, optical-axis alignment, remaining horizon, sampler strategy, validity mask, and reason code.],
+
     [Makes the finite action row interpretable and keeps invalidity a hard mask rather than a low-reward training example.],
     [Candidate-target relation],
     [Frustum-target overlap, projected target area, expected support change, target-local approach direction, visibility novelty, and optional EVL/crop support read.],
+
     [Forces the model to condition on the chosen target instead of learning scene-level coverage shortcuts.],
     [Candidate-candidate and history relations],
     [Relative poses, angular separation, duplicate/near-duplicate indicators, selected-view directional memory, and valid-count features.],
+
     [Supports permutation-equivariant interaction while exposing attention-normalization shortcuts and duplicate-row artifacts.],
     [Feature-bank joins],
     [Stable point or voxel id, feature-model id, compression version, observation count, frame lineage, uncertainty, and out-of-extent status.],
+
     [Prevents silent mixing of logged RGB/DINO features with counterfactual rows that only have selected successor geometry.],
     bottomrule(),
   ),
@@ -193,33 +233,43 @@ $
   #eqs.features.direction_unit
 $
 
-The planned actor-visible feature branch stores history either as low-order spherical-harmonic coefficients @e3nn-SphericalHarmonics-2025
+Here $bold(v) in RR^3$ is a target-local point or voxel center, $bold(c)_k in RR^3$ is the center of a selected camera, and $bold(d)_k(bold(v)) in bb(S)^2$ is the unit ray from the target-local support location toward that selected view. The scalar weight $w_k(bold(v))$ can encode whether view $k$ observed, supported, or improved that target-local region. The planned actor-visible feature branch stores history either as low-order spherical-harmonic coefficients @e3nn-SphericalHarmonics-2025
 
 $
   #eqs.features.direction_memory_sh
 $
 
-or as a second-moment summary,
+or as a second-moment summary over unit directions,
 
 $
   #eqs.features.direction_memory_moment
 $
 
-from which the candidate can read a directional novelty score:
+from which the candidate can read a directional novelty score. The numerator projects the candidate direction through the accumulated second-moment matrix; the trace-normalized complement is high when the candidate approaches the target from an underrepresented direction:
 
 $
   #eqs.features.direction_novelty
 $
 
+The directional-memory diagram in @fig:qh-directional-memory keeps this branch separate from generic pose tokens: selected views first accumulate target-local directional evidence, and each candidate then queries whether it sees the target from a genuinely new direction.
+
+#figure(
+  align(center, image(
+    "../figures/qh_directional_memory.pdf",
+    width: 72%,
+  )),
+  caption: [Actor-visible directional memory for target-local view novelty. The figure shows a planned descriptor branch, not an implemented performance result: selected view directions over observed points or voxels are summarized as low-order directional coefficients, and each valid candidate reads the memory to produce a candidate token feature for #symb.rl.qh.],
+) <fig:qh-directional-memory>
+
 The minimum replay row contains scene/snippet/target/step identifiers, counterfactual state, target descriptor, candidate table, masks, invalid reasons, selected action, target reward, successor state, successor candidates, successor masks, and policy/seed/sampler metadata. This row reproduces the mask, selected transition, value target, and oracle re-evaluation.
 
 == Architecture Contract and Geometric Acceptance Tests <sec:thesis-method-geometry-contract>
 
-Section @sec:thesis-geometric-learning-theory owns the scientific rationale for the architecture ladder. This method section turns that rationale into acceptance tests over the replay fields. The planned architecture is not justified by adding geometric modules until the model looks sophisticated. Each module must answer a specific symmetry or provenance requirement of the finite-candidate problem. Candidate rows form an unordered set, so the learned value map must be permutation equivariant at the row level: reordering #symb.rl.candidate_table may reorder #symb.rl.qh outputs, but it must not change the value attached to a physical candidate. Invalid and padded rows are constraints, so mask isolation is part of the architecture contract rather than a post-processing detail. Candidate, target, and current-history geometry must be encoded in local frames so that arbitrary world-frame origin or yaw conventions do not become shortcuts. At the same time, the task is gravity aligned and egocentric; the thesis should not claim full $op("SO")(3)$ or $op("SE")(3)$ equivariance for the whole system.
+The geometric-learning rationale in @sec:thesis-geometric-learning-theory becomes acceptance tests over the replay fields here. The planned architecture is not justified by adding geometric modules until the model looks sophisticated. Each module must answer a specific symmetry or provenance requirement of the finite-candidate problem. Candidate rows form an unordered set, so the learned value map must be permutation equivariant at the row level: reordering #symb.rl.candidate_table may reorder #symb.rl.qh outputs, but it must not change the value attached to a physical candidate. Invalid and padded rows are constraints, so mask isolation is part of the architecture contract rather than a post-processing detail. Candidate, target, and current-history geometry must be encoded in local frames so that arbitrary world-frame origin or yaw conventions do not become shortcuts. At the same time, the task is gravity aligned and egocentric; the thesis should not claim full $op("SO")(3)$ or $op("SE")(3)$ equivariance for the whole system.
 
 #figure(
   align(center, image(
-    "../figures/qh_symmetry_contract.png",
+    "../figures/qh_symmetry_contract.pdf",
     width: 100%,
   )),
   caption: [Minimum symmetry and provenance contract for the finite-candidate #symb.rl.qh model. The contract requires row-level equivariance, mask isolation, local-frame geometry, target-local directional memory, and oracle/actor provenance gates; it does not claim exact global $op("SE")(3)$ equivariance.],
@@ -227,7 +277,7 @@ Section @sec:thesis-geometric-learning-theory owns the scientific rationale for 
 
 The first model family should therefore use scalar invariant and local-frame relative features before heavier equivariant tensor machinery. A candidate-local relation such as $bold(T)^r_(c_q)$ or a target-relative bearing is a deliberate gauge choice: it removes irrelevant global-coordinate dependence while preserving the yaw, elevation, distance, and approach-direction signals needed for visibility. Directional history is a separate object. A selected view direction belongs on $bb(S)^2$ and should be stored as a target-local histogram, second-moment matrix, or low-order spherical-harmonic memory rather than being merged into generic pose features. This separation protects the interpretation of an ablation: a QCNet-style relative positional bias tests candidate-candidate geometry, while directional memory tests whether the target has already been observed from similar directions @zhou2023query @e3nn-SphericalHarmonics-2025.
 
-The architecture acceptance tests are as important as validation loss. Row-shuffle tests must satisfy $f_theta(Pi X_t, m_t)=Pi f_theta(X_t, m_t)$ up to numerical tolerance for every per-candidate output used by selection. Mask tests must show that invalid rows cannot alter valid scores except through explicit valid-count or support features. Valid-count and duplicate-row stress tests check whether attention normalization has corrupted absolute target-specific @relative-reconstruction-improvement:short calibration. Only after the independent scorer and DeepSets controls pass these tests should masked Set Transformer interaction, Fisher/SCONE overlap bias, QCNet-style local relative positional encoding, or EGNN-style candidate graphs be credited as architectural gains @DeepSets-zaheer2017 @SetTransformer-lee2019 @FisherRF-jiang2024 @SCONE-guedon2022 @EGNN-satorras2021.
+The architecture acceptance tests are as important as validation loss. Row-shuffle tests must satisfy $f_theta (Pi X_t, m_t)=Pi f_theta (X_t, m_t)$ up to numerical tolerance for every per-candidate output used by selection. Mask tests must show that invalid rows cannot alter valid scores except through explicit valid-count or support features. Valid-count and duplicate-row stress tests check whether attention normalization has corrupted absolute target-specific @relative-reconstruction-improvement:short calibration. Only after the independent scorer and DeepSets controls pass these tests should masked Set Transformer interaction, Fisher/SCONE overlap bias, QCNet-style local relative positional encoding, or EGNN-style candidate graphs be credited as architectural gains @DeepSets-zaheer2017 @SetTransformer-lee2019 @FisherRF-jiang2024 @SCONE-guedon2022 @EGNN-satorras2021.
 
 #research_todo(
   [Treat Fisher/SCONE overlap attention and QCNet-style relative encodings as ablation hypotheses until row-shuffle, mask-isolation, and paired oracle policy evidence show they improve target-specific endpoint gain over simpler controls.],
@@ -273,6 +323,8 @@ $
   #eqs.rl.qh_coral_interface
 $
 
+ARIA-NBV's adaptation is in the binning and decoding around that interface. Continuous oracle target gains are fitted to empirical quantile edges $tau_1 <= dots <= tau_(K-1)$, and each sample receives the ordinal label $y = sum_(j=1)^(K-1) bb(1)[r^e > tau_j]$, matching the repository's `RriOrdinalBinner`. CORAL levels are threshold indicators $ell_k = bb(1)[y > k]$ for $k=0,dots,K-2$, matching `ordinal_labels_to_levels`. The code then decodes logits both as cumulative probabilities $P(y>k)=sigma(o_k)$ and as a ranking proxy $E[y]=sum_k sigma(o_k)$; when calibrated bin representatives are available, the expectation over $u_k$ maps the ordinal distribution back to target-gain units. This preserves the VIN-NBV ordinal-ranking precedent while making calibration, bin drift, and residual #symb.rl.qh recovery explicit ARIA-NBV diagnostics.
+
 Training is staged to preserve the residual interpretation: train and calibrate $hat(r)_psi^e$, then freeze or slow-finetune it while fitting residual #symb.rl.qh, and finally ablate whether end-to-end fine-tuning improves oracle-evaluated policy performance.
 
 The first #symb.rl.qh implementation should start from implemented @view-introspection-network:short/@egocentric-voxel-lifting:short heads plus semi-dense or fused geometry. A richer queryable feature bank is a planned representation ablation, not a current persisted cache schema:
@@ -292,6 +344,16 @@ The candidate encoder is permutation-equivariant:
 $
   #eqs.features.qh_set_encoder
 $
+
+The candidate-query architecture in @fig:qh-vin-gnn-architecture expands the same contract into the architecture used for the thesis hypothesis and ablation ladder.
+
+#figure(
+  image(
+    "../figures/qh_vin_gnn_architecture.pdf",
+    width: 100%,
+  ),
+  caption: [Candidate-query #symb.rl.qh architecture sketch. Actor-visible @egocentric-voxel-lifting:short evidence, accumulated geometry, target descriptors, selected-history summaries, candidate geometry, masks, and directional memory feed a permutation-equivariant set reasoner; residual finite-horizon values, one-step auxiliary scores, and diagnostics are then decoded only over valid candidate rows. Oracle labels supervise training and evaluation outside this actor-input graph.],
+) <fig:qh-vin-gnn-architecture>
 
 No-interaction candidate MLP scoring and pooled DeepSets aggregation are required baselines before attributing gains to masked Set Transformer interaction or QCNet-style RPE. For immediate target-specific @relative-reconstruction-improvement:short, the physical oracle label of candidate $q_i$ does not change when unrelated rows are added to $cal(Q)_t$. Candidate interaction can therefore corrupt absolute calibration if it replaces the independent scorer. The safer myopic ablation uses candidate context only as a zero-mean relative advantage correction.
 

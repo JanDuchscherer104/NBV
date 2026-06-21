@@ -190,7 +190,7 @@ empirical evidence.
 Run:
 
 ```bash
-.agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections/proposal
+.agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections
 ```
 
 Use `--examples` only when intentionally reviewing the bad/good examples in

@@ -2,6 +2,20 @@
 name: rerun-nbv-inspector
 description: Use when creating, reviewing, or fixing ARIA-NBV Rerun integrations for immutable VIN offline-store inspection, NBV candidate/frustum visualization, RRI/validity diagnostics, depth/RGB/keyframe layers, OBB/mesh/trajectory logging, `.rrd` smoke artifacts, or Rerun frame-coordinate issues involving PoseTW, CameraTW, PyTorch3D cameras, and display-only CW90 handling.
 metadata:
+  mode: implementation
+  not_when:
+    - "generic Streamlit UI behavior with no Rerun artifact or visual logging path"
+    - "offline-store data validity before Rerun receives a compatible sample"
+    - "geometry-frame changes outside the Rerun logging or inspection surface"
+  handoff_to:
+    - "diagnose-aria for concrete Rerun launch failures or suspicious visual output"
+    - "dataset-cache-ops for incompatible or invalid offline stores"
+    - "nbv-geometry-contracts for PoseTW, CameraTW, projection, or CW90 frame issues"
+    - "aria-litkg-memory for official-doc/API lookup when Rerun behavior is uncertain"
+  evidence_required:
+    - "focused inspector test, saved .rrd smoke artifact, or exact store incompatibility"
+    - "entity-path, frame-coordinate, and display-only downsampling evidence"
+    - "official Rerun/API evidence when changing SDK usage patterns"
   applies_to:
     - "aria_nbv/aria_nbv/app/**"
     - "aria_nbv/aria_nbv/rerun_inspector/**"
@@ -17,11 +31,35 @@ metadata:
     - "AGENTS.md"
     - "aria_nbv/AGENTS.md"
     - ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md"
+    - ".agents/skills/rerun-nbv-inspector/references/context7-queries.md"
+  canonical_sources:
+    - "aria_nbv/AGENTS.md#core-rules"
+    - ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md"
+    - ".agents/skills/rerun-nbv-inspector/references/context7-queries.md"
+    - ".agents/skills/rerun-nbv-inspector/references/rerun-python-patterns.md"
+    - ".agents/references/external_stack_contracts.md"
+  context7_refs:
+    - "/rerun-io/rerun"
+    - "/websites/streamlit_io"
+    - "/facebookresearch/pytorch3d"
+  literature_refs:
+    - "quality-driven-rri"
+    - "egocentric-aria-substrate"
+  tool_refs:
+    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__MCP_DOCKER.browser_run_code"
+    - "mcp__code_index.search_code_advanced"
   verification:
     - "focused Rerun inspector tests or smoke command for changed surface"
 ---
 
 # Rerun NBV Inspector
+
+## OMX Integration
+
+OMX owns task orchestration; this skill owns ARIA Rerun evidence production.
+Return the exact inspector command, artifact path, frame/entity evidence, and
+handoffs for data or geometry blockers.
 
 ## Overview
 

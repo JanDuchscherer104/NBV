@@ -26,6 +26,21 @@ metadata:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
     - ".agents/references/litkg_quick_reference.md"
+  canonical_sources:
+    - "AGENTS.md"
+    - ".agents/references/source_order.md#role-split"
+    - ".agents/references/litkg_quick_reference.md#probation-lane"
+    - ".agents/references/litkg_quick_reference.md#fallback"
+    - ".agents/references/litkg_quick_reference.md#mandatory-claim-checks"
+    - ".agents/references/alignment_tools_contract.md#tool-boundaries"
+    - ".configs/litkg.toml"
+  literature_refs:
+    - "docs/contents/literature/index.qmd"
+    - "docs/literature/sources.jsonl"
+    - "docs/references.bib"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__MCP_DOCKER.list_papers"
   verification:
     - "make kg-capabilities KG_FORMAT=json"
     - "make kg-route KG_TASK=\"<task>\" KG_FORMAT=json"
@@ -42,29 +57,17 @@ source families.
 
 1. Read `AGENTS.md`, `.agents/references/source_order.md`, and
    `.agents/references/litkg_quick_reference.md`.
-2. Default first read: `make kg-search KG_QUERY="<terms>"` for fast,
-   score-ranked retrieval over code/docs/memory/backlog/literature. Empirical
-   verdict: this is the killer verb for localized lookups.
-3. Escalate to `make kg-route KG_TASK="<task>"` only when the agent needs a
-   full context pack (top_sources + required_reads + active_backlog +
-   verification_commands + missing_context).
-4. Use `make kg-claim-check KG_CLAIM="<claim>"` for advisor-facing proposal,
-   roadmap, research-question, or literature-synthesis claims; expect
-   `verdict, confidence, supporting_evidence, contradicting_evidence`.
-   The default output is a compact ~10-line summary (verdict + top 2
-   supporting + top 2 contradicting); add `KG_VERBOSE=1` for full text or
-   `KG_FORMAT=json` for raw payload. **Known gap**: literature `paper:*`
-   nodes currently lack source paths, so a real literature claim can come
-   back `unverifiable` even when the cited paper is indexed (filed under
-   `issue-025` follow-up). When that happens, also run
-   `make kg-search KG_QUERY="<claim keywords>"` and inspect returned
-   `paper:*` titles + snippets directly before downgrading the claim.
-5. When KG output looks degraded or empty, run `make kg-status` first as a
-   fast 0/1 health probe. If non-zero, fall back to `aria-nbv-context` plus
-   targeted reads and record the outage in the debrief.
-6. Inspect cited canonical sources before treating retrieved statements as
+2. Use the exact command shapes, health checks, fallback policy, and mandatory
+   claim-check rules from `.agents/references/litkg_quick_reference.md`.
+3. Use `kg-search` for source-backed retrieval, `kg-route` for a context pack,
+   and `kg-claim-check` for advisor-facing proposal, roadmap,
+   research-question, or literature-synthesis claims.
+4. When KG output looks degraded or empty, run `make kg-status`; if unavailable,
+   fall back to `aria-nbv-context` plus targeted reads and record the outage
+   only when it blocks the task or exposes durable scaffold debt.
+5. Inspect cited canonical sources before treating retrieved statements as
    current truth.
-7. Use `make kg-consolidate` for proposal-style memory/backlog updates; do not
+6. Use `make kg-consolidate` for proposal-style memory/backlog updates; do not
    silently promote episodic notes.
 
 ## Source Authority

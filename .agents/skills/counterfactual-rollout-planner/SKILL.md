@@ -2,6 +2,19 @@
 name: counterfactual-rollout-planner
 description: Use when ARIA-NBV work touches ASE counterfactual rollouts, non-myopic planning evaluation, invalid-action handling, stochastic branches, finite-candidate candidate-query Transformer Q_H, or the roadmap value/RL gate. Gymnasium/SB3 is post-M6 bridge work only.
 metadata:
+  mode: implementation
+  not_when:
+    - "one-step VIN scoring with no rollout, Q_H, or non-myopic evaluation surface"
+    - "generic geometry, data-cache, or Streamlit debugging without rollout semantics"
+  handoff_to:
+    - "diagnose-aria for concrete rollout failures or suspicious metrics"
+    - "nbv-geometry-contracts for pose, camera, projection, or frame-contract issues"
+    - "entity-aware-rri for target-crop or target-specific RRI ownership"
+    - "plan-grill for thesis-scope planning before changing roadmap claims"
+  evidence_required:
+    - "horizon, branch/beam width, candidate budget, and acquisition budget"
+    - "validity mask and invalid-reason treatment for selected actions"
+    - "oracle-evaluated cumulative target gain or explicit reason it is unavailable"
   applies_to:
     - "aria_nbv/aria_nbv/pose_generation/**"
     - "aria_nbv/aria_nbv/rl/**"
@@ -14,15 +27,38 @@ metadata:
     - "invalid action"
   must_read:
     - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
-    - "docs/contents/thesis/questions.qmd#rq4-planning"
+    - "docs/contents/thesis/questions.qmd#rq2-offline-qh"
     - ".agents/memory/state/PROJECT_STATE.md"
     - ".agents/references/rollout_zarr_q_invalidity_contract.md"
+  canonical_sources:
+    - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
+    - "docs/contents/thesis/questions.qmd#rq2-offline-qh"
+    - "docs/contents/theory/rl_planning.qmd#q-h-training-contract"
+    - ".agents/references/rollout_zarr_q_invalidity_contract.md#mask-semantics"
+    - "aria_nbv/aria_nbv/rollouts/AGENTS.md"
+  context7_refs:
+    - "/pytorch/pytorch"
+    - "/farama-foundation/gymnasium"
+    - "/dlr-rm/stable-baselines3"
+  literature_refs:
+    - "finite-candidate-rl"
+    - "continuous-nbv-bridge"
+    - "DoubleDQN-vanHasselt2015"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__MCP_DOCKER.get_library_docs"
   verification:
     - "cd aria_nbv && uv run pytest tests/pose_generation/test_counterfactuals.py"
     - "cd aria_nbv && uv run pytest tests/rl/test_counterfactual_env.py"
 ---
 
 # Counterfactual Rollout Planner
+
+## OMX Integration
+
+OMX owns planning and execution gates; this skill supplies ARIA rollout and Q_H
+semantics for those gates. Return exact rollout budgets, evidence artifacts,
+and focused verification loops rather than a standalone workflow.
 
 ## When To Use
 
@@ -62,8 +98,10 @@ simulator bridge after the ASE rollout and Q_H path is stable.
   for selected actions or retained chains.
 - Report cumulative target or scene RRI together with acquisition cost,
   invalid action rate, and runtime.
-- Treat full continuous control and simulator-backed online RL as stretch or
-  bridge work until the roadmap evidence gate passes.
+- Treat online discrete `Q_H` over finite candidates as the RQ5 bridge after
+  stable offline `Q_H` evidence; full continuous control and generic
+  simulator-backed RL remain RQ6/stretch until the roadmap evidence gate
+  passes.
 - Keep actor-visible, critic-visible, and oracle-only signals separate.
 - Mask invalid candidates before selection and preserve explicit invalid reason
   summaries.

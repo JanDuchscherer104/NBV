@@ -28,6 +28,21 @@ metadata:
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md"
     - ".agents/references/verification_matrix.md"
+  canonical_sources:
+    - "docs/AGENTS.md"
+    - ".agents/references/source_order.md#role-split"
+    - "docs/contents/thesis/roadmap.qmd"
+    - "docs/contents/thesis/questions.qmd"
+    - "docs/references.bib"
+  context7_refs:
+    - "/websites/quarto"
+    - "/websites/typst_app"
+  literature_refs:
+    - "docs/contents/literature/index.qmd"
+    - "docs/literature/sources.jsonl"
+    - "docs/references.bib"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
   verification:
     - "make qmd-frontmatter-check for Quarto docs"
     - "cd docs && quarto render <page.qmd> for changed pages"

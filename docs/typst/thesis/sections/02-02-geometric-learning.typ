@@ -10,32 +10,55 @@ The geometric-learning question in ARIA-NBV is not whether a more expressive sce
 
 The first required structure is candidate-row permutation equivariance. Reordering the rows of #symb.rl.candidate_table may reorder per-candidate #symb.rl.qh outputs, but it must not change the value assigned to the same physical candidate. Deep Sets supplies the minimal invariant/equivariant baseline for unordered candidate and support sets, while Set Transformer supplies masked candidate-candidate interaction once independent and pooled controls are calibrated @DeepSets-zaheer2017 @SetTransformer-lee2019. The thesis should not replace the row path with only a pooled scene embedding, because the policy selects a candidate row.
 
+The minimum algebraic contract is therefore a row-wise map over a masked set. For any permutation matrix $Pi$ acting on candidate rows, the value model should satisfy
+
+$
+  f_theta (Pi bold(X)_t, Pi bold(m)_t)
+  =
+  Pi f_theta (bold(X)_t, bold(m)_t),
+$
+
+where $bold(X)_t = {bold(x)_(t,i)}_(i=1)^(N_q)$ stores per-candidate actor-visible descriptors and $bold(m)_t$ stores validity. Invalid rows are not low-quality actions; they are outside the admissible set. A masked scorer must therefore compute selection over
+
+$
+  cal(A)_t
+  =
+  {i in {1, dots, N_q} : m_(t,i)=1},
+  quad
+  a_t^theta
+  =
+  op("argmax", limits: #true)_(i in cal(A)_t) f_(theta,i)(bold(X)_t, bold(m)_t).
+$
+
+The local-frame contract is a controlled gauge choice rather than a full invariance claim. Candidate features may use transforms such as $bold(T)^r_(c_q)$, target-relative bearings, and query-local relative encodings so that a global origin change does not change the physical row identity, while gravity alignment and camera-frustum geometry remain available task structure @zhou2019continuity @zhou2023query.
+
 The second required structure is gauge discipline. Candidate, target, current camera, and selected-history poses should be encoded in local frames, with continuous rotation representations and query-local relative positional features where needed @zhou2019continuity @zhou2023query. This borrows the useful part of query-centric trajectory models: local relations and relative encodings. It does not import their forecasting decoder, road-agent priors, or online streaming claims. Full global $op("SE")(3)$ equivariance is also not the right default because the task is gravity aligned, camera-frustum limited, and tied to egocentric acquisition. Exact equivariant networks remain ablations for support encoders or candidate graphs, not the core claim @EGNN-satorras2021 @SE3Transformer-fuchs2020.
 
-The third required structure is directional visibility memory. A candidate view is not only a pose vector; it is a direction from which target-local surface regions may or may not have been observed. This suggests storing selected-view history on $bb(S)^2$ through a histogram, a second-moment summary, or low-order spherical harmonics before more specialized equivariant layers are introduced @e3nn-SphericalHarmonics-2025. Coverage and information-gain methods motivate support, overlap, and uncertainty features, but those features remain diagnostic channels unless they improve target-specific oracle @relative-reconstruction-improvement:short under the paired evaluation protocol @SCONE-guedon2022 @FisherRF-jiang2024.
+The third required structure is directional visibility memory. A candidate view is not only a posed pinhole pose; it is a directional field from which target-local surface regions may or may not have been observed. This suggests storing selected-view history on $bb(S)^2$ through a histogram, a second-moment summary, or low-order spherical harmonics before more specialized equivariant layers are introduced @e3nn-SphericalHarmonics-2025. Coverage and information-gain methods motivate support, overlap, and uncertainty features, but those features remain diagnostic channels unless they improve target-specific oracle @relative-reconstruction-improvement:short under the paired evaluation protocol @SCONE-guedon2022 @FisherRF-jiang2024.
 
 #figure(
   table(
     columns: (0.82fr, 1.12fr, 1.28fr),
     toprule(),
     table.header([*Object*], [*Required structure*], [*Testable consequence*]),
-    midrule(),
-    [Candidate rows],
-    [Permutation-equivariant per-row value map.],
-    [Row-shuffle tests must satisfy $f_theta(Pi X, Pi m)=Pi f_theta(X,m)$ for every selection score.],
+    midrule(), [Candidate rows], [Permutation-equivariant per-row value map.],
+    [Row-shuffle tests must satisfy $f_theta(Pi X, Pi m)=Pi f_theta(X, m)$ for every selection score.],
     [Invalid and padded rows],
     [Hard mask isolation.],
+
     [Invalid rows cannot change valid-row scores except through explicit valid-count or support features.],
     [Candidate-target geometry],
     [Target-local and candidate-local relative pose features.],
+
     [World-frame origin, yaw convention, and display-only camera transforms cannot become shortcuts.],
     [Selected-view history],
     [Directional memory on $bb(S)^2$.],
+
     [Novelty tests separate already-observed target directions from generic pose distance.],
     [Actor/oracle boundary],
     [Typed provenance for target descriptors, labels, and support features.],
-    [@ground-truth:short meshes, crops, and all-candidate renders supervise labels/evaluation only.],
-    bottomrule(),
+
+    [@ground-truth:short meshes, crops, and all-candidate renders supervise labels/evaluation only.], bottomrule(),
   ),
   caption: [Minimum geometric-learning contract for the finite-candidate value model.],
 ) <tab:geometric-learning-contract>
@@ -51,24 +74,36 @@ This contract implies an architecture ladder with conservative attribution. The 
     [A0],
     [Independent candidate scorer],
     [Locks target/candidate descriptors, CORAL calibration, and one-step ranking before context is added.],
-    [A1],
-    [Pooled DeepSets context],
-    [Tests unordered valid-set summaries while preserving a per-candidate row path.],
+
+    [A1], [Pooled DeepSets context], [Tests unordered valid-set summaries while preserving a per-candidate row path.],
     [A2],
     [Masked Set Transformer],
     [Tests candidate-candidate interaction under row-shuffle and mask-isolation checks.],
+
     [A3],
     [Query-local relative encoding],
     [Adapts QCNet-style local RPE for candidate-target, candidate-candidate, and selected-history relations.],
+
     [A4],
     [Directional/support bias],
     [Tests visibility memory, target-frustum support, overlap, and uncertainty as features rather than proxy rewards.],
+
     [A5],
     [Residual dueling #symb.rl.qh],
     [Tests finite-horizon recovery over the calibrated myopic scorer with masked Double-Q backups.],
+
     [A6+],
     [Point/sparse/exact-equivariant/recurrent encoders],
     [Escalates only if compact descriptors bottleneck target-RRI ranking or #symb.rl.qh recovery.],
+
+    [B0],
+    [Online candidate-table refresh],
+    [Bridge level after offline #symb.rl.qh evidence: tests whether the same finite-action contract survives streaming candidate regeneration.],
+
+    [B1],
+    [Continuous policy / simulator controller],
+    [Post-thesis bridge only unless finite candidates fail; requires a separate action-parameterization, safety, and simulator-realism gate.],
+
     bottomrule(),
   ),
   caption: [Architecture ladder used to keep geometric-learning claims attributable.],

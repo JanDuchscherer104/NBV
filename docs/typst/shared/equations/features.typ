@@ -68,6 +68,7 @@
   $,
   candidate_query_pools: $
     // TODO: what is the difference between these potential candidate features? Frustum vs. projected? Pooling over the entire scene vs. just the candidate crop?
+    // TODO: these Pool_ symbols don't look well. too much contents in the subsctipt and writing out Frustum is stupid. what symbol can we use to represent Frustum(*)?
               bold(z)_e & =
                           op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
          bold(z)_i^"fr" & =

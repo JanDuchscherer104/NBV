@@ -164,53 +164,11 @@ issue_ids = ["issue-019", "issue-018"]
 loc_min = 180
 loc_expected = 460
 loc_max = 1000
-context = [
-  "The literature synthesis maps Gumbel-Top-k to diverse branch sampling without replacement and soft Q / maximum-entropy ideas to softmax-over-score exploration.",
-  "Current rollout code supports deterministic selectors, seeded temperature-softmax, branch-factor schedules, stochastic branch factors, robust median/IQR softmax logits, and optional sibling diversity guards for distance, yaw, strategy, and target bearing.",
-  "Gumbel-Top-k, late exploration, and more granular per-step stochastic replay audits still need evidence before stochastic traces become final thesis evidence.",
-  "Branching only at step 0 can miss later setup actions that unlock valuable views.",
-  "The multimodal rollout alignment locks the first stochastic branch target as explicit seeded bounded beam generation with horizon 3 and branch/beam cap 3, not an unbounded random tree.",
-  "The curated thesis decision makes oracle-scored temperature-softmax required before first Q_H training; Gumbel-Top-k remains preferred later diversity evidence rather than a first-attempt blocker.",
-  "Current rollout lineage records seed-once RNG provenance with the job seed and split manifest hash; final stochastic evidence should also report sampled outcomes and diversity-guard fallback counts.",
-  "The target-selection/candidate-sampling review notes that diversity guards are data-generation tools rather than thesis contributions; if no candidate passes the guards, the current sampler falls back to remaining candidates, so guard activation and fallback counts must be reported before diversity claims.",
-]
-references = [
-  "repo:docs/contents/theory/rl_planning.qmd",
-  "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#mixture-rollout-branch-selection",
-  "repo:.agents/skills/counterfactual-rollout-planner/SKILL.md",
-  "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md",
-  "repo:aria_nbv/aria_nbv/pose_generation/counterfactuals.py",
-  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
-  "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md",
-  "bib:GumbelTopK-kool2019",
-  "bib:DeepEnergyPolicies-haarnoja2017",
-  "bib:TrajectoryTransformer-janner2021",
-]
-implementation_notes = [
-  "Keep robust temperature-softmax as the default stochastic selector: normalize finite candidate scores by median/IQR before applying selection_temperature.",
-  "Keep sibling diversity guards optional and explicit; use distance, yaw, strategy, and target-bearing thresholds only when the rollout recipe requests them.",
-  "Persist or report diversity_guard_active_count and diversity_guard_fallback_count so strict guards cannot silently become unconstrained sampling.",
-  "Report policy entropy, unique selected chains, selected component/position histograms, valid count by step, target-root-gain distribution, and selected action provenance for stochastic runs.",
-  "Extend seed-once lineage for stochastic evidence with sampled outcome tables, branch order, and optional per-step derived seed hashes where needed for replay/debug.",
-  "Represent branch_schedule as explicit per-step policy parameters such as horizon=3, beam_width<=3, branch_cap<=3, gumbel_top_k, top_k, random_branch_prob, and late_explore probability.",
-  "Keep computational complexity bounded by beam_width, horizon, and candidate count; do not materialize unbounded random per-node trees.",
-  "Persist policy provenance so Q_H training can distinguish random-valid, greedy, softmax, Gumbel, and oracle-lookahead source traces.",
-]
-acceptance = [
-  "Seeded temperature-softmax uses robust scale-invariant logits and tests cover affine score-scale invariance.",
-  "Branch diversity can require distinct sibling strategy or yaw/target-bearing separation when configured.",
-  "Diversity-guard activation and fallback counts are inspectable, and reports state when guards did not constrain a branch.",
-  "Rollouts support Gumbel-Top-k selection policies before the preferred full stochastic diversity evidence suite.",
-  "The first reportable stochastic rollout target can run as seeded H3/B3 bounded beam generation with explicit branch schedule metadata.",
-  "Branch schedules can vary branching by step instead of only at the root.",
-  "Late exploration can sample valid medium/high-entropy candidates under an explicit probability.",
-  "Trace output records policy parameters, selected strategy, selected position/component, and replayable RNG/seed provenance per stochastic step.",
-  "Oracle-scored temperature-softmax can produce replayable traces for first Q_H training.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/pose_generation/test_counterfactuals.py",
-  "rg -n \"temperature|gumbel|branch_schedule|late_explore|diversity_guard|selection_entropy|position_id\" aria_nbv/aria_nbv/pose_generation aria_nbv/tests/pose_generation",
-]
+context = ["The literature synthesis maps Gumbel-Top-k to diverse branch sampling without replacement and soft Q / maximum-entropy ideas to softmax-over-score exploration.", "Current rollout code supports deterministic selectors, seeded temperature-softmax, branch-factor schedules, stochastic branch factors, robust median/IQR softmax logits, and optional sibling diversity guards for distance, yaw, strategy, and target bearing.", "Gumbel-Top-k, late exploration, and more granular per-step stochastic replay audits still need evidence before stochastic traces become final thesis evidence.", "Branching only at step 0 can miss later setup actions that unlock valuable views.", "The multimodal rollout alignment locks the first stochastic branch target as explicit seeded bounded beam generation with horizon 3 and branch/beam cap 3, not an unbounded random tree.", "The curated thesis decision makes oracle-scored temperature-softmax required before first Q_H training; Gumbel-Top-k remains preferred later diversity evidence rather than a first-attempt blocker.", "Current rollout lineage records seed-once RNG provenance with the job seed and split manifest hash; final stochastic evidence should also report sampled outcomes and diversity-guard fallback counts.", "The target-selection/candidate-sampling review notes that diversity guards are data-generation tools rather than thesis contributions; if no candidate passes the guards, the current sampler falls back to remaining candidates, so guard activation and fallback counts must be reported before diversity claims."]
+references = ["repo:docs/contents/theory/rl_planning.qmd", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#mixture-rollout-branch-selection", "repo:.agents/skills/counterfactual-rollout-planner/SKILL.md", "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md", "repo:aria_nbv/aria_nbv/pose_generation/counterfactuals.py", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "bib:GumbelTopK-kool2019", "bib:DeepEnergyPolicies-haarnoja2017", "bib:TrajectoryTransformer-janner2021"]
+implementation_notes = ["Keep robust temperature-softmax as the default stochastic selector: normalize finite candidate scores by median/IQR before applying selection_temperature.", "Keep sibling diversity guards optional and explicit; use distance, yaw, strategy, and target-bearing thresholds only when the rollout recipe requests them.", "Persist or report diversity_guard_active_count and diversity_guard_fallback_count so strict guards cannot silently become unconstrained sampling.", "Report policy entropy, unique selected chains, selected component/position histograms, valid count by step, target-root-gain distribution, and selected action provenance for stochastic runs.", "Extend seed-once lineage for stochastic evidence with sampled outcome tables, branch order, and optional per-step derived seed hashes where needed for replay/debug.", "Represent branch_schedule as explicit per-step policy parameters such as horizon=3, beam_width<=3, branch_cap<=3, gumbel_top_k, top_k, random_branch_prob, and late_explore probability.", "Keep computational complexity bounded by beam_width, horizon, and candidate count; do not materialize unbounded random per-node trees.", "Persist policy provenance so Q_H training can distinguish random-valid, greedy, softmax, Gumbel, and oracle-lookahead source traces."]
+acceptance = ["Seeded temperature-softmax uses robust scale-invariant logits and tests cover affine score-scale invariance.", "Branch diversity can require distinct sibling strategy or yaw/target-bearing separation when configured.", "Diversity-guard activation and fallback counts are inspectable, and reports state when guards did not constrain a branch.", "Rollouts support Gumbel-Top-k selection policies before the preferred full stochastic diversity evidence suite.", "The first reportable stochastic rollout target can run as seeded H3/B3 bounded beam generation with explicit branch schedule metadata.", "Branch schedules can vary branching by step instead of only at the root.", "Late exploration can sample valid medium/high-entropy candidates under an explicit probability.", "Trace output records policy parameters, selected strategy, selected position/component, and replayable RNG/seed provenance per stochastic step.", "Oracle-scored temperature-softmax can produce replayable traces for first Q_H training."]
+verification = ["cd aria_nbv && uv run pytest tests/pose_generation/test_counterfactuals.py", "rg -n \"temperature|gumbel|branch_schedule|late_explore|diversity_guard|selection_entropy|position_id\" aria_nbv/aria_nbv/pose_generation aria_nbv/tests/pose_generation"]
 
 [[todo]]
 id = "todo-028"
@@ -223,57 +181,16 @@ issue_ids = ["issue-020", "issue-007"]
 loc_min = 220
 loc_expected = 520
 loc_max = 1200
-context = [
-  "Candidate generation now separates position families from view-direction families: the main thesis mixture uses forward-local, target-bearing-local, and lateral target-bypass position modes; local-refinement, revisit/backtrack, and the legacy free shell are named ablations.",
-  "CandidateSamplingResult records full-shell view strategy id, position id, mixture id, sampler probability, component name, and sparse component diagnostics.",
-  "The thesis RQ3 working hypothesis expects object-centric candidates plus default exploration candidates.",
-  "The hard thesis core requires a mixed observed candidate set with categorical-probability hyperparameters: default exploration, predicted-target LookAt, random orientation, and forward/trajectory modes are core; GT LookAt is an upper-bound ablation only.",
-  "The synthesis calls for LookAt entity center, missing-surface centroid, frontier, random orientation, and trajectory-forward modes.",
-  "The target-selection/candidate-sampling review confirms the position/view factorization but flags five-family default complexity, permissive local-motion limits, and the fact that target-bearing/lateral position transforms can move final center directions outside the raw angular caps.",
-]
-references = [
-  "repo:docs/contents/thesis/questions.qmd#rq3-candidates",
-  "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#candidate-center-sampling",
-  "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/positional_sampling.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/orientations.py",
-  "repo:.configs/build_rollouts_v1_realistic.toml",
-  "repo:.agents/skills/entity-aware-rri/SKILL.md",
-]
-implementation_notes = [
-  "Keep position_mode and view_mode separate in configs, tests, rollout traces, and diagnostics; do not treat TARGET_POINT as a position sampler.",
-  "Use observed/predicted target points for target-bearing and LookAt components in the main mixed candidate set; keep GT OBB center LookAt explicitly marked as oracle/upper-bound if added later.",
-  "Interpret azimuth/elevation caps as raw draw priors unless a final post-mode clamp/check is implemented; log final azimuth, elevation, height, backward step, and step length after the position-mode transform.",
-  "Consider horizontalizing target-bearing center displacement so target height affects orientation, not the candidate-center movement prior.",
-  "Use the motion-realism rule for local V1 mixtures: step length, height delta, backward step, and yaw delta must be logged when collect_debug_stats is enabled.",
-  "Add named profile configs before scale: v1_realistic_3family, v1_relaxed_3family, v1_current_5family, and upper_bound_free_shell.",
-  "Treat forward_local, target_bearing_local, and lateral_target_bypass as the first production three-family profile; keep local_refinement and revisit_backtrack as ablation components until valid-count and gain diagnostics justify them.",
-  "Keep upper_bound_free_shell as an explicit ablation recipe rather than the main V1 distribution.",
-  "Allow per-rollout or per-step strategy_weights only after the fixed realistic mixture has smoke diagnostics.",
-  "Keep frontier/missing-surface centroid behind clear data availability checks.",
-]
-acceptance = [
-  "Main V1 candidate generation uses realistic local target-aware position families by default in the mixture config.",
-  "Each candidate set records view strategy, position strategy, mixture id, sampler probability, component name, and motion/target diagnostics when requested.",
-  "Entity-aware rollout smoke can generate target-directed candidates without using GT target pose in the main actor-visible protocol.",
-  "The legacy shell can still be requested only as an explicit upper_bound_free_shell ablation.",
-  "A profile matrix can compare v1_realistic_3family, v1_relaxed_3family, v1_current_5family, and upper_bound_free_shell on the same roots/targets/seeds.",
-  "Docs and diagnostics state whether angular caps constrain only the raw draw or the final transformed movement direction.",
-  "Existing candidate-generation tests continue to pass for legacy configs.",
-  "Scale-readiness diagnostics show whether the realistic mixture produces enough valid target-supporting candidates before large rollout writes.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/pose_generation",
-  "rg -n \"v1_realistic_3family|v1_relaxed_3family|v1_current_5family|upper_bound_free_shell|target_bearing_local|lateral_target_bypass|position_id\" aria_nbv/aria_nbv/pose_generation aria_nbv/tests/pose_generation .configs docs .agents",
-]
+context = ["Candidate generation now separates position families from view-direction families: the main thesis mixture uses forward-local, target-bearing-local, and lateral target-bypass position modes; local-refinement, revisit/backtrack, and the legacy free shell are named ablations.", "CandidateSamplingResult records full-shell view strategy id, position id, mixture id, sampler probability, component name, and sparse component diagnostics.", "The thesis RQ3 working hypothesis expects object-centric candidates plus default exploration candidates.", "The hard thesis core requires a mixed observed candidate set with categorical-probability hyperparameters: default exploration, predicted-target LookAt, random orientation, and forward/trajectory modes are core; GT LookAt is an upper-bound ablation only.", "The synthesis calls for LookAt entity center, missing-surface centroid, frontier, random orientation, and trajectory-forward modes.", "The target-selection/candidate-sampling review confirms the position/view factorization but flags five-family default complexity, permissive local-motion limits, and the fact that target-bearing/lateral position transforms can move final center directions outside the raw angular caps."]
+references = ["repo:docs/contents/thesis/questions.qmd#rq3-candidates", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#candidate-center-sampling", "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md", "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation.py", "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", "repo:aria_nbv/aria_nbv/pose_generation/positional_sampling.py", "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py", "repo:aria_nbv/aria_nbv/pose_generation/orientations.py", "repo:.configs/build_rollouts_v1_realistic.toml", "repo:.agents/skills/entity-aware-rri/SKILL.md"]
+implementation_notes = ["Keep position_mode and view_mode separate in configs, tests, rollout traces, and diagnostics; do not treat TARGET_POINT as a position sampler.", "Use observed/predicted target points for target-bearing and LookAt components in the main mixed candidate set; keep GT OBB center LookAt explicitly marked as oracle/upper-bound if added later.", "Interpret azimuth/elevation caps as raw draw priors unless a final post-mode clamp/check is implemented; log final azimuth, elevation, height, backward step, and step length after the position-mode transform.", "Consider horizontalizing target-bearing center displacement so target height affects orientation, not the candidate-center movement prior.", "Use the motion-realism rule for local V1 mixtures: step length, height delta, backward step, and yaw delta must be logged when collect_debug_stats is enabled.", "Add named profile configs before scale: v1_realistic_3family, v1_relaxed_3family, v1_current_5family, and upper_bound_free_shell.", "Treat forward_local, target_bearing_local, and lateral_target_bypass as the first production three-family profile; keep local_refinement and revisit_backtrack as ablation components until valid-count and gain diagnostics justify them.", "Keep upper_bound_free_shell as an explicit ablation recipe rather than the main V1 distribution.", "Allow per-rollout or per-step strategy_weights only after the fixed realistic mixture has smoke diagnostics.", "Keep frontier/missing-surface centroid behind clear data availability checks."]
+acceptance = ["Main V1 candidate generation uses realistic local target-aware position families by default in the mixture config.", "Each candidate set records view strategy, position strategy, mixture id, sampler probability, component name, and motion/target diagnostics when requested.", "Entity-aware rollout smoke can generate target-directed candidates without using GT target pose in the main actor-visible protocol.", "The legacy shell can still be requested only as an explicit upper_bound_free_shell ablation.", "A profile matrix can compare v1_realistic_3family, v1_relaxed_3family, v1_current_5family, and upper_bound_free_shell on the same roots/targets/seeds.", "Docs and diagnostics state whether angular caps constrain only the raw draw or the final transformed movement direction.", "Existing candidate-generation tests continue to pass for legacy configs.", "Scale-readiness diagnostics show whether the realistic mixture produces enough valid target-supporting candidates before large rollout writes."]
+verification = ["cd aria_nbv && uv run pytest tests/pose_generation", "rg -n \"v1_realistic_3family|v1_relaxed_3family|v1_current_5family|upper_bound_free_shell|target_bearing_local|lateral_target_bypass|position_id\" aria_nbv/aria_nbv/pose_generation aria_nbv/tests/pose_generation .configs docs .agents"]
 
 [[todo]]
 id = "todo-029"
-title = "Audit observed-only target selector thresholds"
-description = "Validate and tune the V1 observed-only target selector that scores predicted OBBs/classes/confidence, projected area, and semidense/weighted-EVL support without GT actor input."
+title = "Audit actor-visible observed-target selector thresholds"
+description = "Validate and tune the V1 actor-visible observed-target selector that scores predicted OBBs/classes/confidence, projected area, and semidense/weighted-EVL support without GT actor input."
 priority = "high"
 status = "todo"
 labels = ["entity-aware", "target", "rri", "diagnostics"]
@@ -281,57 +198,11 @@ issue_ids = ["issue-020", "issue-007"]
 loc_min = 200
 loc_expected = 480
 loc_max = 1100
-context = [
-  "Entity-aware RRI needs a target of interest before target-conditioned sampling, scoring, or Q_H can be evaluated.",
-  "The main protocol is OBS-SEL / PRED-Q / GT-EVAL: the selector uses observed/predicted OBBs, classes, confidence, smooth projected-area score, semidense support, and weighted EVL support; GT is label/evaluation only.",
-  "Missing 2D projection is now a configurable penalty rather than full visibility credit, and support defaults are no longer the one-point smoke threshold.",
-  "The selector exposes diagnostic_summary plus row-level confidence, projected-area, support, effective support, selection utility, invalid reasons, and GT match audit fields.",
-  "The synthesis identified filters for projected area, distance, visible-surface fraction, GT mesh-face support after matched OBB crop, OBB tightness, category validity, and not-yet-complete targets.",
-  "The current target score deliberately combines confidence, visibility, support, and support deficit as an implementation utility; the review warns that using the same support/visibility evidence for hard eligibility, target ranking, and GT match reliability can obscure failure causes.",
-  "The current checkout clips projected 2D OBB area to image bounds before computing visibility, so the latest raw-area review finding is stale; a raw-vs-clipped audit channel may still be useful for diagnostics.",
-  "Temperature-softmax target selection currently samples from raw product scores, unlike rollout branch selection's robust logits; this can become nearly uniform or too brittle depending on temperature and score scale.",
-]
-references = [
-  "repo:docs/contents/thesis/questions.qmd#rq2-target-encoding",
-  "repo:docs/contents/thesis/questions.qmd#rq3-candidates",
-  "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#actor-visible-target-selection",
-  "repo:.agents/skills/entity-aware-rri/SKILL.md",
-  "repo:docs/contents/ase_dataset.qmd",
-  "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md",
-  "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md",
-  "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md",
-  "repo:aria_nbv/aria_nbv/data_handling/_target_selection.py",
-  "repo:aria_nbv/tests/data_handling/test_target_selection.py",
-  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
-  "bib:EFM3D-straub2024",
-]
-implementation_notes = [
-  "Keep V0 GT-OBB sanity selection separate from the mandatory V1 observed-only selector; do not let the main selector inspect GT mesh crops before choosing a target.",
-  "Keep score as actor-visible selection utility and keep GT match fields as oracle/evaluation audit fields.",
-  "Separate audit channels for hard target eligibility, target-interest ranking, and GT association: report which gate failed rather than relying only on the product score or match score.",
-  "Evaluate whether GT matching should rank by semantic compatibility plus 3D IoU/gap only, with support/visibility used for eligibility and audit rather than for choosing among GT matches.",
-  "Keep clipped projected 2D OBB area as the V1 eligibility/scoring field; optionally persist raw_projected_area and clipped_projected_area separately for audit.",
-  "Before broad generation, produce threshold diagnostics for selected, rejected, unmatched, ambiguous, unsupported, duplicate predicted-to-GT, and missing-projection cases, including IoU, match score, confidence, projected-area, and support histograms.",
-  "Tune min_support_points, evl_support_weight, missing_projection_visibility_score, min_gt_iou, and min_gt_match_score on a trusted subset before scale; treat current min_support_points=3 as smoke-level until coverage histograms justify it.",
-  "Add named target-selector profiles such as v1_smoke and v1_strict, and start strict calibration with n_min candidates such as 5, 10, and 20 before thesis-scale generation.",
-  "Add robust target logits or stratified target sampling as an ablation for temperature-softmax top-K instead of relying only on raw product scores.",
-  "Keep target selector output compatible with later VIN target fields, Q_H batches, and Rerun diagnostics.",
-  "Do not allow empty GT mesh crops after matching to fall back to scene-level labels.",
-]
-acceptance = [
-  "A small trusted subset can choose at least one eligible observed/predicted target or explain why none exists.",
-  "Selection output includes entity id/class/observed OBB, matched GT OBB id, eligibility score components, support signals, effective support, and rejection reasons.",
-  "Unsupported or complete targets are filtered before target RRI generation.",
-  "Diagnostics summarize selected-target distributions, rejected target reasons, unmatched/ambiguous match rates, IoU/match-score/confidence/projected-area/support histograms, raw-vs-clipped projected-area behavior, and at least a few Rerun examples across snippets.",
-  "A selector-profile or ablation report states whether smoke defaults are sufficient or a stricter V1 profile is needed before scale.",
-  "Target softmax behavior is either robust-normalized/stratified or explicitly reported as raw-score sampling with entropy diagnostics.",
-  "GT match audit can distinguish semantic mismatch, geometric mismatch, low actor-visible support, missing projection, and ambiguity.",
-  "No main-protocol target selector path uses GT OBBs as actor-visible input.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/data_handling/test_target_selection.py tests/rri_metrics tests/data_handling/test_vin_offline_store.py",
-  "rg -n \"target selector|eligibility|projected_area|clipped_projected|raw_projected|visible_surface|selection_reason|robust target\" aria_nbv/aria_nbv aria_nbv/tests docs/contents .agents",
-]
+context = ["Oracle target-task sampling now owns data-generation target pools; this TODO is only for the actor-visible V1 selector that a deployable scorer/Q_H input may consume later.", "The V1 protocol is OBS-SEL / PRED-Q / GT-EVAL: the selector uses observed/predicted OBBs, classes, confidence, smooth projected-area score, semidense support, and weighted EVL support; GT is label/evaluation only.", "Missing 2D projection is now a configurable penalty rather than full visibility credit, and support defaults are no longer the one-point smoke threshold.", "The selector exposes diagnostic_summary plus row-level confidence, projected-area, support, effective support, selection utility, invalid reasons, and GT match audit fields.", "The synthesis identified filters for projected area, distance, visible-surface fraction, GT mesh-face support after matched OBB crop, OBB tightness, category validity, and not-yet-complete targets.", "The current target score deliberately combines confidence, visibility, support, and support deficit as an implementation utility; the review warns that using the same support/visibility evidence for hard eligibility, target ranking, and GT match reliability can obscure failure causes.", "The current checkout clips projected 2D OBB area to image bounds before computing visibility, so the latest raw-area review finding is stale; a raw-vs-clipped audit channel may still be useful for diagnostics.", "Temperature-softmax target selection currently samples from raw product scores, unlike rollout branch selection's robust logits; this can become nearly uniform or too brittle depending on temperature and score scale."]
+references = ["repo:docs/contents/thesis/questions.qmd#rq2-target-encoding", "repo:docs/contents/thesis/questions.qmd#rq3-candidates", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#actor-visible-target-selection", "repo:.agents/skills/entity-aware-rri/SKILL.md", "repo:docs/contents/ase_dataset.qmd", "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md", "repo:aria_nbv/aria_nbv/data_handling/_target_selection.py", "repo:aria_nbv/tests/data_handling/test_target_selection.py", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "bib:EFM3D-straub2024"]
+implementation_notes = ["Keep V0 GT-OBB sanity selection separate from the mandatory V1 observed-only selector; do not let the main selector inspect GT mesh crops before choosing a target.", "Keep score as actor-visible selection utility and keep GT match fields as oracle/evaluation audit fields.", "Separate audit channels for hard target eligibility, target-interest ranking, and GT association: report which gate failed rather than relying only on the product score or match score.", "Evaluate whether GT matching should rank by semantic compatibility plus 3D IoU/gap only, with support/visibility used for eligibility and audit rather than for choosing among GT matches.", "Keep clipped projected 2D OBB area as the V1 eligibility/scoring field; optionally persist raw_projected_area and clipped_projected_area separately for audit.", "Before broad generation, produce threshold diagnostics for selected, rejected, unmatched, ambiguous, unsupported, duplicate predicted-to-GT, and missing-projection cases, including IoU, match score, confidence, projected-area, and support histograms.", "Tune min_support_points, evl_support_weight, missing_projection_visibility_score, min_gt_iou, and min_gt_match_score on a trusted subset before scale; treat current min_support_points=3 as smoke-level until coverage histograms justify it.", "Add named target-selector profiles such as v1_smoke and v1_strict, and start strict calibration with n_min candidates such as 5, 10, and 20 before thesis-scale generation.", "Add robust target logits or stratified target sampling as an ablation for temperature-softmax top-K instead of relying only on raw product scores.", "Keep target selector output compatible with later VIN target fields, Q_H batches, and Rerun diagnostics.", "Do not allow empty GT mesh crops after matching to fall back to scene-level labels."]
+acceptance = ["A small trusted subset can choose at least one eligible observed/predicted target or explain why none exists.", "Selection output includes entity id/class/observed OBB, matched GT OBB id, eligibility score components, support signals, effective support, and rejection reasons.", "Unsupported or complete targets are filtered before target RRI generation.", "Diagnostics summarize selected-target distributions, rejected target reasons, unmatched/ambiguous match rates, IoU/match-score/confidence/projected-area/support histograms, raw-vs-clipped projected-area behavior, and at least a few Rerun examples across snippets.", "A selector-profile or ablation report states whether smoke defaults are sufficient or a stricter V1 profile is needed before scale.", "Target softmax behavior is either robust-normalized/stratified or explicitly reported as raw-score sampling with entropy diagnostics.", "GT match audit can distinguish semantic mismatch, geometric mismatch, low actor-visible support, missing projection, and ambiguity.", "No main-protocol target selector path uses GT OBBs as actor-visible input."]
+verification = ["cd aria_nbv && uv run pytest tests/data_handling/test_target_selection.py tests/rri_metrics tests/data_handling/test_vin_offline_store.py", "rg -n \"target selector|eligibility|projected_area|clipped_projected|raw_projected|visible_surface|selection_reason|robust target\" aria_nbv/aria_nbv aria_nbv/tests docs/contents .agents"]
 
 [[todo]]
 id = "todo-030"
@@ -344,43 +215,11 @@ issue_ids = ["issue-020", "issue-013"]
 loc_min = 120
 loc_expected = 320
 loc_max = 760
-context = [
-  "Candidate-generation realism versus generalization remains under-specified in PROJECT_STATE.md and OPEN_QUESTIONS.md.",
-  "CandidateSamplingResult now carries view strategy id, position id, component name, sampler probability, motion-realism extras, and target-bearing diagnostics that should be reused by audits.",
-  "The synthesis calls out strategy-level diagnostics before broad candidate-generation changes are trusted.",
-  "These diagnostics are needed to decide whether broader candidate distributions buy more than deeper VIN architecture work.",
-  "The target-selection/candidate-sampling review flags that mixture components use full-shell counts rather than guaranteed valid-action counts; without post-pruning support reports, no-headroom outcomes can be confounded with collapsed candidate validity.",
-]
-references = [
-  "repo:.agents/memory/state/PROJECT_STATE.md",
-  "repo:.agents/memory/state/OPEN_QUESTIONS.md",
-  "repo:docs/contents/thesis/questions.qmd#rq3-candidates",
-  "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#mixture-rollout-branch-selection",
-  "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/positional_sampling.py",
-  "repo:aria_nbv/tests/pose_generation/test_candidate_mixture.py",
-]
-implementation_notes = [
-  "Aggregate metrics by candidate view strategy, position strategy, component, scene/snippet, stage, and target type where available.",
-  "Compare D0 current/legacy shell, D1 local realistic, D2 target-bearing/lateral, D3 upper_bound_free_shell, and the review-proposed v1_realistic_3family / v1_relaxed_3family / v1_current_5family recipes before scale.",
-  "Include valid ratio, valid_count_by_component, invalid_reason_by_component, oracle_gain_by_component, selected_frequency_by_component, collision/free-space rejection, motion-realism rejection, mesh clearance, distance to reference, final azimuth/elevation after position-mode transform, height delta, backward step, target distance/bearing, candidate RRI histogram, entity visibility, no-hit depth, and path feasibility.",
-  "Add a min_valid_candidates_per_step and min_valid_candidates_per_component warning/blocker or an equivalent status helper before LRZ-scale generation.",
-  "Keep diagnostics lightweight enough for smoke subsets and final report tables.",
-  "Prefer existing candidate result masks/extras rather than recomputing expensive geometry unless needed.",
-]
-acceptance = [
-  "A report or helper summarizes candidate realism metrics for at least the realistic local mixture and upper_bound_free_shell on a smoke subset.",
-  "Metrics are grouped by view strategy, position strategy, and component and can reveal whether a sampler produces many invalid or no-hit candidates.",
-  "The report identifies post-pruning valid-budget collapse before interpreting no-headroom or weak-Q_H outcomes.",
-  "Component-level selected-frequency and oracle-gain summaries show whether local_refinement, revisit_backtrack, and lateral_target_bypass contribute useful actions.",
-  "The output can feed the experiment registry or thesis figures without manual spreadsheet reconstruction.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/pose_generation",
-  "rg -n \"candidate realism|valid_ratio|valid_count_by_component|invalid_reason_by_component|selected_frequency_by_component|mesh_clearance|azimuth|target_visibility\" aria_nbv docs .agents",
-]
+context = ["Candidate-generation realism versus generalization remains under-specified in PROJECT_STATE.md and OPEN_QUESTIONS.md.", "CandidateSamplingResult now carries view strategy id, position id, component name, sampler probability, motion-realism extras, and target-bearing diagnostics that should be reused by audits.", "The synthesis calls out strategy-level diagnostics before broad candidate-generation changes are trusted.", "These diagnostics are needed to decide whether broader candidate distributions buy more than deeper VIN architecture work.", "The target-selection/candidate-sampling review flags that mixture components use full-shell counts rather than guaranteed valid-action counts; without post-pruning support reports, no-headroom outcomes can be confounded with collapsed candidate validity."]
+references = ["repo:.agents/memory/state/PROJECT_STATE.md", "repo:.agents/memory/state/OPEN_QUESTIONS.md", "repo:docs/contents/thesis/questions.qmd#rq3-candidates", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd#mixture-rollout-branch-selection", "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md", "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py", "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", "repo:aria_nbv/aria_nbv/pose_generation/positional_sampling.py", "repo:aria_nbv/tests/pose_generation/test_candidate_mixture.py"]
+implementation_notes = ["Aggregate metrics by candidate view strategy, position strategy, component, scene/snippet, stage, and target type where available.", "Compare D0 current/legacy shell, D1 local realistic, D2 target-bearing/lateral, D3 upper_bound_free_shell, and the review-proposed v1_realistic_3family / v1_relaxed_3family / v1_current_5family recipes before scale.", "Include valid ratio, valid_count_by_component, invalid_reason_by_component, oracle_gain_by_component, selected_frequency_by_component, collision/free-space rejection, motion-realism rejection, mesh clearance, distance to reference, final azimuth/elevation after position-mode transform, height delta, backward step, target distance/bearing, candidate RRI histogram, entity visibility, no-hit depth, and path feasibility.", "Add a min_valid_candidates_per_step and min_valid_candidates_per_component warning/blocker or an equivalent status helper before LRZ-scale generation.", "Keep diagnostics lightweight enough for smoke subsets and final report tables.", "Prefer existing candidate result masks/extras rather than recomputing expensive geometry unless needed."]
+acceptance = ["A report or helper summarizes candidate realism metrics for at least the realistic local mixture and upper_bound_free_shell on a smoke subset.", "Metrics are grouped by view strategy, position strategy, and component and can reveal whether a sampler produces many invalid or no-hit candidates.", "The report identifies post-pruning valid-budget collapse before interpreting no-headroom or weak-Q_H outcomes.", "Component-level selected-frequency and oracle-gain summaries show whether local_refinement, revisit_backtrack, and lateral_target_bypass contribute useful actions.", "The output can feed the experiment registry or thesis figures without manual spreadsheet reconstruction."]
+verification = ["cd aria_nbv && uv run pytest tests/pose_generation", "rg -n \"candidate realism|valid_ratio|valid_count_by_component|invalid_reason_by_component|selected_frequency_by_component|mesh_clearance|azimuth|target_visibility\" aria_nbv docs .agents"]
 
 [[todo]]
 id = "todo-031"
@@ -461,10 +300,10 @@ issue_ids = ["issue-024"]
 loc_min = 100
 loc_expected = 240
 loc_max = 560
-context = ["The thesis-core simulator substrate is the ASE mesh/oracle counterfactual rollout loop, not Habitat or Isaac.", "The synthesis ranks Habitat fast RL sidecar, Isaac multimodal simulator, and semantic/VLM simulator paths as potential expansion paths, while the roadmap keeps simulator-backed online RL as stretch work.", "The core scale limitation remains the 100 GT-mesh ASE scene subset and available mesh-supervised snippets.", "A simulator decision should not preempt M1-M5 ASE rollout and Q_H evidence."]
-references = ["repo:docs/contents/thesis/questions.qmd#rq5-bridge", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m6", "url:https://aihabitat.org/docs/habitat-sim/habitat_sim.nav.html", "url:https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/ase_getting_started", "bib:GenNBV-chen2024", "bib:Hestia-lu2026"]
+context = ["The thesis-core simulator substrate is the ASE mesh/oracle counterfactual rollout loop, not Habitat or Isaac.", "The synthesis ranks Habitat fast RL sidecar, Isaac multimodal simulator, and semantic/VLM simulator paths as potential expansion paths, while the roadmap keeps generic simulator-backed online RL distinct from the RQ5 finite-candidate online-discrete Q_H bridge.", "The core scale limitation remains the 100 GT-mesh ASE scene subset and available mesh-supervised snippets.", "A simulator decision should not preempt M1-M5 ASE rollout and Q_H evidence."]
+references = ["repo:docs/contents/thesis/questions.qmd#rq5-online", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m6", "url:https://aihabitat.org/docs/habitat-sim/habitat_sim.nav.html", "url:https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/ase_getting_started", "bib:GenNBV-chen2024", "bib:Hestia-lu2026"]
 implementation_notes = ["Compare options by sensor fidelity, Aria/EFM compatibility, reward availability, setup cost, data license, scene diversity, and thesis timeline impact.", "Treat Habitat as a fast topology/RL sidecar and Isaac as a higher-fidelity external expansion only if access and evaluation are realistic.", "List external datasets such as Replica, HM3D, Matterport3D, ScanNet, Structured3D, Hypersim, InteriorNet, ProcTHOR, OmniObject3D, Objaverse, and Houses3K as candidates, not commitments.", "End with a go/no-go gate tied to M5/M6 evidence."]
-acceptance = ["A short decision artifact states that ASE mesh/oracle rollouts are thesis-core while external simulator/data work is stretch or deferred.", "The artifact preserves the ASE mesh-supervised rollout path as the default until a gate is passed.", "Dataset/simulator recommendations name the evidence required to proceed.", "Public thesis docs avoid claiming simulator-backed online RL unless the gate is passed."]
+acceptance = ["A short decision artifact states that ASE mesh/oracle rollouts are thesis-core while external simulator/data work is stretch or deferred.", "The artifact preserves the ASE mesh-supervised rollout path as the default until a gate is passed.", "Dataset/simulator recommendations name the evidence required to proceed.", "Public thesis docs avoid claiming generic simulator-backed online RL unless the gate is passed, while preserving the RQ5 finite-candidate online-discrete Q_H bridge."]
 verification = ["cd docs && quarto render contents/thesis/roadmap.qmd contents/thesis/questions.qmd", "rg -n \"Habitat|Isaac|Replica|HM3D|Matterport|simulator-backed\" docs .agents"]
 
 [[todo]]
@@ -554,37 +393,37 @@ verification = ["rg -n \"VIN ablation|calibration|fixed seeds|stage-aware|CORAL|
 
 [[todo]]
 id = "todo-049"
-title = "Polish and freeze thesis proposal"
-description = "Make the Typst thesis proposal advisor-ready with the five-role thesis boundary and mandatory target-conditioned Q_H scope."
+title = "Polish and freeze thesis seed"
+description = "Make the Typst thesis seed advisor-ready with the five-role thesis boundary and mandatory target-conditioned Q_H scope."
 priority = "high"
 status = "todo"
-labels = ["thesis", "proposal", "typst", "advisor", "docs"]
+labels = ["thesis", "typst", "advisor", "docs"]
 issue_ids = ["issue-027"]
 loc_min = 180
 loc_expected = 520
 loc_max = 1200
-context = ["The follow-up review says docs/typst/thesis/proposal.typ exists and is directionally aligned, but still needs a final advisor-grade pass before submission.", "The current compiled proposal includes the problem/research-contract, objectives, and method/timeline sections; motivation, related-work, schedule, and outline section drafts exist but are not currently included unless reintroduced deliberately.", "The proposal should remain a compact approximately 2.5 content-page research contract with RQs/objectives, literature pointers, and a compact timeline.", "The proposal should explicitly separate implemented substrate, prerequisite/evidence protocol, hard quantitative thesis core, mandatory bridge design, and future-work extensions so it does not overclaim ARIA-NBV as a finished continuous-control or real-device RL policy.", "The hard thesis core now includes target-conditioned candidate-query Transformer Q_H over finite candidate sets trained from ASE oracle rollout data.", "Roadmap and questions now treat proposal freeze as M0/M1 groundwork rather than a late writing afterthought."]
-references = ["repo:docs/typst/thesis/proposal.typ", "repo:docs/typst/thesis/sections/proposal/04-method.typ", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m0", "repo:Makefile#proposal-pdf"]
-implementation_notes = ["Use a consistent project name: ARIA-NBV for the thesis/system and VIN-style or Aria-VIN scorer for the one-step model family.", "Fix proposal metadata such as the German title spelling and secondExaminer placeholder if the template still renders an unfinished empty field.", "Keep proposal.typ as a short research contract instead of a long mini-thesis; align any included sections with the current problem/objectives/method contract.", "Add or preserve a compact five-role summary: implemented substrate; prerequisite/evidence protocol covering proposal, M1, V0/V1 target contracts, and rollout storage; hard quantitative thesis core covering observed target selector, predicted target-conditioned scorer/Q_H, random-valid/oracle-greedy/lookahead/oracle-scored temperature-softmax rollouts, candidate-query Transformer Q_H, and coverage reporting; mandatory bridge design covering online discrete Q_H, IQL, actor-critic and simulator paths; future-work extensions covering Gumbel later evidence, continuous policies, Habitat/Isaac, SceneScript, real-device guidance, and human-in-the-loop AR.", "Include the 100 GT-mesh ASE scenes, 4,608 snippet windows, and the possibility of a scene-level held-out thesis-grade subset only with exact coverage reporting.", "Move invalidity-is-not-low-RRI into the proposal method/objectives text, not only the research questions.", "State that `make proposal-pdf` must succeed and the generated proposal PDF should be tracked only after actual advisor-facing freeze."]
-acceptance = ["proposal.typ renders to an advisor-ready proposal PDF with make proposal-pdf.", "The proposal body is a compact research contract rather than a long literature essay.", "The included proposal sections are intentional and there are no ambiguous orphan-section assumptions in the compiled contract.", "Proposal, roadmap, and questions use the same central thesis claim and do not overclaim full continuous RL or finished real-device NBV policy behavior.", "The proposal clearly distinguishes implemented substrate, prerequisite/evidence protocol, hard quantitative thesis core, mandatory bridge design, and future-work extensions.", "Dataset limitations, Q_H success bar, LRZ/full-scale or held-out-subset coverage gate, metadata placeholders, and invalidity semantics are stated or explicitly blocked in the proposal.", "Generated proposal PDF is tracked only after actual advisor-facing freeze."]
-verification = ["make proposal-pdf", "rg -n \"ARIA-NBV|Aria-NBV|Aria-VIN-NBV|Qualitaets|Qualitäts|secondExaminer|invalidity|low RRI|100 ASE|4,608|883|706/177\" docs/typst/thesis docs/contents/thesis", "cd docs && quarto render contents/thesis/roadmap.qmd contents/thesis/questions.qmd"]
+context = ["The old proposal and advisor handouts were merged into docs/typst/thesis/main.typ and retired to .agents/archive/docs/typst/thesis/ as provenance.", "The active thesis seed includes the proposal/research-contract, method, evaluation, schedule, outline, open decisions, and TODO-marked draft material, but still needs a final advisor-grade pass before freeze.", "The thesis seed should stay a readable research contract before it grows into the full manuscript: RQs/objectives, literature pointers, current method, evidence gates, compact schedule, and explicit draft/open-work markers.", "The thesis seed should explicitly separate implemented substrate, prerequisite/evidence protocol, hard quantitative thesis core, mandatory bridge design, and future-work extensions so it does not overclaim ARIA-NBV as a finished continuous-control or real-device RL policy.", "The hard thesis core now includes target-conditioned candidate-query Transformer Q_H over finite candidate sets trained from ASE oracle rollout data.", "Roadmap and questions now treat thesis-seed freeze as M0/M1 groundwork rather than a late writing afterthought."]
+references = ["repo:docs/typst/thesis/main.typ", "repo:docs/typst/thesis/sections/03-method.typ", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m0", "repo:Makefile#thesis-pdf"]
+implementation_notes = ["Use a consistent project name: ARIA-NBV for the thesis/system and VIN-style or Aria-VIN scorer for the one-step model family.", "Fix thesis seed metadata such as title spelling and examiner placeholders if the template still renders unfinished fields.", "Keep main.typ as the active thesis seed rather than a competing proposal handout; archived proposal/advisor files are provenance only.", "Add or preserve a compact five-role summary: implemented substrate; prerequisite/evidence protocol covering M1, V0/V1 target contracts, and rollout storage; hard quantitative thesis core covering observed target selector, predicted target-conditioned scorer/Q_H, random-valid/oracle-greedy/lookahead/oracle-scored temperature-softmax rollouts, candidate-query Transformer Q_H, and coverage reporting; mandatory bridge design covering online discrete Q_H, IQL, actor-critic and simulator paths; future-work extensions covering Gumbel later evidence, continuous policies, Habitat/Isaac, SceneScript, real-device guidance, and human-in-the-loop AR.", "Include the 100 GT-mesh ASE scenes, 4,608 snippet windows, and the possibility of a scene-level held-out thesis-grade subset only with exact coverage reporting.", "Move invalidity-is-not-low-RRI into the thesis seed method/objectives text, not only the research questions.", "State that `make thesis-pdf` must succeed and the generated thesis PDF should be tracked only after actual advisor-facing freeze."]
+acceptance = ["main.typ renders to an advisor-readable thesis seed PDF with make thesis-pdf.", "The thesis seed body is a compact research contract rather than a long literature essay.", "The included thesis sections are intentional and there are no ambiguous orphan-section assumptions in the compiled contract.", "Thesis seed, roadmap, and questions use the same central thesis claim and do not overclaim full continuous RL or finished real-device NBV policy behavior.", "The thesis seed clearly distinguishes implemented substrate, prerequisite/evidence protocol, hard quantitative thesis core, mandatory bridge design, and future-work extensions.", "Dataset limitations, Q_H success bar, LRZ/full-scale or held-out-subset coverage gate, metadata placeholders, invalidity semantics, and draft markers are stated or explicitly blocked in the thesis seed.", "Generated thesis PDF is tracked only after actual advisor-facing freeze."]
+verification = ["make thesis-pdf", "rg -n \"ARIA-NBV|Aria-NBV|Aria-VIN-NBV|Qualitaets|Qualitäts|secondExaminer|invalidity|low RRI|100 ASE|4,608|883|706/177\" docs/typst/thesis docs/contents/thesis", "cd docs && quarto render contents/thesis/roadmap.qmd contents/thesis/questions.qmd"]
 
 [[todo]]
 id = "todo-050"
 title = "Audit bibliography and citation metadata"
-description = "Clean docs/references.bib before proposal submission so advisor-facing claims cite primary, verified, and non-duplicated sources."
+description = "Clean docs/references.bib before thesis-seed freeze so advisor-facing claims cite primary, verified, and non-duplicated sources."
 priority = "high"
 status = "todo"
-labels = ["bibliography", "proposal", "docs", "citations"]
+labels = ["bibliography", "thesis", "docs", "citations"]
 issue_ids = ["issue-027"]
 loc_min = 120
 loc_expected = 380
 loc_max = 900
 context = ["The follow-up reviews identified bibliography slop that should not ship in the proposal: Wikipedia entries for core technical concepts, a generated `Citations by ChatGPT` comment, duplicate FiLM records, mixed entry formatting, and possibly unverified 2025/2026 metadata.", "docs/AGENTS.md makes docs/references.bib the single bibliography source of truth for docs and Typst surfaces.", "Citation hygiene is part of the proposal freeze gate because the PDF is advisor-facing and literature-backed.", "The accepted cleanup scope is proposal-critical first: advisor-facing proposal/thesis docs must cite primary verified sources, while unused noisy entries can be quarantined or handled later if they do not render into advisor PDFs.", "Source policy remains: add all cited sources to docs/references.bib, but add to docs/literature/sources.jsonl only implementation-shaping local corpus sources. CQL, BCQ, Decision Transformer, and DQN are already local-corpus additions; POMCP and submodularity references stay bibliography-only unless later needed locally."]
-references = ["repo:docs/AGENTS.md", "repo:docs/references.bib", "repo:docs/typst/thesis/proposal.typ"]
+references = ["repo:docs/AGENTS.md", "repo:docs/references.bib", "repo:docs/typst/thesis/main.typ"]
 implementation_notes = ["Remove or quarantine Wikipedia entries for active perception, Chamfer distance, point clouds, attention, ordinal regression, histograms, frusta, spherical harmonics, and similar core technical concepts when they are cited by proposal/thesis-critical output; replace with primary or durable scholarly sources where needed.", "Remove the `Citations by ChatGPT` comment and deduplicate FiLM records from proposal-critical bibliography output.", "Verify metadata for Hestia, ObjectCentricNBV, semantic/dynamic 3DGS, Next Best Sense, and other 2025/2026 proposal-cited entries against primary paper pages, arXiv, DOI, or Semantic Scholar before proposal submission.", "Verify that proposal-cited CQL, BCQ, DQN, Decision Transformer, POMCP, Krause/Golovin submodularity, and Lauri et al. NBV submodularity entries are present with primary metadata; keep local literature-corpus additions limited to implementation-shaping sources.", "Check that all proposal citation keys compile and that uncited noisy entries do not bloat the proposal bibliography."]
-acceptance = ["docs/references.bib has no generated-citation comments, duplicate FiLM entries, or Wikipedia entries cited by the proposal for core technical concepts.", "Metadata for proposal-cited recent papers has a durable source pointer or is intentionally marked for advisor review.", "make proposal-pdf succeeds after the bibliography cleanup.", "The proposal bibliography remains focused on thesis-core and controlled-reference papers."]
-verification = ["rg -n \"Wikipedia|Citations by ChatGPT|perez2017film|FiLM-perez|Wiki-\" docs/references.bib", "make proposal-pdf", "cd docs && quarto render contents/thesis/roadmap.qmd", "cd docs && quarto render contents/thesis/questions.qmd"]
+acceptance = ["docs/references.bib has no generated-citation comments, duplicate FiLM entries, or Wikipedia entries cited by the thesis seed for core technical concepts.", "Metadata for thesis-seed-cited recent papers has a durable source pointer or is intentionally marked for advisor review.", "make thesis-pdf succeeds after the bibliography cleanup.", "The thesis seed bibliography remains focused on thesis-core and controlled-reference papers."]
+verification = ["rg -n \"Wikipedia|Citations by ChatGPT|perez2017film|FiLM-perez|Wiki-\" docs/references.bib", "make thesis-pdf", "cd docs && quarto render contents/thesis/roadmap.qmd", "cd docs && quarto render contents/thesis/questions.qmd"]
 
 [[todo]]
 id = "todo-051"
@@ -631,7 +470,7 @@ issue_ids = ["issue-020", "issue-007", "issue-028"]
 loc_min = 260
 loc_expected = 620
 loc_max = 1400
-context = ["The main thesis protocol cannot use GT OBBs as actor-visible target input; GT remains label/evaluation only.", "V0 GT OBB input remains a sanity/upper-bound path, but V1 is mandatory for the main target-conditioned scorer and Q_H result.", "Target rows now store observed/predicted OBB input, actor-visible score components, hard invalid reasons, matched GT ids, gt_match_iou, and a distinct gt_match_score that combines IoU with observed support/visibility reliability.", "Matching currently resolves compatible class, IoU, visibility/support, projected area, and point support; any additional criterion must be named from a concrete observed failure mode.", "The numeric target-match and eligibility thresholds are not thesis-frozen yet. Before large generation, the V1 protocol needs reports for confidence, IoU/match score, top-1/top-2 ambiguity gap, support counts, projected area, and target-crop validity."]
+context = ["The main thesis protocol cannot use GT OBBs as actor-visible target input; GT remains label/evaluation only.", "Oracle target-task sampling owns data-generation target pools; V1 OBS-SEL / PRED-Q / GT-EVAL owns actor-visible target inputs for a deployable target-conditioned scorer or Q_H path.", "V0 GT OBB input remains a sanity/upper-bound actor-input path, while V1 is mandatory before deployable actor-input target claims.", "Target rows now store observed/predicted OBB input, actor-visible score components, hard invalid reasons, matched GT ids, gt_match_iou, and a distinct gt_match_score that combines IoU with observed support/visibility reliability.", "Matching currently resolves compatible class, IoU, visibility/support, projected area, and point support; any additional criterion must be named from a concrete observed failure mode.", "The numeric target-match and eligibility thresholds are not thesis-frozen yet. Before large generation, the V1 protocol needs reports for confidence, IoU/match score, top-1/top-2 ambiguity gap, support counts, projected area, and target-crop validity."]
 references = ["repo:docs/contents/thesis/questions.qmd#rq2-target-encoding", "repo:docs/contents/thesis/questions.qmd#rq4-planning", "repo:docs/contents/thesis/questions.qmd#rq5-bridge", "repo:.agents/skills/entity-aware-rri/SKILL.md", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md", "repo:aria_nbv/aria_nbv/data_handling/_target_selection.py", "repo:aria_nbv/tests/data_handling/test_target_selection.py", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "bib:EFM3D-straub2024"]
 implementation_notes = ["Keep the typed target record aligned with observed/predicted OBB input, matched GT OBB, class/confidence/support signals, match metadata, and invalid target reasons.", "Keep target selector and candidate generator from inspecting GT crops before action selection.", "Persist target protocol version, gt_match_iou, gt_match_score, match status, effective support, and invalid reasons into rollout/Q_H stores and diagnostics.", "Add a scale-readiness audit for threshold choices: selected target counts, unmatched/ambiguous rates, top-1/top-2 gap, IoU/match-score histograms, support/projected-area histograms, target class distribution, and empty-crop/unsupported-target rates.", "Make Rerun and Streamlit diagnostics display actor-visible observed/predicted target evidence together with clearly labeled matched-GT OBB/crop overlays as oracle/evaluation diagnostics.", "Reject or visibly label any GT-derived field that crosses into actor-visible V1 input blocks."]
 acceptance = ["A small trusted subset can produce OBS-SEL / PRED-Q / GT-EVAL samples with observed/predicted target inputs and matched GT target-RRI labels.", "V0 GT-input and V1 observed-input paths are named separately in configs, traces, reports, and docs.", "Unmatched, unsupported, or empty-crop targets fail with explicit reasons rather than falling back to scene-level labels.", "Target threshold reports make the current acceptance values defensible or explicitly block scale with measured failure modes.", "Rerun and Streamlit can inspect the selected target with observed/predicted OBB/crop evidence and a clearly labeled matched-GT overlay.", "The target record is consumable by the target-conditioned scorer and Q_H training payload."]
@@ -699,69 +538,11 @@ issue_ids = ["issue-018", "issue-022", "issue-028", "issue-031"]
 loc_min = 140
 loc_expected = 360
 loc_max = 900
-context = [
-  "The multimodal rollout alignment locks V1 strict visibility: observed/predicted inputs are actor-visible, while GT OBBs, crops, meshes, and RRI remain oracle/evaluation diagnostics.",
-  "Training shards must include all Q_H/model-required inputs and labels, but validation/audit shards should be able to retain richer one-step modality parity for Rerun and Streamlit inspection.",
-  "Rollout lineage must identify the oracle eval stream separately from actor-visible data: eval depth source, root RGB/depth frame ids, ray-distance vs z-depth convention, canonical fusion settings, reward mode, and legacy semi-dense-root diagnostic availability.",
-  "RGB-D retention is selected-child-action only rather than every shell proposal; lightweight candidate tables still cover every shell candidate for scoring, masks, and provenance.",
-  "The chosen one-step target-conditioned dataset gate is an H=1 rollout sidecar/profile produced by the current rollout writer. It consumes vin_offline as immutable source substrate and records target records, matched GT-eval metadata, candidate masks/reasons, and target-root-gain rewards with target-RRI diagnostics without introducing a separate target_labels_v0 writer.",
-  "The current persisted selected-depth artifact is fixed 240x240 in rollouts.zarr; 224x224 is a reader/model transform unless a future retention profile explicitly changes stored resolution.",
-  "Current code/docs now align on schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, actor_action_mask as the canonical action-feasibility mask, and persisted q_h/ as root-normalized rewards plus selected-transition TD arrays.",
-  "The target-selection/candidate-sampling review's position_id-not-persisted finding is stale for the current schema because position_id is now hot candidate/q_h provenance and mirrored in candidate_diagnostics for inspection.",
-  "The same review questions whether target_eval_crops should be written for thesis-scale training shards by default; retention profiles should distinguish training_core provenance from audit-heavy crop payloads.",
-  "Current rollouts_v1_smoke.zarr is stale if it still validates as schema 0.6-rollout-core; stale or old local rollout artifacts should be regenerated, not migrated or supported through compatibility readers.",
-]
-references = [
-  "repo:.agents/issues.toml#issue-018",
-  "repo:.agents/todos.toml#todo-033",
-  "repo:.agents/todos.toml#todo-053",
-  "repo:.agents/references/rollout_zarr_q_invalidity_contract.md",
-  "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md",
-  "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md",
-  "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md",
-  "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
-  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/counterfactuals.py",
-  "repo:aria_nbv/aria_nbv/data_handling/README.md#manifest-backed-rollout-store",
-  "repo:docs/typst/shared/data-layout-trees.typ#rollout-zarr-tree",
-  "repo:docs/figures/diagrams/data_handling/mermaid/rollout_generation_sequence.mmd",
-  "repo:docs/figures/diagrams/data_handling/mermaid/offline_rollout_physical_layout.mmd",
-  "context7:/zarr-developers/zarr-python",
-  "bib:EFM3D-straub2024",
-  "bib:ProjectAria-ASE-2025",
-]
-implementation_notes = [
-  "Define required training_core blocks for target record, candidate table and masks, lineage, sampling provenance, selected-child RGB-D/features, oracle labels, TD/return fields, eval-stream metadata, and split/config hashes.",
-  "Ensure training_core exposes or can efficiently join strategy_id, position_id, mixture_id, sampler_probability, and component provenance for every actor_action_mask candidate row; validator should reject actor-selectable rows with missing/non-placeholder provenance.",
-  "Add an H=1 target-label retention profile or config recipe that disables unnecessary multi-step/heavy blocks while preserving Rerun-inspectable target/candidate/mask/target-RRI facts.",
-  "Define rich_validation_audit blocks for one-step modality parity, EFM/ATEK predictions, observed/predicted OBBs, matched GT OBB and crop, RRI components, legacy semi-dense-root diagnostics, diagnostic point clouds, target_eval_crops payloads, and viewer artifact pointers.",
-  "Represent block availability in root/group metadata so lean readers can skip missing optional blocks without guessing.",
-  "Make target_eval_crops payload retention explicit: keep it required only for audit profiles or justify it as a training_core requirement with a concrete consumer and storage budget.",
-  "Store selected-child RGB-D with explicit pose, intrinsics, 240x240 persisted selected-depth resolution, dtype, modality source, feature provenance, and retention profile metadata; treat 224x224 as a reader transform by default.",
-  "Keep aria_nbv/data_handling/README.md, docs/typst/shared/data-layout-trees.typ, generated rollout tree figures, Mermaid diagrams, and local docs aligned to schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, actor_action_mask, selected-transition q_h/ semantics, and explicit eval-stream lineage.",
-  "Schema 1.0 already pruned candidate_valid_mask, padded_mask, heavy_diag_available_mask, selection_entropy, steps/transition_id, dictionaries/transition, and candidate-major q_h bootstrap/scene-RRI arrays while adding root-gain rewards, hot position_id provenance, and optional target eval crop payloads; remaining retention work should justify any denormalized rollout scene_id/snippet_id/split_id and keep scene-RRI fields as optional factual diagnostics that may be NaN when disabled.",
-  "Do not add backward-compatibility readers or migrations for old rollout stores; regenerate stale artifacts under the current writer.",
-  "Keep GT-derived data out of actor-visible V1 fields; if present in audit blocks, label it oracle/eval-only.",
-]
-acceptance = [
-  "A written or implemented rollouts.zarr contract distinguishes required training_core blocks from optional rich_validation_audit blocks.",
-  "The H=1 target-conditioned rollout sidecar/profile can serve as the one-step target-label gate before H=3+ rollout scale, without mutating vin_offline or requiring a separate target_labels_v0 writer.",
-  "Lean training shards validate and load required Q_H/model inputs even when rich validation/audit blocks are absent.",
-  "Actor-selectable candidate rows have joinable strategy_id, position_id, mixture_id, sampler_probability, and component provenance, either in the factual candidate table or a required aligned diagnostics table.",
-  "Rollout metadata records eval depth source, root frame ids/timestamps, depth convention, canonical fusion config, reward mode, and legacy diagnostic availability.",
-  "Validation/audit shards can expose one-step modality parity, target_eval_crops, and selected-child RGB-D/features for Rerun and Streamlit without duplicating full ASE meshes.",
-  "Target_eval_crops storage is gated by retention profile or justified as a training_core requirement with measured footprint and consumer.",
-  "Selected-depth persistence defaults to 240x240 in rollouts.zarr, and every stored render records pose, intrinsics, source, resolution, dtype, and feature provenance; 224x224 is documented as a training-reader transform unless a future profile opts into a different stored artifact.",
-  "README and used figures agree on schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, fixed selected-depth storage, actor_action_mask, selected-transition q_h/ semantics, and the fact that selected/parent depth is materialized successor-state history rather than pre-selection actor-visible evidence.",
-  "Low-value or misleading persisted fields are removed, made derived, or explicitly justified as audit/scan conveniences before large-scale generation; no stale-schema compatibility is required.",
-  "Any actor-visible V1 field derived from GT OBB, GT crop, or GT mesh is rejected or clearly marked oracle/eval-only.",
-]
-verification = [
-  "make agents-db AGENTS_ARGS='validate'",
-  "make agents-db",
-  "cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts/test_dataset_writer.py -q",
-  "rg -n \"training_core|rich_validation_audit|target_eval_crops|position_id|selected-depth|selected_depth|240|224|schema 0.4|schema 0.5|depths/\" .agents aria_nbv docs",
-]
+context = ["The multimodal rollout alignment locks V1 strict visibility: observed/predicted inputs are actor-visible, while GT OBBs, crops, meshes, and RRI remain oracle/evaluation diagnostics.", "Training shards must include all Q_H/model-required inputs and labels, but validation/audit shards should be able to retain richer one-step modality parity for Rerun and Streamlit inspection.", "Rollout lineage must identify the oracle eval stream separately from actor-visible data: eval depth source, root RGB/depth frame ids, ray-distance vs z-depth convention, canonical fusion settings, reward mode, and legacy semi-dense-root diagnostic availability.", "RGB-D retention is selected-child-action only rather than every shell proposal; lightweight candidate tables still cover every shell candidate for scoring, masks, and provenance.", "The chosen one-step target-conditioned dataset gate is an H=1 rollout sidecar/profile produced by the current rollout writer. It consumes vin_offline as immutable source substrate and records target records, matched GT-eval metadata, candidate masks/reasons, and target-root-gain rewards with target-RRI diagnostics without introducing a separate target_labels_v0 writer.", "The current persisted selected-depth artifact is fixed 240x240 in rollouts.zarr; 224x224 is a reader/model transform unless a future retention profile explicitly changes stored resolution.", "Current code/docs now align on schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, actor_action_mask as the canonical action-feasibility mask, and persisted q_h/ as root-normalized rewards plus selected-transition TD arrays.", "The target-selection/candidate-sampling review's position_id-not-persisted finding is stale for the current schema because position_id is now hot candidate/q_h provenance and mirrored in candidate_diagnostics for inspection.", "The same review questions whether target_eval_crops should be written for thesis-scale training shards by default; retention profiles should distinguish training_core provenance from audit-heavy crop payloads.", "Current rollouts_v1_smoke.zarr is stale if it still validates as schema 0.6-rollout-core; stale or old local rollout artifacts should be regenerated, not migrated or supported through compatibility readers."]
+references = ["repo:.agents/issues.toml#issue-018", "repo:.agents/todos.toml#todo-033", "repo:.agents/todos.toml#todo-053", "repo:.agents/references/rollout_zarr_q_invalidity_contract.md", "repo:.agents/work/target-selection-sampling/02-review-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md", "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "repo:aria_nbv/aria_nbv/pose_generation/counterfactuals.py", "repo:aria_nbv/aria_nbv/data_handling/README.md#manifest-backed-rollout-store", "repo:docs/typst/shared/data-layout-trees.typ#rollout-zarr-tree", "repo:docs/figures/diagrams/data_handling/mermaid/rollout_generation_sequence.mmd", "repo:docs/figures/diagrams/data_handling/mermaid/offline_rollout_physical_layout.mmd", "context7:/zarr-developers/zarr-python", "bib:EFM3D-straub2024", "bib:ProjectAria-ASE-2025"]
+implementation_notes = ["Define required training_core blocks for target record, candidate table and masks, lineage, sampling provenance, selected-child RGB-D/features, oracle labels, TD/return fields, eval-stream metadata, and split/config hashes.", "Ensure training_core exposes or can efficiently join strategy_id, position_id, mixture_id, sampler_probability, and component provenance for every actor_action_mask candidate row; validator should reject actor-selectable rows with missing/non-placeholder provenance.", "Add an H=1 target-label retention profile or config recipe that disables unnecessary multi-step/heavy blocks while preserving Rerun-inspectable target/candidate/mask/target-RRI facts.", "Define rich_validation_audit blocks for one-step modality parity, EFM/ATEK predictions, observed/predicted OBBs, matched GT OBB and crop, RRI components, legacy semi-dense-root diagnostics, diagnostic point clouds, target_eval_crops payloads, and viewer artifact pointers.", "Represent block availability in root/group metadata so lean readers can skip missing optional blocks without guessing.", "Make target_eval_crops payload retention explicit: keep it required only for audit profiles or justify it as a training_core requirement with a concrete consumer and storage budget.", "Store selected-child RGB-D with explicit pose, intrinsics, 240x240 persisted selected-depth resolution, dtype, modality source, feature provenance, and retention profile metadata; treat 224x224 as a reader transform by default.", "Keep aria_nbv/data_handling/README.md, docs/typst/shared/data-layout-trees.typ, generated rollout tree figures, Mermaid diagrams, and local docs aligned to schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, actor_action_mask, selected-transition q_h/ semantics, and explicit eval-stream lineage.", "Schema 1.0 already pruned candidate_valid_mask, padded_mask, heavy_diag_available_mask, selection_entropy, steps/transition_id, dictionaries/transition, and candidate-major q_h bootstrap/scene-RRI arrays while adding root-gain rewards, hot position_id provenance, and optional target eval crop payloads; remaining retention work should justify any denormalized rollout scene_id/snippet_id/split_id and keep scene-RRI fields as optional factual diagnostics that may be NaN when disabled.", "Do not add backward-compatibility readers or migrations for old rollout stores; regenerate stale artifacts under the current writer.", "Keep GT-derived data out of actor-visible V1 fields; if present in audit blocks, label it oracle/eval-only."]
+acceptance = ["A written or implemented rollouts.zarr contract distinguishes required training_core blocks from optional rich_validation_audit blocks.", "The H=1 target-conditioned rollout sidecar/profile can serve as the one-step target-label gate before H=3+ rollout scale, without mutating vin_offline or requiring a separate target_labels_v0 writer.", "Lean training shards validate and load required Q_H/model inputs even when rich validation/audit blocks are absent.", "Actor-selectable candidate rows have joinable strategy_id, position_id, mixture_id, sampler_probability, and component provenance, either in the factual candidate table or a required aligned diagnostics table.", "Rollout metadata records eval depth source, root frame ids/timestamps, depth convention, canonical fusion config, reward mode, and legacy diagnostic availability.", "Validation/audit shards can expose one-step modality parity, target_eval_crops, and selected-child RGB-D/features for Rerun and Streamlit without duplicating full ASE meshes.", "Target_eval_crops storage is gated by retention profile or justified as a training_core requirement with measured footprint and consumer.", "Selected-depth persistence defaults to 240x240 in rollouts.zarr, and every stored render records pose, intrinsics, source, resolution, dtype, and feature provenance; 224x224 is documented as a training-reader transform unless a future profile opts into a different stored artifact.", "README and used figures agree on schema 1.0-target-rollout-core, selected_depth/, optional sampled/audit target_eval_crops/, fixed selected-depth storage, actor_action_mask, selected-transition q_h/ semantics, and the fact that selected/parent depth is materialized successor-state history rather than pre-selection actor-visible evidence.", "Low-value or misleading persisted fields are removed, made derived, or explicitly justified as audit/scan conveniences before large-scale generation; no stale-schema compatibility is required.", "Any actor-visible V1 field derived from GT OBB, GT crop, or GT mesh is rejected or clearly marked oracle/eval-only."]
+verification = ["make agents-db AGENTS_ARGS='validate'", "make agents-db", "cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts/test_dataset_writer.py -q", "rg -n \"training_core|rich_validation_audit|target_eval_crops|position_id|selected-depth|selected_depth|240|224|schema 0.4|schema 0.5|depths/\" .agents aria_nbv docs"]
 
 [[todo]]
 id = "todo-059"
@@ -944,16 +725,16 @@ issue_ids = ["issue-018", "issue-022", "issue-028", "issue-031"]
 loc_min = 220
 loc_expected = 520
 loc_max = 1200
-context = ["Schema 1.0-target-rollout-core writes q_h/ as a persisted derived cache and RolloutZarrStoreReader.q_h_view reads it by default; overrides still recompute from factual tables for audits.", "The factual rollout tables should remain the source of truth, while the persisted training view caches hot arrays such as state ids, target ids, candidate ids, position ids, action masks, root-normalized rewards, selected successor ids, selected terminal flags, selected discounts, invalid-reason bitsets, eval-stream lineage, and reward semantics.", "The q_h/ group has configurable state-row chunking recorded in metadata and td_semantics=selected_transition_only, reward_metric=target_root_gain, but throughput, source-row joins, candidate-pose/features needed by the first dataloader, and full LRZ-scale read behavior are not yet benchmarked.", "Zarr guidance favors chunk shapes matched to access patterns and chunks around at least 1 MB uncompressed when practical; Q_H view chunks should therefore remain configurable and measured rather than inherited blindly from smoke-store table defaults.", "Advisor-facing evidence requires transition support, successor-table availability, masks/reasons, root-normalized reward fields, state-relative RRI diagnostics, optional target_eval_crops auditability, and scale reporting before interpreting Q_H results.", "The rollout store should own exact full-shell candidate tables for every rollout state, including the root step, while large root EVL/backbone tensors should remain source-linked rather than duplicated by default.", "H=1/myopic labels should be derived views over the same materialized factual/q_h machinery used by H>1 traces, so target-conditioned one-step scorer data and multi-step Q_H data share masks, target records, candidate ids, eval stream metadata, and reward fields.", "Current q_h successor links are selected-action-only; unselected candidates can support one-step/ranking supervision but not Bellman backups unless candidate-expanded successors are materialized later."]
-references = ["repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:.agents/references/rollout_zarr_q_invalidity_contract.md", "repo:docs/typst/thesis/advisor_distillation.typ", "repo:aria_nbv/tests/rollouts/test_zarr_store.py", "repo:.agents/issues.toml#issue-018", "repo:.agents/issues.toml#issue-028", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md", "url:https://zarr.readthedocs.io/en/v3.0.10/user-guide/performance.html", "url:https://zarr.readthedocs.io/en/stable/user-guide/arrays/"]
-implementation_notes = ["Keep q_h/ generated from validated factual tables and keep sources/targets/rollouts/steps/candidates canonical.", "Support the H=1 target-conditioned rollout sidecar/profile as the first target-label training view, with H3+ rollout traces added only after target/mask/label diagnostics pass.", "Extend the hot dense arrays only where the first Q_H dataloader needs them: source_row_id joins, candidate pose/root-relative features, root-normalized reward, state-relative RRI diagnostics, and eval-stream ids are likely next, while full meshes, EVL tensors, all-candidate depth maps, and rich diagnostics stay source-linked or audit-only.", "Use chunks aligned to minibatch reads rather than one-row inspection; choose chunk sizes from configurable defaults, target practical multi-row chunk byte sizes, and record the chosen chunk policy in metadata.", "Benchmark at least smoke/small shards for q_h_view derived-on-read versus persisted q_h/training_core view, reporting read throughput, file/chunk count, shard size, and peak memory.", "Make TD semantics explicit in loaders and losses: Bellman/TD loss uses selected expanded transitions and root-normalized rewards only; all-candidate rows may train one-step target-RRI/ranking heads unless successor expansion is later materialized.", "Do not persist full meshes, full EVL tensors, all-candidate depth maps, or rich diagnostics in the hot training view; link to the VIN source store and optional audit blocks instead.", "Keep validation checks that persisted q_h/ candidate ids, masks, rewards, target ids, eval-source metadata, and TD links agree with the factual candidate/step/rollout tables."]
+context = ["Schema 1.0-target-rollout-core writes q_h/ as a persisted derived cache and RolloutZarrStoreReader.q_h_view normally reads it; overrides still recompute from factual tables for audits.", "The factual rollout tables should remain the source of truth, while the persisted training view caches hot arrays such as state ids, target ids, candidate ids, position ids, action masks, root-normalized rewards, selected successor ids, selected terminal flags, selected discounts, invalid-reason bitsets, eval-stream lineage, and reward semantics.", "The q_h/ group has configurable state-row chunking recorded in metadata and td_semantics=selected_transition_only, reward_metric=target_root_gain, but throughput, source-row joins, candidate-pose/features needed by the first dataloader, and full LRZ-scale read behavior are not yet benchmarked.", "Zarr guidance favors chunk shapes matched to access patterns and chunks around at least 1 MB uncompressed when practical; Q_H view chunks should therefore remain configurable and measured rather than inherited blindly from smoke-store table defaults.", "Advisor-facing evidence requires transition support, successor-table availability, masks/reasons, root-normalized reward fields, state-relative RRI diagnostics, optional target_eval_crops auditability, and scale reporting before interpreting Q_H results.", "The rollout store should own exact full-shell candidate tables for every rollout state, including the root step, while large root EVL/backbone tensors should remain source-linked rather than duplicated as a normal hot-view field.", "H=1/myopic labels should be derived views over the same materialized factual/q_h machinery used by H>1 traces, so target-conditioned one-step scorer data and multi-step Q_H data share masks, target records, candidate ids, eval stream metadata, and reward fields.", "Current q_h successor links are selected-action-only; unselected candidates can support one-step/ranking supervision but not Bellman backups unless candidate-expanded successors are materialized later."]
+references = ["repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:.agents/references/rollout_zarr_q_invalidity_contract.md", "repo:docs/typst/thesis/main.typ", "repo:aria_nbv/tests/rollouts/test_zarr_store.py", "repo:.agents/issues.toml#issue-018", "repo:.agents/issues.toml#issue-028", "repo:.agents/work/rolllout_data/rollout-review-01-gpt55pro.md", "repo:.agents/work/rolllout_data/rollout-review-02-gpt55pro.md", "url:https://zarr.readthedocs.io/en/v3.0.10/user-guide/performance.html", "url:https://zarr.readthedocs.io/en/stable/user-guide/arrays/"]
+implementation_notes = ["Keep q_h/ generated from validated factual tables and keep sources/targets/rollouts/steps/candidates canonical.", "Support the H=1 target-conditioned rollout sidecar/profile as the first target-label training view, with H3+ rollout traces added only after target/mask/label diagnostics pass.", "Extend the hot dense arrays only where the first Q_H dataloader needs them: source_row_id joins, candidate pose/root-relative features, root-normalized reward, state-relative RRI diagnostics, and eval-stream ids are likely next, while full meshes, EVL tensors, all-candidate depth maps, and rich diagnostics stay source-linked or audit-only.", "Use chunks aligned to minibatch reads rather than one-row inspection; choose chunk sizes from configured values, target practical multi-row chunk byte sizes, and record the chosen chunk policy in metadata.", "Benchmark at least smoke/small shards for q_h_view derived-on-read versus persisted q_h/training_core view, reporting read throughput, file/chunk count, shard size, and peak memory.", "Make TD semantics explicit in loaders and losses: Bellman/TD loss uses selected expanded transitions and root-normalized rewards only; all-candidate rows may train one-step target-RRI/ranking heads unless successor expansion is later materialized.", "Do not persist full meshes, full EVL tensors, all-candidate depth maps, or rich diagnostics in the hot training view; link to the VIN source store and optional audit blocks instead.", "Keep validation checks that persisted q_h/ candidate ids, masks, rewards, target ids, eval-source metadata, and TD links agree with the factual candidate/step/rollout tables."]
 acceptance = ["A rollout shard can expose a persisted dense Q_H training view without losing the ability to derive q_h_view from factual tables.", "An H=1 target-conditioned sidecar/profile can expose the same target/candidate/mask/target-RRI training view needed by the one-step target scorer.", "The persisted view contains source and target linkage sufficient to join actor-visible root tensors from the VIN offline store.", "Candidate ids, selected actions, valid masks, q_train masks, root-normalized rewards, state-relative RRI diagnostics, and successor ids match the factual tables.", "Training semantics distinguish selected-transition TD rows from all-candidate one-step/ranking labels.", "Chunk metadata is inspectable and sized for minibatch-oriented reads, not only row-by-row debugging.", "Lean training shards can omit rich audit diagnostics while still serving the Q_H training view."]
 verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts", "rg -n \"q_h_view|training view|state_step_row_id|td_next_step_row_id|valid_action_mask|chunks\" aria_nbv/aria_nbv/rollouts aria_nbv/tests/rollouts .agents"]
 
 [[todo]]
 id = "todo-080"
 title = "Finish target-first RRI theory and advisor alignment"
-description = "Keep current theory pages, durable decisions, and advisor distillation aligned around target-first root-normalized gain and scene-RRI diagnostic-only semantics."
+description = "Keep current theory pages, durable decisions, and the thesis seed aligned around target-first root-normalized gain and scene-RRI diagnostic-only semantics."
 priority = "high"
 status = "todo"
 labels = ["docs", "rri", "advisor", "thesis"]
@@ -961,11 +742,11 @@ issue_ids = ["issue-032", "issue-031"]
 loc_min = 120
 loc_expected = 320
 loc_max = 700
-context = ["The seminar scene-level RRI section is historical implemented evidence and must not override the current target-first thesis contract.", "Current theory pages should explain the dense/semi-dense root mismatch, homogeneous ASE-depth eval stream, root-normalized target gain, and scene-RRI diagnostic role.", "Advisor-facing text should distill the public theory pages rather than duplicating a separate source of truth."]
-references = ["repo:docs/typst/seminar_paper/sections/05-oracle-rri.typ", "repo:docs/contents/theory/rri_theory.qmd", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd", "repo:docs/contents/theory/rl_planning.qmd", "repo:docs/typst/thesis/advisor_distillation.typ", "repo:.agents/memory/state/DECISIONS.md"]
-implementation_notes = ["Render the touched Quarto pages and advisor distillation after edits.", "Do not rewrite the seminar paper as current thesis evidence; only reference it as historical oracle substrate where needed.", "Make docs consistently distinguish target_root_gain from diagnostic target_rri and scene_rri."]
-acceptance = ["RRI theory explains the delta from seminar scene RRI to target-first root-normalized gain.", "Candidate/rollout theory pages agree on H>1 canonical traces, selected parent depth, target-eval crop retention, and scene-RRI diagnostics.", "DECISIONS.md contains the 2026-05-20 alignment decisions.", "Advisor distillation contains the high-signal version of the same contract."]
-verification = ["cd docs && quarto render contents/theory/rri_theory.qmd contents/theory/candidate_sampling_target_selection.qmd contents/theory/rl_planning.qmd", "make advisor-distillation-pdf || true", "rg -n \"scene RRI|target_root_gain|root-normalized|seminar\" docs/contents/theory docs/typst/thesis/advisor_distillation.typ .agents/memory/state/DECISIONS.md"]
+context = ["The seminar scene-level RRI section is historical implemented evidence and must not override the current target-first thesis contract.", "Current theory pages should explain the dense/semi-dense root mismatch, homogeneous ASE-depth eval stream, root-normalized target gain, and scene-RRI diagnostic role.", "Advisor-facing thesis seed text should distill the public theory pages rather than duplicating a separate source of truth."]
+references = ["repo:docs/typst/seminar_paper/sections/05-oracle-rri.typ", "repo:docs/contents/theory/rri_theory.qmd", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd", "repo:docs/contents/theory/rl_planning.qmd", "repo:docs/typst/thesis/main.typ", "repo:.agents/memory/state/DECISIONS.md"]
+implementation_notes = ["Render the touched Quarto pages and thesis seed after edits.", "Do not rewrite the seminar paper as current thesis evidence; only reference it as historical oracle substrate where needed.", "Make docs consistently distinguish target_root_gain from diagnostic target_rri and scene_rri."]
+acceptance = ["RRI theory explains the delta from seminar scene RRI to target-first root-normalized gain.", "Candidate/rollout theory pages agree on H>1 canonical traces, selected parent depth, target-eval crop retention, and scene-RRI diagnostics.", "DECISIONS.md contains the 2026-05-20 alignment decisions.", "The thesis seed contains the high-signal version of the same contract."]
+verification = ["cd docs && quarto render contents/theory/rri_theory.qmd contents/theory/candidate_sampling_target_selection.qmd contents/theory/rl_planning.qmd", "make thesis-pdf", "rg -n \"scene RRI|target_root_gain|root-normalized|seminar\" docs/contents/theory docs/typst/thesis/main.typ .agents/memory/state/DECISIONS.md"]
 
 [[todo]]
 id = "todo-081"
@@ -986,8 +767,8 @@ verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py 
 
 [[todo]]
 id = "todo-082"
-title = "Refactor target selector into eligibility interest match stages"
-description = "Separate hard actor-visible target eligibility, target-interest ranking/sampling, and deterministic class-compatible 3D IoU GT matching."
+title = "Refactor actor-visible target selector into eligibility interest match stages"
+description = "Separate hard actor-visible target eligibility, target-interest ranking/sampling, and deterministic class-compatible 3D IoU GT matching for the diagnostic/deployable V1 selector."
 priority = "high"
 status = "todo"
 labels = ["target", "data", "rri", "contracts"]
@@ -995,7 +776,7 @@ issue_ids = ["issue-032", "issue-020"]
 loc_min = 220
 loc_expected = 520
 loc_max = 1200
-context = ["Target selection defines the target crop and therefore the target-first reward distribution.", "Support and visibility should decide labelability and target interest, not rank competing GT objects.", "The target sampling default remains deferred until coverage audits compare stratified, robust-softmax, and greedy policies.", "Current tests already assert geometry-only GT match after target eligibility, so remaining work should focus on making the three-stage contract explicit in code/docs, clipping projected area to image bounds, threshold profiles, and coverage audits."]
+context = ["Oracle target-task sampling defines the data-generation target crop and first-pass target-first reward distribution; this refactor is scoped to the actor-visible V1 selector.", "Support and visibility should decide V1 labelability and target interest, not rank competing GT objects.", "The actor-visible target sampling default remains deferred until coverage audits compare stratified, robust-softmax, and greedy policies.", "Current tests already assert geometry-only GT match after target eligibility, so remaining work should focus on making the three-stage V1 contract explicit in code/docs, clipping projected area to image bounds, threshold profiles, and coverage audits."]
 references = ["repo:aria_nbv/aria_nbv/data_handling/_target_selection.py", "repo:aria_nbv/tests/data_handling/test_target_selection.py", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd"]
 implementation_notes = ["Use clipped visible projected area as the single projected-area feasibility field.", "Keep baseline product score as an interest utility, not as a full theory of target selection.", "Make GT match score geometry-only class-compatible IoU with ambiguity gap checks.", "Add selector diagnostics for support/projected-area/class/distance strata and target sampling coverage before choosing the scale default."]
 acceptance = ["Tests cover clipped projected visibility, eligibility gates, geometry-only match scores, missing projection fallback/invalidity, and ambiguity.", "Target selection result diagnostics expose enough fields to audit target sampling policy.", "Docs state that target sampling default is deferred until coverage audits."]
@@ -1080,37 +861,11 @@ issue_ids = ["issue-032", "issue-021", "issue-018"]
 loc_min = 80
 loc_expected = 220
 loc_max = 520
-context = [
-  "On 2026-05-20, fresh target-first three-family rollout probes wrote schema 1.0 stores but post-write validation failed with: path_collision_mask rows must include PATH_SEGMENT_COLLISION invalidity bits.",
-  "The failure reproduced even when collect_rule_masks was disabled in the writer-level config because candidate diagnostics still carried path_collision_mask semantics.",
-  "A structural probe only validated after disabling path collision, so normal collision-aware rollout generation is currently blocked.",
-  "The likely semantic mismatch is that _candidate_invalid_reasons records first-failing cumulative rule reasons, while candidate_diagnostics/path_collision_mask can mark every path-colliding row independently. A row that fails clearance first can still have path_collision_mask=true without PATH_SEGMENT_COLLISION in the bitset.",
-  "External review correctly broadened this from a path-collision-only bug to an all-hard-diagnostic contract: motion-realism rejection, invalid free-space margin, mesh-clearance violation, depth/render no-hit, target-support failure, and target/source invalidity need the same bitset/primary-reason consistency when they are hard infeasibility signals.",
-]
-references = [
-  "repo:.agents/work/rollout-scale-readiness/01-path-collision-invalidity-plan.md",
-  "repo:aria_nbv/aria_nbv/rollouts/trace.py#_candidate_invalid_reasons",
-  "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
-  "repo:aria_nbv/tests/rollouts/test_zarr_store.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py",
-]
-implementation_notes = [
-  "Preferred scale contract: invalid_reason_bitset stores all applicable hard invalidity reasons, primary_invalid_reason stores one deterministic fixed-priority reason, and soft diagnostics are explicitly named audit-only.",
-  "Classify every candidate diagnostic as hard_invalidity or audit_only before tightening validation.",
-  "Use a stable primary priority: target/source invalid, pose/frame invalid, extent/free-space, path collision, mesh clearance, motion realism, depth/render no-hit, target crop/support invalid, oracle scoring failed.",
-  "Add regressions where candidates fail multiple hard diagnostics, including clearance plus path collision and motion realism plus free-space; assert bitset contains all hard bits and primary reason is deterministic.",
-  "Regenerate a small collision-aware schema-1.0 rollout probe and require validate_rollout_zarr_store to pass.",
-]
-acceptance = [
-  "Collision-aware fresh rollout generation writes a schema 1.0 store that validates without disabling path collision.",
-  "Rows that have hard diagnostic masks set include the matching invalidity bits, or the validator/docs explicitly treat those diagnostics as audit-only.",
-  "The validator covers path collision, motion realism, free-space, mesh clearance, depth/render no-hit, and target-support invalidity where those diagnostics exist.",
-  "Tests cover multi-reason invalid candidates and preserve the invalidity-as-hard-mask contract.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts/test_dataset_writer.py tests/pose_generation/test_pose_generation.py -q",
-  "cd aria_nbv && uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml --dry-run",
-]
+context = ["On 2026-05-20, fresh target-first three-family rollout probes wrote schema 1.0 stores but post-write validation failed with: path_collision_mask rows must include PATH_SEGMENT_COLLISION invalidity bits.", "The failure reproduced even when collect_rule_masks was disabled in the writer-level config because candidate diagnostics still carried path_collision_mask semantics.", "A structural probe only validated after disabling path collision, so normal collision-aware rollout generation is currently blocked.", "The likely semantic mismatch is that _candidate_invalid_reasons records first-failing cumulative rule reasons, while candidate_diagnostics/path_collision_mask can mark every path-colliding row independently. A row that fails clearance first can still have path_collision_mask=true without PATH_SEGMENT_COLLISION in the bitset.", "External review correctly broadened this from a path-collision-only bug to an all-hard-diagnostic contract: motion-realism rejection, invalid free-space margin, mesh-clearance violation, depth/render no-hit, target-support failure, and target/source invalidity need the same bitset/primary-reason consistency when they are hard infeasibility signals."]
+references = ["repo:.agents/work/rollout-scale-readiness/01-path-collision-invalidity-plan.md", "repo:aria_nbv/aria_nbv/rollouts/trace.py#_candidate_invalid_reasons", "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:aria_nbv/tests/rollouts/test_zarr_store.py", "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation_rules.py"]
+implementation_notes = ["Preferred scale contract: invalid_reason_bitset stores all applicable hard invalidity reasons, primary_invalid_reason stores one deterministic fixed-priority reason, and soft diagnostics are explicitly named audit-only.", "Classify every candidate diagnostic as hard_invalidity or audit_only before tightening validation.", "Use a stable primary priority: target/source invalid, pose/frame invalid, extent/free-space, path collision, mesh clearance, motion realism, depth/render no-hit, target crop/support invalid, oracle scoring failed.", "Add regressions where candidates fail multiple hard diagnostics, including clearance plus path collision and motion realism plus free-space; assert bitset contains all hard bits and primary reason is deterministic.", "Regenerate a small collision-aware schema-1.0 rollout probe and require validate_rollout_zarr_store to pass."]
+acceptance = ["Collision-aware fresh rollout generation writes a schema 1.0 store that validates without disabling path collision.", "Rows that have hard diagnostic masks set include the matching invalidity bits, or the validator/docs explicitly treat those diagnostics as audit-only.", "The validator covers path collision, motion realism, free-space, mesh clearance, depth/render no-hit, and target-support invalidity where those diagnostics exist.", "Tests cover multi-reason invalid candidates and preserve the invalidity-as-hard-mask contract."]
+verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py tests/rollouts/test_dataset_writer.py tests/pose_generation/test_pose_generation.py -q", "cd aria_nbv && uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml --dry-run"]
 
 [[todo]]
 id = "todo-088"
@@ -1123,40 +878,11 @@ issue_ids = ["issue-032", "issue-020", "issue-021"]
 loc_min = 120
 loc_expected = 320
 loc_max = 760
-context = [
-  "The validating 2026-05-20 structural probe used schema 1.0 with path collision disabled and produced only 30 valid candidates out of 600, exactly 3 valid candidates per step.",
-  "All valid and selected candidates in that probe came from forward_local; target_bearing_local and lateral_target_bypass produced zero valid actions.",
-  "The current low-valid-root gate of min_valid_root_candidates=3 is too weak for scale because a root can barely pass while the target-aware families are completely dead.",
-  "This is a thesis blocker: the main sampler should test target-conditioned finite-candidate NBV, not degenerate into forward-only local motion.",
-  "External review proposed first production gates: num_valid_candidates >= max(12, ceil(0.25 * N_q)), at least one valid non-forward target-aware action for smoke, and at least three for production.",
-]
-references = [
-  "repo:.agents/work/rollout-scale-readiness/02-three-family-sampler-preflight-plan.md",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py",
-  "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation.py",
-  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
-  "repo:aria_nbv/aria_nbv/rollouts/info_cli.py",
-  "repo:aria_nbv/tests/pose_generation/test_candidate_mixture.py",
-  "repo:docs/contents/theory/candidate_sampling_target_selection.qmd",
-]
-implementation_notes = [
-  "Add a rollout/candidate preflight summary that reports valid_count, invalid_reason counts, selected_count, target_root_gain distribution, and selected policy by position_id and mixture_id.",
-  "Raise root gating from a single minimum valid count to a profile-level gate that can require num_valid_candidates >= max(12, ceil(0.25 * N_q)) and target-aware non-forward family contribution where configured.",
-  "Run a 25-50 root audit across at least five scenes before retuning; include valid, low-valid, forward-only, target-aware-valid, and flat-gain cases.",
-  "Retune radius, clearance, motion-realism, target-bearing, and lateral-bypass settings using the multi-scene subset before scale.",
-  "Keep upper_bound_free_shell and rich_local_five_family as explicit ablations for diagnosing whether failures come from realism constraints or target-aware priors.",
-]
-acceptance = [
-  "A current-schema preflight report shows valid target_bearing_local and lateral_target_bypass actions on a representative subset, or blocks roots with explicit reasons.",
-  "Production preflight enforces at least max(12, ceil(0.25 * N_q)) valid actions per trainable state and at least three valid non-forward target-aware actions unless explicitly running an ablation.",
-  "Low-valid roots are skipped or marked non-training before they enter Q_H training views.",
-  "Per-position validity and selected-action histograms are available from the rollout inspection path.",
-  "The default thesis generation config matches the three-family contract rather than the older five-family TOML profile.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/pose_generation/test_candidate_mixture.py tests/rollouts/test_dataset_writer.py tests/rollouts/test_inspection.py -q",
-  "cd aria_nbv && uv run nbv-rollouts-info --store <fresh_schema_1_store> --validate --stats",
-]
+context = ["The validating 2026-05-20 structural probe used schema 1.0 with path collision disabled and produced only 30 valid candidates out of 600, exactly 3 valid candidates per step.", "All valid and selected candidates in that probe came from forward_local; target_bearing_local and lateral_target_bypass produced zero valid actions.", "The current low-valid-root gate of min_valid_root_candidates=3 is too weak for scale because a root can barely pass while the target-aware families are completely dead.", "This is a thesis blocker: the main sampler should test target-conditioned finite-candidate NBV, not degenerate into forward-only local motion.", "External review proposed first production gates: num_valid_candidates >= max(12, ceil(0.25 * N_q)), at least one valid non-forward target-aware action for smoke, and at least three for production."]
+references = ["repo:.agents/work/rollout-scale-readiness/02-three-family-sampler-preflight-plan.md", "repo:aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", "repo:aria_nbv/aria_nbv/pose_generation/candidate_generation.py", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "repo:aria_nbv/aria_nbv/rollouts/info_cli.py", "repo:aria_nbv/tests/pose_generation/test_candidate_mixture.py", "repo:docs/contents/theory/candidate_sampling_target_selection.qmd"]
+implementation_notes = ["Add a rollout/candidate preflight summary that reports valid_count, invalid_reason counts, selected_count, target_root_gain distribution, and selected policy by position_id and mixture_id.", "Raise root gating from a single minimum valid count to a profile-level gate that can require num_valid_candidates >= max(12, ceil(0.25 * N_q)) and target-aware non-forward family contribution where configured.", "Run a 25-50 root audit across at least five scenes before retuning; include valid, low-valid, forward-only, target-aware-valid, and flat-gain cases.", "Retune radius, clearance, motion-realism, target-bearing, and lateral-bypass settings using the multi-scene subset before scale.", "Keep upper_bound_free_shell and rich_local_five_family as explicit ablations for diagnosing whether failures come from realism constraints or target-aware priors."]
+acceptance = ["A current-schema preflight report shows valid target_bearing_local and lateral_target_bypass actions on a representative subset, or blocks roots with explicit reasons.", "Production preflight enforces at least max(12, ceil(0.25 * N_q)) valid actions per trainable state and at least three valid non-forward target-aware actions unless explicitly running an ablation.", "Low-valid roots are skipped or marked non-training before they enter Q_H training views.", "Per-position validity and selected-action histograms are available from the rollout inspection path.", "The default thesis generation config matches the three-family contract rather than the older five-family TOML profile."]
+verification = ["cd aria_nbv && uv run pytest tests/pose_generation/test_candidate_mixture.py tests/rollouts/test_dataset_writer.py tests/rollouts/test_inspection.py -q", "cd aria_nbv && uv run nbv-rollouts-info --store <fresh_schema_1_store> --validate --stats"]
 
 [[todo]]
 id = "todo-089"
@@ -1169,40 +895,11 @@ issue_ids = ["issue-032", "issue-018", "issue-022", "issue-028"]
 loc_min = 120
 loc_expected = 360
 loc_max = 900
-context = [
-  "Fresh 2026-05-20 probes showed one current-schema validation blocker, one degenerate target-aware sampler, and selected target_root_gain values around numerical noise on the first inspected scene.",
-  "Local default rollout stores are stale: rollouts_v1_realistic.zarr validates as schema 0.8-global-target-rows and rollouts_v1_smoke.zarr validates as schema 0.6-rollout-core under the current reader.",
-  "Before LRZ or broader local generation, the project needs a single go/no-go report that validates schema 1.0 stores and summarizes coverage, rewards, valid actions, target-aware family contribution, selected-depth retention, optional crop payloads, chunk/file counts, and stale-store status.",
-  "External review recommends extending nbv-rollouts-info with --preflight --profile production --json, unless source/render/scorer checks require a separate command.",
-]
-references = [
-  "repo:.agents/work/rollout-scale-readiness/03-rollout-generation-preflight-plan.md",
-  "repo:aria_nbv/aria_nbv/rollouts/info_cli.py",
-  "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
-  "repo:aria_nbv/aria_nbv/rollouts/shards.py",
-  "repo:.configs/build_rollouts_v1_realistic.toml",
-  "repo:Makefile",
-  "repo:.agents/issues.toml#issue-032",
-]
-implementation_notes = [
-  "Extend nbv-rollouts-info or add a narrow preflight command that exits nonzero on unsupported schema, validation errors, stale default store, missing scene split manifest for thesis profiles, missing stochastic provenance for stochastic training traces, target_eval_crops unexpected retention, low valid-action counts, missing target-aware family contribution, flat reward signal, or excessive file/chunk counts.",
-  "Report stable JSON sections: schema, validation, lineage, coverage, validity, rewards, retention, storage, and go_no_go.",
-  "Report source rows, scenes, snippets, targets, rollouts, steps, candidates, q_h states, selected-depth rows, optional crop rows, file/chunk counts, candidate group size, selected target gain stats, target-vs-scene diagnostic comparison, and per-position valid/selected counts.",
-  "Use first production reward-signal gate as a reviewable default: fail if median absolute valid target_root_gain < 1e-4 and p90 target_root_gain < 1e-3, while smoke/audit only warn.",
-  "Keep stale stores as local artifacts only; do not add compatibility readers for old schemas.",
-  "Wire the preflight into the human runbook before any multi-shard generation command.",
-]
-acceptance = [
-  "A fresh small schema-1.0 rollout store can produce a machine-readable preflight report.",
-  "The preflight fails on the current stale rollouts_v1_realistic.zarr and rollouts_v1_smoke.zarr defaults.",
-  "The preflight fails on a degenerate three-family run where only forward_local is valid unless explicitly running a forward-only ablation.",
-  "Production preflight fails on missing scene split metadata, missing or incomplete replay-grade stochastic provenance for stochastic training traces, and flat target-root-gain signal under the reviewed thresholds.",
-  "The report includes enough reward and validity diagnostics to decide whether scale generation is scientifically useful.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/rollouts/test_inspection.py tests/rollouts/test_zarr_store.py -q",
-  "cd aria_nbv && uv run nbv-rollouts-info <fresh_schema_1_store> --preflight --profile production --json",
-]
+context = ["Fresh 2026-05-20 probes showed one current-schema validation blocker, one degenerate target-aware sampler, and selected target_root_gain values around numerical noise on the first inspected scene.", "Local default rollout stores are stale: rollouts_v1_realistic.zarr validates as schema 0.8-global-target-rows and rollouts_v1_smoke.zarr validates as schema 0.6-rollout-core under the current reader.", "Before LRZ or broader local generation, the project needs a single go/no-go report that validates schema 1.0 stores and summarizes coverage, rewards, valid actions, target-aware family contribution, selected-depth retention, optional crop payloads, chunk/file counts, and stale-store status.", "External review recommends extending nbv-rollouts-info with --preflight --profile production --json, unless source/render/scorer checks require a separate command."]
+references = ["repo:.agents/work/rollout-scale-readiness/03-rollout-generation-preflight-plan.md", "repo:aria_nbv/aria_nbv/rollouts/info_cli.py", "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:aria_nbv/aria_nbv/rollouts/shards.py", "repo:.configs/build_rollouts_v1_realistic.toml", "repo:Makefile", "repo:.agents/issues.toml#issue-032"]
+implementation_notes = ["Extend nbv-rollouts-info or add a narrow preflight command that exits nonzero on unsupported schema, validation errors, stale default store, missing scene split manifest for thesis profiles, missing stochastic provenance for stochastic training traces, target_eval_crops unexpected retention, low valid-action counts, missing target-aware family contribution, flat reward signal, or excessive file/chunk counts.", "Report stable JSON sections: schema, validation, lineage, coverage, validity, rewards, retention, storage, and go_no_go.", "Report source rows, scenes, snippets, targets, rollouts, steps, candidates, q_h states, selected-depth rows, optional crop rows, file/chunk counts, candidate group size, selected target gain stats, target-vs-scene diagnostic comparison, and per-position valid/selected counts.", "Use first production reward-signal gate as a reviewable default: fail if median absolute valid target_root_gain < 1e-4 and p90 target_root_gain < 1e-3, while smoke/audit only warn.", "Keep stale stores as local artifacts only; do not add compatibility readers for old schemas.", "Wire the preflight into the human runbook before any multi-shard generation command."]
+acceptance = ["A fresh small schema-1.0 rollout store can produce a machine-readable preflight report.", "The preflight fails on the current stale rollouts_v1_realistic.zarr and rollouts_v1_smoke.zarr defaults.", "The preflight fails on a degenerate three-family run where only forward_local is valid unless explicitly running a forward-only ablation.", "Production preflight fails on missing scene split metadata, missing or incomplete replay-grade stochastic provenance for stochastic training traces, and flat target-root-gain signal under the reviewed thresholds.", "The report includes enough reward and validity diagnostics to decide whether scale generation is scientifically useful."]
+verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_inspection.py tests/rollouts/test_zarr_store.py -q", "cd aria_nbv && uv run nbv-rollouts-info <fresh_schema_1_store> --preflight --profile production --json"]
 
 [[todo]]
 id = "todo-090"
@@ -1215,35 +912,11 @@ issue_ids = ["issue-032", "issue-011"]
 loc_min = 20
 loc_expected = 60
 loc_max = 140
-context = [
-  "The latest external review could only access PR #14 at 74b7be2190f147da490875c4c3fd7d2f4a34dbe2 and reported that .agents/work/rollout-scale-readiness/*, issue-032, todo-087 through todo-089, refactor-021, and aria_nbv/aria_nbv/rollouts/inspection.py were missing.",
-  "The current local checkout contains those artifacts but is ahead of origin/codex/full-rri-rollout-worktree, so the review target and local working state diverged.",
-  "Future review prompts must include an exact pushed commit SHA/ref that contains the plan pack and linked agents-db records.",
-]
-references = [
-  "repo:.agents/work/rollout-scale-readiness/README.md",
-  "repo:.agents/issues.toml#issue-032",
-  "repo:.agents/todos.toml#todo-087",
-  "repo:.agents/todos.toml#todo-088",
-  "repo:.agents/todos.toml#todo-089",
-  "repo:.agents/refactors.toml#refactor-021",
-  "repo:aria_nbv/aria_nbv/rollouts/inspection.py",
-]
-implementation_notes = [
-  "Push the current branch or otherwise expose an immutable commit SHA/ref before requesting another external review.",
-  "Include git log and branch/ref metadata in the review prompt so reviewers can verify that the plan-pack and DB surfaces are fetchable.",
-  "Do not treat review acceptance/rejection of missing files as substantive code review until the target mismatch is resolved.",
-]
-acceptance = [
-  "The reviewed remote ref contains .agents/work/rollout-scale-readiness/*, issue-032, todo-087 through todo-089, refactor-021, and aria_nbv/aria_nbv/rollouts/inspection.py.",
-  "The review prompt names the exact commit SHA/ref and distinguishes stale visible-branch findings from current-checkout findings.",
-  "A fresh reviewer can fetch the branch/ref and audit the same artifacts without relying on chat history.",
-]
-verification = [
-  "git branch -vv",
-  "git log --oneline --max-count=8",
-  "git ls-tree -r <reviewed-ref> -- .agents/work/rollout-scale-readiness aria_nbv/aria_nbv/rollouts/inspection.py",
-]
+context = ["The latest external review could only access PR #14 at 74b7be2190f147da490875c4c3fd7d2f4a34dbe2 and reported that .agents/work/rollout-scale-readiness/*, issue-032, todo-087 through todo-089, refactor-021, and aria_nbv/aria_nbv/rollouts/inspection.py were missing.", "The current local checkout contains those artifacts but is ahead of origin/codex/full-rri-rollout-worktree, so the review target and local working state diverged.", "Future review prompts must include an exact pushed commit SHA/ref that contains the plan pack and linked agents-db records."]
+references = ["repo:.agents/work/rollout-scale-readiness/README.md", "repo:.agents/issues.toml#issue-032", "repo:.agents/todos.toml#todo-087", "repo:.agents/todos.toml#todo-088", "repo:.agents/todos.toml#todo-089", "repo:.agents/refactors.toml#refactor-021", "repo:aria_nbv/aria_nbv/rollouts/inspection.py"]
+implementation_notes = ["Push the current branch or otherwise expose an immutable commit SHA/ref before requesting another external review.", "Include git log and branch/ref metadata in the review prompt so reviewers can verify that the plan-pack and DB surfaces are fetchable.", "Do not treat review acceptance/rejection of missing files as substantive code review until the target mismatch is resolved."]
+acceptance = ["The reviewed remote ref contains .agents/work/rollout-scale-readiness/*, issue-032, todo-087 through todo-089, refactor-021, and aria_nbv/aria_nbv/rollouts/inspection.py.", "The review prompt names the exact commit SHA/ref and distinguishes stale visible-branch findings from current-checkout findings.", "A fresh reviewer can fetch the branch/ref and audit the same artifacts without relying on chat history."]
+verification = ["git branch -vv", "git log --oneline --max-count=8", "git ls-tree -r <reviewed-ref> -- .agents/work/rollout-scale-readiness aria_nbv/aria_nbv/rollouts/inspection.py"]
 
 [[todo]]
 id = "todo-091"
@@ -1256,33 +929,25 @@ issue_ids = ["issue-032", "issue-018", "issue-028"]
 loc_min = 120
 loc_expected = 300
 loc_max = 700
-context = [
-  "The current thesis contract says H>1 rollout traces are canonical and H=1/myopic labels are derived views over materialized states, but external review found no first-class visible writer profile for H=1 target-label stores.",
-  "A scale-safe H=1 gate should label all valid candidates for one-step target_root_gain while treating the selected action as audit-only and disabling TD confusion.",
-  "The H=1 profile must be trivially extendable to H>1 because selected/parent rendered depth from materialized states becomes actor-visible successor history.",
-]
-references = [
-  "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py",
-  "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
-  "repo:aria_nbv/aria_nbv/rollouts/info_cli.py",
-  "repo:aria_nbv/tests/rollouts/test_dataset_writer.py",
-  "repo:aria_nbv/tests/rollouts/test_zarr_store.py",
-  "repo:docs/contents/theory/rl_planning.qmd",
-  "repo:.agents/todos.toml#todo-078",
-]
-implementation_notes = [
-  "Add or document store_role='target_label_sidecar', rollout_profile='h1_target_labels', td_semantics='none' or 'selected_transition_only_but_unused', and candidate_label_semantics='all_valid_one_step_target_root_gain'.",
-  "Use the existing rollout writer and schema machinery; do not create a separate target-label writer unless the shared path proves unworkable.",
-  "Keep selected/parent depth semantics consistent with H>1: it is successor state history after an action is materialized, not actor-visible all-candidate evidence before selection.",
-  "Preflight should reject H=1 stores that look like H>1 TD training traces or vice versa.",
-]
-acceptance = [
-  "An H=1 target-label profile writes all valid candidate target_root_gain labels with masks and invalid reasons.",
-  "Selected action and selected-depth history are present only with clearly labeled audit/successor semantics.",
-  "TD training code cannot confuse H=1 myopic labels with H>1 selected-transition Bellman data.",
-  "The H=1 profile can be extended to H>1 without changing candidate ids, masks, target ids, reward fields, or selected-depth lineage.",
-]
-verification = [
-  "cd aria_nbv && uv run pytest tests/rollouts/test_dataset_writer.py tests/rollouts/test_zarr_store.py tests/rollouts/test_inspection.py -q",
-  "rg -n \"target_label_sidecar|h1_target_labels|candidate_label_semantics|td_semantics\" aria_nbv .configs docs .agents",
-]
+context = ["The current thesis contract says H>1 rollout traces are canonical and H=1/myopic labels are derived views over materialized states, but external review found no first-class visible writer profile for H=1 target-label stores.", "A scale-safe H=1 gate should label all valid candidates for one-step target_root_gain while treating the selected action as audit-only and disabling TD confusion.", "The H=1 profile must be trivially extendable to H>1 because selected/parent rendered depth from materialized states becomes actor-visible successor history."]
+references = ["repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py", "repo:aria_nbv/aria_nbv/rollouts/info_cli.py", "repo:aria_nbv/tests/rollouts/test_dataset_writer.py", "repo:aria_nbv/tests/rollouts/test_zarr_store.py", "repo:docs/contents/theory/rl_planning.qmd", "repo:.agents/todos.toml#todo-078"]
+implementation_notes = ["Add or document store_role='target_label_sidecar', rollout_profile='h1_target_labels', td_semantics='none' or 'selected_transition_only_but_unused', and candidate_label_semantics='all_valid_one_step_target_root_gain'.", "Use the existing rollout writer and schema machinery; do not create a separate target-label writer unless the shared path proves unworkable.", "Keep selected/parent depth semantics consistent with H>1: it is successor state history after an action is materialized, not actor-visible all-candidate evidence before selection.", "Preflight should reject H=1 stores that look like H>1 TD training traces or vice versa."]
+acceptance = ["An H=1 target-label profile writes all valid candidate target_root_gain labels with masks and invalid reasons.", "Selected action and selected-depth history are present only with clearly labeled audit/successor semantics.", "TD training code cannot confuse H=1 myopic labels with H>1 selected-transition Bellman data.", "The H=1 profile can be extended to H>1 without changing candidate ids, masks, target ids, reward fields, or selected-depth lineage."]
+verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_dataset_writer.py tests/rollouts/test_zarr_store.py tests/rollouts/test_inspection.py -q", "rg -n \"target_label_sidecar|h1_target_labels|candidate_label_semantics|td_semantics\" aria_nbv .configs docs .agents"]
+
+[[todo]]
+id = "todo-092"
+title = "Wire oracle target-task sampler into rollout generation"
+description = "Make rollout/data-generation configs consume OracleTargetTaskSampler as the target-task source instead of the legacy actor-visible selector."
+priority = "high"
+status = "todo"
+labels = ["rollouts", "target", "data-generation", "oracle", "contracts"]
+issue_ids = ["issue-020", "issue-018", "issue-032"]
+loc_min = 120
+loc_expected = 320
+loc_max = 800
+context = ["Automatic target selection for rollout labels is oracle/data-generation work, not actor-visible repo truth.", "G005 added OracleTargetTaskSamplerConfig, OracleTargetTaskSampler, OracleTargetTaskRow, threshold-sweep diagnostics, public exports, and focused tests, but RolloutDatasetWriter still instantiates ActorVisibleTargetSelector.", "The first rollout/H=1 target-label profile should use identity-valid oracle target tasks, persist descriptor/audit fields, and leave actor-visible OBS-SEL/PRED-Q as a separate diagnostic or future deployable-input path."]
+references = ["repo:aria_nbv/aria_nbv/data_handling/_target_selection.py", "repo:aria_nbv/tests/data_handling/test_target_selection.py", "repo:docs/typst/thesis/figures/oracle_target_task_sampler_contract.mmd", "repo:aria_nbv/aria_nbv/rollouts/dataset_writer.py", "repo:aria_nbv/tests/rollouts/test_dataset_writer.py", "repo:.agents/issues.toml#issue-020", "repo:.agents/todos.toml#todo-091"]
+implementation_notes = ["Add rollout writer config fields or a target_source enum that selects OracleTargetTaskSampler for oracle/data-generation profiles while preserving ActorVisibleTargetSelector for V1 diagnostics.", "Persist oracle target-task identity status, identity IoU/gap, selected rank/probability, projected-area audit, support audit, class/id metadata, and headroom placeholders where the rollout schema expects target records.", "Ensure unsupported, ambiguous, or invalid-geometry target tasks are masks/reasons, not low-RRI samples.", "Keep OBS-SEL/PRED-Q/GT-EVAL configs, app diagnostics, and Streamlit selectors visibly separate from oracle target-task sampling."]
+acceptance = ["A rollout writer smoke config can sample capped identity-valid oracle target tasks from GT OBBs.", "The legacy V1 selector remains available only for diagnostic/deployable actor-input profiles.", "Target records in rollout/H=1 outputs preserve oracle identity and descriptor audit fields needed for preflight and Rerun/Streamlit inspection.", "Ambiguous duplicate GT targets are rejected from the sampled task pool with explicit status or invalidity metadata."]
+verification = ["cd aria_nbv && uv run pytest tests/data_handling/test_target_selection.py tests/rollouts/test_dataset_writer.py -q", "cd aria_nbv && uv run ruff check aria_nbv/aria_nbv/data_handling/_target_selection.py aria_nbv/aria_nbv/rollouts/dataset_writer.py aria_nbv/tests/data_handling/test_target_selection.py aria_nbv/tests/rollouts/test_dataset_writer.py", "rg -n \"OracleTargetTaskSampler|ActorVisibleTargetSelector|target_source|identity_ambiguity_gap\" aria_nbv/aria_nbv/rollouts aria_nbv/tests/rollouts .configs .agents"]

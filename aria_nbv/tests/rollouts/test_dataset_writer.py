@@ -14,10 +14,14 @@ import msgspec
 import pytest
 import torch
 
+from aria_nbv.data_handling import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRow, TargetTaskIdentityStatus
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.dataset_writer import (
     RolloutDatasetWriter,
+    RolloutDatasetWriterConfig,
+    RolloutTargetSource,
     SelectedDepthRetentionConfig,
+    _oracle_target_task_to_candidate_row,
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
@@ -159,6 +163,54 @@ def test_selected_depth_renderer_config_sets_exact_size_atomically() -> None:
     assert cfg.resolution_scale is None
     assert cfg.output_width_px == 240
     assert cfg.output_height_px == 240
+
+
+def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label() -> None:
+    row = OracleTargetTaskRow(
+        scene_id="scene",
+        snippet_id="snippet",
+        source=ORACLE_TARGET_TASK_SOURCE,
+        source_index=2,
+        target_row_id=2,
+        target_id="scene:snippet:gt_obbs_oracle:1:7:2",
+        sem_id=1,
+        inst_id=7,
+        class_name="chair",
+        confidence=0.9,
+        center_world=(1.0, 2.0, 3.0),
+        extents=(0.5, 0.5, 0.5),
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
+        relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
+        projected_area_pixels=0.0,
+        projected_area_fraction=0.0,
+        semidense_support_count=0,
+        evl_support_count=0,
+        effective_support_count=0.0,
+        identity_iou=1.0,
+        identity_second_iou=0.0,
+        identity_ambiguity_gap=1.0,
+        identity_status=TargetTaskIdentityStatus.MATCHED.value,
+        identity_valid=True,
+        selected_rank=0,
+        selection_probability=1.0,
+    )
+
+    target = _oracle_target_task_to_candidate_row(row)
+
+    assert RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER.value == "oracle_target_task_sampler"
+    assert target.gt_label_valid
+    assert target.gt_match_status == "matched"
+    assert target.gt_target_row_id == 2
+    assert target.source == ORACLE_TARGET_TASK_SOURCE
+    assert target.invalid_reason_bitset == 1
+
+
+def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:
+    config = RolloutDatasetWriterConfig.model_validate({"max_targets_per_sample": None})
+
+    assert config.max_targets_per_sample is None
+    with pytest.raises(ValueError, match="max_targets_per_sample"):
+        RolloutDatasetWriterConfig.model_validate({"max_targets_per_sample": 0})
 
 
 def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() -> None:

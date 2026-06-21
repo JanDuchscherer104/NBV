@@ -56,6 +56,25 @@ _RULE_REASON_BITS = {
     "PathCollisionRule": INVALID_REASON_CODES["PATH_SEGMENT_COLLISION"],
 }
 
+_HARD_DIAGNOSTIC_REASON_BITS = {
+    "path_collision_mask": INVALID_REASON_CODES["PATH_SEGMENT_COLLISION"],
+}
+
+_PRIMARY_INVALID_REASON_PRIORITY = (
+    "POSE_NONFINITE",
+    "PATH_SEGMENT_COLLISION",
+    "CLEARANCE_TOO_SMALL",
+    "POSE_OUT_OF_EXTENT",
+    "CAMERA_OUT_OF_EXTENT",
+    "FRUSTUM_OUT_OF_BOUNDS",
+    "DEPTH_NO_HIT",
+    "DEPTH_TOO_SPARSE",
+    "BACKPROJECT_EMPTY",
+    "TARGET_SUPPORT_TOO_LOW",
+    "TARGET_VISIBILITY_TOO_LOW",
+    "SAMPLER_RULE_REJECTED",
+)
+
 
 @dataclass(slots=True)
 class RolloutLineage:
@@ -196,9 +215,7 @@ def _full_shell_or_default(
 def _candidate_invalid_reasons(candidates: Any) -> tuple[torch.Tensor, torch.Tensor]:
     valid_mask = candidates.mask_valid.detach().cpu().to(dtype=torch.bool).reshape(-1)
     bitset = torch.zeros(valid_mask.shape, dtype=torch.int64)
-    primary = torch.full(valid_mask.shape, INVALID_REASON_CODES["SAMPLER_RULE_REJECTED"], dtype=torch.int64)
     bitset[valid_mask] = 1 << INVALID_REASON_CODES["VALID"]
-    primary[valid_mask] = INVALID_REASON_CODES["VALID"]
 
     previous = torch.ones_like(valid_mask)
     for rule_name, cumulative_mask in candidates.masks.items():
@@ -208,18 +225,48 @@ def _candidate_invalid_reasons(candidates: Any) -> tuple[torch.Tensor, torch.Ten
         failed_here = previous & (~current)
         reason_bit = _RULE_REASON_BITS.get(rule_name, INVALID_REASON_CODES["SAMPLER_RULE_REJECTED"])
         bitset[failed_here] = bitset[failed_here] | (1 << reason_bit)
-        primary[failed_here] = reason_bit
         previous = current
 
-    unresolved_invalid = (~valid_mask) & (bitset == 0)
-    bitset[unresolved_invalid] = 1 << INVALID_REASON_CODES["SAMPLER_RULE_REJECTED"]
+    for diagnostic_name, reason_bit in _HARD_DIAGNOSTIC_REASON_BITS.items():
+        diagnostic_mask = _full_shell_bool_extra(candidates.extras, diagnostic_name, valid_mask)
+        if diagnostic_mask.shape == valid_mask.shape:
+            bitset[diagnostic_mask] = bitset[diagnostic_mask] | (1 << reason_bit)
 
     shell = candidates.shell_poses.tensor().detach().cpu()
     nonfinite = ~torch.isfinite(shell.reshape(shell.shape[0], -1)).all(dim=1)
     bitset[nonfinite] = bitset[nonfinite] | (1 << INVALID_REASON_CODES["POSE_NONFINITE"])
-    primary[nonfinite] = INVALID_REASON_CODES["POSE_NONFINITE"]
 
+    unresolved_invalid = (~valid_mask) & (bitset == 0)
+    bitset[unresolved_invalid] = 1 << INVALID_REASON_CODES["SAMPLER_RULE_REJECTED"]
+    primary = _primary_candidate_invalid_reason(bitset=bitset, valid_mask=valid_mask)
     return bitset.to(dtype=torch.int64), primary.to(dtype=torch.int64)
+
+
+def _full_shell_bool_extra(extras: dict[str, Any], name: str, valid_mask: torch.Tensor) -> torch.Tensor:
+    value = extras.get(name)
+    if value is None:
+        return torch.zeros_like(valid_mask)
+    tensor = torch.as_tensor(value).detach().cpu().to(dtype=torch.bool).reshape(-1)
+    if tensor.numel() == valid_mask.numel():
+        return tensor
+    if tensor.numel() != int(valid_mask.sum().item()):
+        return torch.zeros_like(valid_mask)
+    full = torch.zeros_like(valid_mask)
+    full[valid_mask] = tensor
+    return full
+
+
+def _primary_candidate_invalid_reason(*, bitset: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+    primary = torch.full(bitset.shape, INVALID_REASON_CODES["SAMPLER_RULE_REJECTED"], dtype=torch.int64)
+    primary[valid_mask] = INVALID_REASON_CODES["VALID"]
+    invalid = ~valid_mask
+    unresolved = invalid.clone()
+    for reason_name in _PRIMARY_INVALID_REASON_PRIORITY:
+        reason_code = INVALID_REASON_CODES[reason_name]
+        has_reason = unresolved & ((bitset & (1 << reason_code)) != 0)
+        primary[has_reason] = reason_code
+        unresolved &= ~has_reason
+    return primary
 
 
 def _termination_reason(result: CounterfactualRolloutResult, trajectory: CounterfactualTrajectory) -> str:

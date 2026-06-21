@@ -8,7 +8,7 @@ conventions in `aria_nbv/`. Binding short-form rules live in
 - Config classes should inherit from `BaseConfig` where appropriate.
 - Instantiate runtime objects through config `.setup_target()` factories instead of constructing them ad hoc.
 - Prefer vectorized implementations over functional helpers, comprehensions, or explicit loops when readability remains acceptable.
-- Use `pathlib.Path` for filesystem paths.
+- All path-handling should be done through `PathConfig` objects that validate existence and absoluteness. Use `pathlib.Path` for filesystem paths.
 - Prefer `Enum` for categorical values and `match-case` when it improves multi-branch clarity.
 - Use existing utilities from `efm3d`, `atek`, and `projectaria_tools` before reimplementing infrastructure.
 - Use `PoseTW` for poses and `CameraTW` for cameras unless a subsystem explicitly requires a different camera type.
@@ -106,23 +106,10 @@ class MyComponentConfig(BaseConfig["MyComponent"]):
     target: type["MyComponent"] = Field(default_factory=lambda: MyComponent, exclude=True)
     """Factory target that `setup_target()` instantiates."""
 
-    learning_rate: float = 1e-3
+    learning_rate: float = Field(default=1e-3, gt=0)
     """Learning rate for the optimizer."""
-    batch_size: int = 32
+    batch_size: int = Field(default=32, gt=0)
     """Mini-batch size used by training and evaluation loops."""
-
-    @field_validator('learning_rate')
-    @classmethod
-    def _validate_lr(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError('learning_rate must be positive')
-        return value
-
-    @model_validator(mode='after')
-    def _validate_batching(self) -> 'MyComponentConfig':
-        if self.batch_size <= 0:
-            raise ValueError('batch_size must be positive')
-        return self
 ```
 
 ## Console Logging

@@ -38,6 +38,7 @@
   m: $bold(m)$,
   e: $bold(e)$,
   b: $b$,
+  acquisition_cost: $C(tau)$,
   candidate_table: $cal(Q)_t$,
   candidate_set: $cal(Q)_t$,
   candidate_token: $bold(u)_(t,i)$,

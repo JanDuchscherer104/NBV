@@ -3,6 +3,7 @@
 # Environment variables are intentionally not interpolated by ARIA-NBV configs.
 
 max_samples = 1
+target_source = "oracle_target_task_sampler"
 require_label_valid = true
 verbosity = 1
 

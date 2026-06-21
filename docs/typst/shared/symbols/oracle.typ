@@ -1,5 +1,3 @@
-#import "../terms.typ": RRI
-
 #let oracle = (
     // Abstract point set (use subscripts for time/candidate: #(symb.oracle.points)_t, #symb.oracle.points_q).
     points: $cal(P)$,
@@ -37,5 +35,5 @@
     // Symmetric point-mesh error aggregate.
     err: $D$,
     // Relative Reconstruction Improvement scalar.
-    rri: $RRI$,
+    rri: $op("RRI")$,
   )

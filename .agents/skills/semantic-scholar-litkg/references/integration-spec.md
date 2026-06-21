@@ -51,7 +51,8 @@ quarto = ["docs/**/*.qmd"]
 typst = ["docs/typst/**/*.typ"]
 
 [sources.external_docs]
-context7_libraries = ["pytorch", "pydantic", "open3d", "pytorch-lightning"]
+# Values are exact IDs from .agents/references/context7_library_ids.md.
+context7_libraries = ["/pytorch/pytorch", "/pydantic/pydantic", "/isl-org/open3d", "/lightning-ai/pytorch-lightning"]
 snapshot_content = false
 
 [sources.web]

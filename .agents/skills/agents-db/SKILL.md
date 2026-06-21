@@ -32,6 +32,14 @@ metadata:
     - ".agents/AGENTS_INTERNAL_DB.md"
     - ".agents/skills/agents-db/references/schema.md"
     - ".agents/skills/agents-db/references/provenance.md"
+  canonical_sources:
+    - ".agents/AGENTS_INTERNAL_DB.md"
+    - ".agents/skills/agents-db/references/schema.md"
+    - ".agents/skills/agents-db/references/provenance.md"
+    - ".agents/issues.toml"
+    - ".agents/todos.toml"
+    - ".agents/refactors.toml"
+    - ".agents/resolved.toml"
   verification:
     - "make agents-db AGENTS_ARGS='validate'"
     - "make agents-db"

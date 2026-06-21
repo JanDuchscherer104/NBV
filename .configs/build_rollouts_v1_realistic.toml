@@ -1,23 +1,28 @@
-# Realistic V1 rollout sample generation with the existing nbv-build-rollouts CLI.
+# Canonical thesis-default V1 rollout generation profile.
 #
 # Usage:
 #   cd aria_nbv
 #   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml --dry-run
 #   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml
 #
-# This config intentionally does not rebuild EFM/backbone outputs. It consumes
-# the existing immutable VIN offline store in sample mode and writes a separate
-# rollouts.zarr replay/training artifact.
+# This is the checked-in "real rollout" semantic contract. It is portable and
+# cache-relative by default; local smoke runs and LRZ campaigns may copy it and
+# override paths or counts in untracked run configs. It intentionally does not
+# rebuild EFM/backbone outputs. It consumes the existing immutable VIN offline
+# store in sample mode and writes a separate rollouts.zarr replay/training
+# artifact. Q_H training settings do not belong in this TOML.
 
-max_samples            = 4
+max_samples            = 25
 max_targets_per_sample = 1
+target_source          = "oracle_target_task_sampler"
 require_label_valid    = true
+min_valid_root_candidates = 15
 log_timing             = true
 verbosity              = 1
 
 [source]
 split                    = "train"
-limit                    = 4
+limit                    = 25
 return_format            = "sample"
 include_efm_snippet      = true
 include_gt_mesh          = true
@@ -75,9 +80,9 @@ collision_backend      = "pytorch3d"
 ray_subsample          = 32
 step_clearance         = 0.1
 enforce_motion_realism = true
-max_step_distance_m    = 1.1
-max_height_delta_m     = 0.4
-max_backward_step_m    = 0.4
+max_step_distance_m    = 1.0
+max_height_delta_m     = 0.25
+max_backward_step_m    = 0.25
 max_yaw_delta_deg      = 70.0
 device                 = "cuda"
 verbosity              = 1
@@ -90,8 +95,16 @@ view_roll_jitter_deg   = 0.0
 seed                   = 0
 
 [[candidate_mixture.components]]
+name                   = "forward_local"
+count                  = 24
+view_mode              = "forward_rig"
+position_mode          = "forward_local"
+view_max_azimuth_deg   = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
 name                   = "target_bearing_local"
-count                  = 12
+count                  = 24
 view_mode              = "target_point"
 position_mode          = "target_bearing_local"
 min_radius             = 0.4
@@ -100,38 +113,10 @@ view_max_azimuth_deg   = 0.0
 view_max_elevation_deg = 0.0
 
 [[candidate_mixture.components]]
-name                   = "forward_local"
-count                  = 30
-view_mode              = "forward_rig"
-position_mode          = "forward_local"
-view_max_azimuth_deg   = 0.0
-view_max_elevation_deg = 0.0
-
-[[candidate_mixture.components]]
 name                   = "lateral_target_bypass"
-count                  = 10
+count                  = 12
 view_mode              = "target_point"
 position_mode          = "lateral_target_bypass"
-view_max_azimuth_deg   = 0.0
-view_max_elevation_deg = 0.0
-
-[[candidate_mixture.components]]
-name                   = "local_refinement"
-count                  = 4
-view_mode              = "forward_rig"
-position_mode          = "local_refinement"
-min_radius             = 0.45
-max_radius             = 1.1
-view_max_azimuth_deg   = 0.0
-view_max_elevation_deg = 0.0
-
-[[candidate_mixture.components]]
-name                   = "revisit_backtrack"
-count                  = 4
-view_mode              = "forward_rig"
-position_mode          = "revisit_backtrack"
-min_radius             = 0.25
-max_radius             = 0.55
 view_max_azimuth_deg   = 0.0
 view_max_elevation_deg = 0.0
 

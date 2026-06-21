@@ -23,14 +23,13 @@ first. This reduces noise and makes visual errors obvious.
 Prefer repo Make targets for full document builds:
 
 ```bash
-make proposal-pdf
 make thesis-pdf
 ```
 
 Use the manual form when isolating an output path:
 
 ```bash
-cd docs && typst compile typst/thesis/proposal.typ /tmp/proposal.pdf --root .
+cd docs && typst compile typst/thesis/main.typ /tmp/thesis-main.pdf --root .
 ```
 
 For files under `.agents/skills`, compile from the repo root with `--root .`.
@@ -39,8 +38,8 @@ For files under `.agents/skills`, compile from the repo root with `--root .`.
 
 ```bash
 .agents/skills/typst-authoring/scripts/render_png.sh \
-  -i docs/typst/thesis/proposal.typ \
-  -o /tmp/proposal-pages \
+  -i docs/typst/thesis/main.typ \
+  -o /tmp/thesis-pages \
   --root docs \
   --pages 1-4 \
   --ppi 300
@@ -62,7 +61,7 @@ until the affected pages are visually clean.
 ## 7. Final Hygiene
 
 ```bash
-.agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections/proposal
+.agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections
 .agents/skills/typst-authoring/scripts/hygiene_checks.sh --examples .agents/skills/typst-authoring
 make check-agent-memory
 git diff --check

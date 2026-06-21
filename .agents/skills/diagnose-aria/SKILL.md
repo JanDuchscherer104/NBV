@@ -8,10 +8,10 @@ metadata:
     - "pure source localization with no failure"
     - "reviewing concrete diffs rather than reproducing a symptom"
   handoff_to:
-    - "omx:analyze for domain-agnostic read-only causal ranking before mutation"
+    - "external analysis workflow capability for domain-agnostic read-only causal ranking before mutation"
     - "plan-grill for broad planning without a concrete symptom"
     - "aria-nbv-context for localizing an unknown failure surface"
-    - "code-review for diff review"
+    - "code-review-aria-nbv for diff review"
     - "specialized contract skills after the failing surface is known"
   evidence_required:
     - "smallest reproducible failing loop or explicit reason none exists"
@@ -28,6 +28,19 @@ metadata:
     - "AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
     - ".agents/references/verification_matrix.md"
+  canonical_sources:
+    - "AGENTS.md"
+    - ".agents/references/source_order.md#role-split"
+    - ".agents/references/verification_matrix.md"
+    - ".agents/memory/state/GOTCHAS.md"
+  context7_refs:
+    - "/websites/streamlit_io"
+    - "/pytorch/pytorch"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__MCP_DOCKER.browser_run_code"
+    - "mcp__MCP_DOCKER.analyze_python_file"
+    - "mcp__MCP_DOCKER.get_package_metrics"
   verification:
     - "the narrowest reproducer for the failing surface"
     - "focused regression test after fixes"
@@ -37,9 +50,9 @@ metadata:
 
 ## Role Split With OMX
 
-OMX owns orchestration, autonomy, goals, loops, and handoffs. Use
-`omx:analyze` for domain-agnostic read-only causal ranking when no concrete
-failing command, artifact, metric, or runtime symptom is known yet.
+OMX owns orchestration, autonomy, goals, loops, and handoffs. Use the external
+analysis workflow capability for domain-agnostic read-only causal ranking when
+no concrete failing command, artifact, metric, or runtime symptom is known yet.
 
 `diagnose-aria` is the ARIA-NBV sidecar for concrete debugging tactics. Use it
 to pick the local reproducer, inspection command, or domain verification loop
@@ -85,26 +98,6 @@ Use the smallest tool that can reproduce or inspect the symptom.
 - Package behavior:
   `cd aria_nbv && uv run pytest <focused-test>`, then targeted
   `cd aria_nbv && uv run ruff check <path>` only for touched Python surfaces.
-
-## Optional Interactive App Inspection
-
-Use browser automation tools when available for live Streamlit symptoms that
-cannot be understood from panel tests or CLI artifacts alone. Treat this as a
-runtime evidence loop, not a repo-owned dependency.
-
-- Start from `cd aria_nbv && uv run nbv-st --server.port <port>`, then open the
-  served app URL with the available browser tool.
-- Capture an accessibility snapshot before screenshots; prefer labels, roles,
-  and visible text for deterministic inspection.
-- Click or type only through stable labels, roles, or unique visible controls.
-  Record the URL, viewport, action sequence, expected signal, and observed
-  signal.
-- Use screenshots only for visual layout, plot, or rendered-state evidence.
-  Store or report the screenshot/snapshot artifact path when one is used.
-- If browser tools are unavailable, fall back to Streamlit panel tests,
-  offline/rollout CLI inspection, and Rerun artifacts.
-- Reduce every live-UI finding to a focused test, CLI/Rerun artifact, or an
-  explicit note explaining why no durable test seam exists.
 
 ## Feedback Loop First
 

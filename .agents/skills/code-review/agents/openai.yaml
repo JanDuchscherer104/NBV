@@ -1,4 +1,0 @@
-interface:
-  display_name: "Code Review ARIA-NBV"
-  short_description: "Working tree and PR review gate"
-  default_prompt: "Use $code-review-aria-nbv to review ARIA-NBV changes in the working tree or on a pull request and report severity-ranked findings with file and line references."

@@ -1,6 +1,7 @@
 # booktabs (Typst package)
 
 Table styling inspired by LaTeX Booktabs, distributed via Typst Universe.
+This is the default table style for ARIA-NBV thesis/proposal Typst sources.
 
 ## Package metadata
 
@@ -28,6 +29,8 @@ Add rules with:
 ## Notes
 
 - The default style is enabled with `#show: booktabs-default-table-style`.
+- Publication-facing thesis/proposal tables should include `toprule()`,
+  `midrule()` after `table.header`, and `bottomrule()`.
 - Use `#sym.degree` and other `#sym.*` symbols in headers instead of Unicode glyphs.
 
 ## Examples

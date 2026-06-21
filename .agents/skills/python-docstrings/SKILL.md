@@ -2,6 +2,19 @@
 name: python-docstrings
 description: Write and refactor concise, contract-focused Python docstrings for modules, public classes, functions, methods, protocols, config models, DTOs, wrappers, and streaming or session APIs. Use when Python docstrings are missing, sparse, misleading, or need better cross-references, examples, units, shapes, lifecycle notes, or boundary semantics.
 metadata:
+  mode: implementation
+  not_when:
+    - "public docs, Quarto, or Typst prose not generated from Python APIs"
+    - "implementation behavior changes where docstrings are incidental"
+    - "large API redesign before the target interface is stable"
+  handoff_to:
+    - "docs-curator for public narrative, Quarto, or Typst documentation"
+    - "nbv-geometry-contracts for frame, unit, or tensor-shape semantics"
+    - "simplification for behavior-preserving API cleanup before documentation"
+  evidence_required:
+    - "public API or cross-module contract being documented"
+    - "local convention source and any needed generated-doc cross-reference"
+    - "targeted ruff check for touched Python docstring files"
   applies_to:
     - "aria_nbv/aria_nbv/**/*.py"
   triggers:
@@ -13,12 +26,30 @@ metadata:
     - "aria_nbv/AGENTS.md"
     - ".agents/references/python_conventions.md"
     - ".agents/skills/python-docstrings/references/general-style.md"
+  canonical_sources:
+    - "aria_nbv/AGENTS.md#completion-criteria"
+    - ".agents/references/python_conventions.md#core-rules"
+    - ".agents/skills/python-docstrings/references/general-style.md"
+    - ".agents/skills/python-docstrings/references/cross-references.md"
+    - ".agents/skills/python-docstrings/references/examples.md"
+  context7_refs:
+    - "/pytorch/pytorch"
+    - "/pydantic/pydantic"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__code_index.get_symbol_body"
   verification:
     - "ruff format <file>"
     - "ruff check <file>"
 ---
 
 # Python Docstrings
+
+## OMX Integration
+
+OMX can schedule docstring work as part of implementation cleanup, but this
+skill supplies only Python API-contract guidance. Return the documented public
+surface, convention evidence, and targeted lint/doc verification.
 
 ## Overview
 

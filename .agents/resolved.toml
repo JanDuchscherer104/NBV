@@ -255,7 +255,7 @@ loc_min = 80
 loc_expected = 160
 loc_max = 360
 context = ["Roadmap M5 and M6 require greedy, stochastic/beam, model-scored, and optional value/RL comparisons under explicit horizon and branch-factor limits.", "The PRML cross-review recommended a planning skill so agents keep rollout work bounded and do not overclaim continuous RL."]
-implementation_notes = ["Route to pose_generation counterfactual APIs, RL tests, roadmap M5/M6, and questions RQ5/RQ6.", "State that full continuous control and simulator-backed online RL remain stretch work unless the roadmap evidence gate passes.", "Require rollout artifacts to report cumulative RRI, acquisition cost, invalid rates, and runtime."]
+implementation_notes = ["Route to pose_generation counterfactual APIs, RL tests, roadmap M5/M6, and questions RQ5/RQ6.", "State that online discrete Q_H over finite candidates is the RQ5 bridge after offline evidence, while full continuous control and generic simulator-backed RL remain gated stretch work.", "Require rollout artifacts to report cumulative RRI, acquisition cost, invalid rates, and runtime."]
 acceptance = ["The skill protects rollout/planning contract edits with targeted tests and docs checks.", "It distinguishes one-step VIN scoring, counterfactual rollout evaluation, and exploratory RL baselines.", "It uses current ARIA-NBV terminology and does not import PRML VSLAM domain rules."]
 verification = ["make check-agent-memory", "rg -n \"PRML VSLAM|prml_vslam|ViSTA\" .agents/skills/counterfactual-rollout-planner || true"]
 resolved_at = "2026-04-29"
@@ -894,6 +894,46 @@ acceptance = ["Default scene and target oracle rollout scorers no longer use MPS
 verification = ["cd aria_nbv && uv run pytest tests/rri_metrics/test_eval_pointclouds.py tests/rri_metrics/test_rollout_metrics.py", "cd aria_nbv && uv run pytest tests/pose_generation/test_counterfactuals.py", "cd aria_nbv && uv run ruff check aria_nbv/rri_metrics aria_nbv/pose_generation tests/rri_metrics/test_eval_pointclouds.py tests/rri_metrics/test_rollout_metrics.py tests/pose_generation/test_counterfactuals.py", "make agents-db AGENTS_ARGS='validate'", "make agents-db"]
 resolved_at = "2026-05-18"
 resolution_note = "ASE-depth-root RRI eval stream and root-normalized rollout reward defaults are implemented and validated by targeted eval_pointclouds, rollout_metrics, and counterfactual tests. Remaining downstream lineage/audit propagation stays tracked by issue-031 and related target/rollout todos."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-093"
+title = "Resolve inline thesis TODO comments"
+description = "Convert the plain inline TODO comments in active Typst thesis sections into advisor-ready prose, equations, and Mermaid diagram updates."
+priority = "high"
+status = "resolved"
+labels = ["thesis", "typst", "docs", "mermaid"]
+issue_ids = ["issue-027"]
+loc_min = 80
+loc_expected = 220
+loc_max = 520
+context = ["The active thesis sections contain plain inline TODO comments for geometric-learning equations, figure layout, missing state-space definitions, architecture ladder coverage, stacked target-RRI equations, table-heavy design scaffolds, explicit WIP marking, descriptor-symbol compression, directional-memory semantics, CORAL adaptation equations, and candidate-query diagram legibility.", "The explicit #validation_todo/#decision_todo/#research_todo draft markers are future evidence gates and should remain until their M1-M8 evidence exists.", "The immediate cleanup target is to remove every plain // TODO comment returned by `rg -n \"//\\\\s*TODO\" docs/typst/thesis/sections docs/typst/thesis/main.typ` by resolving local prose/equation/diagram clarity without inventing final experiment results."]
+references = ["repo:.omx/context/thesis-inline-todos-20260618T215319Z.md", "repo:docs/typst/thesis/sections/03-01-formal-state.typ", "repo:docs/typst/thesis/sections/02-02-geometric-learning.typ", "repo:docs/typst/thesis/sections/03-02-data-generation.typ", "repo:docs/typst/thesis/sections/03-method.typ", "repo:docs/typst/thesis/figures/qh_actor_oracle_contract.mmd", "repo:docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd"]
+implementation_notes = ["Add compact equations or equation-backed prose for candidate-row equivariance, mask isolation, and local-frame/gauge structure in the geometric-learning theory section.", "Define cal(S)^hist, cal(S)^cf0, and cal(S)^oracle before the NBV tuple by introducing the shared #eqs.rl.s_hist/#eqs.rl.s_cf0/#eqs.rl.s_oracle equations.", "Convert raw WIP/internal comments around design-contract tables into explicit thesis marker prose or approved draft-marker surfaces.", "Compress table-heavy descriptor material using shared symbols and equations where possible.", "Split the target-RRI reward, finite-horizon return, endpoint gain, and log gain equations into separate conceptual paragraphs with source roles and adaptation caveats.", "Clarify directional-memory domains on S^2, weight semantics, moment/SH alternatives, and the candidate novelty query without claiming implemented performance evidence.", "Document ARIA-NBV's CORAL adaptation as empirical quantile binning, CORAL threshold levels, class probabilities, ordinal expectation, and optional monotone bin-value calibration.", "Update the two Mermaid diagrams only enough to address layout and legibility; preserve actor/oracle and candidate-query contracts."]
+acceptance = ["The exact extraction command `rg -n \"//\\\\s*TODO\" docs/typst/thesis/sections docs/typst/thesis/main.typ` returns zero matches.", "The future #*_todo marker gates remain available for missing final evidence and advisor-facing protocol decisions.", "The actor/oracle and candidate-query Mermaid sources lint and render locally to the exact PDFs consumed by Typst.", "The thesis Typst surface compiles far enough to validate the edited sections and figure inclusions."]
+verification = ["make agents-db AGENTS_ARGS='validate'", "make agents-db", "rg -n \"//\\s*TODO\" docs/typst/thesis/sections docs/typst/thesis/main.typ", "aria_nbv/.venv/bin/python tools/mermaid/scripts/aria_mermaid_lint.py docs/typst/thesis/figures/qh_actor_oracle_contract.mmd docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd", "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable npx --yes @mermaid-js/mermaid-cli -i docs/typst/thesis/figures/qh_actor_oracle_contract.mmd -o docs/typst/thesis/figures/qh_actor_oracle_contract.pdf -b white -t default --pdfFit", "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable npx --yes @mermaid-js/mermaid-cli -i docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd -o docs/typst/thesis/figures/qh_vin_gnn_architecture.pdf -b white -t default --pdfFit", "cd docs && typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-inline-todos.pdf --root .", "make agents-db AGENTS_ARGS='resolve todo todo-093 --note \"Resolved plain inline thesis TODO comments; verified DB, grep, Mermaid lint/render, Typst compile, and debrief.\"'", "make check-agent-memory"]
+resolved_at = "2026-06-19"
+resolution_note = "Resolved plain inline thesis TODO comments; verified agents DB, zero-match TODO grep, Mermaid lint/render, Typst compile, visual figure QA, and native debrief."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-094"
+title = "Index remaining thesis draft-marker gates"
+description = "Keep all explicit thesis #*_todo markers mapped to agents DB owners so final-writing, protocol-freeze, evidence-refresh, and bridge-scope gates are not lost after inline TODO cleanup."
+priority = "high"
+status = "resolved"
+labels = ["thesis", "typst", "agents-db", "evidence-gates"]
+issue_ids = ["issue-027", "issue-013", "issue-020", "issue-028", "issue-032"]
+loc_min = 40
+loc_expected = 160
+loc_max = 360
+context = ["After resolving plain // TODO comments, the active thesis seed still contains intentional #question_todo/#decision_todo/#validation_todo/#research_todo/#impl_todo/#conflict_todo marker gates.", "These markers are not local prose defects; they represent final-writing, protocol-freeze, manifest-regeneration, ablation-evidence, implementation-audit, and bridge-scope decisions that must remain visible until the relevant evidence exists.", "This record indexes the marker inventory and maps it to existing thesis-seed, evidence-registry, target/RRI, Q_H, rollout, and final-writing backlog owners instead of deleting or prematurely resolving the markers."]
+references = ["repo:.omx/context/thesis-marker-todos-20260618T224945Z.md", "repo:docs/typst/thesis/main.typ#draft-markers", "repo:docs/typst/thesis/sections/01-introduction.typ#draft-markers", "repo:docs/typst/thesis/sections/02-background.typ#draft-markers", "repo:docs/typst/thesis/sections/02-02-geometric-learning.typ#draft-markers", "repo:docs/typst/thesis/sections/03-02-data-generation.typ#draft-markers", "repo:docs/typst/thesis/sections/03-method.typ#draft-markers", "repo:docs/typst/thesis/sections/04-evaluation.typ#draft-markers", "repo:docs/typst/thesis/sections/05-conclusion.typ#draft-markers", "repo:docs/typst/thesis/sections/06-draft-open-work.typ#draft-markers", "repo:.agents/todos.toml#todo-018", "repo:.agents/todos.toml#todo-037", "repo:.agents/todos.toml#todo-038", "repo:.agents/todos.toml#todo-048", "repo:.agents/todos.toml#todo-049", "repo:.agents/todos.toml#todo-050", "repo:.agents/todos.toml#todo-052", "repo:.agents/todos.toml#todo-055", "repo:.agents/todos.toml#todo-080", "repo:.agents/todos.toml#todo-084", "repo:.agents/todos.toml#todo-085", "repo:.agents/todos.toml#todo-087", "repo:.agents/todos.toml#todo-091", "repo:.agents/todos.toml#todo-092"]
+implementation_notes = ["Do not remove marker macros merely to make grep clean; replace each only when the owning final evidence, protocol decision, or writing pass is complete.", "During thesis-freeze work, use the context artifact to resolve markers by class: final prose/title/RQ/structure, target/RRI protocol, scale/evidence manifests, architecture/Q_H ablations, and bridge/future-work routing.", "When a marker becomes obsolete because an existing active todo owns it, update the thesis text and resolve through the owning todo rather than creating duplicate issue records."]
+acceptance = ["All remaining explicit thesis marker TODOs are inventoried in the context artifact.", "Each marker class is mapped to at least one existing DB owner or this record.", "Future thesis cleanup can distinguish intentional evidence gates from accidental inline TODO comments."]
+verification = ["rg -n \"#(validation|research|decision|impl|question|conflict)_todo\" docs/typst/thesis/main.typ docs/typst/thesis/sections", "make agents-db AGENTS_ARGS='validate'", "make agents-db", "make check-agent-memory"]
+resolved_at = "2026-06-19"
+resolution_note = "Indexed all remaining thesis draft-marker TODO macros in .omx/context/thesis-marker-todos-20260618T224945Z.md and mapped them to existing active thesis, evidence, target/RRI, Q_H, rollout, and bridge-scope owners. Marker macros remain in Typst source until those owning gates are complete."
 resolved_from = ".agents/todos.toml"
 
 [[refactor]]

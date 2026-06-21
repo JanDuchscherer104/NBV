@@ -11,7 +11,7 @@ metadata:
     - "diagnose-aria for concrete failures"
     - "aria-nbv-context when the affected surface is unknown"
     - "aria-litkg-memory for KG-backed retrieval or claim checks"
-    - "code-review for concrete diff review"
+    - "code-review-aria-nbv for concrete diff review"
     - "docs-curator for public narrative edits after the decision"
   evidence_required:
     - "source-order owner for the decision"
@@ -26,6 +26,8 @@ metadata:
     - "high-impact refactor"
     - "scaffold ownership"
     - "theory-rich plan"
+    - "conceptual plan"
+    - "--conceptual"
     - "elaborate plan"
     - "rich context"
     - "option tradeoffs"
@@ -36,6 +38,26 @@ metadata:
     - "docs/contents/thesis/questions.qmd"
     - ".agents/memory/state/PROJECT_STATE.md"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
+  canonical_sources:
+    - ".agents/references/source_order.md#role-split"
+    - "docs/contents/thesis/roadmap.qmd"
+    - "docs/contents/thesis/questions.qmd"
+    - ".agents/memory/state/PROJECT_STATE.md"
+    - ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md"
+  context7_refs:
+    - "/pytorch/pytorch"
+    - "/facebookresearch/pytorch3d"
+    - "/websites/typst_app"
+    - "/websites/quarto"
+  literature_refs:
+    - "docs/contents/literature/index.qmd"
+    - "finite-candidate-rl"
+    - "quality-driven-rri"
+    - "egocentric-aria-substrate"
+  tool_refs:
+    - "mcp__MCP_DOCKER.resolve_library_id"
+    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__code_index.search_code_advanced"
   verification:
     - "decision-complete plan with assumptions and deferred decisions"
 ---
@@ -70,6 +92,16 @@ Keep the default path concise unless one of these modifiers applies.
   literature/API grounding, diagrams, equations, or advisor-facing rationale,
   read `references/plan-mode-theory-patterns.md`. Ground theory in the source
   ladder, state claim strength, and include option tradeoffs before questions.
+- `conceptual`: when the user asks for `--conceptual`, conceptual planning,
+  systems thinking, or architectural explanation, start with the system
+  boundary and source-owner model before implementation detail. Name vertical
+  truth owners and horizontal evidence sources, include a Mermaid diagram for
+  non-trivial plans, link implementation-facing Python plans to
+  `.agents/references/python_conventions.md` and the nearest `aria_nbv/**/AGENTS.md`,
+  use local literature owners before web search for thesis claims, and use
+  Context7 only for external library/API behavior after local owner inspection.
+  Keep `$plan`, `$ralplan`, and `$prometheus-strict` as workflow owners; this
+  skill is the ARIA sidecar that teaches why the routing matters.
 - Use Codex-app-safe Markdown/KaTeX equations when they clarify the decision:
   write inline equations as `\(...\)`, display equations as `$$...$$` with
   blank lines before and after, avoid `$...$` inline math because it may not

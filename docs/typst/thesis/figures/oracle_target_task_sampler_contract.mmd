@@ -20,29 +20,23 @@ config:
     .cluster-label { font-size: 18px; font-weight: 700; }
 ---
 flowchart LR
-  GT["$$\begin{array}{c}\textbf{ASE GT OBBs}\\\texttt{gt\_obbs},\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}}\end{array}$$"]
-  Gate["$$\begin{array}{c}\textbf{Identity Gate}\\\texttt{IoU}+\texttt{ambiguity\ gap}\end{array}$$"]
-  Pool["$$\begin{array}{c}\textbf{Target-Task Pool}\\\texttt{identity\_valid}=1\end{array}$$"]
-  Sample["$$\begin{array}{c}\textbf{Seeded Uniform Cap}\\\texttt{max\_targets\_per\_sample}\end{array}$$"]
-  Rows["$$\begin{array}{c}\textbf{OracleTargetTaskRow}\\\texttt{target\_id}+\texttt{descriptor/audit}\end{array}$$"]
-  Rollouts["$$\begin{array}{c}\textbf{Rollout Data Generation}\\q\in\boldsymbol{\mathcal{Q}},\ \mathbf{C}_{q}\end{array}$$"]
-  Labels["$$\begin{array}{c}\textbf{GT-EVAL Labels}\\\mathrm{RRI}_{e},\ \texttt{headroom}\end{array}$$"]
-  Actor["$$\begin{array}{c}\textbf{Actor-Visible Selector}\\\texttt{OBS-SEL/PRED-Q}\\\text{diagnostic or later deployable}\end{array}$$"]
+  Source["$$\begin{array}{c}\textbf{Oracle source}\\\\ P_t,\ \mathbf{F}^{\mathrm{EVL}}_0\\\\ \texttt{gt-obbs},\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}},\ M_e\end{array}$$"]
+  Match["$$\begin{array}{c}\textbf{Identity and labelability gate}\\\\ \mu_1\ge\tau_{\mathrm{IoU}},\quad \mu_1-\mu_2\ge\tau_{\mathrm{gap}}\\\\ \texttt{not-low-RRI? measure headroom later}\end{array}$$"]
+  Rows["$$\begin{array}{c}\textbf{Seeded target-task rows}\\\\ e\in\mathcal{E}_{\mathrm{valid}},\ z_e\\\\ \texttt{uniform/stratified cap}\\\\ \texttt{match/audit/reason}\end{array}$$"]
+  Labels["$$\begin{array}{c}\textbf{rollouts.zarr + GT-EVAL}\\\\ q\in\boldsymbol{\mathcal{Q}}_t,\ \mathbf{C}_{q}\\\\ r_t^e,\ \mathrm{RRI}_{e},\ \Delta_{\mathrm{look}}\\\\ \texttt{invalid reasons}\end{array}$$"]
+  Actor["$$\begin{array}{c}\textbf{Actor-visible selector}\\\\ \texttt{OBS-SEL/PRED-Q}\\\\ \hat{e},\hat{z}_e\ \text{is not label truth}\end{array}$$"]
 
-  GT --> Gate
-  Gate --> Pool
-  Pool --> Sample
-  Sample --> Rows
-  Rows --> Rollouts
-  Rollouts --> Labels
-  Actor -. "separate contract" .-> Rows
+  Source --> Match
+  Match --> Rows
+  Rows --> Labels
+  Actor -. "proposal must pass GT-EVAL" .-> Match
 
   classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
   classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
   classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
 
-  class GT input;
-  class Gate,Sample,Rollouts compute;
-  class Pool,Rows,Actor data;
+  class Source input;
+  class Match compute;
+  class Rows,Actor data;
   class Labels output;

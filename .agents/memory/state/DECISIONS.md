@@ -103,8 +103,11 @@ tags: [codex, workflow, architecture]
   candidate.
 - `Q_H` predicts bounded cumulative root-normalized target gain from ASE oracle rollout traces;
   learned selected actions must be oracle-evaluated.
-- Main actor-visible target protocol is V1 **OBS-SEL / PRED-Q / GT-EVAL**.
-- Target input starts with observed/predicted OBB geometry plus class,
+- First rollout/data-generation target pools use oracle target-task sampling
+  from GT OBBs with identity and ambiguity diagnostics.
+- V1 **OBS-SEL / PRED-Q / GT-EVAL** remains the separate actor-visible target
+  protocol required before deployable-input claims.
+- V1 target input starts with observed/predicted OBB geometry plus class,
   confidence, projected area, semidense support, and EVL support.
 - Compact actor-visible crop descriptors are the first planned target-input
   ablation after the observed/predicted OBB plus support first path; entity
@@ -116,10 +119,10 @@ tags: [codex, workflow, architecture]
 - Mandatory first rollout sources before `Q_H` are random-valid,
   oracle-greedy/lookahead, and oracle-scored temperature-softmax; Gumbel-Top-k
   remains preferred later evidence.
-- Online discrete `Q_H` in the ASE mesh/oracle loop is the first bridge step
-  after offline fitted `Q_H`; continuous actor-critic, external simulator, and
-  online RL baselines are bridge/future work, not required quantitative thesis
-  success.
+- Online discrete `Q_H` in the ASE mesh/oracle loop is RQ5 and the first bridge
+  step after offline fitted `Q_H`; continuous actor-critic is RQ6, while
+  generic Gymnasium/SB3 or external-simulator online RL baselines remain
+  bridge/future work, not required quantitative thesis success.
 - The proposal should be a compact approximately 2.5 content-page research
   contract with RQs/objectives, literature pointers, and a compact timeline.
 - Source policy: add all cited sources to `docs/references.bib`; add to
@@ -131,14 +134,15 @@ tags: [codex, workflow, architecture]
 - First thesis-grade scale may be a scene-level held-out subset with multiple
   targets/trajectories, but coverage must report scenes, snippets, targets,
   trajectories, rollout seeds, transitions, and gaps separately.
-- Scaling is an evidence protocol rather than a standalone research question:
-  scene-level splits, target diversity, snippets, trajectories, rollout seeds,
-  transitions, invalid gaps, coverage gaps, and ablation axes must be reported
-  wherever empirical thesis claims are made.
+- Scaling is RQ4 support plus a shared evidence protocol, not a separate RQ
+  number: scene-level splits, target diversity, snippets, trajectories, rollout
+  seeds, transitions, invalid gaps, coverage gaps, and ablation axes must be
+  reported wherever empirical thesis claims are made.
 
 ### 2026-05-07 Rollout DTO And Store Decisions
 - The first implemented rollout replay path is a standalone `rollouts.zarr`
-  store, not counterfactual blocks embedded inside the VIN offline store.
+  store that includes counterfactual rollout traces and returns, not
+  counterfactual blocks embedded inside the VIN offline store.
 - Masked temperature-softmax is a stochastic rollout data-diversity policy over
   valid oracle/model-scored finite candidates. It persists logits,
   probabilities, log-probabilities, entropy, selected log-probability,
@@ -269,16 +273,16 @@ tags: [codex, workflow, architecture]
 - The core thesis claim is target-conditioned, quality-driven NBV on ASE/EFM with strict M1 data/cache/oracle contracts.
 - RRI is the primary project objective for next-best-view research in this repo. Coverage-style objectives remain baselines or diagnostics, not the main thesis target.
 - The canonical training and evaluation surface remains finite candidate ranking/selection anchored on prerecorded ASE trajectory snippets with oracle supervision derived from GT meshes where available.
-- The thesis-core simulator substrate is the ASE mesh/oracle counterfactual rollout loop. Habitat, Isaac, external datasets, online Gymnasium/SB3, continuous actor-critic policies, SceneScript, VLM planning, and real-device guidance are stretch or bridge work unless later evidence changes the scope.
-- The proposal/thesis boundary has five roles: implemented substrate; prerequisite and evidence protocol covering proposal freeze, M1, V0/V1 target contracts, masks/reasons, rollout/Q storage, LRZ gates, scene-level splits, and coverage reporting; hard quantitative thesis core covering observed target selection, one-step target scorer baseline, mixed candidates, rollout sources, candidate-query Transformer `Q_H`, and scale generation with exact coverage reporting; mandatory bridge design covering online discrete `Q_H`, IQL, actor-critic, hierarchy, and simulator paths; and future-work extensions covering SceneScript, VLM/global planning, real-device guidance, and quantitative continuous-control experiments.
-- Proposal freeze precedes M1 scale-up. The proposal must be a compact research contract, use primary metadata in the bibliography, remove generated/Wikipedia citation slop, render with `make proposal-pdf`, and track the generated proposal PDF once frozen.
+- The thesis-core simulator substrate is the ASE mesh/oracle counterfactual rollout loop. Online discrete `Q_H` over that finite-candidate contract is RQ5 after stable offline `Q_H`; Habitat, Isaac, external datasets, generic online Gymnasium/SB3, continuous actor-critic policies, SceneScript, VLM planning, and real-device guidance are stretch or bridge work unless later evidence changes the scope.
+- The proposal/thesis boundary follows the May advisor RQ order: RQ1 method/objective; RQ2 offline finite-candidate `Q_H`; RQ3 actor-visible representations; RQ4 candidate, rollout, and scale support; RQ5 online discrete `Q_H`; and RQ6 continuous or simulator escalation. Implemented substrate, M1 contracts, masks/reasons, rollout/Q storage, LRZ gates, scene-level splits, and coverage reporting remain shared gates across those RQs.
+- Thesis-seed freeze precedes M1 scale-up. `docs/typst/thesis/main.typ` must be a compact, advisor-readable thesis seed, use primary metadata in the bibliography, remove generated/Wikipedia citation slop, render with `make thesis-pdf`, and preserve unresolved proposal/advisor material with explicit draft markers rather than a competing active proposal source.
 - M1 is a hard stop before target/RL scaling: offline store, split, frame/CW90, candidate-label ordering, depth/backprojection, Rerun normal/boundary/failure recordings, and oracle throughput evidence must be reported in a public M1 contract artifact or explicit blockers.
 - The final experiment scale bar is full 100 GT-mesh ASE scenes and 4,608 snippet windows after small-subset correctness. Final supervision coverage must be reported exactly, and train/validation/test boundaries must be scene-level; the exact held-out test split remains an advisor decision.
 - LRZ deterministic sharding, Slurm/DSS staging, resumable writes, storage budgeting, and Zarr-first rollout/Q schema are hard M2/M3 gates before full-scale target/RL generation. No workstation should be assumed as the thesis scale path.
-- The target contract separates actor input from oracle labels: V0 uses GT OBB input plus GT crop/evaluation as a sanity/upper-bound path; V1 is mandatory for the main result and uses observed/predicted OBB inputs matched to GT-OBB target-RRI labels.
-- The main target protocol is OBS-SEL / PRED-Q / GT-EVAL: observed-only target selection, predicted/observed target-conditioned scoring or Q_H, and GT target-crop evaluation.
-- Automatic target selection is mandatory and actor-visible only: use predicted OBBs/classes/confidence, projected area, current semidense/EVL point support, and related observed signals. GT is label/evaluation only.
-- Target matching starts with compatible class, OBB IoU, visibility/support, projected area, and semidense/EVL point support. Extra criterion `X` is deferred.
+- The target contract separates oracle target-task sampling from actor-visible target inputs: rollout/data generation may use GT OBBs to define identity-valid target tasks, crops, ambiguity diagnostics, and labels; actor-visible models must not receive GT target input for deployable claims.
+- The V1 actor-visible protocol is OBS-SEL / PRED-Q / GT-EVAL: observed/predicted target selection, predicted/observed target-conditioned scoring or Q_H, and GT target-crop evaluation.
+- Automatic target selection for rollout labels is oracle/data-generation work first. Actor-visible target selection is mandatory only for the later deployable-input bridge and uses predicted OBBs/classes/confidence, projected area, current semidense/EVL point support, and related observed signals.
+- Oracle target-task identity starts with GT OBB geometry, self-IoU, and ambiguity gap. V1 target-to-GT matching remains geometry-first class-compatible IoU with actor-visible support/projection as eligibility or audit diagnostics, not as oracle-task gates.
 - Candidate generation is a mandatory mixed observed candidate set with categorical-probability strategy hyperparameters. The thesis-core vocabulary follows the current ARIA-NBV generator modes: `TARGET_POINT`, `RADIAL_AWAY`, `RADIAL_TOWARDS`, `FORWARD_RIG`, `UNIFORM_SPHERE`, `FORWARD_POWERSPHERICAL`, and bounded view jitter. Frontier or missing-surface samplers are stretch unless implemented and validated.
 - The one-step target-conditioned scorer is no longer a standalone research
   question. It is the required learned myopic baseline/control for the revised
@@ -302,10 +306,10 @@ tags: [codex, workflow, architecture]
   `Q_H`. IQL is a second offline-RL ablation only after `Q_H` is stable; SB3
   DQN/PPO/SAC are deferred until an online Gymnasium simulator exists.
 - Zarr is the first-choice rollout replay store. It should contain factual
-  source, target, rollout, step, candidate, lineage, dictionary, target-eval
-  crop, and metadata tables without duplicating raw ASE/ATEK; full meshes are
-  external path/hash/version references, and `Q_H` tensors are validated
-  derived training views.
+  source, target, counterfactual rollout, step, candidate, lineage, dictionary,
+  target-eval crop, return, and metadata tables without duplicating raw
+  ASE/ATEK; full meshes are external path/hash/version references, and `Q_H`
+  tensors are validated derived training views.
 - The current implemented rollout replay path uses standalone `rollouts.zarr`
   schema `0.7-root-gain-target-crops`, not VIN offline-store embedded
   counterfactual blocks. The production root contract is `VinOfflineSample`;

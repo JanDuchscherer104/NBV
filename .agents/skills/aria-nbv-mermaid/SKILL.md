@@ -31,6 +31,20 @@ metadata:
     - "docs/AGENTS.md"
     - "tools/mermaid/references/aria_mermaid_style.md"
     - "tools/mermaid/references/aria_symbol_map.yaml"
+  canonical_sources:
+    - "docs/AGENTS.md"
+    - "tools/mermaid/references/aria_mermaid_style.md"
+    - "tools/mermaid/references/aria_symbol_map.yaml"
+    - "tools/mermaid/scripts/aria_mermaid_lint.py"
+    - "docs/typst/shared"
+  context7_refs:
+    - "/mermaid-js/mermaid"
+    - "/websites/typst_app"
+  literature_refs:
+    - "docs/references.bib"
+    - "docs/contents/literature/index.qmd"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
   verification:
     - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>"
     - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when global mmdc is available"

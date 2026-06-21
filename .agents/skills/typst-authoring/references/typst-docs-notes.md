@@ -10,8 +10,8 @@ Use these notes to align patterns with official docs. Each item includes a Conte
 ## Tables + headers
 - **Query:** `table table.header align stroke inset`
 - **Docs:** *Reference → model/table*; *Guides → Tables*
-- **Pattern:** `#table(..., table.header[...], ...)` and wrap in `#figure(..., caption: [...]) <label>` for caption+reference.
-- **Note:** Use `table.header` for accessibility when possible.
+- **Pattern:** import `@preview/booktabs:0.0.4`, enable `#show: booktabs-default-table-style`, then use `#table(..., toprule(), table.header[...], midrule(), ..., bottomrule())` and wrap in `#figure(..., caption: [...]) <label>` for caption+reference.
+- **Note:** Use `table.header` for accessibility and booktabs rules for thesis/proposal tables.
 
 ## Layout grids
 - **Query:** `grid stack wrap-content`

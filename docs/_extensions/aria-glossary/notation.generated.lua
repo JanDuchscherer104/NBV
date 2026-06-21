@@ -76,7 +76,7 @@ return {
     },
     ["rl.acquisition_cost"] = {
       tex = "C(\\tau)",
-      typst = "#symb.rl.b",
+      typst = "#symb.rl.acquisition_cost",
     },
     ["rl.action_set"] = {
       tex = "\\mathcal{A}(s_t)",

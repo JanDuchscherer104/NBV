@@ -38,6 +38,28 @@ surface for the kind of information being changed.
   boundary that writes proposed artifacts and evidence, not direct policy,
   roadmap, memory, or backlog mutations.
 
+## OMX Consumption Map
+
+OMX workflows consume ARIA-NBV guidance as sidecar context and evidence:
+
+- `$analyze`: use root or nearest `AGENTS.md`, `.agents/references/source_order.md`,
+  and the narrowest domain skill to separate evidence, inference, and unknowns.
+- `$prometheus-strict` / `$ralplan`: use `plan-grill`,
+  `.agents/memory/state/`, thesis roadmap/questions, and this contract to set
+  scope, owner surfaces, non-goals, and verification before execution.
+- `$ultragoal`: use the active ARIA skill metadata for tool loops, must-read
+  surfaces, evidence requirements, and the command index in
+  `.agents/references/verification_matrix.md`.
+- `$code-review`: use the ARIA code-review skill plus nearest owner guidance;
+  findings that need reproduction hand off to `diagnose-aria` or the relevant
+  domain sidecar.
+- `$ultraqa`: use `diagnose-aria`, domain sidecars, Streamlit/Rerun/offline
+  checks, and KG/docs commands as evidence producers. Results become durable
+  only through the owning code, docs, memory, or backlog surface.
+- Optional browser, MCP, KG, graph, memory, and autoresearch tools provide
+  runtime evidence or proposals. They are never mandatory repo dependencies
+  unless a later owner-surface change explicitly promotes them.
+
 ## Autoresearch Adapter
 
 Autoresearch is a replaceable harness boundary, not a package commitment.

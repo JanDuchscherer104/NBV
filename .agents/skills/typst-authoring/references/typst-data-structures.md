@@ -41,6 +41,8 @@ Notes:
 
 ## Table pattern (array to flat cells)
 ```typst
+#import "@preview/booktabs:0.0.4": *
+
 #let rows = (
   (run: "alexnet", acc: 0.99),
   (run: "resnet", acc: 0.96),
@@ -48,7 +50,10 @@ Notes:
 
 #table(
   columns: 2,
+  toprule(),
   table.header[*Run*][*Acc*],
+  midrule(),
   ..rows.map(r => (r.run, r.acc)).flatten(),
+  bottomrule(),
 )
 ```

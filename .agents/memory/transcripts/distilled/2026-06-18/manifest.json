@@ -1,0 +1,36 @@
+{
+  "batch": "2026-06-18",
+  "counts": {
+    "candidate_distillates": 3251,
+    "candidate_distillates_promotable": 2594,
+    "candidate_sessions": 477,
+    "chat_messages_deduped": 37374,
+    "chat_messages_raw": 41542,
+    "plan_answers_deduped": 840,
+    "plan_answers_raw": 3408,
+    "reviewed_already_reflected": 11,
+    "reviewed_needs_canonical_review": 1357,
+    "reviewed_needs_preference_review": 319,
+    "reviewed_rejected_noise": 657,
+    "reviewed_route_to_backlog_review": 907,
+    "session_files_seen": 1554,
+    "sessions_matched_by_cwd": 470,
+    "sessions_matched_by_marker": 320,
+    "sessions_with_plan_mode": 92,
+    "user_messages_deduped": 2869,
+    "user_messages_raw": 11782
+  },
+  "outputs": [
+    ".agents/memory/transcripts/raw/2026-06-18/chat_messages.jsonl",
+    ".agents/memory/transcripts/user/2026-06-18/user_messages.jsonl",
+    ".agents/memory/transcripts/user/2026-06-18/plan_mode_answers.jsonl",
+    ".agents/memory/transcripts/distilled/2026-06-18/candidate_decisions.jsonl",
+    ".agents/memory/transcripts/distilled/2026-06-18/reviewed_decisions.jsonl"
+  ],
+  "project_root": "/home/jd/repos/ARIA-NBV",
+  "roots": [
+    "/home/jd/.codex/sessions",
+    "/home/jd/Desktop/pre-essential-restore-20260425-234438/.codex/sessions"
+  ],
+  "schema_version": 1
+}

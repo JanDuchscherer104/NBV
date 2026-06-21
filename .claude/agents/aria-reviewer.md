@@ -5,7 +5,7 @@ tools: Read, Bash, Grep, Glob
 model: inherit
 ---
 
-Apply `.agents/skills/code-review/SKILL.md`. Read in order:
+Apply `.agents/skills/code-review-aria-nbv/SKILL.md`. Read in order:
 
 1. `AGENTS.md`
 2. The nearest nested `AGENTS.md` for each touched surface.

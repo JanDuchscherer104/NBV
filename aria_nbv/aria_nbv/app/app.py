@@ -21,6 +21,7 @@ from .panels import (
     render_rl_page,
     render_rri_binning_page,
     render_rri_page,
+    render_stored_rollouts_panel,
     render_testing_attribution_page,
     render_vin_diagnostics_page,
     render_wandb_analysis_page,
@@ -157,6 +158,9 @@ class NbvStreamlitApp:
         def _page_counterfactual_rollouts() -> None:
             render_counterfactual_rollouts_page()
 
+        def _page_stored_rollouts() -> None:
+            render_stored_rollouts_panel()
+
         def _page_renders() -> None:
             with st.sidebar.form("depth_form"):
                 depth_cfg_prev = state.labeler_cfg.depth
@@ -251,6 +255,7 @@ class NbvStreamlitApp:
             st.Page(_page_data, title="Data", default=True),
             st.Page(_page_candidates, title="Candidate Poses"),
             st.Page(_page_counterfactual_rollouts, title="Counterfactual Rollouts"),
+            st.Page(_page_stored_rollouts, title="Stored Rollout Zarr"),
             st.Page(_page_renders, title="Candidate Renders"),
             st.Page(_page_rri, title="RRI"),
         ]

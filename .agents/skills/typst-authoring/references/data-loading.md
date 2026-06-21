@@ -18,17 +18,24 @@ Prefer stable, small files and keep parsing minimal.
 
 ## CSV (table-ready)
 ```typst
+#import "@preview/booktabs:0.0.4": *
+
 #let rows = csv("results.csv", row-type: dictionary)
 
 #table(
   columns: 3,
+  toprule(),
   table.header[*Run*][*Acc*][*Loss*],
+  midrule(),
   ..rows.map(r => (r.run, r.acc, r.loss)).flatten(),
+  bottomrule(),
 )
 ```
 Notes:
 - Header row is not stripped; `row-type: dictionary` maps keys to strings.
 - Use `map`/`flatten` to build table cells.
+- For full documents, import `booktabs` once near the root and enable
+  `#show: booktabs-default-table-style`.
 
 ## TOML (metadata/config)
 ```typst

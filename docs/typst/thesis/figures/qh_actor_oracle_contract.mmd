@@ -19,12 +19,12 @@ config:
     .edgeLabel { font-size: 16px; }
     .cluster-label { font-size: 18px; font-weight: 700; }
 ---
-flowchart TB
+flowchart LR
   subgraph ActorVisible["V1 actor-visible inputs"]
     direction TB
     Points["$$\begin{array}{c}\textbf{Accumulated geometry}\\\\ \boldsymbol{\mathcal{P}}_{t}\end{array}$$"]
     EVL["$$\begin{array}{c}\textbf{Frozen EVL field}\\\\ \mathbf{F}_{0}^{\mathrm{EVL}}\end{array}$$"]
-    Target["$$\begin{array}{c}\textbf{Target descriptor}\\\\ \mathbf{z}_{e}\\\\ \texttt{OBB + class + support}\end{array}$$"]
+    Target["$$\begin{array}{c}\textbf{Target descriptor}\\\\ \mathbf{z}_{e}\\\\ \texttt{OBB, class, support}\end{array}$$"]
     Hist["$$\begin{array}{c}\textbf{History and budget}\\\\ \mathbf{h}_{t},\ b_t\end{array}$$"]
     Table["$$\begin{array}{c}\textbf{Candidate table}\\\\ Q_t,\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
   end

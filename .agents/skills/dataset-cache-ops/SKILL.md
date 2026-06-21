@@ -2,6 +2,20 @@
 name: dataset-cache-ops
 description: Use when operating or documenting ARIA-NBV ASE downloads, ATEK shards, meshes, immutable VIN offline stores, dataset-version updates, split manifests, storage estimates, and data smoke checks.
 metadata:
+  mode: maintenance
+  not_when:
+    - "model training or scoring changes that only consume an existing store"
+    - "Rerun display issues with a valid store and no data-contract change"
+    - "legacy cache revival or migration unless explicitly requested"
+  handoff_to:
+    - "diagnose-aria for concrete data smoke failures or tracebacks"
+    - "rerun-nbv-inspector for visual inspection of compatible offline samples"
+    - "lrz-ai-systems for remote storage, Slurm, DSS, or container execution"
+    - "agents-db for durable data debt or blocked-store records"
+  evidence_required:
+    - "manifest, sample-index, split, and shard validation summary"
+    - "exact config path, data root, and smoke command for the store"
+    - "strict reader result or explicit version/blocker reason"
   applies_to:
     - "aria_nbv/aria_nbv/data_handling/**"
     - ".configs/**"
@@ -16,12 +30,37 @@ metadata:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
     - ".agents/references/verification_matrix.md"
+  canonical_sources:
+    - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
+    - "docs/contents/setup.qmd"
+    - ".agents/references/verification_matrix.md"
+    - ".agents/memory/state/GOTCHAS.md"
+  context7_refs:
+    - "/pydantic/pydantic"
+    - "/jcrist/msgspec"
+    - "/zarr-developers/zarr-python"
+    - "/facebookresearch/atek"
+    - "/facebookresearch/efm3d"
+  literature_refs:
+    - "egocentric-aria-substrate"
+    - "ProjectAria-ASE-2025"
+    - "EFM3D-straub2024"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__MCP_DOCKER.get_library_docs"
   verification:
     - "cd aria_nbv && uv run pytest tests/data_handling/test_vin_offline_store.py"
     - "make check-agent-memory for dataset guidance changes"
 ---
 
 # Dataset Cache Ops
+
+## OMX Integration
+
+OMX may schedule data work, but this skill owns ARIA dataset and immutable-store
+evidence. Feed OMX exact store health, smoke commands, and rebuild/migration
+constraints; do not make runtime orchestration or remote execution decisions
+inside this skill.
 
 ## When To Use
 

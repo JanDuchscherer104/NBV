@@ -8,6 +8,9 @@ parsed_root = ".agents/kg/generated/literature/parsed"
 neo4j_export_root = ".agents/kg/generated/neo4j-export"
 memory_state_root = ".agents/memory/state"
 sink = "both"
+# ARIA-NBV does not use a local graphify watch/rebuild loop, so materialize
+# should complete without trying to rebuild an external graphify workspace.
+graphify_rebuild_command = "true"
 download_pdfs = false
 relevance_tags = [
   "next-best-view",

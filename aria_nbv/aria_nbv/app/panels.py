@@ -17,6 +17,7 @@ from .panels.optuna_sweep import render_optuna_sweep_page
 from .panels.rl import render_rl_page
 from .panels.rri import render_rri_page
 from .panels.rri_binning import render_rri_binning_page
+from .panels.stored_rollouts import render_stored_rollouts_panel
 from .panels.testing_attribution import render_testing_attribution_page
 from .panels.vin_diagnostics import render_vin_diagnostics_page
 from .panels.wandb import render_wandb_analysis_page
@@ -31,6 +32,7 @@ __all__ = [
     "render_rl_page",
     "render_rri_page",
     "render_rri_binning_page",
+    "render_stored_rollouts_panel",
     "render_testing_attribution_page",
     "render_vin_diagnostics_page",
     "render_wandb_analysis_page",

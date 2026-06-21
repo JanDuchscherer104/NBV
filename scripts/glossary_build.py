@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -218,6 +220,82 @@ def _validate_lookup_refs(
                 raise GlossaryError(f"{term_id}: unknown equation_ref {ref!r}")
 
 
+def _validate_typst_notation_expressions(
+    notation: dict[str, dict[str, dict[str, str]]],
+) -> None:
+    """Compile every notation Typst expression against the shared facades."""
+
+    checks = [
+        (group, key, entry["typst"])
+        for group in ("symbols", "equations")
+        for key, entry in notation[group].items()
+    ]
+    if not checks:
+        return
+
+    tmp_parent = ROOT / ".omx" / "tmp"
+    tmp_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="notation-check-", dir=tmp_parent
+    ) as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        fixture = tmp_path / "notation-check.typ"
+        output = tmp_path / "notation-check.pdf"
+        rel_symbols = os.path.relpath(
+            ROOT / "docs/typst/shared/symbols.typ", start=tmp_path
+        )
+        rel_equations = os.path.relpath(
+            ROOT / "docs/typst/shared/equations.typ", start=tmp_path
+        )
+        lines = [
+            f'#import "{rel_symbols}": symb',
+            f'#import "{rel_equations}": eqs',
+            "",
+            "#let notation-checks = (",
+        ]
+        for group, key, typst_expr in sorted(checks):
+            lines += [
+                f"  // {group}.{key}",
+                f"  [{typst_expr}],",
+            ]
+        lines += [
+            ")",
+            "",
+            "#for item in notation-checks {",
+            "  item",
+            "  linebreak()",
+            "}",
+            "",
+        ]
+        fixture.write_text("\n".join(lines), encoding="utf-8")
+        command = [
+            "typst",
+            "compile",
+            "--root",
+            str(ROOT),
+            str(fixture),
+            str(output),
+        ]
+        try:
+            subprocess.run(
+                command,
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise GlossaryError(
+                "typst executable not found; install Typst to validate notation"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            details = (exc.stderr or exc.stdout or "").strip()
+            raise GlossaryError(
+                "docs/notation.yml contains a Typst expression that does not "
+                f"compile against shared symbols/equations:\n{details}"
+            ) from exc
+
+
 def _expect_string(term: dict[str, Any], field: str) -> str:
     value = term.get(field)
     if not isinstance(value, str) or not value.strip():
@@ -362,7 +440,7 @@ def _render_qmd(
     category_links = [
         f'<a class="glossary-chip glossary-category-chip" href="#glossary-tier-core">'
         f"Core <span>{len(core_terms)}</span></a>",
-        f'<a class="glossary-chip glossary-category-chip" href="#glossary-core-math-lookup">'
+        '<a class="glossary-chip glossary-category-chip" href="#glossary-core-math-lookup">'
         "Math lookup</a>",
         *[
         f'<a class="glossary-chip glossary-category-chip" href="#glossary-category-{_slug(group)}">'
@@ -698,34 +776,8 @@ def _render_typst(terms: list[dict[str, Any]], path: Path) -> None:
         ]
     lines += [
         "",
-        "#let gls(id) = {",
-    ]
-    for index, term in enumerate(sorted(terms, key=lambda item: item["id"])):
-        keyword = "if" if index == 0 else "} else if"
-        lines.append(
-            f"  {keyword} id == {_typst_string(term['id'])} {{ "
-            f"{_typst_content(str(term.get('short') or term['label']))}"
-        )
-    lines += [
-        "  } else { id }",
-        "}",
-        "",
-        "#let gls-full(id) = {",
-    ]
-    for index, term in enumerate(sorted(terms, key=lambda item: item["id"])):
-        keyword = "if" if index == 0 else "} else if"
-        short = term.get("short")
-        full = (
-            term["label"]
-            if not short or short == term["label"]
-            else f"{term['label']} ({short})"
-        )
-        lines.append(
-            f"  {keyword} id == {_typst_string(term['id'])} {{ {_typst_content(full)}"
-        )
-    lines += [
-        "  } else { id }",
-        "}",
+        "// Use Glossarium-native @term references in Typst prose.",
+        "// This compatibility file intentionally does not generate gls wrappers.",
         "",
         "#let glossary-list() = [",
     ]
@@ -884,6 +936,7 @@ def build(args: argparse.Namespace) -> None:
     _validate_terms(terms)
     notation = _load_notation(args.notation)
     _validate_lookup_refs(terms, notation)
+    _validate_typst_notation_expressions(notation)
     actions = set(args.actions)
     if "all" in actions:
         actions = {

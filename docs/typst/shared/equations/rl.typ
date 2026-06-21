@@ -18,6 +18,8 @@
       #symb.rl.target,
       #symb.rl.budget
     )
+    in
+    cal(S)^"hist"
   $,
   s_off: $
     #symb.rl.s_off
@@ -42,6 +44,7 @@
       #symb.rl.target,
       #symb.rl.budget
     )
+    in cal(S)^"cf0"
   $,
   s_cf_geom: $
     #symb.rl.s_cf_geom
@@ -62,6 +65,7 @@
       #symb.oracle.points_q,
       #symb.oracle.rri
     )
+    in cal(S)^"oracle"
   $,
   obs_render: $
     #(symb.rl.o) _(t+1)

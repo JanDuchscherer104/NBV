@@ -8,15 +8,19 @@ choose its own rendering library without owning rollout-store semantics.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+import zarr
 
 from ..data_handling import TARGET_INVALID_REASON_CODES
 from ..pose_generation import CandidatePositionMode, ViewDirectionMode, candidate_position_id, candidate_strategy_id
+from .manifest import read_rollout_store_manifest
 from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
-from .zarr_store import RolloutZarrStoreReader
+from .zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader, _required_groups
 
 _INVALID_REASON_NAMES = {int(code): name for name, code in INVALID_REASON_CODES.items()}
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
@@ -72,6 +76,40 @@ def decode_strategy_id(strategy_id: int | np.integer[Any]) -> str:
     """Return the stable orientation/strategy name for one numeric id."""
 
     return _STRATEGY_NAMES.get(int(strategy_id), "unknown" if int(strategy_id) < 0 else f"strategy_{int(strategy_id)}")
+
+
+def discover_rollout_store_paths(base_dir: Path, *, pattern: str = "**/*.zarr") -> list[Path]:
+    """Return rollout Zarr store candidates under a cache directory.
+
+    Args:
+        base_dir: Directory to scan recursively.
+        pattern: Glob pattern used to find Zarr directories.
+
+    Returns:
+        Absolute store paths sorted with the newest candidates first.
+    """
+
+    root = Path(base_dir).expanduser().resolve()
+    if not root.exists():
+        return []
+    stores = [path.expanduser().resolve() for path in root.glob(pattern) if path.is_dir()]
+    return sorted(stores, key=lambda path: (_path_mtime(path), path.as_posix()), reverse=True)
+
+
+def rollout_store_inventory_rows(store_paths: Iterable[Path]) -> list[dict[str, object]]:
+    """Return schema, validation, count, lineage, and storage rows for stores."""
+
+    rows = [_rollout_store_inventory_row(Path(path).expanduser().resolve()) for path in store_paths]
+    return sorted(
+        rows,
+        key=lambda row: (
+            _schema_sort_rank(str(row.get("schema_status", ""))),
+            bool(row.get("validation_ok") is True),
+            float(row.get("mtime_unix") or 0.0),
+            str(row.get("path", "")),
+        ),
+        reverse=True,
+    )
 
 
 def candidate_audit_rows(
@@ -278,6 +316,101 @@ def candidate_group_summary_rows(reader: RolloutZarrStoreReader, *, group_by: st
     return output
 
 
+def rollout_step_objective_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    rollout_row_id: int | None = None,
+) -> list[dict[str, object]]:
+    """Return per-step objective, branching, and selected-action audit rows."""
+
+    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    if step_ids.size == 0:
+        return []
+
+    rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(reader.array("steps/step_index"), dtype=np.int64).reshape(-1)
+    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+    num_candidates = np.asarray(reader.array("steps/num_candidates"), dtype=np.int64).reshape(-1)
+    num_valid = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.int64).reshape(-1)
+    cumulative_target_rri = np.asarray(reader.array("steps/cumulative_target_rri"), dtype=np.float64).reshape(-1)
+    cumulative_scene_rri = np.asarray(reader.array("steps/cumulative_scene_rri"), dtype=np.float64).reshape(-1)
+    cumulative_target_root_gain = np.asarray(
+        reader.array("steps/cumulative_target_root_gain"),
+        dtype=np.float64,
+    ).reshape(-1)
+    cumulative_scene_root_gain = np.asarray(reader.array("steps/cumulative_scene_root_gain"), dtype=np.float64).reshape(
+        -1
+    )
+
+    dictionaries = _reader_dictionaries(reader)
+    rollout_context = _rollout_context_by_id(reader, dictionaries=dictionaries)
+    rollout_rows_by_id = _rollout_rows_by_id(reader)
+    selected_candidates = _selected_candidate_context_by_id(reader)
+    previous_target_by_rollout: dict[int, float | None] = {}
+
+    ordered = sorted(
+        range(step_ids.size),
+        key=lambda index: (int(rollout_ids[index]), int(step_indices[index]), int(step_ids[index])),
+    )
+    rows: list[dict[str, object]] = []
+    for index in ordered:
+        current_rollout_id = int(rollout_ids[index])
+        if rollout_row_id is not None and current_rollout_id != int(rollout_row_id):
+            continue
+        cumulative_target = _finite_or_none(cumulative_target_rri[index])
+        previous_target = previous_target_by_rollout.get(current_rollout_id)
+        marginal_target = (
+            None
+            if cumulative_target is None
+            else cumulative_target
+            if previous_target is None
+            else cumulative_target - previous_target
+        )
+        previous_target_by_rollout[current_rollout_id] = cumulative_target
+        candidate_context = selected_candidates.get(int(selected_candidate_ids[index]), {})
+        rollout_context_row = rollout_context.get(current_rollout_id, {})
+        rollout_row = rollout_rows_by_id.get(current_rollout_id, {})
+        invalid_fraction = None
+        if int(num_candidates[index]) > 0:
+            invalid_fraction = 1.0 - float(num_valid[index]) / float(num_candidates[index])
+        rows.append(
+            {
+                "rollout_row_id": current_rollout_id,
+                "step_row_id": int(step_ids[index]),
+                "step_index": int(step_indices[index]),
+                "chain_id": rollout_row.get("chain_id"),
+                "scene": rollout_context_row.get("scene", ""),
+                "split": rollout_context_row.get("split", ""),
+                "policy": rollout_context_row.get("policy", ""),
+                "target_row_id": rollout_context_row.get("target_row_id", -1),
+                "horizon": rollout_row.get("horizon"),
+                "branch_factor": rollout_row.get("branch_factor"),
+                "beam_width": rollout_row.get("beam_width"),
+                "temperature": rollout_row.get("temperature"),
+                "cumulative_target_rri": cumulative_target,
+                "marginal_target_rri": marginal_target,
+                "cumulative_scene_rri": _finite_or_none(cumulative_scene_rri[index]),
+                "cumulative_target_root_gain": _finite_or_none(cumulative_target_root_gain[index]),
+                "cumulative_scene_root_gain": _finite_or_none(cumulative_scene_root_gain[index]),
+                "num_candidates": int(num_candidates[index]),
+                "num_valid_candidates": int(num_valid[index]),
+                "invalid_fraction": invalid_fraction,
+                "selected_candidate_row_id": int(selected_candidate_ids[index]),
+                "selected_target_rri": candidate_context.get("target_rri"),
+                "selected_target_root_gain": candidate_context.get("target_root_gain"),
+                "selected_scene_rri": candidate_context.get("scene_rri"),
+                "selected_probability": candidate_context.get("selection_probability"),
+                "selected_entropy": _step_selection_entropy(reader, step_row_id=int(step_ids[index])),
+                "selected_sampler_probability": candidate_context.get("sampler_probability"),
+                "selected_strategy": candidate_context.get("strategy", ""),
+                "selected_position": candidate_context.get("position", ""),
+                "selected_mixture": candidate_context.get("mixture", ""),
+                "selected_invalid_reason": candidate_context.get("invalid_reason", ""),
+            }
+        )
+    return rows
+
+
 def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, object]]]:
     """Return live `CandidateSamplingResult` counts by position and invalid reason."""
 
@@ -459,6 +592,224 @@ def _selected_motion_outlier_rows(
     return output
 
 
+def _rollout_store_inventory_row(store_path: Path) -> dict[str, object]:
+    try:
+        root = zarr.open_group(store_path, mode="r")
+    except Exception as exc:
+        stat = _store_stats(store_path)
+        return {
+            "path": store_path.as_posix(),
+            "name": store_path.name,
+            "schema_status": "unreadable",
+            "schema_version": None,
+            "schema_id": None,
+            "manifest_version": None,
+            "manifest_schema_version": None,
+            "manifest_profile": None,
+            "manifest_config": None,
+            "manifest_scene_count": None,
+            "manifest_split_count": None,
+            "validation_ok": False,
+            "validation_status": "failed",
+            "validation_error_count": 1,
+            "first_error": f"{type(exc).__name__}: {exc}",
+            "validation_errors": [f"{type(exc).__name__}: {exc}"],
+            "required_groups_present": 0,
+            "required_groups_missing": len(_required_groups()),
+            "missing_required_groups": list(_required_groups()),
+            **stat,
+        }
+
+    attrs = dict(root.attrs)
+    schema_version = attrs.get("schema_version")
+    manifest = _safe_manifest(store_path)
+    validation_ok: bool | None = None
+    validation_errors: list[str] = []
+    validator_counts = {"validator_rollouts": None, "validator_steps": None, "validator_candidates": None}
+    try:
+        validation = RolloutZarrStoreReader(store_path).validate()
+    except Exception as exc:
+        validation_errors = [f"{type(exc).__name__}: {exc}"]
+        validation_ok = False
+    else:
+        validation_ok = validation.ok
+        validation_errors = list(validation.errors)
+        validator_counts = {
+            "validator_rollouts": int(validation.num_rollouts),
+            "validator_steps": int(validation.num_steps),
+            "validator_candidates": int(validation.num_candidates),
+        }
+
+    missing_required = [name for name in _required_groups() if name not in root]
+    row: dict[str, object] = {
+        "path": store_path.as_posix(),
+        "name": store_path.name,
+        "schema_status": "current" if schema_version == ROLLOUT_ZARR_SCHEMA_VERSION else "stale",
+        "schema_version": schema_version,
+        "schema_id": attrs.get("schema_id"),
+        "created_at": attrs.get("created_at_utc") or attrs.get("created_at"),
+        "manifest_path": attrs.get("manifest_path"),
+        "manifest_version": attrs.get("manifest_version"),
+        "manifest_schema_version": manifest.get("manifest_version") if isinstance(manifest, dict) else None,
+        "manifest_profile": _manifest_profile(manifest),
+        "manifest_config": _manifest_config_stem(manifest),
+        "manifest_scene_count": _manifest_coverage_count(manifest, "scenes"),
+        "manifest_split_count": _manifest_coverage_count(manifest, "splits"),
+        "validation_ok": validation_ok,
+        "validation_status": _validation_status(validation_ok),
+        "validation_error_count": len(validation_errors),
+        "first_error": validation_errors[0] if validation_errors else "",
+        "validation_errors": validation_errors,
+        "required_groups_present": len(_required_groups()) - len(missing_required),
+        "required_groups_missing": len(missing_required),
+        "missing_required_groups": missing_required,
+        "observed_rollouts": _array_size(root, "rollouts/rollout_row_id"),
+        "observed_steps": _array_size(root, "steps/step_row_id"),
+        "observed_candidates": _array_size(root, "candidates/candidate_row_id"),
+        "actor_action_fraction": _mask_fraction(root, "candidates/actor_action_mask"),
+        "q_train_fraction": _mask_fraction(root, "candidates/q_train_mask"),
+        "selected_count": _mask_count(root, "candidates/selected_mask"),
+        "policy_summary": _rollout_dictionary_summary(
+            root, group="rollouts", id_array="policy_id", dictionary="policy"
+        ),
+        "horizon_summary": _numeric_summary(root, "rollouts/horizon"),
+        "branch_factor_summary": _numeric_summary(root, "rollouts/branch_factor"),
+        **validator_counts,
+        **_store_stats(store_path),
+    }
+    return row
+
+
+def _schema_sort_rank(status: str) -> int:
+    return {"current": 3, "stale": 2, "unreadable": 1}.get(status, 0)
+
+
+def _validation_status(validation_ok: bool | None) -> str:
+    if validation_ok is True:
+        return "ok"
+    if validation_ok is False:
+        return "failed"
+    return "unknown"
+
+
+def _safe_manifest(store_path: Path) -> dict[str, Any]:
+    try:
+        manifest = read_rollout_store_manifest(store_path)
+    except Exception:
+        return {}
+    return manifest if isinstance(manifest, dict) else {}
+
+
+def _manifest_profile(manifest: dict[str, Any]) -> str | None:
+    generation = manifest.get("generation")
+    if not isinstance(generation, dict):
+        return None
+    writer_config = generation.get("writer_config")
+    if not isinstance(writer_config, dict):
+        return None
+    for key in ("profile", "recipe_profile", "name"):
+        value = writer_config.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _manifest_config_stem(manifest: dict[str, Any]) -> str | None:
+    generation = manifest.get("generation")
+    if not isinstance(generation, dict):
+        return None
+    invocation = generation.get("invocation")
+    if not isinstance(invocation, dict):
+        return None
+    config_path = invocation.get("config_path")
+    return None if config_path in (None, "") else Path(str(config_path)).stem
+
+
+def _manifest_coverage_count(manifest: dict[str, Any], key: str) -> int | None:
+    coverage = manifest.get("source_coverage")
+    if not isinstance(coverage, dict):
+        return None
+    value = coverage.get(key)
+    if isinstance(value, dict):
+        return len(value)
+    if isinstance(value, list | tuple | set):
+        return len(value)
+    return None
+
+
+def _store_stats(store_path: Path) -> dict[str, object]:
+    file_count = 0
+    byte_size = 0
+    if store_path.exists():
+        for path in store_path.rglob("*"):
+            if not path.is_file():
+                continue
+            file_count += 1
+            try:
+                byte_size += path.stat().st_size
+            except OSError:
+                continue
+    return {
+        "mtime_unix": _path_mtime(store_path),
+        "size_bytes": int(byte_size),
+        "file_count": int(file_count),
+    }
+
+
+def _path_mtime(path: Path) -> float:
+    try:
+        return float(path.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+def _array_size(root: Any, path: str) -> int | None:
+    try:
+        return int(np.asarray(root[path]).reshape(-1).shape[0])
+    except Exception:
+        return None
+
+
+def _mask_count(root: Any, path: str) -> int | None:
+    try:
+        return int(np.asarray(root[path], dtype=np.bool_).reshape(-1).sum())
+    except Exception:
+        return None
+
+
+def _mask_fraction(root: Any, path: str) -> float | None:
+    try:
+        values = np.asarray(root[path], dtype=np.bool_).reshape(-1)
+    except Exception:
+        return None
+    if values.size == 0:
+        return None
+    return float(values.sum()) / float(values.size)
+
+
+def _rollout_dictionary_summary(root: Any, *, group: str, id_array: str, dictionary: str) -> str:
+    try:
+        ids = np.asarray(root[f"{group}/{id_array}"], dtype=np.int64).reshape(-1)
+        values = json.loads(np.asarray(root[f"dictionaries/{dictionary}"], dtype=np.uint8).tobytes().decode("utf-8"))
+    except Exception:
+        return ""
+    names = [_dict_value(values, int(value)) or str(int(value)) for value in np.unique(ids).tolist()]
+    return ", ".join(names)
+
+
+def _numeric_summary(root: Any, path: str) -> str:
+    try:
+        values = np.asarray(root[path]).reshape(-1)
+    except Exception:
+        return ""
+    if values.size == 0:
+        return ""
+    unique = sorted({int(value) for value in values.tolist()})
+    if len(unique) <= 4:
+        return ", ".join(str(value) for value in unique)
+    return f"{unique[0]}..{unique[-1]} ({len(unique)} values)"
+
+
 def _candidate_diagnostics(reader: RolloutZarrStoreReader, *, row_positions: np.ndarray) -> dict[str, np.ndarray]:
     length = int(row_positions.shape[0])
     defaults: dict[str, tuple[Any, Any]] = {
@@ -509,6 +860,54 @@ def _rollout_context_by_id(
             "target_row_id": int(reader.array("rollouts/target_row_id")[index]),
         }
     return output
+
+
+def _rollout_rows_by_id(reader: RolloutZarrStoreReader) -> dict[int, dict[str, object]]:
+    rollout_rows = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    output: dict[int, dict[str, object]] = {}
+    for index, rollout_row_id in enumerate(rollout_rows.tolist()):
+        output[int(rollout_row_id)] = {
+            "chain_id": int(reader.array("rollouts/chain_id")[index]),
+            "horizon": int(reader.array("rollouts/horizon")[index]),
+            "branch_factor": int(reader.array("rollouts/branch_factor")[index]),
+            "beam_width": int(reader.array("rollouts/beam_width")[index]),
+            "temperature": _finite_or_none(reader.array("rollouts/temperature")[index]),
+        }
+    return output
+
+
+def _selected_candidate_context_by_id(reader: RolloutZarrStoreReader) -> dict[int, dict[str, object]]:
+    rows = candidate_audit_rows(reader)
+    return {
+        int(row["candidate_row_id"]): {
+            "target_rri": row.get("target_rri"),
+            "target_root_gain": row.get("target_root_gain"),
+            "scene_rri": row.get("scene_rri"),
+            "selection_probability": row.get("selection_probability"),
+            "sampler_probability": row.get("sampler_probability"),
+            "strategy": row.get("strategy", ""),
+            "position": row.get("position", ""),
+            "mixture": row.get("mixture", ""),
+            "invalid_reason": row.get("invalid_reason", ""),
+        }
+        for row in rows
+        if bool(row.get("selected"))
+    }
+
+
+def _step_selection_entropy(reader: RolloutZarrStoreReader, *, step_row_id: int) -> float | None:
+    step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
+    actor_valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    probabilities = np.asarray(reader.array("candidates/selection_probabilities"), dtype=np.float64).reshape(-1)
+    mask = (step_ids == int(step_row_id)) & actor_valid & np.isfinite(probabilities) & (probabilities > 0.0)
+    values = probabilities[mask]
+    if values.size == 0:
+        return None
+    total = float(values.sum())
+    if not np.isfinite(total) or total <= 0.0:
+        return None
+    normalized = values / total
+    return float(-(normalized * np.log(normalized)).sum())
 
 
 def _component_names(reader: RolloutZarrStoreReader) -> dict[int, str]:
@@ -591,6 +990,9 @@ __all__ = [
     "decode_position_id",
     "decode_strategy_id",
     "decode_target_invalid_reason",
+    "discover_rollout_store_paths",
+    "rollout_store_inventory_rows",
+    "rollout_step_objective_rows",
     "suspicious_rollout_rows",
     "target_audit_rows",
     "validity_waterfall_rows",

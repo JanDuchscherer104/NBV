@@ -25,6 +25,18 @@ metadata:
   must_read:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
+  canonical_sources:
+    - "AGENTS.md"
+    - ".agents/references/source_order.md#role-split"
+    - ".agents/skills/aria-nbv-context/references/context_map.md"
+  literature_refs:
+    - "docs/contents/literature/index.qmd"
+    - "docs/literature/sources.jsonl"
+    - "quality-driven-rri"
+    - "finite-candidate-rl"
+  tool_refs:
+    - "mcp__code_index.search_code_advanced"
+    - "mcp__code_index.get_symbol_body"
   verification:
     - "make context when generated context is stale or missing"
 ---

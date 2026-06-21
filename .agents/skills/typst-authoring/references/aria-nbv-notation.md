@@ -9,14 +9,14 @@ docs/typst/shared/
   symbols.typ       # facade: symb.frame, symb.vin, symb.oracle, ...
   equations.typ     # facade: eqs.rri, eqs.vin, eqs.entity, ...
   math.typ          # helpers such as T(A, B)
-  terms.typ         # generated glossary term facade
+  terms.typ         # legacy generated acronym facade, not new prose API
   glossary.typ      # glossary source
   macros.typ        # reusable document macros
 ```
 
-Import relative to the file being edited. From a thesis proposal section under
-`docs/typst/thesis/sections/proposal/`, the shared library is reached through
-`../../../shared/...`; fixtures under `.agents/skills` can use root-relative
+Import relative to the file being edited. From an active thesis section under
+`docs/typst/thesis/sections/`, the shared library is reached through
+`../../shared/...`; fixtures under `.agents/skills` can use root-relative
 imports with `--root .`.
 
 ## Shared Modules
@@ -126,6 +126,17 @@ proposal/thesis math should use `D` and the shared equations.
 
 ## Adding Missing Notation
 
+ARIA-NBV has three coupled notation stores:
+
+- `symbols.typ` / `equations.typ` provide autocomplete-friendly Typst APIs
+  (`#symb...`, `#eqs...`) for math in thesis text, slides, and diagrams.
+- `glossary.typ` uses Glossarium as the prose term source; write
+  Glossarium-native `@term` or `@term:short` references instead of new `#gls`
+  wrappers.
+- `docs/notation.yml` maps stable symbol/equation keys to TeX and Typst
+  expressions so Quarto lookup tables, generated Lua helpers, and agent context
+  stay aligned with the shared Typst facades.
+
 When a new symbol is needed:
 
 1. Pick the domain module: `symbols/vin.typ`, `symbols/oracle.typ`,
@@ -134,11 +145,15 @@ When a new symbol is needed:
 3. Export through `symbols.typ` if a new module is added.
 4. Add reusable formulae under `equations/*.typ` and export through
    `equations.typ`.
-5. Use the shared symbol/equation in the document.
-6. Compile a fixture or the affected document.
-7. If the new term needs a glossary entry, edit
-   `docs/typst/shared/glossary.typ`, run `make glossary`, and verify generated
-   Typst/Quarto glossary artifacts changed as expected.
+5. Add or update the matching `docs/notation.yml` entry and connect glossary
+   records through `symbol_refs` or `equation_refs` when a term owns the symbol.
+6. Use the shared symbol/equation in the document.
+7. Run `make glossary` so generated Quarto, Typst, Lua, JSONL, and notation
+   artifacts stay synchronized.
+8. Compile a fixture or the affected document.
+9. If the new term needs a glossary entry, edit
+   `docs/typst/shared/glossary.typ`, use native Glossarium references in prose,
+   and verify generated Typst/Quarto glossary artifacts changed as expected.
 
 Do not create a local one-off alias in a thesis section if the symbol will
 recur.

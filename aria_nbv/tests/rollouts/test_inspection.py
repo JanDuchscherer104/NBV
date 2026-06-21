@@ -16,12 +16,72 @@ from aria_nbv.rollouts import (
     RolloutZarrStoreReader,
     candidate_audit_rows,
     candidate_group_summary_rows,
+    discover_rollout_store_paths,
+    rollout_step_objective_rows,
+    rollout_store_inventory_rows,
     suspicious_rollout_rows,
     target_audit_rows,
     validity_waterfall_rows,
     write_rollout_zarr_store,
 )
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores(tmp_path) -> None:
+    """Inventory rows should diagnose stores before current-schema deep inspection."""
+
+    current = write_rollout_zarr_store(
+        tmp_path / "current.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=41)[:1],
+    )
+    stale_path = tmp_path / "stale.zarr"
+    stale_root = zarr.open_group(stale_path, mode="w")
+    stale_root.attrs["schema_version"] = "0.6-rollout-core"
+    stale_root.create_group("rollouts").create_array("rollout_row_id", data=np.arange(2, dtype=np.int64))
+    stale_root.create_group("steps").create_array("step_row_id", data=np.arange(4, dtype=np.int64))
+    stale_root.create_group("candidates").create_array("candidate_row_id", data=np.arange(12, dtype=np.int64))
+    unreadable_path = tmp_path / "unreadable.zarr"
+    unreadable_path.mkdir()
+    (unreadable_path / "not-a-zarr-store.txt").write_text("broken", encoding="utf-8")
+
+    rows = rollout_store_inventory_rows([stale_path, unreadable_path, current.store_dir])
+    by_name = {str(row["name"]): row for row in rows}
+
+    assert by_name["current.zarr"]["schema_status"] == "current"
+    assert by_name["current.zarr"]["validation_ok"] is True
+    assert by_name["current.zarr"]["validation_status"] == "ok"
+    assert by_name["current.zarr"]["observed_rollouts"] == current.num_rollouts
+    assert by_name["current.zarr"]["validator_rollouts"] == current.num_rollouts
+    assert by_name["current.zarr"]["required_groups_missing"] == 0
+
+    assert by_name["stale.zarr"]["schema_status"] == "stale"
+    assert by_name["stale.zarr"]["validation_ok"] is False
+    assert by_name["stale.zarr"]["validation_status"] == "failed"
+    assert by_name["stale.zarr"]["observed_rollouts"] == 2
+    assert by_name["stale.zarr"]["observed_steps"] == 4
+    assert by_name["stale.zarr"]["observed_candidates"] == 12
+    assert by_name["stale.zarr"]["validator_rollouts"] == 0
+    assert "Unsupported rollout Zarr schema_version" in str(by_name["stale.zarr"]["first_error"])
+
+    assert by_name["unreadable.zarr"]["schema_status"] == "unreadable"
+    assert by_name["unreadable.zarr"]["validation_ok"] is False
+    assert by_name["unreadable.zarr"]["validation_status"] == "failed"
+    assert by_name["unreadable.zarr"]["validation_error_count"] == 1
+    assert by_name["unreadable.zarr"]["first_error"]
+
+
+def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None:
+    """Discovery should recursively find candidate Zarr directories only."""
+
+    first = tmp_path / "nested" / "a.zarr"
+    second = tmp_path / "b.zarr"
+    first.mkdir(parents=True)
+    second.mkdir()
+    (tmp_path / "not_zarr.txt").write_text("skip", encoding="utf-8")
+
+    paths = discover_rollout_store_paths(tmp_path)
+
+    assert set(paths) == {first.resolve(), second.resolve()}
 
 
 def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path) -> None:
@@ -95,3 +155,31 @@ def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path)
     assert "low_valid_fanout" in kinds
     assert "valid_candidate_missing_label" in kinds
     assert "selected_motion_outlier" in kinds
+
+
+def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fields(tmp_path) -> None:
+    """Per-step rows should join objectives and selected-action provenance from existing arrays."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=45)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = rollout_step_objective_rows(reader, rollout_row_id=0)
+
+    assert [row["step_index"] for row in rows] == [0, 1]
+    assert rows[0]["policy"] == "oracle_greedy"
+    assert rows[0]["chain_id"] == 0
+    assert rows[0]["marginal_target_rri"] == pytest.approx(rows[0]["cumulative_target_rri"])
+    assert rows[1]["marginal_target_rri"] == pytest.approx(
+        float(rows[1]["cumulative_target_rri"]) - float(rows[0]["cumulative_target_rri"])
+    )
+    assert rows[0]["selected_target_rri"] == pytest.approx(rows[0]["marginal_target_rri"])
+    assert rows[0]["selected_target_root_gain"] is not None
+    assert rows[0]["selected_position"] == "forward_local"
+    assert rows[0]["selected_strategy"] != ""
+    assert rows[0]["selected_mixture"] != ""
+    assert rows[0]["selected_sampler_probability"] == pytest.approx(1.0 / float(rows[0]["num_candidates"]))
+    assert rows[0]["selected_probability"] is not None
+    assert rows[0]["selected_entropy"] is not None
+    assert rows[0]["num_candidates"] >= 6
+    assert rows[0]["num_valid_candidates"] <= rows[0]["num_candidates"]

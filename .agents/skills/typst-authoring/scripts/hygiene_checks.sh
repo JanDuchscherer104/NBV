@@ -12,7 +12,7 @@ Modes:
 
 Examples:
   .agents/skills/typst-authoring/scripts/hygiene_checks.sh docs/typst/thesis
-  .agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections/proposal
+  .agents/skills/typst-authoring/scripts/hygiene_checks.sh --strict docs/typst/thesis/sections
   .agents/skills/typst-authoring/scripts/hygiene_checks.sh --examples .agents/skills/typst-authoring
 EOF
 }

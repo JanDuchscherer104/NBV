@@ -30,6 +30,23 @@ metadata:
     - ".agents/references/litkg_quick_reference.md"
     - ".agents/external/litkg-rs/AGENTS.md"
     - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
+  canonical_sources:
+    - ".agents/external/litkg-rs/AGENTS.md"
+    - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
+    - ".agents/references/litkg_quick_reference.md#default-commands"
+    - ".configs/litkg.toml"
+    - ".agents/references/context7_library_ids.md"
+  context7_refs:
+    - "/pytorch/pytorch"
+    - "/pydantic/pydantic"
+    - "/isl-org/open3d"
+    - "/lightning-ai/pytorch-lightning"
+  literature_refs:
+    - "docs/literature/sources.jsonl"
+    - "docs/references.bib"
+  tool_refs:
+    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__MCP_DOCKER.list_papers"
   verification:
     - "make kg-capabilities KG_FORMAT=json"
     - "cd .agents/external/litkg-rs && cargo fmt --all --check"

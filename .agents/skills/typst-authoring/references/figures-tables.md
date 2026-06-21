@@ -39,6 +39,30 @@ context from counterfactual candidate rendering (@fig:vin-offline-store)."
 Use tables for exact values and compact comparisons. Use figures for trends,
 architecture, flow, or spatial relationships.
 
+ARIA-NBV thesis/proposal tables use the Typst Universe `booktabs` package by
+default. At the document root, import and enable it once:
+
+```typst
+#import "@preview/booktabs:0.0.4": *
+#show: booktabs-default-table-style
+```
+
+Then include explicit rules in every publication-facing table:
+
+```typst
+#figure(
+  table(
+    columns: (1fr, 1fr, 1fr),
+    toprule(),
+    table.header([*Claim*], [*Evidence*], [*Decision*]),
+    midrule(),
+    [Target utility], [Endpoint target gain], [Primary metric],
+    bottomrule(),
+  ),
+  caption: [Claim-to-evidence mapping.],
+) <tab:claim-evidence>
+```
+
 For thesis result tables:
 
 - include metric direction in header or caption;

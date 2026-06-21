@@ -12,8 +12,10 @@ Use this reference when a task needs current project truth or sources disagree.
   `docs/contents/glossary.qmd` is generated public output.
 - Idea archive: `docs/contents/ideas.qmd` is read-only scratch/history, not
   current direction.
-- Advisor proposal narrative: `docs/typst/thesis/proposal.typ` and its included
-  sections own proposal-facing wording once proposal work is in scope.
+- Active thesis seed: `docs/typst/thesis/main.typ` and its included sections
+  own thesis-facing Typst prose once thesis work is in scope. Archived
+  proposal/advisor Typst sources under `.agents/archive/docs/typst/thesis/`
+  are provenance only.
 - Seminar evidence: `docs/typst/seminar_paper/main.typ` and included sections
   describe the older implemented substrate and past seminar writeup. Use them
   for historical evidence, not for current thesis priority.
@@ -23,6 +25,16 @@ Use this reference when a task needs current project truth or sources disagree.
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.
 - Operator aids and long conventions: `.agents/references/`.
+- Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
+  read-first, evidence, and verification loops only. They must point to
+  canonical sources through `metadata.canonical_sources` instead of restating
+  thesis claims, formulas, package contracts, or planned implementation detail.
+  Optional `metadata.context7_refs`, `metadata.literature_refs`, and
+  `metadata.tool_refs` are horizontal evidence-routing hints; they do not
+  override the owner ladder in this file.
+  Semantic-drift warnings from `make scaffold-audit` are source-order review
+  prompts: move durable truth to the owner above, or justify the text as a
+  compact routing/evidence cue.
 - Optional tool and adapter boundaries:
   `.agents/references/alignment_tools_contract.md`. KG/backend operational
   details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
