@@ -114,11 +114,10 @@ with one fixed provenance component $k(i)$ per row. The canonical `v1_realistic_
     columns: (1.0fr, 0.42fr, 0.9fr, 0.9fr),
     toprule(),
     table.header([*Component*], [*Rows*], [*Center family*], [*View family*]),
-    midrule(),
-    [`forward_local`], [24], [`forward_local`], [`forward_rig`],
-    [`target_bearing_local`], [24], [`target_bearing_local`], [`target_point`],
-    [`lateral_target_bypass`], [12], [`lateral_target_bypass`], [`target_point`],
-    bottomrule(),
+    midrule(), [`forward_local`], [24], [`forward_local`],
+    [`forward_rig`], [`target_bearing_local`], [24], [`target_bearing_local`],
+    [`target_point`], [`lateral_target_bypass`], [12], [`lateral_target_bypass`],
+    [`target_point`], bottomrule(),
   ),
   caption: [Canonical three-family finite candidate table for real thesis rollouts. Counts are full-shell rows; valid-action counts are measured after geometry and motion pruning.],
 ) <tab:realistic-three-family-mixture>
@@ -143,28 +142,28 @@ $
 
 $
   bold(d)_i^0 =
-  op("norm")((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi')).
+  norm((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi')).
 $
 
-The three position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the actor-visible target bearing in the reference frame, $bold(l)_e = op("norm")(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
+The three position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the actor-visible target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
 
 $
   bold(d)_i^"forward" =
-  op("norm")(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
+  norm(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
   quad
   alpha_f = 0.45,
 $
 
 $
   bold(d)_i^"target" =
-  op("norm")(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
+  norm(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
   quad
   alpha_t = 0.4,
 $
 
 $
   bold(d)_i^"bypass" =
-  op("norm")(
+  norm(
     0.55 bold(b)_e
     + 0.85 op("sign")(d_(i,x)^0) bold(l)_e
     + op("clip")(d_(i,y)^0, -0.35, 0.35) bold(e)_y
@@ -182,10 +181,10 @@ $
 `forward_local` keeps the reference rig orientation. The two target-looking families orient the camera to the selected actor-visible target center $bold(p)_e$:
 
 $
-  bold(z)_i^w = op("norm")(bold(p)_e - bold(c)_i^w),
+  bold(z)_i^w = norm(bold(p)_e - bold(c)_i^w),
   quad
   bold(y)_i^w =
-  op("norm")(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
+  norm(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
   quad
   bold(x)_i^w = bold(y)_i^w times bold(z)_i^w.
 $
@@ -215,12 +214,11 @@ Rollout generation samples finite branches over the valid candidate table. The c
     columns: (1fr, 0.58fr, 0.58fr, 0.58fr, 1.12fr),
     toprule(),
     table.header([*Recipe*], [*$H$*], [*$B$*], [*Beam*], [*Selection rule*]),
-    midrule(),
-    [`random_valid`], [1], [1], [1], [Uniform over valid rows.],
-    [`oracle_greedy`], [1], [1], [1], [Argmax of oracle target-root gain.],
-    [`oracle_lookahead`], [2], [2], [2], [Bounded oracle greedy branches.],
-    [`temperature_softmax`], [2], [2], [2], [Softmax over robust oracle scores with $tau=1$.],
-    bottomrule(),
+    midrule(), [`random_valid`], [1], [1], [1],
+    [Uniform over valid rows.], [`oracle_greedy`], [1], [1], [1],
+    [Argmax of oracle target-root gain.], [`oracle_lookahead`], [2], [2], [2],
+    [Bounded oracle greedy branches.], [`temperature_softmax`], [2], [2], [2],
+    [Softmax over robust oracle scores with $tau=1$.], bottomrule(),
   ),
   caption: [Canonical rollout recipes for the real thesis profile. The recipes create replay diversity and oracle-lookahead references; they do not train #symb.rl.qh by themselves.],
 ) <tab:realistic-rollout-recipes>
