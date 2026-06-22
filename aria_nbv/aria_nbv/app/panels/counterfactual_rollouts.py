@@ -51,7 +51,7 @@ from ...rendering.plotting import (
     depth_grid_with_box_overlays,
     project_world_points_to_image,
 )
-from ...rollouts import candidate_result_diagnostic_counts
+from ...rollouts import candidate_result_diagnostic_counts, decode_position_id, decode_strategy_id
 from ...rri_metrics import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -181,6 +181,16 @@ If this tab reports no retained depths, inspect a persisted rollout store or add
 _LIVE_LOG_INFO = """
 Rollout logs are captured from the project Console during generation/scoring.
 Use them to verify renderer device, candidate generation counts, target-RRI scorer timings, invalidity warnings, and early termination causes.
+"""
+
+_LIVE_STEP_CANDIDATE_INFO = """
+Step candidate diagnostics inspect the finite candidate shell generated for one rollout step.
+
+- Fanout counts show how many candidates each position family contributed before selection.
+- Rejection counts are hard actor-action invalidity diagnostics, not low-RRI labels.
+- Score rows are compact valid candidates aligned to selection scores, target-RRI metrics, probabilities, and family provenance.
+- Selected markers identify the action that entered the rollout path; they should not be the only high-quality candidate unless the policy is intentionally greedy.
+- Family score plots expose whether target-aware families contribute useful target-root-gain support or whether all reward mass comes from one generic family.
 """
 
 
@@ -638,6 +648,7 @@ def _format_optional_metric(value: object) -> str:
 def _render_live_step_candidate_diagnostics(step: object) -> None:
     """Render per-step live candidate fanout by family and rejection reason."""
 
+    _info_popover("step candidate diagnostics", _LIVE_STEP_CANDIDATE_INFO)
     candidates = getattr(step, "candidates", None)
     if candidates is None:
         return
@@ -679,6 +690,172 @@ def _render_live_step_candidate_diagnostics(step: object) -> None:
             )
         else:
             st.success("No rejected candidates in this step.")
+
+    score_rows = _live_step_candidate_score_rows(step)
+    if not score_rows:
+        st.info("No per-valid-candidate score/provenance rows are available for this step.")
+        return
+    score_df = pd.DataFrame(score_rows)
+    st.dataframe(score_df, width="stretch", hide_index=True)
+    score_metric = _first_available_step_score_metric(score_df)
+    if score_metric is None:
+        st.info("No finite target-RRI or selection score metric is available for candidate score plots.")
+        return
+
+    score_col1, score_col2 = st.columns(2)
+    hover_cols = [
+        name
+        for name in (
+            "valid_index",
+            "shell_index",
+            "selected",
+            "position",
+            "strategy",
+            "mixture",
+            "component",
+            "selection_score",
+            "selection_probability",
+            "target_root_gain",
+            "target_rri",
+        )
+        if name in score_df.columns
+    ]
+    with score_col1:
+        st.plotly_chart(
+            px.scatter(
+                score_df,
+                x="selection_score",
+                y=score_metric,
+                color="position",
+                symbol="selected",
+                hover_data=hover_cols,
+                title=f"Selection Score vs {score_metric}",
+            ),
+            width="stretch",
+        )
+    with score_col2:
+        st.plotly_chart(
+            px.box(
+                score_df,
+                x="position",
+                y=score_metric,
+                color="selected",
+                points="outliers",
+                hover_data=hover_cols,
+                title=f"{score_metric} by Position Family",
+            ),
+            width="stretch",
+        )
+    if "selection_probability" in score_df and score_df["selection_probability"].notna().any():
+        st.plotly_chart(
+            px.histogram(
+                score_df,
+                x="selection_probability",
+                color="selected",
+                nbins=40,
+                title="Selection Probability Mass",
+            ),
+            width="stretch",
+        )
+
+
+def _live_step_candidate_score_rows(step: object) -> list[dict[str, object]]:
+    candidates = getattr(step, "candidates", None)
+    mask_valid = getattr(candidates, "mask_valid", None)
+    if candidates is None or mask_valid is None:
+        return []
+    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    shell_indices = np.flatnonzero(mask)
+    if shell_indices.size == 0:
+        return []
+    rows: list[dict[str, object]] = []
+    selection_scores = _aligned_valid_vector(getattr(step, "selection_scores", None), shell_indices=shell_indices)
+    probabilities = _aligned_valid_vector(getattr(step, "selection_probabilities", None), shell_indices=shell_indices)
+    logits = _aligned_valid_vector(getattr(step, "selection_logits", None), shell_indices=shell_indices)
+    metric_vectors = getattr(step, "metric_vectors", {})
+    target_root_gain = _aligned_valid_vector(metric_vectors.get("target_root_gain"), shell_indices=shell_indices)
+    target_rri = _aligned_valid_vector(
+        metric_vectors.get("target_rri", metric_vectors.get("rri")), shell_indices=shell_indices
+    )
+    position_ids = _full_shell_int_values(getattr(candidates, "position_id", None), expected=mask.shape[0])
+    strategy_ids = _full_shell_int_values(getattr(candidates, "strategy_id", None), expected=mask.shape[0])
+    mixture_ids = _full_shell_int_values(getattr(candidates, "mixture_id", None), expected=mask.shape[0])
+    sampler_probability = _full_shell_float_values(
+        getattr(candidates, "sampler_probability", None), expected=mask.shape[0]
+    )
+    component_names = getattr(candidates, "component_name", None)
+    selected_valid_index = int(getattr(step, "selected_valid_index", -1))
+    selected_shell_index = int(getattr(step, "selected_shell_index", -1))
+    for valid_index, shell_index in enumerate(shell_indices.tolist()):
+        position_id = None if position_ids is None else int(position_ids[shell_index])
+        strategy_id = None if strategy_ids is None else int(strategy_ids[shell_index])
+        mixture_id = None if mixture_ids is None else int(mixture_ids[shell_index])
+        component = None
+        if isinstance(component_names, tuple) and shell_index < len(component_names):
+            component = component_names[shell_index]
+        rows.append(
+            {
+                "valid_index": valid_index,
+                "shell_index": int(shell_index),
+                "selected": valid_index == selected_valid_index or int(shell_index) == selected_shell_index,
+                "position": "unknown" if position_id is None else decode_position_id(position_id),
+                "strategy": "unknown" if strategy_id is None else decode_strategy_id(strategy_id),
+                "mixture": "unknown" if mixture_id is None else f"component_{mixture_id}",
+                "component": component,
+                "selection_score": _array_value(selection_scores, valid_index),
+                "selection_probability": _array_value(probabilities, valid_index),
+                "selection_logit": _array_value(logits, valid_index),
+                "target_root_gain": _array_value(target_root_gain, valid_index),
+                "target_rri": _array_value(target_rri, valid_index),
+                "sampler_probability": (
+                    None if sampler_probability is None else _array_value(sampler_probability, int(shell_index))
+                ),
+            }
+        )
+    return rows
+
+
+def _aligned_valid_vector(values: object, *, shell_indices: np.ndarray) -> np.ndarray | None:
+    if values is None:
+        return None
+    values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1).astype(float, copy=False)
+    if values_np.shape[0] == shell_indices.shape[0]:
+        return values_np
+    if values_np.shape[0] > int(shell_indices.max()):
+        return values_np[shell_indices]
+    return None
+
+
+def _full_shell_int_values(values: object, *, expected: int) -> np.ndarray | None:
+    if values is None:
+        return None
+    values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1)
+    if values_np.shape[0] != expected:
+        return None
+    return values_np.astype(np.int64, copy=False)
+
+
+def _full_shell_float_values(values: object, *, expected: int) -> np.ndarray | None:
+    if values is None:
+        return None
+    values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1)
+    if values_np.shape[0] != expected:
+        return None
+    return values_np.astype(float, copy=False)
+
+
+def _array_value(values: np.ndarray | None, index: int) -> float | None:
+    if values is None or index < 0 or index >= values.shape[0]:
+        return None
+    value = float(values[index])
+    return value if np.isfinite(value) else None
+
+
+def _first_available_step_score_metric(score_df: pd.DataFrame) -> str | None:
+    for column in ("target_root_gain", "target_rri", "selection_score"):
+        if column in score_df.columns and score_df[column].notna().any():
+            return column
+    return None
 
 
 _ROLLOUT_PLOT_COLORS = (

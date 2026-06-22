@@ -725,6 +725,62 @@ def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
     assert values.tolist() == pytest.approx([0.5, 0.9])
 
 
+def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
+    step = SimpleNamespace(
+        candidates=SimpleNamespace(
+            mask_valid=torch.tensor([True, False, True]),
+            position_id=torch.tensor([1, 2, 3]),
+            strategy_id=torch.tensor([0, 1, 2]),
+            mixture_id=torch.tensor([0, 1, 2]),
+            sampler_probability=torch.tensor([0.2, 0.3, 0.5]),
+            component_name=("forward", "target", "lateral"),
+        ),
+        selected_valid_index=1,
+        selected_shell_index=2,
+        selection_scores=torch.tensor([0.1, 0.9]),
+        selection_probabilities=torch.tensor([0.25, 0.75]),
+        selection_logits=torch.tensor([-1.0, 1.0]),
+        metric_vectors={"target_root_gain": torch.tensor([0.2, 0.8])},
+    )
+
+    rows = rollout_panel._live_step_candidate_score_rows(step)
+
+    assert [row["shell_index"] for row in rows] == [0, 2]
+    assert rows[0]["position"] == "forward_local"
+    assert rows[1]["position"] == "lateral_target_bypass"
+    assert rows[1]["selected"] is True
+    assert rows[1]["selection_score"] == pytest.approx(0.9)
+    assert rows[1]["selection_probability"] == pytest.approx(0.75)
+    assert rows[1]["target_root_gain"] == pytest.approx(0.8)
+    assert rows[1]["sampler_probability"] == pytest.approx(0.5)
+    assert rows[1]["component"] == "lateral"
+
+
+def test_live_step_candidate_score_rows_align_full_shell_vectors() -> None:
+    step = SimpleNamespace(
+        candidates=SimpleNamespace(
+            mask_valid=torch.tensor([True, False, True]),
+            position_id=None,
+            strategy_id=None,
+            mixture_id=None,
+            sampler_probability=None,
+            component_name=None,
+        ),
+        selected_valid_index=0,
+        selected_shell_index=0,
+        selection_scores=torch.tensor([0.1, -1.0, 0.9]),
+        selection_probabilities=None,
+        selection_logits=None,
+        metric_vectors={"target_rri": torch.tensor([0.3, 100.0, 0.7])},
+    )
+
+    rows = rollout_panel._live_step_candidate_score_rows(step)
+
+    assert [row["selection_score"] for row in rows] == pytest.approx([0.1, 0.9])
+    assert [row["target_rri"] for row in rows] == pytest.approx([0.3, 0.7])
+    assert rollout_panel._first_available_step_score_metric(pd.DataFrame(rows)) == "target_rri"
+
+
 def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
     rows = rollout_panel.pd.DataFrame(
         [
