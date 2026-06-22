@@ -413,6 +413,52 @@ def test_candidate_angle_frame_keeps_available_sources() -> None:
     assert angle_df["angle_deg"].tolist() == [-90.0, 45.0, 0.0, 30.0]
 
 
+def test_target_selection_frame_coerces_scores_and_masks() -> None:
+    targets = pd.DataFrame(
+        [
+            {
+                "target_row_id": "4",
+                "source": None,
+                "class": "chair",
+                "confidence": "0.9",
+                "selection_rank": "1",
+                "selection_score": "0.75",
+                "target_valid": None,
+                "gt_label_valid": True,
+                "gt_match_status": None,
+                "projected_area_fraction": "0.01",
+            }
+        ]
+    )
+
+    df = stored_rollouts_panel._target_selection_frame(targets)
+
+    assert df.loc[0, "target_row_id"] == pytest.approx(4.0)
+    assert df.loc[0, "selection_score"] == pytest.approx(0.75)
+    assert bool(df.loc[0, "target_valid"]) is False
+    assert bool(df.loc[0, "gt_label_valid"]) is True
+    assert df.loc[0, "source"] == "unknown"
+    assert df.loc[0, "gt_match_status"] == "unknown"
+
+
+def test_first_available_numeric_skips_absent_and_empty_columns() -> None:
+    df = pd.DataFrame(
+        {
+            "projected_area_fraction": [np.nan, np.nan],
+            "projected_area_pixels": [32.0, np.nan],
+        }
+    )
+
+    assert (
+        stored_rollouts_panel._first_available_numeric(
+            df,
+            ("effective_support", "projected_area_fraction", "projected_area_pixels"),
+        )
+        == "projected_area_pixels"
+    )
+    assert stored_rollouts_panel._first_available_numeric(df, ("missing",)) is None
+
+
 def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "current.zarr",
@@ -439,6 +485,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Selected-depth step",
         "Geometry / label metric",
         "Color / split by",
+        "Target breakdown",
         "Rollout row",
     }
     assert {text_input.label for text_input in app.text_input} >= {

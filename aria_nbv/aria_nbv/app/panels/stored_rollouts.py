@@ -119,6 +119,17 @@ _TARGET_INFO = """
 Target audit separates actor-visible target metadata from GT/evaluation label validity. Invalid targets remain diagnostics and masks; they are not low-RRI training labels.
 """
 
+_TARGET_SELECTION_DIAGNOSTICS_INFO = """
+Target-selection diagnostics explain whether the stored target pool is usable for rollout generation.
+
+- `target_valid` is the actor-visible target mask; `gt_label_valid` is the oracle/evaluation label mask.
+- Rank/score plots should show selected or high-rank targets with enough support and visible area.
+- Score-component plots compare visibility, support, deficit, and projected area against the final selection score.
+- Class/source breakdowns expose accidental concentration on one semantic class, source, or invalid-target reason.
+
+High selection scores paired with invalid GT labels are not training labels. They are audit evidence that the sampler or GT matching needs inspection.
+"""
+
 _GEOMETRY_INFO = """
 Geometry diagnostics summarize persisted candidate motion and clearance fields: path collision, clearance, free-space margin, step length, height delta, backward motion, yaw change, target distance, and target bearing.
 """
@@ -1018,28 +1029,184 @@ def _render_targets_tab(reader: RolloutZarrStoreReader) -> None:
     if targets.empty:
         st.info("No stored target rows are available.")
         return
-    st.dataframe(targets, width="stretch", hide_index=True)
+    target_df = _target_selection_frame(targets)
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Targets", len(target_df))
+    metric_cols[1].metric("Actor-valid targets", _bool_count(target_df, "target_valid"))
+    metric_cols[2].metric("GT-valid targets", _bool_count(target_df, "gt_label_valid"))
+    metric_cols[3].metric("Mean selection score", _format_metric(target_df.get("selection_score", pd.Series()).mean()))
+
+    st.dataframe(target_df, width="stretch", hide_index=True)
+    _render_target_selection_diagnostics(target_df)
+
+
+def _render_target_selection_diagnostics(target_df: pd.DataFrame) -> None:
+    _info_popover("target selection diagnostics", _TARGET_SELECTION_DIAGNOSTICS_INFO)
     chart_col1, chart_col2 = st.columns(2)
+    hover_cols = [
+        name
+        for name in (
+            "target_row_id",
+            "target_id",
+            "source",
+            "source_index",
+            "class",
+            "confidence",
+            "selection_rank",
+            "selection_score",
+            "selection_probability",
+            "target_valid",
+            "gt_label_valid",
+            "gt_match_status",
+            "target_invalid_reason",
+        )
+        if name in target_df.columns
+    ]
     with chart_col1:
         st.plotly_chart(
-            px.histogram(targets, x="gt_match_status", color="target_valid", title="GT Match Status"),
+            px.histogram(target_df, x="gt_match_status", color="target_valid", title="GT Match Status"),
             width="stretch",
         )
     with chart_col2:
-        if "effective_support" in targets and targets["effective_support"].notna().any():
+        rank_df = target_df.dropna(subset=["selection_rank", "selection_score"])
+        if not rank_df.empty:
             st.plotly_chart(
                 px.scatter(
-                    targets,
-                    x="effective_support",
+                    rank_df,
+                    x="selection_rank",
                     y="selection_score",
                     color="gt_match_status",
-                    hover_data=["target_row_id", "class", "confidence"],
-                    title="Stored Target Score Decomposition",
+                    symbol="gt_label_valid",
+                    hover_data=hover_cols,
+                    title="Target Rank vs Selection Score",
                 ),
                 width="stretch",
             )
-        else:
-            st.info("Support/visibility fields are absent in this store; regenerate with target audit fields.")
+
+    support_x = _first_available_numeric(
+        target_df,
+        ("effective_support", "projected_area_fraction", "projected_area_pixels", "visibility_score"),
+    )
+    if support_x is not None and "selection_score" in target_df:
+        support_df = target_df.dropna(subset=[support_x, "selection_score"])
+        if not support_df.empty:
+            st.plotly_chart(
+                px.scatter(
+                    support_df,
+                    x=support_x,
+                    y="selection_score",
+                    color="gt_match_status",
+                    symbol="target_valid",
+                    hover_data=hover_cols,
+                    title=f"Selection Score vs {support_x}",
+                ),
+                width="stretch",
+            )
+
+    component_cols = [
+        name
+        for name in (
+            "selection_score",
+            "visibility_score",
+            "support_score",
+            "deficit_score",
+            "projected_area_fraction",
+            "gt_match_iou",
+            "gt_match_score",
+        )
+        if name in target_df.columns and target_df[name].notna().any()
+    ]
+    if len(component_cols) >= 2:
+        st.plotly_chart(
+            px.scatter_matrix(
+                target_df,
+                dimensions=component_cols,
+                color="gt_match_status" if "gt_match_status" in target_df.columns else None,
+                hover_data=hover_cols,
+                title="Target Score Component Relationships",
+            ),
+            width="stretch",
+        )
+
+    group_cols = [name for name in ("class", "source", "target_invalid_reason") if name in target_df.columns]
+    if group_cols:
+        group_by = st.selectbox(
+            "Target breakdown",
+            options=group_cols,
+            key="stored_rollout_target_breakdown",
+        )
+        grouped = (
+            target_df.groupby(group_by, dropna=False)
+            .agg(
+                targets=("target_row_id", "count"),
+                actor_valid=("target_valid", "sum"),
+                gt_valid=("gt_label_valid", "sum"),
+                mean_selection_score=("selection_score", "mean"),
+                mean_projected_area_fraction=("projected_area_fraction", "mean"),
+                mean_effective_support=("effective_support", "mean"),
+            )
+            .reset_index()
+            .sort_values("targets", ascending=False)
+        )
+        st.dataframe(grouped, width="stretch", hide_index=True)
+        st.plotly_chart(
+            px.bar(
+                grouped,
+                x=group_by,
+                y=["targets", "actor_valid", "gt_valid"],
+                barmode="group",
+                hover_data=["mean_selection_score", "mean_projected_area_fraction", "mean_effective_support"],
+                title=f"Target Validity by {group_by}",
+            ),
+            width="stretch",
+        )
+
+
+def _target_selection_frame(targets: pd.DataFrame) -> pd.DataFrame:
+    df = targets.copy()
+    numeric_columns = [
+        "target_row_id",
+        "source_index",
+        "sem_id",
+        "inst_id",
+        "confidence",
+        "selection_rank",
+        "selection_score",
+        "selection_probability",
+        "gt_match_iou",
+        "gt_match_score",
+        "projected_area_pixels",
+        "projected_area_fraction",
+        "semidense_support",
+        "evl_support",
+        "effective_support",
+        "visibility_score",
+        "support_score",
+        "deficit_score",
+    ]
+    for column in numeric_columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+    for column in ("target_valid", "gt_label_valid"):
+        if column in df.columns:
+            df[column] = df[column].map(lambda value: bool(value) if pd.notna(value) else False).astype(bool)
+    for column in ("target_id", "source", "class", "target_invalid_reason", "gt_match_status"):
+        if column in df.columns:
+            df[column] = df[column].fillna("unknown").astype(str)
+    return df
+
+
+def _bool_count(df: pd.DataFrame, column: str) -> int:
+    if column not in df.columns:
+        return 0
+    return int(df[column].astype(bool).sum())
+
+
+def _first_available_numeric(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
+    for column in candidates:
+        if column in df.columns and df[column].notna().any():
+            return column
+    return None
 
 
 def _render_candidates_tab(reader: RolloutZarrStoreReader) -> None:
