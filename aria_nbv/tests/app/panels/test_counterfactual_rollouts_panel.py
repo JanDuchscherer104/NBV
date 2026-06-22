@@ -380,6 +380,10 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert _metric_values(app)["Rollouts"] == "1"
     assert _metric_values(app)["Steps"] == "1"
     assert _metric_values(app)["Candidates"] == "12"
+    assert _metric_values(app)["Discovered stores"] == "1"
+    assert _metric_values(app)["Current valid stores"] == "1"
+    assert _metric_values(app)["Blocked stores"] == "0"
+    assert _metric_values(app)["Observed R/S"] == "1/1"
     assert _metric_values(app)["Q-train candidates"] == "12"
     assert {selectbox.label for selectbox in app.selectbox} >= {
         "rollouts.zarr store",
@@ -426,6 +430,10 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     assert _metric_values(app)["Rollouts"] == "2"
     assert _metric_values(app)["Steps"] == "4"
     assert _metric_values(app)["Candidates"] == "8"
+    assert _metric_values(app)["Discovered stores"] == "1"
+    assert _metric_values(app)["Current valid stores"] == "0"
+    assert _metric_values(app)["Blocked stores"] == "1"
+    assert _metric_values(app)["Observed R/S"] == "2/4"
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
     assert any("requires a store that passes" in info.value for info in app.info)
     assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)

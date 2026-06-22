@@ -68,6 +68,19 @@ Observed counts are lightweight direct reads from `rollouts/`, `steps/`, and `ca
 Validator counts come from the current schema validator and intentionally become zero when root-contract checks fail.
 """
 
+_STORE_INVENTORY_INFO = """
+The inventory table is the first triage surface for every discovered `*.zarr` store.
+
+- `schema`: `current` can use all deep tabs; `stale` or `unreadable` stays in overview/metadata only.
+- `validation`: current-schema contract result from `RolloutZarrStoreReader.validate()`.
+- `observed_*`: direct array counts, useful even when schema validation fails.
+- `validator_*`: counts returned by the current validator; zero usually means a root/schema gate failed.
+- `actor_action_fraction` / `q_train_fraction`: candidate-mask health for deployable actions and finite-candidate training cells.
+- `policies`, `horizons`, and `branch_factors`: quick diversity clues for the shard.
+- `manifest`, `profile`, and `config`: generation lineage from the rollout manifest sidecar.
+- `missing_groups` and `first_error`: the fastest way to decide whether to regenerate, migrate, or inspect manually.
+"""
+
 _OBJECTIVE_INFO = """
 Objective plots use persisted rollout arrays only. Cumulative target RRI tracks the rollout path total, marginal target RRI is the step-to-step delta, and target root gain is the root-normalized `Q_H` reward family.
 """
@@ -305,8 +318,10 @@ def _render_store_inventory(
 ) -> None:
     _info_popover("schema status", _SCHEMA_VALIDATION_INFO)
     _info_popover("rollout counts", _COUNTS_INFO)
+    _info_popover("store inventory fields", _STORE_INVENTORY_INFO)
     if not inventory_rows:
         return
+    _render_inventory_health_metrics(inventory_rows)
     display_rows = [_inventory_display_row(row, root=path_config.root) for row in inventory_rows]
     st.dataframe(display_rows, width="stretch", hide_index=True)
     error_rows = [
@@ -320,6 +335,22 @@ def _render_store_inventory(
     if error_rows:
         with st.expander("Validation and open errors", expanded=False):
             st.dataframe(error_rows, width="stretch", hide_index=True)
+
+
+def _render_inventory_health_metrics(inventory_rows: list[dict[str, object]]) -> None:
+    current_valid = sum(
+        1 for row in inventory_rows if row.get("schema_status") == "current" and bool(row.get("validation_ok") is True)
+    )
+    blocked = len(inventory_rows) - current_valid
+    observed_rollouts = sum(int(row.get("observed_rollouts") or 0) for row in inventory_rows)
+    observed_steps = sum(int(row.get("observed_steps") or 0) for row in inventory_rows)
+    total_size = sum(int(row.get("size_bytes") or 0) for row in inventory_rows)
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Discovered stores", len(inventory_rows))
+    metric_cols[1].metric("Current valid stores", current_valid)
+    metric_cols[2].metric("Blocked stores", blocked)
+    metric_cols[3].metric("Observed R/S", f"{observed_rollouts}/{observed_steps}")
+    st.caption(f"Total discovered rollout-store footprint: {_format_bytes(total_size)}")
 
 
 def _inventory_display_row(row: dict[str, object], *, root: Path) -> dict[str, object]:
