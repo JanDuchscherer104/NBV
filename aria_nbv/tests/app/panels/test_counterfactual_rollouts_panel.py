@@ -270,6 +270,44 @@ def test_active_target_info_documents_actor_visible_and_gt_eval_boundary() -> No
     assert "sem=..." in info
 
 
+def test_live_selected_depth_rows_summarize_retained_depth() -> None:
+    step = SimpleNamespace(
+        step_index=0,
+        selection_score=0.75,
+        selection_policy="oracle_greedy",
+        selected_depth_m=torch.tensor([[1.0, 2.0], [3.0, float("nan")]], dtype=torch.float32),
+        selected_depth_valid_mask=torch.tensor([[True, True], [False, True]], dtype=torch.bool),
+    )
+    rollouts = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
+
+    rows = rollout_panel._live_selected_depth_rows(rollouts)
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["available"] is True
+    assert row["valid_fraction"] == pytest.approx(0.75)
+    assert row["finite_fraction"] == pytest.approx(0.5)
+    assert row["depth_min_m"] == pytest.approx(1.0)
+    assert row["depth_mean_m"] == pytest.approx(1.5)
+    assert row["depth_max_m"] == pytest.approx(2.0)
+
+
+def test_live_selected_depth_rows_report_unretained_depth() -> None:
+    step = SimpleNamespace(
+        step_index=0,
+        selection_score=0.75,
+        selection_policy="oracle_greedy",
+        selected_depth_m=None,
+        selected_depth_valid_mask=None,
+    )
+    rollouts = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
+
+    rows = rollout_panel._live_selected_depth_rows(rollouts)
+
+    assert rows[0]["available"] is False
+    assert "not retained" in str(rows[0]["warning"])
+
+
 def test_format_rollout_option_includes_context_and_nan_beam() -> None:
     reader = _FakeRolloutReader(
         {

@@ -19,6 +19,7 @@ from aria_nbv.rollouts import (
     discover_rollout_store_paths,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_tree_summary_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
     suspicious_rollout_rows,
@@ -185,6 +186,27 @@ def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fiel
     assert rows[0]["selected_entropy"] is not None
     assert rows[0]["num_candidates"] >= 6
     assert rows[0]["num_valid_candidates"] <= rows[0]["num_candidates"]
+
+
+def test_rollout_tree_summary_rows_group_selected_branch_provenance(tmp_path) -> None:
+    """Tree summaries should aggregate selected-step routing without reading dense payloads."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=45)[:2]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = rollout_tree_summary_rows(reader)
+
+    assert rows
+    assert sum(int(row["selected_steps"]) for row in rows) == result.num_steps
+    first = rows[0]
+    assert first["policy"]
+    assert first["step_label"].startswith("step ")
+    assert first["selected_position"]
+    assert first["selected_strategy"]
+    assert first["selected_mixture"]
+    assert first["mean_valid_fanout"] is not None
+    assert first["mean_invalid_fraction"] is not None
 
 
 def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path) -> None:

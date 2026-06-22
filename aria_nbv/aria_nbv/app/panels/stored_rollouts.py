@@ -21,6 +21,7 @@ from ...rollouts import (
     discover_rollout_store_paths,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_tree_summary_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
     suspicious_rollout_rows,
@@ -73,6 +74,18 @@ Objective plots use persisted rollout arrays only. Cumulative target RRI tracks 
 
 _BRANCHING_INFO = """
 Branching rows show the selected action per rollout step: policy, chain, branch factor, beam width, selected strategy, selected position family, mixture component, sampler probability, and selection entropy.
+"""
+
+_TREE_SUMMARY_INFO = """
+Rollout-tree summaries aggregate the factual selected steps stored in `rollouts.zarr`.
+
+- `policy`, `horizon`, `branch_factor`, `beam_width`, and `temperature` identify the rollout recipe.
+- `step_label` is the rollout depth of the selected action.
+- `selected_position`, `selected_strategy`, and `selected_mixture` show which sampling family produced selected actions.
+- `selected_steps` counts how often that route occurred in the inspected store.
+- Mean fanout, invalid fraction, selected probability, entropy, marginal RRI, and root gain expose diversity and selection collapse.
+
+The store does not persist every unexpanded parent edge as a graph. These plots visualize observed selected-branch provenance, not a full search tree reconstruction.
 """
 
 _SELECTED_DEPTH_INFO = """
@@ -198,6 +211,8 @@ def render_stored_rollouts_panel() -> None:
         if _render_current_schema_gate(current_schema):
             _info_popover("branching provenance", _BRANCHING_INFO)
             _render_stored_step_dashboard(reader, include_objective_plots=False, include_branching_plots=True)
+            _info_popover("rollout tree summary", _TREE_SUMMARY_INFO)
+            _render_rollout_tree_summary(reader)
 
     with tab_selected_depth:
         if _render_current_schema_gate(current_schema):
@@ -652,6 +667,10 @@ def _render_stored_step_dashboard(
         "selected_strategy",
         "selected_mixture",
     ]
+    _info_popover(
+        "selected step table",
+        "Selected-step rows are one factual action per rollout depth. They join persisted `steps/` arrays with the selected candidate row so objective deltas, fanout, invalidity, and sampling provenance can be inspected together.",
+    )
     st.dataframe(rows[[col for col in display_cols if col in rows.columns]], width="stretch", hide_index=True)
 
     if not include_objective_plots and not include_branching_plots:
@@ -663,6 +682,10 @@ def _render_stored_step_dashboard(
 
 
 def _render_step_objective_plots(rows: pd.DataFrame) -> None:
+    _info_popover(
+        "objective plots",
+        "`Cumulative Target RRI` traces the selected path total by depth. `Marginal Target RRI` is the per-step delta, useful for spotting flat rewards, negative increments, or late-step collapse.",
+    )
     objective_col, marginal_col = st.columns(2)
     with objective_col:
         st.plotly_chart(
@@ -694,6 +717,10 @@ def _render_step_objective_plots(rows: pd.DataFrame) -> None:
 
 
 def _render_step_branching_plots(rows: pd.DataFrame) -> None:
+    _info_popover(
+        "branching plots",
+        "Branching diagnostics compare selected-action probability/entropy, valid fanout, invalid fraction, and selected sampling families across rollout depth. Use them to detect policy determinism, low diversity, and candidate-family imbalance.",
+    )
     diagnostics_col, fanout_col = st.columns(2)
     with diagnostics_col:
         probability_rows = rows[rows["selected_probability"].notna() | rows["selected_entropy"].notna()]
@@ -754,6 +781,88 @@ def _render_step_branching_plots(rows: pd.DataFrame) -> None:
             facet_col="policy" if provenance["policy"].nunique(dropna=True) > 1 else None,
             hover_data=["selected_mixture"],
             title="Selected Sampling Families by Policy",
+        ),
+        width="stretch",
+    )
+
+
+def _render_rollout_tree_summary(reader: RolloutZarrStoreReader) -> None:
+    rows = pd.DataFrame(rollout_tree_summary_rows(reader))
+    if rows.empty:
+        st.info("No selected rollout-tree provenance rows are available in this store.")
+        return
+
+    display_cols = [
+        "policy",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+        "temperature",
+        "step_label",
+        "selected_position",
+        "selected_strategy",
+        "selected_mixture",
+        "selected_steps",
+        "mean_valid_fanout",
+        "mean_invalid_fraction",
+        "mean_marginal_target_rri",
+        "mean_selected_target_root_gain",
+        "mean_selected_probability",
+        "mean_selected_entropy",
+    ]
+    st.dataframe(rows[[col for col in display_cols if col in rows.columns]], width="stretch", hide_index=True)
+
+    tree_col, metric_col = st.columns(2)
+    with tree_col:
+        st.plotly_chart(
+            px.sunburst(
+                rows,
+                path=["policy", "step_label", "selected_position", "selected_strategy", "selected_mixture"],
+                values="selected_steps",
+                color="mean_selected_target_root_gain",
+                title="Observed Selected-Branch Provenance",
+            ),
+            width="stretch",
+        )
+    with metric_col:
+        metric_rows = rows.melt(
+            id_vars=["policy", "step_label", "selected_position", "selected_strategy"],
+            value_vars=["mean_valid_fanout", "mean_invalid_fraction", "mean_selected_entropy"],
+            var_name="metric",
+            value_name="value",
+        ).dropna(subset=["value"])
+        st.plotly_chart(
+            px.line(
+                metric_rows,
+                x="step_label",
+                y="value",
+                color="metric",
+                line_dash="policy",
+                markers=True,
+                hover_data=["selected_position", "selected_strategy"],
+                title="Tree Validity and Selection Diagnostics by Step",
+            ),
+            width="stretch",
+        )
+
+    family_rows = (
+        rows.groupby(["step_label", "selected_position", "selected_strategy"], dropna=False)
+        .agg(
+            selected_steps=("selected_steps", "sum"),
+            mean_target_root_gain=("mean_selected_target_root_gain", "mean"),
+            mean_marginal_target_rri=("mean_marginal_target_rri", "mean"),
+        )
+        .reset_index()
+    )
+    st.plotly_chart(
+        px.bar(
+            family_rows,
+            x="step_label",
+            y="selected_steps",
+            color="selected_position",
+            pattern_shape="selected_strategy",
+            hover_data=["mean_target_root_gain", "mean_marginal_target_rri"],
+            title="Selected Candidate Families by Rollout Step",
         ),
         width="stretch",
     )

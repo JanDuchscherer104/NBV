@@ -44,6 +44,7 @@ from ...pose_generation import (
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
+from ...rendering.plotting import depth_grid
 from ...rollouts import candidate_result_diagnostic_counts
 from ...rri_metrics import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
@@ -158,6 +159,22 @@ Result table and plots:
 - `Paths`: trajectory-level visualization.
 - `Step Shell`: per-step candidate shell and selected candidate view.
 - `Logs`: captured Console output from generation/scoring.
+"""
+
+_LIVE_SELECTED_DEPTH_INFO = """
+Selected-depth inspection shows the retained depth image for the action chosen at each live rollout step.
+
+- Live generation only shows images when `CounterfactualStepResult.selected_depth_m` is populated.
+- Dataset-writer generated stores usually retain selected-depth rasters; plain live runs may not.
+- Valid and finite pixel fractions expose broken renders or all-miss views.
+- The preview uses the shared Plotly depth-grid builder and does not scan unrelated candidates.
+
+If this tab reports no retained depths, inspect a persisted rollout store or add live selected-depth retention rather than inferring geometry from missing images.
+"""
+
+_LIVE_LOG_INFO = """
+Rollout logs are captured from the project Console during generation/scoring.
+Use them to verify renderer device, candidate generation counts, target-RRI scorer timings, invalidity warnings, and early termination causes.
 """
 
 
@@ -1144,7 +1161,7 @@ def _render_rollout_result(
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     _render_live_rollout_metric_dashboard(rollouts, rows=rows, scoring_mode=scoring_mode)
 
-    plot_tab, step_tab, log_tab = st.tabs(["Paths", "Step Shell", "Logs"])
+    plot_tab, step_tab, depth_tab, log_tab = st.tabs(["Paths", "Step Shell", "Selected Depth", "Logs"])
     snippet = sample.efm_snippet_view
     with plot_tab:
         if snippet is not None:
@@ -1310,8 +1327,157 @@ def _render_rollout_result(
                     with st.expander("Step candidate fanout diagnostics", expanded=True):
                         _render_live_step_candidate_diagnostics(trajectory.steps[int(step_display_index - 1)])
 
+    with depth_tab:
+        _info_popover("selected depth", _LIVE_SELECTED_DEPTH_INFO)
+        _render_live_selected_depth_tab(rollouts)
+
     with log_tab:
-        st.caption("No implemented content yet.")
+        _info_popover("rollout logs", _LIVE_LOG_INFO)
+        if log_text.strip():
+            st.code(log_text, language="text")
+        else:
+            st.info("No Console output was captured for this rollout run.")
+
+
+def _render_live_selected_depth_tab(rollouts: CounterfactualRolloutResult) -> None:
+    rows = pd.DataFrame(_live_selected_depth_rows(rollouts))
+    if rows.empty:
+        st.info("No rollout steps are available for selected-depth inspection.")
+        return
+
+    available = rows["available"].astype(bool)
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Selected steps", len(rows))
+    metric_cols[1].metric("Retained depth rows", int(available.sum()))
+    metric_cols[2].metric("Mean finite pixels", _format_optional_metric(rows["finite_fraction"].dropna().mean()))
+    metric_cols[3].metric("Mean selected depth", _format_optional_metric(rows["depth_mean_m"].dropna().mean()))
+
+    display_cols = [
+        "trajectory",
+        "step",
+        "available",
+        "valid_fraction",
+        "finite_fraction",
+        "depth_min_m",
+        "depth_mean_m",
+        "depth_max_m",
+        "selected_score",
+        "selected_policy",
+        "warning",
+    ]
+    st.dataframe(rows[[col for col in display_cols if col in rows.columns]], width="stretch", hide_index=True)
+
+    preview_rows = rows[available]
+    if preview_rows.empty:
+        st.warning("No selected-depth images were retained for this live rollout result.")
+        return
+
+    preview_options = list(range(len(preview_rows)))
+    selected_preview_index = int(
+        st.selectbox(
+            "Live selected-depth step",
+            options=preview_options,
+            format_func=lambda index: _format_live_selected_depth_option(preview_rows.iloc[int(index)]),
+            key="cf_live_selected_depth_step",
+        )
+    )
+    selected = preview_rows.iloc[selected_preview_index]
+    trajectory = rollouts.trajectories[int(selected["trajectory"])]
+    step = trajectory.steps[int(selected["step"]) - 1]
+    depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
+    valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+    depth_plot = depth.clone()
+    depth_plot[~(valid_mask & torch.isfinite(depth_plot))] = torch.nan
+    finite = depth_plot[torch.isfinite(depth_plot)]
+    zmax = float(finite.max().item()) if finite.numel() else None
+    st.plotly_chart(
+        depth_grid(
+            depth_plot.unsqueeze(0),
+            titles=[f"traj {int(selected['trajectory'])} · step {int(selected['step'])}"],
+            max_cols=1,
+            zmax=zmax,
+        ),
+        width="stretch",
+    )
+    st.json(
+        {
+            "focal_px": step.selected_depth_focal_px,
+            "principal_point_px": step.selected_depth_principal_point_px,
+            "image_size_hw": step.selected_depth_image_size_hw,
+            "selected_valid_index": int(step.selected_valid_index),
+            "selected_shell_index": int(step.selected_shell_index),
+        },
+        expanded=False,
+    )
+
+
+def _live_selected_depth_rows(rollouts: CounterfactualRolloutResult) -> list[dict[str, object]]:
+    """Return selected-depth availability and summary stats for live rollout steps."""
+
+    rows: list[dict[str, object]] = []
+    for trajectory_index, trajectory in enumerate(rollouts.trajectories):
+        for step in trajectory.steps:
+            base = {
+                "trajectory": int(trajectory_index),
+                "step": int(step.step_index) + 1,
+                "available": False,
+                "valid_pixels": None,
+                "finite_pixels": None,
+                "pixel_count": None,
+                "valid_fraction": None,
+                "finite_fraction": None,
+                "depth_min_m": None,
+                "depth_mean_m": None,
+                "depth_max_m": None,
+                "selected_score": float(step.selection_score),
+                "selected_policy": step.selection_policy,
+                "warning": "",
+            }
+            if step.selected_depth_m is None or step.selected_depth_valid_mask is None:
+                rows.append({**base, "warning": "selected_depth_m/valid_mask not retained for this live step."})
+                continue
+            depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
+            valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+            if depth.ndim != 2 or valid_mask.shape != depth.shape:
+                rows.append(
+                    {
+                        **base,
+                        "warning": f"selected depth shape mismatch: depth={tuple(depth.shape)} mask={tuple(valid_mask.shape)}.",
+                    }
+                )
+                continue
+            finite_valid = valid_mask & torch.isfinite(depth)
+            valid_depth = depth[finite_valid]
+            pixel_count = int(depth.numel())
+            valid_pixels = int(valid_mask.sum().item())
+            finite_pixels = int(finite_valid.sum().item())
+            rows.append(
+                {
+                    **base,
+                    "available": True,
+                    "valid_pixels": valid_pixels,
+                    "finite_pixels": finite_pixels,
+                    "pixel_count": pixel_count,
+                    "valid_fraction": _safe_fraction(valid_pixels, pixel_count),
+                    "finite_fraction": _safe_fraction(finite_pixels, pixel_count),
+                    "depth_min_m": None if valid_depth.numel() == 0 else float(valid_depth.min().item()),
+                    "depth_mean_m": None if valid_depth.numel() == 0 else float(valid_depth.mean().item()),
+                    "depth_max_m": None if valid_depth.numel() == 0 else float(valid_depth.max().item()),
+                }
+            )
+    return rows
+
+
+def _format_live_selected_depth_option(row: pd.Series) -> str:
+    return (
+        f"traj {int(row['trajectory'])} · step {int(row['step'])} · "
+        f"finite={_format_optional_metric(row.get('finite_fraction'))} · "
+        f"mean={_format_optional_metric(row.get('depth_mean_m'))}m"
+    )
+
+
+def _safe_fraction(numerator: int, denominator: int) -> float | None:
+    return None if denominator <= 0 else float(numerator) / float(denominator)
 
 
 def _render_live_rollout_metric_dashboard(

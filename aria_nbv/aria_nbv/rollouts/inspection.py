@@ -411,6 +411,93 @@ def rollout_step_objective_rows(
     return rows
 
 
+def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Summarize selected rollout-tree provenance by policy, step, and family.
+
+    Rollout stores persist factual selected chains, not a full parent-edge tree.
+    This helper therefore reports the observed branching/provenance distribution
+    across selected steps: policy/recipe parameters, candidate family, fanout,
+    invalidity, and selected objective values.
+    """
+
+    step_rows = rollout_step_objective_rows(reader)
+    groups: dict[tuple[object, ...], dict[str, float]] = {}
+    for row in step_rows:
+        key = (
+            row.get("policy", ""),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+            row.get("temperature"),
+            row.get("step_index"),
+            row.get("selected_position", ""),
+            row.get("selected_strategy", ""),
+            row.get("selected_mixture", ""),
+        )
+        summary = groups.setdefault(
+            key,
+            {
+                "selected_steps": 0.0,
+                "valid_fanout_sum": 0.0,
+                "valid_fanout_count": 0.0,
+                "invalid_fraction_sum": 0.0,
+                "invalid_fraction_count": 0.0,
+                "marginal_target_rri_sum": 0.0,
+                "marginal_target_rri_count": 0.0,
+                "selected_target_root_gain_sum": 0.0,
+                "selected_target_root_gain_count": 0.0,
+                "selected_probability_sum": 0.0,
+                "selected_probability_count": 0.0,
+                "selected_entropy_sum": 0.0,
+                "selected_entropy_count": 0.0,
+            },
+        )
+        summary["selected_steps"] += 1.0
+        _accumulate_optional(summary, "valid_fanout", row.get("num_valid_candidates"))
+        _accumulate_optional(summary, "invalid_fraction", row.get("invalid_fraction"))
+        _accumulate_optional(summary, "marginal_target_rri", row.get("marginal_target_rri"))
+        _accumulate_optional(summary, "selected_target_root_gain", row.get("selected_target_root_gain"))
+        _accumulate_optional(summary, "selected_probability", row.get("selected_probability"))
+        _accumulate_optional(summary, "selected_entropy", row.get("selected_entropy"))
+
+    output: list[dict[str, object]] = []
+    for key, summary in sorted(groups.items(), key=lambda item: (str(item[0][0]), int(item[0][5] or 0), str(item[0]))):
+        (
+            policy,
+            horizon,
+            branch_factor,
+            beam_width,
+            temperature,
+            step_index,
+            selected_position,
+            selected_strategy,
+            selected_mixture,
+        ) = key
+        step_int = int(step_index) if step_index is not None else -1
+        output.append(
+            {
+                "policy": policy,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "temperature": temperature,
+                "step_index": step_int,
+                "step_label": f"step {step_int}",
+                "selected_position": selected_position,
+                "selected_strategy": selected_strategy,
+                "selected_mixture": selected_mixture,
+                "selected_steps": int(summary["selected_steps"]),
+                "mean_valid_fanout": _mean_accumulator(summary, "valid_fanout"),
+                "mean_invalid_fraction": _mean_accumulator(summary, "invalid_fraction"),
+                "mean_marginal_target_rri": _mean_accumulator(summary, "marginal_target_rri"),
+                "mean_selected_target_root_gain": _mean_accumulator(summary, "selected_target_root_gain"),
+                "mean_selected_probability": _mean_accumulator(summary, "selected_probability"),
+                "mean_selected_entropy": _mean_accumulator(summary, "selected_entropy"),
+            }
+        )
+    return output
+
+
 def selected_depth_summary_rows(
     reader: RolloutZarrStoreReader,
     *,
@@ -718,6 +805,21 @@ def _selected_depth_dense_summary(group: zarr.Group, *, row_position: int) -> di
         "principal_y_px": float(principal[1]),
         "warning": "",
     }
+
+
+def _accumulate_optional(summary: dict[str, float], key: str, value: object) -> None:
+    value_float = _finite_or_none(value)
+    if value_float is None:
+        return
+    summary[f"{key}_sum"] += float(value_float)
+    summary[f"{key}_count"] += 1.0
+
+
+def _mean_accumulator(summary: dict[str, float], key: str) -> float | None:
+    count = summary[f"{key}_count"]
+    if count <= 0:
+        return None
+    return float(summary[f"{key}_sum"] / count)
 
 
 def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, object]]]:
