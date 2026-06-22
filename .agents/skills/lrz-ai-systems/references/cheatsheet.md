@@ -40,6 +40,9 @@ Run Slurm queries as one-shot inspections. Do not put them in polling loops.
 .agents/skills/lrz-ai-systems/scripts/lrz-resources.sh mine
 ```
 
+Read `slurm-partitions.md` before choosing final partitions and
+`slurm-job-patterns.md` before writing batch directives.
+
 ## GPU Smoke Test
 
 ```bash
@@ -72,3 +75,6 @@ squeue -u "$USER" -o "%.18i %.20P %.30j %.8T %.10M %.6D %R"
 scancel <JOB_ID>
 scancel --me
 ```
+
+For failed or pending jobs, collect evidence with `troubleshooting-slurm.md`
+before changing resources or scripts.

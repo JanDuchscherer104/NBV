@@ -1,5 +1,9 @@
 # ARIA Workflows On LRZ
 
+Use this for ARIA-NBV commands. Use `efm3d-aria-workloads.md` when the command
+comes from facebookresearch/efm3d, ASE, ATEK, or EVL rather than an ARIA-NBV
+entry point.
+
 ## Before Filling Commands
 
 Inspect current ARIA console scripts before writing cache or training commands:
@@ -57,3 +61,6 @@ LRZ_GPUS=2 \
 ## Data Placement
 
 Keep all generated datasets, oracle caches, VIN stores, checkpoints, logs, W&B runs, temp files, and package/model caches under `$ARIA_DSS`.
+
+Large EFM3D/ASE downloads should be planned from `efm3d-aria-workloads.md`
+before being mixed into ARIA cache or training jobs.

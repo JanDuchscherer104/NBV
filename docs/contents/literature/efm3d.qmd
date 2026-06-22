@@ -21,6 +21,8 @@ format: html
 
 For ARIA-NBV, EFM3D is not a planner and its final voxel heads are not the whole scene memory. It is an actor-visible evidence and target-support provider: local EVL features, head outputs, and predicted OBBs can be combined with broader semidense or fused point evidence for target-conditioned candidate scoring.
 
+The relevant planning invariant is therefore not "dense voxels everywhere." It is a target-conditioned, actor-visible state that preserves which target is being improved, which finite candidates are valid, what surface/semantic support exists around the target and each candidate frustum, and which parts of that evidence were actually observable from the rollout history.
+
 ### Verified paper signals
 
 | signal | source-backed detail | ARIA-NBV relevance |
@@ -32,34 +34,91 @@ For ARIA-NBV, EFM3D is not a planner and its final voxel heads are not the whole
 | OBB head | The detection head predicts centerness, 7-DoF boxes, class scores, and sparse post-processed OBBs. | Supports observed/predicted target selection without exposing GT boxes to the actor. |
 | Dataset scale | The paper trains/evaluates on {{< gls aria-synthetic-environments >}} and Project Aria-related real datasets, with ASE providing GT meshes/annotations for supervised tasks. | Confirms the substrate for oracle labels and observed-state realism. |
 
-### ARIA-NBV adoption
+### Ranked backbone requirements
 
-- **Core substrate:** use EVL/EFM3D outputs as local actor-visible evidence and target support for one-step RRI scoring, rollout state summaries, and target-conditioned candidate ranking.
-- **Scene memory hypothesis:** test semidense/fused points with compressed DINO features as the broader queryable scene embedding.
-- **Target contract:** use predicted or observed {{< gls oriented-bounding-box >}} support as actor-visible target input; keep GT meshes and GT target crops for offline labels/evaluation only.
-- **Diagnostics:** preserve frame lineage, voxel extent, camera stream identity, calibration, and {{< gls machine-perception-services >}} / ASE point-source metadata in offline stores.
+The backbone for finite-candidate $Q_H$ should be selected by the invariants it preserves, not by whether it looks like a full 3D reconstruction.
 
-The compact state contract for ARIA-NBV is:
+| rank | requirement | representation consequence |
+|---:|---|---|
+| 1 | Actor-visible target identity and support. | The state must expose a target hypothesis from observed or predicted OBBs, class/confidence, projected support, semidense support, and EVL support. GT OBBs, meshes, and target crops remain label/evaluation surfaces. |
+| 2 | Candidate-row permutation equivariance with hard mask isolation. | Candidate scoring should treat the finite candidate set as a masked set: row order is arbitrary, but validity masks and invalidity reasons are hard contracts, not soft features. Deep Sets or masked Set Transformer baselines are the first architecture tests before heavier interaction models [@DeepSets-zaheer2017; @SetTransformer-lee2019]. |
+| 3 | Local relative geometry, not global pose memorization. | Candidate, target, and support tokens should encode target-local, current-camera-local, and query-local relative poses, gravity alignment, ranges, bearings, and frustum/OBB intersections. Full SE(3) invariance is not the right constraint because gravity, egocentric camera history, and object orientation are meaningful. |
+| 4 | Scene support beyond EVL's fixed local cube. | EVL should be a local read and evidence source; broad scene memory should come from semidense or fused points, support/free-space summaries, and logged-history descriptors so valid far candidates are not discarded merely because they lie outside the current EVL volume. |
+| 5 | Logged visual semantics without future-observation leakage. | DINO-derived descriptors can be attached only from logged frames or existing EVL products. Counterfactual candidate states do not get freshly rendered RGB/DINO features unless a separate synthetic-rendering protocol is explicitly introduced. |
+| 6 | Directional history and uncertainty. | The value model needs to know which directions around the target have already been observed, which candidate rays are supported, and which evidence is low-support or out-of-extent. This separates "unknown" from "known bad" and prevents EVL coverage gaps from becoming false invalidity. |
+| 7 | Provenance and compression. | Feature banks must carry checkpoint/config/source hashes, point or voxel lineage, support counts, and descriptor dimensionality. Raw high-dimensional DINO features are an ablation surface, not the default offline-store contract. |
+
+### Representation ladder for ARIA-NBV
+
+The recommended first serious representation is a sparse scene and target-pooled state:
 
 $$
-s_t =
+s_t^{\mathrm{actor}} =
 \left(
-  P_t^{\mathrm{semi}},
+  P_t^{\mathrm{semi/fused}},
   F_t^{\mathrm{DINO@pt}},
   V_t^{\mathrm{EVL}},
   O_t^{\mathrm{pred}},
+  z_e,
   \mathcal{Q}_t,
-  h_t
+  m_t,
+  \rho_t,
+  h_t,
+  b_t
 \right),
 $$
 
-where $P_t^{\mathrm{semi}}$ is the semi-dense reconstruction proxy, $F_t^{\mathrm{DINO@pt}}$ is an optional compressed image-foundation feature bank attached to points, $V_t^{\mathrm{EVL}}$ is the local voxel/evidence field, $O_t^{\mathrm{pred}}$ are actor-visible detections or target hypotheses, $\mathcal{Q}_t$ is the finite candidate set, and $h_t$ is rollout history.
+where $P_t^{\mathrm{semi/fused}}$ is broad scene geometry, $F_t^{\mathrm{DINO@pt}}$ is an optional compressed descriptor bank attached to logged semidense or fused points, $V_t^{\mathrm{EVL}}$ is the local EVL evidence field, $O_t^{\mathrm{pred}}$ are actor-visible detections, $z_e$ is the selected target descriptor, $\mathcal{Q}_t$ is the finite candidate set, $m_t$ are validity masks, $\rho_t$ are invalidity or low-support reasons, $h_t$ is selected rollout history, and $b_t$ records backbone/provenance metadata.
+
+For each target $e$ and candidate $i$, the useful pooled tokens are:
+
+- **Target pool $z_e$:** semidense/fused points inside or near the actor-visible OBB, OBB geometry, class/confidence, projected area, observed support, EVL support, and optional compressed DINO descriptors sampled from logged frames.
+- **Candidate-frustum pool $z_i^{\mathrm{fr}}$:** points, free-space/support counts, EVL coverage, range/bearing, visibility history, and uncertainty inside the candidate frustum.
+- **Target-candidate intersection pool $z_{e,i}^{\cap}$:** support and descriptors in the candidate frustum that intersect the target OBB or target-local neighborhood.
+- **EVL local read:** voxel/head/neck/crop summaries near the target and candidate rays when the query is inside the current EVL support volume; otherwise an explicit out-of-extent or low-coverage flag.
+
+This makes the global dense field optional. Point and sparse backbones such as KPConv, Minkowski sparse convolutions, or Point Transformer variants become natural later ablations for encoding the point/descriptor bank [@KPConv-thomas2019; @MinkowskiEngine-choy2019; @PointTransformerV3-wu2024]. They should compete against simple pooled descriptors first, because the immediate research risk is leakage, support mismatch, and candidate masking rather than insufficient network capacity.
+
+### Salvageable EFM3D internals
+
+EFM3D is most useful as a feature/evidence source with a known local support envelope:
+
+- **Keep as mandatory actor-visible substrate:** predicted/observed OBBs, class scores, centerness, detection confidence, local EVL extent, camera calibration, pose lineage, and support metadata. These define target proposals and local evidence without using oracle GT.
+- **Harvest as high-ROI scene features:** semidense point and free-space masks, support counts, local voxel occupancy/surface logits, and EVL coverage flags. These are interpretable and directly diagnose why a candidate is uncertain or unsupported.
+- **Harvest DINO before it becomes too local:** sample frozen DINO maps or upsampled feature maps only from logged frames, attach compressed descriptors to semidense or fused world points, and pool those descriptors by target OBB, candidate frustum, and their intersection. This is the cleanest way to use EFM3D's image-foundation signal outside the fixed EVL cube.
+- **Use pre-head EVL features as ablations:** pooled reads from lifted voxel features, neck occupancy features, OBB-head features, and target/candidate crops can test whether EVL internals outperform simple point support. They should carry extent/coverage metadata so out-of-bounds queries are explicit.
+- **Defer global radiance fields and Gaussian splats:** they may become useful visualization or future scene-memory baselines, but the EFM3D supplemental evidence already flags dynamic-scene artifacts and false surfaces. They do not solve the immediate actor-visible Q-state contract by themselves.
+
+The limited EVL voxel extent should be handled by a two-tier state rather than by pretending the local cube is global: EVL provides local high-quality target/support evidence, while semidense/fused points and logged DINO-on-point descriptors provide broad memory. Out-of-EVL does not imply invalid; it implies missing EVL support and should be encoded as coverage/reason metadata unless the evaluator proves the candidate is physically impossible.
+
+### Cube R-CNN role
+
+Cube R-CNN is useful to ARIA-NBV as a detector and target-proposal baseline, not as the primary scene representation [@omni3d-cubercnn-brazil2023]. Its strengths are practical:
+
+- It predicts 3D OBBs from single RGB images, so it can test how far a simpler detector-only target proposal pipeline can go without EVL.
+- It is easier to isolate as an RGB detector ablation, including through the ATEK Cube R-CNN preprocessing/adaptor surface.
+- Its ROI and detection features can be pooled into a target descriptor baseline when the question is target identity/support, not full scene memory.
+- It avoids EVL's local voxel extent by construction, which makes it a useful stress test for target proposal coverage.
+
+Its limits are equally important. Single-frame Cube R-CNN predictions do not give persistent scene memory, semidense/free-space support, local voxel evidence, or logged-history descriptors. Accumulating per-frame boxes still needs tracking and duplicate/noise handling. For this thesis, Cube R-CNN is therefore a fallback/probe for actor-visible OBB proposals and ROI features; it is not a replacement for the EFM3D-plus-semidense scene substrate.
+
+### ARIA-NBV adoption
+
+- **Core substrate:** use EVL/EFM3D outputs as local actor-visible evidence and target support for one-step RRI scoring, rollout state summaries, and target-conditioned candidate ranking.
+- **Scene memory hypothesis:** test semidense/fused points with compressed logged-DINO features as the broader queryable scene embedding.
+- **Target contract:** use predicted or observed {{< gls oriented-bounding-box >}} support as actor-visible target input; keep GT meshes and GT target crops for offline labels/evaluation only.
+- **Candidate contract:** score finite candidate rows with hard validity masks, target-local geometry, candidate-frustum pools, target-candidate intersection pools, and explicit support/coverage reasons.
+- **Backbone ladder:** start with pooled support/descriptor tokens, then Deep Sets, masked Set Transformer, and only then sparse/point backbones or richer cross-candidate attention if the simpler controls fail.
+- **Diagnostics:** preserve frame lineage, voxel extent, camera stream identity, calibration, and {{< gls machine-perception-services >}} / ASE point-source metadata in offline stores.
 
 ### Do not adopt
 
 - Do not treat EVL predictions as ground truth; they are actor-visible evidence.
 - Do not treat EVL's fixed local voxel extent as the complete scene extent. Candidates can be partially out of bounds even when valid in the scene.
 - Do not mix offline GT meshes/OBBs into target selection or scorer inputs for the main protocol.
+- Do not generate fresh DINO descriptors for arbitrary counterfactual candidate poses unless that becomes an explicit synthetic-rendering protocol.
+- Do not treat DINO-on-point or EVL-internal feature banks as already implemented; they are planned representation ablations until backed by stored artifacts.
+- Do not treat Cube R-CNN as a full scene encoder; it is a detector/ROI-feature baseline.
 - Do not keep implementation debug dictionaries in this literature page; feature-selection details belong in generated VIN API docs and code docstrings.
 
 ### Open risks / caveats
@@ -67,3 +126,4 @@ where $P_t^{\mathrm{semi}}$ is the semi-dense reconstruction proxy, $F_t^{\mathr
 - Local voxel anchoring and coordinate-frame conventions can silently corrupt projection features and RRI labels.
 - Dynamic objects, reflections, distant surfaces, and incomplete semi-dense support can weaken EVL evidence.
 - EVL features should be logged with explicit config/checkpoint/source hashes because rollout/Q datasets will otherwise mix incomparable backbone states.
+- Descriptor compression may erase small-object or hard-turn target cues; keep raw-feature probes as bounded diagnostics before committing a low-dimensional store format.

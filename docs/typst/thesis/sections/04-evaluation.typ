@@ -44,17 +44,20 @@ Success is measured by oracle-rescored selected actions, not predicted values. I
     midrule(),
     [Target utility],
     [#symb.entity.endpoint_gain, #symb.entity.return_h, scene @relative-reconstruction-improvement:short, cost],
+
     [#symb.entity.endpoint_gain decides endpoint quality; #symb.entity.return_h trains and ranks rollouts.],
     [Input safety],
     [actor-visible #symb.entity.target_desc, match score, support, leakage checks],
+
     [@ground-truth:short is label/evaluation only for the V1 result.],
     [Myopic control],
     [target-rank metrics, selected-candidate oracle @relative-reconstruction-improvement:short, calibration],
+
     [One-step target scoring is the comparator for #symb.rl.qh, not the final policy claim.],
     [Planning headroom],
     [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-    [#symb.rl.qh is meaningful only relative to measured oracle-lookahead headroom.],
-    bottomrule(),
+
+    [#symb.rl.qh is meaningful only relative to measured oracle-lookahead headroom.], bottomrule(),
   ),
   caption: [Objective-to-evidence matrix.],
 ) <tab:thesis-objective-evidence>
@@ -70,21 +73,23 @@ The replay pipeline in @fig:qh-rollout-replay-doubleq is the operational boundar
     columns: (0.72fr, 1.02fr, 1.06fr),
     toprule(),
     table.header([*Data product*], [*Purpose*], [*Minimum evidence*]),
-    midrule(),
-    [one-step all-candidate labels],
-    [train and calibrate $hat(r)_psi^e$],
+    midrule(), [one-step all-candidate labels], [train and calibrate $hat(r)_psi^e$],
     [rank correlation, top-$k$ oracle hit, calibration],
     [paired greedy/lookahead roots],
     [measure #symb.entity.lookahead_headroom],
+
     [same root, target, seed, $N_q$, horizon, and validity masks],
     [stochastic support traces],
     [avoid fitting #symb.rl.qh only on greedy states],
+
     [policy entropy, unique selected chains, target visibility],
     [invalid near-misses],
     [stress hard masks and failure modes],
+
     [invalid-reason distribution and with/without-mask diagnostics],
     [target and candidate strata],
     [test support across target difficulty and candidate families],
+
     [class/support/area/occlusion bins, per-strategy @relative-reconstruction-improvement:short histograms, successor-table availability],
     bottomrule(),
   ),
@@ -98,23 +103,24 @@ The one-step scorer is trained on all valid candidate rows with oracle immediate
     columns: (0.72fr, 1.03fr, 1.25fr),
     toprule(),
     table.header([*Evidence surface*], [*Seminar evidence role*], [*Current thesis gate*]),
-    midrule(),
-    [Oracle RRI labeler],
-    [Implemented scene-level depth-render, fusion, and point-mesh scoring substrate.],
+    midrule(), [Oracle RRI labeler], [Implemented scene-level depth-render, fusion, and point-mesh scoring substrate.],
     [Target-cropped labels, empty-crop invalidity, and identity-match audit pass on current manifests.],
     [Candidate sampling],
     [Legacy free-shell candidate generator and pruning diagnostics.],
+
     [Target-conditioned mixture reports strategy counts, invalid reasons, headroom strata, and hard-turn diagnostics.],
     [CORAL scorer],
     [One-step ordinal RRI calibration and expected-RRI interface.],
+
     [Target scorer passes ranking/calibration before residual #symb.rl.qh is interpreted.],
     [Offline stores],
     [Immutable one-step VIN payload proves feasibility of materialized labels.],
+
     [Selected-transition rollout store reports successor tables, masks, seeds, storage, and replay integrity.],
     [Architecture],
     [VINv3/EVL myopic scorer is the implemented control.],
-    [A0-A5 ablation ladder is compared by paired oracle-rescored endpoint gain.],
-    bottomrule(),
+
+    [A0-A5 ablation ladder is compared by paired oracle-rescored endpoint gain.], bottomrule(),
   ),
   caption: [Substrate-to-thesis evidence matrix used to avoid treating historical seminar results as final target-Q_H claims.],
 ) <tab:seminar-to-thesis-evidence>
@@ -168,8 +174,9 @@ All selected actions are oracle-evaluated under the same acquisition and candida
     columns: (0.72fr, 0.58fr, 0.58fr, 0.52fr, 1.3fr),
     toprule(),
     table.header([*Policy*], [*Actor input*], [*@ground-truth:short decision*], [*H*], [*Role*]),
-    midrule(),
-    [$pi_"rand"$], [yes], [no], [1], [lower reference over valid candidates],
+    midrule(), [$pi_"rand"$], [yes], [no], [1],
+    [lower reference over valid candidates],
+    // NOTE: removed $pi_"rand"$, random policy is not a reference
     [$pi_"learned-1"$], [yes], [no], [1], [myopic learned target scorer],
     [$pi_"oracle-1"$], [no], [yes], [1], [one-step oracle upper bound],
     [$pi_"oracle-look"$], [no], [yes], [$H$], [cumulative-@relative-reconstruction-improvement:short headroom estimate],

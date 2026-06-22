@@ -10,6 +10,7 @@ metadata:
   handoff_to:
     - "diagnose-aria for concrete data smoke failures or tracebacks"
     - "rerun-nbv-inspector for visual inspection of compatible offline samples"
+    - "zarr-python for Zarr API, chunk, codec, store, sharding, concurrency, or migration changes"
     - "lrz-ai-systems for remote storage, Slurm, DSS, or container execution"
     - "agents-db for durable data debt or blocked-store records"
   evidence_required:
@@ -73,6 +74,9 @@ Use this skill for:
 - `offline_only.toml`, VIN diagnostics, and data smoke commands
 
 Do not use it to restore legacy cache migration or removed training APIs.
+Hand off to `zarr-python` when the task changes Zarr API usage, chunking,
+codecs, stores, sharding, concurrency, or migration behavior rather than only
+operating or validating an existing ARIA store.
 
 ## Read First
 

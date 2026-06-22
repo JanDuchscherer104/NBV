@@ -23,6 +23,7 @@ Do not run Slurm status commands in tight loops.
 - Serious cache/training: H100 or A100 80GB partitions.
 - Multi-GPU: only after the single-GPU path works.
 - MIG: small experiments only, not large rendering/cache jobs.
+- MCML partitions: use only after access/QOS is confirmed by project membership or a short successful test allocation.
 
 ## Common Partition Patterns
 
@@ -42,3 +43,6 @@ mcml-*                     require confirmed MCML access/QOS
 ## GPU Requirement
 
 Always include `--gres=gpu:<N>` for GPU allocations and batch jobs. Missing GRES can leave jobs pending with policy errors or allocate no GPU.
+
+For allocation and batch-script patterns, read `slurm-job-patterns.md`. For
+concrete failed or pending jobs, read `troubleshooting-slurm.md`.

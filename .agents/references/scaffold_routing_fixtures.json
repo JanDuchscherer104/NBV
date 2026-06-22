@@ -27,6 +27,13 @@
       "non_goals": ["Do not route geometry contract changes through entity-aware RRI unless target crop semantics are touched."]
     },
     {
+      "id": "zarr-storage-api-change",
+      "task": "Change rollout or offline Zarr chunking, codecs, LocalStore, create_array, sharding, concurrency, or Zarr v3 API usage.",
+      "expected_skills": ["agent-behavior", "zarr-python"],
+      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
+      "non_goals": ["Do not route pure ASE download, offline-store smoke, manifest, split, or existing-store validation work away from dataset-cache-ops."]
+    },
+    {
       "id": "context7-pytorch3d-conceptual-plan",
       "task": "Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence.",
       "expected_skills": ["agent-behavior", "plan-grill"],

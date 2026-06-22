@@ -1,5 +1,8 @@
 # DSS Storage
 
+LRZ AI Systems DSS is the default home for high-intensity AI I/O. Home
+directories are for code and small configuration only.
+
 ## Placement Rules
 
 - Store code, small configs, SSH config, git config, and non-committed NGC credentials in `$HOME`.
@@ -38,6 +41,7 @@ $ARIA_DSS/
 
 - Use `dssusrinfo all` to inspect accessible DSS containers and quota.
 - Use `scripts/lrz-dss-init.sh "$ARIA_DSS"` to create the ARIA layout.
-- Prefer tar shards, archives, HDF5, TFRecord, WebDataset-style shards, or immutable chunked stores.
+- Prefer tar shards, archives, HDF5, TFRecord, WebDataset-style shards, Zarr, or immutable chunked stores.
 - Avoid millions of loose files and repeated directory scans on GPFS/DSS.
 - Request more DSS quota before filling transitional or small per-user allocations.
+- For EFM3D/ASE work, check `efm3d-aria-workloads.md`; full ASE training data is far beyond `$HOME`.
