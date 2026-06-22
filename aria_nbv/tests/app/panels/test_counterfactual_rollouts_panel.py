@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import pytest
 import torch
 import zarr
@@ -362,6 +363,54 @@ def test_format_rollout_store_option_includes_schema_validation_and_counts(tmp_p
     label = stored_rollouts_panel.format_rollout_store_option(row, root=tmp_path)
 
     assert label == "rollouts_v1_smoke.zarr · stale · FAILED · R/S/C=18/54/270"
+
+
+def test_candidate_distribution_frame_coerces_display_fields() -> None:
+    audit_df = pd.DataFrame(
+        [
+            {
+                "candidate_row_id": "7",
+                "rollout_row_id": 1,
+                "step_index": "0",
+                "center_x": "1.25",
+                "center_y": "2.5",
+                "center_z": "3.75",
+                "selected": True,
+                "actor_action": None,
+                "q_train": False,
+                "position": None,
+                "strategy": "target_bearing_local",
+                "mixture": "component_a",
+                "invalid_reason": None,
+                "motion_yaw_delta_deg": "45.5",
+                "target_bearing_yaw_deg": "-32.0",
+                "target_root_gain": "0.125",
+            }
+        ]
+    )
+
+    df = stored_rollouts_panel._candidate_distribution_frame(audit_df)
+
+    assert df.loc[0, "candidate_row_id"] == pytest.approx(7.0)
+    assert df.loc[0, "center_x"] == pytest.approx(1.25)
+    assert bool(df.loc[0, "actor_action"]) is False
+    assert df.loc[0, "position"] == "unknown"
+    assert df.loc[0, "invalid_reason"] == "unknown"
+    assert df.loc[0, "motion_yaw_delta_deg"] == pytest.approx(45.5)
+
+
+def test_candidate_angle_frame_keeps_available_sources() -> None:
+    diagnostics_df = pd.DataFrame(
+        {
+            "target_bearing_yaw_deg": [-90.0, np.nan, 45.0],
+            "motion_yaw_delta_deg": [0.0, 30.0, np.nan],
+        }
+    )
+
+    angle_df = stored_rollouts_panel._candidate_angle_frame(diagnostics_df)
+
+    assert set(angle_df["angle_source"]) == {"target bearing yaw", "motion yaw delta"}
+    assert angle_df["angle_deg"].tolist() == [-90.0, 45.0, 0.0, 30.0]
 
 
 def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:

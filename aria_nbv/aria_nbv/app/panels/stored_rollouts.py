@@ -123,6 +123,17 @@ _GEOMETRY_INFO = """
 Geometry diagnostics summarize persisted candidate motion and clearance fields: path collision, clearance, free-space margin, step length, height delta, backward motion, yaw change, target distance, and target bearing.
 """
 
+_CANDIDATE_DISTRIBUTION_INFO = """
+Candidate distribution diagnostics use the same bounded candidate-audit rows shown in the table.
+
+- Center plots show persisted candidate camera centers in world coordinates; they diagnose spatial coverage and selected-action collapse.
+- Angular histograms compare target bearing and executed yaw deltas, exposing whether target-aware families actually populate hard-turn cases.
+- Motion plots combine step length, yaw change, and target distance to catch unrealistic movement or target-distance bias.
+- Reward-by-family plots show whether selected and trainable candidates have distinct target-root-gain support.
+
+These plots do not reconstruct unexpanded search-tree edges. They summarize persisted candidate rows and selected-branch provenance.
+"""
+
 _RERUN_INFO = """
 Rerun launch uses the selected current-schema rollout row. Native launch opens the desktop viewer; web launch writes an `.rrd` and serves it through the configured ports.
 """
@@ -1130,6 +1141,202 @@ def _render_geometry_tab(reader: RolloutZarrStoreReader) -> None:
             ),
             width="stretch",
         )
+    _render_candidate_distribution_diagnostics(audit_df, color_field=color_field)
+
+
+def _render_candidate_distribution_diagnostics(audit_df: pd.DataFrame, *, color_field: str) -> None:
+    diagnostics_df = _candidate_distribution_frame(audit_df)
+    if diagnostics_df.empty:
+        st.info("Candidate distribution diagnostics require persisted candidate pose and motion fields.")
+        return
+
+    with st.expander("Candidate Distributions & Selection Diagnostics", expanded=False):
+        _info_popover("candidate distribution diagnostics", _CANDIDATE_DISTRIBUTION_INFO)
+        st.caption(
+            "These plots reuse the current candidate-audit row limit. Increase the limit only when the browser can handle "
+            "larger interactive traces."
+        )
+
+        color = color_field if color_field in diagnostics_df.columns else None
+        symbol = "selected" if "selected" in diagnostics_df.columns else None
+        hover_cols = [
+            name
+            for name in (
+                "rollout_row_id",
+                "step_index",
+                "candidate_row_id",
+                "position",
+                "strategy",
+                "mixture",
+                "selected",
+                "actor_action",
+                "q_train",
+                "target_distance_m",
+                "target_root_gain",
+                "target_rri",
+                "invalid_reason",
+            )
+            if name in diagnostics_df.columns
+        ]
+
+        center_df = diagnostics_df.dropna(subset=["center_x", "center_z"])
+        if not center_df.empty:
+            center_col1, center_col2 = st.columns(2)
+            with center_col1:
+                center_xz = px.scatter(
+                    center_df,
+                    x="center_x",
+                    y="center_z",
+                    color=color,
+                    symbol=symbol,
+                    hover_data=hover_cols,
+                    title="Candidate Centers (World X/Z)",
+                )
+                center_xz.update_xaxes(title="world x / left (m)")
+                center_xz.update_yaxes(title="world z / forward (m)", scaleanchor="x", scaleratio=1)
+                st.plotly_chart(center_xz, width="stretch")
+            if "center_y" in center_df.columns and center_df["center_y"].notna().any():
+                with center_col2:
+                    center_height = px.scatter(
+                        center_df,
+                        x="center_z",
+                        y="center_y",
+                        color=color,
+                        symbol=symbol,
+                        hover_data=hover_cols,
+                        title="Candidate Height vs Forward Position",
+                    )
+                    center_height.update_xaxes(title="world z / forward (m)")
+                    center_height.update_yaxes(title="world y / up (m)")
+                    st.plotly_chart(center_height, width="stretch")
+
+        angle_df = _candidate_angle_frame(diagnostics_df)
+        motion_cols = {"motion_step_length_m", "motion_yaw_delta_deg"}
+        has_motion = (
+            motion_cols.issubset(diagnostics_df.columns) and diagnostics_df[list(motion_cols)].notna().any().all()
+        )
+        if not angle_df.empty or has_motion:
+            angle_col, motion_col = st.columns(2)
+            if not angle_df.empty:
+                with angle_col:
+                    angle_fig = px.histogram(
+                        angle_df,
+                        x="angle_deg",
+                        color="angle_source",
+                        nbins=72,
+                        barmode="overlay",
+                        title="Target Bearing and Motion Yaw Distributions",
+                    )
+                    angle_fig.update_traces(opacity=0.72)
+                    angle_fig.update_xaxes(title="angle (deg)", range=[-180, 180])
+                    angle_fig.update_yaxes(title="candidate rows")
+                    st.plotly_chart(angle_fig, width="stretch")
+            if has_motion:
+                with motion_col:
+                    motion_df = diagnostics_df.dropna(subset=["motion_step_length_m", "motion_yaw_delta_deg"])
+                    motion_fig = px.scatter(
+                        motion_df,
+                        x="motion_step_length_m",
+                        y="motion_yaw_delta_deg",
+                        color=color,
+                        symbol=symbol,
+                        hover_data=hover_cols,
+                        title="Motion Step Length vs Yaw Change",
+                    )
+                    motion_fig.update_xaxes(title="step length (m)")
+                    motion_fig.update_yaxes(title="yaw delta (deg)")
+                    st.plotly_chart(motion_fig, width="stretch")
+
+        reward_cols = {"target_root_gain", "selected"}
+        has_reward = reward_cols.issubset(diagnostics_df.columns) and diagnostics_df["target_root_gain"].notna().any()
+        if has_reward and color is not None:
+            reward_df = diagnostics_df.dropna(subset=["target_root_gain"])
+            reward_fig = px.box(
+                reward_df,
+                x=color,
+                y="target_root_gain",
+                color="selected",
+                points="outliers",
+                title=f"Target Root Gain by {color}",
+            )
+            reward_fig.update_xaxes(title=color)
+            reward_fig.update_yaxes(title="target root gain")
+            st.plotly_chart(reward_fig, width="stretch")
+
+
+def _candidate_distribution_frame(audit_df: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "candidate_row_id",
+        "rollout_row_id",
+        "step_index",
+        "center_x",
+        "center_y",
+        "center_z",
+        "selected",
+        "actor_action",
+        "q_train",
+        "position",
+        "strategy",
+        "mixture",
+        "policy",
+        "invalid_reason",
+        "motion_step_length_m",
+        "motion_height_delta_m",
+        "motion_yaw_delta_deg",
+        "target_distance_m",
+        "target_bearing_yaw_deg",
+        "target_root_gain",
+        "target_rri",
+    ]
+    present = [name for name in columns if name in audit_df.columns]
+    required = {"center_x", "center_z"}
+    if not required.issubset(present):
+        return pd.DataFrame()
+
+    df = audit_df[present].copy()
+    numeric_columns = [
+        "candidate_row_id",
+        "rollout_row_id",
+        "step_index",
+        "center_x",
+        "center_y",
+        "center_z",
+        "motion_step_length_m",
+        "motion_height_delta_m",
+        "motion_yaw_delta_deg",
+        "target_distance_m",
+        "target_bearing_yaw_deg",
+        "target_root_gain",
+        "target_rri",
+    ]
+    for column in numeric_columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+    for column in ("selected", "actor_action", "q_train"):
+        if column in df.columns:
+            df[column] = df[column].map(lambda value: bool(value) if pd.notna(value) else False).astype(bool)
+    for column in ("position", "strategy", "mixture", "policy", "invalid_reason"):
+        if column in df.columns:
+            df[column] = df[column].fillna("unknown").astype(str)
+    return df
+
+
+def _candidate_angle_frame(diagnostics_df: pd.DataFrame) -> pd.DataFrame:
+    rows: list[pd.DataFrame] = []
+    angle_sources = {
+        "target_bearing_yaw_deg": "target bearing yaw",
+        "motion_yaw_delta_deg": "motion yaw delta",
+    }
+    for column, label in angle_sources.items():
+        if column not in diagnostics_df.columns:
+            continue
+        values = pd.to_numeric(diagnostics_df[column], errors="coerce").dropna()
+        if values.empty:
+            continue
+        rows.append(pd.DataFrame({"angle_deg": values.to_numpy(dtype=float), "angle_source": label}))
+    if not rows:
+        return pd.DataFrame(columns=["angle_deg", "angle_source"])
+    return pd.concat(rows, ignore_index=True)
 
 
 def _render_suspicious_tab(
