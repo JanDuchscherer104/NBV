@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Self
 
 import numpy as np
@@ -18,6 +19,34 @@ from ..pose_generation.plotting import CandidatePlotBuilder
 from ..utils import rotate_yaw_cw90
 from ..utils.data_plotting import FrameGridBuilder, _depth_to_color
 from .unproject import backproject_depth_with_p3d
+
+_BOX_EDGE_IDX = np.array(
+    [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0),
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4),
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+    ],
+    dtype=np.int64,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DepthBoxOverlay:
+    """Projected OBB wireframe overlay for one depth-grid panel."""
+
+    corners_px: np.ndarray
+    name: str
+    color: str
+    width: int = 3
 
 
 def depth_grid(
@@ -57,6 +86,125 @@ def depth_grid(
     fig = builder.finalize()
     fig.update_layout(title=f"Candidate depth renders (hit_ratio={hit_ratio:.3f})")
     return fig
+
+
+def depth_grid_with_box_overlays(
+    depths: Tensor,
+    *,
+    overlays: Iterable[Iterable[DepthBoxOverlay]],
+    titles: Iterable[str] | None = None,
+    max_cols: int = 3,
+    zmax: float | None = None,
+    zfar: float | None = None,
+) -> go.Figure:
+    """Visualise depth maps with projected 2D OBB wireframes.
+
+    The image conversion matches `depth_grid`: depth maps are colorized through
+    the shared `FrameGridBuilder` path and rotated for display. Overlay pixel
+    coordinates are transformed by the same display rotation before Plotly
+    scatter traces are added.
+    """
+
+    if depths.ndim != 3:
+        raise ValueError(f"depth_grid_with_box_overlays expects (N,H,W) tensor, got shape {tuple(depths.shape)}")
+
+    overlay_rows = [list(row) for row in overlays]
+    num = depths.shape[0]
+    if len(overlay_rows) != num:
+        raise ValueError(f"Expected overlays for {num} depth maps, got {len(overlay_rows)}.")
+
+    cols = max(1, min(max_cols, num))
+    rows = int(math.ceil(num / cols))
+    provided_titles = list(titles) if titles is not None else []
+    subplot_titles = [provided_titles[i] if i < len(provided_titles) else f"Candidate {i}" for i in range(num)]
+
+    builder = FrameGridBuilder(
+        rows=rows, cols=cols, titles=subplot_titles, height=320 * rows, width=360 * cols, title=""
+    )
+
+    vmax = float(depths.max().item()) if zmax is None else zmax
+    for idx in range(num):
+        row = idx // cols + 1
+        col = idx % cols + 1
+        depth = depths[idx]
+        rgb = _depth_to_color(depth, percentile=99.5)
+        rgb = np.rot90(rgb, k=1)
+        builder.add_image(rgb, row=row, col=col)
+        for overlay in overlay_rows[idx]:
+            points = _rotate_pixel_points_for_depth_grid(np.asarray(overlay.corners_px, dtype=float), depth.shape)
+            x, y = _projected_box_edges_for_plotly(points)
+            if x.size == 0:
+                continue
+            builder.fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                    mode="lines",
+                    line={"color": overlay.color, "width": overlay.width},
+                    name=overlay.name,
+                    hoverinfo="name",
+                    showlegend=True,
+                ),
+                row=row,
+                col=col,
+            )
+
+    threshold = zfar if zfar is not None else vmax + 1e-6
+    hit_ratio = float(((depths.float() < threshold).float().mean()).item())
+    fig = builder.finalize()
+    fig.update_layout(title=f"Candidate depth renders with OBB overlays (hit_ratio={hit_ratio:.3f})")
+    return fig
+
+
+def project_world_points_to_image(
+    points_world: Tensor,
+    pose_world_cam: PoseTW,
+    *,
+    focal_px: tuple[float, float],
+    principal_point_px: tuple[float, float],
+) -> np.ndarray:
+    """Project world-frame points into retained selected-depth pixel coordinates."""
+
+    points = torch.as_tensor(points_world, dtype=torch.float32)
+    pose = pose_world_cam.to(device=points.device, dtype=points.dtype)
+    points_cam = pose.inverse().transform(points.reshape(-1, 3)).reshape(-1, 3)
+    z = points_cam[:, 2]
+    fx, fy = (float(focal_px[0]), float(focal_px[1]))
+    cx, cy = (float(principal_point_px[0]), float(principal_point_px[1]))
+    u = points_cam[:, 0] / z.clamp_min(1e-6) * fx + cx
+    v = points_cam[:, 1] / z.clamp_min(1e-6) * fy + cy
+    projected = torch.stack([u, v], dim=1)
+    projected = torch.where((z > 1e-6).unsqueeze(-1), projected, torch.full_like(projected, torch.nan))
+    return projected.detach().cpu().numpy()
+
+
+def _rotate_pixel_points_for_depth_grid(
+    points_px: np.ndarray, image_shape_hw: torch.Size | tuple[int, int]
+) -> np.ndarray:
+    points = np.asarray(points_px, dtype=float).reshape(-1, 2)
+    height_width = tuple(int(value) for value in image_shape_hw)
+    if len(height_width) != 2:
+        raise ValueError(f"Expected image shape (H,W), got {image_shape_hw}.")
+    _, width = height_width
+    rotated = np.empty_like(points)
+    rotated[:, 0] = points[:, 1]
+    rotated[:, 1] = float(width - 1) - points[:, 0]
+    rotated[~np.isfinite(points).all(axis=1)] = np.nan
+    return rotated
+
+
+def _projected_box_edges_for_plotly(points_px: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    points = np.asarray(points_px, dtype=float).reshape(-1, 2)
+    if points.shape != (8, 2):
+        raise ValueError(f"Expected projected OBB corners shaped (8,2), got {points.shape}.")
+    edges = points[_BOX_EDGE_IDX]
+    finite_edge = np.isfinite(edges).all(axis=(1, 2))
+    edges = edges[finite_edge]
+    if edges.size == 0:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+    edges_sep = np.concatenate([edges, np.full((edges.shape[0], 1, 2), np.nan, dtype=float)], axis=1)
+    flat = edges_sep.reshape(-1, 2)
+    return flat[:, 0], flat[:, 1]
 
 
 def depth_histogram(depths: Tensor, *, bins: int = 50, zfar: float | None = None) -> go.Figure:
@@ -314,7 +462,10 @@ class RenderingPlotBuilder(CandidatePlotBuilder):
 
 
 __all__ = [
+    "DepthBoxOverlay",
     "depth_grid",
+    "depth_grid_with_box_overlays",
     "depth_histogram",
+    "project_world_points_to_image",
     "RenderingPlotBuilder",
 ]

@@ -14,6 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import torch
+from efm3d.aria.pose import PoseTW
 
 from ...data_handling import (
     ActorVisibleTargetSelector,
@@ -44,7 +45,12 @@ from ...pose_generation import (
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
-from ...rendering.plotting import depth_grid
+from ...rendering.plotting import (
+    DepthBoxOverlay,
+    depth_grid,
+    depth_grid_with_box_overlays,
+    project_world_points_to_image,
+)
 from ...rollouts import candidate_result_diagnostic_counts
 from ...rri_metrics import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
@@ -1329,7 +1335,7 @@ def _render_rollout_result(
 
     with depth_tab:
         _info_popover("selected depth", _LIVE_SELECTED_DEPTH_INFO)
-        _render_live_selected_depth_tab(rollouts)
+        _render_live_selected_depth_tab(rollouts, sample=sample, target=target)
 
     with log_tab:
         _info_popover("rollout logs", _LIVE_LOG_INFO)
@@ -1339,7 +1345,12 @@ def _render_rollout_result(
             st.info("No Console output was captured for this rollout run.")
 
 
-def _render_live_selected_depth_tab(rollouts: CounterfactualRolloutResult) -> None:
+def _render_live_selected_depth_tab(
+    rollouts: CounterfactualRolloutResult,
+    *,
+    sample: VinOfflineSample,
+    target: TargetCandidateRow | None,
+) -> None:
     rows = pd.DataFrame(_live_selected_depth_rows(rollouts))
     if rows.empty:
         st.info("No rollout steps are available for selected-depth inspection.")
@@ -1384,21 +1395,47 @@ def _render_live_selected_depth_tab(rollouts: CounterfactualRolloutResult) -> No
     selected = preview_rows.iloc[selected_preview_index]
     trajectory = rollouts.trajectories[int(selected["trajectory"])]
     step = trajectory.steps[int(selected["step"]) - 1]
+    overlay_col1, overlay_col2 = st.columns(2)
+    show_actor_projection = overlay_col1.checkbox(
+        "Project actor-visible target OBB",
+        value=target is not None,
+        key="cf_live_depth_actor_obb",
+    )
+    show_gt_projection = overlay_col2.checkbox(
+        "Project matched GT target OBB",
+        value=bool(target is not None and target.gt_label_valid),
+        key="cf_live_depth_gt_obb",
+    )
     depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
     valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
     depth_plot = depth.clone()
     depth_plot[~(valid_mask & torch.isfinite(depth_plot))] = torch.nan
     finite = depth_plot[torch.isfinite(depth_plot)]
     zmax = float(finite.max().item()) if finite.numel() else None
-    st.plotly_chart(
-        depth_grid(
+    overlays = _live_depth_target_overlays(
+        step,
+        sample=sample,
+        target=target,
+        show_actor_target=show_actor_projection,
+        show_gt_target=show_gt_projection,
+    )
+    title = f"traj {int(selected['trajectory'])} · step {int(selected['step'])}"
+    if overlays:
+        fig = depth_grid_with_box_overlays(
             depth_plot.unsqueeze(0),
-            titles=[f"traj {int(selected['trajectory'])} · step {int(selected['step'])}"],
+            overlays=[overlays],
+            titles=[title],
             max_cols=1,
             zmax=zmax,
-        ),
-        width="stretch",
-    )
+        )
+    else:
+        fig = depth_grid(depth_plot.unsqueeze(0), titles=[title], max_cols=1, zmax=zmax)
+        if show_actor_projection or show_gt_projection:
+            st.warning(
+                "Target OBB projection is unavailable for this step. Retained depth requires focal, principal-point, "
+                "target OBB, and selected pose metadata."
+            )
+    st.plotly_chart(fig, width="stretch")
     st.json(
         {
             "focal_px": step.selected_depth_focal_px,
@@ -1466,6 +1503,75 @@ def _live_selected_depth_rows(rollouts: CounterfactualRolloutResult) -> list[dic
                 }
             )
     return rows
+
+
+def _live_depth_target_overlays(
+    step: object,
+    *,
+    sample: VinOfflineSample,
+    target: TargetCandidateRow | None,
+    show_actor_target: bool,
+    show_gt_target: bool,
+) -> list[DepthBoxOverlay]:
+    """Build projected actor/GT target overlays for one selected live depth."""
+
+    if target is None:
+        return []
+    focal = getattr(step, "selected_depth_focal_px", None)
+    principal = getattr(step, "selected_depth_principal_point_px", None)
+    if focal is None or principal is None:
+        return []
+
+    overlays: list[DepthBoxOverlay] = []
+    pose_world_cam = step.selected_pose_world
+    if show_actor_target:
+        actor_corners = _oriented_box_corners_world(target.pose_world_object, target.extents)
+        overlays.append(
+            DepthBoxOverlay(
+                corners_px=project_world_points_to_image(
+                    actor_corners,
+                    pose_world_cam,
+                    focal_px=(float(focal[0]), float(focal[1])),
+                    principal_point_px=(float(principal[0]), float(principal[1])),
+                ),
+                name="Actor-visible target OBB",
+                color="#ff2f74",
+                width=4,
+            )
+        )
+    if show_gt_target and target.gt_label_valid:
+        try:
+            gt_corners = target_gt_obb_world(target, sample).bb3corners_world.reshape(8, 3)
+        except ValueError:
+            gt_corners = None
+        if gt_corners is not None:
+            overlays.append(
+                DepthBoxOverlay(
+                    corners_px=project_world_points_to_image(
+                        gt_corners,
+                        pose_world_cam,
+                        focal_px=(float(focal[0]), float(focal[1])),
+                        principal_point_px=(float(principal[0]), float(principal[1])),
+                    ),
+                    name="Matched GT target OBB",
+                    color="#00d4ff",
+                    width=4,
+                )
+            )
+    return overlays
+
+
+def _oriented_box_corners_world(
+    pose_world_object: tuple[float, ...] | np.ndarray | torch.Tensor,
+    extents: tuple[float, ...] | np.ndarray | torch.Tensor,
+) -> torch.Tensor:
+    pose = PoseTW(torch.as_tensor(pose_world_object, dtype=torch.float32).reshape(-1))
+    half = torch.as_tensor(extents, dtype=torch.float32).reshape(3) / 2.0
+    signs = torch.tensor(
+        [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]],
+        dtype=torch.float32,
+    )
+    return pose.transform(signs * half)
 
 
 def _format_live_selected_depth_option(row: pd.Series) -> str:

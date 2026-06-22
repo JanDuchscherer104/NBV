@@ -308,6 +308,26 @@ def test_live_selected_depth_rows_report_unretained_depth() -> None:
     assert "not retained" in str(rows[0]["warning"])
 
 
+def test_live_depth_target_overlays_project_actor_target() -> None:
+    step = SimpleNamespace(
+        selected_depth_focal_px=(100.0, 100.0),
+        selected_depth_principal_point_px=(50.0, 50.0),
+        selected_pose_world=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0)),
+    )
+
+    overlays = rollout_panel._live_depth_target_overlays(
+        step,
+        sample=SimpleNamespace(),
+        target=_target_row(gt_label_valid=False),
+        show_actor_target=True,
+        show_gt_target=False,
+    )
+
+    assert len(overlays) == 1
+    assert overlays[0].name == "Actor-visible target OBB"
+    assert overlays[0].corners_px.shape == (8, 2)
+
+
 def test_format_rollout_option_includes_context_and_nan_beam() -> None:
     reader = _FakeRolloutReader(
         {
