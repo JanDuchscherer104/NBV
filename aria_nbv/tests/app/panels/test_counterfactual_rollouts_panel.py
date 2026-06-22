@@ -325,6 +325,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert _metric_values(app)["Q-train candidates"] == "12"
     assert {selectbox.label for selectbox in app.selectbox} >= {
         "rollouts.zarr store",
+        "Selected-depth step",
         "Geometry / label metric",
         "Color / split by",
         "Rollout row",
@@ -337,6 +338,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert {number_input.label for number_input in app.number_input} >= {
         "Rerun web-viewer port",
         "Rerun gRPC/proxy port",
+        "Selected-depth row limit",
         "Candidate audit row limit (0 = all)",
         "Min valid fanout",
     }

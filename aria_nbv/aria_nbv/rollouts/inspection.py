@@ -411,6 +411,315 @@ def rollout_step_objective_rows(
     return rows
 
 
+def selected_depth_summary_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    rollout_row_id: int | None = None,
+    step_row_id: int | None = None,
+    limit: int | None = 128,
+) -> list[dict[str, object]]:
+    """Return bounded summaries for persisted selected-action depth rasters.
+
+    Dense selected-depth arrays are intentionally read only for the filtered
+    step rows. The default limit keeps app and CLI inspections from scanning a
+    production store by accident.
+    """
+
+    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    if step_ids.size == 0:
+        return []
+    rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(reader.array("steps/step_index"), dtype=np.int64).reshape(-1)
+    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+    selected_context = _selected_candidate_context_by_id(reader)
+
+    mask = np.ones(step_ids.shape, dtype=np.bool_)
+    if rollout_row_id is not None:
+        mask &= rollout_ids == int(rollout_row_id)
+    if step_row_id is not None:
+        mask &= step_ids == int(step_row_id)
+    row_positions = np.flatnonzero(mask)
+    if limit is not None:
+        row_positions = row_positions[: max(0, int(limit))]
+
+    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
+        return [
+            _selected_depth_unavailable_row(
+                rollout_row_id=int(rollout_ids[index]),
+                step_row_id=int(step_ids[index]),
+                step_index=int(step_indices[index]),
+                selected_candidate_row_id=int(selected_candidate_ids[index]),
+                warning="selected_depth unavailable: store metadata has selected_depth_enabled=false.",
+            )
+            for index in row_positions.tolist()
+        ]
+
+    try:
+        group = reader.root["selected_depth"]
+        depth_step_ids = np.asarray(group["step_row_id"], dtype=np.int64).reshape(-1)
+        depth_candidate_ids = np.asarray(group["candidate_row_id"], dtype=np.int64).reshape(-1)
+    except KeyError as exc:
+        return [
+            _selected_depth_unavailable_row(
+                rollout_row_id=int(rollout_ids[index]),
+                step_row_id=int(step_ids[index]),
+                step_index=int(step_indices[index]),
+                selected_candidate_row_id=int(selected_candidate_ids[index]),
+                warning=f"selected_depth unavailable: missing array {exc}.",
+            )
+            for index in row_positions.tolist()
+        ]
+
+    rows: list[dict[str, object]] = []
+    for index in row_positions.tolist():
+        selected_candidate_row_id = int(selected_candidate_ids[index])
+        base = _selected_depth_base_row(
+            rollout_row_id=int(rollout_ids[index]),
+            step_row_id=int(step_ids[index]),
+            step_index=int(step_indices[index]),
+            selected_candidate_row_id=selected_candidate_row_id,
+        )
+        matches = np.flatnonzero(depth_step_ids == int(step_ids[index]))
+        if matches.size != 1:
+            rows.append(
+                {
+                    **base,
+                    "available": False,
+                    "warning": (
+                        f"selected_depth unavailable: expected one row for step_row_id={int(step_ids[index])}, "
+                        f"found {matches.size}."
+                    ),
+                }
+            )
+            continue
+        depth_row = int(matches[0])
+        candidate_row_id = int(depth_candidate_ids[depth_row])
+        if candidate_row_id != selected_candidate_row_id:
+            rows.append(
+                {
+                    **base,
+                    "candidate_row_id": candidate_row_id,
+                    "available": False,
+                    "warning": (
+                        "selected_depth candidate mismatch: "
+                        f"depth candidate_row_id={candidate_row_id}, "
+                        f"step selected_candidate_row_id={selected_candidate_row_id}."
+                    ),
+                }
+            )
+            continue
+        summary = _selected_depth_dense_summary(group, row_position=depth_row)
+        candidate_context = selected_context.get(candidate_row_id, {})
+        rows.append(
+            {
+                **base,
+                **summary,
+                "candidate_row_id": candidate_row_id,
+                "available": summary.get("warning") in (None, ""),
+                "selected_position": candidate_context.get("position", ""),
+                "selected_strategy": candidate_context.get("strategy", ""),
+                "selected_mixture": candidate_context.get("mixture", ""),
+                "selected_target_root_gain": candidate_context.get("target_root_gain"),
+                "selected_target_rri": candidate_context.get("target_rri"),
+            }
+        )
+    return rows
+
+
+def selected_depth_preview(
+    reader: RolloutZarrStoreReader,
+    *,
+    step_row_id: int,
+    max_size: int = 96,
+) -> dict[str, object]:
+    """Return one downsampled selected-depth payload for Plotly app previews."""
+
+    max_side = max(1, int(max_size))
+    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+    step_matches = np.flatnonzero(step_ids == int(step_row_id))
+    if step_matches.size != 1:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": None,
+            "warning": f"selected_depth preview unavailable: expected one step row, found {step_matches.size}.",
+        }
+    selected_candidate_row_id = int(selected_candidate_ids[int(step_matches[0])])
+    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": selected_candidate_row_id,
+            "warning": "selected_depth unavailable: store metadata has selected_depth_enabled=false.",
+        }
+    try:
+        group = reader.root["selected_depth"]
+        depth_step_ids = np.asarray(group["step_row_id"], dtype=np.int64).reshape(-1)
+        candidate_ids = np.asarray(group["candidate_row_id"], dtype=np.int64).reshape(-1)
+    except KeyError as exc:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": selected_candidate_row_id,
+            "warning": f"selected_depth unavailable: missing array {exc}.",
+        }
+    matches = np.flatnonzero(depth_step_ids == int(step_row_id))
+    if matches.size != 1:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": selected_candidate_row_id,
+            "warning": f"selected_depth unavailable: expected one row for step_row_id={step_row_id}, found {matches.size}.",
+        }
+    row = int(matches[0])
+    candidate_row_id = int(candidate_ids[row])
+    if candidate_row_id != selected_candidate_row_id:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": candidate_row_id,
+            "warning": (
+                "selected_depth candidate mismatch: "
+                f"depth candidate_row_id={candidate_row_id}, "
+                f"step selected_candidate_row_id={selected_candidate_row_id}."
+            ),
+        }
+    try:
+        depth = np.asarray(group["depth_m"][row], dtype=np.float32)
+        valid_mask = np.asarray(group["valid_mask"][row], dtype=np.bool_)
+        image_size = np.asarray(group["image_size_hw"][row], dtype=np.int32).reshape(-1)
+        focal = np.asarray(group["focal_px"][row], dtype=np.float32).reshape(-1)
+        principal = np.asarray(group["principal_point_px"][row], dtype=np.float32).reshape(-1)
+    except KeyError as exc:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": candidate_row_id,
+            "warning": f"selected_depth unavailable: missing dense array {exc}.",
+        }
+    if depth.ndim != 2 or valid_mask.shape != depth.shape:
+        return {
+            "available": False,
+            "step_row_id": int(step_row_id),
+            "candidate_row_id": candidate_row_id,
+            "warning": f"selected_depth shape mismatch: depth_m={tuple(depth.shape)} valid_mask={tuple(valid_mask.shape)}.",
+        }
+    stride = max(1, int(np.ceil(max(depth.shape) / float(max_side))))
+    depth_preview = depth[::stride, ::stride].astype(np.float32, copy=True)
+    valid_preview = valid_mask[::stride, ::stride].astype(np.bool_, copy=True)
+    depth_preview[~(valid_preview & np.isfinite(depth_preview))] = np.nan
+    return {
+        "available": True,
+        "step_row_id": int(step_row_id),
+        "candidate_row_id": candidate_row_id,
+        "depth_m": depth_preview,
+        "valid_mask": valid_preview,
+        "image_size_hw": (int(image_size[0]), int(image_size[1])) if image_size.shape[0] == 2 else tuple(depth.shape),
+        "focal_px": tuple(float(value) for value in focal.tolist()) if focal.shape[0] == 2 else (),
+        "principal_point_px": tuple(float(value) for value in principal.tolist()) if principal.shape[0] == 2 else (),
+        "stride": stride,
+        "warning": "",
+    }
+
+
+def _selected_depth_base_row(
+    *,
+    rollout_row_id: int,
+    step_row_id: int,
+    step_index: int,
+    selected_candidate_row_id: int,
+) -> dict[str, object]:
+    return {
+        "rollout_row_id": int(rollout_row_id),
+        "step_row_id": int(step_row_id),
+        "step_index": int(step_index),
+        "selected_candidate_row_id": int(selected_candidate_row_id),
+        "candidate_row_id": None,
+        "available": False,
+        "valid_pixels": None,
+        "finite_pixels": None,
+        "pixel_count": None,
+        "valid_fraction": None,
+        "finite_fraction": None,
+        "depth_min_m": None,
+        "depth_mean_m": None,
+        "depth_max_m": None,
+        "image_height": None,
+        "image_width": None,
+        "focal_x_px": None,
+        "focal_y_px": None,
+        "principal_x_px": None,
+        "principal_y_px": None,
+        "warning": "",
+    }
+
+
+def _selected_depth_unavailable_row(
+    *,
+    rollout_row_id: int,
+    step_row_id: int,
+    step_index: int,
+    selected_candidate_row_id: int,
+    warning: str,
+) -> dict[str, object]:
+    return {
+        **_selected_depth_base_row(
+            rollout_row_id=rollout_row_id,
+            step_row_id=step_row_id,
+            step_index=step_index,
+            selected_candidate_row_id=selected_candidate_row_id,
+        ),
+        "warning": warning,
+    }
+
+
+def _selected_depth_dense_summary(group: zarr.Group, *, row_position: int) -> dict[str, object]:
+    try:
+        depth = np.asarray(group["depth_m"][row_position], dtype=np.float32)
+        valid_mask = np.asarray(group["valid_mask"][row_position], dtype=np.bool_)
+        focal = np.asarray(group["focal_px"][row_position], dtype=np.float32).reshape(-1)
+        principal = np.asarray(group["principal_point_px"][row_position], dtype=np.float32).reshape(-1)
+        image_size = np.asarray(group["image_size_hw"][row_position], dtype=np.int32).reshape(-1)
+    except KeyError as exc:
+        return {"warning": f"selected_depth unavailable: missing dense array {exc}."}
+    if depth.ndim != 2 or valid_mask.shape != depth.shape:
+        return {
+            "warning": f"selected_depth shape mismatch: depth_m={tuple(depth.shape)} "
+            f"valid_mask={tuple(valid_mask.shape)}."
+        }
+    if focal.shape[0] != 2 or principal.shape[0] != 2 or image_size.shape[0] != 2:
+        return {"warning": "selected_depth camera metadata must have two values per row."}
+    height, width = int(image_size[0]), int(image_size[1])
+    if (height, width) != tuple(depth.shape):
+        return {
+            "warning": f"selected_depth image_size_hw={(height, width)} does not match depth shape {tuple(depth.shape)}."
+        }
+
+    finite_valid = valid_mask & np.isfinite(depth)
+    valid_depth = depth[finite_valid]
+    pixel_count = int(depth.size)
+    valid_pixels = int(valid_mask.sum())
+    finite_pixels = int(finite_valid.sum())
+    return {
+        "valid_pixels": valid_pixels,
+        "finite_pixels": finite_pixels,
+        "pixel_count": pixel_count,
+        "valid_fraction": _safe_fraction(valid_pixels, pixel_count),
+        "finite_fraction": _safe_fraction(finite_pixels, pixel_count),
+        "depth_min_m": None if valid_depth.size == 0 else float(np.min(valid_depth)),
+        "depth_mean_m": None if valid_depth.size == 0 else float(np.mean(valid_depth)),
+        "depth_max_m": None if valid_depth.size == 0 else float(np.max(valid_depth)),
+        "image_height": height,
+        "image_width": width,
+        "focal_x_px": float(focal[0]),
+        "focal_y_px": float(focal[1]),
+        "principal_x_px": float(principal[0]),
+        "principal_y_px": float(principal[1]),
+        "warning": "",
+    }
+
+
 def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, object]]]:
     """Return live `CandidateSamplingResult` counts by position and invalid reason."""
 

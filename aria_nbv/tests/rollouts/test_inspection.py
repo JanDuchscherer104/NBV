@@ -19,6 +19,8 @@ from aria_nbv.rollouts import (
     discover_rollout_store_paths,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    selected_depth_preview,
+    selected_depth_summary_rows,
     suspicious_rollout_rows,
     target_audit_rows,
     validity_waterfall_rows,
@@ -183,3 +185,64 @@ def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fiel
     assert rows[0]["selected_entropy"] is not None
     assert rows[0]["num_candidates"] >= 6
     assert rows[0]["num_valid_candidates"] <= rows[0]["num_candidates"]
+
+
+def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path) -> None:
+    """Selected-depth inspection should summarize dense rows through rollout inspection helpers."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=46)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = selected_depth_summary_rows(reader, rollout_row_id=0, limit=1)
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["rollout_row_id"] == 0
+    assert row["step_index"] == 0
+    assert row["step_row_id"] == 0
+    assert row["candidate_row_id"] == row["selected_candidate_row_id"]
+    assert row["available"] is True
+    assert row["valid_fraction"] == pytest.approx(1.0)
+    assert row["finite_fraction"] == pytest.approx(1.0)
+    assert row["depth_min_m"] == pytest.approx(1.0)
+    assert row["depth_max_m"] == pytest.approx(1.0)
+    assert row["depth_mean_m"] == pytest.approx(1.0)
+    assert row["image_height"] == 240
+    assert row["image_width"] == 240
+    assert row["focal_x_px"] == pytest.approx(120.0)
+    assert row["principal_y_px"] == pytest.approx(120.0)
+
+
+def test_selected_depth_summary_rows_report_disabled_store_without_dense_scan(tmp_path) -> None:
+    """Disabled selected-depth stores should expose explicit unavailable rows."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=48)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, selected_depth_enabled=False)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = selected_depth_summary_rows(reader)
+
+    assert len(rows) == result.num_steps
+    assert rows[0]["available"] is False
+    assert rows[0]["valid_fraction"] is None
+    assert "selected_depth_enabled=false" in str(rows[0]["warning"])
+
+
+def test_selected_depth_preview_returns_one_bounded_image_payload(tmp_path) -> None:
+    """Selected-depth previews should read one selected step and downsample for app plotting."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=49)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    preview = selected_depth_preview(reader, step_row_id=0, max_size=24)
+
+    assert preview["available"] is True
+    assert preview["step_row_id"] == 0
+    assert preview["candidate_row_id"] == reader.array("steps/selected_candidate_row_id")[0]
+    assert preview["depth_m"].shape == (24, 24)
+    assert preview["valid_mask"].shape == (24, 24)
+    assert np.isfinite(preview["depth_m"]).all()
+    assert preview["valid_mask"].all()
+    assert preview["image_size_hw"] == (240, 240)

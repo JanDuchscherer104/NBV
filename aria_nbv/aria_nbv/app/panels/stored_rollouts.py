@@ -9,8 +9,10 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import torch
 
 from ...configs import PathConfig
+from ...rendering.plotting import depth_grid
 from ...rollouts import (
     RolloutSuspiciousQueryConfig,
     RolloutZarrStoreReader,
@@ -19,6 +21,8 @@ from ...rollouts import (
     discover_rollout_store_paths,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    selected_depth_preview,
+    selected_depth_summary_rows,
     suspicious_rollout_rows,
     target_audit_rows,
     validity_waterfall_rows,
@@ -69,6 +73,16 @@ Objective plots use persisted rollout arrays only. Cumulative target RRI tracks 
 
 _BRANCHING_INFO = """
 Branching rows show the selected action per rollout step: policy, chain, branch factor, beam width, selected strategy, selected position family, mixture component, sampler probability, and selection entropy.
+"""
+
+_SELECTED_DEPTH_INFO = """
+Selected-depth rows are the persisted selected successor-view depth renders for each rollout step.
+
+- One row should align with each `steps/step_row_id`.
+- `candidate_row_id` must match `steps/selected_candidate_row_id`.
+- Valid and finite pixel fractions expose broken renders without loading every dense array.
+- Depth statistics are computed only for the filtered rows shown on this tab.
+- The quicklook reads one selected step and downsamples it for interactive plotting.
 """
 
 _MASK_INFO = """
@@ -142,6 +156,7 @@ def render_stored_rollouts_panel() -> None:
         tab_validation,
         tab_objectives,
         tab_branching,
+        tab_selected_depth,
         tab_targets,
         tab_candidates,
         tab_geometry,
@@ -153,6 +168,7 @@ def render_stored_rollouts_panel() -> None:
             "Validation",
             "Objectives",
             "Branching",
+            "Selected Depth",
             "Targets",
             "Candidates",
             "Geometry",
@@ -182,6 +198,11 @@ def render_stored_rollouts_panel() -> None:
         if _render_current_schema_gate(current_schema):
             _info_popover("branching provenance", _BRANCHING_INFO)
             _render_stored_step_dashboard(reader, include_objective_plots=False, include_branching_plots=True)
+
+    with tab_selected_depth:
+        if _render_current_schema_gate(current_schema):
+            _info_popover("selected depth", _SELECTED_DEPTH_INFO)
+            _render_selected_depth_tab(reader)
 
     with tab_targets:
         if _render_current_schema_gate(current_schema):
@@ -735,6 +756,109 @@ def _render_step_branching_plots(rows: pd.DataFrame) -> None:
             title="Selected Sampling Families by Policy",
         ),
         width="stretch",
+    )
+
+
+def _render_selected_depth_tab(reader: RolloutZarrStoreReader) -> None:
+    row_limit = int(
+        st.number_input(
+            "Selected-depth row limit",
+            min_value=1,
+            max_value=10_000,
+            value=128,
+            step=32,
+            key="stored_rollout_selected_depth_limit",
+        )
+    )
+    rows = pd.DataFrame(selected_depth_summary_rows(reader, limit=row_limit))
+    if rows.empty:
+        st.info("No rollout steps are available for selected-depth inspection.")
+        return
+
+    metric_cols = st.columns(4)
+    available = rows["available"].astype(bool) if "available" in rows else pd.Series(dtype=bool)
+    metric_cols[0].metric("Selected-depth rows", len(rows))
+    metric_cols[1].metric("Available rows", int(available.sum()) if not available.empty else 0)
+    finite_fraction = rows["finite_fraction"].dropna() if "finite_fraction" in rows else pd.Series(dtype=float)
+    metric_cols[2].metric("Mean finite pixels", _format_fraction(finite_fraction.mean()))
+    depth_mean = rows["depth_mean_m"].dropna() if "depth_mean_m" in rows else pd.Series(dtype=float)
+    metric_cols[3].metric("Mean selected depth", _format_metric(depth_mean.mean()))
+
+    display_cols = [
+        "rollout_row_id",
+        "step_index",
+        "step_row_id",
+        "candidate_row_id",
+        "selected_candidate_row_id",
+        "available",
+        "valid_fraction",
+        "finite_fraction",
+        "depth_min_m",
+        "depth_mean_m",
+        "depth_max_m",
+        "image_height",
+        "image_width",
+        "selected_position",
+        "selected_strategy",
+        "selected_mixture",
+        "selected_target_root_gain",
+        "warning",
+    ]
+    st.dataframe(rows[[col for col in display_cols if col in rows.columns]], width="stretch", hide_index=True)
+
+    preview_rows = rows[rows["available"].astype(bool)] if "available" in rows else pd.DataFrame()
+    if preview_rows.empty:
+        warnings = rows["warning"].dropna().astype(str).loc[lambda values: values != ""]
+        if not warnings.empty:
+            st.warning(warnings.iloc[0])
+        else:
+            st.info("No selected-depth row is available for quicklook.")
+        return
+
+    step_options = preview_rows["step_row_id"].astype(int).tolist()
+    selected_step = int(
+        st.selectbox(
+            "Selected-depth step",
+            options=step_options,
+            format_func=lambda step_id: _format_selected_depth_option(preview_rows, int(step_id)),
+            key="stored_rollout_selected_depth_step",
+        )
+    )
+    preview = selected_depth_preview(reader, step_row_id=selected_step, max_size=96)
+    if not bool(preview.get("available")):
+        st.warning(str(preview.get("warning") or "Selected-depth preview is unavailable."))
+        return
+    depth = np.asarray(preview["depth_m"], dtype=np.float32)
+    finite = depth[np.isfinite(depth)]
+    zmax = float(np.max(finite)) if finite.size else None
+    st.plotly_chart(
+        depth_grid(
+            torch.as_tensor(depth[None, ...], dtype=torch.float32),
+            titles=[f"step {selected_step} · candidate {preview['candidate_row_id']}"],
+            max_cols=1,
+            zmax=zmax,
+        ),
+        width="stretch",
+    )
+    metadata = {
+        "step_row_id": preview["step_row_id"],
+        "candidate_row_id": preview["candidate_row_id"],
+        "image_size_hw": preview["image_size_hw"],
+        "focal_px": preview["focal_px"],
+        "principal_point_px": preview["principal_point_px"],
+        "preview_stride": preview["stride"],
+    }
+    st.json(metadata, expanded=False)
+
+
+def _format_selected_depth_option(rows: pd.DataFrame, step_row_id: int) -> str:
+    matches = rows[rows["step_row_id"].astype(int) == int(step_row_id)]
+    if matches.empty:
+        return f"step {step_row_id}"
+    row = matches.iloc[0]
+    return (
+        f"rollout {int(row['rollout_row_id'])} · step {int(row['step_index'])} · "
+        f"candidate {int(row['candidate_row_id'])} · mean={_format_metric(row.get('depth_mean_m'))}m"
     )
 
 
