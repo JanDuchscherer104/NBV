@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "workflow": "autoresearch-goal",
+  "slug": "aria-nbv-canonical-real-rollout-config-and-thesi",
+  "topic": "ARIA-NBV canonical real rollout config and thesis data-generation math alignment",
+  "rubric": "Pass only if .configs/build_rollouts_v1_realistic.toml encodes the canonical oracle target-task v1_realistic_3family thesis profile; docs/typst/thesis prose explains target-task sampling, candidate geometry, three candidate families, rollout recipes, masks, and downstream impacts without promoting planned work to implemented results; internal source owners and external primary sources are reflected; validation evidence includes config dry-run or an explicit blocker, Typst compile or explicit blocker, and git diff hygiene.",
+  "critic_command": "git diff --check && cd aria_nbv && uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml --dry-run && cd ../docs && typst compile typst/thesis/main.typ --root .",
+  "status": "complete",
+  "created_at": "2026-06-21T14:29:53.482Z",
+  "updated_at": "2026-06-21T14:59:19.738Z",
+  "mission_path": ".omx/goals/autoresearch/aria-nbv-canonical-real-rollout-config-and-thesi/mission.json",
+  "rubric_path": ".omx/goals/autoresearch/aria-nbv-canonical-real-rollout-config-and-thesi/rubric.md",
+  "ledger_path": ".omx/goals/autoresearch/aria-nbv-canonical-real-rollout-config-and-thesi/ledger.jsonl",
+  "completion_path": ".omx/goals/autoresearch/aria-nbv-canonical-real-rollout-config-and-thesi/completion.json",
+  "completed_at": "2026-06-21T14:59:19.738Z"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "workflow": "autoresearch-goal",
+  "slug": "peer-review-and-patch-aria-nbv-thesis-sections-a",
+  "topic": "Peer-review and patch ARIA-NBV thesis sections against current thesis source order, seminar implementation evidence, litkg, theory docs, and external literature",
+  "rubric": "Pass only if the work inspects current docs/typst/thesis/main.typ include graph and every included section; ranks inclusion candidates from .omx/specs/autoresearch-thesis-lit-review; compares thesis claims against docs/typst/seminar_paper/main.typ, local theory docs, litkg/literature archive, and targeted external literature; produces a conflict/citation/inclusion matrix with exact sources; patches docs/typst/thesis sections with close citations and dashy-todo markers for unresolved inconsistencies; verifies Typst compile and relevant hygiene checks or records blockers.",
+  "critic_command": "cd /home/jd/repos/ARIA-NBV && git diff --check && cd docs && typst compile typst/thesis/main.typ --root . /tmp/thesis-peer-review.pdf",
+  "status": "complete",
+  "created_at": "2026-06-18T19:23:37.640Z",
+  "updated_at": "2026-06-18T19:46:59.209Z",
+  "mission_path": ".omx/goals/autoresearch/peer-review-and-patch-aria-nbv-thesis-sections-a/mission.json",
+  "rubric_path": ".omx/goals/autoresearch/peer-review-and-patch-aria-nbv-thesis-sections-a/rubric.md",
+  "ledger_path": ".omx/goals/autoresearch/peer-review-and-patch-aria-nbv-thesis-sections-a/ledger.jsonl",
+  "completion_path": ".omx/goals/autoresearch/peer-review-and-patch-aria-nbv-thesis-sections-a/completion.json",
+  "completed_at": "2026-06-18T19:46:59.209Z"
+}

@@ -1,0 +1,28 @@
+{
+  "active": false,
+  "iteration": 4,
+  "max_iterations": 10,
+  "current_phase": "cancelled",
+  "started_at": "2026-06-18T20:53:00Z",
+  "context_snapshot_path": ".omx/context/thesis-mermaid-visualizations-20260618T205300Z.md",
+  "iteration_goal": "include existing lint-clean Mermaid SVG thesis figures with provenance-safe captions",
+  "owner_omx_session_id": "019edc76-42f5-7a13-90a5-ffff0d85d0a1",
+  "owner_codex_thread_id": "019ed03b-ab31-7972-8b69-37fd42f7ec3d",
+  "last_turn_at": "2026-06-18T21:16:43.073Z",
+  "last_checkpoint": "thesis_mermaid_visual_iteration2",
+  "verified_pdf": "/tmp/thesis-mermaid-final.pdf",
+  "checks": [
+    "mermaid lint selected sources: pass",
+    "typst compile thesis main: pass",
+    "git diff --check: pass",
+    "make check-agent-memory: pass"
+  ],
+  "next_iteration_targets": [
+    "replace target sampler with Typst-native Fletcher or CeTZ if a larger two-lane figure is needed",
+    "split or simplify broad architecture sketch",
+    "add evaluation ladder/headroom gate diagram if thesis text needs it"
+  ],
+  "completed_at": "2026-06-18T21:16:43.073Z",
+  "note": "SVG exports are retained; active Typst inclusion uses Mermaid PDFs because Typst currently drops Mermaid SVG foreignObject labels.",
+  "run_outcome": "continue"
+}

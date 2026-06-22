@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "active": false,
+  "skill": "ralph",
+  "keyword": "$oh-my-codex:prometheus-strict",
+  "phase": "completing",
+  "activated_at": "2026-06-22T09:59:57.285Z",
+  "updated_at": "2026-06-22T10:06:34.742Z",
+  "source": "keyword-detector",
+  "input_lock": null
+}

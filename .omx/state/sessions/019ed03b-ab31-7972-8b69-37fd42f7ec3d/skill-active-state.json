@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "active": false,
+  "skill": "ralph",
+  "keyword": "$oh-my-codex:ultragoal",
+  "phase": "planning",
+  "activated_at": "2026-06-18T20:00:01.830Z",
+  "updated_at": "2026-06-18T20:08:03.359Z",
+  "source": "keyword-detector",
+  "input_lock": {
+    "active": false,
+    "scope": "deep-interview-auto-approval",
+    "acquired_at": "2026-06-17T09:11:51.896Z",
+    "released_at": "2026-06-18T18:40:35.316Z",
+    "blocked_inputs": [
+      "yes",
+      "y",
+      "proceed",
+      "continue",
+      "ok",
+      "sure",
+      "go ahead",
+      "next i should"
+    ],
+    "message": "Deep interview is active; auto-approval shortcuts are blocked until the interview finishes.",
+    "exit_reason": "handoff"
+  },
+  "active_skills": []
+}

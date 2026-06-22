@@ -1,0 +1,12 @@
+{
+  "active": true,
+  "mode": "ultragoal",
+  "current_phase": "planning",
+  "started_at": "2026-06-18T22:03:14.490Z",
+  "updated_at": "2026-06-18T22:03:14.490Z",
+  "session_id": "019edc76-42f5-7a13-90a5-ffff0d85d0a1",
+  "thread_id": "019edc76-42f5-7a13-90a5-ffff0d85d0a1",
+  "turn_id": "019edcaa-6610-7091-86b6-73711d39c585",
+  "iteration": 7,
+  "last_turn_at": "2026-06-18T22:53:20.712Z"
+}

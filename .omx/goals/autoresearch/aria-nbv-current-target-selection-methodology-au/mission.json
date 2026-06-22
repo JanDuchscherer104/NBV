@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "workflow": "autoresearch-goal",
+  "slug": "aria-nbv-current-target-selection-methodology-au",
+  "topic": "ARIA-NBV current target selection methodology audit",
+  "rubric": "Compare theory/docs/canonical memory against implementation; use litkg retrieval/claim checks; inspect rollout samples if available; produce severity-ranked evidence with file references and verification gaps; pass only when claims are grounded in canonical sources and current code.",
+  "critic_command": "make kg-claim-check KG_CLAIM='ARIA-NBV target selection methodology audit findings are grounded in current docs, canonical memory, implementation, and rollout evidence where available'",
+  "status": "blocked",
+  "created_at": "2026-06-17T09:19:45.948Z",
+  "updated_at": "2026-06-17T09:35:13.624Z",
+  "mission_path": ".omx/goals/autoresearch/aria-nbv-current-target-selection-methodology-au/mission.json",
+  "rubric_path": ".omx/goals/autoresearch/aria-nbv-current-target-selection-methodology-au/rubric.md",
+  "ledger_path": ".omx/goals/autoresearch/aria-nbv-current-target-selection-methodology-au/ledger.jsonl",
+  "completion_path": ".omx/goals/autoresearch/aria-nbv-current-target-selection-methodology-au/completion.json"
+}

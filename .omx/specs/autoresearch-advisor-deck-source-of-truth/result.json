@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "passed": true,
+  "validation_mode": "prompt-architect-artifact",
+  "output_artifact_path": ".omx/specs/autoresearch-advisor-deck-source-of-truth/report.md",
+  "architect_review": {
+    "verdict": "approved",
+    "summary": "The report verifies the major source families, lists add/update/prune recommendations for advisor_meeting_2026_05_22.typ, identifies ownership, conflicts, and open decisions, includes litkg evidence, and proposes dashy-todo flavors without implementing broad deck edits.",
+    "blocking_findings": []
+  }
+}

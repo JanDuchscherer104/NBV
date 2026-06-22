@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "slug": "aria-nbv-rollout-sample-validity-and-geometric-c",
+  "verdict": "blocked",
+  "passed": false,
+  "summary": "Blocked: no active Codex goal snapshot available for OMX completion reconciliation.",
+  "evidence": "Blocked only on Codex goal snapshot reconciliation: a fresh get_goal call in this thread returned {\"goal\":null,\"remainingTokens\":null,\"completionBudgetReport\":null}, and omx autoresearch-goal complete rejected that snapshot as absent/no active goal. Per hook instruction, the same completion command was not repeated. Existing professor-critic research verdict had already passed; this blocker is the missing compatible native Codex goal snapshot.",
+  "critic_command": "cd /home/jd/repos/ARIA-NBV && make check-agent-memory >/dev/null && cd aria_nbv && uv run nbv-rollouts-info --store <STORE> --preflight --profile smoke --json",
+  "recorded_at": "2026-06-21T08:30:12.843Z"
+}

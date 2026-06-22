@@ -1,0 +1,29 @@
+{
+  "active": false,
+  "current_phase": "complete",
+  "iteration": 5,
+  "review_cycle": 1,
+  "max_iterations": 10,
+  "phase_cycle": [
+    "deep-interview",
+    "ralplan",
+    "ultragoal",
+    "code-review",
+    "ultraqa"
+  ],
+  "handoff_artifacts": {
+    "context_snapshot_path": ".omx/context/session-019edf35-rollout-app-autopilot-20260620T195122Z.md",
+    "deep_interview": ".omx/plans/session-019edf35-rollout-app-deep-interview-20260620T195122Z.md",
+    "ralplan": ".omx/plans/session-019edf35-rollout-app-ralplan-20260620T195122Z.md",
+    "ralplan_test_spec": ".omx/specs/session-019edf35-rollout-app-test-spec-20260620T195122Z.md",
+    "ultragoal": ".omx/plans/session-019edf35-rollout-app-ultragoal-20260620T195122Z.md",
+    "code_review": ".omx/plans/session-019edf35-rollout-app-code-review-20260620T195122Z.md",
+    "ultraqa": ".omx/plans/session-019edf35-rollout-app-ultraqa-20260620T195122Z.md"
+  },
+  "review_verdict": "approve",
+  "qa_verdict": "approve",
+  "run_outcome": "finish",
+  "last_turn_at": "2026-06-20T20:31:00Z",
+  "lifecycle_outcome": "finished",
+  "completed_at": "2026-06-20T20:43:06.204Z"
+}

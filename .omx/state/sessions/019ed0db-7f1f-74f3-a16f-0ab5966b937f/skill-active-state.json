@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "active": true,
+  "skill": "autoresearch",
+  "keyword": "$oh-my-codex:autoresearch",
+  "phase": "executing",
+  "activated_at": "2026-06-16T15:28:20.124Z",
+  "updated_at": "2026-06-16T15:28:20.124Z",
+  "source": "keyword-detector",
+  "session_id": "019ed0db-7f1f-74f3-a16f-0ab5966b937f",
+  "thread_id": "019ed03b-ab31-7972-8b69-37fd42f7ec3d",
+  "turn_id": "019ed0f6-b90b-76b3-93eb-aa4b0f46b7cc",
+  "active_skills": [
+    {
+      "skill": "autoresearch",
+      "phase": "executing",
+      "active": true,
+      "activated_at": "2026-06-16T15:28:20.124Z",
+      "updated_at": "2026-06-16T15:28:20.124Z",
+      "session_id": "019ed0db-7f1f-74f3-a16f-0ab5966b937f",
+      "thread_id": "019ed03b-ab31-7972-8b69-37fd42f7ec3d",
+      "turn_id": "019ed0f6-b90b-76b3-93eb-aa4b0f46b7cc"
+    }
+  ],
+  "initialized_mode": "autoresearch",
+  "initialized_state_path": ".omx/state/sessions/019ed0db-7f1f-74f3-a16f-0ab5966b937f/autoresearch-state.json"
+}

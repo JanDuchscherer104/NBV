@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "slug": "arch-goal-thesis-peer-review-with-at-least-ten-a",
+  "verdict": "blocked",
+  "passed": false,
+  "summary": "Completion reconciliation blocked: refreshed get_goal snapshot returned null after Codex update_goal(status=complete) had already succeeded. The requested omx autoresearch-goal complete command failed with \"Codex goal snapshot is absent or reports no active goal\". Hooks must not mutate Codex goal state, so the remaining issue is OMX/Codex completion bookkeeping, not thesis patch validation.",
+  "evidence": "Completion reconciliation blocked: refreshed get_goal snapshot returned null after Codex update_goal(status=complete) had already succeeded. The requested omx autoresearch-goal complete command failed with \"Codex goal snapshot is absent or reports no active goal\". Hooks must not mutate Codex goal state, so the remaining issue is OMX/Codex completion bookkeeping, not thesis patch validation.",
+  "critic_command": "cd /home/jd/repos/ARIA-NBV && git diff --check && make check-agent-memory && cd docs && typst compile typst/thesis/main.typ --root . /tmp/thesis-arch-goal.pdf",
+  "recorded_at": "2026-06-18T20:28:09.288Z"
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "active": true,
+  "skill": "autopilot",
+  "keyword": "$oh-my-codex:best-practice-research",
+  "phase": "ultragoal",
+  "activated_at": "2026-06-20T20:21:36.480Z",
+  "updated_at": "2026-06-20T20:21:36.480Z",
+  "source": "keyword-detector",
+  "input_lock": null,
+  "session_id": "019ee62a-a758-7641-a9c8-e3aa391a3faf",
+  "active_skills": [
+    {
+      "skill": "autopilot",
+      "phase": "ultragoal",
+      "active": true,
+      "activated_at": "2026-06-20T20:21:36.480Z",
+      "updated_at": "2026-06-20T20:21:36.480Z",
+      "session_id": "019ee62a-a758-7641-a9c8-e3aa391a3faf"
+    }
+  ]
+}

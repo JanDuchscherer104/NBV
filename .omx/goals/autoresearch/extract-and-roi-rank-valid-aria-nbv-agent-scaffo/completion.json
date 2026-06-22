@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "slug": "extract-and-roi-rank-valid-aria-nbv-agent-scaffo",
+  "verdict": "pass",
+  "passed": true,
+  "summary": "Parsed both 2026-06-19 review artifacts; validated claims against AGENTS.md, skill_style_guide, live skill metadata, agents DB/refactors/todos, alignment_tools_contract, Gemini/Codex plugin adapters, kg-status/kg-search, and official GitHub MCP/Playwright MCP/Plotly/Pandas docs where external-tool claims affected ROI. agents-db validation and check-agent-memory passed. Repo surfaces left read-only; only ignored .omx autoresearch artifacts changed.",
+  "evidence": "Parsed both 2026-06-19 review artifacts; validated claims against AGENTS.md, skill_style_guide, live skill metadata, agents DB/refactors/todos, alignment_tools_contract, Gemini/Codex plugin adapters, kg-status/kg-search, and official GitHub MCP/Playwright MCP/Plotly/Pandas docs where external-tool claims affected ROI. agents-db validation and check-agent-memory passed. Repo surfaces left read-only; only ignored .omx autoresearch artifacts changed.",
+  "critic_command": "Manual professor-critic audit by Codex: check source coverage, repo evidence, dedupe correctness, ROI ordering, and no repo-surface edits.",
+  "recorded_at": "2026-06-19T09:32:30.139Z"
+}

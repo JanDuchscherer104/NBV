@@ -1,0 +1,19 @@
+{
+  "active": false,
+  "mode": "ralph",
+  "current_phase": "complete",
+  "started_at": "2026-06-22T09:44:10.743Z",
+  "updated_at": "2026-06-22T09:53:25.985Z",
+  "session_id": "019edf35-6ede-7ab1-907a-44fb067d5221",
+  "turn_id": "019eeebf-c30b-7272-b80a-50e6aea1fb82",
+  "iteration": 0,
+  "max_iterations": 50,
+  "completed_at": "2026-06-22T10:52:00Z",
+  "stop_reason": "shadowed_by_completed_canonical_ralph",
+  "shadowed_by_completed_canonical_ralph": {
+    "session_id": "019eea90-7925-7b62-88f3-46be5740c081",
+    "state_path": "/home/jd/repos/ARIA-NBV/.omx/state/sessions/019eea90-7925-7b62-88f3-46be5740c081/ralph-state.json",
+    "completed_at": "2026-06-22T10:52:00Z",
+    "reconciled_at": "2026-06-22T10:53:19.118Z"
+  }
+}

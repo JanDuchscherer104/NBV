@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "active": false,
+  "skill": "autopilot",
+  "keyword": "$oh-my-codex:autopilot",
+  "phase": "completing",
+  "activated_at": "2026-06-20T20:58:49.990Z",
+  "updated_at": "2026-06-20T20:58:49.998Z",
+  "source": "keyword-detector",
+  "input_lock": null
+}

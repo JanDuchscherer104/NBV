@@ -1,0 +1,18 @@
+{
+  "validator_prompt": "Approve iff the report aggregates the requested transcript, persisted artifacts, distilled memory, work notes, current method section, code, tests, docs, backlog, and KG evidence; separates verified current facts from stale review findings; identifies requirements, attempted approaches, implementation issues, and concrete rework recommendations for ARIA-NBV target selection.",
+  "architect_review": {
+    "verdict": "approved",
+    "summary": "The artifact covers the requested evidence sources and converts the current target-selection discussion into an implementation-ready thesis-aligned contract. It distinguishes V1 source-boundary correctness from remaining policy design gaps, marks stale review claims, and recommends a scoped stratified target-pool sampling rework without changing GT-EVAL semantics."
+  },
+  "output_artifact_path": ".omx/specs/autoresearch-target-selection-rework/report.md",
+  "status": "passed",
+  "passed": true,
+  "evidence": [
+    "Transcript 019ed4da-5d8f-7740-a68e-e2ee800d7bee and its .omx goal artifacts were inspected.",
+    ".agents/memory/transcripts/distilled/2026-06-18 was searched for target-selection decisions.",
+    ".agents/work/target-selection-sampling current audit and prior reviews were inspected.",
+    "docs/typst/thesis/sections/03-method.typ target-specific RRI section was inspected.",
+    "Current selector code, rollout persistence, candidate generation, tests, docs, memory, backlog, and KG route evidence were inspected.",
+    "Report separates stale review findings from current implementation facts and names canonical updates needed."
+  ]
+}

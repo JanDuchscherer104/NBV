@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "slug": "aria-nbv-current-target-selection-methodology-au",
+  "verdict": "blocked",
+  "passed": false,
+  "summary": "Blocked only on Codex goal snapshot reconciliation; audit evidence and professor-critic pass were already recorded.",
+  "evidence": "Completion reconciliation blocked after refreshed get_goal: Codex get_goal reports no active goal, because the Codex goal had already been marked complete. Earlier omx autoresearch-goal complete failed with an objective mismatch between the created Codex goal objective and OMX generated handoff objective. Hooks must not mutate Codex goal state, and rerunning complete without a matching active snapshot would repeat the known-bad path. Audit evidence remains recorded in completion.json with prior pass verdict; this blocked verdict documents the ledger reconciliation blocker.",
+  "critic_command": "make kg-claim-check KG_CLAIM='ARIA-NBV target selection methodology audit findings are grounded in current docs, canonical memory, implementation, and rollout evidence where available'",
+  "recorded_at": "2026-06-17T09:35:13.624Z"
+}

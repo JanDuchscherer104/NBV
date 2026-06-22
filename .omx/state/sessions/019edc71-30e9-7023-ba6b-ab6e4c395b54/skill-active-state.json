@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "active": true,
+  "skill": "ultragoal",
+  "keyword": "$ultragoal",
+  "phase": "reviewing",
+  "activated_at": "2026-06-18T20:40:29.257Z",
+  "updated_at": "2026-06-19T05:39:51.167Z",
+  "source": "keyword-detector",
+  "input_lock": null
+}

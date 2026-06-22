@@ -1,0 +1,119 @@
+{
+  "goal_id": "G001-resolve-the-typst-glossary-notation",
+  "status": "pass",
+  "completed_at": "2026-06-18T21:55:00Z",
+  "summary": "Glossary and notation coupling is validated through Typst compile checks; generated Typst no longer exposes custom gls wrappers; acquisition-cost notation has a dedicated shared symbol; typst-authoring and agents DB now route thesis, slide, and diagram work through shared notation/package guidance.",
+  "aiSlopCleaner": {
+    "status": "passed",
+    "evidence": "Scoped anti-slop scan over the changed generator, notation, shared Typst modules, typst-authoring guidance, and agents DB found no masking fallback slop; intentional compatibility surfaces remain limited to generated/legacy term constants."
+  },
+  "verification": {
+    "status": "passed",
+    "commands": [
+      "aria_nbv/.venv/bin/python scripts/glossary_build.py validate",
+      "make glossary",
+      "aria_nbv/.venv/bin/python -m ruff check scripts/glossary_build.py",
+      "cd docs && typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-notation.pdf --root .",
+      "python3 ${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/typst-authoring",
+      "make agents-db AGENTS_ARGS='validate'",
+      "make agents-db",
+      "make check-agent-memory",
+      "git diff --check"
+    ],
+    "evidence": "All commands passed. Glossary validation reported 56 terms, 44 symbols, and 33 equations; thesis Typst compile exited 0."
+  },
+  "codeReview": {
+    "recommendation": "APPROVE",
+    "architectStatus": "CLEAR",
+    "evidence": "Independent code-reviewer returned APPROVE with zero findings; independent architect returned CLEAR with no boundary leaks.",
+    "independentReview": {
+      "codeReviewer": {
+        "agentRole": "code-reviewer",
+        "agentId": "019edcb7-2a5f-7501-8a85-1cc8c2ada975",
+        "evidence": "APPROVE; no findings in the requested scope."
+      },
+      "architect": {
+        "agentRole": "architect",
+        "agentId": "019edcb7-4654-7b13-b7c3-acdc3c348591",
+        "evidence": "CLEAR; no boundary leaks between Glossarium prose terms, symb/eqs math APIs, docs/notation.yml lookup bridge, and agent routing guidance."
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "glossary_validate",
+      "command": "aria_nbv/.venv/bin/python scripts/glossary_build.py validate",
+      "status": "pass",
+      "evidence": "Validated 56 glossary terms, 44 symbols, and 33 equations."
+    },
+    {
+      "name": "glossary_regenerate",
+      "command": "make glossary",
+      "status": "pass",
+      "evidence": "Regenerated notation Lua/Typst artifacts and glossary.generated.typ."
+    },
+    {
+      "name": "ruff",
+      "command": "aria_nbv/.venv/bin/python -m ruff check scripts/glossary_build.py",
+      "status": "pass",
+      "evidence": "All checks passed."
+    },
+    {
+      "name": "typst_compile",
+      "command": "cd docs && typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-notation.pdf --root .",
+      "status": "pass",
+      "evidence": "Thesis Typst compile completed with exit code 0."
+    },
+    {
+      "name": "skill_validate",
+      "command": "python3 ${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/typst-authoring",
+      "status": "pass",
+      "evidence": "Skill is valid."
+    },
+    {
+      "name": "agents_db_validate",
+      "command": "make agents-db AGENTS_ARGS='validate'",
+      "status": "pass",
+      "evidence": "agents DB validation passed."
+    },
+    {
+      "name": "agents_db_render",
+      "command": "make agents-db",
+      "status": "pass",
+      "evidence": "Rendered active issues, TODOs, and refactors successfully."
+    },
+    {
+      "name": "agent_memory_validate",
+      "command": "make check-agent-memory",
+      "status": "pass",
+      "evidence": "agent memory validation passed."
+    },
+    {
+      "name": "diff_check",
+      "command": "git diff --check",
+      "status": "pass",
+      "evidence": "No whitespace errors."
+    },
+    {
+      "name": "anti_slop_review",
+      "command": "ai-slop-cleaner scoped scan over changed generator, notation, Typst shared modules, typst-authoring guidance, and agents DB",
+      "status": "pass",
+      "evidence": "No masking fallback slop found; intentional compatibility surfaces remain limited to generated/legacy term constants."
+    },
+    {
+      "name": "independent_code_review",
+      "command": "code-reviewer subagent review",
+      "status": "pass",
+      "evidence": "APPROVE with zero findings; independently reran py_compile, ruff, mypy with ignored missing PyYAML stubs, glossary validation, thesis compile, skill validation, and agents-db validation."
+    },
+    {
+      "name": "independent_architecture_review",
+      "command": "architect subagent review",
+      "status": "pass",
+      "evidence": "CLEAR; no boundary leaks between Glossarium prose terms, symb/eqs math APIs, docs/notation.yml lookup bridge, and agent routing guidance."
+    }
+  ],
+  "residual_risks": [
+    "docs/typst/shared/terms.typ remains as a legacy compatibility facade for old acronym-style constants; updated guidance discourages new use but does not delete compatibility."
+  ]
+}

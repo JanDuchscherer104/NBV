@@ -1,0 +1,13 @@
+{
+  "goal": {
+    "threadId": "019ee5f9-daf1-7320-bf93-d4c1fc3ff061",
+    "objective": "Autoresearch goal: ARIA-NBV Python standards and aria_nbv package guidance source-of-truth audit\n\nResearch methodology / professor-critic rubric:\nPass only if the research identifies all current Python/package guidance owners and redundancies, uses litkg or the repo KG where available to find additional candidate sources, compares against current external best-practice sources, explains why agents still reimplement existing aria_nbv functionality or violate Python standards, and produces a ranked streamlining plan with deprecation candidates, owner surfaces, verification gates, and residual risks.\n\nCompletion gate: record a passing professor-critic verdict with omx autoresearch-goal verdict --slug aria-nbv-python-standards-and-aria-nbv-package-g --verdict pass --evidence \"<critic artifact/evidence>\". After the objective audit passes, call update_goal({status: \"complete\"}), call get_goal again, then run omx autoresearch-goal complete --slug aria-nbv-python-standards-and-aria-nbv-package-g --codex-goal-json \"<fresh get_goal JSON or path>\".",
+    "status": "complete",
+    "tokensUsed": 243042,
+    "timeUsedSeconds": 1330,
+    "createdAt": 1782029200,
+    "updatedAt": 1782030531
+  },
+  "remainingTokens": null,
+  "completionBudgetReport": "Goal achieved. Report final usage from this tool result's structured goal fields. If `goal.tokenBudget` is present, include token usage from `goal.tokensUsed` and `goal.tokenBudget`. If `goal.timeUsedSeconds` is greater than 0, summarize elapsed time in a concise, human-friendly form appropriate to the response language."
+}

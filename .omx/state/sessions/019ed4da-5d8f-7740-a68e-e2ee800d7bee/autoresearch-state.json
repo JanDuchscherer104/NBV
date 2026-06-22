@@ -1,0 +1,13 @@
+{
+  "active": false,
+  "mode": "autoresearch",
+  "current_phase": "complete",
+  "started_at": "2026-06-17T10:38:31.474Z",
+  "updated_at": "2026-06-17T10:38:31.474Z",
+  "session_id": "019ed4da-5d8f-7740-a68e-e2ee800d7bee",
+  "thread_id": "019ed03b-ab31-7972-8b69-37fd42f7ec3d",
+  "turn_id": "019ed50b-7877-7a10-b60a-5e72cbdebe41",
+  "run_outcome": "finish",
+  "lifecycle_outcome": "finished",
+  "completed_at": "2026-06-18T00:00:00.000Z"
+}

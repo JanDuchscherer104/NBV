@@ -1,0 +1,8 @@
+{
+  "validation_mode": "prompt-architect-artifact",
+  "completion_artifact_path": ".omx/specs/autoresearch-thesis-structure/result.json",
+  "validator_prompt": "Approve iff the report verifies the current main.typ include graph, uses local source order plus external master's-thesis writing guidance, proposes a concrete chapter/source-file tree, maps chapters to ARIA-NBV RQs and owner sources, identifies appendix/provenance moves, and provides a follow-up validation matrix without mutating thesis files.",
+  "output_artifact_path": ".omx/specs/autoresearch-thesis-structure/report.md",
+  "active": false,
+  "current_phase": "complete"
+}

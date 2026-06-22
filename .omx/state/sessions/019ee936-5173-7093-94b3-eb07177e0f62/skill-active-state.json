@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "active": true,
+  "skill": "best-practice-research",
+  "keyword": "$oh-my-codex:best-practice-research",
+  "phase": "reviewing",
+  "activated_at": "2026-06-21T16:51:15.895Z",
+  "updated_at": "2026-06-21T17:09:33.325Z",
+  "source": "keyword-detector",
+  "input_lock": null
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "workflow": "autoresearch-goal",
+  "slug": "arch-goal-thesis-peer-review-with-at-least-ten-a",
+  "topic": "arch-goal thesis peer review with at least ten architecture/literature iterations and implemented Typst patch audit",
+  "rubric": "Pass only if current evidence proves at least ten useful research iterations were mined from local OMX artifacts; every active thesis section and total coherence were reviewed; seminar paper, litkg, theory docs, local/external literature were compared; inclusion candidates from .omx/specs/autoresearch-thesis-lit-review were ranked; a conflict/citation/inclusion matrix maps findings to exact thesis patches and dashy TODO markers; the approved patch set is implemented under docs/typst/thesis; verification includes Typst compile, diff hygiene, qmd frontmatter, agent memory, stale scans, and litkg claim check.",
+  "critic_command": "cd /home/jd/repos/ARIA-NBV && git diff --check && make check-agent-memory && cd docs && typst compile typst/thesis/main.typ --root . /tmp/thesis-arch-goal.pdf",
+  "status": "blocked",
+  "created_at": "2026-06-18T19:57:33.279Z",
+  "updated_at": "2026-06-18T20:28:09.288Z",
+  "mission_path": ".omx/goals/autoresearch/arch-goal-thesis-peer-review-with-at-least-ten-a/mission.json",
+  "rubric_path": ".omx/goals/autoresearch/arch-goal-thesis-peer-review-with-at-least-ten-a/rubric.md",
+  "ledger_path": ".omx/goals/autoresearch/arch-goal-thesis-peer-review-with-at-least-ten-a/ledger.jsonl",
+  "completion_path": ".omx/goals/autoresearch/arch-goal-thesis-peer-review-with-at-least-ten-a/completion.json"
+}

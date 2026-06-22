@@ -1,0 +1,10 @@
+{
+  "session_id": "019eefd9-5a73-7680-abe7-c27ac270eb7e",
+  "native_session_id": "019eefd9-5a73-7680-abe7-c27ac270eb7e",
+  "started_at": "2026-06-22T15:01:03.494Z",
+  "cwd": "/home/jd/repos/ARIA-NBV",
+  "pid": 4486,
+  "platform": "linux",
+  "pid_start_ticks": 1801,
+  "pid_cmdline": "codex app-server --listen unix://"
+}

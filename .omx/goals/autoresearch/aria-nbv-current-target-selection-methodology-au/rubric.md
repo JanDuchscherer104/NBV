@@ -1,0 +1,1 @@
+Compare theory/docs/canonical memory against implementation; use litkg retrieval/claim checks; inspect rollout samples if available; produce severity-ranked evidence with file references and verification gaps; pass only when claims are grounded in canonical sources and current code.
