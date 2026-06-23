@@ -160,11 +160,133 @@ Result table and plots:
 
 - `cumulative_score`: cumulative score used by the selected policy.
 - `cumulative_rri`: cumulative RRI when an RRI scorer is attached; intentionally empty in geometry mode.
+- `G_target`: selected-branch cumulative root-normalized target return when target metrics are available.
+- `J_endpoint`: endpoint target-error gain from rollout root to final selected state.
+- `log_gain`: endpoint log target-error reduction used as a diagnostic companion.
 - `terminated_early`: rollout stopped before `H`, usually because no valid successor action remained.
 - `final_x/y/z`: final selected rig pose translation in world coordinates.
 - `Paths`: trajectory-level visualization.
 - `Step Shell`: per-step candidate shell and selected candidate view.
 - `Logs`: captured Console output from generation/scoring.
+
+The metric dashboard has plot-specific info boxes with the equations used for
+target return, endpoint gain, candidate bands, and top-k candidate headroom.
+"""
+
+_LIVE_TRAJECTORY_OBJECTIVE_INFO = r"""
+These headline metrics summarize the selected rollout branches.
+
+Target-cropped point-mesh error for target \(e\) is
+
+$$
+\Delta_t^e =
+d(C_e(\mathcal{P}_t), M_e).
+$$
+
+`Best G_0^(H)` is the largest selected-branch finite-horizon return rooted at
+the loaded sample:
+
+$$
+G_0^{(H)}(\tau)=
+\sum_{t=0}^{H-1}\gamma^t r_{t,\mathrm{root}}^e.
+$$
+
+`Best J_e^(H)` is endpoint target-error gain:
+
+$$
+J_{e,\Delta}^{(H)}(\tau)=
+\frac{\Delta_0^e-\Delta_H^e}{\Delta_0^e+\varepsilon}.
+$$
+
+`Mean valid fanout` is the mean number of valid candidate actions available
+across expanded rollout states. Invalid candidates are hard masks, not low-RRI
+examples.
+"""
+
+_LIVE_SELECTED_RETURN_INFO = r"""
+This plot shows the selected action at each rollout step and the cumulative
+prefix return for each branch.
+
+The immediate rollout/Q_H reward is root-normalized target gain:
+
+$$
+r_{t,\mathrm{root}}^e =
+\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_0^e+\varepsilon}.
+$$
+
+The dashed line is the displayed undiscounted cumulative prefix after chart
+step \(s\):
+
+$$
+G_{0:s}^{(H)} =
+\sum_{k=0}^{s-1} r_{k,\mathrm{root}}^e.
+$$
+
+using the emitted selected `target_root_gain` values. Legacy or diagnostic rows
+fall back to state-relative target RRI when root-normalized gain is unavailable:
+
+$$
+\mathrm{RRI}_{t,\mathrm{state}}^e =
+\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_t^e+\varepsilon}.
+$$
+"""
+
+_LIVE_FANOUT_BAND_INFO = r"""
+This plot compares the chosen action with the valid candidate shell available
+at each rollout step.
+
+For each expanded state, the shaded region is the empirical central 95% range
+over valid candidate target gains:
+
+$$
+\left[
+Q_{0.025}\{r_{t,\mathrm{root}}^e(a_i): m_{t,i}=1\},
+Q_{0.975}\{r_{t,\mathrm{root}}^e(a_i): m_{t,i}=1\}
+\right].
+$$
+
+The selected line is the action actually retained by the rollout policy. This
+range is a candidate-shell diagnostic, not a statistical confidence interval.
+When root-normalized gain is missing, the plot falls back to target RRI.
+"""
+
+_LIVE_TOPK_CANDIDATE_INFO = r"""
+This plot shows per-step headroom in the valid candidate shell.
+
+For each expanded state, the displayed lines are
+
+$$
+\operatorname{TopK}_t =
+\operatorname{TopK}_{i:m_{t,i}=1}
+r_{t,\mathrm{root}}^e(a_i).
+$$
+
+Large gaps between the selected action and top-k candidates indicate selection
+or sampling-policy headroom. Flat or near-zero top-k curves indicate the current
+candidate families are not exposing target-improving views for that state.
+"""
+
+_LIVE_ENDPOINT_METRIC_INFO = r"""
+Endpoint metrics evaluate the whole selected branch after the fixed horizon or
+early termination.
+
+Endpoint gain reports the fraction of initial target error removed:
+
+$$
+J_{e,\Delta}^{(H)}(\tau)=
+\frac{\Delta_0^e-\Delta_H^e}{\Delta_0^e+\varepsilon}.
+$$
+
+Log gain is a diagnostic companion:
+
+$$
+L_e^{(H)}(\tau)=
+\log(\Delta_0^e+\varepsilon)-\log(\Delta_H^e+\varepsilon).
+$$
+
+When all selected steps emit root-normalized gain and \(\gamma=1\), cumulative
+root-normalized reward telescopes to endpoint gain up to numerical epsilon. Log
+gain is not the default rollout/Q_H reward.
 """
 
 _LIVE_SELECTED_DEPTH_INFO = """
@@ -919,7 +1041,7 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
             )
         )
     fig.update_layout(
-        title="Valid-candidate target-RRI empirical 95% band",
+        title="Valid-candidate empirical central 95% range",
         xaxis_title="rollout step",
         yaxis_title="candidate target root gain / target RRI",
     )
@@ -1779,9 +1901,10 @@ def _render_live_rollout_metric_dashboard(
     metric_cols = st.columns(4)
     if rows_df.empty:
         metric_cols[0].metric("Best branch", "n/a")
-        metric_cols[1].metric("Best G_t^(H)", "n/a")
+        metric_cols[1].metric("Best G_0^(H)", "n/a")
         metric_cols[2].metric("Best J_e^(H)", "n/a")
         metric_cols[3].metric("Mean valid fanout", "n/a")
+        _info_popover("trajectory objective metrics", _LIVE_TRAJECTORY_OBJECTIVE_INFO)
         return
 
     cumulative_score = pd.to_numeric(rows_df["cumulative_score"], errors="coerce")
@@ -1789,10 +1912,11 @@ def _render_live_rollout_metric_dashboard(
     j_endpoint = pd.to_numeric(rows_df["J_endpoint"], errors="coerce")
     best_idx = int(cumulative_score.idxmax())
     metric_cols[0].metric("Best branch", int(rows_df.loc[best_idx, "trajectory"]))
-    metric_cols[1].metric("Best G_t^(H)", _format_optional_metric(g_target.max()))
+    metric_cols[1].metric("Best G_0^(H)", _format_optional_metric(g_target.max()))
     metric_cols[2].metric("Best J_e^(H)", _format_optional_metric(j_endpoint.max()))
     mean_fanout = None if step_df.empty else step_df["valid_candidates"].mean()
     metric_cols[3].metric("Mean valid fanout", _format_optional_metric(mean_fanout))
+    _info_popover("trajectory objective metrics", _LIVE_TRAJECTORY_OBJECTIVE_INFO)
 
     if step_df.empty:
         st.info("No selected rollout steps are available for metric plots.")
@@ -1813,7 +1937,7 @@ def _render_live_rollout_metric_dashboard(
                 x=traj_df["step"],
                 y=traj_df["G_target"],
                 mode="lines+markers",
-                name=f"traj {traj_idx} G_t^(H)",
+                name=f"traj {traj_idx} G_0 prefix",
                 line={"dash": "dash"},
             )
         )
@@ -1827,12 +1951,14 @@ def _render_live_rollout_metric_dashboard(
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
+        _info_popover("selected target return", _LIVE_SELECTED_RETURN_INFO)
         st.plotly_chart(rri_fig, width="stretch")
     with chart_col2:
+        _info_popover("valid candidate return band", _LIVE_FANOUT_BAND_INFO)
         st.plotly_chart(fanout_fig, width="stretch")
         st.caption(
-            "Band shows the 2.5-97.5 percentile range of valid candidate target root gain when available, "
-            "falling back to target RRI; the selected line shows the action actually taken."
+            "Band shows the empirical 2.5-97.5 percentile range of valid candidate target root gain when "
+            "available, falling back to target RRI; the selected line shows the action actually taken."
         )
 
     top_rows = []
@@ -1863,11 +1989,12 @@ def _render_live_rollout_metric_dashboard(
             xaxis_title="rollout step",
             yaxis_title="target root gain / target RRI",
         )
+        _info_popover("top-k candidate headroom", _LIVE_TOPK_CANDIDATE_INFO)
         st.plotly_chart(top_fig, width="stretch")
 
     if rows_df["J_endpoint"].notna().any() or rows_df["log_gain"].notna().any():
         endpoint_fig = go.Figure()
-        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name="J_e^(H)"))
+        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name="J_e,Delta^(H)"))
         endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["log_gain"], name="log gain"))
         endpoint_fig.update_layout(
             title="Endpoint target-quality metrics",
@@ -1875,8 +2002,10 @@ def _render_live_rollout_metric_dashboard(
             yaxis_title="gain",
             barmode="group",
         )
+        _info_popover("endpoint target-quality metrics", _LIVE_ENDPOINT_METRIC_INFO)
         st.plotly_chart(endpoint_fig, width="stretch")
     else:
+        _info_popover("endpoint target-quality metrics", _LIVE_ENDPOINT_METRIC_INFO)
         st.caption(
             "Endpoint `J_e^(H)` and log-gain are unavailable for this run because selected target point-mesh before/after fields were not emitted."
         )

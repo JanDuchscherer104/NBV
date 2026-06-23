@@ -718,7 +718,7 @@
         #slide-small[
           1. Train target-conditioned one-step scorer $hat(r)_psi^e$ on valid all-candidate labels.
           2. Use held-out rank, top-$k$, calibration, and oracle-selected rollouts as evidence gate.
-          3. Fit residual dueling $Q_H$ on selected-action transitions.
+          3. Fit an uncentred residual $Q_H$ on selected-action transitions.
           4. Decode only over hard-valid candidates.
           #v(0.18em)
           #text(
@@ -1115,7 +1115,7 @@
         [masked Set Transformer candidate interaction], [A3 ablation],
         [QCNet-style query-centric relative pose encoding], [A4 ablation],
         [Fisher/SCONE-style support-overlap attention bias], [A5 value head],
-        [residual dueling $Q_H$ with hard masks and matched-budget oracle re-scoring], [Deferred bridges],
+        [uncentred residual $Q_H$ with hard masks and matched-budget oracle re-scoring], [Deferred bridges],
         [privileged-teacher distillation, distributional $Q_H$, EGNN candidate graph, Hestia-style target-then-pose],
         bottomrule(),
       )

@@ -36,6 +36,12 @@ generic context, treat it as advisory and inspect the concrete owner directly.
 - Inspect source/backend readiness:
   `make kg-capabilities KG_FORMAT=json`
 
+When connecting thesis prose to implementation code, use `kg-search` or
+`kg-route` to locate likely source/code relationships, inspect the cited owners,
+then encode the selected Typst link with
+`.agents/references/thesis_code_links.md`: `#gh` for final-worthy pinned
+anchors, `#gh-wip` and `#gh-symbol` for removable draft/agent navigation.
+
 ## Output Modes
 
 `kg-route`, `kg-search`, and `kg-claim-check` print a **compact ~12-line

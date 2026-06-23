@@ -34,6 +34,7 @@
   abstract_de: "",
   acknowledgement: "",
   transparency_ai_tools: "",
+  front_matter_after_contents: none,
   is_print: false,
   body,
 ) = {
@@ -99,7 +100,11 @@
 
   set par(leading: 1em)
   set cite(style: "alphanumeric")
-  show figure: set text(size: 0.85em)
+  show figure.where(kind: image): set text(size: 0.85em)
+  show figure.where(kind: table): set text(size: 0.85em)
+  show figure.where(kind: "FR"): set text(size: 0.85em)
+  show figure.where(kind: "QA"): set text(size: 0.85em)
+  show figure.where(kind: "C"): set text(size: 0.85em)
 
   show outline.entry.where(level: 1): it => {
     v(15pt, weak: true)
@@ -113,7 +118,12 @@
     indent: 2em,
   )
 
-  v(2.4fr)
+  if front_matter_after_contents != none {
+    pagebreak()
+    front_matter_after_contents
+  } else {
+    v(2.4fr)
+  }
   pagebreak()
 
   set page(numbering: "1")

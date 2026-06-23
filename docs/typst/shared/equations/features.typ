@@ -44,10 +44,56 @@
     /
     (op("tr") (#symb.vin.dir_moment (bold(v))) + epsilon)
   $,
+  logged_point_projection: $
+    bold(p)_(j,c,tau)
+    =
+    T_(c_tau <- w) bold(p)_j,
+    quad
+    (u_(j,tau), v_(j,tau), alpha_(j,tau))
+    =
+    pi_(kappa_tau) (bold(p)_(j,c,tau))
+  $,
+  logged_feature_sample: $
+    bold(f)_(j,tau)
+    =
+    op("Sample") (
+      bold(F)_tau^"2D",
+      u_(j,tau),
+      v_(j,tau)
+    )
+  $,
+  logged_visibility_gate: $
+    m_(j,tau)^"vis"
+    =
+    alpha_(j,tau)
+    m_(j,tau)^"obs/depth"
+    m_(j,tau)^"quality"
+  $,
+  logged_feature_pool: $
+    w_(j,tau)
+    =
+    m_(j,tau)^"vis" q_j r_(j,tau),
+    quad
+    overline(bold(f))_j
+    =
+    (sum_tau w_(j,tau) bold(f)_(j,tau))
+    /
+    (sum_tau w_(j,tau) + epsilon)
+  $,
+  compressed_point_descriptor: $
+    bold(f)_j^"DINO-comp"
+    =
+    op("Compress") (overline(bold(f))_j),
+    quad
+    n_j^"valid"
+    =
+    sum_tau m_(j,tau)^"vis"
+  $,
   qh_scene_memory: $
     bold(Phi)_t^"scene"
     =
     (
+      bold(M)_t^"ray",
       bold(X)_t^"pt",
       bold(F)_t^"DINO@pt",
       bold(E)_0^"EVL-local",
@@ -67,14 +113,32 @@
     )
   $,
   candidate_query_pools: $
-    // TODO: what is the difference between these potential candidate features? Frustum vs. projected? Pooling over the entire scene vs. just the candidate crop?
-    // TODO: these Pool_ symbols don't look well. too much contents in the subsctipt and writing out Frustum is stupid. what symbol can we use to represent Frustum(*)?
               bold(z)_e & =
                           op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
          bold(z)_i^"fr" & =
                           op("Pool")_(bold(p)_j in op("Frustum") (q_(t,i))) bold(x)_j^"pt" \
     bold(z)_(e,i)^"cap" & =
                           op("Pool")_(bold(p)_j in hat(bold(B))_e inter op("Frustum") (q_(t,i))) bold(x)_j^"pt"
+  $,
+  candidate_ray_query: $
+    bold(R)_(t,i)^"ray"
+    =
+    op("RenderQuery") (
+      bold(M)_t^"ray",
+      q_(t,i),
+      hat(bold(B))_e
+    )
+    =
+    (
+      bold(D)_(t,i)^"near",
+      bold(L)_(t,i)^"free",
+      bold(L)_(t,i)^"unk",
+      bold(M)_(t,i)^"hit",
+      bold(W)_(t,i)^"target",
+      bold(C)_(t,i)^"support",
+      bold(Sigma)_(t,i)^"geom",
+      nu_(t,i)^"dir"
+    )
   $,
   qh_target_token: $
     bold(T)_e
@@ -90,15 +154,12 @@
     #symb.vin.candidate_pose_feat (q_(t,i))
     =
     op("concat") (
-      // TODO: It's either R6d + bold(t)_(t,i) or the QCNet like decsriptor!
       bold(t)_(t,i),
       bold(R)_(t,i)^"6D",
       norm(bold(t)_(t,i) - bold(t)_e)_2^2,
       alpha_(t,i)^e,
-      // TODO: What is l_(t, i). OBB?
-      l_(t,i),
-      // TODO: what is strategy?
-      c_(t,i)^"strategy"
+      l_(t,i)^"OBB-overlap",
+      c_(t,i)^"sampler"
     )
   $,
   candidate_query_local_frame: $
@@ -152,6 +213,7 @@
     op("concat") (
       phi_"frustum" (bold(X)_t^"pt", q_(t,i)),
       phi_"target-frustum" (bold(X)_t^"pt", #symb.entity.target_desc, q_(t,i)),
+      bold(R)_(t,i)^"ray",
       phi_"EVL-local" (bold(E)_0^"EVL-local", q_(t,i), #symb.entity.target_desc),
       phi_"dir" (#symb.vin.dir_moment, q_(t,i))
     )
@@ -174,6 +236,14 @@
         op("concat") (bold(x)_(t,i), bold(T)_e, bold(H)_t)
       }_(i=1)^(#symb.shape.Nq),
       bold(m)_t
+    )
+  $,
+  qh_candidate_state_cross_attention: $
+    bold(u)_(t,i)
+    =
+    op("CrossAttn")_theta (
+      bold(x)_(t,i),
+      {bold(T)_e, bold(M)_t^"ray", bold(H)_t, bold(b)_t, bold(E)_0^"EVL-local"}
     )
   $,
 )

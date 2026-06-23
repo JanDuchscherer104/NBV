@@ -22,6 +22,16 @@ from .pose_encoders import (
     R6dLffPoseEncoderConfig,
 )
 from .pose_encoding import LearnableFourierFeatures, LearnableFourierFeaturesConfig
+from .scene_feature_bank import (
+    FeaturePoolingResult,
+    PointFeatureBank,
+    PointQueryPool,
+    compress_point_features,
+    pool_multiview_point_features,
+    pool_point_query,
+    sample_logged_image_features_at_world_points,
+    validate_actor_feature_provenance,
+)
 from .traj_encoder import (
     TrajectoryEncoder,
     TrajectoryEncoderConfig,
@@ -33,8 +43,11 @@ __all__ = [
     "EvlBackbone",
     "EvlBackboneConfig",
     "EvlBackboneOutput",
+    "FeaturePoolingResult",
     "LearnableFourierFeatures",
     "LearnableFourierFeaturesConfig",
+    "PointFeatureBank",
+    "PointQueryPool",
     "PoseEncoder",
     "PoseEncodingOutput",
     "R6dLffPoseEncoder",
@@ -46,4 +59,9 @@ __all__ = [
     "VinModelV3Config",
     "VinPrediction",
     "VinV3ForwardDiagnostics",
+    "compress_point_features",
+    "pool_multiview_point_features",
+    "pool_point_query",
+    "sample_logged_image_features_at_world_points",
+    "validate_actor_feature_provenance",
 ]

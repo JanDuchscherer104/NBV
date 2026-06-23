@@ -45,6 +45,8 @@ Apply this file when working under `docs/`.
 - Quarto check: `quarto check`
 - Typst paper: `cd docs && typst compile typst/seminar_paper/main.typ --root .`
 - Typst thesis: `cd docs && typst compile typst/thesis/main.typ --root .`
+- Typst thesis final-link review:
+  `cd docs && typst compile typst/thesis/main.typ /tmp/aria-thesis-final.pdf --root . --input aria-wip-links=false --input aria-code-ref=<sha-or-tag>`
 - Typst slides: `cd docs && typst compile typst/seminar_slides/<file>.typ --root .`
 - QMD tree: `make context-qmd-tree`
 - Outline-first routing: `scripts/nbv_qmd_outline.sh`, `scripts/nbv_typst_includes.py`
@@ -64,6 +66,9 @@ Apply this file when working under `docs/`.
 - Add new references to `docs/references.bib` when introducing important concepts or papers.
 - Replace temporary citation placeholders such as `cite…` before finishing.
 - Use links to relevant internal docs or authoritative external references when introducing non-obvious concepts.
+- Use `.agents/references/thesis_code_links.md` for thesis-to-code links:
+  `#gh` is for final-worthy pinned implementation anchors, while `#gh-wip`
+  and `#gh-symbol` are removable draft/agent navigation aids.
 - Keep Quarto source files (`*.qmd`) separate from rendered site output. Published HTML belongs under `docs/_site/`, not next to the sources.
 - Treat `docs/_freeze/` as tracked execution state for code-backed pages when needed; treat `docs/_site/`, `site_libs/`, `index_files/`, and `*_files/` as generated publish artifacts.
 - Do not store generated context or rendered artifacts in tracked docs paths unless the task explicitly requires it.

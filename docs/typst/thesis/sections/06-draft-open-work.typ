@@ -11,45 +11,7 @@
 
 == Schedule and Risk Control
 
-The planned thesis window runs from 29 April 2026 to 30 September 2026. The roadmap owns the detailed Gantt chart; this draft keeps milestone exit conditions for traceability.
-
-#figure(
-  table(
-    columns: (0.9fr, 1.15fr, 1.82fr),
-    toprule(),
-    table.header([*Dates*], [*Milestone*], [*Exit condition*]),
-    midrule(),
-    [2026-04-29 to 2026-05-10],
-    [M0 proposal contract],
-    [Proposal, roadmap, research questions, and source policy state the same finite-candidate thesis claim.],
-    [2026-05-11 to 2026-05-31],
-    [M1 data/oracle],
-    [Offline-store, split, pose/frame, depth/backprojection, invalidity, Rerun, and throughput checks pass before target scale-up.],
-    [2026-06-01 to 2026-06-21],
-    [M2 one-step baseline],
-    [Scene-level VIN baseline, calibration plots, LRZ sharding plan, and Zarr rollout/Q schema are ready.],
-    [2026-06-22 to 2026-07-12],
-    [M3 target oracle],
-    [Target @relative-reconstruction-improvement:short, V1 @observed-target-selection:short / @predicted-target-q:short / @ground-truth-target-evaluation:short, and observed-only target selection are trusted on a small subset.],
-    [2026-07-13 to 2026-08-09],
-    [M4 target scorer],
-    [Target-conditioned one-step scoring is compared with scene-level scoring and oracle target labels.],
-    [2026-08-10 to 2026-08-30],
-    [M5 headroom/$Q_H$],
-    [Oracle lookahead headroom is measured; $Q_H$ is trained and oracle-evaluated if the headroom is positive.],
-    [2026-08-31 to 2026-09-13],
-    [M6 follow-up design],
-    [Online discrete $Q_H$, IQL, actor-critic, hierarchy, and simulator paths are written as follow-up designs or post-M5 ablations.],
-    [2026-09-14 to 2026-09-27],
-    [M7 experiments/writing],
-    [Final tables, figures, failure cases, coverage report, and thesis narrative are frozen.],
-    [2026-09-28 to 2026-09-30],
-    [M8 release],
-    [Configs, smoke checks, demo path, and final PDF artifacts are reproducible.],
-    bottomrule(),
-  ),
-  caption: [Retained milestone exit criteria from the proposal.],
-) <tab:thesis-draft-schedule>
+The planned thesis window from the proposal ran from 29 April 2026 to 30 September 2026. The roadmap owns the live schedule; this appendix keeps only the exit-condition logic. The work must progress from source-aligned proposal scope, through data/oracle validation, one-step target scoring, target-task rollouts, oracle-lookahead headroom, and #symb.rl.qh recovery, before bridge designs such as online discrete control or continuous policies are promoted. Final writing freezes only after manifests, coverage, failure cases, reproducible configs, and PDF artifacts are generated.
 
 #conflict_todo(
   [The absolute dates are retained from the proposal source but must be checked against the current roadmap before they appear as final thesis text.],
@@ -59,37 +21,7 @@ The planned thesis window runs from 29 April 2026 to 30 September 2026. The road
 
 == Preliminary Thesis Outline
 
-#figure(
-  table(
-    columns: (0.78fr, 1.45fr, 1.58fr),
-    toprule(),
-    table.header([*Chapter*], [*Purpose*], [*Expected evidence*]),
-    midrule(),
-    [Introduction],
-    [Motivate target-conditioned, quality-driven @next-best-view:short for egocentric indoor reconstruction and state the finite-candidate thesis claim.],
-    [Research questions, contribution boundary, and source-backed scope.],
-    [Background],
-    [Review active perception, @next-best-view:short, @relative-reconstruction-improvement:short, @aria-synthetic-environments:short/Project Aria, @egocentric-foundation-model-3d:short/@egocentric-voxel-lifting:short, target-aware 3DGS, and offline value learning.],
-    [Literature synthesis with adoption/rejection decisions.],
-    [Data and geometry contracts],
-    [Describe snippets, calibration, frames, offline stores, candidates, rendered depths, backprojection, masks, and Rerun inspection.],
-    [Geometry contract report, visual diagnostics, throughput, and known limitations.],
-    [Oracle @relative-reconstruction-improvement:short and target @relative-reconstruction-improvement:short],
-    [Define scene/target distances, crop matching, invalidity, and label generation.],
-    [Label distributions, target crops, target/scene divergence, and failure cases.],
-    [Target-conditioned scoring],
-    [Present target-task encoding, candidate features, VIN-style model, ordinal/regression losses, and calibration.],
-    [Held-out ranking, top-$k$ oracle hit, ablations, calibration, and target-specific failures.],
-    [Bounded rollout and $Q_H$],
-    [Compare random-valid, one-step greedy, learned one-step scorer, oracle lookahead, temperature-softmax traces, and candidate-query $Q_H$.],
-    [Cumulative target @relative-reconstruction-improvement:short, endpoint target gain, scene @relative-reconstruction-improvement:short, cost, invalidity, runtime, and rollout visualizations.],
-    [Discussion and conclusion],
-    [Interpret limits, scale blockers, simulator gaps, semantic/global planning, and real-device follow-up paths.],
-    [Scope-bound conclusion and reproducibility package.],
-    bottomrule(),
-  ),
-  caption: [Retained preliminary chapter outline from the proposal.],
-) <tab:thesis-draft-outline>
+The proposal outline split the thesis into motivation, background, data and geometry contracts, target-specific oracle labels, target-conditioned scoring, bounded #symb.rl.qh rollouts, and discussion. The current five-chapter skeleton can keep that logic by letting the method chapter own data generation, target-RRI, candidate/replay contracts, and the value model, while the evaluation chapter owns policy comparisons, scale, failures, and threats to validity. A later structure pass may split these roles into separate chapters if the final result tables require it.
 
 #research_todo(
   [Decide whether the final thesis keeps the current five-chapter skeleton or expands to the more detailed outline above.],

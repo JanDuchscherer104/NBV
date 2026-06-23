@@ -33,10 +33,62 @@
 /// Create a filename/path reference
 #let filepath(body) = raw(body, lang: none)
 
-/// Link to a file in the GitHub repo (shows only the filename).
-#let gh(path) = {
-  let base = path.split("/").last()
-  link("https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/" + path)[#code-inline(base)]
+// ============================================================================
+// Thesis/Source Code Link Macros
+// ============================================================================
+
+#let aria-github-repo = "JanDuchscherer104/ARIA-NBV"
+#let aria-github-base = "https://github.com/" + aria-github-repo
+
+#let _aria-code-ref() = sys.inputs.at("aria-code-ref", default: "main")
+#let _aria-wip-links-enabled() = sys.inputs.at("aria-wip-links", default: "true") != "false"
+
+#let _gh-label(path, body: none) = if body == none {
+  code-inline(path.split("/").last())
+} else {
+  body
+}
+
+#let _gh-line-anchor(line: none, end: none) = if line == none {
+  ""
+} else if end == none {
+  "#L" + str(line)
+} else {
+  "#L" + str(line) + "-L" + str(end)
+}
+
+#let _github-file-url(path, ref: none, line: none, end: none) = {
+  let resolved-ref = if ref == none { _aria-code-ref() } else { ref }
+  aria-github-base + "/blob/" + resolved-ref + "/" + path + _gh-line-anchor(line: line, end: end)
+}
+
+#let _github-symbol-url(symbol, language: "python") = {
+  "https://github.com/search?q=repo%3A" + aria-github-repo + "+language%3A" + language + "+symbol%3A" + symbol + "&type=code"
+}
+
+/// Link to a file or line in the GitHub repo. Use for final-worthy implementation anchors.
+#let gh(path, body: none, ref: none, line: none, end: none) = {
+  link(_github-file-url(path, ref: ref, line: line, end: end))[#(_gh-label(path, body: body))]
+}
+
+/// Draft-only GitHub file/line link. Compiles to plain text with `--input aria-wip-links=false`.
+#let gh-wip(path, body: none, ref: "main", line: none, end: none) = {
+  let label = _gh-label(path, body: body)
+  if _aria-wip-links-enabled() {
+    link(_github-file-url(path, ref: ref, line: line, end: end))[#label]
+  } else {
+    label
+  }
+}
+
+/// Draft-only GitHub symbol-search link. Compiles to plain text with `--input aria-wip-links=false`.
+#let gh-symbol(symbol, body: none, language: "python") = {
+  let label = if body == none { code-inline(symbol) } else { body }
+  if _aria-wip-links-enabled() {
+    link(_github-symbol-url(symbol, language: language))[#label]
+  } else {
+    label
+  }
 }
 
 /// Create a citation-style reference

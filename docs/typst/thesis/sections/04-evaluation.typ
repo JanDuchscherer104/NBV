@@ -176,7 +176,6 @@ All selected actions are oracle-evaluated under the same acquisition and candida
     table.header([*Policy*], [*Actor input*], [*@ground-truth:short decision*], [*H*], [*Role*]),
     midrule(), [$pi_"rand"$], [yes], [no], [1],
     [lower reference over valid candidates],
-    // NOTE: removed $pi_"rand"$, random policy is not a reference
     [$pi_"learned-1"$], [yes], [no], [1], [myopic learned target scorer],
     [$pi_"oracle-1"$], [no], [yes], [1], [one-step oracle upper bound],
     [$pi_"oracle-look"$], [no], [yes], [$H$], [cumulative-@relative-reconstruction-improvement:short headroom estimate],

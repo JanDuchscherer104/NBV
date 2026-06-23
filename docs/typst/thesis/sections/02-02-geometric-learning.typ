@@ -8,7 +8,7 @@
 
 The geometric-learning question in ARIA-NBV is not whether a more expressive scene backbone can be added to the system. The thesis object is a typed finite-candidate decision map: for a target task, selected history, partial geometry, and an unordered set of feasible candidate poses, predict which candidate will improve target reconstruction under oracle re-evaluation. The model should therefore match the symmetries of this map before it escalates to heavier point, sparse, recurrent, or equivariant modules @GeometricDeepLearning-bronstein2021.
 
-The first required structure is candidate-row permutation equivariance. Reordering the rows of #symb.rl.candidate_table may reorder per-candidate #symb.rl.qh outputs, but it must not change the value assigned to the same physical candidate. Deep Sets supplies the minimal invariant/equivariant baseline for unordered candidate and support sets, while Set Transformer supplies masked candidate-candidate interaction once independent and pooled controls are calibrated @DeepSets-zaheer2017 @SetTransformer-lee2019. The thesis should not replace the row path with only a pooled scene embedding, because the policy selects a candidate row.
+The first required structure is candidate-row permutation equivariance. Reordering the rows of #symb.rl.candidate_table may reorder per-candidate #symb.rl.qh outputs, but it must not change the value assigned to the same physical candidate. Candidate-to-state queries are therefore the first context mechanism: each candidate reads the same target, map, history, budget, and local-EVL state tokens. Deep Sets supplies the minimal pooled context baseline for unordered candidate and support sets, while Set Transformer supplies masked candidate-candidate interaction once independent and candidate-to-state controls are calibrated @DeepSets-zaheer2017 @SetTransformer-lee2019. The thesis should not replace the row path with only a pooled scene embedding, because the policy selects a candidate row.
 
 The minimum algebraic contract is therefore a row-wise map over a masked set. For any permutation matrix $Pi$ acting on candidate rows, the value model should satisfy
 
@@ -63,7 +63,7 @@ The third required structure is directional visibility memory. A candidate view 
   caption: [Minimum geometric-learning contract for the finite-candidate value model.],
 ) <tab:geometric-learning-contract>
 
-This contract implies an architecture ladder with conservative attribution. The independent scorer tests whether candidate self-features already solve the target task. A pooled DeepSets context tests whether valid-set summaries help without pairwise attention. A masked Set Transformer tests candidate-candidate interaction. QCNet-style relative positional encoding tests whether local candidate-target/history relations are the missing signal. Directional support and overlap biases test whether visibility memory or surface-support hypotheses add value. Only after these controls pass should point backbones, sparse convolutions, exact equivariant graphs, or looped refinement be treated as thesis-relevant architecture changes @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019 @dejaviewloopingtransformersburzio2026.
+This contract implies an architecture ladder with conservative attribution. The independent scorer tests whether candidate self-features already solve the target task. Candidate-to-state cross-attention tests whether fixed target, map, history, and budget tokens explain finite-horizon value without candidate-candidate coupling. A pooled DeepSets context tests whether valid-set summaries help without pairwise attention. A masked Set Transformer tests candidate-candidate interaction. QCNet-style relative positional encoding tests whether local candidate-target/history relations are the missing signal. Directional support and overlap biases test whether visibility memory or surface-support hypotheses add value. Only after these controls pass should point backbones, sparse convolutions, exact equivariant graphs, or looped refinement be treated as thesis-relevant architecture changes @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019 @dejaviewloopingtransformersburzio2026.
 
 #figure(
   table(
@@ -75,24 +75,25 @@ This contract implies an architecture ladder with conservative attribution. The 
     [Independent candidate scorer],
     [Locks target/candidate descriptors, CORAL calibration, and one-step ranking before context is added.],
 
-    [A1], [Pooled DeepSets context], [Tests unordered valid-set summaries while preserving a per-candidate row path.],
-    [A2],
+    [A1], [Candidate-to-state query], [Tests fixed target, map, history, budget, and local-EVL context while preserving a per-candidate row path.],
+    [A2], [Pooled DeepSets context], [Tests unordered valid-set summaries while preserving a per-candidate row path.],
+    [A3],
     [Masked Set Transformer],
     [Tests candidate-candidate interaction under row-shuffle and mask-isolation checks.],
 
-    [A3],
+    [A4],
     [Query-local relative encoding],
     [Adapts QCNet-style local RPE for candidate-target, candidate-candidate, and selected-history relations.],
 
-    [A4],
+    [A5],
     [Directional/support bias],
     [Tests visibility memory, target-frustum support, overlap, and uncertainty as features rather than proxy rewards.],
 
-    [A5],
-    [Residual dueling #symb.rl.qh],
-    [Tests finite-horizon recovery over the calibrated myopic scorer with masked Double-Q backups.],
+    [A6],
+    [Uncentred residual #symb.rl.qh],
+    [Tests finite-horizon recovery in continuous return units over the calibrated myopic scorer with masked Double-Q backups.],
 
-    [A6+],
+    [A7+],
     [Point/sparse/exact-equivariant/recurrent encoders],
     [Escalates only if compact descriptors bottleneck target-RRI ranking or #symb.rl.qh recovery.],
 
@@ -109,7 +110,7 @@ This contract implies an architecture ladder with conservative attribution. The 
   caption: [Architecture ladder used to keep geometric-learning claims attributable.],
 ) <tab:geometric-learning-ladder>
 
-The active method turns this theory into concrete replay fields, descriptor versions, and acceptance tests in Chapter @sec:thesis-method-geometry-contract. The literature review uses the same split: Deep Sets, Set Transformer, and query-local relative encoding are immediate model controls; point, sparse, exact-equivariant, radiance-field, and recurrent models are scoped ablations or bridge work until the finite-candidate target-RRI protocol is stable.
+The active method turns this theory into concrete replay fields, descriptor versions, and acceptance tests in Chapter @sec:thesis-method-geometry-contract. The literature review uses the same split: independent scoring and candidate-to-state queries are immediate model controls; Deep Sets, Set Transformer, and query-local relative encoding are interaction ablations; point, sparse, exact-equivariant, radiance-field, and recurrent models are scoped representation ablations or bridge work until the finite-candidate target-RRI protocol is stable.
 
 #validation_todo(
   [Add measured row-shuffle, mask-isolation, duplicate-row, frame-transform, and valid-count stress-test results before claiming any geometric-learning module improves #symb.rl.qh.],

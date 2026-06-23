@@ -45,8 +45,8 @@ The advisor-facing contract is deliberately compact:
 - validate finite candidate mixtures, branch/beam rollout support, and
   stochastic rollout-data diversity before the first $Q_H$ training run;
 - train $Q_{H,\theta}$ as a finite-candidate value model, first implemented as
-  a candidate-query Transformer over scene, target, history, and candidate
-  tokens;
+  a candidate-to-state query Transformer over target, ray-aware map, local EVL,
+  history, budget, and candidate tokens;
 - treat scale as an RQ4 support and evidence protocol: move from small trusted
   subsets toward ASE-wide and external mesh/oracle-compatible settings without
   replacing target RRI by proxy objectives;
@@ -89,7 +89,7 @@ continuous-control or real-device RL policy before the evidence exists.
 |---|---|
 | Already implemented substrate | Scene-level oracle RRI, immutable VIN offline-store paths, VINv3-style one-step scoring, candidate generation, rollout scaffolding, rollout Zarr record/store path, and Rerun offline inspection. |
 | Prerequisite and evidence protocol | Proposal freeze, M1 contract report, V0/V1 target contracts, candidate-label/frame guards, invalidity masks/reasons, rollout/Q storage schema, LRZ deterministic sharding/storage gates, scene-level splits, coverage reporting, and ablation reporting. |
-| Hard quantitative thesis core | Oracle target-task sampling for rollout/data-generation labels; target-conditioned learned one-step scorer as the myopic control; mixed target-aware candidate sets; random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax rollouts; finite-candidate $Q_{H,\theta}$ value model, first implemented as a candidate-query Transformer; explicit scale reporting. |
+| Hard quantitative thesis core | Oracle target-task sampling for rollout/data-generation labels; target-conditioned learned one-step scorer as the myopic control; mixed target-aware candidate sets; random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax rollouts; finite-candidate $Q_{H,\theta}$ value model, first implemented as candidate-to-state queries; explicit scale reporting. |
 | RQ4 support and scale research | Candidate/rollout support, ASE-wide finite-candidate offline scale, and external mesh/oracle-compatible expansion only when target-RRI supervision is preserved. |
 | RQ5 online bridge | Online discrete $Q_H$ over the same finite-candidate action contract after offline $Q_H$ is trusted. |
 | RQ6 lower-priority escalation | Continuous target-then-pose actor-critic and simulator-backed control after online finite-candidate evidence exists; quantitative continuous-control results are time-permitting, not required for the finite-candidate thesis result. |
@@ -106,8 +106,9 @@ pages must state the same advisor-facing contract:
   pools and labels; V1 OBS-SEL / PRED-Q / GT-EVAL is mandatory before making
   actor-visible deployable-input claims;
 - target-conditioned finite-candidate $Q_H$ value learning is a hard thesis
-  deliverable after the M1/M3/M4 gates, with the candidate-query Transformer as
-  the first implementation; any blocker must be documented explicitly;
+  deliverable after the M1/M3/M4 gates, with candidate-to-state cross-attention
+  as the first implementation and candidate-candidate self-attention only as an
+  ablation; any blocker must be documented explicitly;
 - scaling beyond the current ASE mesh subset must preserve mesh/oracle
   target-RRI supervision for thesis-grade evidence; proxy objectives remain
   contrast or discussion signals;
@@ -220,7 +221,7 @@ fixed-budget tables or quality-cost curves rather than raw endpoint gain alone.
 <span id="rq4-planning"></span><span id="rq4-model"></span><span id="rq5-planning"></span><span id="rq5-argtopk-rollout-sequence"></span>
 
 **Question.** How does the trained finite-candidate value model
-$Q_{H,\theta}$, first implemented as a candidate-query Transformer, perform
+$Q_{H,\theta}$, first implemented as candidate-to-state query attention, perform
 against learned one-step target scoring, oracle greedy/lookahead planning, and
 oracle-scored stochastic rollout references under the same acquisition and
 candidate budgets?
@@ -252,14 +253,22 @@ target-conditioned scorer.
 
 **Q_H formulation.** $Q_H$ is the glossary-level concept; the learned network in
 the thesis is the finite-candidate value model
-$Q_{H,\theta}(s_t^{\mathrm{cf0}},z_e,q_{t,i})$, first implemented as a compact
-candidate-query Transformer. The first actor-visible rollout state is
-$s_t^{\mathrm{cf0}}=(F_0^{\mathrm{EVL}},\mathcal{P}_t,\mathcal{Q}_t,m_t,\rho_t,z_e,h_t,b_t)$:
-frozen logged EVL context, accumulated counterfactual points, finite candidate
+$Q_{H,\theta}(s_t^{\mathrm{cf0}},z_e,q_{t,i})$, first implemented as compact
+candidate-to-state query attention. The first actor-visible rollout state is
+$s_t^{\mathrm{cf0}}=(F_0^{\mathrm{EVL}},\mathcal{P}_t^{\mathrm{semi/fused}},M_t^{\mathrm{ray}},F_t^{\mathrm{DINO@pt}},\mathcal{Q}_t,m_t,\rho_t,z_e,h_t,b_t)$:
+root local EVL context, accumulated semidense/fused counterfactual points, a
+ray-aware occupied/free/unknown memory updated by selected geometry, an optional
+visibility-gated logged-frame DINO-on-point feature bank, finite candidate
 table, validity mask, invalid-reason metadata, actor-visible target descriptor,
-selected-view history, and remaining budget. GT meshes, GT crops, and oracle
-RRI values are supervision and evaluation only. The model applies hard validity
-masks and emits one bounded-horizon value per finite candidate-table action.
+selected-view history, and remaining budget. The first $Q_{H,\theta}$ result may
+start with the implemented VIN/EVL heads plus semidense geometry only; the
+first planned representation upgrade is ray-aware geometry and candidate
+queries, while $F_t^{\mathrm{DINO@pt}}$ is a later appearance ablation, not
+required evidence before the baseline. GT meshes, GT crops, and oracle RRI
+values are supervision and evaluation only. The model applies hard validity
+masks and emits one bounded-horizon value per finite candidate-table action in
+continuous return units; CORAL remains scoped to the one-step scorer unless an
+explicit ordinal ablation is reported.
 The formal ArgTopK recursion, branch-factor schedule, replay row fields, and
 DQN/Double-DQN backup shapes live on the
 [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd), while
@@ -334,7 +343,10 @@ leaking ground-truth target annotations into the actor input?
 **Working hypothesis.** RQ3 owns target inputs, not the Q-network architecture.
 The first path should use observed/predicted OBB geometry plus support signals.
 A compact actor-visible crop descriptor is the first planned ablation and may be
-promoted if it is cheap and leakage-safe. Entity tokens remain later ablations.
+promoted if it is cheap and leakage-safe. The strongest near-term crop descriptor
+candidate is semidense/fused target support with a target/context shell and
+ray-aware support; compressed DINO-on-point features are added only after logged
+visibility gating works. Entity tokens remain later ablations.
 
 **Main protocol.** The thesis protocol is
 {{< gls observed-target-selection >}} / {{< gls predicted-target-q >}} /
@@ -346,8 +358,11 @@ path, and V1 is mandatory before deployable actor-input claims.
 
 Actor-visible target hypotheses are sourced from the EFM3D/EVL stack or the
 observed support derived from it: predicted or tracked OBBs, semantic class
-probabilities, confidence-style scores, projected area, and voxel or semidense
-support signals.
+probabilities, confidence-style scores, projected area, voxel support,
+semidense/fused point support, ray-aware target/context support, and optional
+visibility-gated logged DINO-on-point descriptors.
+Cube R-CNN-style detections can be evaluated as auxiliary target proposals or ROI
+descriptors after ARIA/ASE adaptation; they are not the default scene memory.
 
 **First target input.** The minimum first-path descriptor is the
 observed/predicted OBB center, extents, orientation, class, confidence,
@@ -361,7 +376,7 @@ used to build V1 actor-visible descriptors.
 |---|---|
 | GT OBB | V0 sanity or upper-bound input only; never the main V1 actor input. |
 | Predicted/observed OBB | Mandatory V1 actor-visible target record. |
-| Crop descriptor | First V1 ablation: pooled EVL/voxel features or point statistics inside the predicted/observed crop. |
+| Crop descriptor | First V1 ablation: pooled EVL/voxel features, semidense/fused point statistics, ray-aware target/context support, or visibility-gated logged DINO-on-point descriptors inside the predicted/observed crop. |
 | Entity token | Later learned target/entity embedding ablation. |
 | Target point | Candidate-generation look-at point, such as OBB center, support centroid, missing-surface centroid, or expected-RRI centroid. |
 

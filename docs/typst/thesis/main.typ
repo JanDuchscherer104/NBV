@@ -2,6 +2,7 @@
 #import "metadata.typ": *
 #import "../shared/macros.typ": *
 #import "../shared/glossary.typ": *
+#import "../shared/notation.typ": print-thesis-symbols
 #import "draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
@@ -9,9 +10,8 @@
 #set text(font: "New Computer Modern")
 
 #show: booktabs-default-table-style
-#show: make-glossary.with(link: false)
+#show: make-glossary
 #register-aria-glossary()
-#load-aria-glossary-references()
 
 #show: thesis.with(
   title: titleEnglish,
@@ -48,6 +48,22 @@
   ],
   transparency_ai_tools: [
     AI-assisted tools were used to organize literature notes, check consistency across repository documentation, and draft parts of the thesis seed. The author remains responsible for the final research scope, technical claims, citations, implementation, experiments, and submitted document. #validation_todo([Update this statement against final institutional requirements before submission.], source: [proposal transparency text])
+  ],
+  front_matter_after_contents: [
+    #heading(numbering: none, outlined: false)[Glossary and Abbreviations]
+    #print-aria-glossary(
+      show-all: true,
+      disable-back-references: true,
+      user-print-group-heading: (group, level: none) => heading(
+        level: 2,
+        numbering: none,
+        outlined: false,
+      )[#group],
+    )
+
+    #pagebreak()
+    #heading(numbering: none, outlined: false)[List of Symbols]
+    #print-thesis-symbols()
   ],
 )
 

@@ -803,13 +803,33 @@ def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
 
     fig = rollout_panel._build_fanout_band_figure(rows)
 
-    assert fig.layout.title.text == "Valid-candidate target-RRI empirical 95% band"
+    assert fig.layout.title.text == "Valid-candidate empirical central 95% range"
     assert "CI" not in fig.layout.title.text
     assert any(trace.fill == "tonexty" for trace in fig.data)
     assert any("selected target_root_gain" in str(trace.name) for trace in fig.data)
     assert not any("candidate min" in str(trace.name) for trace in fig.data)
     assert not any("candidate mean" in str(trace.name) for trace in fig.data)
     assert not any("candidate max" in str(trace.name) for trace in fig.data)
+
+
+def test_live_rollout_metric_info_contains_canonical_equations() -> None:
+    info_text = "\n".join(
+        [
+            rollout_panel._LIVE_TRAJECTORY_OBJECTIVE_INFO,
+            rollout_panel._LIVE_SELECTED_RETURN_INFO,
+            rollout_panel._LIVE_FANOUT_BAND_INFO,
+            rollout_panel._LIVE_TOPK_CANDIDATE_INFO,
+            rollout_panel._LIVE_ENDPOINT_METRIC_INFO,
+        ]
+    )
+
+    assert r"J_{e,\Delta}^{(H)}" in info_text
+    assert r"G_0^{(H)}" in info_text
+    assert r"r_{t,\mathrm{root}}^e" in info_text
+    assert r"\mathrm{RRI}_{t,\mathrm{state}}^e" in info_text
+    assert r"L_e^{(H)}" in info_text
+    assert r"\operatorname{TopK}" in info_text
+    assert "not a statistical confidence interval" in info_text
 
 
 def test_rl_page_is_hidden_by_default() -> None:

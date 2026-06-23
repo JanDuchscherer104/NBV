@@ -825,15 +825,16 @@
   lookup_rank: 190
   definition_short: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
   definition_long: 'The mandatory M5 learned policy-like result is Q_H over finite candidate
-    sets. The first-path architecture is a candidate-query Transformer: encode s_t^{cf0},
-    actor-visible target descriptor z_e, selected-view history, budget state, and candidate
-    tokens, then emit one value per candidate. DQN contributes replayed transition learning
-    and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector
-    / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes
-    the offline support rule that value learning must not query invalid, ungenerated, or unavailable
-    actions. Q_H must respect validity masks and beat one-step greedy or model scoring on
-    cumulative root-normalized target gain under equal acquisition budget, with bounded oracle
-    lookahead as an upper bound.'
+    sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0},
+    actor-visible target descriptor z_e, selected-view history, budget state, scene-memory
+    summaries, and candidate tokens, then emit one continuous return value per candidate.
+    DQN contributes replayed transition learning and Bellman-style finite-action value targets;
+    Double DQN contributes the masked online-selector / target-evaluator backup to reduce
+    max-over-candidate overestimation; IQL contributes the offline support rule that value
+    learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect
+    validity masks and beat one-step greedy or model scoring on cumulative root-normalized
+    target gain under equal acquisition budget, with bounded oracle lookahead as an upper
+    bound.'
   formula:
     label: Finite-horizon candidate value
     tex: Q_H(s_t^{\mathrm{cf0}},a_t,z_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,z_e\right]

@@ -121,17 +121,18 @@
     &=
     sum_(k=0)^(K - 1) pi_(t,i,k)^"CORAL" u_k
   $,
-  qh_dueling_residual: $
+  qh_uncentered_residual: $
     #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
     =
     hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
     +
-    V_theta (#symb.rl.s_cf0, #symb.entity.target_desc, bold(H)_t)
-    +
-    A_(theta,i)^H
-    -
+    delta_(theta,i)^H (#symb.rl.s_cf0, #symb.entity.target_desc, bold(H)_t),
+    quad
+    cal(L)_delta
+    =
+    lambda_delta
     (1) / (abs(#symb.rl.action_set_t))
-    sum_(j in #symb.rl.action_set_t) A_(theta,j)^H
+    sum_(j in #symb.rl.action_set_t) (delta_(theta,j)^H)^2
   $,
   qh_candidate_token: $
     #symb.rl.candidate_token

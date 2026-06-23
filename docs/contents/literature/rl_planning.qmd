@@ -22,7 +22,7 @@ The RL literature is useful for ARIA-NBV only after the finite-candidate rollout
 ```{mermaid}
 flowchart TD
   A["Paper signals"] --> B["Rollout data contract"]
-  B --> C["Masked candidate-query Q_H"]
+  B --> C["Masked candidate-to-state Q_H"]
   C --> D["Optional IQL / actor-critic bridge"]
 ```
 
@@ -38,7 +38,7 @@ Use these local source files when tracing thesis claims back to papers:
 
 ### DQN, Double DQN, and IQL for Q_H {#q-h-and-dqn}
 
-DQN contributes the basic learning pattern for ARIA-NBV's {{< gls finite-horizon-q-function >}}. It identifies sparse or delayed rewards, correlated streams, and non-stationary behavior distributions as stability problems for deep RL, then uses experience replay to store transitions and train from random minibatches. It also motivates batched discrete-action scoring: the Atari network emits one value per valid action in one forward pass, while ARIA-NBV replaces those fixed heads with candidate-query tokens over a variable candidate table [@DBLP:journals/corr/MnihKSGAWR13].
+DQN contributes the basic learning pattern for ARIA-NBV's {{< gls finite-horizon-q-function >}}. It identifies sparse or delayed rewards, correlated streams, and non-stationary behavior distributions as stability problems for deep RL, then uses experience replay to store transitions and train from random minibatches. It also motivates batched discrete-action scoring: the Atari network emits one value per valid action in one forward pass, while ARIA-NBV replaces those fixed heads with candidate-to-state query tokens over a variable candidate table [@DBLP:journals/corr/MnihKSGAWR13].
 
 Double DQN is the first-path overestimation safeguard. Its source argues that Q-learning's maximization step can prefer overestimated action values and shows that separating action selection from evaluation reduces this bias. ARIA-NBV adopts that idea as a masked selector/evaluator backup over valid candidate-table entries; the exact equations live in the [training contract](../theory/rl_planning.qmd#q-h-training-contract) [@DoubleDQN-vanHasselt2015].
 
@@ -50,7 +50,7 @@ IQL contributes the offline support rule. Its source emphasizes that offline RL 
 |---|---|---|---|
 | Trajectory Transformer | Offline control can be modeled as sequences of states, actions, and rewards; beam search can decode high-return trajectories. | Use bounded rollout and beam-search abstractions before training a large sequence model. | Do not start with a trajectory Transformer before typed rollout traces and oracle labels are trusted. |
 | Gumbel-Top-k | Ordered size-$k$ samples can be drawn without replacement, and stochastic beam search avoids enumerating the full sequence space. | Use after deterministic lookahead to diversify rollout data and reduce duplicate root-greedy traces. | Do not present stochastic beams as a substitute for deterministic oracle lookahead. |
-| DQN | Replayed minibatch Q-learning can reuse transitions, decorrelate sequential samples, and score all discrete valid actions in one forward pass. | Adopt replayed transition learning and batched finite-candidate scoring with candidate-query tokens. | Do not import Atari CNNs, epsilon-greedy schedules, score clipping, or emulator hyperparameters as defaults. |
+| DQN | Replayed minibatch Q-learning can reuse transitions, decorrelate sequential samples, and score all discrete valid actions in one forward pass. | Adopt replayed transition learning and batched finite-candidate scoring with candidate-to-state query tokens. | Do not import Atari CNNs, epsilon-greedy schedules, score clipping, or emulator hyperparameters as defaults. |
 | Double DQN | Separating action selection from action evaluation reduces max-operator overestimation. | Use masked fitted Double-Q as the first mandatory learned $Q_H$ method. | It reduces overestimation but does not solve offline support mismatch by itself. |
 | IQL | Offline RL should avoid querying unseen actions; value fitting uses an upper expectile over dataset actions before advantage-weighted policy extraction. | Keep as a second offline-RL ablation after the fitted Double-Q dataset and masks are stable. | Do not use IQL to skip the required finite-candidate $Q_H$ result. |
 | Soft Q / energy policies | Maximum-entropy policies can represent multimodal action distributions through energy/Q-shaped sampling. | Use as conceptual support for temperature-softmax candidate selection. | Not a first thesis algorithm. |

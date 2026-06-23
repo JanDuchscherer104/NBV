@@ -26,7 +26,8 @@ ground-truth meshes [@ProjectAria-ASE-2025], frozen EVL/EFM3D features
 [@EFM3D-straub2024], {{< gls oracle-rri >}} supervision inspired by VIN-NBV
 [@VIN-NBV-frahm2025], an ASE mesh/oracle counterfactual rollout loop, and a
 target-conditioned finite-candidate $Q_H$ value model, first implemented as a
-candidate-query Transformer over finite candidate sets.
+candidate-to-state query Transformer over finite candidate actions and fixed
+actor-visible state tokens.
 External mesh/oracle-compatible substrates are RQ4 support and scale evidence.
 Online discrete $Q_H$ is the RQ5 bridge after offline finite-candidate evidence,
 and continuous target-then-pose actor-critic policies are RQ6 headroom tests
@@ -59,7 +60,8 @@ The September deliverable is a reproducible target-aware
   temperature-softmax rollout data, with Gumbel-Top-k as preferred later
   diversity evidence;
 - a mandatory target-conditioned finite-candidate value model $Q_H$ trained from
-  ASE oracle rollout traces, first implemented as a candidate-query Transformer;
+  ASE oracle rollout traces, first implemented as a candidate-to-state query
+  Transformer;
 - final figures, ablations, and failure cases that report cumulative
   root-normalized target gain, diagnostic target RRI, and
   {{< gls acquisition-cost >}};
@@ -99,8 +101,9 @@ target record, a finite feasible candidate table, and a fixed acquisition
 budget, bounded oracle lookahead first exposes whether target-specific RRI has
 non-myopic headroom under the evaluated split, horizon, branch factor, and
 candidate distribution. When it does, a learned finite-horizon value model,
-first implemented as a candidate-query Transformer, should recover measurable
-headroom over myopic learned one-step selection after oracle re-evaluation.
+first implemented as candidate-to-state cross-attention over actor-visible
+target, map, history, and candidate tokens, should recover measurable headroom
+over myopic learned one-step selection after oracle re-evaluation.
 
 **Explicit non-claims.** The thesis does not claim real-device deployment,
 continuous actor-critic performance, Habitat/Isaac simulator performance,
@@ -115,7 +118,7 @@ meaningful oracle/evaluation sample.
 | Source family | Role in ARIA-NBV | Adopt | Do not adopt as thesis core |
 |---|---|---|---|
 | Project Aria / ASE / ATEK [@projectaria-engel2023; @ProjectAria-ASE-2025; @ATEK-DataStore-2025] | Actor-visible egocentric sensing and mesh-supervised substrate. | Poses, calibration, camera streams, semi-dense points, snippets, GT meshes for oracle labels. | Dense GT geometry, GT OBBs, or semantic labels as V1 actor input. |
-| EFM3D / EVL [@EFM3D-straub2024; @EVL-Doc-2025] | Local egocentric evidence and predicted object support. | DINO/EVL local evidence, pre-head features, OBB predictions, actor-visible target descriptors, support masks. | Treating predicted OBBs as GT, ignoring local extent limits, or treating EVL heads as the complete scene memory. |
+| EFM3D / EVL [@EFM3D-straub2024; @EVL-Doc-2025] | Local egocentric evidence and predicted object support. | EVL local evidence, pre-head features, OBB predictions, actor-visible target descriptors, support masks, and visibility-gated logged DINO descriptors as ablations. | Treating predicted OBBs as GT, ignoring local extent limits, treating EVL heads as the complete scene memory, or using projection-valid DINO samples as if they were visible observations. |
 | VIN-NBV [@VIN-NBV-frahm2025] | Closest quality-driven one-step candidate-ranking precedent. | Oracle RRI labels, ordinal ranking, learned myopic scorer baseline. | One-step greedy as sufficient for multi-step thesis claims. |
 | GenNBV / Hestia [@GenNBV-chen2024; @Hestia-lu2026] | Continuous-control and hierarchy references. | 5-DoF notation, target-then-pose factorization, directional observability ideas. | Coverage reward or continuous actor-critic as the first thesis-core result. |
 | PB-NBV / active 3DGS / downstream NBV [@PB-NBV-jia2025; @ActiveNeRF-pan2022; @FisherRF-jiang2024; @NextBestSense-strong2024; @li2025bestviewselectionssemantic; @ObjectCentricNBV-jeong2026; @FOVHPE-bae2025] | Proposal, uncertainty, semantic, object-focus, and simulator-bridge signals. | Utility-channel separation, candidate shortlist diagnostics, target-focus arguments. | Replacing mesh-supervised target RRI with projection, uncertainty, or downstream-task proxy labels. |
@@ -137,7 +140,7 @@ At step $t$, the actor-visible logged state is
 $$
 s_t^{\mathrm{obs}}
 =
-\left(P_t^{\mathrm{semi}}, F_t^{\mathrm{EVL}}, O_t^{\mathrm{pred}}, h_t, b_t\right),
+\left(P_t^{\mathrm{semi/fused}}, M_t^{\mathrm{ray}}, F_0^{\mathrm{EVL}}, F_t^{\mathrm{DINO@pt}}, O_t^{\mathrm{pred}}, h_t, b_t\right),
 $$
 
 while the privileged oracle state augments it with ASE GT assets:
@@ -155,12 +158,25 @@ label/evaluation assets. The planner state is
 $$
 s_t^{\mathrm{cf0}}
 =
-\left(F_0^{\mathrm{EVL}}, P_t, z_e, h_t, b_t, Q_t, m_t, \rho_t\right),
+\left(F_0^{\mathrm{EVL}}, P_t^{\mathrm{semi/fused}}, M_t^{\mathrm{ray}}, F_t^{\mathrm{DINO@pt}}, z_e, h_t, b_t, Q_t, m_t, \rho_t\right),
 $$
 
-where $Q_t=\{q_{t,i}\}_{i=1}^{N_t}$ is the finite candidate table,
-$m_{t,i}\in\{0,1\}$ is the hard validity mask, and $\rho_{t,i}$ is the
-invalid-reason code. The admissible actions are candidate indices:
+where $P_t^{\mathrm{semi/fused}}$ is the broad actor-visible point state,
+$M_t^{\mathrm{ray}}$ is a sparse occupied/free/unknown evidence map derived from
+logged observations and selected successor geometry, $F_0^{\mathrm{EVL}}$ is the
+root local EVL evidence field, $F_t^{\mathrm{DINO@pt}}$ is an optional
+visibility-gated logged-frame descriptor bank attached to semidense/fused
+points, and $O_t^{\mathrm{pred}}$ stores observed or predicted target
+hypotheses. EVL is fixed across counterfactual rollout unless a named ablation
+recomputes it; candidate successors may extend $P_t^{\mathrm{semi/fused}}$ and
+$M_t^{\mathrm{ray}}$ with selected geometry, free-space, support history, and
+directional memory, but not fresh RGB/DINO/EVL features from unvisited poses.
+Cube R-CNN-style outputs can enter $O_t^{\mathrm{pred}}$ as auxiliary target
+proposals or ROI descriptors after adaptation evidence; they are not the default
+broad scene memory. $Q_t=\{q_{t,i}\}_{i=1}^{N_t}$ is the finite candidate table,
+$m_{t,i}\in\{0,1\}$ is the hard validity mask, and
+$\rho_{t,i}$ is the invalid-reason code. The admissible actions are candidate
+indices:
 
 $$
 \mathcal{A}(s_t)
@@ -176,7 +192,7 @@ deployable claims:
 $$
 z_e^{\mathrm{oracle}}
 =
-\psi_{\mathrm{task}}\!\left(O_{\mathrm{GT}}, P_t^{\mathrm{semi}}, F_t^{\mathrm{EVL}}, I_{1:t}\right),
+\psi_{\mathrm{task}}\!\left(O_{\mathrm{GT}}, P_t^{\mathrm{semi/fused}}, F_0^{\mathrm{EVL}}, I_{1:t}\right),
 \qquad
 M_e =
 \operatorname{crop}\!\left(M_{\mathrm{GT}}, e\right).
@@ -282,7 +298,7 @@ f_\theta^{\mathrm{VIN}}(s_t^{\mathrm{cf0}},z_e,q_{t,i}).
 $$
 
 The mandatory planner is a masked finite-candidate value model, first
-implemented as a candidate-query Transformer:
+implemented as a candidate-to-state query Transformer:
 
 $$
 Q_{H,\theta}(s_t^{\mathrm{cf0}},z_e,q_{t,i})
@@ -326,7 +342,7 @@ flowchart LR
   OneStep --> Rollouts["Replayable rollout traces<br/>random-valid, greedy, lookahead, temp-softmax"]
   RRIOracle --> Rollouts
   Rollouts --> Headroom["Oracle headroom<br/>lookahead vs one-step greedy"]
-  Headroom --> QH["Finite-candidate Q_H<br/>candidate-query Transformer first"]
+  Headroom --> QH["Finite-candidate Q_H<br/>candidate-to-state query first"]
   QH --> Eval["Oracle re-evaluation<br/>endpoint target gain, recovered headroom, cost"]
   Eval --> Thesis["Thesis figures, ablations, failure cases"]
 ```
@@ -356,7 +372,7 @@ gantt
 
 | Dates | Milestone | Exit criteria |
 |---|---|---|
-| 2026-04-29 to 2026-05-10 | **M0 - Scope, repo, docs foundation** | Dirty worktree classified; available partial VIN offline store smoke path understood; Rerun inspector smoke command documented; compact proposal freeze and bibliography/source-policy audit tracked as advisor deliverables; candidate-query $Q_H$ thesis boundary adopted. |
+| 2026-04-29 to 2026-05-10 | **M0 - Scope, repo, docs foundation** | Dirty worktree classified; available partial VIN offline store smoke path understood; Rerun inspector smoke command documented; compact proposal freeze and bibliography/source-policy audit tracked as advisor deliverables; finite-candidate $Q_H$ thesis boundary adopted. |
 | 2026-05-11 to 2026-05-31 | **M1 - Data, cache, oracle correctness** | Offline store and RRI contracts stable; public M1 contract report records store/split/frame/CW90/candidate-alignment/depth-backprojection/Rerun normal-boundary-failure evidence; oracle throughput measured. |
 | 2026-06-01 to 2026-06-21 | **M2 - VIN baseline and scale check** | One-step VIN baseline reproducible; calibration and ranking plots available; ablation matrix fixed; LRZ sharding/storage plan and Zarr rollout/Q schema are ready enough for M3 scale work. |
 | 2026-06-22 to 2026-07-12 | **M3 - Entity/target-aware RRI and generation readiness** | V0 GT-OBB target RRI trusted on a small subset; V1 observed-target / GT-label contract and observed-only target selector defined; deterministic sharding, Slurm/DSS staging, and Zarr store checks pass before full-scale generation. |
@@ -538,8 +554,9 @@ the [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd).
 - keep rollout complexity bounded by explicit horizon, branch factor, and beam
   width;
 - train $Q_H$ as a finite-candidate value model, first implemented as a
-  candidate-query Transformer over scene, target, history, and candidate tokens
-  to predict one masked bounded-horizon Q value per candidate; scalar motion or
+  candidate-to-state query Transformer over target, ray-aware map, local EVL,
+  history, budget, and candidate tokens to predict one masked bounded-horizon Q
+  value per candidate; candidate-candidate self-attention, scalar motion, and
   rule penalties are extensions;
 - require hard validity masks and explicit invalid reason codes in Q_H data;
 - require learned $Q_H$ selected actions to be oracle-evaluated under equal
@@ -629,8 +646,8 @@ architecture toggles.
 | Objective | scene RRI; target root gain; target RRI diagnostic; log-gain ablation | endpoint target gain, cumulative target-root gain, quality-cost curves |
 | Planner | random-valid; learned one-step scorer; one-step oracle greedy; bounded oracle lookahead; $Q_H$ | oracle-lookahead headroom, recovered headroom, and oracle-evaluated endpoint gain under equal budget |
 | Invalidity | hard mask; hard mask plus validity head; scalar penalty only after masks work | invalid-action rate, value leakage, invalid-reason distribution |
-| Ordinal/scalar loss | CORAL; balanced CORAL; focal threshold; auxiliary Huber | calibration, Spearman correlation, top-k hit, confusion structure |
-| State richness | CF0 geometry-only; selected synthetic observations; optional directional observability | planning improvement, support gap, overfitting gap |
+| Ordinal/scalar loss | one-step CORAL; balanced CORAL; focal threshold; finite-horizon Huber or quantile return | calibration, Spearman correlation, top-k hit, confusion structure, return-unit calibration |
+| State richness | CF0 geometry-only; ray-aware occupied/free/unknown memory; selected synthetic observations; visibility-gated DINO; optional directional observability | planning improvement, support gap, overfitting gap |
 | Scale and online bridge | small trusted subset; scene-level held-out subset; full 100 GT-mesh scenes; external mesh/oracle-compatible substrate; RQ5 online discrete $Q_H$ | confidence intervals, coverage report, oracle throughput, recovered headroom under matched budgets |
 
 ## Evidence Reporting Contract {#roadmap-evidence-contract}

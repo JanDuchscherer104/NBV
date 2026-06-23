@@ -18,7 +18,8 @@ The thesis-facing recommendation is deliberately split by claim strength:
 |---|---|---|
 | EFM3D exposes DINO tokens or maps, lifted voxel features, neck features, head outputs, voxel poses/extents, and actor-visible OBB predictions. | implementation fact | These are valid representation ablations and diagnostics. |
 | ATEK/ASE exposes semidense world points, uncertainty, observation support, and scene-scale volume bounds. | implementation fact | These are the broad actor-visible geometry substrate. |
-| Compressed DINO features attached to semidense world points are the best first serious scene embedding for NBV. | hypothesis | Treat this as an ablation to build, not as current code. |
+| A sparse ray-aware occupied/free/unknown map is the first persistent memory upgrade beyond local EVL support. | design decision | Preserve visibility, free space, unknown space, support count, uncertainty, and directional history before adding appearance descriptors. |
+| Compressed DINO features attached to semidense world points are a useful appearance-memory ablation after visibility gating. | implemented sampling primitive; cache/training schema still planned | Use the reader-side helper for experiments, but do not treat it as a persisted rollout feature bank or as a substitute for geometry. |
 | Target-specific RRI remains the utility and oracle-evaluation signal. | project decision | Scene embeddings are inputs to target-conditioned RRI and $Q_H$, not replacement objectives. |
 
 Related pages: [EFM3D/EVL literature](../literature/efm3d.qmd), [ASE dataset](../ase_dataset.qmd), [semi-dense point clouds](semi-dense-pc.qmd), [candidate sampling](candidate_sampling_target_selection.qmd), [candidate-view dependence](candidate_view_dependence.qmd), and [finite-candidate rollout / $Q_H$](rl_planning.qmd).
@@ -53,13 +54,41 @@ $$
 \text{EVL} =
 \text{actor-visible target support and local evidence},
 \qquad
-\text{semidense/fused points} =
-\text{broad scene memory}.
+\text{ray-aware semidense/fused memory} =
+\text{persistent occupied/free/unknown state}.
 $$
+
+## Persistent Ray-Aware Evidence Map
+
+The broad scene memory should first preserve observation evidence, not high-dimensional appearance. A derived sparse map $M_t^{\mathrm{ray}}$ can aggregate actor-visible observations into cells with surface evidence, free-space evidence, known/unknown status, support count, uncertainty, last-seen metadata, optional compressed visual descriptors, and directional observation history:
+
+$$
+M_t^{\mathrm{ray}}(v)
+=
+\left[
+L_v^{\mathrm{surf}},
+L_v^{\mathrm{free}},
+m_v^{\mathrm{known}},
+c_v,
+\sigma_v,
+\tau_v,
+D_v,
+\mu_v^{\mathrm{DINO}},
+\Sigma_v^{\mathrm{DINO}}
+\right].
+$$
+
+This map is still actor-visible because it is derived from logged observations and selected successor geometry. It is more suitable than a raw point cloud as the first persistent neural state because semidense point density depends on texture, motion, and tracking behavior, while the value model needs stable distinctions among observed surface, observed free space, and unknown space. Raw points remain useful for projection, normal estimation, target support, and audit visualizations.
+
+## Storage and Compute Budget
+
+The representation budget should make sparse actor-visible geometry the default and make high-dimensional tensors an explicit ablation. A dense EVL grid is valuable local evidence, but its memory and compute scale with volume. A 48^3 grid with 32 fp16 channels is already about 7 MB before metadata; 96^3 is about 57 MB; 128^3 is about 134 MB. Runtime activations for the 3D U-Net are larger than these stored tensors.
+
+Raw image-foundation storage has the same problem. Storing 100k points with 768 fp16 DINO dimensions is about 154 MB before metadata. A 32-dimensional compressed fp16 descriptor for the same points is about 6.4 MB, and most $Q_H$ rows should consume pooled target/candidate summaries rather than raw point descriptors. The default cache should therefore store sparse occupied/free/unknown evidence, support counts, uncertainty, history, masks, and compressed pooled descriptors. Raw DINO tensors, raw EVL feature volumes, larger EVL extents, global dense fusion, and renderable fields should be short-lived diagnostics or named ablation stores.
 
 ## Semidense + DINO Point Tokens
 
-The most promising first non-head representation is a point-attached feature bank. For each actor-visible semidense or fused point $j$, maintain a token
+The first appearance extension is a point-attached feature bank. For each actor-visible semidense or fused point $j$, maintain a token
 
 $$
 x_j^{\mathrm{pt}}
@@ -73,7 +102,7 @@ x_j^{\mathrm{pt}}
 \right],
 $$
 
-where $p_j\in\mathbb{R}^3$ is the world point, $\tilde f_j^{\mathrm{DINO}}$ is a compressed DINO descriptor sampled from valid point observations, $\sigma_j^{-1}$ is an uncertainty/confidence signal such as inverse distance standard deviation or a monotone transform of it, $n_j$ is the number of supporting observations, and $a_j^{\mathrm{hist}}$ stores compact history/support metadata.
+where $p_j\in\mathbb{R}^3$ is the world point, $\tilde f_j^{\mathrm{DINO}}$ is a compressed DINO descriptor sampled from visibility-gated logged point observations, $\sigma_j^{-1}$ is an uncertainty/confidence signal such as inverse distance standard deviation or a monotone transform of it, $n_j$ is the number of supporting observations, and $a_j^{\mathrm{hist}}$ stores compact history/support metadata.
 
 This is a planned representation candidate, not a current persisted cache schema. A future point-cache row could include:
 
@@ -84,13 +113,63 @@ obs_count
 dino_feature_compressed
 frame_ids
 projection_validity
+visibility_or_observation_mask
 ```
 
 Raw 768-dimensional DINO storage should not be the default. Use compression first, for example PCA, random projection, product quantization, or a learned bottleneck trained under the RRI/value task.
 
+## Logged-Frame Feature Projection
+
+The clean feature-bank construction is the sparse-point analogue of EFM3D voxel lifting. Each actor-visible point is projected into logged RGB frames with the same pose and calibration contract that EFM3D uses for local voxels:
+
+$$
+p_{j,c,\tau}
+=
+T_{c_\tau\leftarrow w}\,p_j,
+\qquad
+(u_{j,\tau}, v_{j,\tau}, \alpha_{j,\tau})
+=
+\pi_{\kappa_\tau}(p_{j,c,\tau}),
+$$
+
+where $p_j$ is a semidense or fused world point, $T_{c_\tau\leftarrow w}$ is the inverse logged camera pose, $\pi_{\kappa_\tau}$ is the calibrated camera projection, and $\alpha_{j,\tau}$ is the projection-valid mask. Projection validity is not visibility: a background point can project into the image even when a foreground surface occluded it in that frame. The descriptor sample is
+
+$$
+f_{j,\tau}
+=
+\operatorname{Sample}\!\left(F^{2D}_\tau,u_{j,\tau},v_{j,\tau}\right),
+$$
+
+with $F^{2D}_\tau$ coming from logged EFM3D/DINO feature maps such as `rgb/feat2d_upsampled`, not from rendered or unvisited views. Valid multi-view samples are therefore pooled with actor-visible visibility and support weights:
+
+$$
+m_{j,\tau}^{\mathrm{vis}}
+=
+\alpha_{j,\tau}\,
+m_{j,\tau}^{\mathrm{obs/depth}}\,
+m_{j,\tau}^{\mathrm{quality}},
+\qquad
+w_{j,\tau}
+=
+m_{j,\tau}^{\mathrm{vis}}\,q_j\,r_{j,\tau},
+\qquad
+\bar f_j
+=
+\operatorname{Compress}\!\left(
+  \frac{\sum_\tau w_{j,\tau} f_{j,\tau}}
+       {\sum_\tau w_{j,\tau}+\varepsilon}
+\right),
+$$
+
+where $m_{j,\tau}^{\mathrm{obs/depth}}$ comes from native semidense observation lineage when available, otherwise a depth-consistency or conservative z-buffer gate; $q_j$ is a point-confidence term such as inverse distance uncertainty or observation count; and $r_{j,\tau}$ is an optional logged-view weight for view angle, recency, or frame quality. The uncompressed pooled descriptor, valid-frame count, point ids, frame ids, feature source, compression id, and masks are provenance fields; they are not oracle labels.
+
+This projection can extend beyond the root EVL voxel cube because the carrier is the semidense/fused point set, not the final local EVL grid. It still cannot invent image evidence for counterfactual future poses. Counterfactual successors may add selected geometry, support counts, and history metadata, but they may not attach fresh RGB/DINO features unless a separate actor-visible renderer or modality generator is implemented and validated.
+
+The current ARIA-NBV helper `aria_nbv/aria_nbv/vin/scene_feature_bank.py` implements this `SceneFeatureBank`-style reader-side projection/pooling primitive for logged features at world points, including provenance checks and descriptor compression. It is useful for experiments and tests. The missing piece is still a durable offline cache writer, manifest contract, and training-reader integration with explicit visibility lineage or depth/z-buffer gates.
+
 ## Candidate-Query Pooling
 
-For target-conditioned finite-candidate scoring, the point bank should be queried by both target support and candidate geometry. Let $\mathcal{P}_t=\{x_j^{\mathrm{pt}}\}_{j=1}^{N_t}$, $\hat B_e$ be an observed or predicted target OBB, and $\mathrm{Fr}(q_{t,i})$ be the candidate frustum. The minimum query set is:
+For target-conditioned finite-candidate scoring, the point bank and ray-aware map should be queried by both target support and candidate geometry. Let $\mathcal{P}_t=\{x_j^{\mathrm{pt}}\}_{j=1}^{N_t}$, $\hat B_e$ be an observed or predicted target OBB, and $\mathrm{Fr}(q_{t,i})$ be the candidate frustum. The minimum point-pooling baseline is:
 
 $$
 z_e
@@ -119,7 +198,15 @@ z_{e,i}^{\cap}
 \right).
 $$
 
-The candidate token can then combine target crop, candidate frustum, target-frustum intersection, local EVL reads, directional memory, mask/reason, and candidate pose features:
+These pools are support summaries. They do not by themselves model what a candidate camera would see, because frustum membership ignores occlusion ordering and empty rays. The candidate observation model should therefore add a ray-aware query over $M_t^{\mathrm{ray}}$:
+
+$$
+R_{t,i}^{\mathrm{ray}}
+=
+\operatorname{RenderQuery}\!\left(M_t^{\mathrm{ray}},q_{t,i},\hat B_e\right),
+$$
+
+with channels such as nearest observed surface depth, free-space length, unknown-space length, hit/empty mask, target-membership weight, support count, uncertainty, and directional novelty. The candidate token can then combine target crop, candidate support pools, ray-aware candidate query, local EVL reads, directional memory, mask/reason, and candidate pose features:
 
 $$
 g_{t,i}
@@ -129,12 +216,13 @@ g_{t,i}
   z_e,\;
   z_i^{\mathrm{fr}},\;
   z_{e,i}^{\cap},\;
+  R_{t,i}^{\mathrm{ray}},\;
   \operatorname{Read}_{\mathrm{EVL}}(q_{t,i}, \hat B_e),\;
   m_{t,i}^{\mathrm{dir}}
 \right).
 $$
 
-The pooling operator can be a simple masked mean/max for the first ablation, then a point encoder, sparse convolution, cross-attention query, or Set Transformer as complexity becomes justified.
+The pooling operator can be a simple masked mean/max for the first ablation, then a point encoder, sparse convolution, or candidate-to-state cross-attention query as complexity becomes justified. Candidate-to-candidate self-attention is an ablation for policy context or diversity, not the default definition of a physical $Q(s,a_i)$ value.
 
 ## Ablation Ladder
 
@@ -144,10 +232,11 @@ Use an ordered ladder so gains can be attributed to representation quality rathe
 |---|---|---|
 | 0 | current EVL heads plus implemented semidense projection statistics | Baseline already closest to current VIN/RRI code. |
 | 1 | semidense-only point state: position, uncertainty, support, history | Test whether broad actor-visible geometry beats local heads. |
-| 2 | semidense + compressed DINO point cache | First serious scene embedding hypothesis. |
-| 3 | local EVL internals: `voxel/feat`, `neck/occ_feat`, `neck/obb_feat`, `rgb/feat2d_upsampled` | Test whether pre-head EFM3D features recover lost evidence. |
-| 4 | point or sparse encoders over the feature bank | Move from hand pooling to learned queryable scene memory. |
-| 5 | external geometry/3D foundation models | Future bridge after the local EFM3D/ATEK evidence stack is exhausted. |
+| 2 | sparse ray-aware occupied/free/unknown map plus target-aware candidate query | Test whether stable visibility and unknown-space state beats frustum pooling. |
+| 3 | local EVL internals: `voxel/feat`, `neck/occ_feat`, `neck/obb_feat`, `rgb/feat2d_upsampled` | Test whether pre-head EFM3D features recover lost local target evidence. |
+| 4 | semidense/map cells plus compressed visible DINO descriptors | Test whether appearance helps after geometry, visibility, and provenance are fixed. |
+| 5 | point or sparse encoders over the feature bank | Move from hand pooling to learned queryable scene memory. |
+| 6 | external geometry/3D foundation models | Future bridge after the local EFM3D/ATEK evidence stack is exhausted. |
 
 The active utility throughout the ladder is target-specific {{< gls relative-reconstruction-improvement >}} and finite-candidate $Q_H$, not generic reconstruction coverage.
 
@@ -163,9 +252,9 @@ Actor inputs must not use:
 
 - GT meshes, GT OBB crops, GT semantic object identities, or all-candidate rendered point clouds;
 - oracle RRI values except as labels, evaluation metrics, or fitted value targets;
+- unvisited-candidate RGB, DINO, EVL, detector, or ROI features unless a separate validated actor-visible modality generator provides them;
 - invalid-action outcomes as soft low-RRI values. Invalidity remains a mask/reason contract.
 
 ## Current Documentation Contract
 
-For the advisor narrative, describe EVL as a local evidence and actor-visible target-support provider. Describe broader scene state as semidense/fused point evidence, optionally augmented with lifted image-foundation features. Any point-cache schema must be presented as planned/non-implemented until a writer, manifest, and training reader exist.
-
+For the advisor narrative, describe EVL as a local evidence and actor-visible target-support provider. Describe broader scene state as semidense/fused observations accumulated into ray-aware occupied/free/unknown memory, optionally augmented with visibility-gated image-foundation descriptors. Any point-cache or map-cache schema must be presented as planned/non-implemented until a writer, manifest, and training reader exist.

@@ -4,135 +4,267 @@ symbols:
   oracle.rri:
     tex: '\mathrm{RRI}'
     typst: '#symb.oracle.rri'
+    description: Relative Reconstruction Improvement score for a candidate view.
+    thesis_list: true
+    order: 10
   oracle.points:
     tex: '\mathcal{P}'
     typst: '#symb.oracle.points'
+    description: Actor-visible point set accumulated from observed or replayed views.
+    thesis_list: true
+    order: 20
   oracle.points_q:
     tex: '\mathcal{P}_q'
     typst: '#symb.oracle.points_q'
+    description: Candidate-view point contribution used in oracle or counterfactual updates.
+    thesis_list: true
+    order: 30
   oracle.candidates:
     tex: '\mathcal{Q}'
     typst: '#symb.oracle.candidates'
+    description: Finite candidate-view set considered by the planner.
+    thesis_list: true
+    order: 40
   oracle.candidates_t:
     tex: '\mathcal{Q}_t'
     typst: '#symb.oracle.candidates_t'
+    description: Candidate-view set available at rollout step t.
+    thesis_list: true
+    order: 50
   oracle.candidate_qti:
     tex: 'q_{t,i}'
     typst: '#symb.oracle.candidate_qti'
+    description: Candidate pose i at rollout step t.
+    thesis_list: true
+    order: 60
   oracle.depth_q:
     tex: '\boldsymbol{D}_q'
     typst: '#symb.oracle.depth_q'
+    description: Oracle-rendered or candidate-specific depth map for a proposed view.
+    thesis_list: true
+    order: 70
   oracle.acc:
     tex: 'D_{P\to M}'
     typst: '#symb.oracle.acc'
+    description: Point-to-mesh directional error component.
+    thesis_list: true
+    order: 80
   oracle.comp:
     tex: 'D_{M\to P}'
     typst: '#symb.oracle.comp'
+    description: Mesh-to-point directional error component.
+    thesis_list: true
+    order: 90
   rri.cd_value:
     tex: 'D'
-    typst: '#eqs.rri.cd'
+    typst: '#symb.oracle.err'
+    description: Aggregate point-mesh reconstruction error used by RRI definitions.
+    thesis_list: true
+    order: 100
   ase.mesh:
     tex: '\mathcal{M}^{\mathrm{GT}}'
     typst: '#symb.ase.mesh'
+    description: Ground-truth scene mesh used for oracle labels and evaluation.
+    thesis_list: true
+    order: 110
   ase.mesh_target:
     tex: '\mathcal{M}_e^{\mathrm{GT}}'
     typst: '#symb.ase.mesh_target'
+    description: Ground-truth mesh crop for target e.
+    thesis_list: true
+    order: 120
   ase.faces:
     tex: '\mathcal{F}^{\mathrm{GT}}'
     typst: '#symb.ase.faces'
+    description: Ground-truth mesh faces used in point-mesh distance calculations.
+    thesis_list: true
+    order: 130
   ase.traj:
     tex: '\boldsymbol{T}_{\mathrm{rig}}^{\mathrm{w}}(t)'
     typst: '#symb.ase.traj'
+    description: Project Aria rig pose in the world frame at time t.
+    thesis_list: true
+    order: 140
   ase.traj_final:
     tex: '\boldsymbol{T}_{\mathrm{rig}}^{\mathrm{w}}(T)'
     typst: '#symb.ase.traj_final'
+    description: Final rig pose used as an anchor for gravity-aligned local fields.
+    thesis_list: true
+    order: 150
   vin.rri:
     tex: 'r'
     typst: '#symb.vin.rri'
+    description: Target or scene RRI value used as a model target.
+    thesis_list: true
+    order: 160
   vin.rri_hat:
     tex: '\hat{r}'
     typst: '#symb.vin.rri_hat'
+    description: Predicted RRI value emitted by the learned scorer.
+    thesis_list: true
+    order: 170
   vin.loss:
     tex: '\mathcal{L}'
     typst: '#symb.vin.loss'
+    description: Training loss for scorer or value-model objectives.
+    thesis_list: true
+    order: 180
   vin.cand_valid:
     tex: 'm'
     typst: '#symb.vin.cand_valid'
+    description: Candidate validity indicator used by scorer diagnostics.
+    thesis_list: true
+    order: 190
   entity.rri_e:
     tex: '\mathrm{RRI}_e'
     typst: '#symb.entity.rri_e'
+    description: Target-specific Relative Reconstruction Improvement for entity e.
+    thesis_list: true
+    order: 200
   rl.s:
     tex: 's'
     typst: '#symb.rl.s'
+    description: Abstract planning state.
+    thesis_list: true
+    order: 210
   rl.a:
     tex: 'a'
     typst: '#symb.rl.a'
+    description: Action index selecting a candidate row.
+    thesis_list: true
+    order: 220
   rl.r:
     tex: 'r'
     typst: '#symb.rl.r'
+    description: Scalar reward or immediate gain.
+    thesis_list: true
+    order: 230
   rl.G:
     tex: 'G'
     typst: '#symb.rl.G'
+    description: Finite-horizon return accumulated across rollout steps.
+    thesis_list: true
+    order: 240
   rl.mdp_nbv:
     tex: '\mathcal{M}_{\mathrm{NBV}}'
     typst: '#symb.rl.mdp_nbv'
+    description: Target-conditioned finite-candidate NBV decision process.
+    thesis_list: true
+    order: 250
   rl.action_set:
     tex: '\mathcal{A}(s_t)'
     typst: '#symb.rl.action_set'
+    description: Valid action set available in state s_t.
+    thesis_list: true
+    order: 260
   rl.transition:
     tex: 'T'
     typst: '#symb.rl.transition'
+    description: State-transition operator for selected candidate actions.
+    thesis_list: true
+    order: 270
   rl.s_hist:
     tex: 's_t^{\mathrm{hist}}'
     typst: '#symb.rl.s_hist'
+    description: Logged historic snippet state at rollout step t.
+    thesis_list: true
+    order: 280
   rl.s_off:
     tex: 's_t^{\mathrm{off}}'
     typst: '#symb.rl.s_off'
+    description: Persisted offline sample state used by training readers.
+    thesis_list: true
+    order: 290
   rl.s_cf0:
     tex: 's_t^{\mathrm{cf0}}'
     typst: '#symb.rl.s_cf0'
+    description: Minimal actor-visible counterfactual state.
+    thesis_list: true
+    order: 300
   rl.s_cf_geom:
     tex: 's_t^{\mathrm{cf+}}'
     typst: '#symb.rl.s_cf_geom'
+    description: Geometry-enriched counterfactual successor state.
+    thesis_list: true
+    order: 310
   rl.s_oracle:
     tex: 's_t^{\mathrm{oracle}}'
     typst: '#symb.rl.s_oracle'
+    description: Oracle-only state used for labels, upper bounds, and evaluation.
+    thesis_list: true
+    order: 320
   rl.reward_target:
     tex: 'r_t^e'
     typst: '#symb.rl.reward_target'
+    description: Target-specific reward at rollout step t.
+    thesis_list: true
+    order: 330
   rl.return_h:
     tex: 'G_t^{(H)}'
     typst: '#symb.rl.return_h'
+    description: H-step finite-horizon return from rollout step t.
+    thesis_list: true
+    order: 340
   rl.qh:
     tex: 'Q_H'
     typst: '#symb.rl.qh'
+    description: Finite-horizon candidate-value function.
+    thesis_list: true
+    order: 350
   rl.gamma:
     tex: '\gamma'
     typst: '#symb.rl.gamma'
+    description: Return discount factor.
+    thesis_list: true
+    order: 360
   rl.H:
     tex: 'H'
     typst: '#symb.rl.H'
+    description: Planning or rollout horizon length.
+    thesis_list: true
+    order: 370
   rl.validity_mask:
     tex: 'm_{t,i}'
     typst: '#symb.rl.validity_mask'
+    description: Hard validity mask for candidate i at rollout step t.
+    thesis_list: true
+    order: 380
   rl.invalid_reason:
     tex: '\rho_{t,i}'
     typst: '#symb.rl.invalid_reason'
+    description: Invalid-action reason code for candidate i at rollout step t.
+    thesis_list: true
+    order: 390
   rl.target:
     tex: 'e_t'
     typst: '#symb.rl.target'
+    description: Selected target entity at rollout step t.
+    thesis_list: true
+    order: 400
   rl.budget:
     tex: 'b_t'
     typst: '#symb.rl.budget'
+    description: Remaining acquisition budget at rollout step t.
+    thesis_list: true
+    order: 410
   rl.acquisition_cost:
     tex: 'C(\tau)'
     typst: '#symb.rl.acquisition_cost'
+    description: Acquisition cost of a selected trajectory.
+    thesis_list: true
+    order: 420
   shape.Nq:
     tex: 'N_q'
     typst: '#symb.shape.Nq'
+    description: Number of candidate views in a candidate table.
+    thesis_list: true
+    order: 430
   shape.K:
     tex: 'K'
     typst: '#symb.shape.K'
+    description: Number of ordinal bins or discrete levels when used in scorer losses.
+    thesis_list: true
+    order: 440
 
 equations:
   rri.cd:

@@ -35,6 +35,7 @@ metadata:
     - ".agents/references/source_order.md#role-split"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
+    - ".agents/references/thesis_code_links.md"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
   context7_refs:
@@ -90,7 +91,8 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 ## Rules
 
 1. Inspect nearest docs guidance, target imports, adjacent sections,
-   bibliography style, labels, and `docs/typst/shared/`.
+   bibliography style, labels, thesis-to-code link tier, and
+   `docs/typst/shared/`.
 2. Use shared notation, glossary, and equations before inventing local symbols;
    add recurring terms or equations to shared modules first.
 3. Keep notation policy, math-attachment details, claim discipline, figure/table
@@ -107,15 +109,18 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 1. Choose the task mode and read only its required references.
 2. If notation changes, check `docs/typst/shared` and update the shared module
    before using the symbol in thesis text.
-3. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
+3. If thesis prose links to implementation code, classify the link with
+   `.agents/references/thesis_code_links.md`: use `#gh` for final-worthy pinned
+   anchors and `#gh-wip` / `#gh-symbol` for removable drafting aids.
+4. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
    read `references/aria-nbv-notation.md`; for package-backed layouts or
    slide templates, also read `references/packages/index.md` and
    `references/slides.md` as relevant.
-4. If prose changes, draft claims/evidence first, then convert to paragraphs.
-5. If figures or Mermaid assets change, render them locally before inclusion.
-6. Compile the document or fixture, render affected pages to PNG, inspect
+5. If prose changes, draft claims/evidence first, then convert to paragraphs.
+6. If figures or Mermaid assets change, render them locally before inclusion.
+7. Compile the document or fixture, render affected pages to PNG, inspect
    visually, then fix and repeat.
-7. Report exact compile/render/check commands and any skipped checks.
+8. Report exact compile/render/check commands and any skipped checks.
 
 ## References And Commands
 

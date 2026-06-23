@@ -1103,7 +1103,7 @@
     key: "finite-horizon-q-function",
     short: "Q_H",
     long: "Finite-Horizon Q Function",
-    description: "Target-conditioned candidate-query Transformer value function trained from ASE oracle rollout traces. Q_H emits one masked finite-horizon value per valid candidate-table action, using DQN-style replayed Bellman targets, Double-DQN selector/evaluator backups, and offline support constraints.",
+    description: "Target-conditioned finite-candidate value function trained from ASE oracle rollout traces. The first thesis implementation uses candidate-to-state query attention and emits one masked continuous-return value per valid candidate-table action, using DQN-style replayed Bellman targets, Double-DQN selector/evaluator backups, and offline support constraints.",
     group: "Model",
     custom: (
       anchor: "term-finite-horizon-q-function",
@@ -1117,7 +1117,7 @@
       category: "model.value",
       parent: "target-conditioned-nbv-mdp",
       definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
-      definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture is a candidate-query Transformer: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, and candidate tokens, then emit one value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
+      definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
       internal_links: (
         "docs/contents/thesis/questions.qmd#rq4-planning",
         "docs/contents/thesis/roadmap.qmd#roadmap-m5",
@@ -2555,11 +2555,43 @@
 
 #let register-aria-glossary() = register-glossary(aria-glossary-entries)
 #let print-aria-glossary(..args) = print-glossary(aria-glossary-entries, ..args)
-#let load-aria-glossary-references(..args) = hide(print-aria-glossary(
+#let aria-glossary-reference-stub(label-key) = [
+  #figure(kind: "glossarium_entry", supplement: "", numbering: none)[]#label(label-key)
+]
+#let aria-glossary-reference-stubs(entries, ..args) = {
+  let labels = ()
+  for entry in entries {
+    let key = entry.key
+    labels.push(key)
+    labels.push(key + ":pl")
+    labels.push(upper(key.first()) + key.slice(1))
+    labels.push(upper(key.first()) + key.slice(1) + ":pl")
+    if entry.short != none {
+      labels.push(key + ":short")
+    }
+    if entry.long != none {
+      labels.push(key + ":long")
+    }
+    if entry.at("description", default: none) != none {
+      labels.push(key + ":description")
+    }
+    if entry.at("custom", default: none) != none {
+      labels.push(key + ":custom")
+    }
+    if entry.at("longplural", default: none) != none {
+      labels.push(key + ":longplural")
+    }
+  }
+  for label-key in labels.dedup() {
+    aria-glossary-reference-stub(label-key)
+  }
+}
+#let load-aria-glossary-references(..args) = print-aria-glossary(
   show-all: true,
   disable-back-references: true,
+  user-print-glossary: aria-glossary-reference-stubs,
   ..args,
-))
+)
 
 #for entry in aria-glossary-entries [
   #metadata(aria-glossary-metadata(entry)) <aria-glossary-term>

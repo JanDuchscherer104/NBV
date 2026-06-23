@@ -81,7 +81,7 @@ VIN-NBV provides the direct precedent for sampled-view RRI prediction [@VIN-NBV-
 | foundation | key idea | ARIA-NBV transfer |
 |---|---|---|
 | Deep Sets [@DeepSets-zaheer2017] | Set functions should respect permutation symmetry. | Candidate-row order must not change the semantic output. |
-| Set Transformer [@SetTransformer-lee2019] | Attention can model interactions among set elements while preserving set symmetry. | Masked candidate self-attention is the default interaction test. |
+| Set Transformer [@SetTransformer-lee2019] | Attention can model interactions among set elements while preserving set symmetry. | Masked candidate self-attention is an interaction ablation after independent candidate-to-state calibration. |
 | FisherRF [@FisherRF-jiang2024] | View utility is expected information gain, and overlapping views have diminishing returns. | Candidate value can depend on target-local information overlap with other candidates and existing evidence. |
 | Multipoint expected improvement [@MultipointEI-marmin2015] | Batch Bayesian optimization treats selected points jointly, not as independent top-$q$ points. | A candidate table is a batch of possible measurements; redundancy and diversity matter. |
 | Adaptive submodularity [@AdaptiveSubmodularity-golovin2011] | Active sensing often has diminishing returns under partial observations. | Support, visibility, and information channels can behave submodularly even when RRI does not. |
@@ -174,7 +174,7 @@ The case for interaction is therefore strongest for $Q_H$, but it is still worth
 
 ## Recommended Architecture
 
-Use an independent calibrated base plus a zero-mean set residual. This preserves absolute RRI semantics while allowing set context to alter relative ranking:
+Use an independent calibrated base plus candidate-to-state residual context. This preserves absolute RRI semantics while allowing target, map, history, and budget evidence to alter finite-horizon value:
 
 $$
 \hat r_i^{\mathrm{abs}}
@@ -185,40 +185,32 @@ $$
 $$
 \delta_i
 =
-f_{\mathrm{set}}(x_i,\{x_j\}_{j=1}^{N_q},m_t),
-\qquad
-\bar\delta
-=
-\frac{1}{|\mathcal A_t|}
-\sum_{j\in\mathcal A_t}\delta_j,
+f_{\mathrm{query}}(x_i,\{T_e,M_t^{\mathrm{ray}},H_t,B_t,E_0^{\mathrm{EVL}}\}),
 $$
 
 $$
 \boxed{
-\hat r_i
+Q_{H,i}
 =
 \hat r_i^{\mathrm{abs}}
 +
-\lambda(\delta_i-\bar\delta)
+\delta_i^H
 }.
 $$
 
-For $Q_H$, the same pattern becomes the residual dueling value head:
+The residual can be regularized, but it should not be exactly mean-centred within each sampled candidate set. Adding or duplicating an unrelated valid row would change the per-set mean and therefore shift TD targets for other physical candidates.
+
+For $Q_H$, the same pattern becomes an uncentred residual value head:
 
 $$
 Q_H(s,e,q_i;\mathcal Q_t,m_t)
 =
 \hat r_\psi^e(s,q_i)
 +
-V_\theta(s,e,h_t)
-+
-A_{\theta,i}^{H}
--
-\frac{1}{|\mathcal A_t|}
-\sum_{j\in\mathcal A_t} A_{\theta,j}^{H}.
+\delta_{\theta,i}^{H}(s,e,q_i,M_t^{\mathrm{ray}},h_t).
 $$
 
-The mean is taken only over valid candidate rows.
+Candidate-candidate self-attention remains useful for policy logits, diversity, top-$k$ branch construction, or a separately evaluated context ablation, but it is not the default physical value estimator.
 
 ## Candidate Token And Pairwise Features
 
@@ -381,11 +373,12 @@ Use a staged ladder so gains can be attributed:
 | stage | model | purpose |
 |---|---|---|
 | A0 | Independent candidate scorer $\hat r_i=f(x_i)$ | Seminar/VIN-style baseline. |
-| A1 | DeepSets context $g=\rho(\sum_{j\in\mathcal A_t}\phi(x_j))$, $\hat r_i=f(x_i,g)$ | Test whether global candidate-set context helps. |
-| A2 | Masked Set Transformer $Z=\mathrm{SetTransformer}(X,m_t)$, $\hat r_i=h(Z_i)$ | Test candidate-candidate interaction. |
-| A3 | Set Transformer plus $\mathrm{SE}(3)$ relative bias | Test geometric interaction. |
-| A4 | Fisher/SCONE overlap bias $o_{ij}^{\mathrm{target}},o_{ij}^{\mathrm{frustum}},o_{ij}^{\mathrm{dir}}$ | Test information-overlap structure. |
-| A5 | Residual dueling $Q_H$ over finite candidates | Main finite-horizon use case. |
+| A1 | Candidate-to-state query $u_i=\mathrm{CrossAttn}(x_i,\{T_e,M_t,H_t,B_t,E_0^{\mathrm{EVL}}\})$ | Test target/map/history context without candidate-candidate value coupling. |
+| A2 | DeepSets context $g=\rho(\sum_{j\in\mathcal A_t}\phi(x_j))$, $\hat r_i=f(x_i,g)$ | Test whether global candidate-set context helps. |
+| A3 | Masked Set Transformer $Z=\mathrm{SetTransformer}(X,m_t)$, $\hat r_i=h(Z_i)$ | Test candidate-candidate interaction. |
+| A4 | Set Transformer plus $\mathrm{SE}(3)$ relative bias | Test geometric interaction. |
+| A5 | Fisher/SCONE overlap bias $o_{ij}^{\mathrm{target}},o_{ij}^{\mathrm{frustum}},o_{ij}^{\mathrm{dir}}$ | Test information-overlap structure. |
+| A6 | Uncentred residual $Q_H$ over finite candidates | Main finite-horizon use case. |
 
 The evaluation should report more than validation loss:
 
@@ -406,7 +399,7 @@ For $Q_H$, report endpoint target gain, oracle-lookahead recovery, per-scene win
 
 | risk | failure mode | mitigation |
 |---|---|---|
-| Absolute-label contamination | The same candidate receives different predicted immediate RRI depending on unrelated sampled rows. | Keep an independent absolute head and constrain set context to zero-mean residuals. |
+| Absolute-label contamination | The same candidate receives different predicted immediate RRI or TD value depending on unrelated sampled rows. | Keep an independent absolute head and use candidate-to-state residuals before candidate-candidate context. |
 | Generator overfitting | The model learns candidate-mixture quirks rather than geometry. | Vary ordering and mixture proportions; evaluate on held-out candidate generators. |
 | Duplicate instability | Adding duplicate candidates changes scores. | Add duplicate stress tests and inspect attention normalization. |
 | Mask leakage | Invalid rows influence valid scores. | Enforce hard masks in attention, argmax, losses, and bootstrap targets. |
@@ -416,6 +409,6 @@ For $Q_H$, report endpoint target gain, oracle-lookahead recovery, per-scene win
 
 The thesis-safe framing is:
 
-> The independent VIN-style scorer estimates point samples of a view-utility field over $\mathrm{SE}(3)$. ARIA-NBV tests whether a permutation-equivariant candidate-set model can exploit the local geometric and information-overlap structure of the sampled candidate population to improve candidate ranking and finite-horizon value prediction.
+> The independent VIN-style scorer estimates point samples of a view-utility field over $\mathrm{SE}(3)$. ARIA-NBV first tests whether candidate-to-state queries over target, map, history, and budget evidence improve finite-horizon value prediction, then ablates whether candidate-set context adds useful interaction without corrupting absolute target-gain calibration.
 
-This is grounded by VIN-NBV's RRI-based sampled-view ranking [@VIN-NBV-frahm2025], FisherRF's expected-information-gain view of candidate measurements [@FisherRF-jiang2024], Deep Sets and Set Transformer set modeling [@DeepSets-zaheer2017; @SetTransformer-lee2019], and geometric deep learning's symmetry principle [@GeometricDeepLearning-bronstein2021]. The implementation should stay conservative: retain the calibrated independent scorer and let candidate-set interaction act as a residual advantage correction unless experiments justify a stronger coupling.
+This is grounded by VIN-NBV's RRI-based sampled-view ranking [@VIN-NBV-frahm2025], FisherRF's expected-information-gain view of candidate measurements [@FisherRF-jiang2024], Deep Sets and Set Transformer set modeling [@DeepSets-zaheer2017; @SetTransformer-lee2019], and geometric deep learning's symmetry principle [@GeometricDeepLearning-bronstein2021]. The implementation should stay conservative: retain the calibrated independent scorer, use candidate-to-state context for the first residual value head, and let candidate-set interaction affect policy context or residual ablations only after duplicate-row and valid-count tests pass.
