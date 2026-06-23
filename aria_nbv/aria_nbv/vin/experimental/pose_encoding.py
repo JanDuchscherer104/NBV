@@ -9,7 +9,7 @@ from pydantic import Field
 from torch import Tensor, nn
 
 from ...utils import TargetConfig
-from ..pose_encoding import LearnableFourierFeatures, LearnableFourierFeaturesConfig
+from ..encoders import LearnableFourierFeatures, LearnableFourierFeaturesConfig
 
 
 class FourierFeatures(nn.Module):

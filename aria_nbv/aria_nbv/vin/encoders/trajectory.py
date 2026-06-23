@@ -1,4 +1,8 @@
-"""Trajectory encoder for EFM snippet rig poses."""
+"""Trajectory encoders for EFM snippet rig poses.
+
+The active trajectory encoder reuses the VIN candidate pose encoder per frame
+and then pools the encoded sequence into optional global context features.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +13,9 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor, nn
 
-from ..data_handling import EfmTrajectoryView
-from ..utils import TargetConfig
-from .pose_encoders import PoseEncodingOutput, R6dLffPoseEncoder, R6dLffPoseEncoderConfig
+from ...data_handling import EfmTrajectoryView
+from ...utils import TargetConfig
+from .pose import PoseEncodingOutput, R6dLffPoseEncoder, R6dLffPoseEncoderConfig
 
 
 @dataclass(slots=True)

@@ -19,6 +19,17 @@ from .candidate_scorer import (
     CandidateScorerConfig,
     CandidateScorerPrediction,
 )
+from .encoders import (
+    LearnableFourierFeatures,
+    LearnableFourierFeaturesConfig,
+    PoseEncoder,
+    PoseEncodingOutput,
+    R6dLffPoseEncoder,
+    R6dLffPoseEncoderConfig,
+    TrajectoryEncoder,
+    TrajectoryEncoderConfig,
+    TrajectoryEncodingOutput,
+)
 from .model_v3 import VinModelV3, VinModelV3Config
 from .models import (
     MultiStepCandidateScorer,
@@ -26,13 +37,6 @@ from .models import (
     TargetConditionedMyopicScorer,
     TargetConditionedMyopicScorerConfig,
 )
-from .pose_encoders import (
-    PoseEncoder,
-    PoseEncodingOutput,
-    R6dLffPoseEncoder,
-    R6dLffPoseEncoderConfig,
-)
-from .pose_encoding import LearnableFourierFeatures, LearnableFourierFeaturesConfig
 from .scene_feature_bank import (
     FeaturePoolingResult,
     PointFeatureBank,
@@ -42,11 +46,6 @@ from .scene_feature_bank import (
     pool_point_query,
     sample_logged_image_features_at_world_points,
     validate_actor_feature_provenance,
-)
-from .traj_encoder import (
-    TrajectoryEncoder,
-    TrajectoryEncoderConfig,
-    TrajectoryEncodingOutput,
 )
 from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
 

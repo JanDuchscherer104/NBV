@@ -5,8 +5,8 @@
 import torch
 from torch import nn
 
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig
 from aria_nbv.vin.modules import PoseConditionedGlobalPool
-from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
 
 
 def test_global_pool_positional_embedding_does_not_leak_into_values() -> None:

@@ -1,7 +1,8 @@
-"""Pose encoding modules for VIN candidate poses.
+"""Learnable Fourier feature encoders for VIN continuous inputs.
 
-For a learnable positional encoding, we implement Learnable Fourier Features
-as introduced in:
+`LearnableFourierFeatures` maps continuous vectors such as candidate pose
+features or normalized voxel XYZ coordinates into a trainable positional
+embedding. The implementation follows:
 
     *Learnable Fourier Features for Multi-Dimensional Spatial Positional Encoding*
     (NeurIPS 2021)
@@ -19,7 +20,7 @@ import torch
 from pydantic import Field
 from torch import Tensor, nn
 
-from ..utils import TargetConfig
+from ...utils import TargetConfig
 
 
 class LearnableFourierFeatures(nn.Module):
@@ -56,12 +57,19 @@ class LearnableFourierFeatures(nn.Module):
 
     @property
     def out_dim(self) -> int:
+        """Return the emitted feature dimension, including raw inputs when enabled."""
         return (self.input_dim if self.include_input else 0) + self.output_dim
 
     def forward(self, x: Tensor) -> Tensor:
-        """
+        """Encode vectors with learned sinusoidal features.
 
-        TODO: Ensure same signature as other pose encoders - i.e. ShellShPoseEncoder.forward (derive both from a common base class!)
+        Args:
+            x: ``Tensor["... D"]`` input vectors with ``D == input_dim``.
+
+        Returns:
+            ``Tensor["... E"]`` encoded vectors, optionally concatenated with
+            the raw input when `LearnableFourierFeaturesConfig.include_input`
+            is enabled.
         """
         if x.shape[-1] != self.input_dim:
             raise ValueError(f"Expected x[..., {self.input_dim}], got {tuple(x.shape)}.")
@@ -79,6 +87,7 @@ class LearnableFourierFeaturesConfig(TargetConfig[LearnableFourierFeatures]):
 
     @property
     def target_type(self) -> type[LearnableFourierFeatures]:
+        """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return LearnableFourierFeatures
 
     input_dim: int = Field(default=6, gt=0)

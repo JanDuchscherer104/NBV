@@ -118,6 +118,7 @@ from ...rri_metrics.coral import (
 from ...utils import TargetConfig
 from .._model_mixins import FrustumSamplingMixin
 from ..backbone_evl import EvlBackboneConfig
+from ..encoders import LearnableFourierFeaturesConfig
 from ..geometry import (
     build_scene_field as _build_scene_field,
 )
@@ -131,7 +132,6 @@ from ..modules import VinScorerHeadConfig
 from ..vin_utils import (
     largest_divisor_leq as _largest_divisor_leq,
 )
-from .pose_encoding import LearnableFourierFeaturesConfig
 from .types import EvlBackboneOutput, VinForwardDiagnostics, VinPrediction
 
 if TYPE_CHECKING:

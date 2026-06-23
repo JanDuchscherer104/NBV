@@ -10,8 +10,8 @@ from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
 from ..data_handling import VinSnippetView
+from .encoders import LearnableFourierFeaturesConfig
 from .geometry.voxel import pos_grid_from_pts_world
-from .pose_encoding import LearnableFourierFeaturesConfig
 
 
 @dataclass(slots=True)

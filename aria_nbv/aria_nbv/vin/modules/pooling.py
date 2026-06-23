@@ -5,7 +5,7 @@ from __future__ import annotations
 from torch import Tensor, nn
 from torch.nn import functional as functional
 
-from ..pose_encoding import LearnableFourierFeaturesConfig
+from ..encoders import LearnableFourierFeaturesConfig
 
 
 class PoseConditionedGlobalPool(nn.Module):

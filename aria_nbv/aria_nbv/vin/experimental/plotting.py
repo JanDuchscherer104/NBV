@@ -36,7 +36,7 @@ from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_w
 from .types import VinForwardDiagnostics
 
 if TYPE_CHECKING:
-    from .pose_encoding import LearnableFourierFeatures
+    from ..encoders import LearnableFourierFeatures
 
 
 @dataclass

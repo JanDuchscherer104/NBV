@@ -1,6 +1,7 @@
-"""Pose encoder variants for VIN candidates.
+"""Pose encoder modules for VIN candidate views.
 
-This module centralizes pose-encoding logic used by VIN-Core (v3).
+This module owns the active candidate-pose encoder interface and the R6D plus
+learnable Fourier feature implementation used by VIN-Core (v3).
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ from pydantic import Field, field_validator
 from pytorch3d.transforms import matrix_to_rotation_6d
 from torch import Tensor, nn
 
-from ..utils import TargetConfig
-from .pose_encoding import LearnableFourierFeatures, LearnableFourierFeaturesConfig
+from ...utils import TargetConfig
+from .fourier import LearnableFourierFeatures, LearnableFourierFeaturesConfig
 
 
 @dataclass(slots=True)
@@ -115,6 +116,7 @@ class R6dLffPoseEncoderConfig(TargetConfig[R6dLffPoseEncoder]):
 
     @property
     def target_type(self) -> type[R6dLffPoseEncoder]:
+        """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return R6dLffPoseEncoder
 
     kind: Literal["r6d_lff"] = "r6d_lff"

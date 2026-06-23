@@ -65,11 +65,15 @@ from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_l
 from ...utils import Optimizable, TargetConfig, optimizable_field
 from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbone_evl import EvlBackboneConfig
+from ..encoders import (
+    LearnableFourierFeaturesConfig,
+    R6dLffPoseEncoderConfig,
+    TrajectoryEncoder,
+    TrajectoryEncoderConfig,
+)
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
 from ..modules import PoseConditionedGlobalPool
-from ..pose_encoders import R6dLffPoseEncoderConfig
 from ..semidense_projection import SEMIDENSE_PROJ_DIM
-from ..traj_encoder import TrajectoryEncoder, TrajectoryEncoderConfig
 from ..vin_utils import (
     FieldBundle,
     GlobalContext,
@@ -79,13 +83,12 @@ from ..vin_utils import (
 )
 from .pointnext_encoder import PointNeXtSEncoder, PointNeXtSEncoderConfig
 from .pose_encoders import PoseEncoder, PoseEncoderConfig
-from .pose_encoding import LearnableFourierFeaturesConfig
 from .types import EvlBackboneOutput, VinPrediction, VinV2ForwardDiagnostics
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch
 
-    from .pose_encoding import LearnableFourierFeatures
+    from ..encoders import LearnableFourierFeatures
 
 
 FIELD_CHANNELS_V2: tuple[str, ...] = (

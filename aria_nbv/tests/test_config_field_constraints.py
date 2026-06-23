@@ -33,9 +33,8 @@ from aria_nbv.rerun_inspector._config import (
 from aria_nbv.rl import CounterfactualRLEnvConfig
 from aria_nbv.rollouts import RolloutDatasetWriterConfig, RolloutRecipeConfig, RolloutZarrStoreConfig
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 from aria_nbv.vin.experimental.model_v1_SH import VinModelConfig as ShVinModelConfig
-from aria_nbv.vin.pose_encoders import R6dLffPoseEncoderConfig
-from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
 
 
 def _recipe(**kwargs: object) -> RolloutRecipeConfig:

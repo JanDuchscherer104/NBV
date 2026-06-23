@@ -13,8 +13,13 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator
 
 from ...utils import TargetConfig
-from ..pose_encoders import PoseEncoder, PoseEncodingOutput, R6dLffPoseEncoder, R6dLffPoseEncoderConfig
-from ..pose_encoding import LearnableFourierFeaturesConfig
+from ..encoders import (
+    LearnableFourierFeaturesConfig,
+    PoseEncoder,
+    PoseEncodingOutput,
+    R6dLffPoseEncoder,
+    R6dLffPoseEncoderConfig,
+)
 from .spherical_encoding import ShellShPoseEncoderConfig
 
 
