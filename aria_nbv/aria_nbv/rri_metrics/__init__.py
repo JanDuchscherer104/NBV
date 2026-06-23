@@ -50,6 +50,15 @@ from .rollout import (
     target_point_mesh_error_before,
 )
 from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
+from .torch_rollout import (
+    TorchRolloutMetrics,
+    candidate_best_value,
+    candidate_masked_mean,
+    discounted_selected_return,
+    endpoint_log_gain_tensor,
+    endpoint_target_gain_tensor,
+    summarize_selected_rollout_tensors,
+)
 from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [
@@ -60,6 +69,7 @@ __all__ = [
     "RriErrorStats",
     "RriOrdinalBinner",
     "TargetRolloutMetricSummary",
+    "TorchRolloutMetrics",
     "VinMetrics",
     "VinMetricsConfig",
     "loss_key",
@@ -74,18 +84,24 @@ __all__ = [
     "RriEvaluationPointCloudSource",
     "RriRewardMode",
     "build_root_eval_pointcloud",
+    "candidate_best_value",
+    "candidate_masked_mean",
     "coral_expected_from_logits",
     "coral_logits_to_prob",
     "coral_loss",
     "coral_random_loss",
     "canonical_fuse_points",
+    "discounted_selected_return",
     "endpoint_log_gain",
+    "endpoint_log_gain_tensor",
     "endpoint_target_gain",
+    "endpoint_target_gain_tensor",
     "finite_horizon_target_return",
     "ordinal_labels_to_levels",
     "observed_prefix_frame_indices",
     "selected_target_reward",
     "selected_target_rri",
+    "summarize_selected_rollout_tensors",
     "summarize_target_rollout_metrics",
     "target_point_mesh_error_after",
     "target_point_mesh_error_before",
