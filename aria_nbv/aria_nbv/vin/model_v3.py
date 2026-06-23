@@ -636,71 +636,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         field = self.field_proj(field_in)
         return FieldBundle(field_in=field_in, field=field, aux=field_aux)
 
-    def _pool_voxel_points(
-        self,
-        pts_world: Tensor,
-        *,
-        grid_shape: tuple[int, int, int],
-        pool_grid: int,
-    ) -> Tensor:
-        """Downsample voxel center points to match the pooled token grid.
-
-        This keeps voxel-projection summaries aligned with the global pool
-        resolution and handles padded grids via symmetric center-cropping.
-
-        Args:
-            pts_world (Tensor["B, V, 3"] or Tensor["B, D, H, W, 3"]): Voxel centers in world frame.
-            grid_shape (tuple[int, int, int]): Target (D, H, W) grid shape.
-            pool_grid (int): G_pool (pooled grid size per axis).
-
-        Returns:
-            Tensor["B, P_proj, 3"]: Pooled voxel centers with P_proj = G_pool^3.
-        """
-
-        def _infer_pts_shape(num_pts: int, target_shape: tuple[int, int, int]) -> tuple[int, int, int]:
-            d_t, h_t, w_t = target_shape
-            if num_pts == d_t * h_t * w_t:
-                return target_shape
-            for pad in range(1, 4):
-                d_p, h_p, w_p = d_t + 2 * pad, h_t + 2 * pad, w_t + 2 * pad
-                if num_pts == d_p * h_p * w_p:
-                    return (d_p, h_p, w_p)
-            raise ValueError(
-                "pts_world size mismatch: "
-                f"got {num_pts} points; expected {d_t * h_t * w_t} "
-                f"for grid_shape {target_shape} or a symmetric padding variant.",
-            )
-
-        def _center_crop(grid: Tensor, target_shape: tuple[int, int, int]) -> Tensor:
-            d0, h0, w0 = int(grid.shape[1]), int(grid.shape[2]), int(grid.shape[3])
-            d_t, h_t, w_t = target_shape
-            if (d0, h0, w0) == target_shape:
-                return grid
-            if d0 < d_t or h0 < h_t or w0 < w_t:
-                raise ValueError(
-                    f"pts_world grid {d0, h0, w0} smaller than target {target_shape}.",
-                )
-            if (d0 - d_t) % 2 != 0 or (h0 - h_t) % 2 != 0 or (w0 - w_t) % 2 != 0:
-                raise ValueError(
-                    f"pts_world grid {d0, h0, w0} cannot be center-cropped to {target_shape}.",
-                )
-            d_start = (d0 - d_t) // 2
-            h_start = (h0 - h_t) // 2
-            w_start = (w0 - w_t) // 2
-            return grid[
-                :,
-                d_start : d_start + d_t,
-                h_start : h_start + h_t,
-                w_start : w_start + w_t,
-                :,
-            ]
-
-        return pool_voxel_points(
-            pts_world,
-            grid_shape=grid_shape,
-            pool_grid=pool_grid,
-        )
-
     @staticmethod
     def _apply_film(
         global_feat: Tensor,
@@ -1366,7 +1301,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             int(field_bundle.field.shape[-2]),
             int(field_bundle.field.shape[-1]),
         )
-        voxel_points = self._pool_voxel_points(
+        voxel_points = pool_voxel_points(
             pts_world,
             grid_shape=(
                 int(field_bundle.field.shape[-3]),

@@ -78,6 +78,7 @@ from aria_nbv.data_handling.vin_oracle_types import VinOracleBatch
 from aria_nbv.vin.model_v3 import SEMIDENSE_PROJ_DIM, VinModelV3, VinModelV3Config
 from aria_nbv.vin.traj_encoder import TrajectoryEncoderConfig
 from aria_nbv.vin.types import EvlBackboneOutput
+from aria_nbv.vin.vin_utils import pool_voxel_points
 
 
 def _identity_pose(batch: int) -> PoseTW:
@@ -283,14 +284,13 @@ def test_compute_global_context_shapes() -> None:
 
 
 def test_pool_voxel_points_handles_flat_and_grid() -> None:
-    model = _make_model()
     grid = 3
     pts_world = torch.zeros((1, grid, grid, grid, 3), dtype=torch.float32)
-    tokens_grid = model._pool_voxel_points(pts_world, grid_shape=(grid, grid, grid), pool_grid=2)
+    tokens_grid = pool_voxel_points(pts_world, grid_shape=(grid, grid, grid), pool_grid=2)
     assert tokens_grid.shape == (1, 8, 3)
 
     flat = pts_world.reshape(1, -1, 3)
-    tokens_flat = model._pool_voxel_points(flat, grid_shape=(grid, grid, grid), pool_grid=2)
+    tokens_flat = pool_voxel_points(flat, grid_shape=(grid, grid, grid), pool_grid=2)
     assert tokens_flat.shape == (1, 8, 3)
 
 
