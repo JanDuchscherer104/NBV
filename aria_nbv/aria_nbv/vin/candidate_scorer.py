@@ -119,7 +119,8 @@ CandidateScorerConfig: TypeAlias = VinModelV3Config
 This alias is intentionally narrow until a concrete target-conditioned or
 finite-horizon scorer exists. The expected expansion point is a discriminated
 union such as ``VinModelV3Config | TargetConditionedMyopicScorerConfig`` once
-the second config can be instantiated and tested end-to-end.
+the second config can be instantiated and tested end-to-end. Non-runnable
+scaffolds for those planned families live under `aria_nbv.vin.models`.
 """
 
 

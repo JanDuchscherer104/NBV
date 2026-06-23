@@ -20,6 +20,12 @@ from .candidate_scorer import (
     CandidateScorerPrediction,
 )
 from .model_v3 import VinModelV3, VinModelV3Config
+from .models import (
+    MultiStepCandidateScorer,
+    MultiStepCandidateScorerConfig,
+    TargetConditionedMyopicScorer,
+    TargetConditionedMyopicScorerConfig,
+)
 from .pose_encoders import (
     PoseEncoder,
     PoseEncodingOutput,
@@ -54,12 +60,16 @@ __all__ = [
     "FeaturePoolingResult",
     "LearnableFourierFeatures",
     "LearnableFourierFeaturesConfig",
+    "MultiStepCandidateScorer",
+    "MultiStepCandidateScorerConfig",
     "PointFeatureBank",
     "PointQueryPool",
     "PoseEncoder",
     "PoseEncodingOutput",
     "R6dLffPoseEncoder",
     "R6dLffPoseEncoderConfig",
+    "TargetConditionedMyopicScorer",
+    "TargetConditionedMyopicScorerConfig",
     "TrajectoryEncoder",
     "TrajectoryEncoderConfig",
     "TrajectoryEncodingOutput",
