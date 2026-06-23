@@ -65,7 +65,12 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.efm_views import VinSnippetView
 from aria_nbv.vin.backbone_evl import EvlBackboneConfig
-from aria_nbv.vin.model_v3 import SEMIDENSE_PROJ_DIM, VinModelV3, VinModelV3Config
+from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
+from aria_nbv.vin.semidense_projection import (
+    SEMIDENSE_PROJ_DIM,
+    encode_projection_summary,
+    project_points_to_candidate_cameras,
+)
 from aria_nbv.vin.types import EvlBackboneOutput
 
 
@@ -206,19 +211,23 @@ def test_semidense_projection_features_shape_v3() -> None:
         image_size=torch.tensor([[100.0, 100.0]], device=device),
         in_ndc=False,
     )
-    proj_data = model._project_semidense_points(
+    proj_data = project_points_to_candidate_cameras(
         points_world,
         cameras,
         batch_size=1,
         num_candidates=1,
         device=device,
     )
-    proj_feat = model._encode_semidense_projection_features(
+    proj_feat = encode_projection_summary(
         proj_data,
         batch_size=1,
         num_candidates=1,
         device=device,
         dtype=torch.float32,
+        grid_size=int(model.config.semidense_proj_grid_size),
+        obs_count_max=int(model.config.semidense_obs_count_max),
+        inv_dist_std_min=float(model.config.semidense_inv_dist_std_min),
+        inv_dist_std_p95=float(model.config.semidense_inv_dist_std_p95),
     )
     assert proj_feat.shape == (1, 1, SEMIDENSE_PROJ_DIM)
     assert (proj_feat[..., 0] >= 0.0).all()
