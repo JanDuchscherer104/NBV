@@ -7,6 +7,9 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.rri_metrics import (
+    CandidateTableMetrics,
+    FiniteMeanMetric,
+    SelectedRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
     discounted_selected_return,
@@ -71,3 +74,73 @@ def test_candidate_reductions_respect_hard_mask_and_nonfinite_values() -> None:
 
     assert torch.allclose(mean, torch.tensor([1.5, 4.0, float("nan")]), equal_nan=True)
     assert torch.allclose(best, torch.tensor([2.0, 4.0, float("nan")]), equal_nan=True)
+
+
+def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
+    metric = FiniteMeanMetric()
+
+    metric.update(
+        torch.tensor([1.0, float("nan"), 3.0, 100.0]),
+        torch.tensor([True, True, True, False]),
+    )
+
+    assert torch.isclose(metric.compute(), torch.tensor(2.0))
+    metric.reset()
+    metric.update(torch.tensor([1.0, float("nan")]), torch.tensor([False, True]))
+    assert torch.isnan(metric.compute())
+
+
+def test_selected_rollout_metrics_report_proposal_metrics() -> None:
+    metric = SelectedRolloutMetrics(gamma=0.5, eps=1e-6)
+
+    metric.update(
+        torch.tensor([[1.0, 2.0], [float("nan"), 4.0]]),
+        initial_error=torch.tensor([10.0, 8.0]),
+        final_error=torch.tensor([5.0, 4.0]),
+        valid_mask=torch.tensor([[True, True], [False, True]]),
+    )
+    metric.update(
+        torch.tensor([[2.0, 0.0]]),
+        initial_error=torch.tensor([4.0]),
+        final_error=torch.tensor([2.0]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["return_h"], torch.tensor((2.0 + 2.0 + 2.0) / 3.0))
+    assert torch.allclose(result["endpoint_gain"], torch.tensor(0.5), atol=1e-6)
+    assert result["endpoint_log_gain"] > 0.0
+    assert torch.allclose(result["valid_steps"], torch.tensor((2.0 + 1.0 + 2.0) / 3.0))
+    assert torch.allclose(result["valid_endpoint_rate"], torch.tensor(1.0))
+
+
+def test_selected_rollout_metrics_accept_one_dimensional_rollouts() -> None:
+    metric = SelectedRolloutMetrics(gamma=1.0, eps=1e-6)
+
+    metric.update(
+        torch.tensor([0.2, 0.3, 0.5]),
+        initial_error=torch.tensor([10.0]),
+        final_error=torch.tensor([6.0]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["return_h"], torch.tensor(1.0))
+    assert torch.allclose(result["endpoint_gain"], torch.tensor(0.4), atol=1e-6)
+    assert torch.allclose(result["valid_steps"], torch.tensor(3.0))
+
+
+def test_candidate_table_metrics_report_invalidity_and_values() -> None:
+    metric = CandidateTableMetrics()
+
+    metric.update(
+        torch.tensor([[1.0, 2.0, float("nan")], [5.0, 4.0, 3.0]]),
+        torch.tensor([[True, True, True], [False, True, False]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["candidate_valid_rate"], torch.tensor(3.0 / 6.0))
+    assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
+    assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
