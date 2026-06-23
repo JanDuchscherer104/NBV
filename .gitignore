@@ -237,7 +237,32 @@ docs/_freeze/**/*.html
 !.codex/hooks.example.json
 .codex/config.toml
 .codex/hooks.json
-.omx/
+
+# OMX operator state. Keep durable planning/spec/context artifacts reviewable,
+# but leave live runtime state, logs, caches, and bulky render outputs local.
+.omx/*
+!.omx/context/
+!.omx/context/**
+!.omx/plans/
+!.omx/plans/**
+!.omx/specs/
+!.omx/specs/**
+!.omx/goals/
+!.omx/goals/autoresearch/
+!.omx/goals/autoresearch/**
+.omx/goals/**/artifacts/
+.omx/cache/
+.omx/logs/
+.omx/state/
+.omx/tmp/
+.omx/metrics.json
+.omx/hud-config.json
+.omx/setup-scope.json
+.omx/tmux-hook.json
+.omx/ultragoal/
+
+# OMC local memory/replay state is operator-local unless promoted into .agents.
+.omc/
 .agents/generated/
 .agents/kg/generated/
 .agents/kg/.refresh.log
@@ -258,6 +283,8 @@ docs/_freeze/**/*.html
 
 .logs/*
 .logs/ckpts
+
+.tmp/*
 
 # Literature review
 docs/literature/pdf/

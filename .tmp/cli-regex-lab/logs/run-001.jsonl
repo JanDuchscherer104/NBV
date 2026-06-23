@@ -1,3 +1,0 @@
-{"level":"INFO","event":"start","run":"001","target_count":3}
-{"level":"WARN","event":"invalidity","reason":"outside_frustum"}
-{"level":"INFO","event":"finish","low_rri":false}

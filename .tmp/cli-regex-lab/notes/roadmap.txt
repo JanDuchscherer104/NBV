@@ -1,4 +1,0 @@
-current: target-conditioned VIN
-planned: online Q_H over finite candidates
-archive: generic simulator experiments
-scratch: maybe compare RRI bins later

@@ -1,4 +1,0 @@
-target: object or region selected for evaluation
-entity: actor or object instance
-invalidity: reason-coded hard rejection
-rri: residual risk index
