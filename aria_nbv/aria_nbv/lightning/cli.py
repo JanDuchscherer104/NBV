@@ -38,6 +38,28 @@ def _ensure_run_mode(argv: list[str], run_mode: str) -> list[str]:
     return ["--run-mode", run_mode, *argv]
 
 
+def _extract_config_path(argv: list[str]) -> Path | None:
+    """Return a config path from CLI arguments without building default configs.
+
+    `CLIAriaNBVExperimentConfig` is intentionally rich enough to parse full
+    experiment overrides, but constructing it also constructs nested defaults.
+    For offline TOML runs those defaults are irrelevant and may require raw ASE
+    shards or external EFM assets that the offline config does not use. This
+    small pre-parser lets `main` seed the settings model from the TOML first.
+    """
+
+    flag_names = {"--config-path", "--config_path"}
+    for index, arg in enumerate(argv):
+        if arg in flag_names:
+            if index + 1 >= len(argv):
+                raise ValueError(f"{arg} requires a path argument.")
+            return Path(argv[index + 1])
+        for prefix in ("--config-path=", "--config_path="):
+            if arg.startswith(prefix):
+                return Path(arg.split("=", 1)[1])
+    return None
+
+
 class CLIAriaNBVExperimentConfig(AriaNBVExperimentConfig):
     """CLI-enabled experiment config with optional TOML config path."""
 
@@ -240,13 +262,22 @@ def main(argv: list[str] | None = None) -> None:
     paths = PathConfig()
     console = Console.with_prefix("cli", "main")
 
-    cli_cfg = CLIAriaNBVExperimentConfig(_cli_parse_args=argv)
-    config_path = cli_cfg.config_path
+    early_config_path = _extract_config_path(argv)
+    if early_config_path is None:
+        cli_cfg = CLIAriaNBVExperimentConfig(_cli_parse_args=argv)
+        config_path = cli_cfg.config_path
+    else:
+        config_path = early_config_path
+
     if config_path is None:
         cfg = cli_cfg
     else:
         config_path = paths.resolve_config_toml_path(config_path, must_exist=True)
         base_cfg = AriaNBVExperimentConfig.from_toml(config_path)
+        cli_cfg = CLIAriaNBVExperimentConfig(
+            **base_cfg.model_dump(),
+            _cli_parse_args=argv,
+        )
         overrides = cli_cfg.model_dump(exclude_unset=True)
         overrides.pop("config_path", None)
         merged = _merge_with_toml(base_cfg, overrides)

@@ -57,13 +57,20 @@ def test_ensure_run_mode_preserves_explicit_cli_mode() -> None:
     assert resolved == argv
 
 
+def test_extract_config_path_without_constructing_full_cli_config() -> None:
+    """The early config parser supports both split and equals-style flags."""
+    assert cli._extract_config_path(["--config-path", "offline_only.toml"]) == Path("offline_only.toml")
+    assert cli._extract_config_path(["--config_path=offline_only.toml"]) == Path("offline_only.toml")
+    assert cli._extract_config_path(["--run-mode", "train"]) is None
+
+
 def test_toml_merge_uses_cli_run_mode_over_train_config_and_disables_wandb(tmp_path: Path) -> None:
     """Direct merge keeps the summarize override above TOML training defaults."""
     config_path = tmp_path / "offline_only.toml"
     _write_train_wandb_toml(config_path)
     base_cfg = AriaNBVExperimentConfig.from_toml(config_path)
     cli_cfg = cli.CLIAriaNBVExperimentConfig(
-        _cli_parse_args=["--run-mode", "summarize-vin", "--config-path", str(config_path)]
+        **base_cfg.model_dump(), _cli_parse_args=["--run-mode", "summarize-vin", "--config-path", str(config_path)]
     )
     overrides = cli_cfg.model_dump(exclude_unset=True)
     overrides.pop("config_path", None)
@@ -194,3 +201,16 @@ def test_train_mode_preserves_training_datamodule_defaults_after_validation() ->
     assert cfg.datamodule_config.shuffle is True
     assert isinstance(cfg.datamodule_config.source, VinOfflineSourceConfig)
     assert cfg.datamodule_config.source.offline.include_efm_snippet is True
+
+
+def test_experiment_defaults_trainer_root_to_run_output_dir(tmp_path: Path) -> None:
+    """Logger-free Lightning artifacts should stay under the experiment output dir."""
+    cfg = AriaNBVExperimentConfig.model_validate(
+        {
+            "out_dir": tmp_path / "offline-smoke",
+            "trainer_config": {"use_wandb": False},
+            "datamodule_config": {"source": {"kind": "offline"}},
+        }
+    )
+
+    assert cfg.trainer_config.default_root_dir == cfg.resolved_out_dir

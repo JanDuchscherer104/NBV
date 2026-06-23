@@ -290,6 +290,9 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
                 self.paths.checkpoints,
             )
 
+        if self.trainer_config.default_root_dir is None:
+            object.__setattr__(self.trainer_config, "default_root_dir", out_dir)
+
         if self.module_config.binner_path is None and bool(
             self.module_config.save_binner,
         ):

@@ -11,11 +11,13 @@ configuration surface small while supporting:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 import pytorch_lightning as pl
 import torch
 from pydantic import Field, model_validator
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from ..configs.wandb_config import WandbConfig
 from ..utils import Console, TargetConfig
@@ -46,6 +48,8 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
 
     max_epochs: int | None = 50
     precision: str | int = "32"
+    default_root_dir: Path | None = None
+    """Root directory used by Lightning for logger-free run artifacts."""
 
     tf32_matmul_precision: str | None = "medium"
     gradient_clip_val: float | None = 1.0
@@ -125,7 +129,7 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
             except Exception as exc:  # pragma: no cover - hardware dependent
                 console.warn(f"Failed to set TF32 matmul precision: {exc}")
 
-        logger = None
+        logger: Any = False
         if self.is_debug:
             logger = True
             console.log("Using default logger (debug mode)")
@@ -137,10 +141,11 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
 
         callbacks = self.callbacks.setup_target(
             model_name=None,
-            has_logger=logger is not None,
+            has_logger=bool(logger),
             trial=trial,
             optuna_config=resolved_optuna,
         )
+        enable_checkpointing = any(isinstance(callback, ModelCheckpoint) for callback in callbacks)
         console.log(f"Configured {len(callbacks)} callbacks.")
 
         return pl.Trainer(
@@ -149,6 +154,7 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
             strategy=self.strategy,
             max_epochs=self.max_epochs,
             precision=self.precision,
+            default_root_dir=self.default_root_dir,
             gradient_clip_val=self.gradient_clip_val,
             accumulate_grad_batches=self.accumulate_grad_batches,
             log_every_n_steps=self.log_every_n_steps,
@@ -157,6 +163,7 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
             limit_train_batches=self.limit_train_batches,
             limit_val_batches=self.limit_val_batches,
             check_val_every_n_epoch=self.check_val_every_n_epoch,
+            enable_checkpointing=enable_checkpointing,
             enable_model_summary=bool(self.enable_model_summary),
             callbacks=callbacks,
             logger=logger,
