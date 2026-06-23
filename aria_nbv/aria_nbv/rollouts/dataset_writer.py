@@ -117,6 +117,21 @@ class RolloutRecipeConfig(BaseConfig):
     selection_temperature: float = Field(default=1.0, gt=0.0)
     """Softmax temperature for stochastic selection policies."""
 
+    min_history_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum distance from previously selected poses during rollout selection."""
+
+    min_sibling_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum distance between sibling branches expanded from one rollout node."""
+
+    min_sibling_yaw_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum yaw separation between sibling branches expanded from one node."""
+
+    min_sibling_target_bearing_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum target-bearing separation between sibling branches."""
+
+    require_sibling_strategy_diversity: bool = False
+    """Require sibling branches to use distinct candidate strategy families when possible."""
+
     seed: int | None = 0
     """Recipe-local random seed for candidate/action sampling."""
 
@@ -618,6 +633,11 @@ class RolloutDatasetWriter:
                 selection_policy=recipe.selection_policy,
                 selection_temperature=recipe.selection_temperature,
                 branch_schedule_id=recipe.name,
+                min_history_distance_m=recipe.min_history_distance_m,
+                min_sibling_distance_m=recipe.min_sibling_distance_m,
+                min_sibling_yaw_deg=recipe.min_sibling_yaw_deg,
+                min_sibling_target_bearing_deg=recipe.min_sibling_target_bearing_deg,
+                require_sibling_strategy_diversity=recipe.require_sibling_strategy_diversity,
                 seed=recipe.seed,
                 log_timing=self.config.log_timing,
                 verbosity=self.config.verbosity,

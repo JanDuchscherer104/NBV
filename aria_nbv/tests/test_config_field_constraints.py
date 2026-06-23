@@ -64,6 +64,8 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (OracleTargetTaskSamplerConfig, {"identity_iou_thresholds": ()}),
         (_recipe, {"horizon": 0}),
         (_recipe, {"selection_temperature": 0.0}),
+        (_recipe, {"min_sibling_distance_m": -0.1}),
+        (_recipe, {"min_sibling_yaw_deg": -1.0}),
         (RolloutDatasetWriterConfig, {"max_samples": 0}),
         (RolloutZarrStoreConfig, {"discount_gamma": -0.1}),
         (VinOfflineWriterConfig, {"samples_per_shard": 0}),

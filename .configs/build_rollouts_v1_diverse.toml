@@ -1,0 +1,180 @@
+max_samples = 1
+max_targets_per_sample = 2
+target_source = "oracle_target_task_sampler"
+require_label_valid = true
+min_valid_root_candidates = 2
+log_timing = true
+verbosity = 1
+
+[source]
+split = "all"
+limit = 1
+return_format = "sample"
+include_efm_snippet = true
+include_gt_mesh = true
+load_backbone = true
+load_candidates = false
+load_depths = false
+load_candidate_pcs = false
+load_gt_obbs = true
+load_detected_obbs = true
+load_trajectory_metadata = true
+map_location = "cpu"
+verbosity = 1
+
+[source.store]
+store_dir = "vin_offline"
+
+[target_selector]
+k = 4
+source_mode = "v1_actor_visible"
+policy = "greedy_top_k"
+match_gt = true
+require_projected_visibility = false
+min_support_points = 3
+
+[candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 48
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.25
+max_radius = 1.1
+min_elev_deg = -12.0
+max_elev_deg = 18.0
+delta_azimuth_deg = 110.0
+sampling_strategy = "forward_powerspherical"
+kappa = 8.0
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = true
+max_step_distance_m = 1.25
+max_height_delta_m = 0.35
+max_backward_step_m = 0.45
+max_yaw_delta_deg = 90.0
+device = "cpu"
+verbosity = 1
+collect_rule_masks = true
+collect_debug_stats = true
+view_max_angle_deg = 0.0
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[[candidate_mixture.components]]
+name = "radial_towards_target_bearing"
+count = 16
+view_mode = "radial_towards"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 1.1
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "radial_away_target_bearing"
+count = 16
+view_mode = "radial_away"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 1.1
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "revisit_backtrack"
+count = 12
+view_mode = "forward_rig"
+position_mode = "revisit_backtrack"
+min_radius = 0.25
+max_radius = 0.9
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "target_point_anchor"
+count = 4
+view_mode = "target_point"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 0.9
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[target_scorer]
+backprojection_stride = 12
+target_crop_margin_m = 0.05
+min_current_target_points = 1
+include_scene_rri = false
+eval_point_cloud_source = "ase_gt_depth_root"
+eval_camera_label = "rgb"
+eval_fusion_voxel_size_m = 0.02
+eval_fusion_max_points = 200000
+target_eval_max_points = 50000
+reward_mode = "root_normalized_gain"
+log_timing = true
+verbosity = 1
+
+[target_scorer.depth]
+device = "cpu"
+max_candidates_final = 48
+resolution_scale = 0.2
+verbosity = 1
+
+[selected_depth]
+enabled = true
+width_px = 240
+height_px = 240
+chunk_steps = 16
+
+[store]
+store_dir = "rollouts_v1_diverse.zarr"
+target_protocol_version = "v1_observed"
+field_retention_policy = "compact_selected_heavy"
+source_offline_store_version = "vin-offline-v7"
+split_manifest_hash = "configured-at-runtime"
+discount_gamma = 1.0
+q_h_chunk_states = 64
+target_eval_crop_max_points = 50000
+
+[[recipes]]
+name = "random_valid_diverse"
+selection_policy = "random_valid"
+horizon = 2
+branch_factor = 3
+beam_width = 3
+require_sibling_strategy_diversity = true
+min_sibling_distance_m = 0.2
+min_sibling_yaw_deg = 20.0
+seed = 0
+
+[[recipes]]
+name = "oracle_lookahead_diverse"
+selection_policy = "oracle_greedy"
+horizon = 2
+branch_factor = 3
+beam_width = 3
+require_sibling_strategy_diversity = true
+min_sibling_distance_m = 0.2
+min_sibling_yaw_deg = 20.0
+seed = 0
+
+[[recipes]]
+name = "temperature_softmax_diverse"
+selection_policy = "temperature_softmax"
+horizon = 2
+branch_factor = 3
+beam_width = 3
+selection_temperature = 1.25
+require_sibling_strategy_diversity = true
+min_sibling_distance_m = 0.2
+min_sibling_yaw_deg = 20.0
+stochastic_branch_factors = [2, 3]
+stochastic_branch_probabilities = [0.5, 0.5]
+seed = 0
