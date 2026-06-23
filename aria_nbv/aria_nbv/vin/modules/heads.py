@@ -1,4 +1,10 @@
-"""Shared scorer head definitions used by experimental VIN variants."""
+"""Reusable candidate scoring heads for VIN architectures.
+
+This module owns small, task-level prediction heads that sit after scene,
+trajectory, and pose encoders. The heads are intentionally separate from
+`aria_nbv.vin.models` so myopic, multi-step, and legacy seminar scorer variants
+can share ordinal prediction logic without importing from experimental modules.
+"""
 
 from __future__ import annotations
 
@@ -12,9 +18,23 @@ from ...utils import TargetConfig
 
 
 class VinScorerHead(nn.Module):
-    """Candidate scoring head producing CORAL ordinal logits."""
+    """Predict ordinal RRI logits from per-candidate feature vectors.
+
+    `VinScorerHead` is the shared MLP-plus-CORAL head used when a VIN scorer
+    represents candidate quality as ordinal Relative Reconstruction Improvement
+    bins. It consumes the final feature tensor produced by an architecture and
+    returns threshold logits compatible with `aria_nbv.rri_metrics.coral`.
+    """
 
     def __init__(self, config: "VinScorerHeadConfig", *, in_dim: int | None = None) -> None:
+        """Build the MLP and CORAL threshold layer.
+
+        Args:
+            config: Config-as-factory instance that owns head width, depth,
+                dropout, activation, and ordinal class count.
+            in_dim: Optional feature dimension. When omitted, the first layer is
+                lazy and initializes on the first forward pass.
+        """
         super().__init__()
         self.config = config
 
@@ -45,12 +65,20 @@ class VinScorerHead(nn.Module):
         self.coral = CoralLayer(in_dim=hidden_dim, num_classes=self.config.num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
-        """Compute CORAL logits from per-candidate features."""
+        """Return CORAL threshold logits for candidate features.
+
+        Args:
+            x: ``Tensor["... F"]`` feature vectors, where leading dimensions are
+                preserved as candidate or batch axes.
+
+        Returns:
+            ``Tensor["... K-1"]`` CORAL logits for ``K`` ordinal RRI classes.
+        """
         return self.coral(self.mlp(x))
 
 
 class VinScorerHeadConfig(TargetConfig[VinScorerHead]):
-    """Configuration for `VinScorerHead`."""
+    """Configure the shared VIN ordinal scoring head."""
 
     @property
     def target_type(self) -> type[VinScorerHead]:
@@ -73,6 +101,14 @@ class VinScorerHeadConfig(TargetConfig[VinScorerHead]):
     """Activation function."""
 
     def setup_target(self, *, in_dim: int | None = None) -> VinScorerHead:
+        """Instantiate the configured scoring head.
+
+        Args:
+            in_dim: Optional input feature width passed to `VinScorerHead`.
+
+        Returns:
+            Runtime scoring module.
+        """
         return self.target(self, in_dim=in_dim)
 
 

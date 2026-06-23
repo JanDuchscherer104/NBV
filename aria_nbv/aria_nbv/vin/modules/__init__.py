@@ -1,7 +1,13 @@
-"""Reusable neural building blocks for VIN scorer architectures."""
+"""Reusable neural building blocks for VIN scorer architectures.
+
+The package collects `torch.nn.Module` components that are shared across active
+and planned VIN scorers, while top-level architecture orchestration remains in
+`aria_nbv.vin.models` and `aria_nbv.vin.model_v3`.
+"""
 
 from __future__ import annotations
 
+from .heads import VinScorerHead, VinScorerHeadConfig
 from .pooling import PoseConditionedGlobalPool
 
-__all__ = ["PoseConditionedGlobalPool"]
+__all__ = ["PoseConditionedGlobalPool", "VinScorerHead", "VinScorerHeadConfig"]

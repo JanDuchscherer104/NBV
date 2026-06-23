@@ -127,11 +127,11 @@ from ..geometry import (
 from ..geometry import (
     sample_voxel_field as _sample_voxel_field,
 )
+from ..modules import VinScorerHeadConfig
 from ..vin_utils import (
     largest_divisor_leq as _largest_divisor_leq,
 )
 from .pose_encoding import LearnableFourierFeaturesConfig
-from .scorer_head import VinScorerHeadConfig
 from .types import EvlBackboneOutput, VinForwardDiagnostics, VinPrediction
 
 if TYPE_CHECKING:
