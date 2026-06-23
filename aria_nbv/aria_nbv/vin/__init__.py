@@ -14,6 +14,11 @@ and target crops are supervision/evaluation assets.
 from __future__ import annotations
 
 from .backbone_evl import EvlBackbone, EvlBackboneConfig
+from .candidate_scorer import (
+    CandidateScorer,
+    CandidateScorerConfig,
+    CandidateScorerPrediction,
+)
 from .model_v3 import VinModelV3, VinModelV3Config
 from .pose_encoders import (
     PoseEncoder,
@@ -43,6 +48,9 @@ __all__ = [
     "EvlBackbone",
     "EvlBackboneConfig",
     "EvlBackboneOutput",
+    "CandidateScorer",
+    "CandidateScorerConfig",
+    "CandidateScorerPrediction",
     "FeaturePoolingResult",
     "LearnableFourierFeatures",
     "LearnableFourierFeaturesConfig",

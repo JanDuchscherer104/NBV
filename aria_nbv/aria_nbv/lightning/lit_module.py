@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
 import matplotlib
 import pytorch_lightning as pl
@@ -46,6 +46,7 @@ from ..utils.grad_norms import (
     _collect_grad_norm_targets,
     _grad_norm_from_params,
 )
+from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.experimental.plotting import plot_vin_encodings_from_debug
 from ..vin.model_v3 import VinModelV3Config
 from ..vin.vin_utils import largest_divisor_leq
@@ -59,7 +60,14 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
     def target_type(self) -> type["VinLightningModule"]:
         return VinLightningModule
 
-    vin: VinModelV3Config = Field(default_factory=VinModelV3Config)
+    vin: CandidateScorerConfig = Field(default_factory=VinModelV3Config)
+    """Candidate scorer configuration.
+
+    The field name remains ``vin`` to preserve existing TOML, checkpoint, and
+    experiment-config compatibility. New scorer architectures should enter via
+    `aria_nbv.vin.candidate_scorer.CandidateScorerConfig` instead of adding
+    Lightning-specific branches.
+    """
 
     optimizer: AdamWConfig = Field(default_factory=AdamWConfig)
     """Optimizer configuration."""
@@ -206,6 +214,17 @@ class VinLightningModule(pl.LightningModule):
         self._interval_metrics = metrics_cfg.setup_target()
         self._rri_error_stats = nn.ModuleDict({f"{Stage.VAL.value}_stage": RriErrorStats()})
         self._logged_effective_config = False
+
+    @property
+    def candidate_scorer(self) -> CandidateScorer:
+        """Return the registered scorer through the structural VIN protocol.
+
+        `self.vin` intentionally remains the owning `torch.nn.Module` attribute
+        so historical checkpoints keep their ``vin.*`` state-dict prefix. This
+        property is a typed view only; it must not register a duplicate module.
+        """
+
+        return cast(CandidateScorer, self.vin)
 
     # --------------------------------------------------------------------- lifecycle
     def setup(self, stage: str) -> None:
@@ -387,7 +406,8 @@ class VinLightningModule(pl.LightningModule):
         candidate_poses_world_cam = batch.candidate_poses_world_cam.to(device=self.device)
         reference_pose_world_rig = batch.reference_pose_world_rig.to(device=self.device)
 
-        pred = self.vin.forward(
+        candidate_scorer = self.candidate_scorer
+        pred = candidate_scorer.forward(
             efm,
             candidate_poses_world_cam=candidate_poses_world_cam,
             reference_pose_world_rig=reference_pose_world_rig,
@@ -477,7 +497,7 @@ class VinLightningModule(pl.LightningModule):
         pred_rri_proxy_valid = None
         aux_loss = None
         if self.config.aux_regression_loss is not None or log_enabled:
-            pred_rri_proxy = self.vin.head_coral.expected_from_probs(probs)
+            pred_rri_proxy = candidate_scorer.head_coral.expected_from_probs(probs)
             pred_rri_proxy_valid = pred_rri_proxy.reshape(-1)[mask]
 
         combined_loss = coral_loss_value

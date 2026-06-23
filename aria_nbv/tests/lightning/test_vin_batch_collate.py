@@ -409,6 +409,23 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
     assert torch.isclose(loss, expected_loss)  # noqa: S101
 
 
+def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
+    """The scorer seam should not rename existing VIN checkpoint parameters."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.config.vin, VinModelV3Config)  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
 def test_shuffle_candidates_preserves_padded_tail_unbatched() -> None:
     """Only the valid prefix should move when candidate_count is smaller than width."""
 
