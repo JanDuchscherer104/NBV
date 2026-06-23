@@ -1,1 +1,0 @@
-Pass only if both provided artifacts are parsed, claims/action items are deduplicated, each retained item is validated against current repo scaffold evidence or marked stale/unverified, ROI ranking criteria are explicit, and final output separates high/medium/low ROI with concrete next actions.

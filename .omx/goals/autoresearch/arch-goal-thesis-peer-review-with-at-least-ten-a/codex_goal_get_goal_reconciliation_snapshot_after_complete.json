@@ -1,7 +1,0 @@
-{
-  "goal": null,
-  "remainingTokens": null,
-  "completionBudgetReport": null,
-  "captured_for": "omx autoresearch-goal complete reconciliation after Codex goal completion",
-  "captured_at_note": "get_goal returned null in this Codex App context after update_goal(status=complete) had already succeeded; see codex_goal_update_goal_complete.json for the structured completion payload."
-}

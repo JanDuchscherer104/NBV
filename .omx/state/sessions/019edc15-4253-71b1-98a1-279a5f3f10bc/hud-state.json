@@ -1,6 +1,0 @@
-{
-  "last_turn_at": "2026-06-18T19:11:17.796Z",
-  "turn_count": 2,
-  "last_progress_at": "2026-06-18T19:11:17.796Z",
-  "last_agent_output": "Use `$autoresearch-goal`, not `$autopilot` or plain `$ultragoal`, for the first phase.\n\nThis task is"
-}

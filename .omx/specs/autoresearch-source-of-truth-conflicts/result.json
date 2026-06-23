@@ -1,7 +1,0 @@
-{
-  "status": "passed",
-  "passed": true,
-  "summary": "Verified all C1-C16 and R1-R4 items from .agents/work/source-of-truth-conflicts.md against the current local repo state. One ledger item, C13, was corrected because the M1 report now exists; the live conflict is its current/blocked status and manifest version inconsistency.",
-  "output_artifact_path": ".omx/specs/autoresearch-source-of-truth-conflicts/report.md",
-  "validator_command": "python3 - <<'PY'\nfrom pathlib import Path\nreport = Path('.omx/specs/autoresearch-source-of-truth-conflicts/report.md').read_text()\nmissing = [f'C{i}' for i in range(1, 17) if f'### C{i}' not in report]\nmissing += [f'R{i}' for i in range(1, 5) if f'### R{i}' not in report]\nif missing:\n    raise SystemExit(f'missing report items: {missing}')\nfor token in ['docs/index.qmd:47', 'docs/contents/thesis/questions.qmd:119', 'docs/typst/thesis/advisor_meeting_2026_05_22.typ:142', 'docs/typst/thesis/advisor_distillation.typ:282', 'docs/contents/thesis/m1_contract_report.qmd:43', 'aria_nbv/aria_nbv/data_handling/_offline_store.py:33']:\n    if token not in report:\n        raise SystemExit(f'missing required evidence token: {token}')\nprint('source-of-truth conflict report validates')\nPY"
-}

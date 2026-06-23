@@ -1,6 +1,0 @@
-{
-  "last_turn_at": "2026-06-18T20:28:47.550Z",
-  "turn_count": 2,
-  "last_progress_at": "2026-06-18T20:28:47.550Z",
-  "last_agent_output": "Handled the hook reconciliation path.\n\n- Refreshed `get_goal`: it returned `null`.\n- Saved that snap"
-}

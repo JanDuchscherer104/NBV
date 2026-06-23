@@ -1,6 +1,0 @@
-{
-  "last_turn_at": "2026-06-22T10:06:34.736Z",
-  "turn_count": 6,
-  "last_progress_at": "2026-06-22T10:06:34.736Z",
-  "last_agent_output": "## Test Report\n\n### Summary\n**Coverage**: existing targeted rollout/panel tests are healthy; selecte"
-}
