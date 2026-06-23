@@ -1,11 +1,12 @@
-"""Unit tests for VIN v2 pose-conditioned global pooling."""
+"""Unit tests for VIN pose-conditioned global pooling."""
 
 # ruff: noqa: S101
 
 import torch
-from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
-from aria_nbv.vin.vin_modules import PoseConditionedGlobalPool
 from torch import nn
+
+from aria_nbv.vin.modules import PoseConditionedGlobalPool
+from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
 
 
 def test_global_pool_positional_embedding_does_not_leak_into_values() -> None:

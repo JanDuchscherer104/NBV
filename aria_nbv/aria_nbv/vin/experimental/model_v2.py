@@ -66,10 +66,10 @@ from ...utils import Optimizable, TargetConfig, optimizable_field
 from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbone_evl import EvlBackboneConfig
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
+from ..modules import PoseConditionedGlobalPool
 from ..pose_encoders import R6dLffPoseEncoderConfig
 from ..semidense_projection import SEMIDENSE_PROJ_DIM
 from ..traj_encoder import TrajectoryEncoder, TrajectoryEncoderConfig
-from ..vin_modules import PoseConditionedGlobalPool
 from ..vin_utils import (
     FieldBundle,
     GlobalContext,

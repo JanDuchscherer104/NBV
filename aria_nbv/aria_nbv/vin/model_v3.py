@@ -90,6 +90,7 @@ from ..utils import TargetConfig
 from ._model_mixins import PoseFeatureGlobalContextMixin
 from .backbone_evl import EvlBackboneConfig
 from .geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
+from .modules import PoseConditionedGlobalPool
 from .pose_encoders import PoseEncoder, R6dLffPoseEncoderConfig
 from .pose_encoding import LearnableFourierFeaturesConfig
 from .semidense_projection import (
@@ -103,7 +104,6 @@ from .semidense_projection import (
 from .summarize_v3 import summarize_vin_v3
 from .traj_encoder import TrajectoryEncoder, TrajectoryEncoderConfig
 from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
-from .vin_modules import PoseConditionedGlobalPool
 from .vin_utils import (
     FieldBundle,
     GlobalContext,
