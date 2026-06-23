@@ -75,6 +75,7 @@ from efm3d.aria.pose import PoseTW
 from aria_nbv.data_handling import is_vin_snippet_view_instance
 from aria_nbv.data_handling.efm_views import EfmSnippetView, VinSnippetView
 from aria_nbv.data_handling.vin_oracle_types import VinOracleBatch
+from aria_nbv.vin.geometry import pool_voxel_points
 from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
 from aria_nbv.vin.semidense_projection import (
     SEMIDENSE_PROJ_DIM,
@@ -84,7 +85,6 @@ from aria_nbv.vin.semidense_projection import (
 )
 from aria_nbv.vin.traj_encoder import TrajectoryEncoderConfig
 from aria_nbv.vin.types import EvlBackboneOutput
-from aria_nbv.vin.vin_utils import pool_voxel_points
 
 
 def _encode_projection_summary_for_model(

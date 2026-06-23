@@ -118,17 +118,17 @@ from ...rri_metrics.coral import (
 from ...utils import TargetConfig
 from .._model_mixins import FrustumSamplingMixin
 from ..backbone_evl import EvlBackboneConfig
-from ..vin_utils import (
+from ..geometry import (
     build_scene_field as _build_scene_field,
 )
-from ..vin_utils import (
+from ..geometry import (
     candidate_valid_from_token as _candidate_valid_from_token,
+)
+from ..geometry import (
+    sample_voxel_field as _sample_voxel_field,
 )
 from ..vin_utils import (
     largest_divisor_leq as _largest_divisor_leq,
-)
-from ..vin_utils import (
-    sample_voxel_field as _sample_voxel_field,
 )
 from .pose_encoding import LearnableFourierFeaturesConfig
 from .scorer_head import VinScorerHeadConfig
