@@ -32,7 +32,7 @@ from .._plotting_common import (
     _pretty_label,
     _scatter3d,
 )
-from ..vin_utils import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
+from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
 from .types import VinForwardDiagnostics
 
 if TYPE_CHECKING:

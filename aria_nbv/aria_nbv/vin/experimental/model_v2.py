@@ -65,6 +65,7 @@ from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_l
 from ...utils import Optimizable, TargetConfig, optimizable_field
 from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbone_evl import EvlBackboneConfig
+from ..geometry import ensure_candidate_batch, ensure_pose_batch
 from ..pose_encoders import R6dLffPoseEncoderConfig
 from ..semidense_projection import SEMIDENSE_PROJ_DIM
 from ..traj_encoder import TrajectoryEncoder, TrajectoryEncoderConfig
@@ -73,8 +74,6 @@ from ..vin_utils import (
     FieldBundle,
     GlobalContext,
     PreparedInputs,
-    ensure_candidate_batch,
-    ensure_pose_batch,
     largest_divisor_leq,
     sample_voxel_field,
     validate_pos_grid_xyz_encoder,
