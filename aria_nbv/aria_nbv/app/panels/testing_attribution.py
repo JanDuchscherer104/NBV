@@ -21,6 +21,7 @@ from ...interpretability.attribution import (
 from ...lightning.lit_module import VinLightningModule
 from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from ...vin.experimental.pose_encoders import infer_pose_vec_groups
+from ...vin.geometry import pos_grid_from_pts_world
 from ..state import get_vin_state
 from .common import _info_popover
 from .vin_utils import _load_vin_module_from_checkpoint
@@ -490,14 +491,12 @@ def render_testing_attribution_page() -> None:
                         pose_enc = debug.pose_enc[:, candidate_idx : candidate_idx + 1].to(
                             dtype=field_in.dtype,
                         )
-                        if not hasattr(module.vin, "_pos_grid_from_pts_world"):
-                            raise RuntimeError("Scene-field attribution requires VIN v2 positional grid helper.")
                         backbone_out = debug.backbone_out
                         if backbone_out is None or not isinstance(backbone_out.pts_world, torch.Tensor):
                             raise RuntimeError("Missing backbone voxel center grid for scene-field attribution.")
                         t_world_voxel = backbone_out.t_world_voxel.to(device)
                         pose_world_rig_ref = cache_sample.reference_pose_world_rig.to(device)
-                        pos_grid = module.vin._pos_grid_from_pts_world(
+                        pos_grid = pos_grid_from_pts_world(
                             backbone_out.pts_world.to(device=device, dtype=field_in.dtype),
                             t_world_voxel=t_world_voxel,
                             pose_world_rig_ref=pose_world_rig_ref,

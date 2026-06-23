@@ -7,6 +7,7 @@ import streamlit as st
 import torch
 
 from ....vin.experimental.plotting import build_candidate_encoding_figures, build_vin_encoding_figures
+from ....vin.geometry import pos_grid_from_pts_world
 from ....vin.plotting import (
     build_lff_empirical_figures,
     build_pose_enc_pca_figure,
@@ -349,7 +350,7 @@ def render_encodings_tab(ctx: VinDiagContext) -> None:
                         int(field_in.shape[-2]),
                         int(field_in.shape[-1]),
                     )
-                    pos_grid = vin_model._pos_grid_from_pts_world(
+                    pos_grid = pos_grid_from_pts_world(
                         debug.backbone_out.pts_world,
                         t_world_voxel=debug.backbone_out.t_world_voxel,
                         pose_world_rig_ref=batch.reference_pose_world_rig,

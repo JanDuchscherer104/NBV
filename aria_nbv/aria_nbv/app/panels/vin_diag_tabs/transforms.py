@@ -6,6 +6,7 @@ import streamlit as st
 
 from ....utils.plotting import _to_numpy
 from ....vin.experimental.plotting import build_prediction_alignment_figure
+from ....vin.geometry import pos_grid_from_pts_world
 from ....vin.plotting import (
     build_pos_grid_linearity_figure,
     build_se3_closure_figure,
@@ -25,7 +26,6 @@ def render_transforms_tab(ctx: VinDiagContext) -> None:
     debug = ctx.debug
     pred = ctx.pred
     batch = ctx.batch
-    state = ctx.state
 
     _info_popover(
         "transforms",
@@ -70,9 +70,8 @@ def render_transforms_tab(ctx: VinDiagContext) -> None:
         ),
         width="stretch",
     )
-    vin_model = state.module.vin if state.module is not None else None
     pos_grid = getattr(debug, "pos_grid", None)
-    if pos_grid is not None or (vin_model is not None and hasattr(vin_model, "_pos_grid_from_pts_world")):
+    if pos_grid is not None or getattr(debug, "backbone_out", None) is not None:
         try:
             if pos_grid is None:
                 field_in = debug.field_in
@@ -81,7 +80,7 @@ def render_transforms_tab(ctx: VinDiagContext) -> None:
                     int(field_in.shape[-2]),
                     int(field_in.shape[-1]),
                 )
-                pos_grid = vin_model._pos_grid_from_pts_world(  # type: ignore[union-attr]
+                pos_grid = pos_grid_from_pts_world(
                     debug.backbone_out.pts_world,
                     t_world_voxel=debug.backbone_out.t_world_voxel,
                     pose_world_rig_ref=batch.reference_pose_world_rig,
