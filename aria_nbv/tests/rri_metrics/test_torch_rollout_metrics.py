@@ -9,6 +9,7 @@ import torch
 from aria_nbv.rri_metrics import (
     CandidateTableMetrics,
     FiniteMeanMetric,
+    PolicyTableMetrics,
     SelectedRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
@@ -144,3 +145,61 @@ def test_candidate_table_metrics_report_invalidity_and_values() -> None:
     assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(0.5))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+
+
+def test_policy_table_metrics_report_proposal_columns() -> None:
+    metric = PolicyTableMetrics(gamma=0.5, eps=1e-6)
+
+    metric.update(
+        torch.tensor([[1.0, 2.0], [0.5, 0.5]]),
+        initial_error=torch.tensor([10.0, 4.0]),
+        final_error=torch.tensor([5.0, 2.0]),
+        scene_rri=torch.tensor([0.2, 0.4]),
+        cost=torch.tensor([3.0, 5.0]),
+        runtime=torch.tensor([10.0, 20.0]),
+        coverage=torch.tensor([0.6, 0.8]),
+        candidate_values=torch.tensor([[1.0, 2.0, 3.0], [5.0, 4.0, 3.0]]),
+        candidate_valid_mask=torch.tensor([[True, True, False], [False, True, False]]),
+    )
+
+    result = metric.compute()
+
+    for key in ("endpoint_gain", "return_h", "scene_rri", "cost", "invalidity", "runtime", "coverage"):
+        assert key in result
+    assert torch.allclose(result["endpoint_gain"], torch.tensor(0.5), atol=1e-6)
+    assert torch.allclose(result["return_h"], torch.tensor(((1.0 + 0.5 * 2.0) + (0.5 + 0.5 * 0.5)) / 2.0))
+    assert torch.allclose(result["scene_rri"], torch.tensor(0.3))
+    assert torch.allclose(result["cost"], torch.tensor(4.0))
+    assert torch.allclose(result["runtime"], torch.tensor(15.0))
+    assert torch.allclose(result["coverage"], torch.tensor(0.7))
+    assert torch.allclose(result["invalidity"], torch.tensor(3.0 / 6.0))
+    assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
+    assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+
+
+def test_policy_table_metrics_ignore_nonfinite_and_masked_entries() -> None:
+    metric = PolicyTableMetrics()
+
+    metric.update(
+        torch.tensor([[1.0, float("nan")], [2.0, 3.0]]),
+        initial_error=torch.tensor([10.0, 8.0]),
+        final_error=torch.tensor([5.0, 4.0]),
+        selected_valid_mask=torch.tensor([[True, True], [False, True]]),
+        scene_rri=torch.tensor([0.2, float("nan"), 0.8]),
+        cost=torch.tensor([1.0, 100.0, float("inf")]),
+        runtime=torch.tensor([10.0, 20.0, 30.0]),
+        coverage=torch.tensor([0.5, 0.9, float("nan")]),
+        scalar_valid_mask=torch.tensor([True, False, True]),
+        candidate_values=torch.tensor([[100.0, -100.0], [float("nan"), 4.0]]),
+        candidate_valid_mask=torch.tensor([[False, True], [False, False]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["scene_rri"], torch.tensor(0.5))
+    assert torch.allclose(result["cost"], torch.tensor(1.0))
+    assert torch.allclose(result["runtime"], torch.tensor(20.0))
+    assert torch.allclose(result["coverage"], torch.tensor(0.5))
+    assert torch.allclose(result["invalidity"], torch.tensor(3.0 / 4.0))
+    assert torch.allclose(result["candidate_value_mean"], torch.tensor(-100.0))
+    assert torch.allclose(result["candidate_best_value"], torch.tensor(-100.0))

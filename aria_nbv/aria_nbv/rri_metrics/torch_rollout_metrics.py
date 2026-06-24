@@ -202,6 +202,99 @@ class CandidateTableMetrics(MetricBase):
         }
 
 
+class PolicyTableMetrics(MetricBase):
+    """Accumulate proposal policy-comparison table metrics.
+
+    The thesis policy table reports target endpoint gain, finite-horizon return,
+    scene RRI, cost, invalidity, runtime, and coverage for each policy row. This
+    composite metric keeps those columns under one TorchMetric interface while
+    delegating the actual math to the smaller metric owners in this module.
+    Candidate invalidity is the hard-mask invalid fraction from
+    `CandidateTableMetrics`; it is never inferred from low values or low RRI.
+    """
+
+    full_state_update = False
+
+    def __init__(self, *, gamma: float = 1.0, eps: float = 1e-8) -> None:
+        super().__init__()
+        self.selected = SelectedRolloutMetrics(gamma=gamma, eps=eps)
+        self.scene_rri = FiniteMeanMetric()
+        self.cost = FiniteMeanMetric()
+        self.runtime = FiniteMeanMetric()
+        self.coverage = FiniteMeanMetric()
+        self.candidates = CandidateTableMetrics()
+
+    def update(
+        self,
+        rewards: Tensor,
+        initial_error: Tensor,
+        final_error: Tensor,
+        *,
+        selected_valid_mask: Tensor | None = None,
+        scene_rri: Tensor | None = None,
+        cost: Tensor | None = None,
+        runtime: Tensor | None = None,
+        coverage: Tensor | None = None,
+        scalar_valid_mask: Tensor | None = None,
+        candidate_values: Tensor | None = None,
+        candidate_valid_mask: Tensor | None = None,
+        candidate_dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of policy-table tensors.
+
+        Args:
+            rewards: Selected target rewards ``Tensor["B H"]`` or
+                ``Tensor["H"]``.
+            initial_error: Initial target point-mesh errors ``d_0``.
+            final_error: Endpoint target point-mesh errors ``d_H``.
+            selected_valid_mask: Optional hard mask for selected rewards.
+            scene_rri: Optional scene-level RRI values for the same policy row.
+            cost: Optional acquisition or path-cost values.
+            runtime: Optional runtime values, normally seconds.
+            coverage: Optional scene/target coverage values.
+            scalar_valid_mask: Optional mask for scalar columns only.
+            candidate_values: Optional finite candidate table values used for
+                value diagnostics.
+            candidate_valid_mask: Optional hard candidate validity mask.
+            candidate_dim: Candidate axis for candidate-table reductions.
+        """
+
+        self.selected.update(rewards, initial_error, final_error, selected_valid_mask)
+        for metric, values in (
+            (self.scene_rri, scene_rri),
+            (self.cost, cost),
+            (self.runtime, runtime),
+            (self.coverage, coverage),
+        ):
+            if values is not None:
+                metric.update(values, scalar_valid_mask)
+        if candidate_values is not None or candidate_valid_mask is not None:
+            if candidate_values is None or candidate_valid_mask is None:
+                raise ValueError("candidate_values and candidate_valid_mask must be provided together.")
+            self.candidates.update(candidate_values, candidate_valid_mask, dim=candidate_dim)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return proposal table columns plus candidate diagnostics."""
+
+        selected = self.selected.compute()
+        candidates = self.candidates.compute()
+        return {
+            "endpoint_gain": selected["endpoint_gain"],
+            "return_h": selected["return_h"],
+            "scene_rri": self.scene_rri.compute(),
+            "cost": self.cost.compute(),
+            "invalidity": candidates["candidate_invalid_rate"],
+            "runtime": self.runtime.compute(),
+            "coverage": self.coverage.compute(),
+            "endpoint_log_gain": selected["endpoint_log_gain"],
+            "valid_steps": selected["valid_steps"],
+            "valid_endpoint_rate": selected["valid_endpoint_rate"],
+            "candidate_valid_rate": candidates["candidate_valid_rate"],
+            "candidate_value_mean": candidates["candidate_value_mean"],
+            "candidate_best_value": candidates["candidate_best_value"],
+        }
+
+
 def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
     return torch.where(count > 0, total / count.clamp_min(1.0), torch.full_like(total, float("nan")))
 
@@ -209,5 +302,6 @@ def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
 __all__ = [
     "CandidateTableMetrics",
     "FiniteMeanMetric",
+    "PolicyTableMetrics",
     "SelectedRolloutMetrics",
 ]

@@ -59,7 +59,7 @@ from .torch_rollout import (
     endpoint_target_gain_tensor,
     summarize_selected_rollout_tensors,
 )
-from .torch_rollout_metrics import CandidateTableMetrics, FiniteMeanMetric, SelectedRolloutMetrics
+from .torch_rollout_metrics import CandidateTableMetrics, FiniteMeanMetric, PolicyTableMetrics, SelectedRolloutMetrics
 from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [
@@ -69,6 +69,7 @@ __all__ = [
     "LabelHistogram",
     "Loss",
     "Metric",
+    "PolicyTableMetrics",
     "RriErrorStats",
     "RriOrdinalBinner",
     "SelectedRolloutMetrics",
