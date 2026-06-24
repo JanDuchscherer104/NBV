@@ -34,6 +34,7 @@ from ..rri_metrics import (
     coral_random_loss,
     loss_key,
     metric_key,
+    selected_action_oracle_comparison,
     topk_accuracy_from_probs,
 )
 from ..rri_metrics.coral import coral_logits_to_label, coral_monotonicity_violation_rate
@@ -611,6 +612,24 @@ class VinLightningModule(pl.LightningModule):
                 candidate_mask_table,
                 top_k=3,
             )
+            pred_valid_table = candidate_mask_table & torch.isfinite(expected_scores)
+            filled_scores = torch.where(
+                pred_valid_table,
+                expected_scores.detach(),
+                torch.full_like(expected_scores, -torch.inf),
+            )
+            selected_indices = filled_scores.argmax(dim=-1)
+            has_prediction = pred_valid_table.any(dim=-1)
+            selected_indices = torch.where(
+                has_prediction,
+                selected_indices,
+                torch.full_like(selected_indices, -1),
+            )
+            selected_oracle = selected_action_oracle_comparison(
+                rri_table.detach(),
+                selected_indices.detach(),
+                candidate_mask_table,
+            )
             top1_oracle_hit_mean = (
                 top1_oracle_hit[torch.isfinite(top1_oracle_hit)].mean()
                 if torch.isfinite(top1_oracle_hit).any()
@@ -621,6 +640,25 @@ class VinLightningModule(pl.LightningModule):
                 if torch.isfinite(top3_oracle_hit).any()
                 else nan_tensor
             )
+            selected_oracle_regret = selected_oracle.selected_oracle_regret
+            selected_oracle_rank = selected_oracle.selected_oracle_rank
+            selected_oracle_percentile = selected_oracle.selected_oracle_percentile
+            selected_oracle_regret_mean = (
+                selected_oracle_regret[torch.isfinite(selected_oracle_regret)].mean()
+                if torch.isfinite(selected_oracle_regret).any()
+                else nan_tensor
+            )
+            selected_oracle_rank_mean = (
+                selected_oracle_rank[torch.isfinite(selected_oracle_rank)].mean()
+                if torch.isfinite(selected_oracle_rank).any()
+                else nan_tensor
+            )
+            selected_oracle_percentile_mean = (
+                selected_oracle_percentile[torch.isfinite(selected_oracle_percentile)].mean()
+                if torch.isfinite(selected_oracle_percentile).any()
+                else nan_tensor
+            )
+            selected_oracle_valid_rate = selected_oracle.valid_table.to(dtype=torch.float32).mean()
         self._log_aux_scalars(
             {
                 Metric.RRI_MEAN: rri_valid.mean(),
@@ -634,6 +672,10 @@ class VinLightningModule(pl.LightningModule):
                 ),
                 Metric.CANDIDATE_TOP1_ORACLE_HIT: top1_oracle_hit_mean,
                 Metric.CANDIDATE_TOP3_ORACLE_HIT: top3_oracle_hit_mean,
+                Metric.SELECTED_ORACLE_REGRET: selected_oracle_regret_mean,
+                Metric.SELECTED_ORACLE_RANK: selected_oracle_rank_mean,
+                Metric.SELECTED_ORACLE_PERCENTILE: selected_oracle_percentile_mean,
+                Metric.SELECTED_ORACLE_VALID_TABLE_RATE: selected_oracle_valid_rate,
                 Metric.AUX_REGRESSION_WEIGHT: float(aux_weight)
                 if aux_weight is not None
                 else torch.tensor(float("nan"), device=combined_loss.device),

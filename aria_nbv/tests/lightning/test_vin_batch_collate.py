@@ -481,6 +481,75 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
     assert loss is not None
     assert torch.allclose(logged["train-aux/candidate_top1_oracle_hit"], torch.tensor(0.0))
     assert torch.allclose(logged["train-aux/candidate_top3_oracle_hit"], torch.tensor(1.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_regret"], torch.tensor(0.1))
+    assert torch.allclose(logged["train-aux/selected_oracle_rank"], torch.tensor(2.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_percentile"], torch.tensor(0.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(1.0))
+
+
+def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Selected-action oracle diagnostics should not select from all-nonfinite valid predictions."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+            aux_regression_loss=None,
+        ),
+    )
+    module._binner = RriOrdinalBinner.fit_from_iterable(
+        [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
+        num_classes=3,
+    )
+    module._maybe_init_bin_values()
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    logged: dict[str, torch.Tensor | float] = {}
+
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        logged.update(values)
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+
+    logits = torch.zeros((1, 4, 2), dtype=torch.float32)
+    probs = coral_logits_to_prob(logits)
+    expected, _ = coral_expected_from_logits(logits)
+    pred = VinPrediction(
+        logits=logits,
+        prob=probs,
+        expected=expected,
+        expected_normalized=torch.tensor([[float("nan"), float("nan"), 1.0, 0.8]], dtype=torch.float32),
+        candidate_valid=torch.ones((1, 4), dtype=torch.bool),
+        voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
+        semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
+        semidense_valid_frac=torch.ones((1, 4), dtype=torch.float32),
+    )
+    module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
+
+    batch = VinOracleBatch(
+        efm_snippet_view=_make_snippet(),
+        candidate_poses_world_cam=_identity_pose(4),
+        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
+        pm_dist_before=torch.ones(4, dtype=torch.float32),
+        pm_dist_after=torch.ones(4, dtype=torch.float32),
+        pm_acc_before=torch.ones(4, dtype=torch.float32),
+        pm_comp_before=torch.ones(4, dtype=torch.float32),
+        pm_acc_after=torch.ones(4, dtype=torch.float32),
+        pm_comp_after=torch.ones(4, dtype=torch.float32),
+        p3d_cameras=_make_cameras(4),
+        scene_id="scene-a",
+        snippet_id="snip-a",
+        candidate_count=torch.tensor(2, dtype=torch.int64),
+        backbone_out=_make_backbone(),
+    )
+
+    loss = module.training_step(batch, batch_idx=0)
+
+    assert loss is not None
+    assert torch.isnan(logged["train-aux/selected_oracle_regret"])
+    assert torch.isnan(logged["train-aux/selected_oracle_rank"])
+    assert torch.isnan(logged["train-aux/selected_oracle_percentile"])
+    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(0.0))
 
 
 def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
