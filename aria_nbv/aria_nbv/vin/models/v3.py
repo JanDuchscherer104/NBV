@@ -99,13 +99,12 @@ from ..encoders import (
 )
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
 from ..geometry.semidense_projection import (
-    SEMIDENSE_GRID_CHANNELS,
-    SEMIDENSE_PROJ_DIM,
     build_projection_grid,
     encode_projection_summary,
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
+from ..geometry.semidense_schema import SEMIDENSE_GRID_CHANNELS, SEMIDENSE_PROJ_DIM
 from ..modules import PoseConditionedGlobalPool, largest_divisor_leq
 from ..types import (
     EvlBackboneOutput,

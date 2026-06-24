@@ -14,7 +14,7 @@ from typing import Any
 from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
-from ..geometry import semidense_proj_feature_index
+from ..geometry.semidense_schema import semidense_proj_feature_index
 from ..scorer_context import (
     compute_global_context,
     encode_pose_features,

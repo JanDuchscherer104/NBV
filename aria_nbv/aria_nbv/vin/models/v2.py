@@ -76,7 +76,7 @@ from ..encoders import (
     validate_pos_grid_xyz_encoder,
 )
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
-from ..geometry.semidense_projection import SEMIDENSE_PROJ_DIM
+from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
 from ..modules import PoseConditionedGlobalPool, largest_divisor_leq
 from ..types import (
     EvlBackboneOutput,
