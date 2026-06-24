@@ -110,6 +110,60 @@ def sample_voxel_field(
     return tokens, valid
 
 
+def sample_candidate_voxel_coverage(
+    counts_norm: Tensor,
+    *,
+    candidate_centers_world: Tensor,
+    pose_finite: Tensor,
+    t_world_voxel: PoseTW,
+    voxel_extent: Tensor,
+) -> Tensor:
+    """Sample normalized voxel observation coverage at candidate camera centers.
+
+    Args:
+        counts_norm: ``Tensor["B 1 D H W", float32]`` normalized observation-count
+            field from the VIN scene-field bundle.
+        candidate_centers_world: ``Tensor["B N 3", float32]`` candidate camera
+            centers in the world frame.
+        pose_finite: ``Tensor["B N", bool]`` mask for finite candidate pose
+            encodings. Non-finite poses are forced to zero coverage.
+        t_world_voxel: ``PoseTW["B 12"]`` world-from-voxel transform for the EVL grid.
+        voxel_extent: ``Tensor["B 6"]`` or ``Tensor["6"]`` voxel-frame grid bounds.
+
+    Returns:
+        ``Tensor["B N", float32]`` per-candidate coverage in ``[0, 1]``.
+
+    Notes:
+        This helper keeps candidate-center voxel sampling out of scorer forward
+        methods. It is intentionally stateless and differentiability-neutral:
+        `sample_voxel_field` uses nearest-neighbor EVL sampling, and this helper
+        only folds in hard geometric validity plus pose finiteness.
+    """
+    if counts_norm.ndim != 5 or int(counts_norm.shape[1]) != 1:
+        raise ValueError(f"Expected counts_norm shape (B,1,D,H,W), got {tuple(counts_norm.shape)}.")
+    if candidate_centers_world.ndim != 3 or int(candidate_centers_world.shape[-1]) != 3:
+        raise ValueError(
+            f"Expected candidate_centers_world shape (B,N,3), got {tuple(candidate_centers_world.shape)}.",
+        )
+    if pose_finite.shape != candidate_centers_world.shape[:2]:
+        raise ValueError(
+            "Expected pose_finite shape to match candidate_centers_world[:2], "
+            f"got {tuple(pose_finite.shape)} and {tuple(candidate_centers_world.shape[:2])}.",
+        )
+
+    center_tokens, center_valid = sample_voxel_field(
+        counts_norm,
+        points_world=candidate_centers_world.unsqueeze(2),
+        t_world_voxel=t_world_voxel,
+        voxel_extent=voxel_extent,
+    )
+    counts_norm_center = center_tokens[..., 0, 0]
+    center_valid = center_valid.squeeze(-1)
+    coverage = counts_norm_center * center_valid.to(dtype=counts_norm_center.dtype)
+    coverage = coverage * pose_finite.to(device=coverage.device, dtype=coverage.dtype)
+    return coverage.clamp(0.0, 1.0)
+
+
 def candidate_valid_from_token(
     token_valid: Tensor,
     *,

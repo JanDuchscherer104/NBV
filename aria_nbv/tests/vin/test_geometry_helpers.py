@@ -14,6 +14,7 @@ from aria_nbv.vin.geometry import (
     ensure_candidate_batch,
     ensure_pose_batch,
     frustum_points_world_from_cameras,
+    sample_candidate_voxel_coverage,
 )
 
 
@@ -96,6 +97,33 @@ def test_candidate_valid_from_token_thresholds_last_axis() -> None:
     candidate_valid = candidate_valid_from_token(valid, min_valid_frac=0.5)
 
     assert candidate_valid.tolist() == [[True, False], [True, False]]
+
+
+def test_sample_candidate_voxel_coverage_masks_geometry_and_pose() -> None:
+    counts_norm = torch.ones((1, 1, 6, 6, 6), dtype=torch.float32)
+    t_world_voxel = _identity_pose(1)
+    voxel_extent = torch.tensor([0.0, 6.0, 0.0, 6.0, 0.0, 6.0], dtype=torch.float32)
+    centers_world = torch.tensor(
+        [
+            [
+                [3.0, 3.0, 3.0],
+                [30.0, 30.0, 30.0],
+                [4.0, 3.0, 3.0],
+            ],
+        ],
+        dtype=torch.float32,
+    )
+    pose_finite = torch.tensor([[True, True, False]], dtype=torch.bool)
+
+    coverage = sample_candidate_voxel_coverage(
+        counts_norm,
+        candidate_centers_world=centers_world,
+        pose_finite=pose_finite,
+        t_world_voxel=t_world_voxel,
+        voxel_extent=voxel_extent,
+    )
+
+    assert torch.allclose(coverage, torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32))
 
 
 def test_build_scene_field_preserves_experimental_observed_unknown_contract() -> None:

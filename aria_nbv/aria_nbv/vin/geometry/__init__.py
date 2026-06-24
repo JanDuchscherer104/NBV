@@ -28,6 +28,7 @@ from .voxel import (
     infer_padded_grid_shape,
     pool_voxel_points,
     pos_grid_from_pts_world,
+    sample_candidate_voxel_coverage,
     sample_voxel_field,
 )
 
@@ -47,6 +48,7 @@ __all__ = [
     "build_projection_grid",
     "encode_projection_summary",
     "project_points_to_candidate_cameras",
+    "sample_candidate_voxel_coverage",
     "sample_voxel_field",
     "sample_semidense_points",
     "semidense_proj_feature_index",

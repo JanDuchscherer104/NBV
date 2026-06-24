@@ -96,7 +96,12 @@ from ..encoders import (
     TrajectoryEncoderConfig,
     validate_pos_grid_xyz_encoder,
 )
-from ..geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
+from ..geometry import (
+    ensure_candidate_batch,
+    ensure_pose_batch,
+    pool_voxel_points,
+    sample_candidate_voxel_coverage,
+)
 from ..geometry.semidense_projection import (
     encode_projection_summary,
     project_points_to_candidate_cameras,
@@ -742,18 +747,14 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         counts_norm = field_bundle.aux.get("counts_norm")
         if counts_norm is None:
             raise KeyError("Missing counts_norm in field bundle.")
-        center_tokens, center_valid = sample_voxel_field(
+        pose_finite = torch.isfinite(pose_feats.pose_vec).all(dim=-1)
+        voxel_valid_frac = sample_candidate_voxel_coverage(
             counts_norm,
-            points_world=candidate_centers_world.unsqueeze(2),
+            candidate_centers_world=candidate_centers_world,
+            pose_finite=pose_finite,
             t_world_voxel=prepared.t_world_voxel,
             voxel_extent=backbone_out.voxel_extent,
         )
-        # center_tokens: (B, N_q, 1, 1); center_valid: (B, N_q, 1)
-        center_valid = center_valid.squeeze(-1)  # (B, N_q)
-        counts_norm_center = center_tokens[..., 0, 0]  # (B, N_q)
-        pose_finite = torch.isfinite(pose_feats.pose_vec).all(dim=-1)
-        voxel_valid_frac = (counts_norm_center * center_valid.to(dtype=counts_norm_center.dtype)).clamp(0.0, 1.0)
-        voxel_valid_frac = (voxel_valid_frac * pose_finite.to(dtype=voxel_valid_frac.dtype)).clamp(0.0, 1.0)
 
         pts_world = backbone_out.pts_world
         if not isinstance(pts_world, torch.Tensor):
