@@ -63,7 +63,6 @@ from aria_nbv.utils.frames import rotate_yaw_cw90
 from ...data_handling import EfmSnippetView, VinSnippetView
 from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_logits_to_prob
 from ...utils import Optimizable, TargetConfig, optimizable_field
-from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbones import EvlBackboneConfig
 from ..encoders import (
     LearnableFourierFeaturesConfig,
@@ -87,6 +86,7 @@ from ..types import (
     VinPrediction,
     VinV2ForwardDiagnostics,
 )
+from ._context_mixin import PoseFeatureGlobalContextMixin
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch

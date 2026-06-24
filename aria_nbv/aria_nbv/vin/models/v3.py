@@ -87,7 +87,6 @@ from ...data_handling._raw import (
 from ...data_handling.vin_adapter import build_vin_snippet_view
 from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_logits_to_prob
 from ...utils import TargetConfig
-from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v3
 from ..encoders import (
@@ -116,6 +115,7 @@ from ..types import (
     VinPrediction,
     VinV3ForwardDiagnostics,
 )
+from ._context_mixin import PoseFeatureGlobalContextMixin
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch
