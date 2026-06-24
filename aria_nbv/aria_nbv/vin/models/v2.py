@@ -61,7 +61,7 @@ from torch import Tensor, nn
 from aria_nbv.utils.frames import rotate_yaw_cw90
 
 from ...data_handling import EfmSnippetView, VinSnippetView
-from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_logits_to_prob
+from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from ...utils import Optimizable, TargetConfig, optimizable_field
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v2
@@ -78,7 +78,7 @@ from ..encoders import (
 )
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
 from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
-from ..modules import PoseConditionedGlobalPool, largest_divisor_leq
+from ..modules import PoseConditionedGlobalPool, VinScorerHeadConfig, largest_divisor_leq
 from ..types import (
     EvlBackboneOutput,
     FieldBundle,
@@ -528,29 +528,16 @@ class VinModelV2(PoseFeatureGlobalContextMixin, nn.Module):
         head_in_dim = (
             pose_dim + field_dim + point_dim + traj_ctx_dim + SEMIDENSE_PROJ_DIM + frustum_dim + voxel_frac_dim
         )
-        act: nn.Module
-        match self.config.head_activation:
-            case "relu":
-                act = nn.ReLU()
-            case "gelu":
-                act = nn.GELU()
-
-        hidden_dim = int(self.config.head_hidden_dim)
-        layers: list[nn.Module] = [nn.Linear(head_in_dim, hidden_dim), act]
-        if self.config.head_dropout > 0:
-            layers.append(nn.Dropout(p=float(self.config.head_dropout)))
-        for _ in range(int(self.config.head_num_layers) - 1):
-            layers.append(nn.Linear(hidden_dim, hidden_dim))
-            layers.append(act)
-            if self.config.head_dropout > 0:
-                layers.append(nn.Dropout(p=float(self.config.head_dropout)))
-
-        self.head_mlp = nn.Sequential(*layers)
-        self.head_coral = CoralLayer(
-            in_dim=hidden_dim,
-            num_classes=self.config.num_classes,
-            preinit_bias=self.config.coral_preinit_bias,
-        )
+        head = VinScorerHeadConfig(
+            hidden_dim=int(self.config.head_hidden_dim),
+            num_layers=int(self.config.head_num_layers),
+            dropout=float(self.config.head_dropout),
+            num_classes=int(self.config.num_classes),
+            coral_preinit_bias=bool(self.config.coral_preinit_bias),
+            activation=self.config.head_activation,
+        ).setup_target(in_dim=head_in_dim)
+        self.head_mlp = head.mlp
+        self.head_coral = head.coral
         if self.traj_encoder is not None:
             traj_dim = int(self.traj_encoder.out_dim)
             traj_heads = largest_divisor_leq(pose_dim, 4)

@@ -150,6 +150,16 @@ def test_vin_model_v2_gradients(monkeypatch) -> None:
         assert torch.isfinite(param.grad).all(), f"Non-finite grad for {name}"
 
 
+def test_v2_shared_head_preserves_checkpoint_keys() -> None:
+    """V2 should keep the public head_mlp/head_coral state-dict surface."""
+    model = VinModelV2(VinModelV2Config())
+    keys = set(model.state_dict())
+
+    assert any(key.startswith("head_mlp.") for key in keys)
+    assert any(key.startswith("head_coral.") for key in keys)
+    assert not any(key.startswith("scorer_head.") for key in keys)
+
+
 def test_semidense_projection_features_shape() -> None:
     model = VinModelV2(VinModelV2Config(point_encoder=None, traj_encoder=None))
     device = torch.device("cpu")
