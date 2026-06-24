@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 from torch import Tensor
 
 from .model_v3 import VinModelV3Config
+from .models.multi_step import MultiStepCandidateScorerConfig
+from .models.target_conditioned_myopic import TargetConditionedMyopicScorerConfig
 from .types import EvlBackboneOutput, VinPrediction
 
 if TYPE_CHECKING:
@@ -113,14 +115,16 @@ class CandidateScorerPrediction(Protocol):
     """Optional ``Tensor["B C"]`` hard candidate-valid mask from the scorer."""
 
 
-CandidateScorerConfig: TypeAlias = VinModelV3Config
-"""Config-as-factory type for the active candidate scorer slot.
+CandidateScorerConfig: TypeAlias = (
+    VinModelV3Config | TargetConditionedMyopicScorerConfig | MultiStepCandidateScorerConfig
+)
+"""Config-as-factory type for candidate scorer architecture slots.
 
-This alias is intentionally narrow until a concrete target-conditioned or
-finite-horizon scorer exists. The expected expansion point is a discriminated
-union such as ``VinModelV3Config | TargetConditionedMyopicScorerConfig`` once
-the second config can be instantiated and tested end-to-end. Non-runnable
-scaffolds for those planned families live under `aria_nbv.vin.models`.
+The union keeps the preserved `VinModelV3Config` as the default runnable
+implementation while letting experiment configs name the planned
+target-conditioned myopic and finite-horizon families. Those planned configs
+are still non-runnable scaffolds; their `setup_target()` methods fail
+explicitly until the corresponding model semantics are implemented.
 """
 
 
