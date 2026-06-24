@@ -1069,17 +1069,19 @@ class VinModelV2(PoseFeatureGlobalContextMixin, nn.Module):
         )
         global_feat = global_ctx.global_feat
         if semidense_feat is not None and self.point_film is not None:
-            film = self.point_film(semidense_feat.to(dtype=global_feat.dtype))
-            gamma, beta = film.chunk(2, dim=-1)
-            global_feat = global_feat * (1.0 + gamma[:, None, :]) + beta[:, None, :]
-            if self.point_film_norm is not None:
-                global_feat = self.point_film_norm(global_feat.transpose(1, 2)).transpose(1, 2)
+            global_feat = self._apply_film(
+                global_feat,
+                semidense_feat[:, None, :],
+                film=self.point_film,
+                norm=self.point_film_norm,
+            )
         if self.sem_proj_film is not None:
-            film = self.sem_proj_film(semidense_proj.to(dtype=global_feat.dtype))
-            gamma, beta = film.chunk(2, dim=-1)
-            global_feat = global_feat * (1.0 + gamma) + beta
-            if self.sem_proj_film_norm is not None:
-                global_feat = self.sem_proj_film_norm(global_feat.transpose(1, 2)).transpose(1, 2)
+            global_feat = self._apply_film(
+                global_feat,
+                semidense_proj,
+                film=self.sem_proj_film,
+                norm=self.sem_proj_film_norm,
+            )
         global_ctx = GlobalContext(pos_grid=global_ctx.pos_grid, global_feat=global_feat)
         traj_feat, traj_pose_vec, traj_pose_enc = self._encode_traj_features(
             prepared.snippet,

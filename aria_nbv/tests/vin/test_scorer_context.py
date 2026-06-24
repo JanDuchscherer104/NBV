@@ -6,7 +6,7 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.vin.scorer_context import build_vin_scorer_scene_field
+from aria_nbv.vin.scorer_context import apply_vin_scorer_film, build_vin_scorer_scene_field
 from aria_nbv.vin.types import EvlBackboneOutput
 
 
@@ -99,3 +99,45 @@ def test_build_vin_scorer_scene_field_rejects_unknown_channel() -> None:
             scene_field_channels=["occ_pr", "not_a_channel"],
             model_name="VinModelV2",
         )
+
+
+def test_apply_vin_scorer_film_uses_shared_formula() -> None:
+    """FiLM helper should apply global * (1 + gamma) + beta."""
+    global_feat = torch.ones((1, 2, 3), dtype=torch.float32)
+    cond_feat = torch.tensor([[[2.0], [4.0]]], dtype=torch.float32)
+    film = torch.nn.Linear(1, 6, bias=False)
+    with torch.no_grad():
+        film.weight.copy_(
+            torch.tensor(
+                [
+                    [1.0],
+                    [2.0],
+                    [3.0],
+                    [4.0],
+                    [5.0],
+                    [6.0],
+                ],
+                dtype=torch.float32,
+            ),
+        )
+
+    out = apply_vin_scorer_film(global_feat, cond_feat, film=film, norm=None)
+    film_out = film(cond_feat)
+    gamma, beta = film_out.chunk(2, dim=-1)
+
+    assert torch.allclose(out, global_feat * (1.0 + gamma) + beta)
+
+
+def test_apply_vin_scorer_film_preserves_single_condition_broadcast() -> None:
+    """A ``(B, 1, F)`` conditioning tensor should broadcast across candidates."""
+    global_feat = torch.ones((2, 3, 2), dtype=torch.float32)
+    cond_feat = torch.tensor([[[1.0]], [[3.0]]], dtype=torch.float32)
+    film = torch.nn.Linear(1, 4, bias=False)
+    with torch.no_grad():
+        film.weight.fill_(1.0)
+
+    out = apply_vin_scorer_film(global_feat, cond_feat, film=film, norm=None)
+
+    assert out.shape == global_feat.shape
+    assert torch.allclose(out[0], torch.full((3, 2), 3.0))
+    assert torch.allclose(out[1], torch.full((3, 2), 7.0))

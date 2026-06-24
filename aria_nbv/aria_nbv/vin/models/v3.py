@@ -606,35 +606,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         field = self.field_proj(field_in)
         return FieldBundle(field_in=field_in, field=field, aux=field_aux)
 
-    @staticmethod
-    def _apply_film(
-        global_feat: Tensor,
-        proj_feat: Tensor,
-        *,
-        film: nn.Module,
-        norm: nn.GroupNorm | None,
-    ) -> Tensor:
-        """Apply FiLM modulation to global features.
-
-        VIN v3 keeps only the voxel-projection FiLM path after sweep evidence
-        showed limited benefit from additional FiLM branches.
-
-        Args:
-            global_feat (Tensor["B, Nq, F_g"]): Global features to modulate.
-            proj_feat (Tensor["B, Nq, F_proj"]): Projection summary features.
-            film (nn.Module): MLP that outputs 2*F_g parameters (gamma, beta).
-            norm (nn.GroupNorm | None): Optional normalization on channels.
-
-        Returns:
-            Tensor["B, Nq, F_g"]: FiLM-modulated global features.
-        """
-        film_out = film(proj_feat.to(dtype=global_feat.dtype))
-        gamma, beta = film_out.chunk(2, dim=-1)
-        global_feat = global_feat * (1.0 + gamma) + beta
-        if norm is not None:
-            global_feat = norm(global_feat.transpose(1, 2)).transpose(1, 2)
-        return global_feat
-
     def _encode_semidense_grid_features(
         self,
         proj_data: dict[str, Tensor] | None,

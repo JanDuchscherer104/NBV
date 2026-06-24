@@ -13,7 +13,7 @@ from typing import Any
 
 import torch
 from efm3d.aria.pose import PoseTW
-from torch import Tensor
+from torch import Tensor, nn
 
 from .geometry.voxel import pos_grid_from_pts_world
 from .types import EvlBackboneOutput, GlobalContext, PoseFeatures
@@ -80,6 +80,38 @@ def build_vin_scorer_scene_field(
     return field_in, field_aux
 
 
+def apply_vin_scorer_film(
+    global_feat: Tensor,
+    cond_feat: Tensor,
+    *,
+    film: nn.Module,
+    norm: nn.GroupNorm | None,
+) -> Tensor:
+    """Apply FiLM modulation to per-candidate global scene features.
+
+    Concrete scorer models own the trainable FiLM projection and optional
+    normalization modules. This stateless helper only applies the shared
+    ``global * (1 + gamma) + beta`` formula and preserves candidate-axis
+    broadcasting when ``cond_feat`` has shape ``Tensor["B 1 F"]``.
+
+    Args:
+        global_feat: ``Tensor["B Nq F_g"]`` global features to modulate.
+        cond_feat: ``Tensor["B Nq F_c"]`` or ``Tensor["B 1 F_c"]`` conditioning
+            features consumed by ``film``.
+        film: Module that maps ``cond_feat`` to ``2 * F_g`` FiLM parameters.
+        norm: Optional GroupNorm over ``F_g`` channels.
+
+    Returns:
+        ``Tensor["B Nq F_g"]`` after FiLM and optional normalization.
+    """
+    film_out = film(cond_feat.to(dtype=global_feat.dtype))
+    gamma, beta = film_out.chunk(2, dim=-1)
+    modulated = global_feat * (1.0 + gamma) + beta
+    if norm is not None:
+        modulated = norm(modulated.transpose(1, 2)).transpose(1, 2)
+    return modulated
+
+
 def encode_pose_features(
     *,
     pose_encoder: Any,
@@ -136,6 +168,7 @@ def compute_global_context(
 
 
 __all__ = [
+    "apply_vin_scorer_film",
     "build_vin_scorer_scene_field",
     "compute_global_context",
     "encode_pose_features",

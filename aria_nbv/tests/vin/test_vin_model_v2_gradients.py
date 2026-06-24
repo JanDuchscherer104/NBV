@@ -157,7 +157,10 @@ def test_v2_shared_head_preserves_checkpoint_keys() -> None:
 
     assert any(key.startswith("head_mlp.") for key in keys)
     assert any(key.startswith("head_coral.") for key in keys)
+    assert any(key.startswith("sem_proj_film.") for key in keys)
+    assert any(key.startswith("sem_proj_film_norm.") for key in keys)
     assert not any(key.startswith("scorer_head.") for key in keys)
+    assert not any(key.startswith("film.") for key in keys)
 
 
 def test_semidense_projection_features_shape() -> None:
