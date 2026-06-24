@@ -67,6 +67,8 @@ from .._model_mixins import PoseFeatureGlobalContextMixin
 from ..backbones import EvlBackboneConfig
 from ..encoders import (
     LearnableFourierFeaturesConfig,
+    PoseEncoder,
+    PoseEncoderConfig,
     R6dLffPoseEncoderConfig,
     TrajectoryEncoder,
     TrajectoryEncoderConfig,
@@ -77,7 +79,6 @@ from ..modules import PoseConditionedGlobalPool
 from ..types import FieldBundle, GlobalContext, PreparedInputs
 from ..vin_utils import largest_divisor_leq, validate_pos_grid_xyz_encoder
 from .pointnext_encoder import PointNeXtSEncoder, PointNeXtSEncoderConfig
-from .pose_encoders import PoseEncoder, PoseEncoderConfig
 from .types import EvlBackboneOutput, VinPrediction, VinV2ForwardDiagnostics
 
 if TYPE_CHECKING:

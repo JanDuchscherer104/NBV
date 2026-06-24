@@ -20,7 +20,7 @@ from ...interpretability.attribution import (
 )
 from ...lightning.lit_module import VinLightningModule
 from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
-from ...vin.experimental.pose_encoders import infer_pose_vec_groups
+from ...vin.encoders import infer_pose_vec_groups
 from ...vin.geometry import pos_grid_from_pts_world
 from ..state import get_vin_state
 from .common import _info_popover

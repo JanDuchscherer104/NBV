@@ -19,7 +19,7 @@ from pydantic import Field
 from torch import Tensor, nn
 
 from ...utils import TargetConfig
-from .pose_encoding import FourierFeaturesConfig
+from .fixed_fourier import FourierFeaturesConfig
 
 
 class ShellShPoseEncoder(nn.Module):
@@ -123,7 +123,9 @@ class ShellShPoseEncoder(nn.Module):
         Returns:
             ``Tensor["... out_dim", float32]`` pose embedding.
 
-        TODO: ensure same signature as other pose encoders - i.e. LearnableFourierFeatures.forward (derive both from a common base class!)
+        This lower-level module receives the shell descriptor tensors directly.
+        Use `aria_nbv.vin.encoders.shell_pose.ShellShPoseEncoderAdapter` when
+        the input is an `efm3d.aria.pose.PoseTW` pose.
         """
 
         if u.shape[-1] != 3 or f.shape[-1] != 3:

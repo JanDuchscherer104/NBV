@@ -1,4 +1,11 @@
-"""Experimental pose-encoding utilities not used by VIN-Core."""
+"""Fixed or directly learnable Fourier features for scalar VIN descriptors.
+
+`FourierFeatures` is a small `torch.nn.Module` used by
+`aria_nbv.vin.encoders.spherical.ShellShPoseEncoder` to encode a one-dimensional
+candidate radius before projection. For the trainable MLP-based positional
+encoder used by VIN-Core, prefer
+`aria_nbv.vin.encoders.fourier.LearnableFourierFeatures`.
+"""
 
 from __future__ import annotations
 
@@ -9,11 +16,15 @@ from pydantic import Field
 from torch import Tensor, nn
 
 from ...utils import TargetConfig
-from ..encoders import LearnableFourierFeatures, LearnableFourierFeaturesConfig
 
 
 class FourierFeatures(nn.Module):
-    """Fixed/learnable Fourier features for scalar or vector inputs."""
+    """Sin/cos Fourier features with optional learnable frequencies.
+
+    Args:
+        config: Config-as-factory object defining input dimension, number of
+            frequencies, raw-input concatenation, and frequency initialization.
+    """
 
     def __init__(self, config: "FourierFeaturesConfig") -> None:
         super().__init__()
@@ -59,7 +70,13 @@ class FourierFeatures(nn.Module):
 
 
 class FourierFeaturesConfig(TargetConfig[FourierFeatures]):
-    """Config-as-factory wrapper for `FourierFeatures`."""
+    """Config-as-factory wrapper for `FourierFeatures`.
+
+    The emitted module has no hidden MLP; it only returns raw inputs and
+    normalized sin/cos features. Use
+    `aria_nbv.vin.encoders.fourier.LearnableFourierFeaturesConfig` when the
+    projection should be followed by a trainable MLP.
+    """
 
     @property
     def target_type(self) -> type[FourierFeatures]:
@@ -84,6 +101,4 @@ class FourierFeaturesConfig(TargetConfig[FourierFeatures]):
 __all__ = [
     "FourierFeatures",
     "FourierFeaturesConfig",
-    "LearnableFourierFeatures",
-    "LearnableFourierFeaturesConfig",
 ]

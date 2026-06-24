@@ -282,19 +282,25 @@ quartodoc:
     - title: "VIN Core"
       desc: "Core model modules behind EVL-backed view scoring."
       contents:
-        - name: vin.backbone_evl
+        - name: vin.backbones.evl
           children: separate
           member_options: *embedded_members
         - name: vin.model_v3
           children: separate
           member_options: *embedded_members
-        - name: vin.pose_encoders
+        - name: vin.encoders.pose
           children: separate
           member_options: *embedded_members
-        - name: vin.pose_encoding
+        - name: vin.encoders.shell_pose
           children: separate
           member_options: *embedded_members
-        - name: vin.traj_encoder
+        - name: vin.encoders.spherical
+          children: separate
+          member_options: *embedded_members
+        - name: vin.encoders.fourier
+          children: separate
+          member_options: *embedded_members
+        - name: vin.encoders.trajectory
           children: separate
           member_options: *embedded_members
         - name: vin.types

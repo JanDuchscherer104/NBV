@@ -100,6 +100,7 @@ from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_pro
 from ...utils import TargetConfig
 from .._model_mixins import FrustumSamplingMixin
 from ..backbones import EvlBackboneConfig
+from ..encoders import ShellShPoseEncoderConfig
 from ..geometry import (
     build_scene_field as _build_scene_field,
 )
@@ -113,7 +114,6 @@ from ..modules import VinScorerHeadConfig
 from ..vin_utils import (
     largest_divisor_leq as _largest_divisor_leq,
 )
-from .spherical_encoding import ShellShPoseEncoderConfig
 from .types import EvlBackboneOutput, VinForwardDiagnostics, VinPrediction
 
 

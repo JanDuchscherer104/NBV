@@ -1,34 +1,32 @@
-"""Pose encoder variants for VIN candidates.
+"""Shell-pose encoder modules for VIN candidates.
 
-This module centralizes pose-encoding logic that was previously embedded in
-`VinModelV2`, allowing different encoders to be selected via configuration.
+Shell encoders describe a candidate by the direction from the reference pose to
+the candidate center, the candidate optical axis, the radial distance, and a
+view-target alignment scalar. They are useful for shell-sampled NBV candidates
+where roll about the optical axis is not semantically important.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Literal, TypeAlias
 
-import torch
 from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator
 
 from ...utils import TargetConfig
-from ..encoders import (
-    LearnableFourierFeaturesConfig,
-    PoseEncoder,
-    PoseEncodingOutput,
-    R6dLffPoseEncoder,
-    R6dLffPoseEncoderConfig,
-)
-from .spherical_encoding import ShellShPoseEncoderConfig
+from .fourier import LearnableFourierFeaturesConfig
+from .pose import PoseEncoder, PoseEncodingOutput, R6dLffPoseEncoderConfig
+from .shell_descriptor import encode_shell_pose_descriptor
+from .spherical import ShellShPoseEncoderConfig
 
 
 class ShellShPoseEncoderAdapter(PoseEncoder):
-    """Encode shell descriptors with SH-based encoder.
+    """Adapt `ShellShPoseEncoder` to the common pose-encoder interface.
 
-    Note: The SH descriptor uses only the forward direction and therefore does
-    not encode roll about the forward axis. This is acceptable when roll jitter
-    is small; use R6D LFF if roll sensitivity is needed.
+    The adapter accepts `efm3d.aria.pose.PoseTW` poses, derives the canonical
+    shell descriptor with `encode_shell_pose_descriptor`, and delegates the
+    direction/radius tensors to
+    `aria_nbv.vin.encoders.spherical.ShellShPoseEncoder`.
     """
 
     def __init__(self, config: "ShellShPoseEncoderAdapterConfig") -> None:
@@ -43,42 +41,30 @@ class ShellShPoseEncoderAdapter(PoseEncoder):
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:
         """Encode shell pose descriptors with spherical harmonics."""
-        center_m = pose_rig.t.to(dtype=torch.float32)
-        radius_m = torch.linalg.vector_norm(center_m, dim=-1, keepdim=True)
-        center_dir = center_m / (radius_m + 1e-8)
-
-        cam_forward_axis = torch.tensor(
-            [0.0, 0.0, 1.0],
-            device=center_m.device,
-            dtype=torch.float32,
+        descriptor = encode_shell_pose_descriptor(pose_rig)
+        pose_enc = self.sh_encoder(
+            descriptor.center_dir,
+            descriptor.forward_dir,
+            r=descriptor.radius_m,
+            scalars=descriptor.view_alignment,
         )
-        forward_dir = torch.einsum(
-            "...ij,j->...i",
-            pose_rig.R.to(dtype=torch.float32),
-            cam_forward_axis,
-        )
-        forward_dir = forward_dir / (torch.linalg.vector_norm(forward_dir, dim=-1, keepdim=True) + 1e-8)
-        view_alignment = (forward_dir * (-center_dir)).sum(dim=-1, keepdim=True)
-
-        pose_vec = torch.cat([center_dir, forward_dir, radius_m, view_alignment], dim=-1)
-        pose_enc = self.sh_encoder(center_dir, forward_dir, r=radius_m, scalars=view_alignment)
         return PoseEncodingOutput(
-            center_m=center_m,
-            pose_vec=pose_vec,
+            center_m=descriptor.center_m,
+            pose_vec=descriptor.pose_vec,
             pose_enc=pose_enc,
-            center_dir=center_dir,
-            forward_dir=forward_dir,
-            radius_m=radius_m,
-            view_alignment=view_alignment,
+            center_dir=descriptor.center_dir,
+            forward_dir=descriptor.forward_dir,
+            radius_m=descriptor.radius_m,
+            view_alignment=descriptor.view_alignment,
         )
 
 
 class ShellLffPoseEncoder(PoseEncoder):
-    """Encode shell descriptors with LFF.
+    """Encode canonical shell descriptors with learned Fourier features.
 
-    Note: The shell descriptor uses only the forward direction. Roll about the
-    forward axis is not represented; this is acceptable when roll jitter is
-    small. Use the R6D encoder if roll needs to be captured.
+    The input pose must already be expressed in the reference rig frame. The
+    emitted pose vector is ``[center_dir, forward_dir, radius_m,
+    view_alignment]`` and has dimension 8.
     """
 
     def __init__(self, config: "ShellLffPoseEncoderConfig") -> None:
@@ -92,41 +78,25 @@ class ShellLffPoseEncoder(PoseEncoder):
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:
         """Encode shell pose descriptors in the reference rig frame."""
-        center_m = pose_rig.t.to(dtype=torch.float32)
-        radius_m = torch.linalg.vector_norm(center_m, dim=-1, keepdim=True)
-        center_dir = center_m / (radius_m + 1e-8)
-
-        cam_forward_axis = torch.tensor(
-            [0.0, 0.0, 1.0],
-            device=center_m.device,
-            dtype=torch.float32,
-        )
-        forward_dir = torch.einsum(
-            "...ij,j->...i",
-            pose_rig.R.to(dtype=torch.float32),
-            cam_forward_axis,
-        )
-        forward_dir = forward_dir / (torch.linalg.vector_norm(forward_dir, dim=-1, keepdim=True) + 1e-8)
-        view_alignment = (forward_dir * (-center_dir)).sum(dim=-1, keepdim=True)
-
-        pose_vec = torch.cat([center_dir, forward_dir, radius_m, view_alignment], dim=-1)
-        pose_enc = self.pose_encoder_lff(pose_vec)
+        descriptor = encode_shell_pose_descriptor(pose_rig)
+        pose_enc = self.pose_encoder_lff(descriptor.pose_vec)
         return PoseEncodingOutput(
-            center_m=center_m,
-            pose_vec=pose_vec,
+            center_m=descriptor.center_m,
+            pose_vec=descriptor.pose_vec,
             pose_enc=pose_enc,
-            center_dir=center_dir,
-            forward_dir=forward_dir,
-            radius_m=radius_m,
-            view_alignment=view_alignment,
+            center_dir=descriptor.center_dir,
+            forward_dir=descriptor.forward_dir,
+            radius_m=descriptor.radius_m,
+            view_alignment=descriptor.view_alignment,
         )
 
 
 class ShellLffPoseEncoderConfig(TargetConfig[ShellLffPoseEncoder]):
-    """Config for `ShellLffPoseEncoder`."""
+    """Config-as-factory wrapper for `ShellLffPoseEncoder`."""
 
     @property
     def target_type(self) -> type[ShellLffPoseEncoder]:
+        """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return ShellLffPoseEncoder
 
     kind: Literal["shell_lff"] = "shell_lff"
@@ -151,10 +121,11 @@ class ShellLffPoseEncoderConfig(TargetConfig[ShellLffPoseEncoder]):
 
 
 class ShellShPoseEncoderAdapterConfig(TargetConfig[ShellShPoseEncoderAdapter]):
-    """Config for `ShellShPoseEncoderAdapter`."""
+    """Config-as-factory wrapper for `ShellShPoseEncoderAdapter`."""
 
     @property
     def target_type(self) -> type[ShellShPoseEncoderAdapter]:
+        """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return ShellShPoseEncoderAdapter
 
     kind: Literal["shell_sh"] = "shell_sh"
@@ -203,7 +174,6 @@ __all__ = [
     "PoseEncoder",
     "PoseEncoderConfig",
     "PoseEncodingOutput",
-    "R6dLffPoseEncoder",
     "R6dLffPoseEncoderConfig",
     "ShellLffPoseEncoder",
     "ShellLffPoseEncoderConfig",

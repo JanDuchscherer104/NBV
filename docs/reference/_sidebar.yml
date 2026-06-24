@@ -37,11 +37,13 @@ website:
       - reference/rri_metrics.types.qmd
       section: Implementation Contracts
     - contents:
-      - reference/vin.backbone_evl.qmd
+      - reference/vin.backbones.evl.qmd
       - reference/vin.model_v3.qmd
-      - reference/vin.pose_encoders.qmd
-      - reference/vin.pose_encoding.qmd
-      - reference/vin.traj_encoder.qmd
+      - reference/vin.encoders.pose.qmd
+      - reference/vin.encoders.shell_pose.qmd
+      - reference/vin.encoders.spherical.qmd
+      - reference/vin.encoders.fourier.qmd
+      - reference/vin.encoders.trajectory.qmd
       - reference/vin.types.qmd
       section: VIN Core
     - contents:
