@@ -30,14 +30,7 @@ from .encoders import (
     TrajectoryEncoderConfig,
     TrajectoryEncodingOutput,
 )
-from .model_v3 import VinModelV3, VinModelV3Config
-from .models import (
-    MultiStepCandidateScorer,
-    MultiStepCandidateScorerConfig,
-    TargetConditionedMyopicScorer,
-    TargetConditionedMyopicScorerConfig,
-)
-from .scene_feature_bank import (
+from .feature_bank import (
     FeaturePoolingResult,
     PointFeatureBank,
     PointQueryPool,
@@ -46,6 +39,13 @@ from .scene_feature_bank import (
     pool_point_query,
     sample_logged_image_features_at_world_points,
     validate_actor_feature_provenance,
+)
+from .model_v3 import VinModelV3, VinModelV3Config
+from .models import (
+    MultiStepCandidateScorer,
+    MultiStepCandidateScorerConfig,
+    TargetConditionedMyopicScorer,
+    TargetConditionedMyopicScorerConfig,
 )
 from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
 
