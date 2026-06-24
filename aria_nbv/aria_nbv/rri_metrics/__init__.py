@@ -56,6 +56,7 @@ from .torch_rollout import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_policy_entropy,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
@@ -64,6 +65,7 @@ from .torch_rollout import (
 )
 from .torch_rollout_metrics import (
     CandidateOrderConsistencyMetric,
+    CandidatePolicyEntropyMetric,
     CandidateTableMetrics,
     FiniteMeanMetric,
     PolicyTableMetrics,
@@ -76,6 +78,7 @@ __all__ = [
     "CoralLayer",
     "CandidateOrderConsistency",
     "CandidateOrderConsistencyMetric",
+    "CandidatePolicyEntropyMetric",
     "CandidateTableMetrics",
     "FiniteMeanMetric",
     "LabelHistogram",
@@ -105,6 +108,7 @@ __all__ = [
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
+    "candidate_policy_entropy",
     "coral_expected_from_logits",
     "coral_logits_to_prob",
     "coral_loss",

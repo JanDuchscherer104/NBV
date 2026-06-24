@@ -10,6 +10,7 @@ import torch
 from aria_nbv.rri_metrics import (
     CandidateOrderConsistency,
     CandidateOrderConsistencyMetric,
+    CandidatePolicyEntropyMetric,
     CandidateTableMetrics,
     FiniteMeanMetric,
     PolicyTableMetrics,
@@ -18,6 +19,7 @@ from aria_nbv.rri_metrics import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_policy_entropy,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
@@ -149,6 +151,42 @@ def test_candidate_order_consistency_ignores_invalid_tail_and_detects_bias() -> 
     assert not result.top1_match[1]
 
 
+def test_candidate_policy_entropy_renormalizes_candidate_weights() -> None:
+    probabilities = torch.tensor([[2.0, 2.0], [1.0, 3.0]])
+
+    result = candidate_policy_entropy(probabilities)
+
+    assert torch.allclose(result[0], torch.log(torch.tensor(2.0)))
+    expected_second = -(0.25 * torch.log(torch.tensor(0.25)) + 0.75 * torch.log(torch.tensor(0.75)))
+    assert torch.allclose(result[1], expected_second)
+
+
+def test_candidate_policy_entropy_ignores_invalid_nonfinite_and_nonpositive_entries() -> None:
+    probabilities = torch.tensor([[0.5, float("nan"), -1.0, 0.5], [0.0, float("inf"), 1.0, 1.0]])
+    valid = torch.tensor([[True, True, True, False], [True, True, True, True]])
+
+    result = candidate_policy_entropy(probabilities, valid)
+
+    assert torch.allclose(result, torch.tensor([-0.0, torch.log(torch.tensor(2.0))]))
+
+
+def test_candidate_policy_entropy_returns_nan_for_empty_or_zero_mass_tables() -> None:
+    probabilities = torch.tensor([[0.0, float("nan")], [-1.0, 0.0]])
+
+    result = candidate_policy_entropy(probabilities)
+
+    assert torch.isnan(result).all()
+
+
+def test_candidate_policy_entropy_supports_non_last_candidate_dim() -> None:
+    probabilities = torch.tensor([[1.0, 2.0], [1.0, 0.0], [0.0, 2.0]])
+    valid = torch.tensor([[True, True], [True, False], [False, True]])
+
+    result = candidate_policy_entropy(probabilities, valid, dim=0)
+
+    assert torch.allclose(result, torch.tensor([torch.log(torch.tensor(2.0)), torch.log(torch.tensor(2.0))]))
+
+
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
     metric = FiniteMeanMetric()
 
@@ -274,6 +312,29 @@ def test_candidate_order_consistency_metric_reports_rates() -> None:
     assert result["candidate_order_score_mae"] > 0.0
     assert torch.allclose(result["candidate_order_top1_match_rate"], torch.tensor(0.5))
     assert torch.allclose(result["candidate_order_valid_table_rate"], torch.tensor(2.0 / 3.0))
+
+
+def test_candidate_policy_entropy_metric_accumulates_finite_table_entropies() -> None:
+    metric = CandidatePolicyEntropyMetric()
+
+    metric.update(
+        torch.tensor([[2.0, 2.0], [0.0, float("nan")]]),
+        torch.tensor([[True, True], [True, True]]),
+    )
+    metric.update(torch.tensor([[1.0, 3.0]]))
+
+    result = metric.compute()
+    second = -(0.25 * torch.log(torch.tensor(0.25)) + 0.75 * torch.log(torch.tensor(0.75)))
+
+    assert torch.allclose(result, (torch.log(torch.tensor(2.0)) + second) / 2.0)
+
+
+def test_candidate_policy_entropy_metric_returns_nan_when_all_tables_empty() -> None:
+    metric = CandidatePolicyEntropyMetric()
+
+    metric.update(torch.tensor([[0.0, float("nan")]]))
+
+    assert torch.isnan(metric.compute())
 
 
 def test_policy_table_metrics_report_proposal_columns() -> None:

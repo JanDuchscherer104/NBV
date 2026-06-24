@@ -302,6 +302,42 @@ def candidate_order_consistency(
     return CandidateOrderConsistency(score_mae=score_mae, top1_match=top1_match, valid_table=valid_table)
 
 
+def candidate_policy_entropy(
+    selection_probabilities: Tensor,
+    valid_mask: Tensor | None = None,
+    *,
+    dim: int = -1,
+) -> Tensor:
+    """Compute masked per-table entropy from candidate selection probabilities.
+
+    This is the torch-native counterpart to rollout-store inspection entropy.
+    It accepts probabilities before or after normalization, filters hard-invalid
+    rows plus non-finite and non-positive entries, renormalizes over the
+    candidate axis, and returns ``NaN`` for tables with no positive finite mass.
+
+    Args:
+        selection_probabilities: Candidate selection probabilities or
+            probability-like non-negative weights.
+        valid_mask: Optional hard-validity mask broadcastable to
+            ``selection_probabilities``.
+        dim: Candidate dimension.
+
+    Returns:
+        Entropy per candidate table after reducing `dim`.
+    """
+
+    values = selection_probabilities.to(dtype=torch.float32)
+    valid = torch.isfinite(values) & (values > 0.0)
+    if valid_mask is not None:
+        valid = valid & torch.broadcast_to(valid_mask.to(device=values.device, dtype=torch.bool), values.shape)
+    positive = torch.where(valid, values, torch.zeros_like(values))
+    mass = positive.sum(dim=dim, keepdim=True)
+    normalized = torch.where(mass > 0.0, positive / mass.clamp_min(torch.finfo(positive.dtype).tiny), positive)
+    entropy_terms = torch.where(normalized > 0.0, normalized * normalized.log(), torch.zeros_like(normalized))
+    entropy = -entropy_terms.sum(dim=dim)
+    return torch.where(mass.squeeze(dim) > 0.0, entropy, torch.full_like(entropy, float("nan")))
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -399,6 +435,7 @@ __all__ = [
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
+    "candidate_policy_entropy",
     "discounted_selected_return",
     "endpoint_log_gain_tensor",
     "endpoint_target_gain_tensor",

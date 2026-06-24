@@ -17,6 +17,7 @@ from .torch_rollout import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_policy_entropy,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -312,6 +313,49 @@ class CandidateOrderConsistencyMetric(MetricBase):
         }
 
 
+class CandidatePolicyEntropyMetric(MetricBase):
+    """Accumulate masked candidate-policy entropy diagnostics.
+
+    The metric summarizes selection diversity for finite candidate tables. It
+    consumes probabilities or probability-like weights, delegates masking and
+    renormalization to `candidate_policy_entropy`, and reports the finite mean
+    entropy. Invalid candidates affect entropy support only; invalidity remains
+    owned by `CandidateTableMetrics`.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("entropy_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("entropy_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        selection_probabilities: Tensor,
+        valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate selection probabilities."""
+
+        entropy = candidate_policy_entropy(
+            selection_probabilities.to(device=self.entropy_total.device, dtype=torch.float32),
+            None if valid_mask is None else valid_mask.to(device=self.entropy_total.device),
+            dim=dim,
+        ).reshape(-1)
+        finite = torch.isfinite(entropy)
+        if not finite.any():
+            return
+        self.entropy_total = self.entropy_total + entropy[finite].sum()
+        self.entropy_count = self.entropy_count + finite.to(dtype=torch.float32).sum()
+
+    def compute(self) -> Tensor:
+        """Return mean entropy or ``NaN`` when no table had positive mass."""
+
+        return _safe_mean(self.entropy_total, self.entropy_count)
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -428,6 +472,7 @@ def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
 __all__ = [
     "CandidateTableMetrics",
     "CandidateOrderConsistencyMetric",
+    "CandidatePolicyEntropyMetric",
     "FiniteMeanMetric",
     "PolicyTableMetrics",
     "SelectedPathCostMetrics",
