@@ -4,7 +4,7 @@ This module names the one-step architecture family that should score each
 candidate from actor-visible scene evidence plus an actor-visible target
 descriptor. It is intentionally not wired into Lightning yet: the concrete
 target descriptor contract and feature ownership still need implementation
-tests before this can replace or extend `aria_nbv.vin.model_v3.VinModelV3`.
+tests before this can replace or extend `aria_nbv.vin.models.v3.VinModelV3`.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 The package collects `torch.nn.Module` components that are shared across active
 and planned VIN scorers, while top-level architecture orchestration remains in
-`aria_nbv.vin.models` and `aria_nbv.vin.model_v3`.
+`aria_nbv.vin.models`.
 """
 
 from __future__ import annotations

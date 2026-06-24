@@ -111,7 +111,7 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
     """Keep direct ``data_handling`` submodule imports tightly constrained."""
 
     package_root = Path(__file__).resolve().parents[2] / "aria_nbv"
-    allowlist = {"vin/model_v3.py"}
+    allowlist = {"vin/models/v3.py"}
     allowed_direct_imports = {
         "pose_generation/target_counterfactuals.py": {
             "data_handling._offline_dataset",

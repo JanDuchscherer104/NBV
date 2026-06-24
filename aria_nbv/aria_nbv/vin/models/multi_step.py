@@ -2,7 +2,7 @@
 
 The planned multi-step architecture predicts masked finite-candidate values
 over rollout state, target context, history, and candidate tokens. It is not the
-same training contract as `aria_nbv.vin.model_v3.VinModelV3`: selected-transition
+same training contract as `aria_nbv.vin.models.v3.VinModelV3`: selected-transition
 returns, endpoint gains, and hard valid-action masks come from
 `aria_nbv.rollouts` stores and should not be folded into one-step RRI labels.
 """

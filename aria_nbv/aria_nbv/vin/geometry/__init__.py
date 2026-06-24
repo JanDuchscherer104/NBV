@@ -1,7 +1,7 @@
 """Geometry helpers shared by VIN scorer implementations.
 
 The modules in this package own stateless SE(3), camera, frustum, and voxel
-geometry contracts used by :mod:`aria_nbv.vin.model_v3` and related diagnostic
+geometry contracts used by :mod:`aria_nbv.vin.models.v3` and related diagnostic
 surfaces. Neural modules should import these helpers rather than keeping shape
 normalization or camera-space math in model classes.
 """

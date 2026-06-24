@@ -48,7 +48,7 @@ from ..utils.grad_norms import (
 )
 from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.diagnostics import plot_vin_encodings_from_debug
-from ..vin.model_v3 import VinModelV3Config
+from ..vin.models import VinModelV3Config
 from ..vin.modules import largest_divisor_leq
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauConfig
 

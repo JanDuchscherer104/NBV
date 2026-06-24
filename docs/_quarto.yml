@@ -285,7 +285,7 @@ quartodoc:
         - name: vin.backbones.evl
           children: separate
           member_options: *embedded_members
-        - name: vin.model_v3
+        - name: vin.models.v3
           children: separate
           member_options: *embedded_members
         - name: vin.models.v2

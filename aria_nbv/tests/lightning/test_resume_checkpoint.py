@@ -9,7 +9,7 @@ from pytest import MonkeyPatch
 from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from aria_nbv.utils import Console
-from aria_nbv.vin.model_v3 import VinModelV3Config
+from aria_nbv.vin.models.v3 import VinModelV3Config
 
 
 def _write_checkpoint(

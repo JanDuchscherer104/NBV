@@ -83,7 +83,7 @@ from aria_nbv.vin.geometry.semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
-from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
+from aria_nbv.vin.models.v3 import VinModelV3, VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 

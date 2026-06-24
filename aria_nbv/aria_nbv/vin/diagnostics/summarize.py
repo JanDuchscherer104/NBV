@@ -23,7 +23,7 @@ from ...utils.rich_summary import capture_tree, rich_summary, summarize
 
 if TYPE_CHECKING:
     from ...data_handling import VinOracleBatch
-    from ..model_v3 import VinModelV3
+    from ..models.v3 import VinModelV3
 
 
 def summarize_vin_v3(

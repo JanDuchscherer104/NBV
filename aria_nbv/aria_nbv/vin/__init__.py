@@ -40,12 +40,13 @@ from .feature_bank import (
     sample_logged_image_features_at_world_points,
     validate_actor_feature_provenance,
 )
-from .model_v3 import VinModelV3, VinModelV3Config
 from .models import (
     MultiStepCandidateScorer,
     MultiStepCandidateScorerConfig,
     TargetConditionedMyopicScorer,
     TargetConditionedMyopicScorerConfig,
+    VinModelV3,
+    VinModelV3Config,
 )
 from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
 

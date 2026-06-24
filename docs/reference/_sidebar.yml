@@ -38,7 +38,7 @@ website:
       section: Implementation Contracts
     - contents:
       - reference/vin.backbones.evl.qmd
-      - reference/vin.model_v3.qmd
+      - reference/vin.models.v3.qmd
       - reference/vin.models.v2.qmd
       - reference/vin.encoders.pose.qmd
       - reference/vin.encoders.shell_pose.qmd

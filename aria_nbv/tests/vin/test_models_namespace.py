@@ -15,27 +15,26 @@ from aria_nbv.vin import (
     VinModelV3,
     VinModelV3Config,
 )
-from aria_nbv.vin import model_v3 as legacy_v3
 from aria_nbv.vin.candidate_scorer import CandidateScorerConfig
-from aria_nbv.vin.model_v3 import VinModelV3 as LegacyVinModelV3
-from aria_nbv.vin.model_v3 import VinModelV3Config as LegacyVinModelV3Config
 from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models import VinModelV3 as NamespacedVinModelV3
 from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
 from aria_nbv.vin.models import v2 as namespaced_v2
 from aria_nbv.vin.models import v3 as namespaced_v3
+from aria_nbv.vin.models.v3 import VinModelV3 as CanonicalVinModelV3
+from aria_nbv.vin.models.v3 import VinModelV3Config as CanonicalVinModelV3Config
 
 
 def test_models_namespace_reexports_preserved_vin_v3() -> None:
-    """The new namespace should not clone or move the active v3 implementation."""
+    """The models namespace should own and re-export the preserved v3 implementation."""
 
-    assert VinModelV3 is LegacyVinModelV3
-    assert VinModelV3Config is LegacyVinModelV3Config
-    assert NamespacedVinModelV3 is LegacyVinModelV3
-    assert NamespacedVinModelV3Config is LegacyVinModelV3Config
-    assert LegacyVinModelV3Config in get_args(CandidateScorerConfig)
-    assert namespaced_v3.FIELD_CHANNELS_V3 is legacy_v3.FIELD_CHANNELS_V3
-    assert namespaced_v3.SEMIDENSE_PROJ_DIM == legacy_v3.SEMIDENSE_PROJ_DIM
+    assert VinModelV3 is CanonicalVinModelV3
+    assert VinModelV3Config is CanonicalVinModelV3Config
+    assert NamespacedVinModelV3 is CanonicalVinModelV3
+    assert NamespacedVinModelV3Config is CanonicalVinModelV3Config
+    assert CanonicalVinModelV3Config in get_args(CandidateScorerConfig)
+    assert namespaced_v3.FIELD_CHANNELS_V3
+    assert namespaced_v3.SEMIDENSE_PROJ_DIM > 0
 
 
 def test_models_namespace_owns_vin_v2() -> None:
@@ -51,6 +50,13 @@ def test_experimental_model_namespace_is_removed() -> None:
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("aria_nbv.vin.experimental.model_v2")
+
+
+def test_legacy_root_v3_module_is_removed() -> None:
+    """The preserved v3 implementation should be owned by `aria_nbv.vin.models.v3`."""
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("aria_nbv.vin.model_v3")
 
 
 def test_helper_sidecars_do_not_cycle_with_models_namespace() -> None:
