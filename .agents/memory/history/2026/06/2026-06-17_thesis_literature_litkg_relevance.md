@@ -18,10 +18,10 @@ implementation aims and integrate literature relevance metadata with litkg.
 
 ## Outputs
 
-- Patched `docs/typst/thesis/sections/02-background.typ` so EVL is local
+- Patched `docs/typst/thesis/sections/02-foundations/index.typ` so EVL is local
   actor-visible target/support evidence rather than full long-horizon scene
   memory.
-- Patched `docs/typst/thesis/sections/03-method.typ` so queryable feature banks
+- Patched `docs/typst/thesis/sections/04-method/index.typ` so queryable feature banks
   are planned representation ablations and `gamma=1` telescoping is scoped to
   equal-horizon/equal-budget comparisons.
 - Added `relevance_rank`, `relevance_category`, and `adoptable_ideas` to all 38

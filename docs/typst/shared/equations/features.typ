@@ -21,13 +21,13 @@
     (bold(c)_k - bold(v)) / (norm(bold(c)_k - bold(v))_2)
   $,
   direction_memory_sh: $
-    #symb.vin.dir_memory (bold(v))
+    #symb.spatial.dir_memory (bold(v))
     =
     sum_(k < t) w_k (bold(v))
-    #symb.vin.sh_basis (bold(d)_k (bold(v)))
+    #symb.spatial.sh_basis (bold(d)_k (bold(v)))
   $,
   direction_memory_moment: $
-    #symb.vin.dir_moment (bold(v))
+    #symb.spatial.dir_moment (bold(v))
     =
     sum_(k < t) w_k (bold(v))
     bold(d)_k (bold(v)) (bold(d)_k (bold(v)))^top
@@ -38,16 +38,26 @@
     1 -
     (
     (bold(d)_(t,i) (bold(v)))^top
-    #symb.vin.dir_moment (bold(v))
+    #symb.spatial.dir_moment (bold(v))
     bold(d)_(t,i) (bold(v))
     )
     /
-    (op("tr") (#symb.vin.dir_moment (bold(v))) + epsilon)
+    (op("tr") (#symb.spatial.dir_moment (bold(v))) + epsilon)
+  $,
+  evl_local_support_read: $
+    #symb.scene.evl_support_frac
+    =
+    (1) / (K) sum_(k=1)^K
+    bb(1)[x_(t,i,k) in cal(V)_0^"EVL"],
+    quad
+    #symb.scene.evl_support_token
+    =
+    op("Pool")({#symb.vin.field_evl_0 (x_(t,i,k)) : x_(t,i,k) in cal(V)_0^"EVL"})
   $,
   logged_point_projection: $
     bold(p)_(j,c,tau)
     =
-    T_(c_tau <- w) bold(p)_j,
+    bold(T)_(w)^(c_tau) bold(p)_j,
     quad
     (u_(j,tau), v_(j,tau), alpha_(j,tau))
     =
@@ -90,15 +100,15 @@
     sum_tau m_(j,tau)^"vis"
   $,
   qh_scene_memory: $
-    bold(Phi)_t^"scene"
+    #symb.scene.scene_memory_t
     =
     (
-      bold(M)_t^"ray",
+      #symb.scene.ray_memory_t,
       bold(X)_t^"pt",
       bold(F)_t^"DINO@pt",
-      bold(E)_0^"EVL-local",
+      #symb.scene.evl_local,
       bold(O)_t^"pred",
-      #symb.vin.dir_moment
+      #symb.spatial.dir_moment
     )
   $,
   point_dino_token: $
@@ -113,18 +123,18 @@
     )
   $,
   candidate_query_pools: $
-              bold(z)_e & =
+                   #symb.scene.target_support_pool & =
                           op("Pool")_(bold(p)_j in hat(bold(B))_e) bold(x)_j^"pt" \
-         bold(z)_i^"fr" & =
+                 #symb.scene.frustum_support_pool & =
                           op("Pool")_(bold(p)_j in op("Frustum") (q_(t,i))) bold(x)_j^"pt" \
-    bold(z)_(e,i)^"cap" & =
+                  #symb.scene.target_frustum_pool & =
                           op("Pool")_(bold(p)_j in hat(bold(B))_e inter op("Frustum") (q_(t,i))) bold(x)_j^"pt"
   $,
   candidate_ray_query: $
-    bold(R)_(t,i)^"ray"
+    #symb.scene.ray_query_ti
     =
-    op("RenderQuery") (
-      bold(M)_t^"ray",
+    #symb.scene.render_query (
+      #symb.scene.ray_memory_t,
       q_(t,i),
       hat(bold(B))_e
     )
@@ -141,49 +151,53 @@
     )
   $,
   qh_target_token: $
-    bold(T)_e
+    #symb.model.target_token
     =
-    op("MLP")_phi (
+    op("MLP")_"tgt" (
       op("concat") (
         #symb.entity.target_desc,
-        phi_"target" (bold(Phi)_t^"scene", hat(bold(B))_e)
+        #symb.scene.target_support_pool
       )
     )
   $,
   candidate_pose_features: $
-    #symb.vin.candidate_pose_feat (q_(t,i))
+    #symb.spatial.candidate_pose_feat (q_(t,i); r_t)
     =
     op("concat") (
-      bold(t)_(t,i),
-      bold(R)_(t,i)^"6D",
-      norm(bold(t)_(t,i) - bold(t)_e)_2^2,
-      alpha_(t,i)^e,
-      l_(t,i)^"OBB-overlap",
-      c_(t,i)^"sampler"
+      xi_(r_t,i)^"rel",
+      bold(R)_(r_t,i)^"6D",
+      Delta h_(t,i),
+      bold(u)_(t,i)^"up/frustum"
+    )
+  $,
+  candidate_target_relation: $
+    #symb.spatial.candidate_target_rel_feat (q_(t,i), e)
+    =
+    op("concat") (
+      bold(R)_(t,i)^top (bold(c)_e - bold(c)_(t,i)),
+      norm(bold(c)_e - bold(c)_(t,i))_2,
+      #symb.spatial.target_bearing,
+      beta_(t,e,i)^"elev",
+      lambda_(t,e,i)^"obb"
     )
   $,
   candidate_query_local_frame: $
-    bold(delta)_(j,i)^"p"
+    #symb.spatial.local_delta_pos
     =
-    bold(R)_(t,i)^top (bold(p)_j - bold(c)_(t,i)),
+    bold(R)_(t,i)^top (bold(p)_a - bold(c)_(t,i)),
     quad
-    bold(delta)_(j,i)^"R"
+    #symb.spatial.local_delta_rot
     =
-    bold(R)_(t,i)^top bold(R)_j
+    bold(R)_(t,i)^top bold(R)_a
   $,
   candidate_query_rpe: $
-    bold(eta)_(j,i)^"cand"
-    &=
-    op("concat") (bold(delta)_(j,i)^"p", norm(bold(delta)_(j,i)^"p")_2, op("enc")_R (bold(delta)_(j,i)^"R")) \
-    bold(eta)_(e,i)^"target"
-    &=
-    op("concat") (bold(R)_(t,i)^top (bold(t)_e - bold(c)_(t,i)), alpha_(t,i)^e) \
-    bold(eta)_(k,i)^"hist"
-    &=
-    op("concat") (bold(R)_(t,i)^top (bold(c)_k - bold(c)_(t,i)), t - k, r_k^e) \
-    bold(r)_(a,i)^"rpe"
-    &=
-    phi_R (cal(F) (bold(eta)_(a,i))),
+    bold(eta)_(a|i)
+    =
+    op("concat") (#symb.spatial.local_delta_pos, norm(#symb.spatial.local_delta_pos)_2, op("enc")_R (#symb.spatial.local_delta_rot)),
+    quad
+    #symb.spatial.relation_rpe
+    =
+    psi_"rel" (cal(F) (bold(eta)_(a|i))),
     quad a in {j, e, k}
   $,
   edge_conditioned_attention: $
@@ -203,19 +217,19 @@
     bold(p)_(t,i)
     =
     op("concat") (
-      #symb.vin.candidate_pose_feat (q_(t,i)),
-      phi_"target-rel" (q_(t,i), #symb.entity.target_desc)
+      #symb.spatial.candidate_pose_feat (q_(t,i); r_t),
+      #symb.spatial.candidate_target_rel_feat (q_(t,i), e)
     )
   $,
   candidate_geometry_context: $
     bold(g)_(t,i)
     =
     op("concat") (
-      phi_"frustum" (bold(X)_t^"pt", q_(t,i)),
-      phi_"target-frustum" (bold(X)_t^"pt", #symb.entity.target_desc, q_(t,i)),
-      bold(R)_(t,i)^"ray",
-      phi_"EVL-local" (bold(E)_0^"EVL-local", q_(t,i), #symb.entity.target_desc),
-      phi_"dir" (#symb.vin.dir_moment, q_(t,i))
+      #symb.scene.frustum_support_pool,
+      #symb.scene.target_frustum_pool,
+      #symb.scene.ray_query_ti,
+      #symb.scene.evl_support_token,
+      phi_"dir" (#symb.spatial.dir_moment, q_(t,i))
     )
   $,
   candidate_row_features: $
@@ -224,8 +238,18 @@
     op("concat") (
       bold(p)_(t,i),
       bold(g)_(t,i),
-      phi_"valid" (m_(t,i), rho_(t,i)),
+      #symb.model.candidate_validity_token,
+      #symb.model.candidate_provenance_token,
       bold(H)_t
+    )
+  $,
+  ray_memory_update: $
+    #symb.scene.ray_memory_next
+    =
+    op("Fuse")(
+      #symb.scene.ray_memory_t,
+      #symb.obs.points_cand_ti,
+      #symb.obs.selected_rays_ti
     )
   $,
   qh_set_encoder: $
@@ -233,7 +257,7 @@
     =
     E_"set" (
       {
-        op("concat") (bold(x)_(t,i), bold(T)_e, bold(H)_t)
+        op("concat") (bold(x)_(t,i), #symb.model.target_token, bold(H)_t)
       }_(i=1)^(#symb.shape.Nq),
       bold(m)_t
     )
@@ -243,7 +267,7 @@
     =
     op("CrossAttn")_theta (
       bold(x)_(t,i),
-      {bold(T)_e, bold(M)_t^"ray", bold(H)_t, bold(b)_t, bold(E)_0^"EVL-local"}
+      {#symb.model.target_token, #symb.scene.ray_memory_t, bold(H)_t, bold(b)_t, #symb.scene.evl_local}
     )
   $,
 )

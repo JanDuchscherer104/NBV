@@ -1,7 +1,7 @@
-#import "../../shared/macros.typ": *
-#import "../../shared/symbols.typ": symb
-#import "../../shared/equations.typ": eqs
-#import "../draft_markers.typ": *
+#import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
+#import "../../draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
 == Geometric Learning and Candidate-Set Theory <sec:thesis-geometric-learning-theory>
@@ -13,21 +13,13 @@ The first required structure is candidate-row permutation equivariance. Reorderi
 The minimum algebraic contract is therefore a row-wise map over a masked set. For any permutation matrix $Pi$ acting on candidate rows, the value model should satisfy
 
 $
-  f_theta (Pi bold(X)_t, Pi bold(m)_t)
-  =
-  Pi f_theta (bold(X)_t, bold(m)_t),
+  #eqs.rl.candidate_row_equivariance
 $
 
 where $bold(X)_t = {bold(x)_(t,i)}_(i=1)^(N_q)$ stores per-candidate actor-visible descriptors and $bold(m)_t$ stores validity. Invalid rows are not low-quality actions; they are outside the admissible set. A masked scorer must therefore compute selection over
 
 $
-  cal(A)_t
-  =
-  {i in {1, dots, N_q} : m_(t,i)=1},
-  quad
-  a_t^theta
-  =
-  op("argmax", limits: #true)_(i in cal(A)_t) f_(theta,i)(bold(X)_t, bold(m)_t).
+  #eqs.rl.masked_candidate_selection
 $
 
 The local-frame contract is a controlled gauge choice rather than a full invariance claim. Candidate features may use transforms such as $bold(T)^r_(c_q)$, target-relative bearings, and query-local relative encodings so that a global origin change does not change the physical row identity, while gravity alignment and camera-frustum geometry remain available task structure @zhou2019continuity @zhou2023query.

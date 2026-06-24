@@ -7,11 +7,11 @@ topics: [thesis, mermaid, typst, figures]
 confidence: high
 canonical_updates_needed: []
 files_touched:
-  - docs/typst/thesis/sections/02-background.typ
-  - docs/typst/thesis/sections/03-01-formal-state.typ
-  - docs/typst/thesis/sections/03-02-data-generation.typ
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/02-foundations/index.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
 ---
 
 ## Task

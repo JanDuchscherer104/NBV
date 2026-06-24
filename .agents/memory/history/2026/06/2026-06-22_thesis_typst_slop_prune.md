@@ -7,8 +7,8 @@ topics: [thesis, typst, writing, cleanup]
 confidence: high
 canonical_updates_needed: []
 files_touched:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/typst/thesis/sections/06-draft-open-work.typ
 ---
 
@@ -22,7 +22,7 @@ Locked the thesis build first with a focused Typst compile, then removed repeate
 
 ## Verification
 
-`cd docs && typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-after-cleanup.pdf --root .` passed. `git diff --check -- docs/typst/thesis/sections/03-method.typ docs/typst/thesis/sections/04-evaluation.typ docs/typst/thesis/sections/06-draft-open-work.typ` passed. Rendered affected method, evaluation, and appendix page spans to PNG and visually checked representative pages for overflow or broken layout.
+`cd docs && typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-after-cleanup.pdf --root .` passed. `git diff --check -- docs/typst/thesis/sections/04-method/index.typ docs/typst/thesis/sections/05-experimental-design/index.typ docs/typst/thesis/sections/06-draft-open-work.typ` passed. Rendered affected method, evaluation, and appendix page spans to PNG and visually checked representative pages for overflow or broken layout.
 
 ## Impact
 

@@ -15,8 +15,9 @@
   rri_e: $op("RRI")_e$,
   // Observed or predicted target-hypothesis bundle available to the actor.
   target_hyp_pred_t: $bold(O)_t^"pred"$,
-  // Actor-visible target descriptor.
-  target_desc: $bold(z)_e$,
+  // Actor-visible target/entity descriptor. The encoder map is not named phi;
+  // the descriptor vector is phi_e to match the thesis entity-representation convention.
+  target_desc: $bold(phi)_e$,
   // Target-specific reconstruction error and derived rollout metrics.
   target_error: $Delta_t^e$,
   target_error_pm: $D_(P -> M,t)^e$,

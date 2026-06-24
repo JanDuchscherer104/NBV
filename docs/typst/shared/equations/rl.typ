@@ -7,6 +7,37 @@
   nbv_mdp: $
     #symb.rl.mdp_nbv = (cal(S), cal(A), T, r_e, #symb.rl.gamma, #symb.rl.H)
   $,
+  nbv_process_tuple: $
+    cal(M)_"NBV"
+    =
+    (
+      cal(S)^"hist",
+      cal(S)^"cf0",
+      cal(S)^"oracle",
+      {cal(A)_t},
+      T,
+      r_t^e,
+      gamma,
+      H
+    )
+  $,
+  evidence_chain: $
+    cal(U)_"cov/unc" -> hat(r)_t^e (i) -> #symb.entity.target_reward -> #symb.entity.return_h -> #symb.rl.qh_theta
+  $,
+  candidate_row_equivariance: $
+    f_theta (Pi bold(X)_t, Pi bold(m)_t)
+    =
+    Pi f_theta (bold(X)_t, bold(m)_t)
+  $,
+  masked_candidate_selection: $
+    cal(A)_t
+    =
+    {i in {1, dots, #symb.shape.Nq} : m_(t,i)=1},
+    quad
+    a_t^theta
+    =
+    op("argmax", limits: #true)_(i in cal(A)_t) f_(theta,i)(bold(X)_t, bold(m)_t)
+  $,
   s_hist: $
     #symb.rl.s_hist
     =
@@ -106,6 +137,21 @@
     hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
     +
     A_theta^H (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_table, bold(h)_t, i)
+  $,
+  qh_residual_decomposition: $
+    b_(psi,i)
+    =
+    f_psi^"1-step" (s_t^"cf0", #symb.entity.target_desc, q_(t,i)),
+    quad
+    delta_(theta,i)^H
+    =
+    g_theta (bold(x)_(t,i), {#symb.model.target_token, #symb.scene.ray_memory_t, bold(H)_t, #symb.scene.evl_local}, h_t),
+    quad
+    Q_(H,theta,i)
+    =
+    b_(psi,i)
+    +
+    delta_(theta,i)^H
   $,
   qh_coral_interface: $
     p_(t,i,k)^"CORAL"
@@ -257,9 +303,9 @@
     #(symb.rl.a) _t ~ #(symb.rl.pi) _("lo") (a ; #(symb.rl.s) _t, #(symb.rl.z) _t)
   $,
   target_pose_factorization: $
-    pi_"cont" (bold(x)_t, bold(ell)_t | s_t, z_e)
+    pi_"cont" (bold(x)_t, bold(ell)_t | s_t, #symb.entity.target_desc)
     =
-    pi_"pose" (bold(x)_t | bold(ell)_t, s_t, z_e)
-    pi_"look" (bold(ell)_t | s_t, z_e)
+    pi_"pose" (bold(x)_t | bold(ell)_t, s_t, #symb.entity.target_desc)
+    pi_"look" (bold(ell)_t | s_t, #symb.entity.target_desc)
   $,
 )

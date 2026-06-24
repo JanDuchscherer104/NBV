@@ -12,16 +12,30 @@
   target_descriptor: $
     #symb.entity.target_desc
     =
-    phi(
-      // TODO: what other optional / potentially useful components can we include here?
+    op("Enc")_"tgt" (
       hat(bold(B))_e,
       hat(bold(y))_e,
-      hat(p)_e,
+      hat(pi)_e,
       A_e^"proj",
       n_e^"semi",
       n_e^"EVL",
-       // TODO: T_e^"rel" needs to be represented in a more idiomatic, query centric way!
-      bold(T)_e^"rel"
+      omega_e^"EVL",
+      ell_e^"src",
+      bold(T)_(r_t,e),
+      bold(T)_(c_t,e)
+    )
+  $,
+  target_identity_iou: $
+    mu_"id" (hat(e), e)
+    =
+    op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e)
+  $,
+  target_identity_acceptance: $
+    a_"id" (hat(e)) = 1
+    op("iff")
+    cases(
+      mu_1 >= tau_"IoU",
+      mu_1 - mu_2 >= tau_"gap",
     )
   $,
   target_match_score: $

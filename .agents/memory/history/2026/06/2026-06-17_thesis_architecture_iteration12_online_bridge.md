@@ -6,8 +6,8 @@ status: done
 topics: [thesis, literature, q-h, online-rl, simulators]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/05-conclusion.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/08-conclusion.typ
   - docs/contents/thesis/questions.qmd
   - docs/contents/thesis/roadmap.qmd
 files_touched:

@@ -22,14 +22,14 @@ config:
 flowchart LR
   subgraph EvidenceTop["Finite-candidate evidence contract"]
     direction LR
-    Input["$$\begin{array}{c}\textbf{Actor-visible state}\\\\ \boldsymbol{s}_{t}^{\mathrm{obs}},\ \mathbf{z}_{e},\ Q_t\\\\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
-    Oracle["$$\begin{array}{c}\textbf{Target-RRI oracle}\\\\ M_{\mathrm{GT}},\ M_e,\ \boldsymbol{\mathcal{P}}_{q}\\\\ r_t^e,\ J_e^{(H)},\ \Delta_{\mathrm{look}}\end{array}$$"]
-    Replay["$$\begin{array}{c}\textbf{One-step + rollouts}\\\\ \hat r_{t,i}^{e}=f_{\psi}^{\mathrm{VIN}}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\mathbf{z}_{e},q_{t,i})\\\\ \texttt{random},\ \texttt{greedy},\ \texttt{lookahead},\ \texttt{softmax}\end{array}$$"]
+    Input["$$\begin{array}{c}\textbf{Actor-visible state}\\\\ \boldsymbol{s}_{t}^{\mathrm{obs}},\ \boldsymbol{\phi}_{e},\ \mathcal{Q}_t\\\\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
+    Oracle["$$\begin{array}{c}\textbf{Target-RRI oracle}\\\\ \mathcal{M}^{\mathrm{GT}},\ \mathcal{M}_{e}^{\mathrm{GT}},\ \mathcal{P}_{q}\\\\ r_t^e,\ J_e^{(H)},\ \Delta_{\mathrm{look}}\end{array}$$"]
+    Replay["$$\begin{array}{c}\textbf{One-step + rollouts}\\\\ \hat r_{t,i}^{e}=f_{\psi}^{\mathrm{VIN}}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\boldsymbol{\phi}_{e},q_{t,i})\\\\ \texttt{random},\ \texttt{greedy},\ \texttt{lookahead},\ \texttt{softmax}\end{array}$$"]
   end
 
   subgraph EvidenceBottom["Learned planner and evaluation"]
     direction LR
-    QH["$$\begin{array}{c}\textbf{Masked candidate-query }Q_H\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\mathbf{z}_{e},q_{t,i})\\\\ \operatorname*{arg\,max}_{i:m_{t,i}=1}\ Q_{H,\theta}\end{array}$$"]
+    QH["$$\begin{array}{c}\textbf{Masked candidate-query }Q_H\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\boldsymbol{\phi}_{e},q_{t,i})\\\\ \operatorname*{arg\,max}_{i:m_{t,i}=1}\ Q_{H,\theta}\end{array}$$"]
     Eval["$$\begin{array}{c}\textbf{Oracle re-evaluation}\\\\ J_e^{(H)},\ G_t^{(H)},\ \eta_Q\\\\ \mathrm{cost},\ \mathrm{invalidity},\ \mathrm{coverage}\end{array}$$"]
     Bridge["$$\begin{array}{c}\textbf{M6+ bridge}\\\\ \texttt{IQL},\ \texttt{online }Q_H\\\\ \texttt{actor-critic},\ \texttt{simulators}\end{array}$$"]
   end

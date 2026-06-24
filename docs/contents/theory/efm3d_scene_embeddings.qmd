@@ -39,6 +39,14 @@ EFM3D's {{< gls egocentric-voxel-lifting >}} path starts from synchronized egoce
 
 The local EVL inference config uses a DINO ViT backbone and a finite local voxel extent. The default extent is much smaller than the whole scene represented by ATEK semidense points. This makes EVL useful as local evidence and target support, but risky as the only long-horizon scene memory.
 
+Implementation detail: `aria_nbv/aria_nbv/vin/backbone_evl.py` exposes these families through `EvlBackboneOutput` in `aria_nbv/aria_nbv/vin/types.py`. Its `features_mode` switch can return head tensors, neck tensors, or both. Cache and training readers should treat this as an ablation switch, not a mandate to persist every tensor. In particular:
+
+- `neck/occ_feat` and `neck/obb_feat` are high-dimensional local EVL features. They may be distinct, but implementations must check shape, object identity, and actual tensor equality before storing both as independent evidence.
+- `voxel/free_input` is optional. Current VIN utilities derive a proxy from observed counts and occupied input when EVL does not provide native free-space evidence. Documentation and caches should therefore distinguish native free-space input from derived `observed * (1 - occ_input)` proxies.
+- `voxel/pts_world` is useful for positional encodings and diagnostics, but it is largely reconstructible from `voxel/T_world_voxel`, `voxel_extent`, and grid shape. Persist it when it avoids repeated fragile geometry code or supports plots; otherwise store the pose/extent contract and regenerate centers.
+- `clas_pr` is a dense class-probability field. Persist full probabilities only for local feature ablations; otherwise store sparse OBB predictions, per-OBB class probabilities, or argmax/top-k compressed summaries with taxonomy/checkpoint hashes.
+- `rgb/feat2d_upsampled` and `rgb/token2d` should normally be reader-side or short-lived feature-bank sources. Persist pooled/compressed point descriptors plus provenance before considering raw logged feature maps in offline rollout stores.
+
 ## Why Final EVL Heads Are Too Lossy As Sole Memory
 
 The final heads are optimized for EFM3D's supervised perception tasks, not for ARIA-NBV's target-conditioned view-utility question. As the only scene memory they lose several signals that matter for NBV:
@@ -165,14 +173,31 @@ where $m_{j,\tau}^{\mathrm{obs/depth}}$ comes from native semidense observation 
 
 This projection can extend beyond the root EVL voxel cube because the carrier is the semidense/fused point set, not the final local EVL grid. It still cannot invent image evidence for counterfactual future poses. Counterfactual successors may add selected geometry, support counts, and history metadata, but they may not attach fresh RGB/DINO features unless a separate actor-visible renderer or modality generator is implemented and validated.
 
-The current ARIA-NBV helper `aria_nbv/aria_nbv/vin/scene_feature_bank.py` implements this `SceneFeatureBank`-style reader-side projection/pooling primitive for logged features at world points, including provenance checks and descriptor compression. It is useful for experiments and tests. The missing piece is still a durable offline cache writer, manifest contract, and training-reader integration with explicit visibility lineage or depth/z-buffer gates.
+The current ARIA-NBV helper `aria_nbv/aria_nbv/vin/scene_feature_bank.py` implements this `SceneFeatureBank`-style reader-side projection/pooling primitive for logged features at world points, including provenance checks and descriptor compression. It calls EFM3D's `sample_images` from `external/efm3d/efm3d/utils/image_sampling.py`, matching the projection pattern used by `external/efm3d/efm3d/model/lifter.py` for voxel lifting. It is useful for experiments and tests. The missing piece is still a durable offline cache writer, manifest contract, and training-reader integration with explicit visibility lineage or depth/z-buffer gates.
+
+The minimum cache contract for this path is:
+
+```text
+feature_source: efm3d_feat2d_upsampled | efm3d_token2d | efm3d_neck_occ_feat | efm3d_neck_obb_feat | cubercnn_roi
+source_role: actor
+source_frames: logged frame ids or timestamps
+world_point_ids: semidense/fused point ids when available
+descriptor: compressed feature vector or pooled summary
+descriptor_dim: 32..128 for default DINO-like stores
+visibility_mask: native lineage, depth-consistency, or conservative z-buffer gate
+projection_valid_count: number of logged views with valid calibrated projection
+compression_id: PCA/random-projection/learned-bottleneck identifier
+missing_reason: empty-support | out-of-EVL-extent | missing-descriptor | ambiguous-target
+```
+
+Anything with `source_role: oracle` is a label, teacher, or evaluation product and must be rejected by actor feature provenance checks.
 
 ## Candidate-Query Pooling
 
 For target-conditioned finite-candidate scoring, the point bank and ray-aware map should be queried by both target support and candidate geometry. Let $\mathcal{P}_t=\{x_j^{\mathrm{pt}}\}_{j=1}^{N_t}$, $\hat B_e$ be an observed or predicted target OBB, and $\mathrm{Fr}(q_{t,i})$ be the candidate frustum. The minimum point-pooling baseline is:
 
 $$
-z_e
+g_e^{\mathrm{tgt}}
 =
 \operatorname{Pool}
 \left(
@@ -181,7 +206,7 @@ z_e
 $$
 
 $$
-z_i^{\mathrm{fr}}
+g_{t,i}^{\mathrm{fr}}
 =
 \operatorname{Pool}
 \left(
@@ -190,7 +215,7 @@ z_i^{\mathrm{fr}}
 $$
 
 $$
-z_{e,i}^{\cap}
+g_{t,e,i}^{\cap}
 =
 \operatorname{Pool}
 \left(
@@ -201,28 +226,28 @@ $$
 These pools are support summaries. They do not by themselves model what a candidate camera would see, because frustum membership ignores occlusion ordering and empty rays. The candidate observation model should therefore add a ray-aware query over $M_t^{\mathrm{ray}}$:
 
 $$
-R_{t,i}^{\mathrm{ray}}
+g_{t,i}^{\mathrm{ray}}
 =
 \operatorname{RenderQuery}\!\left(M_t^{\mathrm{ray}},q_{t,i},\hat B_e\right),
 $$
 
-with channels such as nearest observed surface depth, free-space length, unknown-space length, hit/empty mask, target-membership weight, support count, uncertainty, and directional novelty. The candidate token can then combine target crop, candidate support pools, ray-aware candidate query, local EVL reads, directional memory, mask/reason, and candidate pose features:
+with channels such as nearest observed surface depth, free-space length, unknown-space length, hit/empty mask, target-membership weight, support count, uncertainty, and directional novelty. The candidate token can then combine the actor-visible target-support pool, candidate support pools, ray-aware candidate query, local EVL reads around the observed/predicted target OBB, directional memory, mask/reason, and candidate pose features:
 
 $$
-g_{t,i}
+h_{t,i}^{\mathrm{geom}}
 =
-\phi
+\operatorname{Enc}_{\mathrm{geom}}
 \left(
-  z_e,\;
-  z_i^{\mathrm{fr}},\;
-  z_{e,i}^{\cap},\;
-  R_{t,i}^{\mathrm{ray}},\;
+  g_e^{\mathrm{tgt}},\;
+  g_{t,i}^{\mathrm{fr}},\;
+  g_{t,e,i}^{\cap},\;
+  g_{t,i}^{\mathrm{ray}},\;
   \operatorname{Read}_{\mathrm{EVL}}(q_{t,i}, \hat B_e),\;
   m_{t,i}^{\mathrm{dir}}
 \right).
 $$
 
-The pooling operator can be a simple masked mean/max for the first ablation, then a point encoder, sparse convolution, or candidate-to-state cross-attention query as complexity becomes justified. Candidate-to-candidate self-attention is an ablation for policy context or diversity, not the default definition of a physical $Q(s,a_i)$ value.
+The pooling operator can be a simple masked mean/max for the first ablation, matching the permutation-invariant baseline suggested by Deep Sets, then a point encoder, sparse convolution, Set Transformer, or candidate-to-state cross-attention query as complexity becomes justified [@DeepSets-zaheer2017; @SetTransformer-lee2019]. Candidate-to-candidate self-attention is an ablation for policy context or diversity, not the default definition of a physical $Q(s,a_i)$ value.
 
 ## Ablation Ladder
 

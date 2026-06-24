@@ -21,16 +21,16 @@ config:
 ---
 flowchart TB
   Views["$$\begin{array}{c}\textbf{Observed view poses}\\\\ \{q_0,\ldots,q_{t-1}\}\end{array}$$"]
-  Points["$$\begin{array}{c}\textbf{Observed points or voxels}\\\\ v\in\boldsymbol{\mathcal{P}}_{t}\end{array}$$"]
+  Points["$$\begin{array}{c}\textbf{Observed points or voxels}\\\\ v\in\mathcal{P}_{t}\end{array}$$"]
   Directions["$$\begin{array}{c}\textbf{Observation directions}\\\\ d_o(v)\in S^2\end{array}$$"]
   Harmonics["$$\begin{array}{c}\textbf{Low-order spherical harmonics}\\\\ Y_{\ell m}(d),\ \ell\le L\end{array}$$"]
   Coeffs["$$\begin{array}{c}\textbf{Directional coefficients}\\\\ c_{\ell m}(v)=\sum_o w_oY_{\ell m}(d_o(v))\end{array}$$"]
-  DirVol["$$\begin{array}{c}\textbf{Directional memory volume}\\\\ \mathbf{V}_{\mathrm{dir}}(\boldsymbol{\mathcal{P}}_{t})\end{array}$$"]
+  DirVol["$$\begin{array}{c}\textbf{Directional memory volume}\\\\ \mathbf{V}_{\mathrm{dir}}(\mathcal{P}_{t})\end{array}$$"]
 
   Cand["$$\begin{array}{c}\textbf{Candidate view}\\\\ q_{t,i}\end{array}$$"]
   CandDir["$$\begin{array}{c}\textbf{Candidate direction}\\\\ d_i(v)\in S^2\end{array}$$"]
   Similarity["$$\begin{array}{c}\textbf{Seen-from-similar-direction}\\\\ \sum_{\ell,m}c_{\ell m}(v)Y_{\ell m}(d_i(v))\end{array}$$"]
-  Novelty["$$\begin{array}{c}\textbf{Novelty features}\\\\ \phi_{\mathrm{dir}}(\mathbf{V}_{\mathrm{dir}},q_{t,i},\mathbf{z}_e)\end{array}$$"]
+  Novelty["$$\begin{array}{c}\textbf{Novelty features}\\\\ \phi_{\mathrm{dir}}(\mathbf{V}_{\mathrm{dir}},q_{t,i},\boldsymbol{\phi}_e)\end{array}$$"]
   Token["$$\begin{array}{c}\textbf{Candidate token feature}\\\\ \mathbf{C}_{t,i}\end{array}$$"]
 
   Views --> Directions

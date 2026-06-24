@@ -7,8 +7,8 @@ topics: [thesis, architecture, q-h, double-dqn, rollouts-zarr, invalidity]
 confidence: high
 canonical_updates_needed:
   - docs/contents/theory/rl_planning.qmd
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - aria_nbv/aria_nbv/rollouts/zarr_store.py
   - aria_nbv/tests/rollouts/test_zarr_store.py
 files_touched:

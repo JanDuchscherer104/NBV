@@ -49,6 +49,8 @@
   body
 }
 
+#let _gh-link-label(body) = text(fill: rgb("#096eda"))[body]
+
 #let _gh-line-anchor(line: none, end: none) = if line == none {
   ""
 } else if end == none {
@@ -63,19 +65,31 @@
 }
 
 #let _github-symbol-url(symbol, language: "python") = {
-  "https://github.com/search?q=repo%3A" + aria-github-repo + "+language%3A" + language + "+symbol%3A" + symbol + "&type=code"
+  (
+    "https://github.com/search?q=repo%3A"
+      + aria-github-repo
+      + "+language%3A"
+      + language
+      + "+symbol%3A"
+      + symbol
+      + "&type=code"
+  )
 }
 
 /// Link to a file or line in the GitHub repo. Use for final-worthy implementation anchors.
 #let gh(path, body: none, ref: none, line: none, end: none) = {
-  link(_github-file-url(path, ref: ref, line: line, end: end))[#(_gh-label(path, body: body))]
+  link(_github-file-url(path, ref: ref, line: line, end: end))[
+    #_gh-link-label(_gh-label(path, body: body))
+  ]
 }
 
 /// Draft-only GitHub file/line link. Compiles to plain text with `--input aria-wip-links=false`.
 #let gh-wip(path, body: none, ref: "main", line: none, end: none) = {
   let label = _gh-label(path, body: body)
   if _aria-wip-links-enabled() {
-    link(_github-file-url(path, ref: ref, line: line, end: end))[#label]
+    link(_github-file-url(path, ref: ref, line: line, end: end))[
+      #_gh-link-label(label)
+    ]
   } else {
     label
   }
@@ -85,7 +99,9 @@
 #let gh-symbol(symbol, body: none, language: "python") = {
   let label = if body == none { code-inline(symbol) } else { body }
   if _aria-wip-links-enabled() {
-    link(_github-symbol-url(symbol, language: language))[#label]
+    link(_github-symbol-url(symbol, language: language))[
+      #_gh-link-label(label)
+    ]
   } else {
     label
   }

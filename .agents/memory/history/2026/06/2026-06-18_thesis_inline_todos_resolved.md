@@ -10,10 +10,10 @@ files_touched:
   - .agents/todos.toml
   - .omx/context/thesis-inline-todos-20260618T215319Z.md
   - .omx/plans/ralplan-thesis-inline-todos-20260618T215319Z.md
-  - docs/typst/thesis/sections/02-02-geometric-learning.typ
-  - docs/typst/thesis/sections/03-01-formal-state.typ
-  - docs/typst/thesis/sections/03-02-data-generation.typ
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/02-foundations/02-02-geometric-learning.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
+  - docs/typst/thesis/sections/04-method/index.typ
   - docs/typst/thesis/figures/qh_actor_oracle_contract.mmd
   - docs/typst/thesis/figures/qh_actor_oracle_contract.pdf
   - docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd

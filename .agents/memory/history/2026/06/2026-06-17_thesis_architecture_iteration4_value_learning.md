@@ -6,8 +6,8 @@ status: done
 topics: [thesis, literature, offline-rl, q-h, rollouts]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/thesis/roadmap.qmd
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md

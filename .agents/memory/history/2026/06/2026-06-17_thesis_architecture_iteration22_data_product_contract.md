@@ -8,8 +8,8 @@ confidence: high
 canonical_updates_needed:
   - aria_nbv/aria_nbv/data_handling/README.md
   - .agents/references/rollout_zarr_q_invalidity_contract.md
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/rl_planning.qmd
   - .agents/work/rollout-scale-readiness/03-rollout-generation-preflight-plan.md
   - .agents/work/scene-encoding-efm-backbone/01-evl-critique-directions-gpt55pro.md

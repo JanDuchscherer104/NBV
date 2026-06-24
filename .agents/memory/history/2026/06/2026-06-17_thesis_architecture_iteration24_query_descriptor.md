@@ -6,8 +6,8 @@ status: done
 topics: [thesis, architecture, qcnet, descriptors, q-h, geometry]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/candidate_view_dependence.qmd
   - docs/contents/theory/rl_planning.qmd
   - docs/typst/shared/equations/features.typ
@@ -40,7 +40,7 @@ bank joins are staged ablations.
 - `aria_nbv/aria_nbv/vin/pose_encoders.py` implements `R6dLffPoseEncoder`,
   which encodes translation plus continuous 6D rotation in a documented
   reference frame through learnable Fourier features.
-- `docs/typst/thesis/sections/03-method.typ` already separates R6D rotation
+- `docs/typst/thesis/sections/04-method/index.typ` already separates R6D rotation
   features, QCNet-style candidate-local RPE, and `S^2` directional memory in
   the value-model method section.
 - `docs/contents/thesis/questions.qmd` defines the minimum actor-visible target

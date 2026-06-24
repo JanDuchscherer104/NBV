@@ -6,7 +6,7 @@ status: done
 topics: [thesis, architecture, evaluation, headroom, q-h]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/rl_planning.qmd
   - docs/contents/theory/rri_theory.qmd
   - docs/contents/thesis/roadmap.qmd
@@ -35,7 +35,7 @@ controls rather than formal submodularity guarantees.
   and fixed-budget comparison.
 - `docs/contents/theory/rri_theory.qmd` shows why undiscounted
   root-normalized target gain telescopes to endpoint target gain.
-- `docs/typst/thesis/sections/04-evaluation.typ` already treats endpoint gain
+- `docs/typst/thesis/sections/05-experimental-design/index.typ` already treats endpoint gain
   as primary and `Q_H` as meaningful only when oracle lookahead has headroom.
 - SCONE and MACARONS provide the useful reporting pattern of sequential NBV
   acquisition curves and AUC-style convergence summaries.

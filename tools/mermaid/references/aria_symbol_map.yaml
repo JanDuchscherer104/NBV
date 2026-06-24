@@ -32,25 +32,25 @@ math_helpers:
     mermaid_example: '$$\\mathbf{T}^{r}_{c_q}=(\\mathbf{T}^{w}_{r})^{-1}\\circ\\mathbf{T}^{w}_{c_q}$$'
 
 symbols:
-  ase.mesh: { typst: '$bold(cal(M))_"GT"$', latex: '\\boldsymbol{\\mathcal{M}}_{\\mathrm{GT}}', meaning: ground-truth mesh }
-  ase.mesh_target: { typst: '$M_e$', latex: 'M_e', meaning: target/entity-specific mesh crop }
-  ase.faces: { typst: '$bold(cal(F))_"GT"$', latex: '\\boldsymbol{\\mathcal{F}}_{\\mathrm{GT}}', meaning: ground-truth faces }
+  ase.mesh: { typst: '$cal(M)^"GT"$', latex: '\\mathcal{M}^{\\mathrm{GT}}', meaning: ground-truth mesh }
+  ase.mesh_target: { typst: '$cal(M)_e^"GT"$', latex: '\\mathcal{M}_{e}^{\\mathrm{GT}}', meaning: target/entity-specific mesh crop }
+  ase.faces: { typst: '$cal(F)^"GT"$', latex: '\\mathcal{F}^{\\mathrm{GT}}', meaning: ground-truth faces }
   ase.traj: { typst: '$bold(T)_"rig"^"w"(t)$', latex: '\\mathbf{T}^{w}_{\\mathrm{rig}}(t)', meaning: rig trajectory }
   ase.traj_final: { typst: '$bold(T)_"rig"^"w"(T)$', latex: '\\mathbf{T}^{w}_{\\mathrm{rig}}(T)', meaning: final rig pose }
-  ase.points_semi: { typst: '$bold(cal(P))_t$', latex: '\\boldsymbol{\\mathcal{P}}_{t}', meaning: semi-dense point cloud at time t }
+  ase.points_semi: { typst: '$cal(P)_t^"semi"$', latex: '\\mathcal{P}_{t}^{\\mathrm{semi}}', meaning: semi-dense point cloud at time t }
 
   obs.img_rgb: { typst: '$bold(I)^"rgb"$', latex: '\\mathbf{I}^{\\mathrm{rgb}}', meaning: logged RGB image stream }
   obs.depth: { typst: '$bold(D)$', latex: '\\mathbf{D}', meaning: depth image }
   obs.pose: { typst: '$bold(X)$', latex: '\\mathbf{X}', meaning: pose stream }
-  obs.points_semi: { typst: '$bold(cal(P))^"semi"$', latex: '\\boldsymbol{\\mathcal{P}}^{\\mathrm{semi}}', meaning: semi-dense point-cloud observation stream }
+  obs.points_semi: { typst: '$cal(P)^"semi"$', latex: '\\mathcal{P}^{\\mathrm{semi}}', meaning: semi-dense point-cloud observation stream }
   obs.grid: { typst: '$bold(G)$', latex: '\\mathbf{G}', meaning: geometry / voxel-grid observation bundle }
   obs.voxel_center: { typst: '$bold(p)_v$', latex: '\\mathbf{p}_{v}', meaning: voxel center position }
   obs.face_normal: { typst: '$bold(n)$', latex: '\\mathbf{n}', meaning: face normal vector }
 
-  oracle.points: { typst: '$bold(cal(P))$', latex: '\\boldsymbol{\\mathcal{P}}', meaning: point set }
-  oracle.points_q: { typst: '$bold(cal(P))_q$', latex: '\\boldsymbol{\\mathcal{P}}_{q}', meaning: candidate point cloud }
-  oracle.candidates: { typst: '$bold(cal(Q))$', latex: '\\boldsymbol{\\mathcal{Q}}', meaning: candidate pose set }
-  oracle.candidates_t: { typst: '$Q_t$', latex: 'Q_t', meaning: candidate pose set at rollout step t }
+  oracle.points: { typst: '$cal(P)$', latex: '\\mathcal{P}', meaning: point set }
+  oracle.points_q: { typst: '$cal(P)_q$', latex: '\\mathcal{P}_{q}', meaning: candidate point cloud }
+  oracle.candidates: { typst: '$cal(Q)$', latex: '\\mathcal{Q}', meaning: candidate pose set }
+  oracle.candidates_t: { typst: '$cal(Q)_t$', latex: '\\mathcal{Q}_{t}', meaning: candidate pose set at rollout step t }
   oracle.candidate_qti: { typst: '$q_(t,i)$', latex: 'q_{t,i}', meaning: candidate i at rollout step t }
   oracle.depth_q: { typst: '$bold(D)_q$', latex: '\\mathbf{D}_{q}', meaning: candidate depth maps }
   oracle.mask_q: { typst: '$bold(M)_q$', latex: '\\mathbf{M}_{q}', meaning: candidate valid mask }
@@ -62,6 +62,7 @@ symbols:
   entity.lambda_scene: { typst: '$lambda_"scene"$', latex: '\\lambda_{\\mathrm{scene}}', meaning: scene-term mixing weight }
   entity.rri_total: { typst: '$RRI_"total"$', latex: '\\mathrm{RRI}_{\\mathrm{total}}', meaning: weighted global + entity objective }
   entity.rri_e: { typst: '$RRI_e$', latex: '\\mathrm{RRI}_{e}', meaning: entity-specific RRI }
+  entity.target_desc: { typst: '$bold(phi)_e$', latex: '\\boldsymbol{\\phi}_{e}', meaning: actor-visible target descriptor }
 
   rl.s: { typst: '$s$', latex: 's', meaning: RL state }
   rl.o: { typst: '$o$', latex: 'o', meaning: RL observation }
@@ -131,10 +132,10 @@ shapes:
 equations:
   rri.rri:
     typst_module: docs/typst/shared/equations/rri.typ
-    latex: '\\mathrm{RRI}(q)=\\frac{\\mathrm{CD}(\\boldsymbol{\\mathcal{P}}_t,\\boldsymbol{\\mathcal{M}}_{\\mathrm{GT}})-\\mathrm{CD}(\\boldsymbol{\\mathcal{P}}_t\\cup\\boldsymbol{\\mathcal{P}}_q,\\boldsymbol{\\mathcal{M}}_{\\mathrm{GT}})}{\\mathrm{CD}(\\boldsymbol{\\mathcal{P}}_t,\\boldsymbol{\\mathcal{M}}_{\\mathrm{GT}})+\\epsilon}'
+    latex: '\\mathrm{RRI}(q)=\\frac{\\mathrm{CD}(\\mathcal{P}_t,\\mathcal{M}^{\\mathrm{GT}})-\\mathrm{CD}(\\mathcal{P}_t\\cup\\mathcal{P}_q,\\mathcal{M}^{\\mathrm{GT}})}{\\mathrm{CD}(\\mathcal{P}_t,\\mathcal{M}^{\\mathrm{GT}})+\\epsilon}'
   rri.greedy:
     typst_module: docs/typst/shared/equations/rri.typ
-    latex: 'q^{\\star}=\\operatorname*{arg\\,max}_{q\\in\\boldsymbol{\\mathcal{Q}}}\\,\\mathrm{RRI}(q)'
+    latex: 'q^{\\star}=\\operatorname*{arg\\,max}_{q\\in\\mathcal{Q}}\\,\\mathrm{RRI}(q)'
   entity.objective:
     typst_module: docs/typst/shared/equations/entity.typ
     latex: '\\mathrm{RRI}_{\\mathrm{total}}(q)=\\sum_{e\\in\\mathcal{E}}\\mathbf{w}_e\\,\\mathrm{RRI}_e(q)+\\lambda_{\\mathrm{scene}}\\,\\mathrm{RRI}(q)'
@@ -153,5 +154,5 @@ lint_substitutions:
   '\\mathbf{e}_{\\mathrm{pose}}': '\\mathbf{E}_{q}'
   '\\mathbf{z}_{\\mathrm{traj}}': '\\mathbf{c}_{\\mathrm{traj}}'
   '\\mathbf{T}^{w}_{r}(t)': '\\mathbf{T}^{w}_{\\mathrm{rig}}(t)'
-  '\\mathbf{P}_{\\mathrm{sem}}': '\\boldsymbol{\\mathcal{P}}^{\\mathrm{semi}}'
+  '\\mathbf{P}_{\\mathrm{sem}}': '\\mathcal{P}^{\\mathrm{semi}}'
   '\\mathbf{C}_q': '\\mathbf{C}_{q}'

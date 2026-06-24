@@ -7,6 +7,9 @@
 #import "equations/vin.typ": vin
 #import "equations/metrics.typ": metrics
 #import "equations/features.typ": features
+#import "equations/scene.typ": scene
+#import "equations/spatial.typ": spatial
+#import "equations/model.typ": model
 #import "equations/rl.typ": rl
 #import "equations/action.typ": action
 #import "equations/entity.typ": entity
@@ -19,6 +22,9 @@
   vin: vin,
   metrics: metrics,
   features: features,
+  scene: scene,
+  spatial: spatial,
+  model: model,
   rl: rl,
   action: action,
   entity: entity,

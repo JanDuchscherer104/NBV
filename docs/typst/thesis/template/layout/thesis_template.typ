@@ -35,6 +35,7 @@
   acknowledgement: "",
   transparency_ai_tools: "",
   front_matter_after_contents: none,
+  appendix_content: none,
   is_print: false,
   body,
 ) = {
@@ -154,8 +155,10 @@
   ]
 
   pagebreak()
-  heading(numbering: none)[Appendix A: Supplementary Material]
-  include("../../appendix/index.typ")
+  if appendix_content != none {
+    heading(numbering: none)[Appendix A: Supplementary Material]
+    appendix_content
+  }
 
   pagebreak()
   bibliography("/references.bib", style: "ieee")

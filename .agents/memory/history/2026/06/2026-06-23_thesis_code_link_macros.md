@@ -26,6 +26,12 @@ docs, Typst-authoring, source-order, and litkg guidance at the convention.
 Verification: compile and guidance checks were run as part of the implementation
 turn and reported in the final response.
 
+Follow-up: active `#gh`, `#gh-wip`, and `#gh-symbol` labels now render blue and
+underlined so custom bodies still advertise that they are hyperlinks. The
+temporary demo under `.tmp/thesis-code-links-demo/` uses examples that exist on
+`origin/main` and renders final mode with `aria-code-ref=main` rather than a
+placeholder release tag.
+
 Canonical state impact: no `.agents/memory/state` updates are needed. The
 durable convention is captured in `.agents/references/thesis_code_links.md` and
 referenced from the owning guidance surfaces.

@@ -7,7 +7,7 @@ topics: [thesis, scene-encoding, backbone, target-rri]
 confidence: high
 canonical_updates_needed: []
 files_touched:
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/04-method/index.typ
 ---
 
 ## Task
@@ -33,7 +33,7 @@ requirements explicit before the candidate/replay and value-model contracts.
 ## Verification
 
 - `cd docs && typst compile typst/thesis/main.typ --root . /tmp/thesis-main.pdf`
-- `git diff --check -- docs/typst/thesis/sections/03-method.typ`
+- `git diff --check -- docs/typst/thesis/sections/04-method/index.typ`
 
 ## Canonical State Impact
 

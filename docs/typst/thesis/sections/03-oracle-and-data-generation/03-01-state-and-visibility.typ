@@ -1,14 +1,14 @@
-#import "../../shared/macros.typ": *
-#import "../../shared/symbols.typ": symb
-#import "../../shared/equations.typ": eqs
+#import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
 
-== Formal State and Visibility
+== State and Visibility Boundary
 
 The initial non-myopic experiment is a #emph[masked finite-horizon candidate-decision process], not a stationary deployment MDP. It is an offline, mesh-supervised #emph[controlled counterfactual replay] process: the oracle may render selected candidates and regenerate the next candidate table as part of the experimental protocol, while the actor sees only the typed state features below.
 
 #figure(
   align(center, image(
-    "../figures/qh_actor_oracle_contract.pdf",
+    "../../figures/qh_actor_oracle_contract.pdf",
     width: 100%,
   )),
   caption: [Actor-visible and oracle-only state boundary for the V1 thesis protocol. The learned #symb.rl.qh policy may consume accumulated geometry, frozen @egocentric-voxel-lifting:short evidence, target descriptors, history, budget, candidates, masks, and invalid reasons; @ground-truth:short meshes, boxes, dense candidate renders, target labels, and endpoint metrics supervise labels, upper bounds, evaluation, or explicitly named teacher ablations only.],
@@ -33,18 +33,7 @@ $
 $
 
 $
-  cal(M)_"NBV"
-  =
-  (
-    cal(S)^"hist",
-    cal(S)^"cf0",
-    cal(S)^"oracle",
-    {cal(A)_t},
-    T,
-    r_t^e,
-    gamma,
-    H
-  ).
+  #eqs.rl.nbv_process_tuple
 $
 
 The model separates logged snippet state, counterfactual actor state, and privileged oracle state because real egocentric trajectories contain modalities that are not available after synthetic view choices. The raw historic state is available on the logged @aria-synthetic-environments:short trajectory. The planner state keeps local root @egocentric-voxel-lifting:short evidence fixed while updating the fused geometry proxy, optional point-feature bank, selected-view history, remaining horizon metadata, target descriptor, candidates, masks, and reason codes. The privileged oracle state augments this with @ground-truth:short geometry, the matched target mesh, all-candidate rendered points, and oracle labels for target-task selection, label generation, upper-bound planning, and evaluation.

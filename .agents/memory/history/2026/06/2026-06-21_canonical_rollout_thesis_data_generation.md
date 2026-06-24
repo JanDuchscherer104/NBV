@@ -8,7 +8,7 @@ confidence: high
 canonical_updates_needed: []
 files_touched:
   - .configs/build_rollouts_v1_realistic.toml
-  - docs/typst/thesis/sections/03-02-data-generation.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
   - docs/typst/thesis/main.pdf
 ---
 
@@ -19,7 +19,7 @@ Align the checked-in realistic rollout profile with the canonical thesis data-ge
 ## Outputs
 
 - `.configs/build_rollouts_v1_realistic.toml` now encodes the audit-scale canonical real profile: train split, 25 source samples, one oracle target task per sample, strict label validity, cache-relative stores, 60 candidates from the three-family mixture, and motion realism caps.
-- `docs/typst/thesis/sections/03-02-data-generation.typ` now describes the three-family candidate sampler mathematically, including Power Spherical direction sampling, family-specific target/forward/bypass directions, target-looking orientation, hard validity masks, and branch sampling recipes.
+- `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ` now describes the three-family candidate sampler mathematically, including Power Spherical direction sampling, family-specific target/forward/bypass directions, target-looking orientation, hard validity masks, and branch sampling recipes.
 - The thesis text explicitly separates implemented evidence from scale claims and lists the diagnostics needed before attributing success or failure to planning.
 
 ## Verification

@@ -7,7 +7,7 @@ topics: [thesis, q_h, efm3d, rollouts, architecture]
 confidence: high
 canonical_updates_needed: []
 files_touched:
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/04-method/index.typ
   - docs/references.bib
 artifacts:
   - .omx/goals/autoresearch/aria-nbv-geometrically-elegant-multi-step-q-h-ar/mission.json
@@ -29,7 +29,7 @@ and external primary literature.
 
 ## Method
 
-Updated `docs/typst/thesis/sections/03-method.typ` in bounded iterations:
+Updated `docs/typst/thesis/sections/04-method/index.typ` in bounded iterations:
 scene/support encoding, target descriptors, token ownership, and residual
 finite-candidate value architecture. Added Typst comments with concrete
 source-file/line pointers for the repo evidence behind the prose, and added
@@ -61,7 +61,7 @@ feature unless it blocks evaluation.
 ## Verification
 
 - `cd docs && typst compile typst/thesis/main.typ --root .`
-- `git diff --check -- docs/typst/thesis/sections/03-method.typ docs/references.bib .agents/memory/history/2026/06/2026-06-22_multistep_qh_architecture_thesis_refinement.md`
+- `git diff --check -- docs/typst/thesis/sections/04-method/index.typ docs/references.bib .agents/memory/history/2026/06/2026-06-22_multistep_qh_architecture_thesis_refinement.md`
 - Rendered affected PDF pages 37, 45, 51, and 53 with `pdftoppm` and inspected
   the support equation, EVL ambiguity TODO, token-ownership table, and
   architecture critique table.

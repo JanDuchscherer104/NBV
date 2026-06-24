@@ -6,8 +6,8 @@ status: done
 topics: [thesis, literature, q-h, representation, support-memory]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/efm3d_scene_embeddings.qmd
   - docs/contents/theory/candidate_view_dependence.qmd
   - docs/contents/theory/rl_planning.qmd

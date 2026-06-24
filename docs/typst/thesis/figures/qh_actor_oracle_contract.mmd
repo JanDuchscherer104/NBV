@@ -22,21 +22,21 @@ config:
 flowchart LR
   subgraph ActorVisible["V1 actor-visible inputs"]
     direction TB
-    Points["$$\begin{array}{c}\textbf{Accumulated geometry}\\\\ \boldsymbol{\mathcal{P}}_{t}\end{array}$$"]
+    Points["$$\begin{array}{c}\textbf{Accumulated geometry}\\\\ \mathcal{P}_{t}\end{array}$$"]
     EVL["$$\begin{array}{c}\textbf{Frozen EVL field}\\\\ \mathbf{F}_{0}^{\mathrm{EVL}}\end{array}$$"]
-    Target["$$\begin{array}{c}\textbf{Target descriptor}\\\\ \mathbf{z}_{e}\\\\ \texttt{OBB, class, support}\end{array}$$"]
+    Target["$$\begin{array}{c}\textbf{Target descriptor}\\\\ \boldsymbol{\phi}_{e}\\\\ \texttt{OBB, class, support}\end{array}$$"]
     Hist["$$\begin{array}{c}\textbf{History and budget}\\\\ \mathbf{h}_{t},\ b_t\end{array}$$"]
-    Table["$$\begin{array}{c}\textbf{Candidate table}\\\\ Q_t,\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
+    Table["$$\begin{array}{c}\textbf{Candidate table}\\\\ \mathcal{Q}_t,\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
   end
 
-  Interface["$$\begin{array}{c}\textbf{Legal }Q_H\textbf{ interface}\\\\ \boldsymbol{s}_{t}^{\mathrm{cf0}}=(\mathbf{F}_{0}^{\mathrm{EVL}},\boldsymbol{\mathcal{P}}_{t},\mathbf{z}_e,\mathbf{h}_t,b_t,Q_t,\mathbf{m}_t,\boldsymbol{\rho}_t)\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\mathbf{z}_{e},q_{t,i})\end{array}$$"]
+  Interface["$$\begin{array}{c}\textbf{Legal }Q_H\textbf{ interface}\\\\ \boldsymbol{s}_{t}^{\mathrm{cf0}}=(\mathbf{F}_{0}^{\mathrm{EVL}},\mathcal{P}_{t},\boldsymbol{\phi}_e,\mathbf{h}_t,b_t,\mathcal{Q}_t,\mathbf{m}_t,\boldsymbol{\rho}_t)\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\boldsymbol{\phi}_{e},q_{t,i})\end{array}$$"]
   Select["$$\begin{array}{c}\textbf{Masked action}\\\\ a_t=\operatorname*{arg\,max}_{i:m_{t,i}=1}Q_{H,\theta}(\cdot)\end{array}$$"]
 
   subgraph OracleOnly["Oracle-only assets"]
     direction TB
-    Mesh["$$\begin{array}{c}\textbf{Scene and target GT}\\\\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}},\ M_e\end{array}$$"]
-    Boxes["$$\begin{array}{c}\textbf{GT boxes and labels}\\\\ \texttt{match}(\mathbf{z}_e,O_{\mathrm{GT}})\end{array}$$"]
-    DenseRenders["$$\begin{array}{c}\textbf{Dense GT candidate renders}\\\\ \mathbf{D}_{q},\ \boldsymbol{\mathcal{P}}_{q}\end{array}$$"]
+    Mesh["$$\begin{array}{c}\textbf{Scene and target GT}\\\\ \mathcal{M}^{\mathrm{GT}},\ \mathcal{M}_{e}^{\mathrm{GT}}\end{array}$$"]
+    Boxes["$$\begin{array}{c}\textbf{GT boxes and labels}\\\\ \texttt{match}(\boldsymbol{\phi}_e,O_{\mathrm{GT}})\end{array}$$"]
+    DenseRenders["$$\begin{array}{c}\textbf{Dense GT candidate renders}\\\\ \mathbf{D}_{q},\ \mathcal{P}_{q}\end{array}$$"]
     Labels["$$\begin{array}{c}\textbf{Training and evaluation labels}\\\\ r_t^e,\ G_t^{(H)},\ J_e^{(H)}\end{array}$$"]
   end
 

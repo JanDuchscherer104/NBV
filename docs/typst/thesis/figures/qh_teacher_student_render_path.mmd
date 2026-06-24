@@ -22,16 +22,16 @@ config:
 flowchart TB
   subgraph Student["V1 student policy"]
     direction TB
-    SState["$$\begin{array}{c}\textbf{Actor-visible state}\\\\ \boldsymbol{\mathcal{P}}_{t},\ \mathbf{F}_{0}^{\mathrm{EVL}},\mathbf{z}_{e},Q_t\end{array}$$"]
-    SRender["$$\begin{array}{c}\textbf{Render current belief}\\\\ I_i^{\mathrm{belief}}=\operatorname{Render}(\boldsymbol{\mathcal{P}}_{t},\mathbf{F}_{0}^{\mathrm{EVL}},q_{t,i})\end{array}$$"]
-    StudentQ["$$\begin{array}{c}\textbf{Student value}\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\mathbf{z}_{e},q_{t,i})\end{array}$$"]
+    SState["$$\begin{array}{c}\textbf{Actor-visible state}\\\\ \mathcal{P}_{t},\ \mathbf{F}_{0}^{\mathrm{EVL}},\boldsymbol{\phi}_{e},\mathcal{Q}_t\end{array}$$"]
+    SRender["$$\begin{array}{c}\textbf{Render current belief}\\\\ I_i^{\mathrm{belief}}=\operatorname{Render}(\mathcal{P}_{t},\mathbf{F}_{0}^{\mathrm{EVL}},q_{t,i})\end{array}$$"]
+    StudentQ["$$\begin{array}{c}\textbf{Student value}\\\\ Q_{H,\theta}(\boldsymbol{s}_{t}^{\mathrm{cf0}},\boldsymbol{\phi}_{e},q_{t,i})\end{array}$$"]
   end
 
   subgraph Teacher["Privileged teacher for training"]
     direction TB
-    GTAssets["$$\begin{array}{c}\textbf{Oracle assets}\\\\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}},\ M_e\end{array}$$"]
-    GTRender["$$\begin{array}{c}\textbf{Dense GT render}\\\\ \mathbf{D}_{q},\ \boldsymbol{\mathcal{P}}_{q},\ \mathbf{M}_{q}\end{array}$$"]
-    TeacherQ["$$\begin{array}{c}\textbf{Teacher value}\\\\ Q_{H}^{\mathrm{priv}}(s_t,z_e,q_{t,i},\mathbf{D}_{q})\end{array}$$"]
+    GTAssets["$$\begin{array}{c}\textbf{Oracle assets}\\\\ \mathcal{M}^{\mathrm{GT}},\ \mathcal{M}_{e}^{\mathrm{GT}}\end{array}$$"]
+    GTRender["$$\begin{array}{c}\textbf{Dense GT render}\\\\ \mathbf{D}_{q},\ \mathcal{P}_{q},\ \mathbf{M}_{q}\end{array}$$"]
+    TeacherQ["$$\begin{array}{c}\textbf{Teacher value}\\\\ Q_{H}^{\mathrm{priv}}(s_t,\boldsymbol{\phi}_{e},q_{t,i},\mathbf{D}_{q})\end{array}$$"]
   end
 
   subgraph Losses["Training signals"]

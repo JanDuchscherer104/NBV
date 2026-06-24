@@ -8,7 +8,7 @@
 
 ## 2026-06-18 structure decision
 
-- Keep `03-method.typ` as the Method chapter entrypoint.
-- Use `03-01-formal-state.typ` for the formal state / oracle boundary.
-- Use `03-02-data-generation.typ` for oracle target-task sampling, target-specific RRI labels, rollout supervision, and headroom diagnostics.
+- Keep `04-method/index.typ` as the Method chapter entrypoint.
+- Use `03-oracle-and-data-generation/03-01-state-and-visibility.typ` for the formal state / oracle boundary.
+- Use `03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ` for oracle target-task sampling, target-specific RRI labels, rollout supervision, and headroom diagnostics.
 - Do not make deployable automatic target discovery the target-selection claim. In the current thesis seed, target selection belongs to oracle data generation; the learned model is target-conditioned view selection.

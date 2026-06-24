@@ -1,8 +1,8 @@
-#import "../../shared/macros.typ": *
-#import "../draft_markers.typ": *
+#import "../../../shared/macros.typ": *
+#import "../../draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
-= Background
+= Foundations <sec:thesis-foundations>
 
 The project combines @aria-synthetic-environments scene assets, @egocentric-foundation-model-3d features, oracle @relative-reconstruction-improvement labels, and VIN-style candidate scoring. @aria-synthetic-environments:short supplies Aria-like synthetic sensor trajectories, aligned semi-dense maps, and @ground-truth:short annotations at indoor-scene scale @ProjectAria-ASE-2025. @egocentric-voxel-lifting:short supplies frozen local voxel evidence, lifted DINO-derived features, and object-support signals for target-task descriptors and diagnostics @EFM3D-straub2024 @EVL-Doc-2025. In the current thesis scope, @egocentric-voxel-lifting:short is local target/support evidence rather than a full long-horizon scene memory; broad scene context comes from semi-dense and fused geometry, with point-attached feature banks treated as planned representation ablations until a persisted cache and training reader exist.
 
@@ -40,13 +40,15 @@ The literature is used here to assign roles, not to broaden the thesis claim. Ol
 
 The resulting lineage is deliberately narrow:
 
-$ cal(U)_"cov/unc" -> hat(r)_t^e (i) -> #symb.entity.target_reward -> #symb.entity.return_h -> #symb.rl.qh_theta. $
+$
+  #eqs.rl.evidence_chain
+$
 
 Coverage and uncertainty remain diagnostics, not the thesis utility. @ground-truth:short meshes and @ground-truth:short target boxes remain oracle assets for target-task sampling, labels, and evaluation; they are not learned actor inputs unless a named privileged ablation says so. Offline and continuous RL references become meaningful only after candidate support, masks, and oracle re-evaluation are trustworthy.
 
 #figure(
   align(center, image(
-    "../figures/proposal_system_flow.pdf",
+    "../../figures/proposal_system_flow.pdf",
     width: 96%,
   )),
   caption: [Evidence chain from actor-visible state and target descriptor to masked candidates, target @relative-reconstruction-improvement:short, lookahead headroom, and the #symb.rl.qh model. Dashed paths are follow-up work.],

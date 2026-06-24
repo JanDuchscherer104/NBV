@@ -96,6 +96,16 @@
     // Time-indexed EVL/EFM evidence field used by proposal rollouts.
     field_evl_t: $bold(F)_t^"EVL"$,
     field_evl_0: $bold(F)_0^"EVL"$,
+    // Compatibility aliases. New thesis prose should use symb.scene.*.
+    scene_memory_t: $bold(Phi)_t^"scene"$,
+    evl_local: $bold(E)_0^"EVL-local"$,
+    evl_support_frac: $omega_(t,i)^"EVL"$,
+    evl_support_token: $bold(g)_(t,i)^"EVL"$,
+    target_pool: $bold(g)_e^"tgt"$,
+    frustum_pool: $bold(g)_(t,i)^"fr"$,
+    target_frustum_pool: $bold(g)_(t,e,i)^"cap"$,
+    ray_query_ti: $bold(g)_(t,i)^"ray"$,
+    render_query: $op("RenderQuery")$,
     // Per-candidate voxel features sampled/pooled from the scene field.
     field_q: $bold(F)_q^("vox")$,
     // Candidate pose/orientation and directional-observation features.
@@ -104,6 +114,6 @@
     dir_memory: $bold(h)_"dir"$,
     dir_moment: $bold(M)_"dir"$,
     sh_basis: $bold(Y)_L$,
-    candidate_pose_feat: $bold(x)_"pose"$,
-    candidate_dir_feat: $bold(x)_"dir"$,
+    candidate_pose_feat: $bold(h)_(t,i)^"pose"$,
+    candidate_dir_feat: $bold(h)_(t,i)^"dir"$,
   )

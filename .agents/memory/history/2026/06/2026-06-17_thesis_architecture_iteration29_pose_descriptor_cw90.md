@@ -7,8 +7,8 @@ topics: [thesis, architecture, pose-encoding, r6d, qcnet, cw90, geometry]
 confidence: high
 canonical_updates_needed:
   - docs/typst/shared/equations/features.typ
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/candidate_view_dependence.qmd
   - aria_nbv/tests/vin/test_vin_model_v3_methods.py
 files_touched:
