@@ -74,7 +74,6 @@ from pytorch3d.renderer.cameras import (  # type: ignore[import-untyped]
     PerspectiveCameras,
 )
 from torch import Tensor, nn
-from torch.nn import functional as functional
 
 from aria_nbv.utils.frames import rotate_yaw_cw90
 
@@ -99,13 +98,18 @@ from ..encoders import (
 )
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
 from ..geometry.semidense_projection import (
-    build_projection_grid,
     encode_projection_summary,
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
-from ..geometry.semidense_schema import SEMIDENSE_GRID_CHANNELS, SEMIDENSE_PROJ_DIM
-from ..modules import PoseConditionedGlobalPool, VinScorerHeadConfig, largest_divisor_leq
+from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
+from ..modules import (
+    PoseConditionedGlobalPool,
+    SemidenseGridEncoder,
+    SemidenseGridEncoderConfig,
+    VinScorerHeadConfig,
+    largest_divisor_leq,
+)
 from ..types import (
     EvlBackboneOutput,
     FieldBundle,
@@ -282,7 +286,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         # Optional modules (may be None)
         self.voxel_proj_film: nn.Module | None = None
         self.voxel_proj_film_norm: nn.GroupNorm | None = None
-        self.semidense_cnn: nn.Module | None = None
+        self.semidense_cnn: SemidenseGridEncoder | None = None
         self.traj_encoder: TrajectoryEncoder | None = None
         self.traj_attn: nn.MultiheadAttention | None = None
         self.traj_attn_norm: nn.GroupNorm | None = None
@@ -328,17 +332,11 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
 
         # Tiny CNN for semidense projection grids (per-candidate cues).
         if self.config.semidense_cnn_enabled:
-            cnn_channels = int(self.config.semidense_cnn_channels)
-            cnn_out_dim = int(self.config.semidense_cnn_out_dim)
-            self.semidense_cnn = nn.Sequential(
-                nn.Conv2d(SEMIDENSE_GRID_CHANNELS, cnn_channels, kernel_size=3, padding=1),
-                nn.GELU(),
-                nn.Conv2d(cnn_channels, cnn_channels, kernel_size=3, padding=1),
-                nn.GELU(),
-                nn.AdaptiveAvgPool2d((2, 2)),
-                nn.Flatten(),
-                nn.Linear(cnn_channels * 4, cnn_out_dim),
-            )
+            self.semidense_cnn = SemidenseGridEncoderConfig(
+                grid_size=int(self.config.semidense_proj_grid_size),
+                channels=int(self.config.semidense_cnn_channels),
+                out_dim=int(self.config.semidense_cnn_out_dim),
+            ).setup_target()
 
         # ---------------------------------------------------------------------------------
         # Scorer head: MLP + CORAL (pose + global voxel + semidense projection stats + CNN)
@@ -649,17 +647,13 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         if proj_data is None:
             raise RuntimeError("Semidense projection data is missing.")
 
-        num_cams = int(proj_data["num_cams"].item())
-        grid = build_projection_grid(
+        return self.semidense_cnn.encode_projection_features(
             proj_data,
+            batch_size=batch_size,
+            num_candidates=num_candidates,
             device=device,
             dtype=dtype,
-            grid_size=int(self.config.semidense_proj_grid_size),
         )
-        feats = self.semidense_cnn(grid)
-        if batch_size == 1 and num_cams == num_candidates:
-            return feats.view(1, num_candidates, -1)
-        return feats.view(batch_size, num_candidates, -1)
 
     def _forward_impl(
         self,

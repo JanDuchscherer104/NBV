@@ -10,5 +10,13 @@ from __future__ import annotations
 from .heads import VinScorerHead, VinScorerHeadConfig
 from .normalization import largest_divisor_leq
 from .pooling import PoseConditionedGlobalPool
+from .semidense_grid import SemidenseGridEncoder, SemidenseGridEncoderConfig
 
-__all__ = ["PoseConditionedGlobalPool", "VinScorerHead", "VinScorerHeadConfig", "largest_divisor_leq"]
+__all__ = [
+    "PoseConditionedGlobalPool",
+    "SemidenseGridEncoder",
+    "SemidenseGridEncoderConfig",
+    "VinScorerHead",
+    "VinScorerHeadConfig",
+    "largest_divisor_leq",
+]

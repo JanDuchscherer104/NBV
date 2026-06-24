@@ -202,6 +202,25 @@ def test_v3_shared_head_preserves_checkpoint_keys() -> None:
     assert not any(key.startswith("film.") for key in keys)
 
 
+def test_v3_semidense_cnn_preserves_checkpoint_keys() -> None:
+    """Semidense CNN extraction must keep historical numbered layer keys."""
+    model = VinModelV3(VinModelV3Config())
+    keys = set(model.state_dict())
+
+    expected = {
+        "semidense_cnn.0.weight",
+        "semidense_cnn.0.bias",
+        "semidense_cnn.2.weight",
+        "semidense_cnn.2.bias",
+        "semidense_cnn.6.weight",
+        "semidense_cnn.6.bias",
+    }
+
+    assert expected.issubset(keys)
+    assert not any(key.startswith("semidense_cnn.encoder.") for key in keys)
+    assert not any(key.startswith("semidense_grid_encoder.") for key in keys)
+
+
 def test_semidense_projection_features_shape_v3() -> None:
     model = VinModelV3(VinModelV3Config())
     device = torch.device("cpu")
