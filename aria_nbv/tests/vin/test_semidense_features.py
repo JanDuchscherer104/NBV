@@ -1,5 +1,7 @@
 import torch
+from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
+from torch import nn
 
 from aria_nbv.data_handling.efm_views import EfmPointsView
 from aria_nbv.vin.geometry.semidense_schema import semidense_proj_feature_index
@@ -7,6 +9,7 @@ from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models._v2_semidense import (
     encode_semidense_projection_features_v2,
     prepare_semidense_frustum_tokens_v2,
+    prepare_semidense_point_encoder_batch_v2,
     project_semidense_points_v2,
 )
 
@@ -139,6 +142,92 @@ def test_prepare_semidense_frustum_tokens_v2_normalizes_and_flattens() -> None:
         flat_tokens[0, 0],
         torch.tensor([-0.5, -0.5, 3.0, 0.25, 0.4], dtype=torch.float32),
     )
+
+
+def test_prepare_semidense_point_encoder_batch_v2_filters_pads_and_transforms() -> None:
+    """Point prep should preserve V2 finite-selection and reference-rig semantics."""
+    device = torch.device("cpu")
+    reference = PoseTW.from_Rt(
+        torch.eye(3, device=device, dtype=torch.float32).repeat(2, 1, 1),
+        torch.tensor([[10.0, 0.0, 0.0], [0.0, 0.0, 0.0]], device=device),
+    )
+    points_world = torch.tensor(
+        [
+            [
+                [11.0, 2.0, 3.0, 0.5, 3.0],
+                [float("nan"), 0.0, 0.0, 7.0, 9.0],
+                [12.0, 2.0, 3.0, 0.25, 8.0],
+            ],
+            [
+                [float("nan"), 0.0, 0.0, 1.0, 1.0],
+                [float("inf"), 0.0, 0.0, 1.0, 1.0],
+                [0.0, float("nan"), 0.0, 1.0, 1.0],
+            ],
+        ],
+        device=device,
+        dtype=torch.float32,
+    )
+
+    pts_rig, has_points = prepare_semidense_point_encoder_batch_v2(
+        points_world,
+        pose_world_rig_ref=reference,
+        batch_size=2,
+        device=device,
+        max_points=3,
+        normalize_obs_count=lambda obs: obs / 10.0,
+    )
+
+    assert has_points.tolist() == [True, False]
+    assert pts_rig.shape == (1, 3, 5)
+    assert torch.allclose(
+        pts_rig[0],
+        torch.tensor(
+            [
+                [1.0, 2.0, 3.0, 0.5, 0.3],
+                [2.0, 2.0, 3.0, 0.25, 0.8],
+                [2.0, 2.0, 3.0, 0.25, 0.8],
+            ],
+            device=device,
+        ),
+    )
+
+
+def test_v2_semidense_point_encoder_wrapper_scatters_valid_rows() -> None:
+    """The V2 model should keep encoder ownership while delegating point prep."""
+    device = torch.device("cpu")
+
+    class SumPointEncoder(nn.Module):
+        out_dim = 2
+
+        def forward(self, points: torch.Tensor) -> torch.Tensor:
+            return torch.stack([points[..., 0].sum(dim=1), points[..., 3].sum(dim=1)], dim=-1)
+
+    model = VinModelV2(VinModelV2Config(point_encoder=None, traj_encoder=None)).to(device=device)
+    model.point_encoder = SumPointEncoder()
+    reference = PoseTW.from_Rt(
+        torch.eye(3, device=device, dtype=torch.float32).repeat(2, 1, 1),
+        torch.tensor([[10.0, 0.0, 0.0], [0.0, 0.0, 0.0]], device=device),
+    )
+    points_world = torch.tensor(
+        [
+            [[11.0, 0.0, 0.0, 0.5], [12.0, 0.0, 0.0, 1.5]],
+            [[float("nan"), 0.0, 0.0, 5.0], [float("inf"), 0.0, 0.0, 5.0]],
+        ],
+        device=device,
+        dtype=torch.float32,
+    )
+
+    feat = model._encode_semidense_features(
+        points_world,
+        pose_world_rig_ref=reference,
+        batch_size=2,
+        device=device,
+        dtype=torch.float32,
+    )
+
+    assert feat is not None
+    assert torch.allclose(feat[0], torch.tensor([3.0, 2.0], device=device))
+    assert torch.count_nonzero(feat[1]) == 0
 
 
 def test_v2_semidense_projection_keeps_permissive_missing_data_contract() -> None:

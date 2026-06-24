@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import torch
+from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 from torch import Tensor
 
@@ -294,6 +295,104 @@ def encode_semidense_projection_features_v2(
     return proj_feat.to(device=device, dtype=dtype)
 
 
+def prepare_semidense_point_encoder_batch_v2(
+    points_world: Tensor,
+    *,
+    pose_world_rig_ref: PoseTW,
+    batch_size: int,
+    device: torch.device,
+    max_points: int | None,
+    normalize_obs_count: Callable[[Tensor], Tensor],
+) -> tuple[Tensor, Tensor]:
+    """Prepare VIN v2 semidense points for the optional PointNeXt encoder.
+
+    VIN v2 encodes a fixed-size point batch in the reference rig frame and
+    leaves the trainable `aria_nbv.vin.encoders.pointnext.PointNeXtSEncoder`
+    call on `aria_nbv.vin.models.v2.VinModelV2`. This helper owns only the
+    deterministic input policy: 2-D point sets broadcast over the batch, rows
+    with no finite XYZ points are skipped, short rows repeat their last finite
+    point, and optional ``inv_dist_std`` / ``obs_count`` channels are preserved
+    with observation counts normalized by the caller.
+
+    Args:
+        points_world: ``Tensor["P C"]`` or ``Tensor["B P C"]`` containing XYZ
+            world points and optional reliability channels.
+        pose_world_rig_ref: Reference rig pose used to express XYZ channels in
+            the rig frame.
+        batch_size: Expected batch size ``B``.
+        device: Device for the returned tensors.
+        max_points: Optional cap from the configured point encoder. When
+            ``None``, all available columns are retained.
+        normalize_obs_count: Model-owned normalization callback for the second
+            optional extra channel.
+
+    Returns:
+        ``(pts_rig, has_points)``. ``pts_rig`` contains only rows with at least
+        one finite XYZ point and has shape ``Tensor["B_valid P C"]``.
+        ``has_points`` is a boolean ``Tensor["B"]`` scatter mask for the model
+        owner.
+
+    Raises:
+        ValueError: If the point batch is not 2-D/3-D or cannot be broadcast to
+            ``batch_size``.
+    """
+    pts_world = points_world.to(dtype=torch.float32)
+    if pts_world.ndim == 2:
+        pts_world = pts_world.unsqueeze(0)
+    elif pts_world.ndim != 3:
+        raise ValueError(
+            f"Expected semidense points with ndim 2 or 3, got {pts_world.ndim}.",
+        )
+    if pts_world.shape[0] == 1 and batch_size > 1:
+        pts_world = pts_world.expand(batch_size, -1, -1)
+    if pts_world.shape[0] != batch_size:
+        raise ValueError(
+            "Semidense points batch size must match candidates or be broadcastable.",
+        )
+    pts_world = pts_world.to(device=device)
+
+    xyz = pts_world[..., :3]
+    extra = pts_world[..., 3:] if pts_world.shape[-1] > 3 else None
+    valid_xyz = torch.isfinite(xyz).all(dim=-1)
+    has_points = valid_xyz.any(dim=1)
+    target_points = int(xyz.shape[1])
+    if max_points is not None:
+        target_points = min(target_points, int(max_points))
+
+    if not bool(has_points.any().item()):
+        empty_dim = int(pts_world.shape[-1])
+        empty = torch.empty((0, target_points, empty_dim), device=device, dtype=torch.float32)
+        return empty, has_points.to(device=device)
+
+    selected_xyz: list[Tensor] = []
+    selected_extra: list[Tensor] | None = [] if extra is not None else None
+    for batch_idx in torch.nonzero(has_points, as_tuple=False).reshape(-1).tolist():
+        valid_idx = torch.nonzero(valid_xyz[batch_idx], as_tuple=False).reshape(-1)
+        if valid_idx.numel() >= target_points:
+            chosen = valid_idx[:target_points]
+        else:
+            pad = valid_idx[-1:].expand(target_points - valid_idx.numel())
+            chosen = torch.cat([valid_idx, pad], dim=0)
+        selected_xyz.append(xyz[batch_idx, chosen])
+        if selected_extra is not None and extra is not None:
+            selected_extra.append(extra[batch_idx, chosen])
+
+    xyz_sel = torch.stack(selected_xyz, dim=0)
+    t_rig_world = pose_world_rig_ref.inverse()
+    t_rig_world_sel = PoseTW(t_rig_world.tensor()[has_points])
+    pts_rig = t_rig_world_sel * xyz_sel
+    if selected_extra is not None and extra is not None:
+        extra_sel = torch.stack(selected_extra, dim=0).to(dtype=pts_rig.dtype)
+        extra_sel = torch.nan_to_num(extra_sel, nan=0.0, posinf=0.0, neginf=0.0)
+        if extra_sel.shape[-1] > 1:
+            inv_dist_std = extra_sel[..., :1]
+            obs_count = normalize_obs_count(extra_sel[..., 1:2])
+            extra_sel = torch.cat([inv_dist_std, obs_count], dim=-1)
+        pts_rig = torch.cat([pts_rig, extra_sel], dim=-1)
+    pts_rig = torch.nan_to_num(pts_rig, nan=0.0, posinf=0.0, neginf=0.0)
+    return pts_rig.to(device=device), has_points.to(device=device)
+
+
 def prepare_semidense_frustum_tokens_v2(
     proj_data: dict[str, Tensor],
     *,
@@ -393,6 +492,7 @@ __all__ = [
     "SEMIDENSE_FRUSTUM_TOKEN_DIM",
     "SEMIDENSE_FRUSTUM_TOKEN_FEATURES",
     "encode_semidense_projection_features_v2",
+    "prepare_semidense_point_encoder_batch_v2",
     "prepare_semidense_frustum_tokens_v2",
     "project_semidense_points_v2",
     "sample_semidense_points_v2",

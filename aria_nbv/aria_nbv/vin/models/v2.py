@@ -92,6 +92,7 @@ from ._v2_semidense import (
     SEMIDENSE_FRUSTUM_TOKEN_DIM,
     encode_semidense_projection_features_v2,
     prepare_semidense_frustum_tokens_v2,
+    prepare_semidense_point_encoder_batch_v2,
     project_semidense_points_v2,
     sample_semidense_points_v2,
 )
@@ -645,59 +646,21 @@ class VinModelV2(PoseFeatureGlobalContextMixin, nn.Module):
                 dtype=dtype,
             )
         else:
-            pts_world = points_world.to(dtype=torch.float32)
-            if pts_world.ndim == 2:
-                pts_world = pts_world.unsqueeze(0)
-            if pts_world.shape[0] == 1 and batch_size > 1:
-                pts_world = pts_world.expand(batch_size, -1, -1)
-            if pts_world.shape[0] != batch_size:
-                raise ValueError(
-                    "Semidense points batch size must match candidates or be broadcastable.",
-                )
-            pts_world = pts_world.to(device=device)
-
-            xyz = pts_world[..., :3]
-            extra = pts_world[..., 3:] if pts_world.shape[-1] > 3 else None
-
-            valid_xyz = torch.isfinite(xyz).all(dim=-1)
-            has_points = valid_xyz.any(dim=1)
-
             out_dim = int(self.point_encoder.out_dim)
             semidense_feat = torch.zeros((batch_size, out_dim), device=device, dtype=dtype)
+            max_points = None
+            if self.config.point_encoder is not None:
+                max_points = int(self.config.point_encoder.max_points)
+            pts_rig, has_points = prepare_semidense_point_encoder_batch_v2(
+                points_world,
+                pose_world_rig_ref=pose_world_rig_ref,
+                batch_size=batch_size,
+                device=device,
+                max_points=max_points,
+                normalize_obs_count=self._normalize_obs_count,
+            )
             if not bool(has_points.any().item()):
                 return semidense_feat
-
-            target_points = int(xyz.shape[1])
-            if self.config.point_encoder is not None:
-                target_points = min(target_points, int(self.config.point_encoder.max_points))
-
-            selected_xyz: list[torch.Tensor] = []
-            selected_extra: list[torch.Tensor] | None = [] if extra is not None else None
-            for b in torch.nonzero(has_points, as_tuple=False).reshape(-1).tolist():
-                valid_idx = torch.nonzero(valid_xyz[b], as_tuple=False).reshape(-1)
-                if valid_idx.numel() >= target_points:
-                    chosen = valid_idx[:target_points]
-                else:
-                    pad = valid_idx[-1:].expand(target_points - valid_idx.numel())
-                    chosen = torch.cat([valid_idx, pad], dim=0)
-                selected_xyz.append(xyz[b, chosen])
-                if selected_extra is not None and extra is not None:
-                    selected_extra.append(extra[b, chosen])
-
-            xyz_sel = torch.stack(selected_xyz, dim=0)
-            t_rig_world = pose_world_rig_ref.inverse()
-            t_rig_world_sel = PoseTW(t_rig_world.tensor()[has_points])
-            pts_rig = t_rig_world_sel * xyz_sel
-            if selected_extra is not None and extra is not None:
-                extra_sel = torch.stack(selected_extra, dim=0).to(dtype=pts_rig.dtype)
-                extra_sel = torch.nan_to_num(extra_sel, nan=0.0, posinf=0.0, neginf=0.0)
-                if extra_sel.shape[-1] > 1:
-                    inv_dist_std = extra_sel[..., :1]
-                    obs_count = extra_sel[..., 1:2]
-                    obs_count = self._normalize_obs_count(obs_count)
-                    extra_sel = torch.cat([inv_dist_std, obs_count], dim=-1)
-                pts_rig = torch.cat([pts_rig, extra_sel], dim=-1)
-            pts_rig = torch.nan_to_num(pts_rig, nan=0.0, posinf=0.0, neginf=0.0)
 
             encoded = self.point_encoder(pts_rig.to(device=device))
             semidense_feat[has_points] = encoded.to(dtype=dtype)
