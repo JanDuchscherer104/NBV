@@ -52,6 +52,7 @@ from .rollout import (
 from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
 from .torch_rollout import (
     CandidateOrderConsistency,
+    SelectedActionOracleComparison,
     TorchRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
@@ -62,6 +63,7 @@ from .torch_rollout import (
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
+    selected_action_oracle_comparison,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -73,6 +75,7 @@ from .torch_rollout_metrics import (
     CandidateTopKOracleHitMetric,
     FiniteMeanMetric,
     PolicyTableMetrics,
+    SelectedActionOracleComparisonMetric,
     SelectedPathCostMetrics,
     SelectedRolloutMetrics,
 )
@@ -93,6 +96,8 @@ __all__ = [
     "PolicyTableMetrics",
     "RriErrorStats",
     "RriOrdinalBinner",
+    "SelectedActionOracleComparison",
+    "SelectedActionOracleComparisonMetric",
     "SelectedPathCostMetrics",
     "SelectedRolloutMetrics",
     "TargetRolloutMetricSummary",
@@ -130,6 +135,7 @@ __all__ = [
     "finite_horizon_target_return",
     "ordinal_labels_to_levels",
     "observed_prefix_frame_indices",
+    "selected_action_oracle_comparison",
     "selected_target_reward",
     "selected_path_length_tensor",
     "selected_target_rri",

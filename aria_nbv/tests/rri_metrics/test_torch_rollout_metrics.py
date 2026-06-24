@@ -16,6 +16,8 @@ from aria_nbv.rri_metrics import (
     CandidateTopKOracleHitMetric,
     FiniteMeanMetric,
     PolicyTableMetrics,
+    SelectedActionOracleComparison,
+    SelectedActionOracleComparisonMetric,
     SelectedPathCostMetrics,
     SelectedRolloutMetrics,
     candidate_best_value,
@@ -27,6 +29,7 @@ from aria_nbv.rri_metrics import (
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
+    selected_action_oracle_comparison,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -253,6 +256,64 @@ def test_candidate_topk_oracle_hit_supports_non_last_candidate_dim() -> None:
     result = candidate_topk_oracle_hit(predicted, oracle, top_k=2, dim=0)
 
     assert torch.equal(result, torch.tensor([1.0, 1.0]))
+
+
+def test_selected_action_oracle_comparison_reports_regret_rank_and_percentile() -> None:
+    oracle = torch.tensor([[2.0, 2.0, 1.0], [1.0, 3.0, 2.0]])
+    selected = torch.tensor([0, 2])
+    valid = torch.ones_like(oracle, dtype=torch.bool)
+
+    result = selected_action_oracle_comparison(oracle, selected, valid)
+
+    assert isinstance(result, SelectedActionOracleComparison)
+    assert torch.allclose(result.selected_oracle_regret, torch.tensor([0.0, 1.0]))
+    assert torch.allclose(result.selected_oracle_rank, torch.tensor([1.0, 2.0]))
+    assert torch.allclose(result.selected_oracle_percentile, torch.tensor([1.0, 0.5]))
+    assert torch.equal(result.valid_table, torch.tensor([True, True]))
+
+
+def test_selected_action_oracle_comparison_masks_uncomparable_tables() -> None:
+    oracle = torch.tensor(
+        [
+            [1.0, 2.0],
+            [1.0, float("nan")],
+            [float("nan"), float("nan")],
+            [1.0, 2.0],
+            [1.0, 2.0],
+            [1.0, 2.0],
+        ],
+    )
+    selected = torch.tensor([-1.0, 1.0, 0.0, 1.0, 2.0, 0.5])
+    valid = torch.tensor(
+        [
+            [True, True],
+            [True, True],
+            [True, True],
+            [True, False],
+            [True, True],
+            [True, True],
+        ],
+    )
+
+    result = selected_action_oracle_comparison(oracle, selected, valid)
+
+    assert torch.isnan(result.selected_oracle_regret).all()
+    assert torch.isnan(result.selected_oracle_rank).all()
+    assert torch.isnan(result.selected_oracle_percentile).all()
+    assert not result.valid_table.any()
+
+
+def test_selected_action_oracle_comparison_supports_non_last_candidate_dim() -> None:
+    oracle = torch.tensor([[1.0, 0.0], [3.0, 1.0], [2.0, 2.0]])
+    selected = torch.tensor([1, 2])
+    valid = torch.ones_like(oracle, dtype=torch.bool)
+
+    result = selected_action_oracle_comparison(oracle, selected, valid, dim=0)
+
+    assert torch.allclose(result.selected_oracle_regret, torch.tensor([0.0, 0.0]))
+    assert torch.allclose(result.selected_oracle_rank, torch.tensor([1.0, 1.0]))
+    assert torch.allclose(result.selected_oracle_percentile, torch.tensor([1.0, 1.0]))
+    assert torch.equal(result.valid_table, torch.tensor([True, True]))
 
 
 def test_candidate_provenance_share_reports_radial_backtrack_union() -> None:
@@ -483,6 +544,41 @@ def test_candidate_topk_oracle_hit_metric_returns_nan_when_all_tables_empty() ->
     metric.update(torch.tensor([[float("nan"), float("nan")]]), torch.tensor([[1.0, 0.0]]))
 
     assert torch.isnan(metric.compute())
+
+
+def test_selected_action_oracle_comparison_metric_accumulates_comparable_tables() -> None:
+    metric = SelectedActionOracleComparisonMetric()
+
+    metric.update(
+        torch.tensor([[3.0, 2.0, 1.0], [1.0, 4.0, 2.0], [1.0, 2.0, 3.0]]),
+        torch.tensor([0, 2, 5]),
+        torch.ones((3, 3), dtype=torch.bool),
+    )
+    metric.update(
+        torch.tensor([[1.0, 2.0]]),
+        torch.tensor([0]),
+        torch.tensor([[True, True]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["selected_oracle_regret"], torch.tensor(1.0))
+    assert torch.allclose(result["selected_oracle_rank"], torch.tensor(5.0 / 3.0))
+    assert torch.allclose(result["selected_oracle_percentile"], torch.tensor(0.5))
+    assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(3.0 / 4.0))
+
+
+def test_selected_action_oracle_comparison_metric_returns_nan_when_all_tables_empty() -> None:
+    metric = SelectedActionOracleComparisonMetric()
+
+    metric.update(torch.tensor([[float("nan"), float("nan")]]), torch.tensor([0]), torch.tensor([[True, True]]))
+
+    result = metric.compute()
+
+    assert torch.isnan(result["selected_oracle_regret"])
+    assert torch.isnan(result["selected_oracle_rank"])
+    assert torch.isnan(result["selected_oracle_percentile"])
+    assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
 
 
 def test_candidate_provenance_share_metric_accumulates_valid_tables() -> None:

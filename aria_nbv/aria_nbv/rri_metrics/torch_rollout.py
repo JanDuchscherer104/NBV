@@ -64,6 +64,30 @@ class CandidateOrderConsistency:
     valid_table: Tensor
 
 
+@dataclass(frozen=True, slots=True)
+class SelectedActionOracleComparison:
+    """Per-table oracle diagnostics for a selected candidate action.
+
+    Attributes:
+        selected_oracle_regret: ``Tensor["B"]`` oracle-best value minus the
+            selected candidate's oracle value. Lower is better; oracle-best
+            ties have zero regret.
+        selected_oracle_rank: ``Tensor["B"]`` one-based selected-candidate rank
+            among finite hard-valid oracle labels. Tied oracle-best candidates
+            have rank ``1``.
+        selected_oracle_percentile: ``Tensor["B"]`` rank percentile in
+            ``[0, 1]`` where ``1`` means oracle-best and ``0`` means worst
+            among comparable finite labels.
+        valid_table: ``Tensor["B"]`` mask for tables with a finite valid
+            selected label and at least one finite valid oracle candidate.
+    """
+
+    selected_oracle_regret: Tensor
+    selected_oracle_rank: Tensor
+    selected_oracle_percentile: Tensor
+    valid_table: Tensor
+
+
 def discounted_selected_return(
     rewards: Tensor,
     valid_mask: Tensor | None = None,
@@ -424,6 +448,100 @@ def candidate_topk_oracle_hit(
     return result.reshape(table_shape)
 
 
+def selected_action_oracle_comparison(
+    oracle_values: Tensor,
+    selected_indices: Tensor,
+    valid_mask: Tensor,
+    *,
+    dim: int = -1,
+) -> SelectedActionOracleComparison:
+    """Compare selected candidate actions against oracle-best candidate labels.
+
+    This reducer is for policy evaluation, not supervision. It reads a selected
+    candidate index per table and reports how far that action is from the
+    finite oracle-best row under the hard action mask. Invalid selected indices,
+    masked selected rows, non-finite selected labels, and empty oracle tables
+    return ``NaN`` diagnostics with ``valid_table=False``.
+
+    Args:
+        oracle_values: Candidate oracle values, such as target reward or
+            finite-horizon oracle return.
+        selected_indices: Selected candidate indices with shape equal to
+            ``oracle_values`` after removing `dim`; values may be integer or
+            floating tensors, but non-finite or non-integral entries are
+            treated as invalid selections.
+        valid_mask: Boolean hard-validity mask broadcastable to
+            ``oracle_values``.
+        dim: Candidate dimension.
+
+    Returns:
+        `SelectedActionOracleComparison` with per-table regret, one-based rank,
+        rank percentile, and comparability mask.
+    """
+
+    if dim < 0:
+        dim = oracle_values.ndim + dim
+    if dim < 0 or dim >= oracle_values.ndim:
+        raise ValueError(f"dim={dim} is outside tensor rank {oracle_values.ndim}.")
+
+    oracle = oracle_values.to(dtype=torch.float32)
+    hard_mask = torch.broadcast_to(valid_mask.to(device=oracle.device, dtype=torch.bool), oracle.shape)
+    if dim != oracle.ndim - 1:
+        oracle = oracle.movedim(dim, -1)
+        hard_mask = hard_mask.movedim(dim, -1)
+
+    table_shape = oracle.shape[:-1]
+    num_candidates = oracle.shape[-1]
+    selected = torch.broadcast_to(selected_indices.to(device=oracle.device), table_shape)
+    if num_candidates == 0:
+        nan = torch.full(table_shape, float("nan"), device=oracle.device, dtype=torch.float32)
+        return SelectedActionOracleComparison(
+            selected_oracle_regret=nan,
+            selected_oracle_rank=nan,
+            selected_oracle_percentile=nan,
+            valid_table=torch.zeros(table_shape, device=oracle.device, dtype=torch.bool),
+        )
+
+    oracle_2d = oracle.reshape(-1, num_candidates)
+    hard_2d = hard_mask.reshape(-1, num_candidates)
+    selected_flat = selected.reshape(-1)
+    selected_float = selected_flat.to(dtype=torch.float32)
+    selected_integral = torch.isfinite(selected_float) & (selected_float == selected_float.round())
+    selected_long = torch.where(
+        selected_integral,
+        selected_float.to(dtype=torch.long),
+        torch.zeros_like(selected_float, dtype=torch.long),
+    )
+    selected_in_bounds = selected_integral & (selected_long >= 0) & (selected_long < num_candidates)
+    safe_selected = selected_long.clamp(min=0, max=num_candidates - 1)
+
+    oracle_valid = hard_2d & torch.isfinite(oracle_2d)
+    valid_count = oracle_valid.to(dtype=torch.float32).sum(dim=-1)
+    has_oracle = valid_count > 0
+    selected_hard_valid = hard_2d.gather(dim=-1, index=safe_selected.unsqueeze(-1)).squeeze(-1)
+    selected_value = oracle_2d.gather(dim=-1, index=safe_selected.unsqueeze(-1)).squeeze(-1)
+    selected_label_valid = selected_in_bounds & selected_hard_valid & torch.isfinite(selected_value)
+    valid_table = has_oracle & selected_label_valid
+
+    oracle_filled = torch.where(oracle_valid, oracle_2d, torch.full_like(oracle_2d, -torch.inf))
+    oracle_best = oracle_filled.max(dim=-1).values
+    regret = oracle_best - selected_value
+    better_count = (oracle_valid & (oracle_2d > selected_value.unsqueeze(-1))).to(dtype=torch.float32).sum(dim=-1)
+    rank = 1.0 + better_count
+    percentile = torch.where(
+        valid_count > 1.0,
+        1.0 - ((rank - 1.0) / (valid_count - 1.0).clamp_min(1.0)),
+        torch.ones_like(rank),
+    )
+    nan = torch.full_like(regret, float("nan"))
+    return SelectedActionOracleComparison(
+        selected_oracle_regret=torch.where(valid_table, regret, nan).reshape(table_shape),
+        selected_oracle_rank=torch.where(valid_table, rank, nan).reshape(table_shape),
+        selected_oracle_percentile=torch.where(valid_table, percentile, nan).reshape(table_shape),
+        valid_table=valid_table.reshape(table_shape),
+    )
+
+
 def candidate_provenance_share(
     strategy_ids: Tensor,
     position_ids: Tensor,
@@ -599,6 +717,7 @@ def _id_membership(values: Tensor, family_ids: Sequence[int] | Tensor) -> Tensor
 __all__ = [
     "TorchRolloutMetrics",
     "CandidateOrderConsistency",
+    "SelectedActionOracleComparison",
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
@@ -608,6 +727,7 @@ __all__ = [
     "discounted_selected_return",
     "endpoint_log_gain_tensor",
     "endpoint_target_gain_tensor",
+    "selected_action_oracle_comparison",
     "selected_path_length_tensor",
     "summarize_selected_rollout_tensors",
 ]

@@ -20,6 +20,7 @@ from .torch_rollout import (
     candidate_policy_entropy,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
+    selected_action_oracle_comparison,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -462,6 +463,76 @@ class CandidateProvenanceShareMetric(MetricBase):
         return _safe_mean(self.share_total, self.share_count)
 
 
+class SelectedActionOracleComparisonMetric(MetricBase):
+    """Accumulate selected-action oracle rank and regret diagnostics.
+
+    This metric evaluates a policy's selected candidate against the finite
+    oracle-labelled candidate table. It is intentionally separate from loss and
+    training metrics: invalid selections are counted only through the valid
+    table rate, and uncomparable rows do not contribute zero-valued regret or
+    rank samples.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("regret_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("regret_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("rank_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("rank_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("percentile_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("percentile_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        oracle_values: Tensor,
+        selected_indices: Tensor,
+        valid_mask: Tensor,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of selected candidate indices and oracle values."""
+
+        comparison = selected_action_oracle_comparison(
+            oracle_values.to(device=self.regret_total.device, dtype=torch.float32),
+            selected_indices.to(device=self.regret_total.device),
+            valid_mask.to(device=self.regret_total.device),
+            dim=dim,
+        )
+        regret = comparison.selected_oracle_regret.reshape(-1)
+        rank = comparison.selected_oracle_rank.reshape(-1)
+        percentile = comparison.selected_oracle_percentile.reshape(-1)
+        valid_table = comparison.valid_table.reshape(-1)
+
+        regret_valid = torch.isfinite(regret) & valid_table
+        rank_valid = torch.isfinite(rank) & valid_table
+        percentile_valid = torch.isfinite(percentile) & valid_table
+        if regret_valid.any():
+            self.regret_total = self.regret_total + regret[regret_valid].sum()
+            self.regret_count = self.regret_count + regret_valid.to(dtype=torch.float32).sum()
+        if rank_valid.any():
+            self.rank_total = self.rank_total + rank[rank_valid].sum()
+            self.rank_count = self.rank_count + rank_valid.to(dtype=torch.float32).sum()
+        if percentile_valid.any():
+            self.percentile_total = self.percentile_total + percentile[percentile_valid].sum()
+            self.percentile_count = self.percentile_count + percentile_valid.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return finite means plus the comparable-table rate."""
+
+        return {
+            "selected_oracle_regret": _safe_mean(self.regret_total, self.regret_count),
+            "selected_oracle_rank": _safe_mean(self.rank_total, self.rank_count),
+            "selected_oracle_percentile": _safe_mean(self.percentile_total, self.percentile_count),
+            "selected_oracle_valid_table_rate": _safe_mean(self.valid_table_count, self.table_count),
+        }
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -583,6 +654,7 @@ __all__ = [
     "CandidateTopKOracleHitMetric",
     "FiniteMeanMetric",
     "PolicyTableMetrics",
+    "SelectedActionOracleComparisonMetric",
     "SelectedPathCostMetrics",
     "SelectedRolloutMetrics",
 ]
