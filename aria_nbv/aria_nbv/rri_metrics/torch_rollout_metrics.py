@@ -16,6 +16,7 @@ from torchmetrics import Metric as MetricBase
 from .torch_rollout import (
     candidate_best_value,
     candidate_masked_mean,
+    candidate_order_consistency,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -251,6 +252,66 @@ class SelectedPathCostMetrics(MetricBase):
         return {"path_length_m": path_length, "cost": path_length}
 
 
+class CandidateOrderConsistencyMetric(MetricBase):
+    """Accumulate shuffled-candidate order-consistency diagnostics.
+
+    This metric supports the proposal's requirement that finite candidate rows
+    have no semantic ordering. It compares paired model scores from the same
+    candidate table before and after a known gather-style permutation, then
+    reports score agreement and top-1 stability over comparable valid tables.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("mae_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mae_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("top1_match_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        scores: Tensor,
+        shuffled_scores: Tensor,
+        permutation: Tensor,
+        valid_mask: Tensor | None = None,
+        shuffled_valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one paired original/shuffled candidate-score batch."""
+
+        consistency = candidate_order_consistency(
+            scores.to(device=self.mae_total.device, dtype=torch.float32),
+            shuffled_scores.to(device=self.mae_total.device, dtype=torch.float32),
+            permutation.to(device=self.mae_total.device, dtype=torch.long),
+            None if valid_mask is None else valid_mask.to(device=self.mae_total.device),
+            None if shuffled_valid_mask is None else shuffled_valid_mask.to(device=self.mae_total.device),
+            dim=dim,
+        )
+        score_mae = consistency.score_mae.reshape(-1)
+        valid_table = consistency.valid_table.reshape(-1)
+        top1_match = consistency.top1_match.reshape(-1) & valid_table
+        finite_mae = torch.isfinite(score_mae) & valid_table
+        if finite_mae.any():
+            self.mae_total = self.mae_total + score_mae[finite_mae].sum()
+            self.mae_count = self.mae_count + finite_mae.to(dtype=torch.float32).sum()
+        self.top1_match_count = self.top1_match_count + top1_match.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return shuffled-candidate consistency diagnostics."""
+
+        return {
+            "candidate_order_score_mae": _safe_mean(self.mae_total, self.mae_count),
+            "candidate_order_top1_match_rate": _safe_mean(self.top1_match_count, self.valid_table_count),
+            "candidate_order_valid_table_rate": _safe_mean(self.valid_table_count, self.table_count),
+        }
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -350,6 +411,7 @@ def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
 
 __all__ = [
     "CandidateTableMetrics",
+    "CandidateOrderConsistencyMetric",
     "FiniteMeanMetric",
     "PolicyTableMetrics",
     "SelectedPathCostMetrics",

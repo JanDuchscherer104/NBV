@@ -44,6 +44,25 @@ class TorchRolloutMetrics:
     valid_endpoint: Tensor
 
 
+@dataclass(frozen=True, slots=True)
+class CandidateOrderConsistency:
+    """Per-table diagnostics for shuffled-candidate consistency.
+
+    Attributes:
+        score_mae: ``Tensor["B"]`` mean absolute score difference after
+            inverse-aligning shuffled predictions to the original candidate
+            order.
+        top1_match: ``Tensor["B"]`` boolean indicator that the best valid
+            candidate index is unchanged by shuffling.
+        valid_table: ``Tensor["B"]`` boolean indicator that a table had at
+            least one comparable valid candidate.
+    """
+
+    score_mae: Tensor
+    top1_match: Tensor
+    valid_table: Tensor
+
+
 def discounted_selected_return(
     rewards: Tensor,
     valid_mask: Tensor | None = None,
@@ -204,6 +223,85 @@ def selected_path_length_tensor(camera_centers_world: Tensor, segment_valid_mask
     return result.squeeze(0) if squeeze else result
 
 
+def candidate_order_consistency(
+    scores: Tensor,
+    shuffled_scores: Tensor,
+    permutation: Tensor,
+    valid_mask: Tensor | None = None,
+    shuffled_valid_mask: Tensor | None = None,
+    *,
+    dim: int = -1,
+) -> CandidateOrderConsistency:
+    """Compare candidate scores before and after a candidate-order shuffle.
+
+    Args:
+        scores: Original candidate scores.
+        shuffled_scores: Scores from the same candidate table after shuffling.
+        permutation: Gather-style permutation where
+            ``shuffled_scores[..., j]`` corresponds to
+            ``scores[..., permutation[..., j]]`` along `dim`.
+        valid_mask: Optional hard-validity mask for `scores`.
+        shuffled_valid_mask: Optional hard-validity mask for `shuffled_scores`.
+            If omitted, `valid_mask` is gathered through `permutation`.
+        dim: Candidate dimension.
+
+    Returns:
+        `CandidateOrderConsistency` with per-table score MAE, top-1 agreement,
+        and valid-table mask. Empty comparable tables report ``NaN`` MAE and
+        ``False`` top-1 agreement.
+    """
+
+    if dim < 0:
+        dim = scores.ndim + dim
+    if scores.shape != shuffled_scores.shape:
+        raise ValueError(
+            f"Expected score shapes to match, got {tuple(scores.shape)} and {tuple(shuffled_scores.shape)}."
+        )
+    if permutation.shape != scores.shape:
+        raise ValueError(f"Expected permutation shape {tuple(scores.shape)}, got {tuple(permutation.shape)}.")
+    if dim != scores.ndim - 1:
+        scores = scores.movedim(dim, -1)
+        shuffled_scores = shuffled_scores.movedim(dim, -1)
+        permutation = permutation.movedim(dim, -1)
+        if valid_mask is not None:
+            valid_mask = valid_mask.movedim(dim, -1)
+        if shuffled_valid_mask is not None:
+            shuffled_valid_mask = shuffled_valid_mask.movedim(dim, -1)
+
+    original, squeeze = _as_candidate_matrix(scores)
+    shuffled, _ = _as_candidate_matrix(shuffled_scores)
+    perm, _ = _as_candidate_matrix(permutation.to(device=original.device, dtype=torch.long))
+    if perm.min().item() < 0 or perm.max().item() >= original.shape[-1]:
+        raise ValueError("permutation contains indices outside the candidate dimension.")
+
+    aligned_shuffled = torch.empty_like(shuffled)
+    aligned_shuffled.scatter_(dim=-1, index=perm, src=shuffled)
+    original_valid = _candidate_valid_matrix(original, valid_mask)
+    if shuffled_valid_mask is None:
+        shuffled_valid = torch.gather(original_valid, dim=-1, index=perm)
+    else:
+        shuffled_valid = _candidate_valid_matrix(shuffled, shuffled_valid_mask)
+    aligned_shuffled_valid = torch.empty_like(shuffled_valid)
+    aligned_shuffled_valid.scatter_(dim=-1, index=perm, src=shuffled_valid)
+
+    comparable = original_valid & aligned_shuffled_valid & torch.isfinite(aligned_shuffled)
+    abs_diff = (original - aligned_shuffled).abs()
+    total = torch.where(comparable, abs_diff, torch.zeros_like(abs_diff)).sum(dim=-1)
+    count = comparable.to(dtype=torch.float32).sum(dim=-1)
+    score_mae = torch.where(count > 0, total / count.clamp_min(1.0), torch.full_like(total, float("nan")))
+    original_top = _masked_argmax(original, original_valid)
+    aligned_top = _masked_argmax(aligned_shuffled, aligned_shuffled_valid)
+    valid_table = count > 0
+    top1_match = valid_table & (original_top == aligned_top)
+    if squeeze:
+        return CandidateOrderConsistency(
+            score_mae=score_mae.squeeze(0),
+            top1_match=top1_match.squeeze(0),
+            valid_table=valid_table.squeeze(0),
+        )
+    return CandidateOrderConsistency(score_mae=score_mae, top1_match=top1_match, valid_table=valid_table)
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -257,6 +355,27 @@ def _as_path_matrix(values: Tensor) -> tuple[Tensor, bool]:
     raise ValueError(f"Expected path tensor with shape (H+1,3) or (B,H+1,3), got {tuple(values.shape)}.")
 
 
+def _as_candidate_matrix(values: Tensor) -> tuple[Tensor, bool]:
+    if values.ndim == 1:
+        return values.unsqueeze(0), True
+    if values.ndim == 2:
+        return values, False
+    raise ValueError(f"Expected candidate tensor with shape (N,) or (B,N), got {tuple(values.shape)}.")
+
+
+def _candidate_valid_matrix(values: Tensor, valid_mask: Tensor | None) -> Tensor:
+    valid = torch.isfinite(values)
+    if valid_mask is None:
+        return valid
+    mask = torch.broadcast_to(valid_mask.to(device=values.device, dtype=torch.bool), values.shape)
+    return valid & mask
+
+
+def _masked_argmax(values: Tensor, valid_mask: Tensor) -> Tensor:
+    filled = torch.where(valid_mask, values, torch.full_like(values, -torch.inf))
+    return filled.argmax(dim=-1)
+
+
 def _discount_weights(length: int, *, gamma: float, device: torch.device, dtype: torch.dtype) -> Tensor:
     steps = torch.arange(length, device=device, dtype=dtype)
     return torch.pow(torch.as_tensor(float(gamma), device=device, dtype=dtype), steps)
@@ -276,8 +395,10 @@ def _valid_endpoint_errors(initial_error: Tensor, final_error: Tensor) -> Tensor
 
 __all__ = [
     "TorchRolloutMetrics",
+    "CandidateOrderConsistency",
     "candidate_best_value",
     "candidate_masked_mean",
+    "candidate_order_consistency",
     "discounted_selected_return",
     "endpoint_log_gain_tensor",
     "endpoint_target_gain_tensor",

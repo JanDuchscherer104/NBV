@@ -7,6 +7,8 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.rri_metrics import (
+    CandidateOrderConsistency,
+    CandidateOrderConsistencyMetric,
     CandidateTableMetrics,
     FiniteMeanMetric,
     PolicyTableMetrics,
@@ -14,6 +16,7 @@ from aria_nbv.rri_metrics import (
     SelectedRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
+    candidate_order_consistency,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
@@ -112,6 +115,37 @@ def test_selected_path_length_tensor_ignores_masked_and_nonfinite_segments() -> 
     result = selected_path_length_tensor(centers, segment_mask)
 
     assert torch.allclose(result, torch.tensor([5.0, float("nan"), float("nan")]), equal_nan=True)
+
+
+def test_candidate_order_consistency_inverse_aligns_gather_permutation() -> None:
+    scores = torch.tensor([[0.1, 0.9, 0.2], [0.5, 0.4, 0.3]])
+    permutation = torch.tensor([[2, 0, 1], [1, 2, 0]])
+    shuffled_scores = torch.gather(scores, dim=-1, index=permutation)
+    valid = torch.tensor([[True, True, True], [True, True, False]])
+    shuffled_valid = torch.gather(valid, dim=-1, index=permutation)
+
+    result = candidate_order_consistency(scores, shuffled_scores, permutation, valid, shuffled_valid)
+
+    assert isinstance(result, CandidateOrderConsistency)
+    assert torch.allclose(result.score_mae, torch.zeros(2))
+    assert torch.equal(result.top1_match, torch.tensor([True, True]))
+    assert torch.equal(result.valid_table, torch.tensor([True, True]))
+
+
+def test_candidate_order_consistency_ignores_invalid_tail_and_detects_bias() -> None:
+    scores = torch.tensor([[0.1, 0.8, 0.2, 99.0], [0.1, 0.2, 0.3, 0.4]])
+    permutation = torch.tensor([[3, 1, 0, 2], [2, 1, 0, 3]])
+    shuffled_scores = torch.gather(scores, dim=-1, index=permutation)
+    shuffled_scores[1] = torch.tensor([0.0, 0.1, 1.0, 0.4])
+    valid = torch.tensor([[True, True, True, False], [True, True, True, False]])
+    shuffled_valid = torch.gather(valid, dim=-1, index=permutation)
+
+    result = candidate_order_consistency(scores, shuffled_scores, permutation, valid, shuffled_valid)
+
+    assert torch.isclose(result.score_mae[0], torch.tensor(0.0))
+    assert result.top1_match[0]
+    assert result.score_mae[1] > 0.0
+    assert not result.top1_match[1]
 
 
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
@@ -216,6 +250,29 @@ def test_selected_path_cost_metrics_return_nan_when_all_paths_invalid() -> None:
 
     assert torch.isnan(result["path_length_m"])
     assert torch.isnan(result["cost"])
+
+
+def test_candidate_order_consistency_metric_reports_rates() -> None:
+    metric = CandidateOrderConsistencyMetric()
+    scores = torch.tensor([[0.1, 0.9, 0.2], [0.1, 0.2, 0.3]])
+    permutation = torch.tensor([[2, 0, 1], [2, 1, 0]])
+    shuffled_scores = torch.gather(scores, dim=-1, index=permutation)
+    shuffled_scores[1] = torch.tensor([0.0, 1.0, 0.1])
+    valid = torch.tensor([[True, True, True], [True, True, True]])
+
+    metric.update(scores, shuffled_scores, permutation, valid)
+    metric.update(
+        torch.tensor([[0.1, 0.2]]),
+        torch.tensor([[0.2, 0.1]]),
+        torch.tensor([[1, 0]]),
+        torch.tensor([[False, False]]),
+    )
+
+    result = metric.compute()
+
+    assert result["candidate_order_score_mae"] > 0.0
+    assert torch.allclose(result["candidate_order_top1_match_rate"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_order_valid_table_rate"], torch.tensor(2.0 / 3.0))
 
 
 def test_policy_table_metrics_report_proposal_columns() -> None:

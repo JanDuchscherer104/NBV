@@ -51,9 +51,11 @@ from .rollout import (
 )
 from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
 from .torch_rollout import (
+    CandidateOrderConsistency,
     TorchRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
+    candidate_order_consistency,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
@@ -61,6 +63,7 @@ from .torch_rollout import (
     summarize_selected_rollout_tensors,
 )
 from .torch_rollout_metrics import (
+    CandidateOrderConsistencyMetric,
     CandidateTableMetrics,
     FiniteMeanMetric,
     PolicyTableMetrics,
@@ -71,6 +74,8 @@ from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [
     "CoralLayer",
+    "CandidateOrderConsistency",
+    "CandidateOrderConsistencyMetric",
     "CandidateTableMetrics",
     "FiniteMeanMetric",
     "LabelHistogram",
@@ -99,6 +104,7 @@ __all__ = [
     "build_root_eval_pointcloud",
     "candidate_best_value",
     "candidate_masked_mean",
+    "candidate_order_consistency",
     "coral_expected_from_logits",
     "coral_logits_to_prob",
     "coral_loss",
