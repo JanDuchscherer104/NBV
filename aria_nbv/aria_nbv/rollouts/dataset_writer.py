@@ -173,6 +173,57 @@ class RolloutRecipeConfig(BaseConfig):
             ),
         ]
 
+    @staticmethod
+    def diverse_suite() -> list["RolloutRecipeConfig"]:
+        """Return the radial/backtrack rollout-diversity recipe suite.
+
+        The suite mirrors `.configs/build_rollouts_v1_diverse.toml` and is
+        intended to pair with
+        `CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family`.
+        Sibling-diversity controls are best-effort after candidate validity
+        pruning, so the recipes record the intended action-family pressure
+        without changing rollout hard-mask semantics.
+        """
+
+        return [
+            RolloutRecipeConfig(
+                name="random_valid_diverse",
+                selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                seed=0,
+            ),
+            RolloutRecipeConfig(
+                name="oracle_lookahead_diverse",
+                selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                seed=0,
+            ),
+            RolloutRecipeConfig(
+                name="temperature_softmax_diverse",
+                selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                selection_temperature=1.25,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                stochastic_branch_factors=[2, 3],
+                stochastic_branch_probabilities=[0.5, 0.5],
+                seed=0,
+            ),
+        ]
+
 
 class SelectedDepthRetentionConfig(BaseConfig):
     """High-resolution selected-action depth retention for rollout stores."""
