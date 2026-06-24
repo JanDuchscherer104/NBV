@@ -6,8 +6,42 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.vin.scorer_context import apply_vin_scorer_film, build_vin_scorer_scene_field
+from aria_nbv.data_handling._raw import VinSnippetView
+from aria_nbv.vin.scorer_context import (
+    apply_vin_scorer_film,
+    build_vin_scorer_scene_field,
+    encode_trajectory_context,
+)
 from aria_nbv.vin.types import EvlBackboneOutput
+
+
+class _DummyPerFrame:
+    def __init__(self, pose_vec: torch.Tensor, pose_enc: torch.Tensor) -> None:
+        self.pose_vec = pose_vec
+        self.pose_enc = pose_enc
+
+
+class _DummyTrajectoryOutput:
+    def __init__(self, pose_vec: torch.Tensor, pose_enc: torch.Tensor, pooled: torch.Tensor | None) -> None:
+        self.per_frame = _DummyPerFrame(pose_vec=pose_vec, pose_enc=pose_enc)
+        self.pooled = pooled
+
+
+class _RecordingTrajectoryEncoder:
+    out_dim = 3
+
+    def __init__(self, *, pooled: torch.Tensor | None = None) -> None:
+        self.pooled = pooled
+        self.last_poses: PoseTW | None = None
+
+    def encode_poses(self, poses: PoseTW) -> _DummyTrajectoryOutput:
+        self.last_poses = poses
+        pose_vec = poses.t
+        pose_enc = torch.cat([pose_vec, pose_vec[..., : self.out_dim]], dim=-1)
+        pooled = self.pooled
+        if pooled is None:
+            pooled = pose_enc.mean(dim=1)
+        return _DummyTrajectoryOutput(pose_vec=pose_vec, pose_enc=pose_enc, pooled=pooled)
 
 
 def _make_backbone_out(*, free_input: torch.Tensor | None = None) -> EvlBackboneOutput:
@@ -33,6 +67,20 @@ def _make_backbone_out(*, free_input: torch.Tensor | None = None) -> EvlBackbone
         pts_world=pts_world,
         t_world_voxel=t_world_voxel,
         voxel_extent=voxel_extent,
+    )
+
+
+def _make_reference_pose(batch_size: int) -> PoseTW:
+    rot = torch.eye(3, dtype=torch.float32).repeat(batch_size, 1, 1)
+    trans = torch.zeros((batch_size, 3), dtype=torch.float32)
+    return PoseTW.from_Rt(rot, trans)
+
+
+def _make_vin_snippet_with_traj(t_world_rig: PoseTW) -> VinSnippetView:
+    return VinSnippetView(
+        points_world=torch.zeros((0, 5), dtype=torch.float32),
+        lengths=torch.tensor([0], dtype=torch.int64),
+        t_world_rig=t_world_rig,
     )
 
 
@@ -141,3 +189,100 @@ def test_apply_vin_scorer_film_preserves_single_condition_broadcast() -> None:
     assert out.shape == global_feat.shape
     assert torch.allclose(out[0], torch.full((3, 2), 3.0))
     assert torch.allclose(out[1], torch.full((3, 2), 7.0))
+
+
+def test_encode_trajectory_context_missing_traj_returns_zero_feature() -> None:
+    """Missing trajectory data should keep the prior zero-feature fallback."""
+    encoder = _RecordingTrajectoryEncoder()
+
+    traj_feat, traj_pose_vec, traj_pose_enc = encode_trajectory_context(
+        traj_encoder=encoder,
+        snippet=None,
+        pose_world_rig_ref=_make_reference_pose(2),
+        batch_size=2,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+
+    assert traj_feat is not None
+    assert torch.allclose(traj_feat, torch.zeros((2, encoder.out_dim)))
+    assert traj_pose_vec is None
+    assert traj_pose_enc is None
+    assert encoder.last_poses is None
+
+
+def test_encode_trajectory_context_broadcasts_single_trajectory() -> None:
+    """A single trajectory sequence should broadcast to all batch items."""
+    encoder = _RecordingTrajectoryEncoder()
+    t_world_rig = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).repeat(4, 1, 1),
+        torch.zeros((4, 3), dtype=torch.float32),
+    )
+    snippet = _make_vin_snippet_with_traj(t_world_rig)
+
+    traj_feat, traj_pose_vec, traj_pose_enc = encode_trajectory_context(
+        traj_encoder=encoder,
+        snippet=snippet,
+        pose_world_rig_ref=_make_reference_pose(3),
+        batch_size=3,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+
+    assert encoder.last_poses is not None
+    assert encoder.last_poses.shape[:2] == (3, 4)
+    assert traj_feat is not None
+    assert traj_feat.shape[0] == 3
+    assert traj_pose_vec is not None
+    assert traj_pose_vec.shape[:2] == (3, 4)
+    assert traj_pose_enc is not None
+    assert traj_pose_enc.shape[:2] == (3, 4)
+
+
+def test_encode_trajectory_context_rejects_mismatched_batch() -> None:
+    """Non-broadcastable trajectory batches should keep the existing error."""
+    encoder = _RecordingTrajectoryEncoder()
+    t_world_rig = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).repeat(2, 4, 1, 1),
+        torch.zeros((2, 4, 3), dtype=torch.float32),
+    )
+    snippet = _make_vin_snippet_with_traj(t_world_rig)
+
+    with pytest.raises(ValueError, match="Trajectory batch size must match candidates"):
+        encode_trajectory_context(
+            traj_encoder=encoder,
+            snippet=snippet,
+            pose_world_rig_ref=_make_reference_pose(3),
+            batch_size=3,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+        )
+
+
+def test_encode_trajectory_context_uses_reference_rig_frame() -> None:
+    """Trajectory poses should be encoded after ``(T_w_ref)^-1 @ T_w_traj``."""
+    encoder = _RecordingTrajectoryEncoder()
+    reference = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).unsqueeze(0),
+        torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32),
+    )
+    t_world_rig = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).repeat(2, 1, 1),
+        torch.tensor([[3.0, 0.0, 0.0], [5.0, 0.0, 0.0]], dtype=torch.float32),
+    )
+    snippet = _make_vin_snippet_with_traj(t_world_rig)
+
+    encode_trajectory_context(
+        traj_encoder=encoder,
+        snippet=snippet,
+        pose_world_rig_ref=reference,
+        batch_size=1,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+
+    assert encoder.last_poses is not None
+    assert torch.allclose(
+        encoder.last_poses.t,
+        torch.tensor([[[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]]], dtype=torch.float32),
+    )

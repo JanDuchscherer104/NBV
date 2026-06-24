@@ -15,6 +15,12 @@ import torch
 from efm3d.aria.pose import PoseTW
 from torch import Tensor, nn
 
+from ..data_handling._raw import (
+    EfmSnippetView,
+    VinSnippetView,
+    is_efm_snippet_view_instance,
+    is_vin_snippet_view_instance,
+)
 from .geometry.voxel import pos_grid_from_pts_world
 from .types import EvlBackboneOutput, GlobalContext, PoseFeatures
 
@@ -112,6 +118,92 @@ def apply_vin_scorer_film(
     return modulated
 
 
+def encode_trajectory_context(
+    *,
+    traj_encoder: Any | None,
+    snippet: EfmSnippetView | VinSnippetView | None,
+    pose_world_rig_ref: PoseTW,
+    batch_size: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[Tensor | None, Tensor | None, Tensor | None]:
+    """Encode snippet rig trajectory poses in the reference rig frame.
+
+    Maintained VIN scorers use this helper to share the deterministic trajectory
+    preparation step while keeping attention modules and scorer-head ownership
+    inside each model. The snippet trajectory is interpreted as world-from-rig
+    poses ``T_w_rig_t`` and converted to reference-rig coordinates via
+    ``T_r_ref_rig_t = (T_w_r_ref)^-1 @ T_w_rig_t`` before the configured
+    `aria_nbv.vin.encoders.trajectory.TrajectoryEncoder` consumes it.
+
+    Args:
+        traj_encoder: Optional trajectory encoder. When ``None``, the helper
+            returns ``(None, None, None)``.
+        snippet: VIN or EFM snippet view carrying ``t_world_rig``. Missing
+            trajectories produce a zero pooled feature and no per-frame tensors,
+            preserving the existing V2/V3 fallback.
+        pose_world_rig_ref: ``PoseTW["B 12"]`` reference rig poses ``T_w_r``.
+        batch_size: Batch size ``B`` used for broadcast validation.
+        device: Target device for trajectory tensors and outputs.
+        dtype: Output dtype.
+
+    Returns:
+        Tuple ``(traj_feat, traj_pose_vec, traj_pose_enc)`` where
+        ``traj_feat`` is ``Tensor["B F_traj"]`` when an encoder is configured,
+        and the per-frame tensors are ``None`` when no trajectory poses are
+        available.
+    """
+    if traj_encoder is None:
+        return None, None, None
+
+    traj_world_rig: PoseTW | None = None
+    if snippet is not None and is_vin_snippet_view_instance(snippet):
+        traj_world_rig = snippet.t_world_rig
+    elif snippet is not None and is_efm_snippet_view_instance(snippet):
+        try:
+            traj_world_rig = snippet.trajectory.t_world_rig
+        except Exception:
+            traj_world_rig = None
+    elif snippet is not None:
+        try:
+            traj_world_rig = snippet.trajectory.t_world_rig
+        except Exception:
+            traj_world_rig = None
+
+    if traj_world_rig is None or traj_world_rig.numel() == 0:
+        traj_feat = torch.zeros(
+            (batch_size, traj_encoder.out_dim),
+            device=device,
+            dtype=dtype,
+        )
+        return traj_feat, None, None
+
+    traj_world_rig = traj_world_rig.to(device=device, dtype=torch.float32)
+    if traj_world_rig.ndim == 2:
+        traj_world_rig = PoseTW(traj_world_rig._data.unsqueeze(0))
+    elif traj_world_rig.ndim != 3:
+        raise ValueError(
+            f"Expected trajectory poses with ndim 2 or 3, got {traj_world_rig.ndim}.",
+        )
+    if traj_world_rig.shape[0] == 1 and batch_size > 1:
+        traj_world_rig = PoseTW(traj_world_rig._data.expand(batch_size, -1, -1))
+    elif traj_world_rig.shape[0] != batch_size:
+        raise ValueError(
+            "Trajectory batch size must match candidates or be broadcastable.",
+        )
+
+    t_rig_world = pose_world_rig_ref.inverse()
+    traj_rig_ref = t_rig_world[:, None] @ traj_world_rig
+    traj_out = traj_encoder.encode_poses(traj_rig_ref)
+    traj_feat = traj_out.pooled
+    if traj_feat is None:
+        traj_feat = traj_out.per_frame.pose_enc.mean(dim=1)
+    traj_feat = traj_feat.to(device=device, dtype=dtype)
+    traj_pose_vec = traj_out.per_frame.pose_vec.to(device=device, dtype=dtype)
+    traj_pose_enc = traj_out.per_frame.pose_enc.to(device=device, dtype=dtype)
+    return traj_feat, traj_pose_vec, traj_pose_enc
+
+
 def encode_pose_features(
     *,
     pose_encoder: Any,
@@ -172,4 +264,5 @@ __all__ = [
     "build_vin_scorer_scene_field",
     "compute_global_context",
     "encode_pose_features",
+    "encode_trajectory_context",
 ]

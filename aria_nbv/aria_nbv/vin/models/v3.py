@@ -518,50 +518,14 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             The per-frame encodings can optionally be attended by candidate pose
             tokens (``traj_attn``) to produce a per-candidate context ``traj_ctx``.
         """
-        if self.traj_encoder is None:
-            return None, None, None
-
-        traj_world_rig: PoseTW | None = None
-        if is_vin_snippet_view_instance(snippet):
-            traj_world_rig = snippet.t_world_rig
-        elif is_efm_snippet_view_instance(snippet):
-            try:
-                traj_world_rig = snippet.trajectory.t_world_rig
-            except Exception:
-                traj_world_rig = None
-
-        if traj_world_rig is None or traj_world_rig.numel() == 0:
-            traj_feat = torch.zeros(
-                (batch_size, self.traj_encoder.out_dim),
-                device=device,
-                dtype=dtype,
-            )
-            return traj_feat, None, None
-
-        traj_world_rig = traj_world_rig.to(device=device, dtype=torch.float32)
-        if traj_world_rig.ndim == 2:
-            traj_world_rig = PoseTW(traj_world_rig._data.unsqueeze(0))
-        elif traj_world_rig.ndim != 3:
-            raise ValueError(
-                f"Expected trajectory poses with ndim 2 or 3, got {traj_world_rig.ndim}.",
-            )
-        if traj_world_rig.shape[0] == 1 and batch_size > 1:
-            traj_world_rig = PoseTW(traj_world_rig._data.expand(batch_size, -1, -1))
-        elif traj_world_rig.shape[0] != batch_size:
-            raise ValueError(
-                "Trajectory batch size must match candidates or be broadcastable.",
-            )
-
-        t_rig_world = pose_world_rig_ref.inverse()
-        traj_rig_ref = t_rig_world[:, None] @ traj_world_rig
-        traj_out = self.traj_encoder.encode_poses(traj_rig_ref)
-        traj_feat = traj_out.pooled
-        if traj_feat is None:
-            traj_feat = traj_out.per_frame.pose_enc.mean(dim=1)
-        traj_feat = traj_feat.to(device=device, dtype=dtype)
-        traj_pose_vec = traj_out.per_frame.pose_vec.to(device=device, dtype=dtype)
-        traj_pose_enc = traj_out.per_frame.pose_enc.to(device=device, dtype=dtype)
-        return traj_feat, traj_pose_vec, traj_pose_enc
+        return self._encode_trajectory_context(
+            traj_encoder=self.traj_encoder,
+            snippet=snippet,
+            pose_world_rig_ref=pose_world_rig_ref,
+            batch_size=batch_size,
+            device=device,
+            dtype=dtype,
+        )
 
     def _build_field_bundle(self, backbone_out: EvlBackboneOutput) -> FieldBundle:
         """Construct the compact voxel scene field and its projection.

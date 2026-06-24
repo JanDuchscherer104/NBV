@@ -53,9 +53,10 @@ if "e3nn" not in sys.modules:
 
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling import VinOracleBatch
+from aria_nbv.data_handling import VinOracleBatch, VinSnippetView
 from aria_nbv.vin.backbones import EvlBackboneConfig
 from aria_nbv.vin.diagnostics import summarize_vin_v2
+from aria_nbv.vin.encoders import TrajectoryEncoderConfig
 from aria_nbv.vin.models import SEMIDENSE_PROJ_DIM, VinModelV2, VinModelV2Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
@@ -161,6 +162,45 @@ def test_v2_shared_head_preserves_checkpoint_keys() -> None:
     assert any(key.startswith("sem_proj_film_norm.") for key in keys)
     assert not any(key.startswith("scorer_head.") for key in keys)
     assert not any(key.startswith("film.") for key in keys)
+
+
+def test_v2_encode_traj_features_vin_snippet() -> None:
+    """V2 trajectory wrapper should use the shared reference-frame helper."""
+    model = VinModelV2(
+        VinModelV2Config(
+            point_encoder=None,
+            use_traj_encoder=True,
+            traj_encoder=TrajectoryEncoderConfig(),
+        ),
+    )
+    t_world_rig = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).repeat(4, 1, 1),
+        torch.zeros((4, 3), dtype=torch.float32),
+    )
+    snippet = VinSnippetView(
+        points_world=torch.zeros((0, 5), dtype=torch.float32),
+        lengths=torch.tensor([0], dtype=torch.int64),
+        t_world_rig=t_world_rig,
+    )
+    reference = PoseTW.from_Rt(
+        torch.eye(3, dtype=torch.float32).unsqueeze(0),
+        torch.zeros((1, 3), dtype=torch.float32),
+    )
+
+    traj_feat, traj_pose_vec, traj_pose_enc = model._encode_traj_features(
+        snippet,
+        pose_world_rig_ref=reference,
+        batch_size=1,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+
+    assert traj_feat is not None
+    assert traj_feat.shape[0] == 1
+    assert traj_pose_vec is not None
+    assert traj_pose_vec.shape[0] == 1
+    assert traj_pose_enc is not None
+    assert traj_pose_enc.shape[0] == 1
 
 
 def test_semidense_projection_features_shape() -> None:

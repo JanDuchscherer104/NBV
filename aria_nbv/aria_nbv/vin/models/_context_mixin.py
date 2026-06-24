@@ -20,6 +20,7 @@ from ..scorer_context import (
     build_vin_scorer_scene_field,
     compute_global_context,
     encode_pose_features,
+    encode_trajectory_context,
 )
 
 
@@ -107,6 +108,7 @@ class PoseFeatureGlobalContextMixin:
     _semidense_proj_feature_index = staticmethod(semidense_proj_feature_index)
     _build_vin_scorer_scene_field = staticmethod(build_vin_scorer_scene_field)
     _apply_film = staticmethod(apply_vin_scorer_film)
+    _encode_trajectory_context = staticmethod(encode_trajectory_context)
 
 
 __all__ = ["PoseFeatureGlobalContextMixin"]
