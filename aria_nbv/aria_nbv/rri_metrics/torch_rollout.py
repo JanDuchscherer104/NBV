@@ -172,6 +172,38 @@ def summarize_selected_rollout_tensors(
     )
 
 
+def selected_path_length_tensor(camera_centers_world: Tensor, segment_valid_mask: Tensor | None = None) -> Tensor:
+    """Compute selected camera-center path length in metres.
+
+    Args:
+        camera_centers_world: Camera centers in world coordinates with shape
+            ``Tensor["H+1 3"]`` or ``Tensor["B H+1 3"]``. The first point is
+            the decision-state root pose and later points are selected rollout
+            views.
+        segment_valid_mask: Optional hard mask over path segments with shape
+            ``Tensor["H"]`` or ``Tensor["B H"]``. Non-finite segments are
+            ignored even when this mask is ``True``.
+
+    Returns:
+        Selected path length in metres per rollout. Paths with no finite valid
+        segment return ``NaN`` rather than ``0`` so invalidity remains separate
+        from acquisition cost.
+    """
+
+    centers, squeeze = _as_path_matrix(camera_centers_world)
+    deltas = centers[:, 1:, :] - centers[:, :-1, :]
+    segment_lengths = torch.linalg.vector_norm(deltas, dim=-1)
+    valid = torch.isfinite(deltas).all(dim=-1) & torch.isfinite(segment_lengths)
+    if segment_valid_mask is not None:
+        valid = valid & torch.broadcast_to(
+            segment_valid_mask.to(device=centers.device, dtype=torch.bool),
+            segment_lengths.shape,
+        )
+    total = torch.where(valid, segment_lengths, torch.zeros_like(segment_lengths)).sum(dim=1)
+    result = torch.where(valid.any(dim=1), total, torch.full_like(total, float("nan")))
+    return result.squeeze(0) if squeeze else result
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -217,6 +249,14 @@ def _as_step_matrix(values: Tensor) -> tuple[Tensor, bool]:
     raise ValueError(f"Expected rollout tensor with shape (H,) or (B,H), got {tuple(values.shape)}.")
 
 
+def _as_path_matrix(values: Tensor) -> tuple[Tensor, bool]:
+    if values.ndim == 2 and values.shape[-1] == 3:
+        return values.unsqueeze(0), True
+    if values.ndim == 3 and values.shape[-1] == 3:
+        return values, False
+    raise ValueError(f"Expected path tensor with shape (H+1,3) or (B,H+1,3), got {tuple(values.shape)}.")
+
+
 def _discount_weights(length: int, *, gamma: float, device: torch.device, dtype: torch.dtype) -> Tensor:
     steps = torch.arange(length, device=device, dtype=dtype)
     return torch.pow(torch.as_tensor(float(gamma), device=device, dtype=dtype), steps)
@@ -241,5 +281,6 @@ __all__ = [
     "discounted_selected_return",
     "endpoint_log_gain_tensor",
     "endpoint_target_gain_tensor",
+    "selected_path_length_tensor",
     "summarize_selected_rollout_tensors",
 ]

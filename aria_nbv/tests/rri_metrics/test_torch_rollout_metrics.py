@@ -10,12 +10,14 @@ from aria_nbv.rri_metrics import (
     CandidateTableMetrics,
     FiniteMeanMetric,
     PolicyTableMetrics,
+    SelectedPathCostMetrics,
     SelectedRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
+    selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
 
@@ -75,6 +77,41 @@ def test_candidate_reductions_respect_hard_mask_and_nonfinite_values() -> None:
 
     assert torch.allclose(mean, torch.tensor([1.5, 4.0, float("nan")]), equal_nan=True)
     assert torch.allclose(best, torch.tensor([2.0, 4.0, float("nan")]), equal_nan=True)
+
+
+def test_selected_path_length_tensor_reports_3_4_5_geometry() -> None:
+    centers = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [3.0, 4.0, 0.0],
+            [3.0, 4.0, 12.0],
+        ]
+    )
+
+    result = selected_path_length_tensor(centers)
+
+    assert torch.allclose(result, torch.tensor(17.0))
+
+
+def test_selected_path_length_tensor_ignores_masked_and_nonfinite_segments() -> None:
+    centers = torch.tensor(
+        [
+            [[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [6.0, 8.0, 0.0]],
+            [[0.0, 0.0, 0.0], [float("nan"), 1.0, 0.0], [0.0, 4.0, 0.0]],
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+        ]
+    )
+    segment_mask = torch.tensor(
+        [
+            [True, False],
+            [True, True],
+            [False, False],
+        ]
+    )
+
+    result = selected_path_length_tensor(centers, segment_mask)
+
+    assert torch.allclose(result, torch.tensor([5.0, float("nan"), float("nan")]), equal_nan=True)
 
 
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
@@ -145,6 +182,40 @@ def test_candidate_table_metrics_report_invalidity_and_values() -> None:
     assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(0.5))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+
+
+def test_selected_path_cost_metrics_report_mean_cost_aliases() -> None:
+    metric = SelectedPathCostMetrics()
+
+    metric.update(
+        torch.tensor(
+            [
+                [[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [3.0, 4.0, 12.0]],
+                [[0.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 9.0, 0.0]],
+            ]
+        ),
+        torch.tensor([[True, True], [True, False]]),
+    )
+    metric.update(
+        torch.tensor([[[0.0, 0.0, 0.0], [float("nan"), 0.0, 0.0]]]),
+        torch.tensor([[True]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["path_length_m"], torch.tensor((17.0 + 5.0) / 2.0))
+    assert torch.allclose(result["cost"], result["path_length_m"])
+
+
+def test_selected_path_cost_metrics_return_nan_when_all_paths_invalid() -> None:
+    metric = SelectedPathCostMetrics()
+
+    metric.update(torch.tensor([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]]), torch.tensor([[False]]))
+
+    result = metric.compute()
+
+    assert torch.isnan(result["path_length_m"])
+    assert torch.isnan(result["cost"])
 
 
 def test_policy_table_metrics_report_proposal_columns() -> None:

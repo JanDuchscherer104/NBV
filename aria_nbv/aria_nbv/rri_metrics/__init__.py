@@ -57,9 +57,16 @@ from .torch_rollout import (
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
+    selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
-from .torch_rollout_metrics import CandidateTableMetrics, FiniteMeanMetric, PolicyTableMetrics, SelectedRolloutMetrics
+from .torch_rollout_metrics import (
+    CandidateTableMetrics,
+    FiniteMeanMetric,
+    PolicyTableMetrics,
+    SelectedPathCostMetrics,
+    SelectedRolloutMetrics,
+)
 from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [
@@ -72,6 +79,7 @@ __all__ = [
     "PolicyTableMetrics",
     "RriErrorStats",
     "RriOrdinalBinner",
+    "SelectedPathCostMetrics",
     "SelectedRolloutMetrics",
     "TargetRolloutMetricSummary",
     "TorchRolloutMetrics",
@@ -105,6 +113,7 @@ __all__ = [
     "ordinal_labels_to_levels",
     "observed_prefix_frame_indices",
     "selected_target_reward",
+    "selected_path_length_tensor",
     "selected_target_rri",
     "summarize_selected_rollout_tensors",
     "summarize_target_rollout_metrics",

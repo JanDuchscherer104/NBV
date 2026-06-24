@@ -13,7 +13,12 @@ import torch
 from torch import Tensor
 from torchmetrics import Metric as MetricBase
 
-from .torch_rollout import candidate_best_value, candidate_masked_mean, summarize_selected_rollout_tensors
+from .torch_rollout import (
+    candidate_best_value,
+    candidate_masked_mean,
+    selected_path_length_tensor,
+    summarize_selected_rollout_tensors,
+)
 
 
 class FiniteMeanMetric(MetricBase):
@@ -202,6 +207,50 @@ class CandidateTableMetrics(MetricBase):
         }
 
 
+class SelectedPathCostMetrics(MetricBase):
+    """Accumulate selected camera-center path cost in metres.
+
+    The metric expects root-plus-selected camera centers in world coordinates
+    and reports the finite mean path length. Invalid or non-finite path
+    segments are ignored via a hard segment mask; fully invalid paths contribute
+    no cost sample instead of contributing zero.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("path_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("path_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(self, camera_centers_world: Tensor, segment_valid_mask: Tensor | None = None) -> None:
+        """Accumulate one batch of selected rollout paths.
+
+        Args:
+            camera_centers_world: ``Tensor["H+1 3"]`` or
+                ``Tensor["B H+1 3"]`` camera centers in metres.
+            segment_valid_mask: Optional hard mask over the ``H`` path
+                segments. Masked or non-finite segments are excluded from the
+                path sum.
+        """
+
+        path_lengths = selected_path_length_tensor(
+            camera_centers_world.to(device=self.path_total.device, dtype=torch.float32),
+            None if segment_valid_mask is None else segment_valid_mask.to(device=self.path_total.device),
+        ).reshape(-1)
+        valid = torch.isfinite(path_lengths)
+        if not valid.any():
+            return
+        self.path_total = self.path_total + path_lengths[valid].sum()
+        self.path_count = self.path_count + valid.to(dtype=torch.float32).sum()
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return mean acquisition cost aliases for policy tables."""
+
+        path_length = _safe_mean(self.path_total, self.path_count)
+        return {"path_length_m": path_length, "cost": path_length}
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -303,5 +352,6 @@ __all__ = [
     "CandidateTableMetrics",
     "FiniteMeanMetric",
     "PolicyTableMetrics",
+    "SelectedPathCostMetrics",
     "SelectedRolloutMetrics",
 ]
