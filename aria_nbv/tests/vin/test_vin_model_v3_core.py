@@ -65,12 +65,12 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.efm_views import VinSnippetView
 from aria_nbv.vin.backbones import EvlBackboneConfig
-from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
-from aria_nbv.vin.semidense_projection import (
+from aria_nbv.vin.geometry.semidense_projection import (
     SEMIDENSE_PROJ_DIM,
     encode_projection_summary,
     project_points_to_candidate_cameras,
 )
+from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 

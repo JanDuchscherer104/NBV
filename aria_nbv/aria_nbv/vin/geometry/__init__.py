@@ -10,6 +10,15 @@ from __future__ import annotations
 
 from .frustum import build_frustum_points_world_p3d, frustum_points_world_from_cameras
 from .pose_batch import ensure_candidate_batch, ensure_pose_batch
+from .semidense_projection import (
+    SEMIDENSE_GRID_CHANNELS,
+    SEMIDENSE_PROJ_DIM,
+    build_projection_grid,
+    encode_projection_summary,
+    project_points_to_candidate_cameras,
+    sample_semidense_points,
+    semidense_proj_feature_index,
+)
 from .voxel import (
     build_scene_field,
     candidate_valid_from_token,
@@ -31,5 +40,12 @@ __all__ = [
     "infer_padded_grid_shape",
     "pool_voxel_points",
     "pos_grid_from_pts_world",
+    "SEMIDENSE_GRID_CHANNELS",
+    "SEMIDENSE_PROJ_DIM",
+    "build_projection_grid",
+    "encode_projection_summary",
+    "project_points_to_candidate_cameras",
     "sample_voxel_field",
+    "sample_semidense_points",
+    "semidense_proj_feature_index",
 ]

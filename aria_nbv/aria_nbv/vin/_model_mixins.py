@@ -14,8 +14,7 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 from torch import Tensor
 
-from .geometry import ensure_candidate_batch, frustum_points_world_from_cameras
-from .semidense_projection import semidense_proj_feature_index
+from .geometry import ensure_candidate_batch, frustum_points_world_from_cameras, semidense_proj_feature_index
 from .vin_utils import (
     compute_global_context,
     encode_pose_features,

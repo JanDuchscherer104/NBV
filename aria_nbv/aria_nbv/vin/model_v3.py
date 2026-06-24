@@ -98,8 +98,7 @@ from .encoders import (
     TrajectoryEncoderConfig,
 )
 from .geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
-from .modules import PoseConditionedGlobalPool
-from .semidense_projection import (
+from .geometry.semidense_projection import (
     SEMIDENSE_GRID_CHANNELS,
     SEMIDENSE_PROJ_DIM,
     build_projection_grid,
@@ -107,6 +106,7 @@ from .semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
+from .modules import PoseConditionedGlobalPool
 from .types import EvlBackboneOutput, FieldBundle, GlobalContext, PreparedInputs, VinPrediction, VinV3ForwardDiagnostics
 from .vin_utils import (
     largest_divisor_leq,

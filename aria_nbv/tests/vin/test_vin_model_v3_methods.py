@@ -77,13 +77,13 @@ from aria_nbv.data_handling.efm_views import EfmSnippetView, VinSnippetView
 from aria_nbv.data_handling.vin_oracle_types import VinOracleBatch
 from aria_nbv.vin.encoders import TrajectoryEncoderConfig
 from aria_nbv.vin.geometry import pool_voxel_points
-from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
-from aria_nbv.vin.semidense_projection import (
+from aria_nbv.vin.geometry.semidense_projection import (
     SEMIDENSE_PROJ_DIM,
     encode_projection_summary,
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
+from aria_nbv.vin.model_v3 import VinModelV3, VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 
