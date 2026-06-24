@@ -52,6 +52,14 @@ def test_experimental_model_namespace_is_removed() -> None:
         importlib.import_module("aria_nbv.vin.experimental.model_v2")
 
 
+def test_helper_sidecars_do_not_cycle_with_models_namespace() -> None:
+    """Context and validation sidecars should import without model-package cycles."""
+
+    assert importlib.import_module("aria_nbv.vin.scorer_context")
+    assert importlib.import_module("aria_nbv.vin.encoders.validation")
+    assert importlib.import_module("aria_nbv.vin.models.v2")
+
+
 def test_planned_myopic_scorer_config_is_visible_but_not_runnable() -> None:
     """The target-conditioned myopic scaffold should fail explicitly."""
 

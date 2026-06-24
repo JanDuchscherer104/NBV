@@ -1,6 +1,6 @@
 """Shared method mixins for VIN model variants.
 
-These wrappers sit one layer above `aria_nbv.vin.vin_utils`: they bridge
+These wrappers sit one layer above `aria_nbv.vin.scorer_context`: they bridge
 model-owned members such as ``self.pose_encoder``, ``self.global_pooler``, and
 ``self.config`` into the stateless tensor helpers without repeating identical
 method bodies across VIN generations.
@@ -15,7 +15,7 @@ from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import
 from torch import Tensor
 
 from .geometry import ensure_candidate_batch, frustum_points_world_from_cameras, semidense_proj_feature_index
-from .vin_utils import (
+from .scorer_context import (
     compute_global_context,
     encode_pose_features,
 )

@@ -22,6 +22,7 @@ from .shell_pose import (
 )
 from .spherical import ShellShPoseEncoder, ShellShPoseEncoderConfig
 from .trajectory import TrajectoryEncoder, TrajectoryEncoderConfig, TrajectoryEncodingOutput
+from .validation import validate_pos_grid_xyz_encoder
 
 __all__ = [
     "FourierFeatures",
@@ -45,4 +46,5 @@ __all__ = [
     "TrajectoryEncoderConfig",
     "TrajectoryEncodingOutput",
     "infer_pose_vec_groups",
+    "validate_pos_grid_xyz_encoder",
 ]

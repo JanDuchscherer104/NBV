@@ -96,6 +96,7 @@ from .encoders import (
     R6dLffPoseEncoderConfig,
     TrajectoryEncoder,
     TrajectoryEncoderConfig,
+    validate_pos_grid_xyz_encoder,
 )
 from .geometry import ensure_candidate_batch, ensure_pose_batch, pool_voxel_points, sample_voxel_field
 from .geometry.semidense_projection import (
@@ -108,7 +109,6 @@ from .geometry.semidense_projection import (
 )
 from .modules import PoseConditionedGlobalPool, largest_divisor_leq
 from .types import EvlBackboneOutput, FieldBundle, GlobalContext, PreparedInputs, VinPrediction, VinV3ForwardDiagnostics
-from .vin_utils import validate_pos_grid_xyz_encoder
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch
