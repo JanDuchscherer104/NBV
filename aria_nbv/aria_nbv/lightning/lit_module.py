@@ -33,6 +33,7 @@ from ..rri_metrics import (
     RriErrorStats,
     RriOrdinalBinner,
     VinMetricsConfig,
+    candidate_topk_oracle_hit,
     coral_loss,
     coral_random_loss,
     loss_key,
@@ -417,7 +418,8 @@ class VinLightningModule(pl.LightningModule):
             backbone_out=backbone_out,
         )
         log_enabled = not getattr(self.trainer, "sanity_checking", False)
-        candidate_mask = batch.candidate_valid_mask(device=self.device).reshape(-1)
+        candidate_mask_table = batch.candidate_valid_mask(device=self.device)
+        candidate_mask = candidate_mask_table.reshape(-1)
         log_batch_size = max(int(candidate_mask.sum().item()), 1)
         logits = pred.logits
         if logits.ndim == 2:
@@ -427,6 +429,7 @@ class VinLightningModule(pl.LightningModule):
 
         rri = batch.rri.to(device=logits.device)
         rri_flat = rri.reshape(-1)
+        candidate_mask_table = candidate_mask_table.to(device=logits.device)
         candidate_mask = candidate_mask.to(device=logits.device)
         mask_rri = torch.isfinite(rri_flat)
         valid_targets = candidate_mask & mask_rri
@@ -600,6 +603,38 @@ class VinLightningModule(pl.LightningModule):
             else nan_tensor,
             Metric.COVERAGE_WEIGHT_STRENGTH: float(coverage_strength) if coverage_strength is not None else nan_tensor,
         }
+        expected_scores = pred.expected_normalized.to(device=logits.device)
+        if rri.numel() != expected_scores.numel() or candidate_mask_table.numel() != expected_scores.numel():
+            raise ValueError(
+                "Expected RRI labels and candidate mask to align with predicted candidate scores, "
+                f"got rri={tuple(rri.shape)}, mask={tuple(candidate_mask_table.shape)}, "
+                f"scores={tuple(expected_scores.shape)}.",
+            )
+        rri_table = rri.reshape(expected_scores.shape)
+        candidate_mask_table = candidate_mask_table.reshape(expected_scores.shape)
+        with torch.no_grad():
+            top1_oracle_hit = candidate_topk_oracle_hit(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+                top_k=1,
+            )
+            top3_oracle_hit = candidate_topk_oracle_hit(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+                top_k=3,
+            )
+            top1_oracle_hit_mean = (
+                top1_oracle_hit[torch.isfinite(top1_oracle_hit)].mean()
+                if torch.isfinite(top1_oracle_hit).any()
+                else nan_tensor
+            )
+            top3_oracle_hit_mean = (
+                top3_oracle_hit[torch.isfinite(top3_oracle_hit)].mean()
+                if torch.isfinite(top3_oracle_hit).any()
+                else nan_tensor
+            )
         self._log_aux_scalars(
             {
                 Metric.RRI_MEAN: rri_valid.mean(),
@@ -611,6 +646,8 @@ class VinLightningModule(pl.LightningModule):
                     labels_valid,
                     top_k=3,
                 ),
+                Metric.CANDIDATE_TOP1_ORACLE_HIT: top1_oracle_hit_mean,
+                Metric.CANDIDATE_TOP3_ORACLE_HIT: top3_oracle_hit_mean,
                 Metric.AUX_REGRESSION_WEIGHT: float(aux_weight)
                 if aux_weight is not None
                 else torch.tensor(float("nan"), device=combined_loss.device),

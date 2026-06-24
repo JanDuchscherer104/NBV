@@ -69,6 +69,8 @@ class Metric(Logable):
     PRED_RRI_BIAS2 = "pred_rri_bias2"
     PRED_RRI_VARIANCE = "pred_rri_variance"
     TOP3_ACCURACY = "top3_accuracy"
+    CANDIDATE_TOP1_ORACLE_HIT = "candidate_top1_oracle_hit"
+    CANDIDATE_TOP3_ORACLE_HIT = "candidate_top3_oracle_hit"
     AUX_REGRESSION_WEIGHT = "aux_regression_weight"
     CORAL_MONOTONICITY_VIOLATION_RATE = "coral_monotonicity_violation_rate"
     VOXEL_VALID_FRAC_MEAN = "voxel_valid_frac_mean"
@@ -96,6 +98,8 @@ class Metric(Logable):
                 Metric.RRI_MEAN
                 | Metric.PRED_RRI_MEAN
                 | Metric.TOP3_ACCURACY
+                | Metric.CANDIDATE_TOP1_ORACLE_HIT
+                | Metric.CANDIDATE_TOP3_ORACLE_HIT
                 | Metric.AUX_REGRESSION_WEIGHT
                 | Metric.VOXEL_VALID_FRAC_MEAN
                 | Metric.VOXEL_VALID_FRAC_STD

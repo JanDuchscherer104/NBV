@@ -39,6 +39,19 @@ def test_metric_log_spec_step_only_train() -> None:
     assert spec_val.enabled is False
 
 
+def test_candidate_oracle_hit_metrics_log_like_training_scalars() -> None:
+    for metric in (Metric.CANDIDATE_TOP1_ORACLE_HIT, Metric.CANDIDATE_TOP3_ORACLE_HIT):
+        train_spec = metric.log_spec(Stage.TRAIN)
+        assert train_spec.on_step is True
+        assert train_spec.on_epoch is True
+        assert train_spec.prog_bar is False
+
+        val_spec = metric.log_spec(Stage.VAL)
+        assert val_spec.on_step is False
+        assert val_spec.on_epoch is True
+        assert val_spec.enabled is True
+
+
 def test_metric_log_spec_val_only() -> None:
     spec_train = Metric.PRED_RRI_BIAS2.log_spec(Stage.TRAIN)
     assert spec_train.enabled is False
