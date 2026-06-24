@@ -339,13 +339,25 @@ return {
       thesis_list = true,
     },
     ["spatial.candidate_target_rel_feat"] = {
-      tex = "\\boldsymbol{h}_{t,e,i}^{\\mathrm{rel}}",
+      tex = "\\boldsymbol{h}_{t,e\\mid i}^{\\mathrm{rel}}",
       typst = "#symb.spatial.candidate_target_rel_feat",
       description = "Candidate-target relation descriptor in the candidate/query local frame.",
       thesis_list = true,
     },
+    ["spatial.ref_candidate_transform"] = {
+      tex = "\\boldsymbol{T}_{r_t,i}^{\\mathrm{rel}}",
+      typst = "#symb.spatial.ref_candidate_transform",
+      description = "Relative transform from the reference pose r_t to candidate camera i.",
+      thesis_list = true,
+    },
+    ["spatial.ref_pose"] = {
+      tex = "r_t",
+      typst = "#symb.spatial.ref_pose",
+      description = "Reference pose for candidate-relative descriptor construction at decision step t.",
+      thesis_list = true,
+    },
     ["spatial.relation_rpe"] = {
-      tex = "\\boldsymbol{e}_{a,i}^{\\mathrm{rel}}",
+      tex = "\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}}",
       typst = "#symb.spatial.relation_rpe",
       description = "Query-local relative positional embedding for target, history, support, or candidate relations.",
       thesis_list = true,
@@ -659,7 +671,7 @@ return {
       thesis_list = false,
     },
     ["spatial.candidate_pose_features"] = {
-      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{pose}}=\\operatorname{concat}(\\xi_{r_t,i}^{\\mathrm{rel}},\\boldsymbol{R}_{r_t,i}^{6D},\\Delta h_{t,i},\\boldsymbol{u}_{t,i}^{\\mathrm{up/frustum}})",
+      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{pose}}=\\operatorname{concat}(\\boldsymbol{\\delta}_{r_t,i}^{p},\\operatorname{R6D}(\\boldsymbol{R}_{r_t,i}),\\|\\boldsymbol{\\delta}_{r_t,i}^{p}\\|_2,\\operatorname{atan2}(\\delta_{r_t,i}^{y},\\delta_{r_t,i}^{x}),\\Delta h_{t,i},\\boldsymbol{u}_{t,i}^{\\mathrm{up/frustum}})",
       typst = "#eqs.spatial.candidate_pose_features",
       description = "",
       thesis_list = false,
@@ -671,13 +683,19 @@ return {
       thesis_list = false,
     },
     ["spatial.candidate_query_rpe"] = {
-      tex = "\\boldsymbol{e}_{a,i}^{\\mathrm{rel}}=\\psi_{\\mathrm{rel}}(\\mathcal{F}(\\boldsymbol{\\eta}_{a\\mid i}))",
+      tex = "\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}}=\\psi_{\\mathrm{rel}}(\\mathcal{F}(\\boldsymbol{\\eta}_{a\\mid i}))",
       typst = "#eqs.spatial.candidate_query_rpe",
       description = "",
       thesis_list = false,
     },
+    ["spatial.candidate_reference_transform"] = {
+      tex = "\\boldsymbol{T}_{r_t,i}^{\\mathrm{rel}}=\\boldsymbol{T}_{w,r_t}^{-1}\\boldsymbol{T}_{w,c_{t,i}},\\quad \\boldsymbol{\\delta}_{r_t,i}^{p}=\\boldsymbol{R}_{r_t}^{\\top}(\\boldsymbol{c}_{t,i}-\\boldsymbol{c}_{r_t}),\\quad \\boldsymbol{R}_{r_t,i}=\\boldsymbol{R}_{r_t}^{\\top}\\boldsymbol{R}_{t,i}",
+      typst = "#eqs.spatial.candidate_reference_transform",
+      description = "",
+      thesis_list = false,
+    },
     ["spatial.candidate_target_relation"] = {
-      tex = "\\boldsymbol{h}_{t,e,i}^{\\mathrm{rel}}=\\operatorname{concat}(\\boldsymbol{R}_{t,i}^\\top(\\boldsymbol{c}_e-\\boldsymbol{c}_{t,i}),\\|\\boldsymbol{c}_e-\\boldsymbol{c}_{t,i}\\|_2,\\cos\\theta_{t,e,i}^{\\mathrm{opt}},\\beta_{t,e,i}^{\\mathrm{elev}},\\lambda_{t,e,i}^{\\mathrm{obb}})",
+      tex = "\\boldsymbol{h}_{t,e\\mid i}^{\\mathrm{rel}}=\\operatorname{concat}(\\boldsymbol{\\delta}_{e\\mid i}^{p},\\|\\boldsymbol{\\delta}_{e\\mid i}^{p}\\|_2,\\cos\\theta_{t,e,i}^{\\mathrm{opt}},\\beta_{t,e,i}^{\\mathrm{elev}},\\lambda_{t,e,i}^{\\mathrm{obb}})",
       typst = "#eqs.spatial.candidate_target_relation",
       description = "",
       thesis_list = false,

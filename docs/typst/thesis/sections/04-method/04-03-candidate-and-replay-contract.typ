@@ -14,6 +14,8 @@ $
   #eqs.rl.finite_action_set
 $
 
+The storage side of this contract is the normalized rollout replay schema in @fig:offline-rollout-store-relation and @fig:rollout-replay-store-layout. This method section therefore defines the tensors and descriptors derived for learning, not a second data format. Row identity, target identity, selected-transition lineage, invalidity, and reward provenance remain owned by the Chapter 03 replay store contract.
+
 Selecting a candidate means choosing a valid index $a_t=i in cal(A)_t$ for the transition. Oracle rendering follows the calibrated depth-rendering contract, so camera-frame and rasterizer conventions are part of the label contract rather than model input @PyTorch3D-Cameras-2025. All valid candidates may be rendered at the oracle layer to score one-step labels, while the rollout writer separately persists selected/parent depth at a canonical configured resolution as actor-history state for successor #symb.rl.qh encoders.
 
 After selection, acquired geometry is added to the current geometry:

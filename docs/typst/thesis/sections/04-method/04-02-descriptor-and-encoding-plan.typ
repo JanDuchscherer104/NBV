@@ -7,13 +7,15 @@
 == Descriptor and Encoding Protocol
 
 // source: docs/contents/theory/efm3d_scene_embeddings.qmd keeps implementation notes for target lineage, replay fields, and feature-bank joins.
-This subsection defines the actor-visible descriptor protocol consumed by #symb.rl.qh. It is intentionally narrower than the rollout store: replay rows persist identifiers, canonical poses, masks, selected transitions, successor references, oracle labels, and provenance, while the training reader derives versioned descriptor tensors from those facts. The notation separates records, learned tokens, spatial relations, support reads, and provenance so that the model cannot silently consume oracle-only information or arbitrary coordinate-system shortcuts. The derived input bundle is
+This subsection defines the actor-visible descriptor protocol consumed by #symb.rl.qh. Its job is not to choose the neural architecture and not to restate the replay schema. Chapter 03 owns row identity, lineage, labels, masks, and selected-transition storage; @sec:thesis-method-geometry-contract and the value-model section own the encoder and ablation ladder. The descriptor protocol is the typed interface between them: a training reader derives versioned target, scene, history, candidate, relation, support, validity, and provenance tensors from replay facts without giving the actor oracle-only fields or arbitrary coordinate shortcuts.
+
+The derived model input at step $t$ is
 
 $
   (#symb.model.target_token, #symb.scene.scene_memory_t, bold(H)_t, {#symb.model.candidate_row, #symb.spatial.relation_rpe, bold(m)_(t,i), bold(rho)_(t,i)}_(i=1)^(#symb.shape.Nq))
 $
 
-Here #symb.model.target_token is the selected-target token, #symb.scene.scene_memory_t is queryable actor-visible scene memory, $bold(H)_t$ is selected-history state, and each candidate row carries typed self, relation, support, validity, and provenance descriptors. Hidden @ground-truth:short target crops, GT matches, target errors, and oracle returns are label or evaluation products only; they are never part of the V1 actor input.
+Here #symb.model.target_token is the selected-target token, #symb.scene.scene_memory_t is queryable actor-visible scene memory, $bold(H)_t$ is selected-history state, and each candidate row carries typed self, relation, support, validity, and provenance descriptors. Hidden @ground-truth:short target crops, GT matches, target errors, all-candidate oracle renders, and oracle returns are label or evaluation products only; they are never part of the V1 actor input. This organization follows the geometric-learning rule that the descriptor should encode task-relevant invariants and equivariances before model capacity is increased @GeometricDeepLearning-bronstein2021.
 
 The target descriptor is the first descriptor because it fixes which object the value model is allowed to care about. It separates identity, actor-visible support, and provenance from later GT association:
 
@@ -47,13 +49,21 @@ $
 
 This planned DINO-on-point branch can represent observed points outside the root @egocentric-voxel-lifting:short voxel cube, but it does not create fresh RGB, DINO, detector, or @egocentric-voxel-lifting:short evidence at unvisited candidate poses.
 
-Candidate pose is only the candidate self descriptor, not the whole row. Canonical poses remain stored as rigid transforms; model readers derive a relative pose feature from a reference pose $r_t$:
+Candidate pose is only the candidate self descriptor, not the whole row. Canonical poses remain stored as rigid transforms; model readers derive a relative pose feature from a reference pose #symb.spatial.ref_pose. For logged root states, #symb.spatial.ref_pose is the current/root actor pose defining the decision state. For counterfactual successors, it is the preceding selected pose whose geometry/history has already been fused. It is therefore a gauge choice for descriptor construction, not a new observation and not a future-looking anchor.
+
+The reference transform is
+
+$
+  #eqs.spatial.candidate_reference_transform
+$
+
+and the candidate self descriptor is
 
 $
   #eqs.spatial.candidate_pose_features
 $
 
-For logged states, $r_t$ is the current/root actor pose used to define the decision state; for counterfactual successors, it is the preceding selected pose. This reference pose is a gauge choice, not another observation modality. It lets the model see motion feasibility and egocentric geometry without depending on arbitrary world origin or yaw. Continuous 6D rotations remain a stable neural representation for rotations @zhou2019continuity, and learnable Fourier features remain a useful scalar/vector encoding control @LFF-li2021, but they should be applied to relative transforms and physically meaningful scalars rather than raw world pose by default.
+This descriptor intentionally excludes the target, support pools, and sampler family. It lets the model see motion feasibility and egocentric geometry without depending on arbitrary world origin or yaw. Continuous 6D rotations remain a stable neural representation for rotations @zhou2019continuity, and learnable Fourier features remain a useful scalar/vector encoding control @LFF-li2021, but they should be applied to relative transforms and physically meaningful scalars rather than raw world pose by default.
 
 The candidate-target relation is a separate descriptor:
 
@@ -140,7 +150,7 @@ with relative pose/relation features, candidate-geometry token #symb.model.candi
 
     [Keeps V1 target input separate from GT-EVAL matching and GT OBB crops.],
     [Candidate self pose],
-    [Reference-pose-relative transform, continuous 6D relative rotation, height/up/frustum scalars, optional LFF controls.],
+    [Reference-pose-relative translation, range, azimuth, continuous 6D relative rotation, height/up/frustum scalars, optional LFF controls.],
 
     [Keeps each finite action row interpretable and invalidity hard-masked.],
     [Candidate-target relation],

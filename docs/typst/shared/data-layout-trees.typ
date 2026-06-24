@@ -83,8 +83,15 @@
   text-size: 8pt,
   node-width: 18em,
   spacing: (8pt, 13pt),
+  orientation: "tb",
 ) = {
-  let tree = _style(compact: compact, text-size: text-size, node-width: node-width, spacing: spacing)
+  let tree = _style(
+    compact: compact,
+    text-size: text-size,
+    node-width: node-width,
+    spacing: spacing,
+    orientation: orientation,
+  )
   tree[
     - #code-strong("vin_offline/") #group
       - #code("manifest.json") -- version, source config, blocks, shards #leaf
@@ -95,12 +102,11 @@
         - #code("val.npy") -- validation source rows #array_node
       - #code-strong("shards/") #group
         - #code-strong("shard-000000/") #group
-          - #code-strong("numeric_blocks.zarr/") -- fixed numeric blocks by row #group
-            - #code("backbone.*") -- cached EFM/VIN tensors #array_node
-            - #code("candidates.*") -- one-step candidate substrate #array_node
-            - #code("depths.*") -- optional cached depth blocks #array_node
-          - #code("records.msgpack") -- optional variable diagnostics #leaf
-          - #code("records_offsets.npy") -- offsets into diagnostics #array_node
+          - #code("zarr.json") -- shard root Zarr v3 metadata #leaf
+          - #code("backbone/*") -- local EVL/VIN fields and voxel support #array_node
+          - #code("oracle/*") -- one-step candidates, depth, cameras, RRI #array_node
+          - #code("vin/*") -- semi-dense points and trajectory history #array_node
+          - #code("*__*.msgpack + *.offsets.npy") -- indexed diagnostics #leaf
         - #code-strong("shard-000001/") -- same contract #group
   ]
 }
@@ -124,7 +130,7 @@
     - #text(weight: "bold")[offline to rollout persisted relation] #group
       - #code-strong("vin_offline/") -- immutable cached source substrate #group
         - #code("sample_index.jsonl") -- sample_index to scene, snippet, split #leaf
-        - #code("numeric_blocks.zarr/") -- cached VIN/EFM substrate by source row #group
+        - #code("shards/shard-*/") -- cached VIN/EFM substrate by source row #group
         - #code("VinOfflineSample") -- runtime root row; not copied #leaf
       - #code-strong("rollouts.zarr/") -- target-conditioned replay sidecar #group
         - #code("manifest.json") -- generation config and source coverage #leaf
@@ -162,90 +168,18 @@
     orientation: orientation,
   )
   tree[
-    - #code-strong("rollouts.zarr/") -- schema 0.9 candidate-diagnostics shard #group
-      - #code("zarr.json") -- compact attrs, counts, manifest hash #leaf
-      - #code("manifest.json") -- resolved config, TOML, provenance, coverage #leaf
-      - #code-strong("metadata/") #group
-        - #code("reason_code_bits") -- uint16[K_reason] #array_node
-        - #code("reason_code_names") -- JSON string-list bytes #leaf
-        - #code("field_retention_policy") -- JSON bytes #leaf
-      - #code-strong("dictionaries/") -- compact string dictionaries #group
-        - #code("scene, snippet, split") -- ids for source coverage #leaf
-        - #code("policy, rollout") -- ids for branch semantics #leaf
-        - #code("target, class_name, target_source") -- ids for target rows #leaf
-        - #code("config, score_source, reason") -- ids for lineage #leaf
-      - #code-strong("sources/") -- one row per VIN source root #group
-        - #code("source_row_id") -- int64[S], source primary key #array_node
-        - #code("sample_index") -- int64[S], VIN offline row #array_node
-        - #code("scene_id, snippet_id, split_id") -- int32[S] dictionary ids #array_node
-        - #code("source_*_hash_id") -- int32[S] config/manifest hashes #array_node
-      - #code-strong("targets/") -- actor-visible target + GT-EVAL fields #group
-        - #code("target_row_id") -- int64[E], target primary key #array_node
-        - actor-visible geometry #group
-          - #code("target_center_world") -- $#symb.oracle.center _e in RR^3$; float32[E,3] #array_node
-          - #code("target_extents") -- float32[E,3] #array_node
-          - #code("target_pose_world_object") -- PoseTW float32[E,12] #array_node
-        - validity and GT-EVAL #group
-          - #code("target_valid_mask, gt_label_valid_mask") -- bool[E] #array_node
-          - #code("gt_match_iou, gt_match_score") -- float32[E] #array_node
-          - #code("target_invalid_reason_bitset") -- uint32[E] #array_node
-      - #code-strong("rollouts/") -- one row per retained branch #group
-        - #code("rollout_row_id") -- int64[R], rollout primary key #array_node
-        - #code("source_row_id, target_row_id") -- int64[R] foreign keys #array_node
-        - #code("policy_id, chain_id") -- policy and branch ids #array_node
-        - #code("horizon, branch_factor, beam_width") -- int16[R] #array_node
-        - #code("root_pose_world") -- PoseTW float32[R,12] #array_node
-        - #code("root_time_ns, root_frame_index") -- rollout root lineage #array_node
-        - #code("final_cumulative_target_root_gain") -- $G_0^((H))$; float32[R] #array_node
-        - #code("final_cumulative_target_rri") -- diagnostic float32[R] #array_node
-      - #code-strong("lineage/") -- rollout config/protocol ids #group
-        - #code("rollout_row_id") -- int64[R] #array_node
-        - #code("candidate_config_id, oracle_config_id") -- int32[R] #array_node
-        - #code("rollout_config_id, target_crop_policy_id") -- int32[R] #array_node
-      - #code-strong("steps/") -- one row per rollout time step #group
-        - #code("step_row_id") -- int64[T], step primary key #array_node
-        - #code("rollout_row_id") -- int64[T] foreign key #array_node
-        - #code("step_index") -- $t$; int16[T] #array_node
-        - #code("selected_candidate_row_id") -- int64[T] foreign key #array_node
-        - #code("num_candidates, num_valid_candidates") -- int32[T] #array_node
-        - #code("cumulative_target_root_gain") -- float32[T] #array_node
-        - #code("cumulative_target_rri") -- diagnostic float32[T] #array_node
-      - #code-strong("candidates/") -- finite candidate shells #group
-        - row identity #group
-          - #code("candidate_row_id") -- int64[C], candidate primary key #array_node
-          - #code("step_row_id, rollout_row_id") -- int64[C] foreign keys #array_node
-          - #code("shell_index") -- candidate index $i$; int32[C] #array_node
-        - pose payload #group
-          - #code("pose_world_cam") -- $#symb.oracle.candidate_qti$; PoseTW float32[C,12] #array_node
-          - #code("pose_relative_root") -- PoseTW float32[C,12] #array_node
-        - masks and labels #group
-          - #code("actor_action_mask") -- $#symb.rl.validity_mask$; bool[C] #array_node
-          - #code("oracle_label_mask, q_train_mask, selected_mask") -- bool[C] #array_node
-          - #code("target_root_gain") -- default reward float32[C] #array_node
-          - #code("target_rri") -- diagnostic $r_t^e(q_(t,i))$; float32[C] #array_node
-          - #code("scene_rri") -- diagnostic float32[C] #array_node
-        - provenance and invalidity #group
-          - #code("strategy_id, position_id, mixture_id") -- int32[C] provenance #array_node
-          - #code("invalid_reason_bitset") -- uint32[C] #array_node
-      - #code-strong("candidate_diagnostics/") -- typed generator audit metrics #group
-        - #code("candidate_row_id, position_id") -- candidate links and position family #array_node
-        - #code("mesh_distance_m, path_min_clearance_m") -- clearance diagnostics #array_node
-        - #code("motion_step_length_m, target_distance_m") -- motion/target diagnostics #array_node
-      - #code-strong("selected_depth/") -- selected-action history rasters #group
-        - #code("step_row_id, candidate_row_id") -- int64[T] links #array_node
-        - #code("depth_m") -- float16[T,240,240], metres #array_node
-        - #code("valid_mask") -- bool[T,240,240] #array_node
-      - #code-strong("target_eval_crops/") -- optional sampled/audit target crops #group
-        - #code("crop_row_id, step_row_id, candidate_row_id") -- row links #array_node
-        - #code("points_world") -- float32[K,50000,3] #array_node
-        - #code("lengths, mask") -- int32[K], bool[K,50000] #array_node
-      - #code-strong("q_h/") -- derived hot training view, validated from row tables #derived
-        - #code("source_row_id, target_row_id") -- state joins #array_node
-        - #code("candidate_row_id, valid_action_mask") -- [T,N_q] #array_node
-        - #code("q_train_mask") -- training mask #array_node
-        - #code("one_step_target_root_gain") -- reward float32[T,N_q] #array_node
-        - #code("one_step_target_rri") -- diagnostic float32[T,N_q] #array_node
-        - #code("td_reward, td_*") -- selected transition reward and links #array_node
+    - #code-strong("rollouts.zarr/") -- schema 1.0 target-rollout-core shard #group
+      - #code("zarr.json + manifest.json") -- schema, counts, provenance, config hashes #leaf
+      - #code("metadata/ + dictionaries/") -- reason bits and compact ids #group
+      - #code("sources/") -- VIN source-row references and split coverage #array_node
+      - #code("targets/") -- target geometry, validity, GT-EVAL audit #array_node
+      - #code("rollouts/ + lineage/") -- policy branches, root pose, config ids #array_node
+      - #code("steps/") -- time rows and selected action links #array_node
+      - #code("candidates/") -- finite shells, poses, masks, rewards, provenance #array_node
+      - #code("candidate_diagnostics/") -- clearance, motion, target-distance audits #array_node
+      - #code("selected_depth/") -- selected successor depth + valid mask #array_node
+      - #code("target_eval_crops/") -- optional oracle/eval target crops #array_node
+      - #code("q_h/") -- derived [T,N_q] training view #derived
   ]
 }
 

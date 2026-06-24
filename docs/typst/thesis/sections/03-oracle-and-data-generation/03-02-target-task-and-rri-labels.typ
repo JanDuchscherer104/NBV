@@ -230,9 +230,3 @@ $
   source: [target-selection interview; target-selection autoresearch report],
   gate: [RQ1/RQ2 protocol freeze],
 )
-
-#validation_todo(
-  [Regenerate current manifest-backed counts for one-step labels, target-task samples, rollout rows, storage footprint, render cost, invalid reasons, and target-headroom strata before presenting scale or runtime claims.],
-  source: [seminar offline-cache appendix; current rollout-store contract],
-  gate: [M1/M2 data-generation evidence],
-)

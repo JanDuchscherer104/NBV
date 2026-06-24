@@ -160,12 +160,27 @@
       )
     )
   $,
+  candidate_reference_transform: $
+    #symb.spatial.ref_candidate_transform
+    =
+    bold(T)_(w,r_t)^(-1) bold(T)_(w,c_(t,i)),
+    quad
+    bold(delta)_(r_t,i)^p
+    =
+    bold(R)_(r_t)^top (bold(c)_(t,i) - bold(c)_(r_t)),
+    quad
+    bold(R)_(r_t,i)
+    =
+    bold(R)_(r_t)^top bold(R)_(t,i)
+  $,
   candidate_pose_features: $
     #symb.spatial.candidate_pose_feat (q_(t,i); r_t)
     =
     op("concat") (
-      xi_(r_t,i)^"rel",
-      bold(R)_(r_t,i)^"6D",
+      bold(delta)_(r_t,i)^p,
+      op("R6D") (bold(R)_(r_t,i)),
+      norm(bold(delta)_(r_t,i)^p)_2,
+      op("atan2") (delta_(r_t,i)^y, delta_(r_t,i)^x),
       Delta h_(t,i),
       bold(u)_(t,i)^"up/frustum"
     )
@@ -174,8 +189,8 @@
     #symb.spatial.candidate_target_rel_feat (q_(t,i), e)
     =
     op("concat") (
-      bold(R)_(t,i)^top (bold(c)_e - bold(c)_(t,i)),
-      norm(bold(c)_e - bold(c)_(t,i))_2,
+      bold(delta)_(e|i)^p,
+      norm(bold(delta)_(e|i)^p)_2,
       #symb.spatial.target_bearing,
       beta_(t,e,i)^"elev",
       lambda_(t,e,i)^"obb"

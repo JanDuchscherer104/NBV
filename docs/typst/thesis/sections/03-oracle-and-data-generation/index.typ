@@ -11,3 +11,5 @@ This chapter defines the non-deployable machinery that turns logged ASE snippets
 #include "03-01-state-and-visibility.typ"
 
 #include "03-02-target-task-and-rri-labels.typ"
+
+#include "03-03-replay-stores-and-diagnostics.typ"

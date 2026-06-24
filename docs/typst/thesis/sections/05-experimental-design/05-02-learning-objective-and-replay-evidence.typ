@@ -8,6 +8,8 @@
 
 The learned value model is interpreted only after the myopic scorer passes ranking, calibration, and oracle-selected rollout checks, and after the replay store passes support, mask, seed, and successor-table checks. These gates make the evaluation contract a scientific guardrail rather than a post-hoc reporting checklist. Seminar-paper diagnostics such as scene-level RRI ranking, CORAL bin behavior, and offline-cache storage are reported as historical substrate evidence unless they are regenerated under the target-task sampler and rollout-store protocol.
 
+The replay evidence gate starts from the Chapter 03 store contract: immutable VIN offline rows supply the one-step source substrate, while standalone rollout rows supply selected-transition evidence, successor history, masks, and derived #symb.rl.qh arrays. The current audit table in @tab:current-rollout-store-audit is therefore a precondition for interpreting learning curves, not a result metric by itself.
+
 The replay pipeline in @fig:qh-rollout-replay-doubleq is the operational boundary for this interpretation: all-candidate labels can train and calibrate the one-step scorer, while #symb.rl.qh evidence comes only from selected-transition rows whose successor state and successor candidate mask are reproducible.
 
 #figure(
