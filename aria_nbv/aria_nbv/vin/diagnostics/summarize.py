@@ -20,6 +20,7 @@ from ...data_handling import (
 )
 from ...rri_metrics.coral import coral_monotonicity_violation_rate
 from ...utils.rich_summary import capture_tree, rich_summary, summarize
+from .summary_stats import pearson_corr, quantile_stats, spearman_corr
 
 if TYPE_CHECKING:
     from ...data_handling import VinOracleBatch
@@ -33,56 +34,6 @@ def summarize_vin_v3(
     include_torchsummary: bool = True,
     torchsummary_depth: int = 3,
 ) -> str:
-    def _finite_1d(values: torch.Tensor) -> torch.Tensor:
-        flat = values.detach().reshape(-1).to(dtype=torch.float32)
-        return flat[torch.isfinite(flat)]
-
-    def _pearson_corr(x: torch.Tensor, y: torch.Tensor) -> float | None:
-        x_f = _finite_1d(x)
-        y_f = _finite_1d(y)
-        num = min(int(x_f.numel()), int(y_f.numel()))
-        if num < 2:
-            return None
-        x_f = x_f[:num]
-        y_f = y_f[:num]
-        x_f = x_f - x_f.mean()
-        y_f = y_f - y_f.mean()
-        denom = x_f.std(unbiased=False) * y_f.std(unbiased=False)
-        if float(denom.item()) < 1e-12:
-            return None
-        return float((x_f * y_f).mean().item() / denom.item())
-
-    def _rankdata(x: torch.Tensor) -> torch.Tensor:
-        order = torch.argsort(x)
-        ranks = torch.empty_like(order, dtype=torch.float32)
-        ranks[order] = torch.arange(order.numel(), device=order.device, dtype=torch.float32)
-        return ranks
-
-    def _spearman_corr(x: torch.Tensor, y: torch.Tensor) -> float | None:
-        x_f = _finite_1d(x)
-        y_f = _finite_1d(y)
-        num = min(int(x_f.numel()), int(y_f.numel()))
-        if num < 2:
-            return None
-        x_f = x_f[:num]
-        y_f = y_f[:num]
-        return _pearson_corr(_rankdata(x_f), _rankdata(y_f))
-
-    def _q_stats(x: torch.Tensor) -> dict[str, float] | None:
-        x_f = _finite_1d(x)
-        if x_f.numel() == 0:
-            return None
-        qs = torch.quantile(
-            x_f,
-            torch.tensor([0.0, 0.5, 0.95], device=x_f.device, dtype=x_f.dtype),
-        )
-        return {
-            "min": float(qs[0].item()),
-            "median": float(qs[1].item()),
-            "p95": float(qs[2].item()),
-            "mean": float(x_f.mean().item()),
-        }
-
     if batch.efm_snippet_view is None and batch.backbone_out is None:
         raise RuntimeError(
             "VIN v3 summary requires efm inputs or cached backbone outputs.",
@@ -129,9 +80,9 @@ def summarize_vin_v3(
         inv_dist_std_stats = None
         obs_count_stats = None
         if points_world.shape[-1] >= 4:
-            inv_dist_std_stats = _q_stats(points_world[..., 3][points_mask])
+            inv_dist_std_stats = quantile_stats(points_world[..., 3][points_mask])
         if points_world.shape[-1] >= 5:
-            obs_count_stats = _q_stats(points_world[..., 4][points_mask])
+            obs_count_stats = quantile_stats(points_world[..., 4][points_mask])
         efm_summary = {
             "note": "VIN offline-store snippet (no raw EFM inputs)",
             "vin_snippet.points_world": summarize(snippet_view.points_world, include_stats=True),
@@ -229,18 +180,18 @@ def summarize_vin_v3(
     candidate_valid_rate = float(pred.candidate_valid.to(dtype=torch.float32).mean().item())
     metrics_dict: dict[str, Any] = {
         "candidate_valid_rate": candidate_valid_rate,
-        "candidate_radius_m": _q_stats(candidate_radius),
-        "voxel_valid_frac": _q_stats(pred.voxel_valid_frac) if pred.voxel_valid_frac is not None else None,
+        "candidate_radius_m": quantile_stats(candidate_radius),
+        "voxel_valid_frac": quantile_stats(pred.voxel_valid_frac) if pred.voxel_valid_frac is not None else None,
         "semidense_candidate_vis_frac": (
-            _q_stats(pred.semidense_candidate_vis_frac) if pred.semidense_candidate_vis_frac is not None else None
+            quantile_stats(pred.semidense_candidate_vis_frac) if pred.semidense_candidate_vis_frac is not None else None
         ),
-        "coral_monotonicity_violation_rate": _q_stats(monotonicity),
-        "coral_entropy": _q_stats(entropy) if entropy is not None else None,
+        "coral_monotonicity_violation_rate": quantile_stats(monotonicity),
+        "coral_entropy": quantile_stats(entropy) if entropy is not None else None,
     }
     if batch.rri is not None:
         corr = {
-            "pearson": _pearson_corr(batch.rri, pred.expected_normalized),
-            "spearman": _spearman_corr(batch.rri, pred.expected_normalized),
+            "pearson": pearson_corr(batch.rri, pred.expected_normalized),
+            "spearman": spearman_corr(batch.rri, pred.expected_normalized),
         }
         metrics_dict["oracle_rri_vs_expected_normalized"] = corr
 
