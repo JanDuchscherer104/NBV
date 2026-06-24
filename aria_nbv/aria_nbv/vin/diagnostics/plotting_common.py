@@ -1,119 +1,19 @@
-"""Shared plotting helpers used by stable and experimental VIN diagnostics."""
+"""VIN-specific plotting adapters shared by diagnostics.
+
+The helpers in this module translate VIN pose, voxel, and backbone diagnostic
+state into arrays consumed by Plotly figures. Generic Plotly primitives live in
+:mod:`aria_nbv.vin.diagnostics._plot_primitives`.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
-import plotly.graph_objects as go  # type: ignore[import-untyped]
 import torch
 from efm3d.aria.pose import PoseTW
 
-from ...utils.data_plotting import BBOX_EDGE_IDX, _flatten_edges_for_plotly
 from ...utils.frames import rotate_yaw_cw90
-from ...utils.reporting import _pretty_label
-
-
-def _pca_2d(values: np.ndarray) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
-    if values.ndim != 2:
-        raise ValueError(f"Expected values with ndim=2, got {values.ndim}.")
-    values = values - values.mean(axis=0, keepdims=True)
-    _, _, vt = np.linalg.svd(values, full_matrices=False)
-    return values @ vt[:2].T
-
-
-def _pca_2d_with_components(
-    values: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    values = np.asarray(values, dtype=float)
-    if values.ndim != 2:
-        raise ValueError(f"Expected values with ndim=2, got {values.ndim}.")
-    mean = values.mean(axis=0, keepdims=True)
-    centered = values - mean
-    _, _, vt = np.linalg.svd(centered, full_matrices=False)
-    components = vt[:2].T
-    proj = centered @ components
-    return proj, mean, components
-
-
-def _histogram_edges(values_list: Iterable[np.ndarray], *, bins: int) -> np.ndarray:
-    arrays: list[np.ndarray] = []
-    for arr in values_list:
-        vals = np.asarray(arr, dtype=float).reshape(-1)
-        vals = vals[np.isfinite(vals)]
-        if vals.size:
-            arrays.append(vals)
-    if not arrays:
-        return np.array([0.0, 1.0], dtype=float)
-    return np.histogram_bin_edges(np.concatenate(arrays, axis=0), bins=int(bins))
-
-
-def _histogram_bar(
-    values: np.ndarray,
-    *,
-    edges: np.ndarray,
-    name: str,
-    color: str | None = None,
-    opacity: float = 0.6,
-    log1p_counts: bool = False,
-) -> go.Bar:
-    vals = np.asarray(values, dtype=float).reshape(-1)
-    vals = vals[np.isfinite(vals)]
-    counts, _ = np.histogram(vals, bins=edges)
-    centers = 0.5 * (edges[:-1] + edges[1:])
-    y = np.log1p(counts) if log1p_counts else counts
-    marker: dict[str, Any] = {"opacity": opacity}
-    if color is not None:
-        marker["color"] = color
-    return go.Bar(x=centers, y=y, name=_pretty_label(name), marker=marker)
-
-
-def _line_trace(
-    start: np.ndarray,
-    end: np.ndarray,
-    *,
-    color: str,
-    name: str,
-    width: int = 3,
-) -> go.Scatter3d:
-    starts = np.asarray(start, dtype=float).reshape(1, 3)
-    ends = np.asarray(end, dtype=float).reshape(1, 3)
-    return _segment_trace(starts, ends, color=color, name=name, width=width)
-
-
-def _scatter3d(
-    points: np.ndarray,
-    *,
-    name: str,
-    color: str | None = None,
-    values: np.ndarray | None = None,
-    colorscale: str | None = None,
-    size: int = 3,
-    opacity: float = 0.7,
-    prettify_name: bool = True,
-) -> go.Scatter3d:
-    pts = np.asarray(points, dtype=float).reshape(-1, 3)
-    label = _pretty_label(name) if prettify_name else name
-    marker: dict[str, Any] = {"size": size, "opacity": opacity}
-    if values is not None:
-        marker["color"] = np.asarray(values, dtype=float)
-        if colorscale is not None:
-            marker["colorscale"] = colorscale
-        marker["colorbar"] = {"title": label}
-    elif color is not None:
-        marker["color"] = color
-
-    return go.Scatter3d(
-        x=pts[:, 0],
-        y=pts[:, 1],
-        z=pts[:, 2],
-        mode="markers",
-        marker=marker,
-        name=label,
-        showlegend=True,
-    )
 
 
 def _voxel_corners(extent: np.ndarray) -> np.ndarray:
@@ -375,47 +275,15 @@ def _collect_backbone_evidence_points(
     return samples
 
 
-def _segment_trace(
-    starts: np.ndarray,
-    ends: np.ndarray,
-    *,
-    color: str,
-    name: str,
-    width: int = 4,
-) -> go.Scatter3d:
-    starts = np.asarray(starts, dtype=float).reshape(-1, 3)
-    ends = np.asarray(ends, dtype=float).reshape(-1, 3)
-    segments = np.stack([starts, ends], axis=1)
-    x, y, z = _flatten_edges_for_plotly(segments)
-    return go.Scatter3d(
-        x=x,
-        y=y,
-        z=z,
-        mode="lines",
-        line={"color": color, "width": width},
-        name=name,
-        showlegend=True,
-    )
-
-
 __all__ = [
-    "BBOX_EDGE_IDX",
     "_as_pose_batch",
     "_as_pose_tw",
     "_broadcast_pose_batch",
     "_candidate_valid_fraction",
     "_centers_rig_from_poses",
     "_collect_backbone_evidence_points",
-    "_flatten_edges_for_plotly",
-    "_histogram_bar",
-    "_histogram_edges",
-    "_line_trace",
-    "_pca_2d",
-    "_pca_2d_with_components",
     "_pose_first_batch",
     "_rotate_points_yaw_cw90",
-    "_scatter3d",
-    "_segment_trace",
     "_voxel_corners",
     "_voxel_indices_to_world",
 ]

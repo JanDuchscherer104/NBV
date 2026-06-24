@@ -28,14 +28,14 @@ from pytorch3d.renderer.cameras import (
     PerspectiveCameras,  # type: ignore[import-untyped]
 )
 
+from ...utils.reporting import _pretty_label
 from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
 from ..types import VinForwardDiagnostics
 from ._frustum_adapter import _camera_tw_from_p3d, _frustum_builder_stub, _pose_from_p3d_camera
-from .plotting_common import (
+from ._plot_primitives import (
     _histogram_bar,
     _histogram_edges,
     _line_trace,
-    _pretty_label,
     _scatter3d,
 )
 
