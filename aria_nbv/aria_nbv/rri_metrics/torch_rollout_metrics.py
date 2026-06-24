@@ -343,6 +343,8 @@ class PolicyTableMetrics(MetricBase):
         selected_valid_mask: Tensor | None = None,
         scene_rri: Tensor | None = None,
         cost: Tensor | None = None,
+        selected_camera_centers_world: Tensor | None = None,
+        selected_path_segment_valid_mask: Tensor | None = None,
         runtime: Tensor | None = None,
         coverage: Tensor | None = None,
         scalar_valid_mask: Tensor | None = None,
@@ -360,6 +362,11 @@ class PolicyTableMetrics(MetricBase):
             selected_valid_mask: Optional hard mask for selected rewards.
             scene_rri: Optional scene-level RRI values for the same policy row.
             cost: Optional acquisition or path-cost values.
+            selected_camera_centers_world: Optional root-plus-selected camera
+                centers ``Tensor["B H+1 3"]`` or ``Tensor["H+1 3"]`` used to
+                derive path cost when ``cost`` is omitted.
+            selected_path_segment_valid_mask: Optional hard mask over the
+                selected path segments. Requires ``selected_camera_centers_world``.
             runtime: Optional runtime values, normally seconds.
             coverage: Optional scene/target coverage values.
             scalar_valid_mask: Optional mask for scalar columns only.
@@ -370,6 +377,15 @@ class PolicyTableMetrics(MetricBase):
         """
 
         self.selected.update(rewards, initial_error, final_error, selected_valid_mask)
+        if selected_path_segment_valid_mask is not None and selected_camera_centers_world is None:
+            raise ValueError("selected_path_segment_valid_mask requires selected_camera_centers_world.")
+        if cost is None and selected_camera_centers_world is not None:
+            cost = selected_path_length_tensor(
+                selected_camera_centers_world.to(device=self.cost.total.device, dtype=torch.float32),
+                None
+                if selected_path_segment_valid_mask is None
+                else selected_path_segment_valid_mask.to(device=self.cost.total.device),
+            )
         for metric, values in (
             (self.scene_rri, scene_rri),
             (self.cost, cost),

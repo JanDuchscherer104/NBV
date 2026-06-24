@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from aria_nbv.rri_metrics import (
@@ -303,6 +304,66 @@ def test_policy_table_metrics_report_proposal_columns() -> None:
     assert torch.allclose(result["invalidity"], torch.tensor(3.0 / 6.0))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+
+
+def test_policy_table_metrics_can_derive_cost_from_selected_path() -> None:
+    metric = PolicyTableMetrics()
+
+    metric.update(
+        torch.tensor([[1.0, 1.0], [1.0, 1.0]]),
+        initial_error=torch.tensor([10.0, 10.0]),
+        final_error=torch.tensor([5.0, 5.0]),
+        scene_rri=torch.tensor([0.2, 0.4]),
+        selected_camera_centers_world=torch.tensor(
+            [
+                [[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [3.0, 4.0, 12.0]],
+                [[0.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 9.0, 0.0]],
+            ]
+        ),
+        selected_path_segment_valid_mask=torch.tensor([[True, True], [True, False]]),
+        runtime=torch.tensor([10.0, 20.0]),
+        coverage=torch.tensor([0.6, 0.8]),
+        candidate_values=torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+        candidate_valid_mask=torch.tensor([[True, False], [True, True]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["cost"], torch.tensor((17.0 + 5.0) / 2.0))
+    assert torch.allclose(result["invalidity"], torch.tensor(1.0 / 4.0))
+
+
+def test_policy_table_metrics_prefers_explicit_cost_over_path_cost() -> None:
+    metric = PolicyTableMetrics()
+
+    metric.update(
+        torch.tensor([[1.0, 1.0]]),
+        initial_error=torch.tensor([10.0]),
+        final_error=torch.tensor([5.0]),
+        scene_rri=torch.tensor([0.2]),
+        cost=torch.tensor([2.0]),
+        selected_camera_centers_world=torch.tensor([[[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [3.0, 4.0, 12.0]]]),
+        runtime=torch.tensor([10.0]),
+        coverage=torch.tensor([0.6]),
+        candidate_values=torch.tensor([[1.0, 2.0]]),
+        candidate_valid_mask=torch.tensor([[True, True]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["cost"], torch.tensor(2.0))
+
+
+def test_policy_table_metrics_requires_centers_for_path_segment_mask() -> None:
+    metric = PolicyTableMetrics()
+
+    with pytest.raises(ValueError, match="selected_path_segment_valid_mask"):
+        metric.update(
+            torch.tensor([[1.0, 1.0]]),
+            initial_error=torch.tensor([10.0]),
+            final_error=torch.tensor([5.0]),
+            selected_path_segment_valid_mask=torch.tensor([[True, False]]),
+        )
 
 
 def test_policy_table_metrics_ignore_nonfinite_and_masked_entries() -> None:
