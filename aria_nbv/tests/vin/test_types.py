@@ -4,10 +4,22 @@ import importlib
 
 import pytest
 
-from aria_nbv.vin.types import EfmDict, FieldBundle, VinForwardDiagnostics, VinV2ForwardDiagnostics
+from aria_nbv.vin.types import (
+    EfmDict,
+    EvlBackboneOutput,
+    FieldBundle,
+    VinForwardDiagnostics,
+    VinPrediction,
+    VinV2ForwardDiagnostics,
+    VinV3ForwardDiagnostics,
+)
+from aria_nbv.vin.types.backbone import EfmDict as LeafEfmDict
+from aria_nbv.vin.types.backbone import EvlBackboneOutput as LeafEvlBackboneOutput
 from aria_nbv.vin.types.diagnostics import VinForwardDiagnostics as LeafVinForwardDiagnostics
 from aria_nbv.vin.types.diagnostics import VinV2ForwardDiagnostics as LeafVinV2ForwardDiagnostics
+from aria_nbv.vin.types.diagnostics import VinV3ForwardDiagnostics as LeafVinV3ForwardDiagnostics
 from aria_nbv.vin.types.model_inputs import FieldBundle as LeafFieldBundle
+from aria_nbv.vin.types.prediction import VinPrediction as LeafVinPrediction
 
 
 def test_efm_dict_contains_expected_keys() -> None:
@@ -40,6 +52,17 @@ def test_efm_dict_contains_expected_keys() -> None:
     assert expected.issubset(EfmDict.__annotations__)
 
 
+def test_backbone_types_are_leaf_owned_and_aggregated() -> None:
+    """The aggregate import path should expose EVL DTOs owned by the backbone leaf."""
+    assert EfmDict is LeafEfmDict
+    assert EvlBackboneOutput is LeafEvlBackboneOutput
+
+
+def test_prediction_types_are_leaf_owned_and_aggregated() -> None:
+    """The aggregate import path should expose scorer outputs owned by the prediction leaf."""
+    assert VinPrediction is LeafVinPrediction
+
+
 def test_model_input_types_are_leaf_owned_and_aggregated() -> None:
     """The aggregate import path should expose DTOs owned by the leaf module."""
     assert FieldBundle is LeafFieldBundle
@@ -49,6 +72,7 @@ def test_diagnostics_types_are_leaf_owned_and_aggregated() -> None:
     """The aggregate import path should expose diagnostics owned by the leaf module."""
     assert VinForwardDiagnostics is LeafVinForwardDiagnostics
     assert VinV2ForwardDiagnostics is LeafVinV2ForwardDiagnostics
+    assert VinV3ForwardDiagnostics is LeafVinV3ForwardDiagnostics
 
 
 def test_experimental_diagnostics_import_paths_are_removed() -> None:
