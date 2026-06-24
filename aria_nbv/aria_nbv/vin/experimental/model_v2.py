@@ -78,9 +78,15 @@ from ..encoders import (
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
 from ..geometry.semidense_projection import SEMIDENSE_PROJ_DIM
 from ..modules import PoseConditionedGlobalPool
-from ..types import FieldBundle, GlobalContext, PreparedInputs
+from ..types import (
+    EvlBackboneOutput,
+    FieldBundle,
+    GlobalContext,
+    PreparedInputs,
+    VinPrediction,
+    VinV2ForwardDiagnostics,
+)
 from ..vin_utils import largest_divisor_leq, validate_pos_grid_xyz_encoder
-from .types import EvlBackboneOutput, VinPrediction, VinV2ForwardDiagnostics
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch

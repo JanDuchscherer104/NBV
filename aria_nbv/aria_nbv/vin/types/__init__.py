@@ -16,6 +16,8 @@ from typing_extensions import Doc
 
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...utils.typed_payloads import from_serializable, to_serializable
+from .diagnostics import VinForwardDiagnostics as VinForwardDiagnostics
+from .diagnostics import VinV2ForwardDiagnostics as VinV2ForwardDiagnostics
 from .model_inputs import (
     FieldBundle as FieldBundle,
 )

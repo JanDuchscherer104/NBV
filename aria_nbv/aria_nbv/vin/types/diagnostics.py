@@ -1,12 +1,20 @@
-"""Typed containers and diagnostics for experimental VIN variants."""
+"""Diagnostics payloads for legacy and experimental VIN scorer variants.
+
+These dataclasses are canonical type owners even when the model producing them
+is still a deprecated experimental scorer. App panels and diagnostics helpers
+should import them through `aria_nbv.vin.types` or this leaf module, not through
+`aria_nbv.vin.experimental`.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
 
-from ..types import EvlBackboneOutput, VinPrediction
+if TYPE_CHECKING:
+    from . import EvlBackboneOutput, VinPrediction
 
 Tensor = torch.Tensor
 

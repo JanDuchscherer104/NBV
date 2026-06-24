@@ -111,10 +111,10 @@ from ..geometry import (
     sample_voxel_field as _sample_voxel_field,
 )
 from ..modules import VinScorerHeadConfig
+from ..types import EvlBackboneOutput, VinForwardDiagnostics, VinPrediction
 from ..vin_utils import (
     largest_divisor_leq as _largest_divisor_leq,
 )
-from .types import EvlBackboneOutput, VinForwardDiagnostics, VinPrediction
 
 
 class VinModelConfig(TargetConfig["VinModel"]):

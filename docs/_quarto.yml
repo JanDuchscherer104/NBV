@@ -309,6 +309,12 @@ quartodoc:
         - name: vin.types
           children: separate
           member_options: *embedded_members
+        - name: vin.types.diagnostics
+          children: separate
+          member_options: *embedded_members
+        - name: vin.diagnostics.experimental_plotting
+          children: separate
+          member_options: *embedded_members
     - title: "Pipelines"
       desc: "End-to-end orchestration modules that connect the typed data stack to oracle labelling."
       contents:

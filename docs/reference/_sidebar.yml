@@ -46,6 +46,8 @@ website:
       - reference/vin.encoders.pointnext.qmd
       - reference/vin.encoders.trajectory.qmd
       - reference/vin.types.qmd
+      - reference/vin.types.diagnostics.qmd
+      - reference/vin.diagnostics.experimental_plotting.qmd
       section: VIN Core
     - contents:
       - reference/pipelines.oracle_rri_labeler.qmd

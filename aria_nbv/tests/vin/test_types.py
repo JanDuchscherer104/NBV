@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from aria_nbv.vin.types import EfmDict, FieldBundle
+import importlib
+
+import pytest
+
+from aria_nbv.vin.types import EfmDict, FieldBundle, VinForwardDiagnostics, VinV2ForwardDiagnostics
+from aria_nbv.vin.types.diagnostics import VinForwardDiagnostics as LeafVinForwardDiagnostics
+from aria_nbv.vin.types.diagnostics import VinV2ForwardDiagnostics as LeafVinV2ForwardDiagnostics
 from aria_nbv.vin.types.model_inputs import FieldBundle as LeafFieldBundle
 
 
@@ -37,3 +43,18 @@ def test_efm_dict_contains_expected_keys() -> None:
 def test_model_input_types_are_leaf_owned_and_aggregated() -> None:
     """The aggregate import path should expose DTOs owned by the leaf module."""
     assert FieldBundle is LeafFieldBundle
+
+
+def test_diagnostics_types_are_leaf_owned_and_aggregated() -> None:
+    """The aggregate import path should expose diagnostics owned by the leaf module."""
+    assert VinForwardDiagnostics is LeafVinForwardDiagnostics
+    assert VinV2ForwardDiagnostics is LeafVinV2ForwardDiagnostics
+
+
+def test_experimental_diagnostics_import_paths_are_removed() -> None:
+    for module_name in (
+        "aria_nbv.vin.experimental.types",
+        "aria_nbv.vin.experimental.plotting",
+    ):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(module_name)

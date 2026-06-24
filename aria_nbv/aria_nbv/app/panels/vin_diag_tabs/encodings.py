@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import torch
 
+from ....vin.diagnostics import build_candidate_encoding_figures, build_vin_encoding_figures
 from ....vin.diagnostics.plotting import (
     build_lff_empirical_figures,
     build_pose_enc_pca_figure,
@@ -13,7 +14,6 @@ from ....vin.diagnostics.plotting import (
     build_pose_grid_slices_figure,
     build_pose_vec_histogram,
 )
-from ....vin.experimental.plotting import build_candidate_encoding_figures, build_vin_encoding_figures
 from ....vin.geometry import pos_grid_from_pts_world
 from ..common import _info_popover, _pretty_label
 from .context import VinDiagContext

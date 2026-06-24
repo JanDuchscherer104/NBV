@@ -16,8 +16,7 @@ from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from ...rri_metrics.rri_binning import RriOrdinalBinner
 from ...utils import Stage
-from ...vin.experimental.types import VinForwardDiagnostics
-from ...vin.types import VinPrediction
+from ...vin.types import VinForwardDiagnostics, VinPrediction
 
 
 def _build_experiment_config(

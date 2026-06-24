@@ -1,4 +1,10 @@
-"""Plotting utilities for VIN encodings and pose descriptors (Plotly)."""
+"""Plotly diagnostics for legacy and experimental VIN encodings.
+
+The active VIN v3 plotting helpers live in `aria_nbv.vin.diagnostics.plotting`.
+This module contains app-facing figures for legacy shell/LFF experiments and
+therefore remains under the canonical diagnostics package rather than
+`aria_nbv.vin.experimental`.
+"""
 
 from __future__ import annotations
 
@@ -22,7 +28,9 @@ from pytorch3d.renderer.cameras import (
     PerspectiveCameras,  # type: ignore[import-untyped]
 )
 
-from ..diagnostics.plotting_common import (
+from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
+from ..types import VinForwardDiagnostics
+from .plotting_common import (
     _camera_tw_from_p3d,
     _frustum_builder_stub,
     _histogram_bar,
@@ -32,8 +40,6 @@ from ..diagnostics.plotting_common import (
     _pretty_label,
     _scatter3d,
 )
-from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
-from .types import VinForwardDiagnostics
 
 if TYPE_CHECKING:
     from ..encoders import LearnableFourierFeatures
