@@ -94,6 +94,15 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     fit_binner_only: bool = False
     """Fit the ordinal binner on oracle labels, save it, and exit (no training)."""
 
+    fit_binner_overwrite: bool = False
+    """Overwrite ``module_config.binner_path`` when ``run_mode="fit_binner"``.
+
+    The low-level `aria_nbv.rri_metrics.rri_binning.RriOrdinalBinner.save`
+    method keeps existing JSON files by default and writes numbered siblings.
+    This flag gives reproducible CLI preflight configs an explicit opt-in to
+    refresh the configured artifact path in place.
+    """
+
     paths: PathConfig = Field(default_factory=PathConfig)
     """Filesystem layout config (singleton)."""
 
@@ -735,7 +744,7 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
             case "dump_config":
                 self.save_config()
             case "fit_binner":
-                self.fit_binner_and_save()
+                self.fit_binner_and_save(overwrite=self.fit_binner_overwrite)
             case "optuna":
                 self.run_optuna_study()
             case "train":

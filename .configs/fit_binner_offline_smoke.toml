@@ -6,6 +6,7 @@ run_mode = "fit_binner"
 run_name = "offline-smoke-binner"
 out_dir = ".logs/vin/offline-smoke"
 seed = 0
+fit_binner_overwrite = true
 
 [datamodule_config]
 num_workers = 0
