@@ -300,6 +300,9 @@ quartodoc:
         - name: vin.encoders.fourier
           children: separate
           member_options: *embedded_members
+        - name: vin.encoders.pointnext
+          children: separate
+          member_options: *embedded_members
         - name: vin.encoders.trajectory
           children: separate
           member_options: *embedded_members

@@ -1,9 +1,14 @@
-"""PointNeXt-S adapter for semidense point cloud features."""
+"""Optional PointNeXt-S encoder for semidense VIN point clouds.
+
+`PointNeXtSEncoder` adapts the OpenPoints PointNeXt-S implementation to the VIN
+encoder interface. It is only constructed when a model config enables the
+semidense point encoder, so importing `aria_nbv.vin.encoders` does not build an
+OpenPoints model or load a checkpoint.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import torch
 from pydantic import Field, field_validator
@@ -12,59 +17,29 @@ from torch import Tensor, nn
 from aria_nbv.configs.path_config import PathConfig
 
 from ...utils import Optimizable, TargetConfig, optimizable_field
-
-
-def _extract_tensor(output: Any) -> Tensor:
-    """Best-effort extractor for tensors returned by external point encoders."""
-    if isinstance(output, torch.Tensor):
-        return output
-    if isinstance(output, dict):
-        for key in ("feat", "features", "logits", "pred", "out"):
-            value = output.get(key)
-            if isinstance(value, torch.Tensor):
-                return value
-        for value in output.values():
-            if isinstance(value, torch.Tensor):
-                return value
-    if isinstance(output, (tuple, list)):
-        for value in output:
-            if isinstance(value, torch.Tensor):
-                return value
-    raise TypeError("Point encoder output did not contain a tensor.")
-
-
-def _load_pointnext_cfg(cfg_path: Path) -> Any:
-    """Load a PointNeXt/OpenPoints YAML config with EasyConfig."""
-    from openpoints.utils import EasyConfig
-
-    cfg = EasyConfig()
-    cfg.load(str(cfg_path), recursive=True)
-    return cfg
-
-
-def _load_checkpoint_strict(model: nn.Module, checkpoint_path: Path) -> None:
-    state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    if isinstance(state, dict):
-        for key in ("model", "net", "network", "state_dict", "base_model"):
-            if key in state:
-                state = state[key]
-                break
-    if not isinstance(state, dict):
-        raise RuntimeError("PointNeXt checkpoint did not contain a state dict.")
-    state = {k.replace("module.", ""): v for k, v in state.items()}
-    model.load_state_dict(state, strict=True)
+from .pointnext_utils import (
+    extract_point_encoder_tensor,
+    load_checkpoint_strict,
+    load_pointnext_cfg,
+)
 
 
 class PointNeXtSEncoderConfig(TargetConfig["PointNeXtSEncoder"]):
-    """Configuration for the optional PointNeXt-S semidense encoder."""
+    """Config-as-factory wrapper for `PointNeXtSEncoder`.
+
+    Paths are resolved against `aria_nbv.configs.path_config.PathConfig` so
+    model configs can store repository-relative external checkpoint references.
+    The target module expects CUDA tensors because OpenPoints PointNeXt-S uses
+    CUDA-only kernels in the configured runtime.
+    """
 
     @property
     def target_type(self) -> type["PointNeXtSEncoder"]:
         """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return PointNeXtSEncoder
 
-    cfg_path: Path = Field(default_factory=lambda: Path("PointNeXt/cfgs/s3dis/pointnext-s.yaml"))  #
-    """Path to the PointNeXt YAML config (relative to relative to PathConfig().external)."""
+    cfg_path: Path = Field(default_factory=lambda: Path("PointNeXt/cfgs/s3dis/pointnext-s.yaml"))
+    """Path to the PointNeXt YAML config, relative to `PathConfig.external_dir`."""
 
     checkpoint_path: Path = Field(
         default_factory=lambda: Path(
@@ -120,7 +95,18 @@ class PointNeXtSEncoderConfig(TargetConfig["PointNeXtSEncoder"]):
 
 
 class PointNeXtSEncoder(nn.Module):
-    """Optional PointNeXt-S adapter for semidense point cloud features."""
+    """Adapt OpenPoints PointNeXt-S to a VIN semidense point-cloud embedding.
+
+    Args:
+        config: Config-as-factory object containing OpenPoints config/checkpoint
+            paths, output projection dimension, and freezing behavior.
+
+    Notes:
+        The wrapped OpenPoints model is loaded lazily at module construction,
+        not at package import time. Use
+        `aria_nbv.vin.experimental.model_v2.VinModelV2Config.use_point_encoder`
+        to decide whether this optional path participates in a scorer.
+    """
 
     def __init__(self, config: PointNeXtSEncoderConfig) -> None:
         super().__init__()
@@ -135,7 +121,7 @@ class PointNeXtSEncoder(nn.Module):
 
         cfg_path = Path(self.config.cfg_path)
 
-        cfg = _load_pointnext_cfg(cfg_path)
+        cfg = load_pointnext_cfg(cfg_path)
         model_cfg = cfg.model if hasattr(cfg, "model") else cfg["model"]
         encoder_args = getattr(model_cfg, "encoder_args", None)
         if encoder_args is None and isinstance(model_cfg, dict):
@@ -154,7 +140,7 @@ class PointNeXtSEncoder(nn.Module):
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"PointNeXt-S checkpoint_path does not exist: {ckpt_path}")
             if self.config.strict_load:
-                _load_checkpoint_strict(self.model, ckpt_path)
+                load_checkpoint_strict(self.model, ckpt_path)
             else:
                 load_checkpoint(self.model, str(ckpt_path))
 
@@ -172,19 +158,21 @@ class PointNeXtSEncoder(nn.Module):
             with torch.no_grad():
                 dummy = torch.zeros((1, 32, 3), dtype=torch.float32, device="cuda")
                 self.model.to(dummy.device)
-                raw = _extract_tensor(self._forward_features(dummy))
+                raw = extract_point_encoder_tensor(self._forward_features(dummy))
                 raw_dim = int(raw.shape[-1])
 
         self.out_dim = int(self.config.out_dim)
         self.proj = nn.Identity() if raw_dim == self.out_dim else nn.Linear(raw_dim, self.out_dim)
 
     def train(self, mode: bool = True) -> "PointNeXtSEncoder":
+        """Switch training mode while keeping frozen OpenPoints weights in eval mode."""
         super().train(mode)
         if self.config.freeze:
             self.model.eval()
         return self
 
     def _forward_features(self, points: Tensor, features: Tensor | None = None) -> Tensor:
+        """Call the most specific feature-forward method exposed by OpenPoints."""
         if hasattr(self.model, "encoder") and hasattr(self.model.encoder, "forward_cls_feat"):
             if features is None:
                 return self.model.encoder.forward_cls_feat(points)
@@ -241,9 +229,9 @@ class PointNeXtSEncoder(nn.Module):
                     dtype=features.dtype,
                 )
                 features = torch.cat([features, pad], dim=-1)
-            raw = _extract_tensor(self._forward_features(xyz, features.transpose(1, 2).contiguous()))
+            raw = extract_point_encoder_tensor(self._forward_features(xyz, features.transpose(1, 2).contiguous()))
         else:
-            raw = _extract_tensor(self._forward_features(xyz))
+            raw = extract_point_encoder_tensor(self._forward_features(xyz))
         if raw.ndim > 2:
             reduce_dims = tuple(range(2, raw.ndim))
             raw = raw.mean(dim=reduce_dims)

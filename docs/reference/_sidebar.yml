@@ -43,6 +43,7 @@ website:
       - reference/vin.encoders.shell_pose.qmd
       - reference/vin.encoders.spherical.qmd
       - reference/vin.encoders.fourier.qmd
+      - reference/vin.encoders.pointnext.qmd
       - reference/vin.encoders.trajectory.qmd
       - reference/vin.types.qmd
       section: VIN Core

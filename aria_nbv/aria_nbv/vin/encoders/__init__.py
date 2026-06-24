@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from .fixed_fourier import FourierFeatures, FourierFeaturesConfig
 from .fourier import LearnableFourierFeatures, LearnableFourierFeaturesConfig
+from .pointnext import PointNeXtSEncoder, PointNeXtSEncoderConfig
 from .pose import PoseEncoder, PoseEncodingOutput, R6dLffPoseEncoder, R6dLffPoseEncoderConfig
 from .shell_pose import (
     PoseEncoderConfig,
@@ -30,6 +31,8 @@ __all__ = [
     "PoseEncoder",
     "PoseEncoderConfig",
     "PoseEncodingOutput",
+    "PointNeXtSEncoder",
+    "PointNeXtSEncoderConfig",
     "R6dLffPoseEncoder",
     "R6dLffPoseEncoderConfig",
     "ShellLffPoseEncoder",
