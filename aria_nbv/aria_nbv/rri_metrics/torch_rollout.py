@@ -88,6 +88,29 @@ class SelectedActionOracleComparison:
     valid_table: Tensor
 
 
+@dataclass(frozen=True, slots=True)
+class CandidatePathIncrementStats:
+    """Per-table movement-cost diagnostics for candidate action rows.
+
+    The rollout replay contract stores each candidate row's path increment,
+    currently persisted as ``motion_step_length_m`` in rollout diagnostics.
+    These statistics summarize that candidate-set cost distribution without
+    changing the selected policy cost column.
+
+    Attributes:
+        mean_m: ``Tensor["B"]`` mean finite path increment in metres.
+        min_m: ``Tensor["B"]`` minimum finite path increment in metres.
+        max_m: ``Tensor["B"]`` maximum finite path increment in metres.
+        valid_table: ``Tensor["B"]`` mask for tables with at least one finite
+            hard-valid path increment.
+    """
+
+    mean_m: Tensor
+    min_m: Tensor
+    max_m: Tensor
+    valid_table: Tensor
+
+
 def discounted_selected_return(
     rewards: Tensor,
     valid_mask: Tensor | None = None,
@@ -613,6 +636,57 @@ def candidate_provenance_share(
     )
 
 
+def candidate_path_increment_stats(
+    path_increment_m: Tensor,
+    valid_mask: Tensor,
+    *,
+    dim: int = -1,
+) -> CandidatePathIncrementStats:
+    """Summarize per-candidate path increments under the hard action mask.
+
+    Args:
+        path_increment_m: Candidate movement cost in metres, usually rollout
+            diagnostic ``motion_step_length_m``.
+        valid_mask: Boolean hard-validity mask broadcastable to
+            ``path_increment_m``. Invalid rows are excluded from all statistics
+            rather than treated as zero-cost actions.
+        dim: Candidate dimension reduced inside each table.
+
+    Returns:
+        `CandidatePathIncrementStats` with per-table mean/min/max increments.
+        Empty tables return ``NaN`` statistics and ``valid_table=False``.
+    """
+
+    if dim < 0:
+        dim = path_increment_m.ndim + dim
+    if dim < 0 or dim >= path_increment_m.ndim:
+        raise ValueError(f"dim={dim} is outside tensor rank {path_increment_m.ndim}.")
+
+    increments = path_increment_m.to(dtype=torch.float32)
+    hard_mask = torch.broadcast_to(valid_mask.to(device=increments.device, dtype=torch.bool), increments.shape)
+    if dim != increments.ndim - 1:
+        increments = increments.movedim(dim, -1)
+        hard_mask = hard_mask.movedim(dim, -1)
+
+    valid = hard_mask & torch.isfinite(increments)
+    count = valid.to(dtype=torch.float32).sum(dim=-1)
+    total = torch.where(valid, increments, torch.zeros_like(increments)).sum(dim=-1)
+    mean = total / count.clamp_min(1.0)
+
+    min_filled = torch.where(valid, increments, torch.full_like(increments, torch.inf))
+    max_filled = torch.where(valid, increments, torch.full_like(increments, -torch.inf))
+    min_m = min_filled.min(dim=-1).values
+    max_m = max_filled.max(dim=-1).values
+    valid_table = count > 0
+    nan = torch.full_like(mean, float("nan"))
+    return CandidatePathIncrementStats(
+        mean_m=torch.where(valid_table, mean, nan),
+        min_m=torch.where(valid_table, min_m, nan),
+        max_m=torch.where(valid_table, max_m, nan),
+        valid_table=valid_table,
+    )
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -717,10 +791,12 @@ def _id_membership(values: Tensor, family_ids: Sequence[int] | Tensor) -> Tensor
 __all__ = [
     "TorchRolloutMetrics",
     "CandidateOrderConsistency",
+    "CandidatePathIncrementStats",
     "SelectedActionOracleComparison",
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
+    "candidate_path_increment_stats",
     "candidate_policy_entropy",
     "candidate_provenance_share",
     "candidate_topk_oracle_hit",

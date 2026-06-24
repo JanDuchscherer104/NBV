@@ -52,11 +52,13 @@ from .rollout import (
 from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
 from .torch_rollout import (
     CandidateOrderConsistency,
+    CandidatePathIncrementStats,
     SelectedActionOracleComparison,
     TorchRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_path_increment_stats,
     candidate_policy_entropy,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
@@ -69,6 +71,7 @@ from .torch_rollout import (
 )
 from .torch_rollout_metrics import (
     CandidateOrderConsistencyMetric,
+    CandidatePathIncrementMetric,
     CandidatePolicyEntropyMetric,
     CandidateProvenanceShareMetric,
     CandidateTableMetrics,
@@ -85,6 +88,8 @@ __all__ = [
     "CoralLayer",
     "CandidateOrderConsistency",
     "CandidateOrderConsistencyMetric",
+    "CandidatePathIncrementMetric",
+    "CandidatePathIncrementStats",
     "CandidatePolicyEntropyMetric",
     "CandidateProvenanceShareMetric",
     "CandidateTableMetrics",
@@ -119,6 +124,7 @@ __all__ = [
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
+    "candidate_path_increment_stats",
     "candidate_policy_entropy",
     "candidate_provenance_share",
     "candidate_topk_oracle_hit",

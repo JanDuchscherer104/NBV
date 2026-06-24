@@ -17,6 +17,7 @@ from .torch_rollout import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_path_increment_stats,
     candidate_policy_entropy,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
@@ -209,6 +210,77 @@ class CandidateTableMetrics(MetricBase):
             "candidate_invalid_rate": 1.0 - valid_rate,
             "candidate_value_mean": _safe_mean(self.mean_total, self.mean_count),
             "candidate_best_value": _safe_mean(self.best_total, self.best_count),
+        }
+
+
+class CandidatePathIncrementMetric(MetricBase):
+    """Accumulate candidate action path-increment diagnostics in metres.
+
+    The metric summarizes the per-table distribution of hard-valid candidate
+    movement costs, usually sourced from rollout ``motion_step_length_m`` rows.
+    It is separate from selected policy cost: this class describes the action
+    set offered to the policy, not the action the policy selected.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("mean_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mean_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("min_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("min_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("max_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("max_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        path_increment_m: Tensor,
+        valid_mask: Tensor,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate path-increment tables."""
+
+        stats = candidate_path_increment_stats(
+            path_increment_m.to(device=self.mean_total.device, dtype=torch.float32),
+            valid_mask.to(device=self.mean_total.device),
+            dim=dim,
+        )
+        mean_m = stats.mean_m.reshape(-1)
+        min_m = stats.min_m.reshape(-1)
+        max_m = stats.max_m.reshape(-1)
+        valid_table = stats.valid_table.reshape(-1)
+
+        mean_valid = torch.isfinite(mean_m) & valid_table
+        min_valid = torch.isfinite(min_m) & valid_table
+        max_valid = torch.isfinite(max_m) & valid_table
+        if mean_valid.any():
+            self.mean_total = self.mean_total + mean_m[mean_valid].sum()
+            self.mean_count = self.mean_count + mean_valid.to(dtype=torch.float32).sum()
+        if min_valid.any():
+            self.min_total = self.min_total + min_m[min_valid].sum()
+            self.min_count = self.min_count + min_valid.to(dtype=torch.float32).sum()
+        if max_valid.any():
+            self.max_total = self.max_total + max_m[max_valid].sum()
+            self.max_count = self.max_count + max_valid.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return finite means of candidate path-increment table statistics."""
+
+        if self.table_count > 0:
+            valid_table_rate = self.valid_table_count / self.table_count.clamp_min(1.0)
+        else:
+            valid_table_rate = torch.zeros_like(self.valid_table_count)
+        return {
+            "candidate_path_increment_mean_m": _safe_mean(self.mean_total, self.mean_count),
+            "candidate_path_increment_min_m": _safe_mean(self.min_total, self.min_count),
+            "candidate_path_increment_max_m": _safe_mean(self.max_total, self.max_count),
+            "candidate_path_increment_valid_table_rate": valid_table_rate,
         }
 
 
@@ -558,6 +630,7 @@ class PolicyTableMetrics(MetricBase):
         self.runtime = FiniteMeanMetric()
         self.coverage = FiniteMeanMetric()
         self.candidates = CandidateTableMetrics()
+        self.candidate_path_increment = CandidatePathIncrementMetric()
         self.selected_oracle = SelectedActionOracleComparisonMetric()
 
     def update(
@@ -576,6 +649,7 @@ class PolicyTableMetrics(MetricBase):
         scalar_valid_mask: Tensor | None = None,
         candidate_values: Tensor | None = None,
         candidate_valid_mask: Tensor | None = None,
+        candidate_path_increment_m: Tensor | None = None,
         selected_indices: Tensor | None = None,
         candidate_dim: int = -1,
     ) -> None:
@@ -600,6 +674,10 @@ class PolicyTableMetrics(MetricBase):
             candidate_values: Optional finite candidate table values used for
                 value diagnostics.
             candidate_valid_mask: Optional hard candidate validity mask.
+            candidate_path_increment_m: Optional candidate movement cost in
+                metres, normally rollout diagnostic ``motion_step_length_m``.
+                Requires ``candidate_valid_mask`` and is kept separate from the
+                selected policy ``cost`` column.
             selected_indices: Optional selected candidate index per table used
                 for oracle regret/rank diagnostics. Requires both
                 ``candidate_values`` and ``candidate_valid_mask``.
@@ -624,10 +702,16 @@ class PolicyTableMetrics(MetricBase):
         ):
             if values is not None:
                 metric.update(values, scalar_valid_mask)
-        if candidate_values is not None or candidate_valid_mask is not None:
-            if candidate_values is None or candidate_valid_mask is None:
-                raise ValueError("candidate_values and candidate_valid_mask must be provided together.")
+        if candidate_values is not None:
+            if candidate_valid_mask is None:
+                raise ValueError("candidate_values requires candidate_valid_mask.")
             self.candidates.update(candidate_values, candidate_valid_mask, dim=candidate_dim)
+        elif candidate_valid_mask is not None and candidate_path_increment_m is None:
+            raise ValueError("candidate_valid_mask requires candidate_values or candidate_path_increment_m.")
+        if candidate_path_increment_m is not None:
+            if candidate_valid_mask is None:
+                raise ValueError("candidate_path_increment_m requires candidate_valid_mask.")
+            self.candidate_path_increment.update(candidate_path_increment_m, candidate_valid_mask, dim=candidate_dim)
         if selected_indices is not None:
             if candidate_values is None or candidate_valid_mask is None:
                 raise ValueError("selected_indices requires candidate_values and candidate_valid_mask.")
@@ -638,6 +722,7 @@ class PolicyTableMetrics(MetricBase):
 
         selected = self.selected.compute()
         candidates = self.candidates.compute()
+        path_increment = self.candidate_path_increment.compute()
         selected_oracle = self.selected_oracle.compute()
         return {
             "endpoint_gain": selected["endpoint_gain"],
@@ -653,6 +738,10 @@ class PolicyTableMetrics(MetricBase):
             "candidate_valid_rate": candidates["candidate_valid_rate"],
             "candidate_value_mean": candidates["candidate_value_mean"],
             "candidate_best_value": candidates["candidate_best_value"],
+            "candidate_path_increment_mean_m": path_increment["candidate_path_increment_mean_m"],
+            "candidate_path_increment_min_m": path_increment["candidate_path_increment_min_m"],
+            "candidate_path_increment_max_m": path_increment["candidate_path_increment_max_m"],
+            "candidate_path_increment_valid_table_rate": path_increment["candidate_path_increment_valid_table_rate"],
             "selected_oracle_regret": selected_oracle["selected_oracle_regret"],
             "selected_oracle_rank": selected_oracle["selected_oracle_rank"],
             "selected_oracle_percentile": selected_oracle["selected_oracle_percentile"],
@@ -667,6 +756,7 @@ def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
 __all__ = [
     "CandidateTableMetrics",
     "CandidateOrderConsistencyMetric",
+    "CandidatePathIncrementMetric",
     "CandidatePolicyEntropyMetric",
     "CandidateProvenanceShareMetric",
     "CandidateTopKOracleHitMetric",

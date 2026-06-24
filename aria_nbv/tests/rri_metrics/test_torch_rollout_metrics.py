@@ -10,6 +10,8 @@ import torch
 from aria_nbv.rri_metrics import (
     CandidateOrderConsistency,
     CandidateOrderConsistencyMetric,
+    CandidatePathIncrementMetric,
+    CandidatePathIncrementStats,
     CandidatePolicyEntropyMetric,
     CandidateProvenanceShareMetric,
     CandidateTableMetrics,
@@ -23,6 +25,7 @@ from aria_nbv.rri_metrics import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
+    candidate_path_increment_stats,
     candidate_policy_entropy,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
@@ -376,6 +379,48 @@ def test_candidate_provenance_share_validates_shapes_and_dim() -> None:
         candidate_provenance_share(torch.tensor([1]), torch.tensor([1]), strategy_family_ids=(1,), dim=2)
 
 
+def test_candidate_path_increment_stats_report_masked_cost_distribution() -> None:
+    increments = torch.tensor(
+        [
+            [1.0, 3.0, float("nan")],
+            [2.0, 4.0, 6.0],
+            [1.0, 2.0, 3.0],
+        ]
+    )
+    valid = torch.tensor(
+        [
+            [True, True, True],
+            [False, True, True],
+            [False, False, False],
+        ]
+    )
+
+    result = candidate_path_increment_stats(increments, valid)
+
+    assert isinstance(result, CandidatePathIncrementStats)
+    assert torch.allclose(result.mean_m, torch.tensor([2.0, 5.0, float("nan")]), equal_nan=True)
+    assert torch.allclose(result.min_m, torch.tensor([1.0, 4.0, float("nan")]), equal_nan=True)
+    assert torch.allclose(result.max_m, torch.tensor([3.0, 6.0, float("nan")]), equal_nan=True)
+    assert torch.equal(result.valid_table, torch.tensor([True, True, False]))
+
+
+def test_candidate_path_increment_stats_support_non_last_candidate_dim() -> None:
+    increments = torch.tensor([[1.0, 10.0], [3.0, 20.0], [5.0, float("nan")]])
+    valid = torch.tensor([[True, True], [True, False], [False, False]])
+
+    result = candidate_path_increment_stats(increments, valid, dim=0)
+
+    assert torch.allclose(result.mean_m, torch.tensor([2.0, 10.0]))
+    assert torch.allclose(result.min_m, torch.tensor([1.0, 10.0]))
+    assert torch.allclose(result.max_m, torch.tensor([3.0, 10.0]))
+    assert torch.equal(result.valid_table, torch.tensor([True, True]))
+
+
+def test_candidate_path_increment_stats_validates_dim() -> None:
+    with pytest.raises(ValueError, match="outside tensor rank"):
+        candidate_path_increment_stats(torch.tensor([1.0]), torch.tensor([True]), dim=2)
+
+
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
     metric = FiniteMeanMetric()
 
@@ -444,6 +489,34 @@ def test_candidate_table_metrics_report_invalidity_and_values() -> None:
     assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(0.5))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+
+
+def test_candidate_path_increment_metric_accumulates_table_stats() -> None:
+    metric = CandidatePathIncrementMetric()
+
+    metric.update(
+        torch.tensor([[1.0, 3.0, float("nan")], [2.0, 4.0, 6.0]]),
+        torch.tensor([[True, True, True], [False, True, True]]),
+    )
+    metric.update(torch.tensor([[1.0, 2.0]]), torch.tensor([[False, False]]))
+
+    result = metric.compute()
+
+    assert torch.allclose(result["candidate_path_increment_mean_m"], torch.tensor((2.0 + 5.0) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_min_m"], torch.tensor((1.0 + 4.0) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_max_m"], torch.tensor((3.0 + 6.0) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(2.0 / 3.0))
+
+
+def test_candidate_path_increment_metric_returns_empty_valid_rate_zero() -> None:
+    metric = CandidatePathIncrementMetric()
+
+    result = metric.compute()
+
+    assert torch.isnan(result["candidate_path_increment_mean_m"])
+    assert torch.isnan(result["candidate_path_increment_min_m"])
+    assert torch.isnan(result["candidate_path_increment_max_m"])
+    assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(0.0))
 
 
 def test_selected_path_cost_metrics_report_mean_cost_aliases() -> None:
@@ -627,6 +700,7 @@ def test_policy_table_metrics_report_proposal_columns() -> None:
         coverage=torch.tensor([0.6, 0.8]),
         candidate_values=torch.tensor([[1.0, 2.0, 3.0], [5.0, 4.0, 3.0]]),
         candidate_valid_mask=torch.tensor([[True, True, False], [False, True, False]]),
+        candidate_path_increment_m=torch.tensor([[0.5, 0.7, 2.0], [1.0, 1.4, 3.0]]),
     )
 
     result = metric.compute()
@@ -642,6 +716,10 @@ def test_policy_table_metrics_report_proposal_columns() -> None:
     assert torch.allclose(result["invalidity"], torch.tensor(3.0 / 6.0))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_mean_m"], torch.tensor((0.6 + 1.4) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_min_m"], torch.tensor((0.5 + 1.4) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_max_m"], torch.tensor((0.7 + 1.4) / 2.0))
+    assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(1.0))
     assert torch.isnan(result["selected_oracle_regret"])
     assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
 
@@ -688,6 +766,38 @@ def test_policy_table_metrics_require_candidate_pair_for_selected_indices() -> N
             initial_error=torch.tensor([10.0]),
             final_error=torch.tensor([5.0]),
             selected_indices=torch.tensor([0]),
+        )
+
+
+def test_policy_table_metrics_accept_candidate_path_increment_without_candidate_values() -> None:
+    metric = PolicyTableMetrics()
+
+    metric.update(
+        torch.tensor([[1.0], [1.0]]),
+        initial_error=torch.tensor([10.0, 10.0]),
+        final_error=torch.tensor([5.0, 5.0]),
+        candidate_valid_mask=torch.tensor([[True, False], [False, False]]),
+        candidate_path_increment_m=torch.tensor([[0.5, 2.0], [1.0, 2.0]]),
+    )
+
+    result = metric.compute()
+
+    assert torch.isnan(result["candidate_value_mean"])
+    assert torch.allclose(result["candidate_path_increment_mean_m"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_path_increment_min_m"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_path_increment_max_m"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(0.5))
+
+
+def test_policy_table_metrics_require_mask_for_candidate_path_increment() -> None:
+    metric = PolicyTableMetrics()
+
+    with pytest.raises(ValueError, match="candidate_path_increment_m requires"):
+        metric.update(
+            torch.tensor([[1.0]]),
+            initial_error=torch.tensor([10.0]),
+            final_error=torch.tensor([5.0]),
+            candidate_path_increment_m=torch.tensor([[0.5]]),
         )
 
 
