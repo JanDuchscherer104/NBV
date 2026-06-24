@@ -27,13 +27,15 @@ from ._plot_primitives import (
     _pca_2d_with_components,
     _scatter3d,
 )
-from .plotting_common import (
+from ._pose_candidate_adapter import (
     _as_pose_tw,
     _candidate_valid_fraction,
     _centers_rig_from_poses,
-    _collect_backbone_evidence_points,
     _pose_first_batch,
     _rotate_points_yaw_cw90,
+)
+from .plotting_common import (
+    _collect_backbone_evidence_points,
     _voxel_corners,
     _voxel_indices_to_world,
 )

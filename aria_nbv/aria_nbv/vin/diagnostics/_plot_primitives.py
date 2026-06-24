@@ -1,7 +1,8 @@
 """Generic Plotly primitives shared by VIN diagnostic figures.
 
 This module owns reusable NumPy and Plotly helpers that are independent of
-VIN pose, voxel, or semidense projection contracts. VIN-specific diagnostic
+VIN pose, voxel, or semidense projection contracts. VIN pose adapters live in
+:mod:`aria_nbv.vin.diagnostics._pose_candidate_adapter`, voxel/backbone
 adapters remain in :mod:`aria_nbv.vin.diagnostics.plotting_common`, while
 callers that need canonical labeling or edge flattening should import
 :func:`aria_nbv.utils.reporting._pretty_label` and
