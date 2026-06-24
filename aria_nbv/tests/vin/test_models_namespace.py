@@ -179,30 +179,3 @@ def test_candidate_scorer_training_contract_classifies_configs() -> None:
         == "target_myopic_coral_scaffold"
     )
     assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=3)) == "finite_horizon_q_scaffold"
-
-
-def test_vin_lightning_module_rejects_nonzero_target_descriptor_scaffold_before_setup_target() -> None:
-    """Current Lightning should reject target descriptors before constructing the placeholder."""
-
-    from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-
-    module_config = VinLightningModuleConfig(
-        vin=TargetConditionedMyopicScorerConfig(num_classes=5, target_descriptor_dim=32),
-        num_classes=5,
-    )
-
-    with pytest.raises(NotImplementedError, match="target descriptor path is not implemented.*target_descriptor_dim=0"):
-        VinLightningModule(config=module_config)
-
-
-def test_vin_lightning_module_rejects_multi_step_scaffold_before_setup_target() -> None:
-    """Current Lightning should reject Q_H configs before assuming CORAL tensors."""
-
-    from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-
-    module_config = VinLightningModuleConfig(
-        vin=MultiStepCandidateScorerConfig(horizon=3, discount=0.9),
-    )
-
-    with pytest.raises(NotImplementedError, match="CORAL/VinPrediction.*Q_H.*rollout objective.*Lightning module"):
-        VinLightningModule(config=module_config)

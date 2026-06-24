@@ -46,10 +46,11 @@ from ..utils.grad_norms import (
     _collect_grad_norm_targets,
     _grad_norm_from_params,
 )
-from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig, candidate_scorer_training_contract
+from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.diagnostics import plot_vin_encodings_from_debug
 from ..vin.models import VinModelV3Config
 from ..vin.modules import largest_divisor_leq
+from ._candidate_scorer_contract import validate_vin_lightning_candidate_scorer_contract
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauConfig
 
 
@@ -200,21 +201,7 @@ class VinLightningModule(pl.LightningModule):
 
         self.console = Console.with_prefix(self.__class__.__name__)
 
-        scorer_contract = candidate_scorer_training_contract(config.vin)
-        if scorer_contract == "finite_horizon_q_scaffold":
-            raise NotImplementedError(
-                "VinLightningModule currently trains only the CORAL/VinPrediction "
-                "candidate-scorer contract. MultiStepCandidateScorerConfig names "
-                "the planned Q_H finite-horizon scorer, which needs a rollout "
-                "objective, hard valid-action masks, and a dedicated Lightning module.",
-            )
-        if scorer_contract == "target_myopic_coral_scaffold":
-            raise NotImplementedError(
-                "VinLightningModule can train the target-conditioned myopic family "
-                "only when it emits the CORAL/VinPrediction contract. The actor-visible "
-                "target descriptor path is not implemented; use target_descriptor_dim=0 "
-                "for the v3-backed myopic baseline.",
-            )
+        validate_vin_lightning_candidate_scorer_contract(config.vin)
         self.vin = config.vin.setup_target()
         self._binner: RriOrdinalBinner | None = None
         metrics_cfg = VinMetricsConfig(num_classes=self.config.num_classes)
