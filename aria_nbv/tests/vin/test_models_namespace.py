@@ -92,6 +92,23 @@ def test_zero_descriptor_myopic_scorer_wraps_preserved_v3_baseline() -> None:
     assert scorer.head_coral is scorer.base_scorer.head_coral
 
 
+def test_zero_descriptor_myopic_scorer_uses_custom_base_scorer_config() -> None:
+    """The named myopic baseline should preserve v3 architecture settings."""
+
+    config = TargetConditionedMyopicScorerConfig(
+        num_classes=5,
+        target_descriptor_dim=0,
+        base_scorer=VinModelV3Config(num_classes=99, field_dim=12, head_dropout=0.2),
+    )
+
+    scorer = config.setup_target()
+
+    assert scorer.base_scorer.config.num_classes == 5
+    assert scorer.base_scorer.config.field_dim == 12
+    assert scorer.base_scorer.config.head_dropout == 0.2
+    assert scorer.base_scorer.config is not config.base_scorer
+
+
 def test_candidate_scorer_config_accepts_myopic_scaffold() -> None:
     """Lightning config should accept the planned myopic scorer config object."""
 
@@ -124,6 +141,32 @@ def test_candidate_scorer_config_parses_myopic_payload() -> None:
 
     assert isinstance(module_config.vin, TargetConditionedMyopicScorerConfig)
     assert module_config.vin.target_descriptor_dim == 32
+
+
+def test_candidate_scorer_config_parses_myopic_base_scorer_payload() -> None:
+    """Dict-style myopic configs should preserve nested v3 architecture fields."""
+
+    from aria_nbv.lightning.lit_module import VinLightningModuleConfig
+
+    module_config = VinLightningModuleConfig(
+        vin={
+            "num_classes": 5,
+            "target_descriptor_dim": 0,
+            "base_scorer": {
+                "num_classes": 99,
+                "field_dim": 12,
+                "head_dropout": 0.2,
+            },
+        },
+        num_classes=5,
+    )
+
+    assert isinstance(module_config.vin, TargetConditionedMyopicScorerConfig)
+    assert module_config.vin.base_scorer.field_dim == 12
+    assert module_config.vin.base_scorer.head_dropout == 0.2
+    scorer = module_config.vin.setup_target()
+    assert scorer.base_scorer.config.num_classes == 5
+    assert scorer.base_scorer.config.field_dim == 12
 
 
 def test_planned_multi_step_scorer_config_is_visible_but_not_runnable() -> None:

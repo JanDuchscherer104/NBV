@@ -34,6 +34,9 @@ class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicS
             runnable v3-backed myopic baseline.
         candidate_token_dim: Internal candidate token width reserved for the
             first target-conditioned implementation.
+        base_scorer: Architecture config for the v3-backed zero-descriptor
+            myopic baseline. The top-level `num_classes` field remains
+            authoritative for Lightning/binner compatibility.
     """
 
     @property
@@ -50,6 +53,9 @@ class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicS
 
     candidate_token_dim: int = Field(default=128, gt=0)
     """Reserved hidden width for target-conditioned candidate tokens."""
+
+    base_scorer: VinModelV3Config = Field(default_factory=VinModelV3Config)
+    """V3 architecture used by the runnable zero-descriptor myopic baseline."""
 
 
 class TargetConditionedMyopicScorer(nn.Module):
@@ -72,7 +78,11 @@ class TargetConditionedMyopicScorer(nn.Module):
                 "TargetConditionedMyopicScorer target descriptor path is not implemented. "
                 "Use target_descriptor_dim=0 for the v3-backed myopic CORAL baseline.",
             )
-        self.base_scorer = VinModelV3(VinModelV3Config(num_classes=int(config.num_classes)))
+        base_config = config.base_scorer.model_copy(
+            deep=True,
+            update={"num_classes": int(config.num_classes)},
+        )
+        self.base_scorer = VinModelV3(base_config)
 
     @property
     def head_coral(self) -> Any:

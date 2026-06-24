@@ -586,6 +586,31 @@ def test_lightning_accepts_zero_descriptor_myopic_scorer_without_state_alias() -
     assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
 
 
+def test_lightning_accepts_custom_zero_descriptor_myopic_base_scorer() -> None:
+    """Custom v3 settings should survive the myopic wrapper without aliasing state."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(
+                num_classes=3,
+                target_descriptor_dim=0,
+                base_scorer=VinModelV3Config(num_classes=99, field_dim=12, head_dropout=0.2),
+            ),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.vin, TargetConditionedMyopicScorer)  # noqa: S101
+    assert module.vin.base_scorer.config.num_classes == 3  # noqa: S101
+    assert module.vin.base_scorer.config.field_dim == 12  # noqa: S101
+    assert module.vin.base_scorer.config.head_dropout == 0.2  # noqa: S101
+    assert module.vin.base_scorer.config is not module.config.vin.base_scorer  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.base_scorer.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
 def test_lightning_can_disable_spearman_metric_buffering() -> None:
     """Smoke modules can skip Spearman without disabling confusion/histogram metrics."""
 
