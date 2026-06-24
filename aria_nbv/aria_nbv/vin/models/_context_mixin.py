@@ -1,7 +1,7 @@
 """Shared context methods for VIN scorer model variants.
 
 `PoseFeatureGlobalContextMixin` is private glue for
-`aria_nbv.vin.models.v2.VinModelV2` and `aria_nbv.vin.models.v3.VinModelV3`.
+`aria_nbv.vin.models.v2.VinModelV2` and `aria_nbv.vin.models.scene_myopic.VinModelV3`.
 It keeps the trainable modules owned by the concrete model classes while
 delegating the repeated pose encoding and global-context tensor contracts to
 `aria_nbv.vin.scorer_context`.

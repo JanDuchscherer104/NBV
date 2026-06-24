@@ -70,7 +70,7 @@ from aria_nbv.vin.geometry.semidense_projection import (
     encode_projection_summary,
     project_points_to_candidate_cameras,
 )
-from aria_nbv.vin.models.v3 import VinModelV3, VinModelV3Config
+from aria_nbv.vin.models.scene_myopic import VinModelV3, VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 

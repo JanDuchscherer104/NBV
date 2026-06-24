@@ -51,7 +51,7 @@ from aria_nbv.pose_generation.target_counterfactuals import (
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
 from aria_nbv.rollouts import RolloutLineage, RolloutZarrRecord
-from aria_nbv.rri_metrics import RriEvaluationPointCloudSource, RriRewardMode
+from aria_nbv.rri_metrics.eval_pointclouds import RriEvaluationPointCloudSource, RriRewardMode
 from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig
 from aria_nbv.utils.data_plotting import get_frustum_segments
 

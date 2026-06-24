@@ -2,7 +2,7 @@
 
 This module owns the stable ordering of semidense projection summary features
 and grid channels used by `aria_nbv.vin.geometry.semidense_projection` and
-model-owned heads such as `aria_nbv.vin.models.v3.VinModelV3`. It is deliberately
+model-owned heads such as `aria_nbv.vin.models.scene_myopic.VinModelV3`. It is deliberately
 pure metadata: no PyTorch, camera, or model imports belong here.
 """
 

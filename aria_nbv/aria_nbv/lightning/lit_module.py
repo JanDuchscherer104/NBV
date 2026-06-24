@@ -23,21 +23,23 @@ from torch.nn import functional as functional
 
 from ..configs import PathConfig
 from ..data_handling import VinOracleBatch
-from ..rri_metrics import (
+from ..rri_metrics.coral import (
+    coral_logits_to_label,
+    coral_loss,
+    coral_monotonicity_violation_rate,
+    coral_random_loss,
+)
+from ..rri_metrics.logging import (
     Loss,
     Metric,
     RriErrorStats,
-    RriOrdinalBinner,
     VinMetricsConfig,
-    candidate_topk_oracle_hit,
-    coral_loss,
-    coral_random_loss,
     loss_key,
     metric_key,
-    selected_action_oracle_comparison,
     topk_accuracy_from_probs,
 )
-from ..rri_metrics.coral import coral_logits_to_label, coral_monotonicity_violation_rate
+from ..rri_metrics.rri_binning import RriOrdinalBinner
+from ..rri_metrics.torch_rollout import candidate_topk_oracle_hit, selected_action_oracle_comparison
 from ..utils import Console, Stage, TargetConfig
 from ..utils.grad_norms import (
     GradNormLoggingConfig,
@@ -317,6 +319,59 @@ class VinLightningModule(pl.LightningModule):
         data = checkpoint.get("rri_binner")
         if data is not None:
             self._binner = RriOrdinalBinner.from_dict(data)
+
+    @classmethod
+    def load_for_inference(
+        cls,
+        checkpoint_path: Path | str,
+        *,
+        device: torch.device | str = "cpu",
+        fallback_binner_path: Path | str | None = None,
+    ) -> "VinLightningModule":
+        """Load a VIN Lightning checkpoint with strict inference state validation."""
+
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        hparams = checkpoint.get("hyper_parameters", {})
+        if isinstance(hparams, dict) and isinstance(hparams.get("config"), dict):
+            config_payload = hparams["config"]
+        elif isinstance(hparams, dict):
+            config_payload = hparams
+        else:
+            config_payload = {}
+
+        module = cls(config=VinLightningModuleConfig(**config_payload))
+        module.on_load_checkpoint(checkpoint)
+        module.prepare_for_inference(fallback_binner_path=fallback_binner_path)
+
+        state_dict = checkpoint.get("state_dict")
+        if state_dict is None:
+            raise RuntimeError("Checkpoint missing state_dict.")
+        module.load_state_dict(state_dict, strict=True)
+        module.to(torch.device(device))
+        module.eval()
+        return module
+
+    def prepare_for_inference(
+        self,
+        *,
+        fallback_binner_path: Path | str | None = None,
+    ) -> None:
+        """Initialize binner-derived scorer state before inference or diagnostics."""
+
+        if self._binner is None:
+            if self.config.binner_path is not None:
+                self._binner = self._load_binner_from_config()
+            elif fallback_binner_path is not None:
+                self._binner = RriOrdinalBinner.load(Path(fallback_binner_path))
+
+        if self._binner is None:
+            raise RuntimeError(
+                "Cannot prepare VIN inference without an RRI binner. "
+                "Provide `VinLightningModuleConfig.binner_path`, save `rri_binner` in the checkpoint, "
+                "or pass `fallback_binner_path`.",
+            )
+        self._maybe_init_bin_values()
+        self._maybe_init_coral_bias()
 
     # ------------------------------------------------------------------ training/val/test
     def training_step(self, batch: VinOracleBatch, batch_idx: int) -> Tensor | None:
@@ -670,12 +725,6 @@ class VinLightningModule(pl.LightningModule):
                     labels_valid,
                     top_k=3,
                 ),
-                Metric.CANDIDATE_TOP1_ORACLE_HIT: top1_oracle_hit_mean,
-                Metric.CANDIDATE_TOP3_ORACLE_HIT: top3_oracle_hit_mean,
-                Metric.SELECTED_ORACLE_REGRET: selected_oracle_regret_mean,
-                Metric.SELECTED_ORACLE_RANK: selected_oracle_rank_mean,
-                Metric.SELECTED_ORACLE_PERCENTILE: selected_oracle_percentile_mean,
-                Metric.SELECTED_ORACLE_VALID_TABLE_RATE: selected_oracle_valid_rate,
                 Metric.AUX_REGRESSION_WEIGHT: float(aux_weight)
                 if aux_weight is not None
                 else torch.tensor(float("nan"), device=combined_loss.device),
@@ -683,6 +732,19 @@ class VinLightningModule(pl.LightningModule):
             },
             stage=stage,
             batch_size=log_batch_size,
+        )
+        table_log_batch_size = max(int(selected_oracle.valid_table.sum().item()), 1)
+        self._log_aux_scalars(
+            {
+                Metric.CANDIDATE_TOP1_ORACLE_HIT: top1_oracle_hit_mean,
+                Metric.CANDIDATE_TOP3_ORACLE_HIT: top3_oracle_hit_mean,
+                Metric.SELECTED_ORACLE_REGRET: selected_oracle_regret_mean,
+                Metric.SELECTED_ORACLE_RANK: selected_oracle_rank_mean,
+                Metric.SELECTED_ORACLE_PERCENTILE: selected_oracle_percentile_mean,
+                Metric.SELECTED_ORACLE_VALID_TABLE_RATE: selected_oracle_valid_rate,
+            },
+            stage=stage,
+            batch_size=table_log_batch_size,
         )
 
         pred_class = coral_logits_to_label(logits_valid)
@@ -1029,8 +1091,9 @@ class VinLightningModule(pl.LightningModule):
         """Initialize learnable CORAL bin values from the fitted binner."""
         if self._binner is None:
             return
-        head_coral = getattr(self.vin, "head_coral", None)
-        if head_coral is None or not hasattr(self.vin, "init_bin_values"):
+        scorer = self.candidate_scorer
+        head_coral = getattr(scorer, "head_coral", None)
+        if head_coral is None:
             return
 
         if self._binner.bin_means is not None:
@@ -1040,7 +1103,7 @@ class VinLightningModule(pl.LightningModule):
 
         device = next(self.vin.parameters()).device
         target = target.to(device=device, dtype=torch.float32)
-        self.vin.init_bin_values(target, overwrite=False)
+        scorer.init_bin_values(target, overwrite=False)
 
     def _maybe_init_coral_bias(self) -> None:
         """Initialize CORAL biases from fitted class priors (if configured)."""

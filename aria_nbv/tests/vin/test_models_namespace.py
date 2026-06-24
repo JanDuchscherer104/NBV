@@ -6,6 +6,7 @@ import importlib
 from typing import get_args
 
 import pytest
+import torch
 
 from aria_nbv.vin import (
     MultiStepCandidateScorer,
@@ -19,10 +20,10 @@ from aria_nbv.vin.candidate_scorer import CandidateScorerConfig, candidate_score
 from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models import VinModelV3 as NamespacedVinModelV3
 from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
+from aria_nbv.vin.models import scene_myopic as namespaced_v3
 from aria_nbv.vin.models import v2 as namespaced_v2
-from aria_nbv.vin.models import v3 as namespaced_v3
-from aria_nbv.vin.models.v3 import VinModelV3 as CanonicalVinModelV3
-from aria_nbv.vin.models.v3 import VinModelV3Config as CanonicalVinModelV3Config
+from aria_nbv.vin.models.scene_myopic import VinModelV3 as CanonicalVinModelV3
+from aria_nbv.vin.models.scene_myopic import VinModelV3Config as CanonicalVinModelV3Config
 
 
 def test_models_namespace_reexports_preserved_vin_v3() -> None:
@@ -53,10 +54,13 @@ def test_experimental_model_namespace_is_removed() -> None:
 
 
 def test_legacy_root_v3_module_is_removed() -> None:
-    """The preserved v3 implementation should be owned by `aria_nbv.vin.models.v3`."""
+    """The preserved v3 implementation should be owned by `aria_nbv.vin.models.scene_myopic`."""
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("aria_nbv.vin.model_v3")
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("aria_nbv.vin.models.v3")
 
 
 def test_helper_sidecars_do_not_cycle_with_models_namespace() -> None:
@@ -90,6 +94,19 @@ def test_zero_descriptor_myopic_scorer_wraps_preserved_v3_baseline() -> None:
     assert isinstance(scorer.base_scorer, VinModelV3)
     assert scorer.base_scorer.config.num_classes == 5
     assert scorer.head_coral is scorer.base_scorer.head_coral
+
+
+def test_zero_descriptor_myopic_scorer_delegates_bin_value_initialization() -> None:
+    """The V3-backed wrapper should preserve CORAL bin-value lifecycle parity."""
+
+    config = TargetConditionedMyopicScorerConfig(num_classes=5, target_descriptor_dim=0)
+    scorer = config.setup_target()
+    values = torch.linspace(0.0, 1.0, steps=5)
+
+    scorer.init_bin_values(values)
+
+    assert scorer.head_coral.has_bin_values
+    assert torch.allclose(scorer.head_coral.bin_values.values().detach().cpu(), values)
 
 
 def test_zero_descriptor_myopic_scorer_uses_custom_base_scorer_config() -> None:

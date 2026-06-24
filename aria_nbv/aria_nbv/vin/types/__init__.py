@@ -9,7 +9,7 @@ keeps `aria_nbv.vin.types` imports stable without owning duplicate definitions.
 from __future__ import annotations
 
 from .backbone import EfmDict, EvlBackboneOutput
-from .diagnostics import VinForwardDiagnostics, VinV2ForwardDiagnostics, VinV3ForwardDiagnostics
+from .diagnostics import VinV3ForwardDiagnostics
 from .model_inputs import FieldBundle, GlobalContext, PoseFeatures, PreparedInputs
 from .prediction import VinPrediction
 
@@ -20,8 +20,6 @@ __all__ = [
     "GlobalContext",
     "PoseFeatures",
     "PreparedInputs",
-    "VinForwardDiagnostics",
     "VinPrediction",
-    "VinV2ForwardDiagnostics",
     "VinV3ForwardDiagnostics",
 ]

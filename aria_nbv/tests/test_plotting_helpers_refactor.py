@@ -20,9 +20,9 @@ from efm3d.aria.aria_constants import (
 )
 from matplotlib import pyplot as plt
 
+import aria_nbv.rri_metrics.plotting as rri_plotting
 from aria_nbv.data_handling.efm_views import EfmCameraView, EfmSnippetView
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
-from aria_nbv.rri_metrics import plotting as rri_plotting
 from aria_nbv.rri_metrics.types import RriResult
 from aria_nbv.utils import plotting as utils_plotting
 from aria_nbv.utils.data_plotting import pose_world_cam, semidense_points_for_frame

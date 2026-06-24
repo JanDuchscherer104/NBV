@@ -15,7 +15,7 @@ from torch import Tensor
 class VinPrediction:
     """VIN predictions for a candidate set.
 
-    This is the primary output of `aria_nbv.vin.models.v3.VinModelV3`.
+    This is the primary output of `aria_nbv.vin.models.scene_myopic.VinModelV3`.
     It is consumed by the Lightning training loop (loss + metrics) and by
     downstream NBV selection (ranking candidates by predicted improvement).
     The expected score is a learned one-step ranking proxy; rollout-level

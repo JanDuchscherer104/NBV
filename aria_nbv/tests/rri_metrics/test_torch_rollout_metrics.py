@@ -7,23 +7,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from aria_nbv.rri_metrics import (
+from aria_nbv.rri_metrics.torch_rollout import (
     CandidateOrderConsistency,
-    CandidateOrderConsistencyMetric,
-    CandidatePathIncrementMetric,
     CandidatePathIncrementStats,
-    CandidatePolicyEntropyMetric,
-    CandidatePrimaryInvalidReasonMetric,
     CandidatePrimaryInvalidReasonStats,
-    CandidateProvenanceShareMetric,
-    CandidateTableMetrics,
-    CandidateTopKOracleHitMetric,
-    FiniteMeanMetric,
-    PolicyTableMetrics,
     SelectedActionOracleComparison,
-    SelectedActionOracleComparisonMetric,
-    SelectedPathCostMetrics,
-    SelectedRolloutMetrics,
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
@@ -38,6 +26,20 @@ from aria_nbv.rri_metrics import (
     selected_action_oracle_comparison,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
+)
+from aria_nbv.rri_metrics.torch_rollout_metrics import (
+    CandidateOrderConsistencyMetric,
+    CandidatePathIncrementMetric,
+    CandidatePolicyEntropyMetric,
+    CandidatePrimaryInvalidReasonMetric,
+    CandidateProvenanceShareMetric,
+    CandidateTableMetrics,
+    CandidateTopKOracleHitMetric,
+    FiniteMeanMetric,
+    PolicyTableMetrics,
+    SelectedActionOracleComparisonMetric,
+    SelectedPathCostMetrics,
+    SelectedRolloutMetrics,
 )
 
 

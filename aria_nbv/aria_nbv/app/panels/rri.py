@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+import aria_nbv.rri_metrics.plotting as rri_plotting
+
 from ...data_handling import EfmSnippetView
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
-from ...rri_metrics import plotting as rri_plotting
 from ...rri_metrics.types import RriResult
 from .common import _info_popover, _pretty_label
 

@@ -12,7 +12,7 @@ from efm3d.aria import CameraTW, PoseTW
 
 import aria_nbv.rri_metrics.eval_pointclouds as eval_pointclouds
 from aria_nbv.data_handling import EfmCameraView, EfmTrajectoryView
-from aria_nbv.rri_metrics import (
+from aria_nbv.rri_metrics.eval_pointclouds import (
     RriEvaluationPointCloudSource,
     build_root_eval_pointcloud,
     canonical_fuse_points,

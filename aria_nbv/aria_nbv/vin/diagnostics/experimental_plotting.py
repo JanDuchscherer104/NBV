@@ -30,7 +30,7 @@ from pytorch3d.renderer.cameras import (
 
 from ...utils.reporting import _pretty_label
 from ..geometry import build_frustum_points_world_p3d as _build_frustum_points_world_p3d
-from ..types import VinForwardDiagnostics
+from ..types.diagnostics import VinForwardDiagnostics
 from ._frustum_adapter import _camera_tw_from_p3d, _frustum_builder_stub, _pose_from_p3d_camera
 from ._plot_primitives import (
     _histogram_bar,

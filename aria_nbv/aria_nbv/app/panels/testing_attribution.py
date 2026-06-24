@@ -24,7 +24,6 @@ from ...vin.encoders import infer_pose_vec_groups
 from ...vin.geometry import pos_grid_from_pts_world
 from ..state import get_vin_state
 from .common import _info_popover
-from .vin_utils import _load_vin_module_from_checkpoint
 
 
 class _VinAttributionHead(nn.Module):
@@ -208,9 +207,10 @@ def render_testing_attribution_page() -> None:
     module_key = (str(resolved_ckpt) if resolved_ckpt else "", device_choice)
     if resolved_ckpt is not None and attr_state.get("module_key") != module_key:
         try:
-            module = _load_vin_module_from_checkpoint(
-                checkpoint_path=resolved_ckpt,
+            module = VinLightningModule.load_for_inference(
+                resolved_ckpt,
                 device=torch.device(device_choice),
+                fallback_binner_path=Path(".logs") / "vin" / "rri_binner.json",
             )
             attr_state["module"] = module
             attr_state["module_key"] = module_key

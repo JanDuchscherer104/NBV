@@ -13,10 +13,10 @@ from ...data_handling import (
     VinSnippetView,
 )
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
-from ...lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from ...rri_metrics.rri_binning import RriOrdinalBinner
+from ...lightning.lit_module import VinLightningModule
 from ...utils import Stage
-from ...vin.types import VinForwardDiagnostics, VinPrediction
+from ...vin.types import VinPrediction
+from ...vin.types.diagnostics import VinForwardDiagnostics
 
 
 def _build_experiment_config(
@@ -38,50 +38,6 @@ def _build_experiment_config(
         cfg.datamodule_config.source = VinOracleOnlineDatasetConfig()
 
     return cfg
-
-
-def _load_vin_module_from_checkpoint(
-    *,
-    checkpoint_path: Path,
-    device: torch.device | str,
-) -> VinLightningModule:
-    payload = torch.load(checkpoint_path, map_location="cpu")
-    hparams = payload.get("hyper_parameters", {})
-    if isinstance(hparams, dict) and "config" in hparams and isinstance(hparams["config"], dict):
-        config_payload = hparams["config"]
-    elif isinstance(hparams, dict):
-        config_payload = hparams
-    else:
-        config_payload = {}
-    config = VinLightningModuleConfig(**config_payload)
-    module = VinLightningModule(config=config)
-    module.on_load_checkpoint(payload)
-    state_dict = payload.get("state_dict")
-    if state_dict is None:
-        raise RuntimeError("Checkpoint missing state_dict.")
-    module.load_state_dict(state_dict, strict=False)
-    module.to(torch.device(device))
-    module.eval()
-    try:
-        if getattr(module, "_binner", None) is None:
-            binner = None
-            if module.config.binner_path is not None:
-                try:
-                    binner = module._load_binner_from_config()
-                except Exception:
-                    binner = None
-            if binner is None:
-                default_binner_path = Path(".logs") / "vin" / "rri_binner.json"
-                try:
-                    binner = RriOrdinalBinner.load(default_binner_path)
-                except Exception:
-                    binner = None
-            if binner is not None:
-                module._binner = binner
-        module._maybe_init_bin_values()
-    except Exception:
-        pass
-    return module
 
 
 def _run_vin_debug(
@@ -129,6 +85,5 @@ def _run_vin_debug(
 
 __all__ = [
     "_build_experiment_config",
-    "_load_vin_module_from_checkpoint",
     "_run_vin_debug",
 ]

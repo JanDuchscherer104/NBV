@@ -1,6 +1,6 @@
 """Semidense point projection helpers shared by VIN scorers.
 
-The active :mod:`aria_nbv.vin.models.v3` scorer uses semidense ASE/EFM points as
+The active :mod:`aria_nbv.vin.models.scene_myopic` scorer uses semidense ASE/EFM points as
 actor-visible scene evidence. This module owns the stateless tensor operations
 for that path:
 
@@ -11,7 +11,7 @@ for that path:
 
 Keeping those operations outside the scorer class makes the geometry contract
 testable without constructing the full model while preserving the neural module
-ownership boundary in :class:`aria_nbv.vin.models.v3.VinModelV3`.
+ownership boundary in :class:`aria_nbv.vin.models.scene_myopic.VinModelV3`.
 """
 
 from __future__ import annotations
@@ -148,7 +148,7 @@ def project_points_to_candidate_cameras(
 
     This is the shared projection path for semidense points and pooled voxel
     centers. It enforces the PyTorch3D camera batch contract used by
-    :class:`aria_nbv.vin.models.v3.VinModelV3`: the camera batch is either
+    :class:`aria_nbv.vin.models.scene_myopic.VinModelV3`: the camera batch is either
     ``Nq`` when ``B == 1`` or ``B * Nq`` for true batched inputs.
 
     Args:

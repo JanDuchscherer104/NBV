@@ -131,7 +131,7 @@ def render_bin_values_tab(ctx: VinDiagContext) -> None:
 
     st.subheader(_pretty_label("Bin centers"))
     st.caption(
-        f"Baseline used for initialization: `{baseline_name}` (see Lightning `LitModule._maybe_init_bin_values`).",
+        f"Baseline used for initialization: `{baseline_name}` (see Lightning `prepare_for_inference`).",
     )
     st.dataframe(payload.centers_df, width="stretch")
 

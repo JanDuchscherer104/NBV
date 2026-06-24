@@ -22,7 +22,8 @@ from ..pose_generation.types import CandidateSamplingResult
 from ..rendering.candidate_depth_renderer import CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds
 from ..rri_metrics.types import RriResult
-from ..vin.types import VinForwardDiagnostics, VinPrediction
+from ..vin.types import VinPrediction
+from ..vin.types.diagnostics import VinForwardDiagnostics
 
 
 def _to_jsonable(value: Any) -> Any:

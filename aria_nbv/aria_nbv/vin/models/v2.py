@@ -85,8 +85,8 @@ from ..types import (
     GlobalContext,
     PreparedInputs,
     VinPrediction,
-    VinV2ForwardDiagnostics,
 )
+from ..types.diagnostics import VinV2ForwardDiagnostics
 from ._context_mixin import PoseFeatureGlobalContextMixin
 from ._v2_semidense import (
     SEMIDENSE_FRUSTUM_TOKEN_DIM,

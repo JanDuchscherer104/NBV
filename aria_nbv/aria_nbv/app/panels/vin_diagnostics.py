@@ -88,16 +88,10 @@ def render_vin_diagnostics_page() -> None:
                 state.datamodule = datamodule
 
             assert state.module is not None and state.datamodule is not None
-            if getattr(state.module, "_binner", None) is None and hasattr(state.module, "_load_binner_from_config"):
-                try:
-                    state.module._binner = state.module._load_binner_from_config()  # type: ignore[attr-defined]
-                except Exception as exc:  # pragma: no cover - diagnostics guard
-                    st.sidebar.warning(f"Failed to load RRI binner: {type(exc).__name__}: {exc}")
             try:
-                if hasattr(state.module, "_maybe_init_bin_values"):
-                    state.module._maybe_init_bin_values()  # type: ignore[attr-defined]
+                state.module.prepare_for_inference()
             except Exception as exc:  # pragma: no cover - diagnostics guard
-                st.sidebar.warning(f"Failed to init CORAL bin values: {type(exc).__name__}: {exc}")
+                st.sidebar.warning(f"Failed to prepare VIN inference state: {type(exc).__name__}: {exc}")
 
             with st.spinner("Running datamodule + VIN forward..."):
                 batch = next(_iter_stage_batches(state.datamodule, stage=stage))

@@ -24,7 +24,7 @@ from .summary_stats import pearson_corr, quantile_stats, spearman_corr
 
 if TYPE_CHECKING:
     from ...data_handling import VinOracleBatch
-    from ..models.v3 import VinModelV3
+    from ..models.scene_myopic import VinModelV3
 
 
 def summarize_vin_v3(

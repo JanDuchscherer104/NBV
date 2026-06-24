@@ -3,7 +3,7 @@
 This module names the one-step architecture family that should score each
 candidate from actor-visible scene evidence plus an actor-visible target
 descriptor. The zero-descriptor configuration is runnable today as a named
-myopic baseline backed by `aria_nbv.vin.models.v3.VinModelV3`; nonzero target
+myopic baseline backed by `aria_nbv.vin.models.scene_myopic.VinModelV3`; nonzero target
 descriptors remain blocked until the actor-visible target-token contract is
 implemented.
 """
@@ -15,12 +15,12 @@ from typing import Any
 from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
-from torch import nn
+from torch import Tensor, nn
 
 from ...data_handling import EfmSnippetView, VinSnippetView
 from ...utils import TargetConfig
 from ..types import EvlBackboneOutput, VinPrediction
-from .v3 import VinModelV3, VinModelV3Config
+from .scene_myopic import VinModelV3, VinModelV3Config
 
 
 class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicScorer"]):
@@ -89,6 +89,11 @@ class TargetConditionedMyopicScorer(nn.Module):
         """CORAL head delegated to the underlying v3 myopic scorer."""
 
         return self.base_scorer.head_coral
+
+    def init_bin_values(self, values: Tensor, *, overwrite: bool = False) -> None:
+        """Initialize delegated v3 CORAL bin representatives."""
+
+        self.base_scorer.init_bin_values(values, overwrite=overwrite)
 
     def forward(
         self,

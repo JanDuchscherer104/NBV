@@ -4,13 +4,12 @@ import importlib
 
 import pytest
 
+import aria_nbv.vin.types as vin_types
 from aria_nbv.vin.types import (
     EfmDict,
     EvlBackboneOutput,
     FieldBundle,
-    VinForwardDiagnostics,
     VinPrediction,
-    VinV2ForwardDiagnostics,
     VinV3ForwardDiagnostics,
 )
 from aria_nbv.vin.types.backbone import EfmDict as LeafEfmDict
@@ -69,10 +68,13 @@ def test_model_input_types_are_leaf_owned_and_aggregated() -> None:
 
 
 def test_diagnostics_types_are_leaf_owned_and_aggregated() -> None:
-    """The aggregate import path should expose diagnostics owned by the leaf module."""
-    assert VinForwardDiagnostics is LeafVinForwardDiagnostics
-    assert VinV2ForwardDiagnostics is LeafVinV2ForwardDiagnostics
+    """Only the active V3 diagnostic remains on the aggregate import path."""
+
+    assert not hasattr(vin_types, "VinForwardDiagnostics")
+    assert not hasattr(vin_types, "VinV2ForwardDiagnostics")
     assert VinV3ForwardDiagnostics is LeafVinV3ForwardDiagnostics
+    assert LeafVinForwardDiagnostics is not None
+    assert LeafVinV2ForwardDiagnostics is not None
 
 
 def test_experimental_diagnostics_import_paths_are_removed() -> None:

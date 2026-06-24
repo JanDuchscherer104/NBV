@@ -2,7 +2,7 @@
 
 This module names the narrow interface that `aria_nbv.lightning.lit_module`
 needs from a candidate scorer. The current implementation is
-`aria_nbv.vin.models.v3.VinModelV3`, the seminar-era one-step RRI scorer. Future
+`aria_nbv.vin.models.scene_myopic.VinModelV3`, the seminar-era one-step RRI scorer. Future
 target-conditioned myopic and finite-horizon scorers should implement the same
 forward surface when they are trainable through the existing Lightning loss
 path, or provide a separate Lightning module when their objective is no longer
@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias
 
 from torch import Tensor
 
-from .models.multi_step import MultiStepCandidateScorerConfig
-from .models.target_conditioned_myopic import TargetConditionedMyopicScorerConfig
-from .models.v3 import VinModelV3Config
+from .models.scene_myopic import VinModelV3Config
+from .models.target_finite_horizon import MultiStepCandidateScorerConfig
+from .models.target_myopic import TargetConditionedMyopicScorerConfig
 from .types import EvlBackboneOutput, VinPrediction
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class CandidateScorer(Protocol):
     compute expected RRI proxies and initialize ordinal bin values.
 
     Implementers:
-        `aria_nbv.vin.models.v3.VinModelV3` is the current one-step scorer.
+        `aria_nbv.vin.models.scene_myopic.VinModelV3` is the current one-step scorer.
         Future target-conditioned myopic scorers can satisfy this protocol when
         they still emit per-candidate ordinal logits. Finite-horizon Q_H models
         should only reuse it if their training objective remains row-local and
@@ -51,6 +51,9 @@ class CandidateScorer(Protocol):
 
     head_coral: Any
     """CORAL head used for ordinal probability and expected-value helpers."""
+
+    def init_bin_values(self, values: Tensor, *, overwrite: bool = False) -> None:
+        """Initialize scorer-owned CORAL bin representatives."""
 
     def forward(
         self,

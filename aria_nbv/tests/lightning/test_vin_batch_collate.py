@@ -13,7 +13,7 @@ from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModule
 from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
 from aria_nbv.vin import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
-from aria_nbv.vin.models.v3 import VinModelV3Config
+from aria_nbv.vin.models.scene_myopic import VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 pytest.importorskip("pytorch_lightning")
@@ -424,12 +424,15 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
         [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
         num_classes=3,
     )
-    module._maybe_init_bin_values()
+    module.prepare_for_inference()
     module._trainer = SimpleNamespace(sanity_checking=False)
     logged: dict[str, torch.Tensor | float] = {}
+    log_dict_calls: list[tuple[dict[str, torch.Tensor | float], dict[str, object]]] = []
 
     def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        del args
         logged.update(values)
+        log_dict_calls.append((values, kwargs))
 
     monkeypatch.setattr(module, "log_dict", capture_log_dict)
 
@@ -485,6 +488,11 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
     assert torch.allclose(logged["train-aux/selected_oracle_rank"], torch.tensor(2.0))
     assert torch.allclose(logged["train-aux/selected_oracle_percentile"], torch.tensor(0.0))
     assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(1.0))
+    assert any(
+        "train-aux/candidate_top3_oracle_hit" in values and kwargs["batch_size"] == 1
+        for values, kwargs in log_dict_calls
+    )
+    assert any("train/loss" in values and kwargs["batch_size"] == 2 for values, kwargs in log_dict_calls)
 
 
 def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -501,7 +509,7 @@ def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypa
         [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
         num_classes=3,
     )
-    module._maybe_init_bin_values()
+    module.prepare_for_inference()
     module._trainer = SimpleNamespace(sanity_checking=False)
     logged: dict[str, torch.Tensor | float] = {}
 
@@ -645,7 +653,7 @@ def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.Monke
         [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
         num_classes=3,
     )
-    module._maybe_init_bin_values()
+    module.prepare_for_inference()
     module._trainer = SimpleNamespace(sanity_checking=False)
     logged: dict[str, torch.Tensor | float] = {}
 
