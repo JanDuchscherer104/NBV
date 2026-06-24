@@ -1,7 +1,13 @@
 import torch
+from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
 from aria_nbv.data_handling.efm_views import EfmPointsView
+from aria_nbv.vin.geometry.semidense_schema import semidense_proj_feature_index
 from aria_nbv.vin.models import VinModelV2, VinModelV2Config
+from aria_nbv.vin.models._v2_semidense import (
+    encode_semidense_projection_features_v2,
+    project_semidense_points_v2,
+)
 
 
 def test_collapse_points_obs_count() -> None:
@@ -97,3 +103,73 @@ def test_semidense_visibility_embedding_changes_output() -> None:
     )
 
     assert not torch.allclose(out_invalid, out_valid)
+
+
+def test_v2_semidense_projection_keeps_permissive_missing_data_contract() -> None:
+    device = torch.device("cpu")
+    cameras_without_size = PerspectiveCameras(
+        device=device,
+        R=torch.eye(3, device=device).unsqueeze(0),
+        T=torch.zeros((1, 3), device=device),
+    )
+
+    assert (
+        project_semidense_points_v2(
+            None,
+            cameras_without_size,
+            batch_size=1,
+            num_candidates=1,
+            device=device,
+        )
+        is None
+    )
+    assert (
+        project_semidense_points_v2(
+            torch.ones(1, 3, device=device),
+            cameras_without_size,
+            batch_size=1,
+            num_candidates=1,
+            device=device,
+        )
+        is None
+    )
+
+    zeros = encode_semidense_projection_features_v2(
+        None,
+        batch_size=1,
+        num_candidates=2,
+        device=device,
+        dtype=torch.float32,
+        grid_size=2,
+    )
+    assert zeros.shape == (1, 2, 5)
+    assert torch.count_nonzero(zeros) == 0
+
+
+def test_v2_semidense_summary_uses_raw_visibility_and_inv_distance_depth_weights() -> None:
+    device = torch.device("cpu")
+    proj_data = {
+        "x": torch.tensor([[0.0, 5.0]], device=device),
+        "y": torch.tensor([[0.0, 5.0]], device=device),
+        "z": torch.tensor([[1.0, 3.0]], device=device),
+        "finite": torch.ones((1, 2), device=device, dtype=torch.bool),
+        "valid": torch.ones((1, 2), device=device, dtype=torch.bool),
+        "image_size": torch.tensor([[10.0, 10.0]], device=device),
+        "inv_dist_std": torch.tensor([[1.0, 3.0]], device=device),
+        "obs_count": torch.tensor([[100.0, 1.0]], device=device),
+        "num_cams": torch.tensor(1, device=device),
+    }
+
+    feats = encode_semidense_projection_features_v2(
+        proj_data,
+        batch_size=1,
+        num_candidates=1,
+        device=device,
+        dtype=torch.float32,
+        grid_size=2,
+    )
+
+    vis_idx = semidense_proj_feature_index("semidense_candidate_vis_frac")
+    depth_idx = semidense_proj_feature_index("depth_mean")
+    assert torch.isclose(feats[0, 0, vis_idx], torch.tensor(1.0, device=device))
+    assert torch.isclose(feats[0, 0, depth_idx], torch.tensor(2.5, device=device))
