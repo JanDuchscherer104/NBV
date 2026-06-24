@@ -17,7 +17,7 @@ training objective.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias
 
 from torch import Tensor
 
@@ -127,9 +127,44 @@ are still non-runnable scaffolds; their `setup_target()` methods fail
 explicitly until the corresponding model semantics are implemented.
 """
 
+CandidateScorerTrainingContract: TypeAlias = Literal[
+    "coral_candidate",
+    "target_myopic_coral_scaffold",
+    "finite_horizon_q_scaffold",
+]
+"""Training-objective contract selected by a candidate scorer config.
+
+`VinLightningModule` currently implements the ``"coral_candidate"`` contract:
+per-candidate `VinPrediction` rows with CORAL logits, probabilities, and a
+``head_coral`` helper. The finite-horizon ``Q_H`` scaffold is intentionally
+classified separately because it needs rollout-return targets and hard
+valid-action masks instead of one-step ordinal RRI labels.
+"""
+
+
+def candidate_scorer_training_contract(config: CandidateScorerConfig) -> CandidateScorerTrainingContract:
+    """Classify a candidate scorer config by its Lightning objective contract.
+
+    Args:
+        config: Candidate scorer config accepted by experiment and Lightning
+            configuration parsing.
+
+    Returns:
+        Contract string used by training entry points to reject incompatible
+        objective families before constructing placeholder modules.
+    """
+
+    if isinstance(config, MultiStepCandidateScorerConfig):
+        return "finite_horizon_q_scaffold"
+    if isinstance(config, TargetConditionedMyopicScorerConfig):
+        return "target_myopic_coral_scaffold"
+    return "coral_candidate"
+
 
 __all__ = [
     "CandidateScorer",
     "CandidateScorerConfig",
     "CandidateScorerPrediction",
+    "CandidateScorerTrainingContract",
+    "candidate_scorer_training_contract",
 ]

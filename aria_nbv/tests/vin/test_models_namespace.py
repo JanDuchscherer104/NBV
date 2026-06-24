@@ -15,7 +15,7 @@ from aria_nbv.vin import (
     VinModelV3,
     VinModelV3Config,
 )
-from aria_nbv.vin.candidate_scorer import CandidateScorerConfig
+from aria_nbv.vin.candidate_scorer import CandidateScorerConfig, candidate_scorer_training_contract
 from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models import VinModelV3 as NamespacedVinModelV3
 from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
@@ -152,3 +152,27 @@ def test_candidate_scorer_config_parses_multi_step_payload() -> None:
 
     assert isinstance(module_config.vin, MultiStepCandidateScorerConfig)
     assert module_config.vin.horizon == 3
+
+
+def test_candidate_scorer_training_contract_classifies_configs() -> None:
+    """Training entry points should distinguish CORAL and rollout-value contracts."""
+
+    assert candidate_scorer_training_contract(VinModelV3Config()) == "coral_candidate"
+    assert (
+        candidate_scorer_training_contract(TargetConditionedMyopicScorerConfig(target_descriptor_dim=32))
+        == "target_myopic_coral_scaffold"
+    )
+    assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=3)) == "finite_horizon_q_scaffold"
+
+
+def test_vin_lightning_module_rejects_multi_step_scaffold_before_setup_target() -> None:
+    """Current Lightning should reject Q_H configs before assuming CORAL tensors."""
+
+    from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
+
+    module_config = VinLightningModuleConfig(
+        vin=MultiStepCandidateScorerConfig(horizon=3, discount=0.9),
+    )
+
+    with pytest.raises(NotImplementedError, match="CORAL/VinPrediction.*Q_H.*rollout objective.*Lightning module"):
+        VinLightningModule(config=module_config)

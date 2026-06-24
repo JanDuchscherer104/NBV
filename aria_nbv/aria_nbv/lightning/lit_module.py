@@ -46,7 +46,7 @@ from ..utils.grad_norms import (
     _collect_grad_norm_targets,
     _grad_norm_from_params,
 )
-from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
+from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig, candidate_scorer_training_contract
 from ..vin.diagnostics import plot_vin_encodings_from_debug
 from ..vin.models import VinModelV3Config
 from ..vin.modules import largest_divisor_leq
@@ -200,6 +200,14 @@ class VinLightningModule(pl.LightningModule):
 
         self.console = Console.with_prefix(self.__class__.__name__)
 
+        scorer_contract = candidate_scorer_training_contract(config.vin)
+        if scorer_contract == "finite_horizon_q_scaffold":
+            raise NotImplementedError(
+                "VinLightningModule currently trains only the CORAL/VinPrediction "
+                "candidate-scorer contract. MultiStepCandidateScorerConfig names "
+                "the planned Q_H finite-horizon scorer, which needs a rollout "
+                "objective, hard valid-action masks, and a dedicated Lightning module.",
+            )
         self.vin = config.vin.setup_target()
         self._binner: RriOrdinalBinner | None = None
         metrics_cfg = VinMetricsConfig(num_classes=self.config.num_classes)
