@@ -53,7 +53,9 @@ if "e3nn" not in sys.modules:
 
 from efm3d.aria.pose import PoseTW
 
+from aria_nbv.data_handling import VinOracleBatch
 from aria_nbv.vin.backbones import EvlBackboneConfig
+from aria_nbv.vin.diagnostics import summarize_vin_v2
 from aria_nbv.vin.models import SEMIDENSE_PROJ_DIM, VinModelV2, VinModelV2Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
@@ -186,3 +188,46 @@ def test_semidense_projection_features_shape() -> None:
     )
     assert proj_feat.shape == (1, 1, SEMIDENSE_PROJ_DIM)
     assert (proj_feat[..., 0] >= 0.0).all()
+
+
+def test_vin_model_v2_cached_batch_summary() -> None:
+    model = VinModelV2(VinModelV2Config(point_encoder=None, traj_encoder=None))
+    device = torch.device("cpu")
+    num_candidates = 2
+    backbone_out = _make_backbone_out(batch=1, grid=2)
+    reference_pose, candidate_poses = _make_poses(batch=1, num_candidates=num_candidates)
+    cameras = PerspectiveCameras(
+        device=device,
+        R=torch.eye(3, device=device).unsqueeze(0).repeat(num_candidates, 1, 1),
+        T=torch.zeros((num_candidates, 3), device=device),
+        focal_length=torch.tensor([[50.0, 50.0]], device=device).repeat(num_candidates, 1),
+        principal_point=torch.tensor([[50.0, 50.0]], device=device).repeat(num_candidates, 1),
+        image_size=torch.tensor([[100.0, 100.0]], device=device).repeat(num_candidates, 1),
+        in_ndc=False,
+    )
+    zeros = torch.zeros(num_candidates, dtype=torch.float32, device=device)
+    batch = VinOracleBatch(
+        efm_snippet_view=None,
+        candidate_poses_world_cam=candidate_poses,
+        reference_pose_world_rig=reference_pose,
+        rri=zeros,
+        pm_dist_before=zeros,
+        pm_dist_after=zeros,
+        pm_acc_before=zeros,
+        pm_comp_before=zeros,
+        pm_acc_after=zeros,
+        pm_comp_after=zeros,
+        scene_id="scene",
+        snippet_id="snippet",
+        p3d_cameras=cameras,
+        candidate_count=torch.tensor(num_candidates),
+        backbone_out=backbone_out,
+    )
+
+    summary = model.summarize_vin(batch, include_torchsummary=False)
+    direct_summary = summarize_vin_v2(model, batch, include_torchsummary=False)
+
+    for text in (summary, direct_summary):
+        assert "VIN v2 summary" in text
+        assert "cached batch" in text
+        assert "Trainable VIN params" in text

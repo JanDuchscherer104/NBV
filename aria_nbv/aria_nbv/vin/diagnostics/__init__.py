@@ -12,6 +12,7 @@ from .experimental_plotting import (
     plot_vin_encodings_from_debug,
 )
 from .summarize import summarize_vin_v3
+from .summarize_v2 import summarize_vin_v2
 
 __all__ = [
     "build_alignment_figures",
@@ -21,5 +22,6 @@ __all__ = [
     "build_prediction_alignment_figure",
     "build_vin_encoding_figures",
     "plot_vin_encodings_from_debug",
+    "summarize_vin_v2",
     "summarize_vin_v3",
 ]
