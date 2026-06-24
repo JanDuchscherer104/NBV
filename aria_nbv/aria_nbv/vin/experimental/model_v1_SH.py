@@ -99,7 +99,7 @@ from torch import Tensor, nn
 from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from ...utils import TargetConfig
 from .._model_mixins import FrustumSamplingMixin
-from ..backbone_evl import EvlBackboneConfig
+from ..backbones import EvlBackboneConfig
 from ..geometry import (
     build_scene_field as _build_scene_field,
 )

@@ -1,7 +1,9 @@
-"""EVL backbone adapter for VIN.
+"""EVL backbone adapter for VIN scorer architectures.
 
 VIN consumes raw EFM snippet dicts as input and queries EVL's 3D neck features
-to score candidate poses.
+to score candidate poses. This module is the canonical ownership point for the
+external EVL dependency; model definitions depend on `EvlBackboneConfig` rather
+than importing EVL internals directly.
 """
 
 from __future__ import annotations
@@ -27,9 +29,9 @@ from efm3d.dataset.wds_dataset import batchify
 from pydantic import Field, ValidationInfo, field_validator
 from torch import Tensor
 
-from ..configs import PathConfig
-from ..utils import BaseConfig, Console, TargetConfig
-from .types import EfmDict, EvlBackboneOutput
+from ...configs import PathConfig
+from ...utils import BaseConfig, Console, TargetConfig
+from ..types import EfmDict, EvlBackboneOutput
 
 
 def _target_cls() -> type["EvlBackbone"]:

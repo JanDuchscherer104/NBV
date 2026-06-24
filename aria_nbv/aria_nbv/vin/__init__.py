@@ -13,7 +13,7 @@ and target crops are supervision/evaluation assets.
 
 from __future__ import annotations
 
-from .backbone_evl import EvlBackbone, EvlBackboneConfig
+from .backbones import EvlBackbone, EvlBackboneConfig
 from .candidate_scorer import (
     CandidateScorer,
     CandidateScorerConfig,

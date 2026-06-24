@@ -64,7 +64,7 @@ from ...data_handling import EfmSnippetView, VinSnippetView
 from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_logits_to_prob
 from ...utils import Optimizable, TargetConfig, optimizable_field
 from .._model_mixins import PoseFeatureGlobalContextMixin
-from ..backbone_evl import EvlBackboneConfig
+from ..backbones import EvlBackboneConfig
 from ..encoders import (
     LearnableFourierFeaturesConfig,
     R6dLffPoseEncoderConfig,

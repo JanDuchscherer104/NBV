@@ -117,7 +117,7 @@ from ...rri_metrics.coral import (
 )
 from ...utils import TargetConfig
 from .._model_mixins import FrustumSamplingMixin
-from ..backbone_evl import EvlBackboneConfig
+from ..backbones import EvlBackboneConfig
 from ..encoders import LearnableFourierFeaturesConfig
 from ..geometry import (
     build_scene_field as _build_scene_field,
