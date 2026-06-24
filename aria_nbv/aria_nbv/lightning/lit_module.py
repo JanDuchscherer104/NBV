@@ -22,11 +22,7 @@ from torch import Tensor, nn
 from torch.nn import functional as functional
 
 from ..configs import PathConfig
-from ..data_handling import (
-    VinOracleBatch,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
-)
+from ..data_handling import VinOracleBatch
 from ..rri_metrics import (
     Loss,
     Metric,
@@ -51,6 +47,7 @@ from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.diagnostics import plot_vin_encodings_from_debug
 from ..vin.models import VinModelV3Config
 from ..vin.modules import largest_divisor_leq
+from ._candidate_scorer_batch import prepare_candidate_scorer_batch_inputs
 from ._candidate_scorer_contract import validate_vin_lightning_candidate_scorer_contract
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauConfig
 
@@ -397,36 +394,14 @@ class VinLightningModule(pl.LightningModule):
                 "or resume from a checkpoint that contains `rri_binner`.",
             )
 
-        efm_snippet_view = batch.efm_snippet_view
-        if is_efm_snippet_view_instance(efm_snippet_view) or is_vin_snippet_view_instance(efm_snippet_view):
-            efm = efm_snippet_view
-        else:
-            raise RuntimeError(
-                "VIN batch missing semidense snippet view; VinModelV3 requires VinSnippetView or EfmSnippetView.",
-            )
-        backbone_out = batch.backbone_out
-        if backbone_out is None and not is_efm_snippet_view_instance(efm_snippet_view):
-            raise RuntimeError(
-                "VIN batch missing both efm snippet view and cached backbone outputs.",
-            )
-
-        if backbone_out is not None:
-            backbone_out = backbone_out.to(self.device)
-
-        p3d_cameras = batch.p3d_cameras.to(self.device)
-        if p3d_cameras.device != self.device:
-            p3d_cameras = p3d_cameras.to(self.device)
-
-        candidate_poses_world_cam = batch.candidate_poses_world_cam.to(device=self.device)
-        reference_pose_world_rig = batch.reference_pose_world_rig.to(device=self.device)
-
+        scorer_inputs = prepare_candidate_scorer_batch_inputs(batch, device=self.device)
         candidate_scorer = self.candidate_scorer
         pred = candidate_scorer.forward(
-            efm,
-            candidate_poses_world_cam=candidate_poses_world_cam,
-            reference_pose_world_rig=reference_pose_world_rig,
-            p3d_cameras=p3d_cameras,
-            backbone_out=backbone_out,
+            scorer_inputs.efm,
+            candidate_poses_world_cam=scorer_inputs.candidate_poses_world_cam,
+            reference_pose_world_rig=scorer_inputs.reference_pose_world_rig,
+            p3d_cameras=scorer_inputs.p3d_cameras,
+            backbone_out=scorer_inputs.backbone_out,
         )
         log_enabled = not getattr(self.trainer, "sanity_checking", False)
         candidate_mask_table = batch.candidate_valid_mask(device=self.device)
