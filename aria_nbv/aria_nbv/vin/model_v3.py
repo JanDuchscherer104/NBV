@@ -89,6 +89,7 @@ from ..rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_lo
 from ..utils import TargetConfig
 from ._model_mixins import PoseFeatureGlobalContextMixin
 from .backbones import EvlBackboneConfig
+from .diagnostics import summarize_vin_v3
 from .encoders import (
     LearnableFourierFeaturesConfig,
     PoseEncoder,
@@ -106,7 +107,6 @@ from .semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
-from .summarize_v3 import summarize_vin_v3
 from .types import EvlBackboneOutput, FieldBundle, GlobalContext, PreparedInputs, VinPrediction, VinV3ForwardDiagnostics
 from .vin_utils import (
     largest_divisor_leq,

@@ -12,18 +12,18 @@ from efm3d.aria.aria_constants import (
 )
 from torch.nn import functional as functional
 
-from ..data_handling import (
+from ...data_handling import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
-from ..rri_metrics.coral import coral_monotonicity_violation_rate
-from ..utils.rich_summary import capture_tree, rich_summary, summarize
+from ...rri_metrics.coral import coral_monotonicity_violation_rate
+from ...utils.rich_summary import capture_tree, rich_summary, summarize
 
 if TYPE_CHECKING:
-    from ..data_handling import VinOracleBatch
-    from .model_v3 import VinModelV3
+    from ...data_handling import VinOracleBatch
+    from ..model_v3 import VinModelV3
 
 
 def summarize_vin_v3(

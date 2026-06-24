@@ -13,9 +13,9 @@ from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
-from ..utils.data_plotting import BBOX_EDGE_IDX, SnippetPlotBuilder, _flatten_edges_for_plotly
-from ..utils.frames import rotate_yaw_cw90
-from ..utils.reporting import _pretty_label
+from ...utils.data_plotting import BBOX_EDGE_IDX, SnippetPlotBuilder, _flatten_edges_for_plotly
+from ...utils.frames import rotate_yaw_cw90
+from ...utils.reporting import _pretty_label
 
 
 def _pca_2d(values: np.ndarray) -> np.ndarray:

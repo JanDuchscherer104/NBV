@@ -8,8 +8,8 @@ import torch
 
 from ....data_handling import VinSnippetView
 from ....rri_metrics.coral import coral_loss
+from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ....vin.experimental.plotting import build_alignment_figures
-from ....vin.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ..common import _info_popover
 from ..data import scene_plot_options_ui
 from .context import VinDiagContext

@@ -11,8 +11,8 @@ import torch
 
 from ....data_handling import VinOfflineSourceConfig, VinSnippetView, collect_vin_offline_dataset_stats
 from ....utils.plotting import _histogram_overlay, _to_numpy
+from ....vin.diagnostics.plotting import _parameter_distribution
 from ....vin.experimental.model_v2 import FIELD_CHANNELS_V2
-from ....vin.plotting import _parameter_distribution
 from ..common import _info_popover, _pretty_label, _strip_ansi
 from .context import VinDiagContext
 

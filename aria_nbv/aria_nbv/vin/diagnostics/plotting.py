@@ -13,11 +13,11 @@ from efm3d.aria.pose import PoseTW
 from plotly.subplots import make_subplots  # type: ignore[import-untyped]
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
-from ..data_handling import EfmSnippetView
-from ..utils.data_plotting import SnippetPlotBuilder
-from ..utils.frames import rotate_yaw_cw90
-from ..utils.plotting import _plot_slice_grid
-from ._plotting_common import (
+from ...data_handling import EfmSnippetView
+from ...utils.data_plotting import SnippetPlotBuilder
+from ...utils.frames import rotate_yaw_cw90
+from ...utils.plotting import _plot_slice_grid
+from .plotting_common import (
     BBOX_EDGE_IDX,
     _as_pose_tw,
     _camera_tw_from_p3d,

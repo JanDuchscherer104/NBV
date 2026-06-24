@@ -22,7 +22,7 @@ from efm3d.aria.aria_constants import (
 )
 
 from aria_nbv.data_handling.efm_views import EfmSnippetView
-from aria_nbv.vin.plotting import (
+from aria_nbv.vin.diagnostics.plotting import (
     build_backbone_evidence_figures,
     build_field_slice_figures,
     build_geometry_overview_figure,

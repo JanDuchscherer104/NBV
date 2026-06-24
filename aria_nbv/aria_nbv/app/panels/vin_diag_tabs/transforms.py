@@ -5,14 +5,14 @@ from __future__ import annotations
 import streamlit as st
 
 from ....utils.plotting import _to_numpy
-from ....vin.experimental.plotting import build_prediction_alignment_figure
-from ....vin.geometry import pos_grid_from_pts_world
-from ....vin.plotting import (
+from ....vin.diagnostics.plotting import (
     build_pos_grid_linearity_figure,
     build_se3_closure_figure,
     build_voxel_inbounds_figure,
     build_voxel_roundtrip_figure,
 )
+from ....vin.experimental.plotting import build_prediction_alignment_figure
+from ....vin.geometry import pos_grid_from_pts_world
 from ..common import _info_popover
 from .context import VinDiagContext
 

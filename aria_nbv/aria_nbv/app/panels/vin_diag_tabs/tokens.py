@@ -6,12 +6,12 @@ import streamlit as st
 import torch
 
 from ....utils.plotting import _histogram_overlay, _plot_slice_grid, _to_numpy
-from ....vin.experimental.plotting import build_frustum_samples_figure
-from ....vin.plotting import (
+from ....vin.diagnostics.plotting import (
     build_semidense_cnn_grid_figure,
     build_semidense_projection_feature_figure,
     build_semidense_projection_figure,
 )
+from ....vin.experimental.plotting import build_frustum_samples_figure
 from ..common import _info_popover, _pretty_label
 from .context import VinDiagContext
 

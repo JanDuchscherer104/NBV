@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ....vin.plotting import build_backbone_evidence_figures, build_scene_field_evidence_figures
+from ....vin.diagnostics.plotting import build_backbone_evidence_figures, build_scene_field_evidence_figures
 from ..common import _info_popover
 from .context import VinDiagContext
 

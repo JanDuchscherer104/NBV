@@ -22,7 +22,7 @@ from pytorch3d.renderer.cameras import (
     PerspectiveCameras,  # type: ignore[import-untyped]
 )
 
-from .._plotting_common import (
+from ..diagnostics.plotting_common import (
     _camera_tw_from_p3d,
     _frustum_builder_stub,
     _histogram_bar,
