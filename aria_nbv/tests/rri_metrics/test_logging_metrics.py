@@ -78,6 +78,20 @@ def test_vin_metrics_compute() -> None:
     assert result["label_hist"].shape == (3,)
 
 
+def test_vin_metrics_can_disable_spearman_buffering() -> None:
+    metrics = VinMetrics(num_classes=3, enable_spearman=False)
+    pred_scores = torch.tensor([0.1, 0.2, 0.3, 0.4])
+    rri = torch.tensor([0.0, 0.5, 0.2, 0.9])
+    pred_class = torch.tensor([0, 1, 2, 1])
+    labels = torch.tensor([0, 1, 2, 2])
+
+    metrics.update(pred_scores=pred_scores, rri=rri, pred_class=pred_class, labels=labels)
+    result = metrics.compute()
+
+    assert set(result.keys()) == {"confusion", "label_hist"}
+    assert metrics.spearman is None
+
+
 def test_metric_key() -> None:
     assert metric_key(Stage.TRAIN, Metric.LOSS) == "train/loss"
     assert metric_key(Stage.TRAIN, Metric.SPEARMAN_STEP) == "train/spearman_step"

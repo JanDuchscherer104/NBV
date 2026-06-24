@@ -130,6 +130,14 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
     log_interval_steps: int | None = Field(default=None)
     """Step interval for logging rank/confusion/histogram metrics (train stage only). If ``None`` only log per-epoch metrics."""
 
+    log_spearman: bool = True
+    """Enable Spearman rank-correlation metrics.
+
+    Spearman uses `torchmetrics.regression.SpearmanCorrCoef`, which buffers all
+    predictions and targets until compute time. Keep it enabled for normal
+    experiments; disable it for fast smoke runs that only need loop viability.
+    """
+
     grad_norms: GradNormLoggingConfig = Field(default_factory=GradNormLoggingConfig)
     """Configuration for gradient-norm logging."""
 
@@ -205,7 +213,10 @@ class VinLightningModule(pl.LightningModule):
         validate_vin_lightning_candidate_scorer_contract(config.vin)
         self.vin = config.vin.setup_target()
         self._binner: RriOrdinalBinner | None = None
-        metrics_cfg = VinMetricsConfig(num_classes=self.config.num_classes)
+        metrics_cfg = VinMetricsConfig(
+            num_classes=self.config.num_classes,
+            enable_spearman=self.config.log_spearman,
+        )
 
         self._metrics = nn.ModuleDict(
             {
@@ -800,8 +811,8 @@ class VinLightningModule(pl.LightningModule):
             self._metrics[stage_key].reset()
             return
 
-        spearman = metrics["spearman"]
-        if torch.isfinite(spearman):
+        spearman = metrics.get("spearman")
+        if spearman is not None and torch.isfinite(spearman):
             self._log_aux_scalars(
                 {Metric.SPEARMAN: spearman},
                 stage=stage,
@@ -845,8 +856,8 @@ class VinLightningModule(pl.LightningModule):
             self._interval_metrics.reset()
             return
 
-        spearman = metrics["spearman"]
-        if torch.isfinite(spearman):
+        spearman = metrics.get("spearman")
+        if spearman is not None and torch.isfinite(spearman):
             self._log_aux_scalars(
                 {Metric.SPEARMAN_STEP: spearman},
                 stage=stage,

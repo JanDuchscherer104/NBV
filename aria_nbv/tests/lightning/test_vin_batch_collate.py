@@ -517,6 +517,91 @@ def test_lightning_accepts_zero_descriptor_myopic_scorer_without_state_alias() -
     assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
 
 
+def test_lightning_can_disable_spearman_metric_buffering() -> None:
+    """Smoke modules can skip Spearman without disabling confusion/histogram metrics."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(num_classes=3, target_descriptor_dim=0),
+            num_classes=3,
+            log_spearman=False,
+        ),
+    )
+
+    for metrics in module._metrics.values():
+        assert metrics.spearman is None  # noqa: S101
+        assert metrics.confusion is not None  # noqa: S101
+        assert metrics.label_hist is not None  # noqa: S101
+    assert module._interval_metrics.spearman is None  # noqa: S101
+
+
+def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disabling Spearman should not break scalar logging or interval metrics."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+            aux_regression_loss=None,
+            log_interval_steps=1,
+            log_spearman=False,
+        ),
+    )
+    module._binner = RriOrdinalBinner.fit_from_iterable(
+        [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
+        num_classes=3,
+    )
+    module._maybe_init_bin_values()
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    logged: dict[str, torch.Tensor | float] = {}
+
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        logged.update(values)
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+
+    logits = torch.tensor([[[0.25, -0.10], [0.05, 0.30]]], dtype=torch.float32)
+    probs = coral_logits_to_prob(logits)
+    expected, expected_norm = coral_expected_from_logits(logits)
+    pred = VinPrediction(
+        logits=logits,
+        prob=probs,
+        expected=expected,
+        expected_normalized=expected_norm,
+        candidate_valid=torch.ones((1, 2), dtype=torch.bool),
+        voxel_valid_frac=torch.ones((1, 2), dtype=torch.float32),
+        semidense_candidate_vis_frac=torch.ones((1, 2), dtype=torch.float32),
+        semidense_valid_frac=torch.ones((1, 2), dtype=torch.float32),
+    )
+    module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
+
+    batch = VinOracleBatch(
+        efm_snippet_view=_make_snippet(),
+        candidate_poses_world_cam=_identity_pose(2),
+        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        rri=torch.tensor([0.10, 0.20], dtype=torch.float32),
+        pm_dist_before=torch.ones(2, dtype=torch.float32),
+        pm_dist_after=torch.ones(2, dtype=torch.float32),
+        pm_acc_before=torch.ones(2, dtype=torch.float32),
+        pm_comp_before=torch.ones(2, dtype=torch.float32),
+        pm_acc_after=torch.ones(2, dtype=torch.float32),
+        pm_comp_after=torch.ones(2, dtype=torch.float32),
+        p3d_cameras=_make_cameras(2),
+        scene_id="scene-a",
+        snippet_id="snip-a",
+        candidate_count=torch.tensor(2, dtype=torch.int64),
+        backbone_out=_make_backbone(),
+    )
+
+    loss = module.training_step(batch, batch_idx=0)
+
+    assert loss is not None  # noqa: S101
+    assert "train/loss" in logged  # noqa: S101
+    assert "train-aux/spearman_step" not in logged  # noqa: S101
+    assert "train-aux/spearman" not in logged  # noqa: S101
+
+
 def test_shuffle_candidates_preserves_padded_tail_unbatched() -> None:
     """Only the valid prefix should move when candidate_count is smaller than width."""
 

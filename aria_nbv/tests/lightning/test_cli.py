@@ -173,6 +173,16 @@ def test_main_skips_rich_config_inspection_when_disabled(
     assert inspect_calls == 0
 
 
+def test_offline_smoke_config_disables_heavy_debug_metrics() -> None:
+    """The checked-in two-epoch smoke config should stay quiet and bounded."""
+
+    repo_root = Path(__file__).resolve().parents[3]
+    cfg = AriaNBVExperimentConfig.from_toml(repo_root / ".configs" / "offline_smoke_2epoch.toml")
+
+    assert cfg.inspect_config is False
+    assert cfg.module_config.log_spearman is False
+
+
 def test_summary_and_plot_modes_use_smoke_datamodule_defaults_after_validation() -> None:
     """Smoke-only modes keep validation cheap after training TOML values merge."""
     summary_cfg = AriaNBVExperimentConfig.model_validate(

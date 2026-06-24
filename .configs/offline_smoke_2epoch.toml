@@ -83,6 +83,7 @@ coral_bias_init = "prior_logits"
 coral_loss_variant = "coral"
 coral_balance_source = "binner"
 coverage_weight_mode = "none"
+log_spearman = false
 
     [module_config.grad_norms]
     enabled = false

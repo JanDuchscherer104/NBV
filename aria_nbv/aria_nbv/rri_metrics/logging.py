@@ -235,9 +235,10 @@ class VinMetrics(MetricBase):
 
     full_state_update = False
 
-    def __init__(self, *, num_classes: int) -> None:
+    def __init__(self, *, num_classes: int, enable_spearman: bool = True) -> None:
         super().__init__()
-        self.spearman = SpearmanCorrCoef()
+        self.enable_spearman = bool(enable_spearman)
+        self.spearman = SpearmanCorrCoef() if self.enable_spearman else None
         self.confusion = MulticlassConfusionMatrix(num_classes=int(num_classes))
         self.label_hist = LabelHistogram(num_classes=int(num_classes))
         self.add_state("has_updates", default=torch.zeros((), dtype=torch.bool), dist_reduce_fx="max")
@@ -252,7 +253,8 @@ class VinMetrics(MetricBase):
     ) -> None:
         if pred_scores.numel() == 0:
             return
-        self.spearman.update(pred_scores, rri)
+        if self.spearman is not None:
+            self.spearman.update(pred_scores, rri)
         self.confusion.update(pred_class, labels)
         self.label_hist.update(labels)
         self.has_updates.fill_(True)
@@ -260,14 +262,17 @@ class VinMetrics(MetricBase):
     def compute(self) -> dict[str, Tensor]:
         if not bool(self.has_updates.item()):
             return {}
-        return {
-            "spearman": self.spearman.compute(),
+        metrics = {
             "confusion": self.confusion.compute(),
             "label_hist": self.label_hist.compute(),
         }
+        if self.spearman is not None:
+            metrics["spearman"] = self.spearman.compute()
+        return metrics
 
     def reset(self) -> None:  # type: ignore[override]
-        self.spearman.reset()
+        if self.spearman is not None:
+            self.spearman.reset()
         self.confusion.reset()
         self.label_hist.reset()
         self.has_updates.fill_(False)
@@ -284,8 +289,11 @@ class VinMetricsConfig(TargetConfig[VinMetrics]):
     num_classes: int
     """Number of ordinal classes used for confusion/histogram metrics."""
 
+    enable_spearman: bool = True
+    """Enable rank-correlation metrics that buffer all predictions/targets."""
+
     def setup_target(self) -> VinMetrics:
-        return self.target(num_classes=int(self.num_classes))
+        return self.target(num_classes=int(self.num_classes), enable_spearman=bool(self.enable_spearman))
 
 
 def _namespace_prefix(stage: Stage, *, namespace: Literal["main", "aux"]) -> str:
