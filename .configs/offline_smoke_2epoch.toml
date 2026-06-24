@@ -6,6 +6,7 @@ run_mode = "train"
 run_name = "offline-smoke-2epoch"
 out_dir = ".logs/vin/offline-smoke"
 seed = 0
+inspect_config = false
 
 [datamodule_config]
 num_workers = 0

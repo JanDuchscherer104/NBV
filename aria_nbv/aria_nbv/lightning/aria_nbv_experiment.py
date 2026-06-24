@@ -103,6 +103,15 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     refresh the configured artifact path in place.
     """
 
+    inspect_config: bool = True
+    """Print rich datamodule and LightningModule config summaries before running.
+
+    The summaries are rendered through `aria_nbv.utils.rich_summary` via
+    `aria_nbv.utils.BaseConfig.inspect`, so they are useful for interactive
+    debugging. Routine smoke configs can disable this to keep verification logs
+    focused on the binner or trainer outcome.
+    """
+
     paths: PathConfig = Field(default_factory=PathConfig)
     """Filesystem layout config (singleton)."""
 

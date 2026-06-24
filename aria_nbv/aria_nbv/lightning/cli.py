@@ -282,8 +282,9 @@ def main(argv: list[str] | None = None) -> None:
         overrides.pop("config_path", None)
         merged = _merge_with_toml(base_cfg, overrides)
         cfg = AriaNBVExperimentConfig.model_validate(merged)
-    cfg.datamodule_config.source.inspect()
-    cfg.module_config.inspect()
+    if cfg.inspect_config:
+        cfg.datamodule_config.source.inspect()
+        cfg.module_config.inspect()
     try:
         cfg.run()
     except KeyboardInterrupt:

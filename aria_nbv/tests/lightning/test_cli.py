@@ -130,6 +130,49 @@ def test_summarize_main_overrides_toml_train_mode_without_training(
     assert cfg.datamodule_config.source.offline.include_efm_snippet is False
 
 
+def test_main_skips_rich_config_inspection_when_disabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Smoke configs can keep CLI logs focused on the run outcome."""
+
+    config_path = tmp_path / "quiet.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                'run_mode = "dump_config"',
+                "inspect_config = false",
+                "",
+                "[trainer_config]",
+                "use_wandb = false",
+                "",
+                "[datamodule_config.source]",
+                'kind = "offline"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    inspect_calls = 0
+    captured: dict[str, AriaNBVExperimentConfig] = {}
+
+    def count_inspect(self: BaseConfig, show_docs: bool = False) -> None:
+        del self, show_docs
+        nonlocal inspect_calls
+        inspect_calls += 1
+
+    def capture_run(self: AriaNBVExperimentConfig) -> None:
+        captured["cfg"] = self
+
+    monkeypatch.setattr(BaseConfig, "inspect", count_inspect)
+    monkeypatch.setattr(AriaNBVExperimentConfig, "run", capture_run)
+
+    cli.main(["--config-path", str(config_path)])
+
+    assert captured["cfg"].inspect_config is False
+    assert inspect_calls == 0
+
+
 def test_summary_and_plot_modes_use_smoke_datamodule_defaults_after_validation() -> None:
     """Smoke-only modes keep validation cheap after training TOML values merge."""
     summary_cfg = AriaNBVExperimentConfig.model_validate(
