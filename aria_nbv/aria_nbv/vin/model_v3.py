@@ -107,11 +107,8 @@ from .semidense_projection import (
     sample_semidense_points,
 )
 from .summarize_v3 import summarize_vin_v3
-from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
+from .types import EvlBackboneOutput, FieldBundle, GlobalContext, PreparedInputs, VinPrediction, VinV3ForwardDiagnostics
 from .vin_utils import (
-    FieldBundle,
-    GlobalContext,
-    PreparedInputs,
     largest_divisor_leq,
     validate_pos_grid_xyz_encoder,
 )

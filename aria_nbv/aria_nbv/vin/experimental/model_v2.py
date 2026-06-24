@@ -74,13 +74,8 @@ from ..encoders import (
 from ..geometry import ensure_candidate_batch, ensure_pose_batch, sample_voxel_field
 from ..modules import PoseConditionedGlobalPool
 from ..semidense_projection import SEMIDENSE_PROJ_DIM
-from ..vin_utils import (
-    FieldBundle,
-    GlobalContext,
-    PreparedInputs,
-    largest_divisor_leq,
-    validate_pos_grid_xyz_encoder,
-)
+from ..types import FieldBundle, GlobalContext, PreparedInputs
+from ..vin_utils import largest_divisor_leq, validate_pos_grid_xyz_encoder
 from .pointnext_encoder import PointNeXtSEncoder, PointNeXtSEncoderConfig
 from .pose_encoders import PoseEncoder, PoseEncoderConfig
 from .types import EvlBackboneOutput, VinPrediction, VinV2ForwardDiagnostics

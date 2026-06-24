@@ -14,8 +14,20 @@ from typing import TYPE_CHECKING, Annotated, TypedDict
 import torch
 from typing_extensions import Doc
 
-from ..utils.semantic_names import normalize_semantic_name_map
-from ..utils.typed_payloads import from_serializable, to_serializable
+from ...utils.semantic_names import normalize_semantic_name_map
+from ...utils.typed_payloads import from_serializable, to_serializable
+from .model_inputs import (
+    FieldBundle as FieldBundle,
+)
+from .model_inputs import (
+    GlobalContext as GlobalContext,
+)
+from .model_inputs import (
+    PoseFeatures as PoseFeatures,
+)
+from .model_inputs import (
+    PreparedInputs as PreparedInputs,
+)
 
 if TYPE_CHECKING:
     from efm3d.aria.obb import ObbTW

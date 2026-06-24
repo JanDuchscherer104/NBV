@@ -1,82 +1,15 @@
-"""Shared VIN helper dataclasses and utility functions."""
+"""Stateless helper functions for VIN scorer implementations."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
-import torch
 from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
-from ..data_handling import VinSnippetView
 from .encoders import LearnableFourierFeaturesConfig
 from .geometry.voxel import pos_grid_from_pts_world
-
-
-@dataclass(slots=True)
-class PreparedInputs:
-    """Prepared inputs for VIN v3 forward pass."""
-
-    pose_world_cam: PoseTW
-    """``PoseTW["B N 12"]`` Candidate poses in world frame."""
-
-    pose_world_rig_ref: PoseTW
-    """``PoseTW["B 12"]`` Reference rig pose in world frame."""
-
-    t_world_voxel: PoseTW
-    """``PoseTW["B 12"]`` World←voxel pose for the EVL voxel grid."""
-
-    batch_size: int
-    """Batch size inferred from candidate poses."""
-
-    num_candidates: int
-    """Number of candidates per batch."""
-
-    device: torch.device
-    """Device for tensors in the forward pass."""
-
-    snippet: VinSnippetView
-    """VIN snippet view (padded semidense points) for semidense features."""
-
-
-@dataclass(slots=True)
-class PoseFeatures:
-    """Pose-related features for VIN v3."""
-
-    pose_enc: Tensor
-    """``Tensor["B N E", float32]`` Pose encoder output."""
-
-    pose_vec: Tensor
-    """``Tensor["B N D", float32]`` Pose vector fed into the pose encoder."""
-
-    candidate_center_rig_m: Tensor
-    """``Tensor["B N 3", float32]`` Candidate centers in reference rig frame."""
-
-
-@dataclass(slots=True)
-class FieldBundle:
-    """Scene field tensors for VIN v3."""
-
-    field_in: Tensor
-    """``Tensor["B C_in D H W", float32]`` Raw scene field."""
-
-    field: Tensor
-    """``Tensor["B C_out D H W", float32]`` Projected scene field."""
-
-    aux: dict[str, Tensor]
-    """Auxiliary channels (e.g. counts_norm, occ_pr)."""
-
-
-@dataclass(slots=True)
-class GlobalContext:
-    """Global context features computed from the scene field."""
-
-    pos_grid: Tensor
-    """``Tensor["B 3 D H W", float32]`` Normalized position grid."""
-
-    global_feat: Tensor
-    """``Tensor["B N C", float32]`` Pose-conditioned global features."""
+from .types import GlobalContext, PoseFeatures
 
 
 def largest_divisor_leq(n: int, max_divisor: int) -> int:

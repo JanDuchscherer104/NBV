@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from aria_nbv.vin.types import EfmDict
+from aria_nbv.vin.types import EfmDict, FieldBundle
+from aria_nbv.vin.types.model_inputs import FieldBundle as LeafFieldBundle
 
 
 def test_efm_dict_contains_expected_keys() -> None:
@@ -31,3 +32,8 @@ def test_efm_dict_contains_expected_keys() -> None:
     }
 
     assert expected.issubset(EfmDict.__annotations__)
+
+
+def test_model_input_types_are_leaf_owned_and_aggregated() -> None:
+    """The aggregate import path should expose DTOs owned by the leaf module."""
+    assert FieldBundle is LeafFieldBundle
