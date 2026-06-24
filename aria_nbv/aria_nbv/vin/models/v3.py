@@ -105,6 +105,7 @@ from ..geometry.semidense_projection import (
 from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
 from ..modules import (
     PoseConditionedGlobalPool,
+    SceneFieldProjectionConfig,
     SemidenseGridEncoder,
     SemidenseGridEncoderConfig,
     VinScorerHeadConfig,
@@ -301,17 +302,11 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         self.traj_encoder = traj_encoder_cfg.setup_target() if traj_encoder_cfg is not None else None
 
         field_dim = self.config.field_dim
-        gn_groups = largest_divisor_leq(field_dim, self.config.field_gn_groups)
-        self.field_proj = nn.Sequential(
-            nn.Conv3d(
-                len(self.config.scene_field_channels),
-                field_dim,
-                kernel_size=1,
-                bias=False,  # embedding-like projection
-            ),
-            nn.GroupNorm(num_groups=gn_groups, num_channels=field_dim),
-            nn.GELU(),
-        )
+        self.field_proj = SceneFieldProjectionConfig(
+            in_channels=len(self.config.scene_field_channels),
+            field_dim=field_dim,
+            field_gn_groups=int(self.config.field_gn_groups),
+        ).setup_target()
 
         pose_dim = self.pose_encoder.out_dim
         num_heads = largest_divisor_leq(field_dim, 4)

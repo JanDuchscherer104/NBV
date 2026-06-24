@@ -202,6 +202,18 @@ def test_v3_shared_head_preserves_checkpoint_keys() -> None:
     assert not any(key.startswith("film.") for key in keys)
 
 
+def test_v3_field_proj_preserves_checkpoint_keys() -> None:
+    """V3 field projection should keep historical numbered Sequential keys."""
+    model = VinModelV3(VinModelV3Config())
+    keys = set(model.state_dict())
+
+    assert {"field_proj.0.weight", "field_proj.1.weight", "field_proj.1.bias"}.issubset(keys)
+    assert "field_proj.0.bias" not in keys
+    assert not any(key.startswith("field_proj.proj.") for key in keys)
+    assert not any(key.startswith("field_proj.layers.") for key in keys)
+    assert not any(key.startswith("field_proj.module.") for key in keys)
+
+
 def test_v3_semidense_cnn_preserves_checkpoint_keys() -> None:
     """Semidense CNN extraction must keep historical numbered layer keys."""
     model = VinModelV3(VinModelV3Config())

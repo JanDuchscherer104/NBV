@@ -4,7 +4,36 @@
 
 import torch
 
-from aria_nbv.vin.modules import VinScorerHead, VinScorerHeadConfig, largest_divisor_leq
+from aria_nbv.vin.modules import (
+    SceneFieldProjection,
+    SceneFieldProjectionConfig,
+    VinScorerHead,
+    VinScorerHeadConfig,
+    largest_divisor_leq,
+)
+
+
+def test_scene_field_projection_config_builds_numbered_layers() -> None:
+    """Scene-field projection should preserve direct Sequential layer keys."""
+    projection = SceneFieldProjectionConfig(
+        in_channels=6,
+        field_dim=30,
+        field_gn_groups=8,
+    ).setup_target()
+
+    assert isinstance(projection, SceneFieldProjection)
+    assert isinstance(projection[0], torch.nn.Conv3d)
+    assert projection[0].in_channels == 6
+    assert projection[0].out_channels == 30
+    assert projection[0].bias is None
+    assert isinstance(projection[1], torch.nn.GroupNorm)
+    assert projection[1].num_groups == 6
+    assert projection[1].num_channels == 30
+    assert isinstance(projection[2], torch.nn.GELU)
+
+    out = projection(torch.randn(2, 6, 3, 3, 3))
+
+    assert out.shape == (2, 30, 3, 3, 3)
 
 
 def test_vin_scorer_head_config_builds_coral_logits() -> None:

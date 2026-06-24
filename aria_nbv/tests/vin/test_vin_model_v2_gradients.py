@@ -164,6 +164,18 @@ def test_v2_shared_head_preserves_checkpoint_keys() -> None:
     assert not any(key.startswith("film.") for key in keys)
 
 
+def test_v2_field_proj_preserves_checkpoint_keys() -> None:
+    """V2 field projection should keep historical numbered Sequential keys."""
+    model = VinModelV2(VinModelV2Config())
+    keys = set(model.state_dict())
+
+    assert {"field_proj.0.weight", "field_proj.1.weight", "field_proj.1.bias"}.issubset(keys)
+    assert "field_proj.0.bias" not in keys
+    assert not any(key.startswith("field_proj.proj.") for key in keys)
+    assert not any(key.startswith("field_proj.layers.") for key in keys)
+    assert not any(key.startswith("field_proj.module.") for key in keys)
+
+
 def test_v2_encode_traj_features_vin_snippet() -> None:
     """V2 trajectory wrapper should use the shared reference-frame helper."""
     model = VinModelV2(
