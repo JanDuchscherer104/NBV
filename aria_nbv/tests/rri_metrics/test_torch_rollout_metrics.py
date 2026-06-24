@@ -581,6 +581,17 @@ def test_selected_action_oracle_comparison_metric_returns_nan_when_all_tables_em
     assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
 
 
+def test_selected_action_oracle_comparison_metric_empty_valid_rate_is_zero() -> None:
+    metric = SelectedActionOracleComparisonMetric()
+
+    result = metric.compute()
+
+    assert torch.isnan(result["selected_oracle_regret"])
+    assert torch.isnan(result["selected_oracle_rank"])
+    assert torch.isnan(result["selected_oracle_percentile"])
+    assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
+
+
 def test_candidate_provenance_share_metric_accumulates_valid_tables() -> None:
     metric = CandidateProvenanceShareMetric(strategy_family_ids=(1, 2), position_family_ids=(5,))
 
@@ -631,6 +642,53 @@ def test_policy_table_metrics_report_proposal_columns() -> None:
     assert torch.allclose(result["invalidity"], torch.tensor(3.0 / 6.0))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
+    assert torch.isnan(result["selected_oracle_regret"])
+    assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
+
+
+def test_policy_table_metrics_report_selected_oracle_columns() -> None:
+    metric = PolicyTableMetrics(gamma=1.0, eps=1e-6)
+
+    metric.update(
+        torch.tensor([[1.0], [1.0], [1.0]]),
+        initial_error=torch.tensor([10.0, 10.0, 10.0]),
+        final_error=torch.tensor([5.0, 5.0, 5.0]),
+        candidate_values=torch.tensor(
+            [
+                [3.0, 2.0, 1.0],
+                [1.0, 4.0, 2.0],
+                [1.0, float("nan"), 3.0],
+            ]
+        ),
+        candidate_valid_mask=torch.tensor(
+            [
+                [True, True, True],
+                [True, True, True],
+                [True, False, True],
+            ]
+        ),
+        selected_indices=torch.tensor([0, 2, 1]),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["candidate_valid_rate"], torch.tensor(8.0 / 9.0))
+    assert torch.allclose(result["selected_oracle_regret"], torch.tensor((0.0 + 2.0) / 2.0))
+    assert torch.allclose(result["selected_oracle_rank"], torch.tensor((1.0 + 2.0) / 2.0))
+    assert torch.allclose(result["selected_oracle_percentile"], torch.tensor((1.0 + 0.5) / 2.0))
+    assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(2.0 / 3.0))
+
+
+def test_policy_table_metrics_require_candidate_pair_for_selected_indices() -> None:
+    metric = PolicyTableMetrics()
+
+    with pytest.raises(ValueError, match="selected_indices requires"):
+        metric.update(
+            torch.tensor([[1.0]]),
+            initial_error=torch.tensor([10.0]),
+            final_error=torch.tensor([5.0]),
+            selected_indices=torch.tensor([0]),
+        )
 
 
 def test_policy_table_metrics_can_derive_cost_from_selected_path() -> None:

@@ -525,11 +525,15 @@ class SelectedActionOracleComparisonMetric(MetricBase):
     def compute(self) -> dict[str, Tensor]:
         """Return finite means plus the comparable-table rate."""
 
+        if self.table_count > 0:
+            valid_table_rate = self.valid_table_count / self.table_count.clamp_min(1.0)
+        else:
+            valid_table_rate = torch.zeros_like(self.valid_table_count)
         return {
             "selected_oracle_regret": _safe_mean(self.regret_total, self.regret_count),
             "selected_oracle_rank": _safe_mean(self.rank_total, self.rank_count),
             "selected_oracle_percentile": _safe_mean(self.percentile_total, self.percentile_count),
-            "selected_oracle_valid_table_rate": _safe_mean(self.valid_table_count, self.table_count),
+            "selected_oracle_valid_table_rate": valid_table_rate,
         }
 
 
@@ -554,6 +558,7 @@ class PolicyTableMetrics(MetricBase):
         self.runtime = FiniteMeanMetric()
         self.coverage = FiniteMeanMetric()
         self.candidates = CandidateTableMetrics()
+        self.selected_oracle = SelectedActionOracleComparisonMetric()
 
     def update(
         self,
@@ -571,6 +576,7 @@ class PolicyTableMetrics(MetricBase):
         scalar_valid_mask: Tensor | None = None,
         candidate_values: Tensor | None = None,
         candidate_valid_mask: Tensor | None = None,
+        selected_indices: Tensor | None = None,
         candidate_dim: int = -1,
     ) -> None:
         """Accumulate one batch of policy-table tensors.
@@ -594,6 +600,9 @@ class PolicyTableMetrics(MetricBase):
             candidate_values: Optional finite candidate table values used for
                 value diagnostics.
             candidate_valid_mask: Optional hard candidate validity mask.
+            selected_indices: Optional selected candidate index per table used
+                for oracle regret/rank diagnostics. Requires both
+                ``candidate_values`` and ``candidate_valid_mask``.
             candidate_dim: Candidate axis for candidate-table reductions.
         """
 
@@ -619,12 +628,17 @@ class PolicyTableMetrics(MetricBase):
             if candidate_values is None or candidate_valid_mask is None:
                 raise ValueError("candidate_values and candidate_valid_mask must be provided together.")
             self.candidates.update(candidate_values, candidate_valid_mask, dim=candidate_dim)
+        if selected_indices is not None:
+            if candidate_values is None or candidate_valid_mask is None:
+                raise ValueError("selected_indices requires candidate_values and candidate_valid_mask.")
+            self.selected_oracle.update(candidate_values, selected_indices, candidate_valid_mask, dim=candidate_dim)
 
     def compute(self) -> dict[str, Tensor]:
         """Return proposal table columns plus candidate diagnostics."""
 
         selected = self.selected.compute()
         candidates = self.candidates.compute()
+        selected_oracle = self.selected_oracle.compute()
         return {
             "endpoint_gain": selected["endpoint_gain"],
             "return_h": selected["return_h"],
@@ -639,6 +653,10 @@ class PolicyTableMetrics(MetricBase):
             "candidate_valid_rate": candidates["candidate_valid_rate"],
             "candidate_value_mean": candidates["candidate_value_mean"],
             "candidate_best_value": candidates["candidate_best_value"],
+            "selected_oracle_regret": selected_oracle["selected_oracle_regret"],
+            "selected_oracle_rank": selected_oracle["selected_oracle_rank"],
+            "selected_oracle_percentile": selected_oracle["selected_oracle_percentile"],
+            "selected_oracle_valid_table_rate": selected_oracle["selected_oracle_valid_table_rate"],
         }
 
 
