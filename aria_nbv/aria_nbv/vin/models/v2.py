@@ -89,7 +89,9 @@ from ..types import (
 )
 from ._context_mixin import PoseFeatureGlobalContextMixin
 from ._v2_semidense import (
+    SEMIDENSE_FRUSTUM_TOKEN_DIM,
     encode_semidense_projection_features_v2,
+    prepare_semidense_frustum_tokens_v2,
     project_semidense_points_v2,
     sample_semidense_points_v2,
 )
@@ -109,15 +111,6 @@ FIELD_CHANNELS_V2: tuple[str, ...] = (
     "unknown",
     "new_surface_prior",
 )
-
-SEMIDENSE_FRUSTUM_TOKEN_FEATURES: tuple[str, ...] = (
-    "x_norm",
-    "y_norm",
-    "depth_m",
-    "inv_dist_std",
-    "obs_count",
-)
-SEMIDENSE_FRUSTUM_TOKEN_DIM = len(SEMIDENSE_FRUSTUM_TOKEN_FEATURES)
 
 
 class VinModelV2Config(TargetConfig["VinModelV2"]):
@@ -794,73 +787,25 @@ class VinModelV2(PoseFeatureGlobalContextMixin, nn.Module):
         if proj_data is None:
             return frustum_feat
 
-        x = proj_data["x"]
-        y = proj_data["y"]
-        z = proj_data["z"]
-        valid = proj_data["valid"]
-        image_size = proj_data["image_size"]
-        inv_dist_std = proj_data.get("inv_dist_std")
-        if inv_dist_std is not None and inv_dist_std.numel() == 0:
-            inv_dist_std = None
-        obs_count = proj_data.get("obs_count")
-        if obs_count is not None and obs_count.numel() == 0:
-            obs_count = None
-        num_cams = int(proj_data["num_cams"].item())
-
-        h = image_size[:, 0].unsqueeze(1).clamp_min(1.0)
-        w = image_size[:, 1].unsqueeze(1).clamp_min(1.0)
-        x_safe = torch.where(valid, x, torch.zeros_like(x))
-        y_safe = torch.where(valid, y, torch.zeros_like(y))
-        z_safe = torch.where(valid, z, torch.zeros_like(z))
-        x_safe = torch.nan_to_num(x_safe, nan=0.0, posinf=0.0, neginf=0.0)
-        y_safe = torch.nan_to_num(y_safe, nan=0.0, posinf=0.0, neginf=0.0)
-        z_safe = torch.nan_to_num(z_safe, nan=0.0, posinf=0.0, neginf=0.0)
-        x_norm = (x_safe / w) * 2.0 - 1.0
-        y_norm = (y_safe / h) * 2.0 - 1.0
-        depth_m = z_safe
-        if inv_dist_std is None:
-            inv_feat = torch.zeros_like(depth_m)
-        else:
-            inv_feat = torch.nan_to_num(
-                inv_dist_std.to(device=device, dtype=depth_m.dtype),
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0,
-            )
-        if obs_count is None:
-            obs_feat = torch.zeros_like(depth_m)
-        else:
-            obs_feat = obs_count.to(device=device, dtype=depth_m.dtype)
-            obs_feat = self._normalize_obs_count(obs_feat)
-            obs_feat = torch.nan_to_num(obs_feat, nan=0.0, posinf=0.0, neginf=0.0)
-
-        tokens = torch.stack([x_norm, y_norm, depth_m, inv_feat, obs_feat], dim=-1)
-        if batch_size == 1 and num_cams == num_candidates:
-            tokens = tokens.view(1, num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
-            valid = valid.view(1, num_candidates, -1)
-        else:
-            tokens = tokens.view(batch_size, num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
-            valid = valid.view(batch_size, num_candidates, -1)
-
-        max_points = int(self.config.semidense_frustum_max_points)
-        if tokens.shape[2] > max_points:
-            tokens = tokens[:, :, :max_points, :]
-            valid = valid[:, :, :max_points]
-
+        tokens, valid, flat_tokens, flat_valid, valid_any = prepare_semidense_frustum_tokens_v2(
+            proj_data,
+            batch_size=batch_size,
+            num_candidates=num_candidates,
+            device=device,
+            dtype=dtype,
+            max_points=int(self.config.semidense_frustum_max_points),
+            normalize_obs_count=self._normalize_obs_count,
+        )
         if self.sem_frustum_vis_embed is not None:
             vis_idx = valid.to(dtype=torch.long)
             tokens = tokens + self.sem_frustum_vis_embed(vis_idx)
-
-        flat_tokens = tokens.reshape(batch_size * num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
-        flat_valid = valid.reshape(batch_size * num_candidates, -1)
-        valid_any = flat_valid.any(dim=1)
+            flat_tokens = tokens.reshape(batch_size * num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
         if self.config.semidense_frustum_mask_invalid and (~valid_any).any():
             flat_tokens = flat_tokens.clone()
             flat_valid = flat_valid.clone()
             flat_tokens[~valid_any] = 0.0
             flat_valid[~valid_any] = False
 
-        flat_tokens = flat_tokens.to(device=device, dtype=dtype)
         q = self.sem_frustum_q_proj(pose_enc.to(dtype=dtype)).reshape(
             batch_size * num_candidates,
             1,

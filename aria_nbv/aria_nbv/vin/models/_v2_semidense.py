@@ -8,6 +8,7 @@ that implementation out of the model class.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import torch
@@ -15,6 +16,18 @@ from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import
 from torch import Tensor
 
 from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
+
+SEMIDENSE_FRUSTUM_TOKEN_FEATURES: tuple[str, ...] = (
+    "x_norm",
+    "y_norm",
+    "depth_m",
+    "inv_dist_std",
+    "obs_count",
+)
+"""Ordered scalar channels used by VIN v2 semidense frustum tokens."""
+
+SEMIDENSE_FRUSTUM_TOKEN_DIM = len(SEMIDENSE_FRUSTUM_TOKEN_FEATURES)
+"""Number of scalar channels per V2 semidense frustum token."""
 
 
 def sample_semidense_points_v2(
@@ -281,8 +294,106 @@ def encode_semidense_projection_features_v2(
     return proj_feat.to(device=device, dtype=dtype)
 
 
+def prepare_semidense_frustum_tokens_v2(
+    proj_data: dict[str, Tensor],
+    *,
+    batch_size: int,
+    num_candidates: int,
+    device: torch.device,
+    dtype: torch.dtype,
+    max_points: int,
+    normalize_obs_count: Callable[[Tensor], Tensor],
+) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """Prepare deterministic VIN v2 frustum-attention tokens.
+
+    This helper owns only the non-trainable tokenization and masking prep for
+    `VinModelV2._encode_semidense_frustum_context`. Trainable projections,
+    attention, residual MLPs, visibility embeddings, and output masking remain
+    on `aria_nbv.vin.models.v2.VinModelV2` so historical checkpoint keys under
+    ``sem_frustum_*`` stay unchanged.
+
+    Args:
+        proj_data: Projection dictionary from `project_semidense_points_v2`.
+        batch_size: Batch size ``B``.
+        num_candidates: Candidate count ``Nq``.
+        device: Target device for returned tensors.
+        dtype: Floating point dtype for returned token features.
+        max_points: Maximum projected points retained per candidate.
+        normalize_obs_count: Model-owned normalization callback for optional
+            observation-count channels.
+
+    Returns:
+        Tuple ``(tokens, valid, flat_tokens, flat_valid, valid_any)`` where
+        ``tokens`` is ``Tensor["B Nq P 5"]``, ``valid`` is
+        ``Tensor["B Nq P", bool]``, and the flat tensors collapse ``B*Nq`` for
+        attention. ``valid_any`` marks candidates with at least one visible
+        point.
+    """
+    x = proj_data["x"]
+    y = proj_data["y"]
+    z = proj_data["z"]
+    valid = proj_data["valid"]
+    image_size = proj_data["image_size"]
+    inv_dist_std = proj_data.get("inv_dist_std")
+    if inv_dist_std is not None and inv_dist_std.numel() == 0:
+        inv_dist_std = None
+    obs_count = proj_data.get("obs_count")
+    if obs_count is not None and obs_count.numel() == 0:
+        obs_count = None
+    num_cams = int(proj_data["num_cams"].item())
+
+    h = image_size[:, 0].unsqueeze(1).clamp_min(1.0)
+    w = image_size[:, 1].unsqueeze(1).clamp_min(1.0)
+    x_safe = torch.where(valid, x, torch.zeros_like(x))
+    y_safe = torch.where(valid, y, torch.zeros_like(y))
+    z_safe = torch.where(valid, z, torch.zeros_like(z))
+    x_safe = torch.nan_to_num(x_safe, nan=0.0, posinf=0.0, neginf=0.0)
+    y_safe = torch.nan_to_num(y_safe, nan=0.0, posinf=0.0, neginf=0.0)
+    z_safe = torch.nan_to_num(z_safe, nan=0.0, posinf=0.0, neginf=0.0)
+    x_norm = (x_safe / w) * 2.0 - 1.0
+    y_norm = (y_safe / h) * 2.0 - 1.0
+    depth_m = z_safe
+    if inv_dist_std is None:
+        inv_feat = torch.zeros_like(depth_m)
+    else:
+        inv_feat = torch.nan_to_num(
+            inv_dist_std.to(device=device, dtype=depth_m.dtype),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+    if obs_count is None:
+        obs_feat = torch.zeros_like(depth_m)
+    else:
+        obs_feat = obs_count.to(device=device, dtype=depth_m.dtype)
+        obs_feat = normalize_obs_count(obs_feat)
+        obs_feat = torch.nan_to_num(obs_feat, nan=0.0, posinf=0.0, neginf=0.0)
+
+    tokens = torch.stack([x_norm, y_norm, depth_m, inv_feat, obs_feat], dim=-1)
+    if batch_size == 1 and num_cams == num_candidates:
+        tokens = tokens.view(1, num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
+        valid = valid.view(1, num_candidates, -1)
+    else:
+        tokens = tokens.view(batch_size, num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
+        valid = valid.view(batch_size, num_candidates, -1)
+
+    if tokens.shape[2] > max_points:
+        tokens = tokens[:, :, :max_points, :]
+        valid = valid[:, :, :max_points]
+
+    tokens = tokens.to(device=device, dtype=dtype)
+    valid = valid.to(device=device)
+    flat_tokens = tokens.reshape(batch_size * num_candidates, -1, SEMIDENSE_FRUSTUM_TOKEN_DIM)
+    flat_valid = valid.reshape(batch_size * num_candidates, -1)
+    valid_any = flat_valid.any(dim=1)
+    return tokens, valid, flat_tokens, flat_valid, valid_any.to(device=device)
+
+
 __all__ = [
+    "SEMIDENSE_FRUSTUM_TOKEN_DIM",
+    "SEMIDENSE_FRUSTUM_TOKEN_FEATURES",
     "encode_semidense_projection_features_v2",
+    "prepare_semidense_frustum_tokens_v2",
     "project_semidense_points_v2",
     "sample_semidense_points_v2",
 ]

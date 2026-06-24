@@ -176,6 +176,38 @@ def test_v2_field_proj_preserves_checkpoint_keys() -> None:
     assert not any(key.startswith("field_proj.module.") for key in keys)
 
 
+def test_v2_semidense_frustum_preserves_checkpoint_keys() -> None:
+    """V2 frustum attention should keep root-level historical state keys."""
+    model = VinModelV2(VinModelV2Config(enable_semidense_frustum=True, semidense_visibility_embed=True))
+    keys = set(model.state_dict())
+
+    expected = {
+        "sem_frustum_q_proj.weight",
+        "sem_frustum_q_proj.bias",
+        "sem_frustum_proj.weight",
+        "sem_frustum_proj.bias",
+        "sem_frustum_attn.in_proj_weight",
+        "sem_frustum_attn.in_proj_bias",
+        "sem_frustum_attn.out_proj.weight",
+        "sem_frustum_attn.out_proj.bias",
+        "sem_frustum_norm_q.weight",
+        "sem_frustum_norm_q.bias",
+        "sem_frustum_norm_kv.weight",
+        "sem_frustum_norm_kv.bias",
+        "sem_frustum_mlp.0.weight",
+        "sem_frustum_mlp.0.bias",
+        "sem_frustum_mlp.2.weight",
+        "sem_frustum_mlp.2.bias",
+        "sem_frustum_mlp_norm.weight",
+        "sem_frustum_mlp_norm.bias",
+        "sem_frustum_vis_embed.weight",
+    }
+
+    assert expected.issubset(keys)
+    assert not any(key.startswith("sem_frustum_context.") for key in keys)
+    assert not any(key.startswith("sem_frustum_module.") for key in keys)
+
+
 def test_v2_encode_traj_features_vin_snippet() -> None:
     """V2 trajectory wrapper should use the shared reference-frame helper."""
     model = VinModelV2(

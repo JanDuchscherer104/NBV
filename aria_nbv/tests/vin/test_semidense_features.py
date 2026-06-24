@@ -6,6 +6,7 @@ from aria_nbv.vin.geometry.semidense_schema import semidense_proj_feature_index
 from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models._v2_semidense import (
     encode_semidense_projection_features_v2,
+    prepare_semidense_frustum_tokens_v2,
     project_semidense_points_v2,
 )
 
@@ -103,6 +104,41 @@ def test_semidense_visibility_embedding_changes_output() -> None:
     )
 
     assert not torch.allclose(out_invalid, out_valid)
+
+
+def test_prepare_semidense_frustum_tokens_v2_normalizes_and_flattens() -> None:
+    """V2 frustum token prep should preserve legacy normalized screen/depth channels."""
+    device = torch.device("cpu")
+    proj = {
+        "x": torch.tensor([[5.0, 0.0]], device=device, dtype=torch.float32),
+        "y": torch.tensor([[2.5, 0.0]], device=device, dtype=torch.float32),
+        "z": torch.tensor([[3.0, 0.0]], device=device, dtype=torch.float32),
+        "valid": torch.tensor([[True, False]], device=device),
+        "image_size": torch.tensor([[10.0, 20.0]], device=device, dtype=torch.float32),
+        "inv_dist_std": torch.tensor([[0.25, 0.75]], device=device, dtype=torch.float32),
+        "obs_count": torch.tensor([[4.0, 9.0]], device=device, dtype=torch.float32),
+        "num_cams": torch.tensor(1, device=device),
+    }
+
+    tokens, valid, flat_tokens, flat_valid, valid_any = prepare_semidense_frustum_tokens_v2(
+        proj,
+        batch_size=1,
+        num_candidates=1,
+        device=device,
+        dtype=torch.float32,
+        max_points=1,
+        normalize_obs_count=lambda obs: obs / 10.0,
+    )
+
+    assert tokens.shape == (1, 1, 1, 5)
+    assert valid.shape == (1, 1, 1)
+    assert flat_tokens.shape == (1, 1, 5)
+    assert flat_valid.shape == (1, 1)
+    assert valid_any.tolist() == [True]
+    assert torch.allclose(
+        flat_tokens[0, 0],
+        torch.tensor([-0.5, -0.5, 3.0, 0.25, 0.4], dtype=torch.float32),
+    )
 
 
 def test_v2_semidense_projection_keeps_permissive_missing_data_contract() -> None:
