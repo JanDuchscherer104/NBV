@@ -19,6 +19,7 @@ from .torch_rollout import (
     candidate_order_consistency,
     candidate_path_increment_stats,
     candidate_policy_entropy,
+    candidate_primary_invalid_reason_share,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
     selected_action_oracle_comparison,
@@ -177,6 +178,13 @@ class CandidateTableMetrics(MetricBase):
         self.add_state("best_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
         self.add_state("best_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
 
+    def update_validity(self, valid_mask: Tensor) -> None:
+        """Accumulate candidate hard-mask validity without value summaries."""
+
+        mask = valid_mask.to(device=self.valid_count.device, dtype=torch.bool)
+        self.valid_count = self.valid_count + mask.to(dtype=torch.float32).sum()
+        self.total_count = self.total_count + torch.tensor(float(mask.numel()), device=self.total_count.device)
+
     def update(self, values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> None:
         """Accumulate validity-aware candidate table summaries.
 
@@ -188,9 +196,7 @@ class CandidateTableMetrics(MetricBase):
 
         values_f = values.to(device=self.valid_count.device, dtype=torch.float32)
         mask = torch.broadcast_to(valid_mask.to(device=self.valid_count.device, dtype=torch.bool), values_f.shape)
-        valid = torch.isfinite(values_f) & mask
-        self.valid_count = self.valid_count + valid.to(dtype=torch.float32).sum()
-        self.total_count = self.total_count + torch.tensor(float(mask.numel()), device=self.total_count.device)
+        self.update_validity(mask)
 
         means = candidate_masked_mean(values_f, mask, dim=dim).reshape(-1)
         best = candidate_best_value(values_f, mask, dim=dim).reshape(-1)
@@ -281,6 +287,64 @@ class CandidatePathIncrementMetric(MetricBase):
             "candidate_path_increment_min_m": _safe_mean(self.min_total, self.min_count),
             "candidate_path_increment_max_m": _safe_mean(self.max_total, self.max_count),
             "candidate_path_increment_valid_table_rate": valid_table_rate,
+        }
+
+
+class CandidatePrimaryInvalidReasonMetric(MetricBase):
+    """Accumulate primary invalid-reason share among rejected candidates.
+
+    The configured reason ids identify one stable rejection family, for example
+    path-collision or target-support failures. Shares are measured over
+    hard-invalid rows only; valid action rows stay out of the denominator so
+    this diagnostic complements, rather than redefines, aggregate invalidity.
+    """
+
+    full_state_update = False
+
+    def __init__(self, *, reason_ids: tuple[int, ...]) -> None:
+        super().__init__()
+        if not reason_ids:
+            raise ValueError("reason_ids must contain at least one primary invalid-reason id.")
+        self.reason_ids = tuple(int(value) for value in reason_ids)
+        self.add_state("share_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("share_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        primary_invalid_reason: Tensor,
+        valid_mask: Tensor,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of primary invalid-reason ids."""
+
+        stats = candidate_primary_invalid_reason_share(
+            primary_invalid_reason.to(device=self.share_total.device),
+            valid_mask.to(device=self.share_total.device),
+            reason_ids=self.reason_ids,
+            dim=dim,
+        )
+        shares = stats.share_of_invalid.reshape(-1)
+        valid_table = stats.valid_table.reshape(-1)
+        finite = torch.isfinite(shares) & valid_table
+        if finite.any():
+            self.share_total = self.share_total + shares[finite].sum()
+            self.share_count = self.share_count + finite.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return reason-group share and denominator-validity rate."""
+
+        if self.table_count > 0:
+            valid_table_rate = self.valid_table_count / self.table_count.clamp_min(1.0)
+        else:
+            valid_table_rate = torch.zeros_like(self.valid_table_count)
+        return {
+            "candidate_primary_invalid_reason_share_of_invalid": _safe_mean(self.share_total, self.share_count),
+            "candidate_primary_invalid_reason_valid_table_rate": valid_table_rate,
         }
 
 
@@ -622,7 +686,13 @@ class PolicyTableMetrics(MetricBase):
 
     full_state_update = False
 
-    def __init__(self, *, gamma: float = 1.0, eps: float = 1e-8) -> None:
+    def __init__(
+        self,
+        *,
+        gamma: float = 1.0,
+        eps: float = 1e-8,
+        primary_invalid_reason_ids: tuple[int, ...] = (),
+    ) -> None:
         super().__init__()
         self.selected = SelectedRolloutMetrics(gamma=gamma, eps=eps)
         self.scene_rri = FiniteMeanMetric()
@@ -631,6 +701,11 @@ class PolicyTableMetrics(MetricBase):
         self.coverage = FiniteMeanMetric()
         self.candidates = CandidateTableMetrics()
         self.candidate_path_increment = CandidatePathIncrementMetric()
+        self.primary_invalid_reason = (
+            CandidatePrimaryInvalidReasonMetric(reason_ids=primary_invalid_reason_ids)
+            if primary_invalid_reason_ids
+            else None
+        )
         self.selected_oracle = SelectedActionOracleComparisonMetric()
 
     def update(
@@ -650,6 +725,7 @@ class PolicyTableMetrics(MetricBase):
         candidate_values: Tensor | None = None,
         candidate_valid_mask: Tensor | None = None,
         candidate_path_increment_m: Tensor | None = None,
+        candidate_primary_invalid_reason: Tensor | None = None,
         selected_indices: Tensor | None = None,
         candidate_dim: int = -1,
     ) -> None:
@@ -678,6 +754,10 @@ class PolicyTableMetrics(MetricBase):
                 metres, normally rollout diagnostic ``motion_step_length_m``.
                 Requires ``candidate_valid_mask`` and is kept separate from the
                 selected policy ``cost`` column.
+            candidate_primary_invalid_reason: Optional
+                ``candidates/primary_invalid_reason`` tensor. Consumed only
+                when this metric was constructed with
+                ``primary_invalid_reason_ids``.
             selected_indices: Optional selected candidate index per table used
                 for oracle regret/rank diagnostics. Requires both
                 ``candidate_values`` and ``candidate_valid_mask``.
@@ -706,12 +786,24 @@ class PolicyTableMetrics(MetricBase):
             if candidate_valid_mask is None:
                 raise ValueError("candidate_values requires candidate_valid_mask.")
             self.candidates.update(candidate_values, candidate_valid_mask, dim=candidate_dim)
-        elif candidate_valid_mask is not None and candidate_path_increment_m is None:
-            raise ValueError("candidate_valid_mask requires candidate_values or candidate_path_increment_m.")
+        elif candidate_valid_mask is not None:
+            self.candidates.update_validity(candidate_valid_mask)
         if candidate_path_increment_m is not None:
             if candidate_valid_mask is None:
                 raise ValueError("candidate_path_increment_m requires candidate_valid_mask.")
             self.candidate_path_increment.update(candidate_path_increment_m, candidate_valid_mask, dim=candidate_dim)
+        if candidate_primary_invalid_reason is not None:
+            if candidate_valid_mask is None:
+                raise ValueError("candidate_primary_invalid_reason requires candidate_valid_mask.")
+            if self.primary_invalid_reason is None:
+                raise ValueError(
+                    "candidate_primary_invalid_reason requires PolicyTableMetrics(primary_invalid_reason_ids=...).",
+                )
+            self.primary_invalid_reason.update(
+                candidate_primary_invalid_reason,
+                candidate_valid_mask,
+                dim=candidate_dim,
+            )
         if selected_indices is not None:
             if candidate_values is None or candidate_valid_mask is None:
                 raise ValueError("selected_indices requires candidate_values and candidate_valid_mask.")
@@ -724,6 +816,19 @@ class PolicyTableMetrics(MetricBase):
         candidates = self.candidates.compute()
         path_increment = self.candidate_path_increment.compute()
         selected_oracle = self.selected_oracle.compute()
+        primary_invalid_reason = (
+            self.primary_invalid_reason.compute()
+            if self.primary_invalid_reason is not None
+            else {
+                "candidate_primary_invalid_reason_share_of_invalid": torch.full_like(
+                    path_increment["candidate_path_increment_valid_table_rate"],
+                    float("nan"),
+                ),
+                "candidate_primary_invalid_reason_valid_table_rate": torch.zeros_like(
+                    path_increment["candidate_path_increment_valid_table_rate"],
+                ),
+            }
+        )
         return {
             "endpoint_gain": selected["endpoint_gain"],
             "return_h": selected["return_h"],
@@ -742,6 +847,12 @@ class PolicyTableMetrics(MetricBase):
             "candidate_path_increment_min_m": path_increment["candidate_path_increment_min_m"],
             "candidate_path_increment_max_m": path_increment["candidate_path_increment_max_m"],
             "candidate_path_increment_valid_table_rate": path_increment["candidate_path_increment_valid_table_rate"],
+            "candidate_primary_invalid_reason_share_of_invalid": primary_invalid_reason[
+                "candidate_primary_invalid_reason_share_of_invalid"
+            ],
+            "candidate_primary_invalid_reason_valid_table_rate": primary_invalid_reason[
+                "candidate_primary_invalid_reason_valid_table_rate"
+            ],
             "selected_oracle_regret": selected_oracle["selected_oracle_regret"],
             "selected_oracle_rank": selected_oracle["selected_oracle_rank"],
             "selected_oracle_percentile": selected_oracle["selected_oracle_percentile"],
@@ -757,6 +868,7 @@ __all__ = [
     "CandidateTableMetrics",
     "CandidateOrderConsistencyMetric",
     "CandidatePathIncrementMetric",
+    "CandidatePrimaryInvalidReasonMetric",
     "CandidatePolicyEntropyMetric",
     "CandidateProvenanceShareMetric",
     "CandidateTopKOracleHitMetric",

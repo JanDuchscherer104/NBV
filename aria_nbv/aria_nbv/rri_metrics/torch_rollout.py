@@ -111,6 +111,26 @@ class CandidatePathIncrementStats:
     valid_table: Tensor
 
 
+@dataclass(frozen=True, slots=True)
+class CandidatePrimaryInvalidReasonStats:
+    """Per-table primary invalid-reason share among rejected candidate rows.
+
+    Rollout replay tables persist the complete invalidity bitset and one
+    priority-selected ``primary_invalid_reason`` per candidate row. This
+    diagnostic intentionally consumes only the primary reason field; use the
+    bitset arrays when auditing overlapping reason vectors.
+
+    Attributes:
+        share_of_invalid: ``Tensor["B"]`` fraction of hard-invalid candidate
+            rows whose primary reason belongs to the configured reason group.
+        valid_table: ``Tensor["B"]`` mask for tables with at least one
+            hard-invalid candidate row and therefore a meaningful denominator.
+    """
+
+    share_of_invalid: Tensor
+    valid_table: Tensor
+
+
 def discounted_selected_return(
     rewards: Tensor,
     valid_mask: Tensor | None = None,
@@ -687,6 +707,61 @@ def candidate_path_increment_stats(
     )
 
 
+def candidate_primary_invalid_reason_share(
+    primary_invalid_reason: Tensor,
+    valid_mask: Tensor,
+    *,
+    reason_ids: Sequence[int] | Tensor,
+    dim: int = -1,
+) -> CandidatePrimaryInvalidReasonStats:
+    """Summarize primary invalid-reason concentration among rejected rows.
+
+    Args:
+        primary_invalid_reason: Stable primary invalid-reason ids aligned with
+            the candidate table, typically ``candidates/primary_invalid_reason``.
+        valid_mask: Boolean hard-validity mask where ``True`` marks valid
+            policy actions. Valid rows are excluded from both numerator and
+            denominator.
+        reason_ids: Reason ids counted as the audited group. The sequence must
+            be non-empty so the metric identity is explicit at construction.
+        dim: Candidate dimension reduced inside each table.
+
+    Returns:
+        `CandidatePrimaryInvalidReasonStats` whose share is measured over
+        invalid rows only. Tables with no invalid rows report ``NaN`` and
+        ``valid_table=False``.
+    """
+
+    if isinstance(reason_ids, Tensor):
+        ids = reason_ids.reshape(-1)
+    else:
+        ids = torch.as_tensor(tuple(reason_ids), dtype=torch.long).reshape(-1)
+    if ids.numel() == 0:
+        raise ValueError("reason_ids must contain at least one primary invalid-reason id.")
+    if dim < 0:
+        dim = primary_invalid_reason.ndim + dim
+    if dim < 0 or dim >= primary_invalid_reason.ndim:
+        raise ValueError(f"dim={dim} is outside tensor rank {primary_invalid_reason.ndim}.")
+
+    reasons = primary_invalid_reason.to(dtype=torch.long)
+    hard_valid = torch.broadcast_to(valid_mask.to(device=reasons.device, dtype=torch.bool), reasons.shape)
+    ids = ids.to(device=reasons.device, dtype=reasons.dtype)
+    if dim != reasons.ndim - 1:
+        reasons = reasons.movedim(dim, -1)
+        hard_valid = hard_valid.movedim(dim, -1)
+
+    invalid_rows = ~hard_valid
+    selected = invalid_rows & _id_membership(reasons, ids)
+    numerator = selected.to(dtype=torch.float32).sum(dim=-1)
+    denominator = invalid_rows.to(dtype=torch.float32).sum(dim=-1)
+    valid_table = denominator > 0
+    share = numerator / denominator.clamp_min(1.0)
+    return CandidatePrimaryInvalidReasonStats(
+        share_of_invalid=torch.where(valid_table, share, torch.full_like(share, float("nan"))),
+        valid_table=valid_table,
+    )
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -792,12 +867,14 @@ __all__ = [
     "TorchRolloutMetrics",
     "CandidateOrderConsistency",
     "CandidatePathIncrementStats",
+    "CandidatePrimaryInvalidReasonStats",
     "SelectedActionOracleComparison",
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
     "candidate_path_increment_stats",
     "candidate_policy_entropy",
+    "candidate_primary_invalid_reason_share",
     "candidate_provenance_share",
     "candidate_topk_oracle_hit",
     "discounted_selected_return",

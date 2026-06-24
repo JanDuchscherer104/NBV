@@ -13,6 +13,8 @@ from aria_nbv.rri_metrics import (
     CandidatePathIncrementMetric,
     CandidatePathIncrementStats,
     CandidatePolicyEntropyMetric,
+    CandidatePrimaryInvalidReasonMetric,
+    CandidatePrimaryInvalidReasonStats,
     CandidateProvenanceShareMetric,
     CandidateTableMetrics,
     CandidateTopKOracleHitMetric,
@@ -27,6 +29,7 @@ from aria_nbv.rri_metrics import (
     candidate_order_consistency,
     candidate_path_increment_stats,
     candidate_policy_entropy,
+    candidate_primary_invalid_reason_share,
     candidate_provenance_share,
     candidate_topk_oracle_hit,
     discounted_selected_return,
@@ -421,6 +424,48 @@ def test_candidate_path_increment_stats_validates_dim() -> None:
         candidate_path_increment_stats(torch.tensor([1.0]), torch.tensor([True]), dim=2)
 
 
+def test_candidate_primary_invalid_reason_share_counts_invalid_rows_only() -> None:
+    primary = torch.tensor(
+        [
+            [0, 6, 12, 6],
+            [0, 5, 12, 12],
+            [0, 0, 0, 0],
+        ],
+        dtype=torch.int64,
+    )
+    valid = torch.tensor(
+        [
+            [True, False, False, False],
+            [True, False, True, False],
+            [True, True, True, True],
+        ]
+    )
+
+    result = candidate_primary_invalid_reason_share(primary, valid, reason_ids=(6, 12))
+
+    assert isinstance(result, CandidatePrimaryInvalidReasonStats)
+    assert torch.allclose(result.share_of_invalid, torch.tensor([1.0, 0.5, float("nan")]), equal_nan=True)
+    assert torch.equal(result.valid_table, torch.tensor([True, True, False]))
+
+
+def test_candidate_primary_invalid_reason_share_supports_non_last_candidate_dim() -> None:
+    primary = torch.tensor([[6, 0], [12, 5], [0, 12]], dtype=torch.int64)
+    valid = torch.tensor([[False, True], [False, False], [True, False]])
+
+    result = candidate_primary_invalid_reason_share(primary, valid, reason_ids=(6, 12), dim=0)
+
+    assert torch.allclose(result.share_of_invalid, torch.tensor([1.0, 0.5]))
+    assert torch.equal(result.valid_table, torch.tensor([True, True]))
+
+
+def test_candidate_primary_invalid_reason_share_validates_configuration() -> None:
+    with pytest.raises(ValueError, match="reason_ids"):
+        candidate_primary_invalid_reason_share(torch.tensor([1]), torch.tensor([False]), reason_ids=())
+
+    with pytest.raises(ValueError, match="outside tensor rank"):
+        candidate_primary_invalid_reason_share(torch.tensor([1]), torch.tensor([False]), reason_ids=(1,), dim=2)
+
+
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
     metric = FiniteMeanMetric()
 
@@ -485,8 +530,8 @@ def test_candidate_table_metrics_report_invalidity_and_values() -> None:
 
     result = metric.compute()
 
-    assert torch.allclose(result["candidate_valid_rate"], torch.tensor(3.0 / 6.0))
-    assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(0.5))
+    assert torch.allclose(result["candidate_valid_rate"], torch.tensor(4.0 / 6.0))
+    assert torch.allclose(result["candidate_invalid_rate"], torch.tensor(2.0 / 6.0))
     assert torch.allclose(result["candidate_value_mean"], torch.tensor((1.5 + 4.0) / 2.0))
     assert torch.allclose(result["candidate_best_value"], torch.tensor((2.0 + 4.0) / 2.0))
 
@@ -517,6 +562,29 @@ def test_candidate_path_increment_metric_returns_empty_valid_rate_zero() -> None
     assert torch.isnan(result["candidate_path_increment_min_m"])
     assert torch.isnan(result["candidate_path_increment_max_m"])
     assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(0.0))
+
+
+def test_candidate_primary_invalid_reason_metric_accumulates_share_of_invalid() -> None:
+    metric = CandidatePrimaryInvalidReasonMetric(reason_ids=(6, 12))
+
+    metric.update(
+        torch.tensor([[0, 6, 12, 5], [0, 6, 0, 0]], dtype=torch.int64),
+        torch.tensor([[True, False, False, False], [True, False, True, True]]),
+    )
+    metric.update(torch.tensor([[0, 0]], dtype=torch.int64), torch.tensor([[True, True]]))
+
+    result = metric.compute()
+
+    assert torch.allclose(
+        result["candidate_primary_invalid_reason_share_of_invalid"],
+        torch.tensor(((2.0 / 3.0) + 1.0) / 2.0),
+    )
+    assert torch.allclose(result["candidate_primary_invalid_reason_valid_table_rate"], torch.tensor(2.0 / 3.0))
+
+
+def test_candidate_primary_invalid_reason_metric_requires_reason_ids() -> None:
+    with pytest.raises(ValueError, match="reason_ids"):
+        CandidatePrimaryInvalidReasonMetric(reason_ids=())
 
 
 def test_selected_path_cost_metrics_report_mean_cost_aliases() -> None:
@@ -720,8 +788,44 @@ def test_policy_table_metrics_report_proposal_columns() -> None:
     assert torch.allclose(result["candidate_path_increment_min_m"], torch.tensor((0.5 + 1.4) / 2.0))
     assert torch.allclose(result["candidate_path_increment_max_m"], torch.tensor((0.7 + 1.4) / 2.0))
     assert torch.allclose(result["candidate_path_increment_valid_table_rate"], torch.tensor(1.0))
+    assert torch.isnan(result["candidate_primary_invalid_reason_share_of_invalid"])
+    assert torch.allclose(result["candidate_primary_invalid_reason_valid_table_rate"], torch.tensor(0.0))
     assert torch.isnan(result["selected_oracle_regret"])
     assert torch.allclose(result["selected_oracle_valid_table_rate"], torch.tensor(0.0))
+
+
+def test_policy_table_metrics_report_configured_primary_invalid_reason_group() -> None:
+    metric = PolicyTableMetrics(primary_invalid_reason_ids=(6, 12))
+
+    metric.update(
+        torch.tensor([[1.0], [1.0]]),
+        initial_error=torch.tensor([10.0, 10.0]),
+        final_error=torch.tensor([5.0, 5.0]),
+        candidate_valid_mask=torch.tensor([[True, False, False, False], [True, False, True, False]]),
+        candidate_primary_invalid_reason=torch.tensor([[0, 6, 12, 5], [0, 5, 0, 12]], dtype=torch.int64),
+    )
+
+    result = metric.compute()
+
+    assert torch.allclose(result["invalidity"], torch.tensor(5.0 / 8.0))
+    assert torch.allclose(
+        result["candidate_primary_invalid_reason_share_of_invalid"],
+        torch.tensor(((2.0 / 3.0) + 0.5) / 2.0),
+    )
+    assert torch.allclose(result["candidate_primary_invalid_reason_valid_table_rate"], torch.tensor(1.0))
+
+
+def test_policy_table_metrics_require_config_for_primary_invalid_reason_group() -> None:
+    metric = PolicyTableMetrics()
+
+    with pytest.raises(ValueError, match="primary_invalid_reason_ids"):
+        metric.update(
+            torch.tensor([[1.0]]),
+            initial_error=torch.tensor([10.0]),
+            final_error=torch.tensor([5.0]),
+            candidate_valid_mask=torch.tensor([[True, False]]),
+            candidate_primary_invalid_reason=torch.tensor([[0, 6]], dtype=torch.int64),
+        )
 
 
 def test_policy_table_metrics_report_selected_oracle_columns() -> None:
