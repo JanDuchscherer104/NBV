@@ -195,6 +195,7 @@ class RolloutRecipeConfig(BaseConfig):
                 require_sibling_strategy_diversity=True,
                 min_sibling_distance_m=0.2,
                 min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
                 seed=0,
             ),
             RolloutRecipeConfig(
@@ -206,6 +207,7 @@ class RolloutRecipeConfig(BaseConfig):
                 require_sibling_strategy_diversity=True,
                 min_sibling_distance_m=0.2,
                 min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
                 seed=0,
             ),
             RolloutRecipeConfig(
@@ -218,6 +220,7 @@ class RolloutRecipeConfig(BaseConfig):
                 require_sibling_strategy_diversity=True,
                 min_sibling_distance_m=0.2,
                 min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
                 stochastic_branch_factors=[2, 3],
                 stochastic_branch_probabilities=[0.5, 0.5],
                 seed=0,

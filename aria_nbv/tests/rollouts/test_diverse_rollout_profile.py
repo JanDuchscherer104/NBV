@@ -43,7 +43,8 @@ def test_diverse_rollout_profile_enables_sibling_diversity_controls() -> None:
         assert recipe.beam_width == 3
         assert recipe.require_sibling_strategy_diversity is True
         assert recipe.min_sibling_distance_m > 0.0
-        assert recipe.min_sibling_yaw_deg > 0.0
+        assert recipe.min_sibling_yaw_deg == 20.0
+        assert recipe.min_sibling_target_bearing_deg == 20.0
 
 
 def test_diverse_rollout_profile_matches_named_code_presets() -> None:
