@@ -17,22 +17,20 @@ from ...data_handling import EfmSnippetView
 from ...utils.data_plotting import SnippetPlotBuilder
 from ...utils.frames import rotate_yaw_cw90
 from ...utils.plotting import _plot_slice_grid
+from ._frustum_adapter import _camera_tw_from_p3d, _frustum_builder_stub, _pose_from_p3d_camera
 from .plotting_common import (
     BBOX_EDGE_IDX,
     _as_pose_tw,
-    _camera_tw_from_p3d,
     _candidate_valid_fraction,
     _centers_rig_from_poses,
     _collect_backbone_evidence_points,
     _flatten_edges_for_plotly,
-    _frustum_builder_stub,
     _histogram_bar,
     _histogram_edges,
     _line_trace,
     _pca_2d,
     _pca_2d_with_components,
     _pose_first_batch,
-    _pose_from_p3d_camera,
     _pretty_label,
     _rotate_points_yaw_cw90,
     _scatter3d,

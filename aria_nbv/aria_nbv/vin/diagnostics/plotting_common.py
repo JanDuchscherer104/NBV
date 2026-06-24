@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go  # type: ignore[import-untyped]
 import torch
-from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
-from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
-from ...utils.data_plotting import BBOX_EDGE_IDX, SnippetPlotBuilder, _flatten_edges_for_plotly
+from ...utils.data_plotting import BBOX_EDGE_IDX, _flatten_edges_for_plotly
 from ...utils.frames import rotate_yaw_cw90
 from ...utils.reporting import _pretty_label
 
@@ -401,108 +398,24 @@ def _segment_trace(
     )
 
 
-def _select_p3d_param(param: torch.Tensor | None, index: int) -> torch.Tensor | None:
-    if param is None:
-        return None
-    if param.ndim == 1:
-        return param
-    if param.shape[0] == 1:
-        return param[0]
-    return param[min(max(index, 0), param.shape[0] - 1)]
-
-
-def _camera_tw_from_p3d(cameras: PerspectiveCameras, index: int) -> CameraTW | None:
-    if int(cameras.R.shape[0]) == 0:
-        return None
-    focal = _select_p3d_param(cameras.focal_length, index)
-    principal = _select_p3d_param(cameras.principal_point, index)
-    image_size = _select_p3d_param(cameras.image_size, index)
-    if focal is None or principal is None or image_size is None:
-        return None
-
-    focal = focal.reshape(-1)
-    principal = principal.reshape(-1)
-    image_size = image_size.reshape(-1)
-    if focal.numel() != 2 or principal.numel() != 2 or image_size.numel() != 2:
-        return None
-
-    height = image_size[0].reshape(1)
-    width = image_size[1].reshape(1)
-    params = torch.stack((focal[0], focal[1], principal[0], principal[1]), dim=0)
-
-    return CameraTW.from_surreal(
-        width=width,
-        height=height,
-        type_str="Pinhole",
-        params=params,
-    )
-
-
-def _pose_from_p3d_camera(cameras: PerspectiveCameras, index: int) -> PoseTW | None:
-    if int(cameras.R.shape[0]) == 0:
-        return None
-    rot = _select_p3d_param(cameras.R, index)
-    trans = _select_p3d_param(cameras.T, index)
-    if rot is None or trans is None:
-        return None
-    rot = rot.reshape(3, 3)
-    trans = trans.reshape(3)
-    t_wc = -(rot @ trans.unsqueeze(-1)).squeeze(-1)
-    return PoseTW.from_Rt(rot, t_wc)
-
-
-@dataclass(slots=True)
-class _FrustumTrajectoryStub:
-    t_world_rig: PoseTW
-
-
-@dataclass(slots=True)
-class _FrustumSnippetStub:
-    trajectory: _FrustumTrajectoryStub
-    mesh: None = None
-    semidense: None = None
-
-
-def _frustum_builder_stub(
-    pose_world_cam: PoseTW | None,
-    *,
-    title: str,
-    height: int = 560,
-) -> SnippetPlotBuilder | None:
-    if pose_world_cam is None:
-        return None
-    snippet_stub = _FrustumSnippetStub(_FrustumTrajectoryStub(t_world_rig=pose_world_cam))
-    return SnippetPlotBuilder.from_snippet(
-        snippet_stub,  # type: ignore[arg-type]
-        title=title,
-        height=height,
-    )
-
-
 __all__ = [
     "BBOX_EDGE_IDX",
-    "_FrustumSnippetStub",
-    "_FrustumTrajectoryStub",
     "_as_pose_batch",
     "_as_pose_tw",
     "_broadcast_pose_batch",
-    "_camera_tw_from_p3d",
     "_candidate_valid_fraction",
     "_centers_rig_from_poses",
     "_collect_backbone_evidence_points",
     "_flatten_edges_for_plotly",
-    "_frustum_builder_stub",
     "_histogram_bar",
     "_histogram_edges",
     "_line_trace",
     "_pca_2d",
     "_pca_2d_with_components",
     "_pose_first_batch",
-    "_pose_from_p3d_camera",
     "_rotate_points_yaw_cw90",
     "_scatter3d",
     "_segment_trace",
-    "_select_p3d_param",
     "_voxel_corners",
     "_voxel_indices_to_world",
 ]

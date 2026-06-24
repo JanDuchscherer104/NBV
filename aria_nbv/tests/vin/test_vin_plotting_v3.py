@@ -261,6 +261,14 @@ def test_vin_plotting_semidense_projection() -> None:
     )
     assert fig.data
 
+    fig_with_frustum = build_semidense_projection_figure(
+        points_world,
+        p3d_cameras=cams,
+        candidate_index=0,
+        show_frustum=True,
+    )
+    assert any(getattr(trace, "name", "") == "candidate frustum" for trace in fig_with_frustum.data)
+
     fig_maps = build_semidense_projection_feature_figure(
         points_world,
         p3d_cameras=cams,
