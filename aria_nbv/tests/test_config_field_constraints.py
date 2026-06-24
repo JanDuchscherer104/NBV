@@ -34,7 +34,6 @@ from aria_nbv.rl import CounterfactualRLEnvConfig
 from aria_nbv.rollouts import RolloutDatasetWriterConfig, RolloutRecipeConfig, RolloutZarrStoreConfig
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
-from aria_nbv.vin.experimental.model_v1_SH import VinModelConfig as ShVinModelConfig
 
 
 def _recipe(**kwargs: object) -> RolloutRecipeConfig:
@@ -82,8 +81,6 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (GradNormLoggingConfig, {"max_items": 0}),
         (LearnableFourierFeaturesConfig, {"fourier_dim": 7}),
         (R6dLffPoseEncoderConfig, {"pose_scale_init": (0.0, 1.0)}),
-        (ShVinModelConfig, {"frustum_depths_m": [float("nan")]}),
-        (ShVinModelConfig, {"frustum_depths_m": [0.0]}),
         (RlPageConfig, {"default_eval_episodes": 0}),
     ],
 )
