@@ -1,9 +1,9 @@
-"""VIN-specific plotting adapters shared by diagnostics.
+"""Voxel and backbone evidence adapters for VIN diagnostic figures.
 
-The helpers in this module translate VIN voxel and backbone diagnostic state
-into arrays consumed by Plotly figures. Pose/candidate adapters live in
-:mod:`aria_nbv.vin.diagnostics._pose_candidate_adapter`, and generic Plotly
-primitives live in :mod:`aria_nbv.vin.diagnostics._plot_primitives`.
+This module converts VIN voxel-grid diagnostics into world-frame point arrays
+for Plotly visualizations. Pose normalization is delegated to
+:mod:`aria_nbv.vin.diagnostics._pose_candidate_adapter`; generic Plotly trace
+builders live in :mod:`aria_nbv.vin.diagnostics._plot_primitives`.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from ._pose_candidate_adapter import _pose_first_batch
 
 
 def _voxel_corners(extent: np.ndarray) -> np.ndarray:
+    """Return the eight voxel-grid box corners from ``[xmin, xmax, ...]`` extent."""
     x_min, x_max, y_min, y_max, z_min, z_max = extent.tolist()
     return np.array(
         [
@@ -41,6 +42,7 @@ def _voxel_indices_to_world(
     extent: np.ndarray,
     shape: tuple[int, int, int],
 ) -> np.ndarray:
+    """Map ``(z, y, x)`` voxel indices to world-frame voxel-center points."""
     d, h, w = shape
     x_min, x_max, y_min, y_max, z_min, z_max = extent.tolist()
 
@@ -61,6 +63,33 @@ def _voxel_indices_to_world(
     return points_world.detach().cpu().numpy()
 
 
+def _voxel_indices_to_world_from_cache(
+    indices: np.ndarray,
+    *,
+    pose: PoseTW,
+    extent: np.ndarray,
+    shape: tuple[int, int, int],
+    pts_world: torch.Tensor | None,
+) -> np.ndarray:
+    """Convert voxel indices to world points using cached centers when available."""
+    if torch.is_tensor(pts_world):
+        pts = pts_world.detach().cpu()
+        if pts.ndim == 3:
+            pts = pts[0]
+        if pts.ndim == 2 and pts.shape[-1] == 3:
+            d, h, w = shape
+            if pts.numel() == d * h * w * 3:
+                pts_grid = pts.reshape(d, h, w, 3)
+                sel = pts_grid[indices[:, 0], indices[:, 1], indices[:, 2]]
+                return sel.numpy()
+    return _voxel_indices_to_world(
+        indices,
+        pose=pose,
+        extent=extent,
+        shape=shape,
+    )
+
+
 def _collect_backbone_evidence_points(
     debug: Any,
     *,
@@ -68,6 +97,7 @@ def _collect_backbone_evidence_points(
     occ_threshold: float,
     max_points: int,
 ) -> list[tuple[str, np.ndarray, np.ndarray]]:
+    """Collect sampled world-frame evidence points from selected backbone fields."""
     if not fields:
         return []
 
@@ -173,4 +203,5 @@ __all__ = [
     "_collect_backbone_evidence_points",
     "_voxel_corners",
     "_voxel_indices_to_world",
+    "_voxel_indices_to_world_from_cache",
 ]

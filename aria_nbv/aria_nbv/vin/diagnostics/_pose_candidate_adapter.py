@@ -3,8 +3,8 @@
 The functions in this module normalize VIN diagnostic pose inputs to
 :class:`efm3d.aria.pose.PoseTW`, broadcast reference and candidate pose batches,
 and derive candidate-center or validity arrays used by Plotly views. Voxel and
-backbone evidence extraction remains in
-:mod:`aria_nbv.vin.diagnostics.plotting_common`.
+backbone evidence extraction lives in
+:mod:`aria_nbv.vin.diagnostics._voxel_evidence_adapter`.
 """
 
 from __future__ import annotations

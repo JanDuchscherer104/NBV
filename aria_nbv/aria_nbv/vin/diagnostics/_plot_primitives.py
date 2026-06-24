@@ -3,7 +3,7 @@
 This module owns reusable NumPy and Plotly helpers that are independent of
 VIN pose, voxel, or semidense projection contracts. VIN pose adapters live in
 :mod:`aria_nbv.vin.diagnostics._pose_candidate_adapter`, voxel/backbone
-adapters remain in :mod:`aria_nbv.vin.diagnostics.plotting_common`, while
+adapters live in :mod:`aria_nbv.vin.diagnostics._voxel_evidence_adapter`, while
 callers that need canonical labeling or edge flattening should import
 :func:`aria_nbv.utils.reporting._pretty_label` and
 :func:`aria_nbv.utils.data_plotting._flatten_edges_for_plotly` directly.

@@ -34,10 +34,10 @@ from ._pose_candidate_adapter import (
     _pose_first_batch,
     _rotate_points_yaw_cw90,
 )
-from .plotting_common import (
+from ._voxel_evidence_adapter import (
     _collect_backbone_evidence_points,
     _voxel_corners,
-    _voxel_indices_to_world,
+    _voxel_indices_to_world_from_cache,
 )
 
 Tensor = torch.Tensor
@@ -97,33 +97,6 @@ def _select_p3d_camera(cameras: PerspectiveCameras, index: int) -> PerspectiveCa
             in_ndc=bool(in_ndc),
         )
     return cameras
-
-
-def _voxel_indices_to_world_from_cache(
-    indices: np.ndarray,
-    *,
-    pose: PoseTW,
-    extent: np.ndarray,
-    shape: tuple[int, int, int],
-    pts_world: torch.Tensor | None,
-) -> np.ndarray:
-    """Convert voxel indices to world points using cached centers when available."""
-    if torch.is_tensor(pts_world):
-        pts = pts_world.detach().cpu()
-        if pts.ndim == 3:
-            pts = pts[0]
-        if pts.ndim == 2 and pts.shape[-1] == 3:
-            d, h, w = shape
-            if pts.numel() == d * h * w * 3:
-                pts_grid = pts.reshape(d, h, w, 3)
-                sel = pts_grid[indices[:, 0], indices[:, 1], indices[:, 2]]
-                return sel.numpy()
-    return _voxel_indices_to_world(
-        indices,
-        pose=pose,
-        extent=extent,
-        shape=shape,
-    )
 
 
 def build_voxel_frame_figure(
