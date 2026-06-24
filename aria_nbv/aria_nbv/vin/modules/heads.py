@@ -62,7 +62,11 @@ class VinScorerHead(nn.Module):
                 layers.append(nn.Dropout(p=self.config.dropout))
 
         self.mlp = nn.Sequential(*layers)
-        self.coral = CoralLayer(in_dim=hidden_dim, num_classes=self.config.num_classes)
+        self.coral = CoralLayer(
+            in_dim=hidden_dim,
+            num_classes=self.config.num_classes,
+            preinit_bias=self.config.coral_preinit_bias,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         """Return CORAL threshold logits for candidate features.
@@ -96,6 +100,9 @@ class VinScorerHeadConfig(TargetConfig[VinScorerHead]):
 
     num_classes: int = Field(default=15, ge=2)
     """Number of ordinal bins (VIN-NBV uses 15)."""
+
+    coral_preinit_bias: bool = True
+    """Whether to initialize CORAL threshold biases with ordinal defaults."""
 
     activation: Literal["gelu", "relu"] = "gelu"
     """Activation function."""

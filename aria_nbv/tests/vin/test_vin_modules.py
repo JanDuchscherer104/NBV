@@ -18,6 +18,21 @@ def test_vin_scorer_head_config_builds_coral_logits() -> None:
     assert logits.shape == (2, 3, 4)
 
 
+def test_vin_scorer_head_config_controls_coral_bias_preinit() -> None:
+    """The shared head should expose the CORAL bias initialization switch."""
+    config = VinScorerHeadConfig(
+        hidden_dim=8,
+        num_classes=5,
+        coral_preinit_bias=False,
+    )
+
+    head = config.setup_target(in_dim=6)
+    logits = head(torch.randn(2, 6))
+
+    assert logits.shape == (2, 4)
+    assert torch.allclose(head.coral.layer.coral_bias, torch.zeros_like(head.coral.layer.coral_bias))
+
+
 def test_largest_divisor_leq_returns_valid_group_count() -> None:
     """Normalization configs should resolve to valid GroupNorm group counts."""
     assert largest_divisor_leq(32, 8) == 8

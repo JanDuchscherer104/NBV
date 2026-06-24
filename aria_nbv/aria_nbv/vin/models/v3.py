@@ -85,7 +85,7 @@ from ...data_handling._raw import (
     is_vin_snippet_view_instance,
 )
 from ...data_handling.vin_adapter import build_vin_snippet_view
-from ...rri_metrics.coral import CoralLayer, coral_expected_from_logits, coral_logits_to_prob
+from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from ...utils import TargetConfig
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v3
@@ -105,7 +105,7 @@ from ..geometry.semidense_projection import (
     sample_semidense_points,
 )
 from ..geometry.semidense_schema import SEMIDENSE_GRID_CHANNELS, SEMIDENSE_PROJ_DIM
-from ..modules import PoseConditionedGlobalPool, largest_divisor_leq
+from ..modules import PoseConditionedGlobalPool, VinScorerHeadConfig, largest_divisor_leq
 from ..types import (
     EvlBackboneOutput,
     FieldBundle,
@@ -347,22 +347,16 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             head_in_dim += pose_dim
         if self.semidense_cnn is not None:
             head_in_dim += int(self.config.semidense_cnn_out_dim)
-        act: nn.Module = nn.GELU()
-        hidden_dim = int(self.config.head_hidden_dim)
-        layers: list[nn.Module] = [nn.Linear(head_in_dim, hidden_dim), act]
-        if self.config.head_dropout > 0:
-            layers.append(nn.Dropout(p=float(self.config.head_dropout)))
-        for _ in range(int(self.config.head_num_layers) - 1):
-            layers.append(nn.Linear(hidden_dim, hidden_dim))
-            layers.append(act)
-            if self.config.head_dropout > 0:
-                layers.append(nn.Dropout(p=float(self.config.head_dropout)))
-        self.head_mlp = nn.Sequential(*layers)
-        self.head_coral = CoralLayer(
-            in_dim=hidden_dim,
-            num_classes=self.config.num_classes,
-            preinit_bias=self.config.coral_preinit_bias,
-        )
+        head = VinScorerHeadConfig(
+            hidden_dim=int(self.config.head_hidden_dim),
+            num_layers=int(self.config.head_num_layers),
+            dropout=float(self.config.head_dropout),
+            num_classes=int(self.config.num_classes),
+            coral_preinit_bias=bool(self.config.coral_preinit_bias),
+            activation="gelu",
+        ).setup_target(in_dim=head_in_dim)
+        self.head_mlp = head.mlp
+        self.head_coral = head.coral
 
         if self.traj_encoder is not None:
             traj_dim = int(self.traj_encoder.out_dim)
