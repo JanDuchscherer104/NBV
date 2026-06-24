@@ -1,7 +1,7 @@
 import torch
 
 from aria_nbv.data_handling.efm_views import EfmPointsView
-from aria_nbv.vin.experimental.model_v2 import VinModelV2, VinModelV2Config
+from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 
 
 def test_collapse_points_obs_count() -> None:

@@ -54,7 +54,7 @@ if "e3nn" not in sys.modules:
 from efm3d.aria.pose import PoseTW
 
 from aria_nbv.vin.backbones import EvlBackboneConfig
-from aria_nbv.vin.experimental.model_v2 import SEMIDENSE_PROJ_DIM, VinModelV2, VinModelV2Config
+from aria_nbv.vin.models import SEMIDENSE_PROJ_DIM, VinModelV2, VinModelV2Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 

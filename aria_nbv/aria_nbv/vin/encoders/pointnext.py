@@ -104,7 +104,7 @@ class PointNeXtSEncoder(nn.Module):
     Notes:
         The wrapped OpenPoints model is loaded lazily at module construction,
         not at package import time. Use
-        `aria_nbv.vin.experimental.model_v2.VinModelV2Config.use_point_encoder`
+        `aria_nbv.vin.models.v2.VinModelV2Config.use_point_encoder`
         to decide whether this optional path participates in a scorer.
     """
 

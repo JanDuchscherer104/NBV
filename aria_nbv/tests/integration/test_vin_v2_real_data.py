@@ -11,7 +11,7 @@ from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling import AseEfmDatasetConfig
 from aria_nbv.utils import Verbosity
 from aria_nbv.vin import EvlBackboneConfig
-from aria_nbv.vin.experimental.model_v2 import VinModelV2Config
+from aria_nbv.vin.models import VinModelV2Config
 
 
 def _find_first_scene_with_shards() -> str | None:
