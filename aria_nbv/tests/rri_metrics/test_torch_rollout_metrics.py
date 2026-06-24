@@ -12,6 +12,7 @@ from aria_nbv.rri_metrics import (
     CandidateOrderConsistencyMetric,
     CandidatePolicyEntropyMetric,
     CandidateTableMetrics,
+    CandidateTopKOracleHitMetric,
     FiniteMeanMetric,
     PolicyTableMetrics,
     SelectedPathCostMetrics,
@@ -20,6 +21,7 @@ from aria_nbv.rri_metrics import (
     candidate_masked_mean,
     candidate_order_consistency,
     candidate_policy_entropy,
+    candidate_topk_oracle_hit,
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
@@ -187,6 +189,70 @@ def test_candidate_policy_entropy_supports_non_last_candidate_dim() -> None:
     assert torch.allclose(result, torch.tensor([torch.log(torch.tensor(2.0)), torch.log(torch.tensor(2.0))]))
 
 
+def test_candidate_topk_oracle_hit_handles_oracle_ties_and_misses() -> None:
+    predicted = torch.tensor([[0.9, 0.1, 0.2], [0.1, 0.2, 0.9]])
+    oracle = torch.tensor([[1.0, 1.0, 0.0], [1.0, 1.0, 0.0]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, top_k=1)
+
+    assert torch.equal(result, torch.tensor([1.0, 0.0]))
+
+
+def test_candidate_topk_oracle_hit_includes_kth_boundary_ties() -> None:
+    predicted = torch.tensor([[0.9, 0.8, 0.8, 0.1]])
+    oracle = torch.tensor([[0.0, 0.0, 1.0, 0.0]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, top_k=2)
+
+    assert torch.equal(result, torch.tensor([1.0]))
+
+
+def test_candidate_topk_oracle_hit_ignores_invalid_and_nonfinite_oracle_values() -> None:
+    predicted = torch.tensor([[0.1, 0.9, 0.8]])
+    oracle = torch.tensor([[1.0, float("nan"), 2.0]])
+    valid = torch.tensor([[True, True, False]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, valid, top_k=2)
+
+    assert torch.equal(result, torch.tensor([1.0]))
+
+
+def test_candidate_topk_oracle_hit_nonfinite_best_prediction_is_miss() -> None:
+    predicted = torch.tensor([[float("nan"), 0.9]])
+    oracle = torch.tensor([[1.0, 0.0]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, top_k=1)
+
+    assert torch.equal(result, torch.tensor([0.0]))
+
+
+def test_candidate_topk_oracle_hit_returns_nan_for_empty_tables() -> None:
+    predicted = torch.tensor([[1.0, 0.0], [float("nan"), float("nan")], [0.1, 0.2]])
+    oracle = torch.tensor([[float("nan"), float("nan")], [1.0, 0.0], [1.0, 0.0]])
+    valid = torch.tensor([[True, True], [True, True], [False, False]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, valid, top_k=1)
+
+    assert torch.isnan(result).all()
+
+
+def test_candidate_topk_oracle_hit_validates_shape_and_top_k() -> None:
+    with pytest.raises(ValueError, match="top_k"):
+        candidate_topk_oracle_hit(torch.tensor([1.0]), torch.tensor([1.0]), top_k=0)
+
+    with pytest.raises(ValueError, match="matching shapes"):
+        candidate_topk_oracle_hit(torch.tensor([1.0, 2.0]), torch.tensor([[1.0, 2.0]]))
+
+
+def test_candidate_topk_oracle_hit_supports_non_last_candidate_dim() -> None:
+    predicted = torch.tensor([[0.9, 0.1], [0.8, 0.2], [0.1, 0.3]])
+    oracle = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+
+    result = candidate_topk_oracle_hit(predicted, oracle, top_k=2, dim=0)
+
+    assert torch.equal(result, torch.tensor([1.0, 1.0]))
+
+
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
     metric = FiniteMeanMetric()
 
@@ -333,6 +399,26 @@ def test_candidate_policy_entropy_metric_returns_nan_when_all_tables_empty() -> 
     metric = CandidatePolicyEntropyMetric()
 
     metric.update(torch.tensor([[0.0, float("nan")]]))
+
+    assert torch.isnan(metric.compute())
+
+
+def test_candidate_topk_oracle_hit_metric_accumulates_finite_hits() -> None:
+    metric = CandidateTopKOracleHitMetric(top_k=1)
+
+    metric.update(
+        torch.tensor([[0.9, 0.1], [float("nan"), float("nan")]]),
+        torch.tensor([[1.0, 0.0], [1.0, 0.0]]),
+    )
+    metric.update(torch.tensor([[0.1, 0.9]]), torch.tensor([[1.0, 0.0]]))
+
+    assert torch.allclose(metric.compute(), torch.tensor(0.5))
+
+
+def test_candidate_topk_oracle_hit_metric_returns_nan_when_all_tables_empty() -> None:
+    metric = CandidateTopKOracleHitMetric(top_k=2)
+
+    metric.update(torch.tensor([[float("nan"), float("nan")]]), torch.tensor([[1.0, 0.0]]))
 
     assert torch.isnan(metric.compute())
 

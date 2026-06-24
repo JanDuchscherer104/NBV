@@ -18,6 +18,7 @@ from .torch_rollout import (
     candidate_masked_mean,
     candidate_order_consistency,
     candidate_policy_entropy,
+    candidate_topk_oracle_hit,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
 )
@@ -356,6 +357,54 @@ class CandidatePolicyEntropyMetric(MetricBase):
         return _safe_mean(self.entropy_total, self.entropy_count)
 
 
+class CandidateTopKOracleHitMetric(MetricBase):
+    """Accumulate candidate top-k oracle-hit rate.
+
+    This metric evaluates one-step candidate ranking directly: a table is a hit
+    when the model's top-k predicted rows include at least one finite
+    oracle-best candidate under the hard action mask. It keeps non-finite model
+    scores separate from oracle labels, matching `candidate_topk_oracle_hit`.
+    """
+
+    full_state_update = False
+
+    def __init__(self, *, top_k: int = 1) -> None:
+        super().__init__()
+        if top_k < 1:
+            raise ValueError("top_k must be >= 1.")
+        self.top_k = int(top_k)
+        self.add_state("hit_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("hit_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        predicted_scores: Tensor,
+        oracle_values: Tensor,
+        valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate prediction/oracle tables."""
+
+        hits = candidate_topk_oracle_hit(
+            predicted_scores.to(device=self.hit_total.device, dtype=torch.float32),
+            oracle_values.to(device=self.hit_total.device, dtype=torch.float32),
+            None if valid_mask is None else valid_mask.to(device=self.hit_total.device),
+            top_k=self.top_k,
+            dim=dim,
+        ).reshape(-1)
+        finite = torch.isfinite(hits)
+        if not finite.any():
+            return
+        self.hit_total = self.hit_total + hits[finite].sum()
+        self.hit_count = self.hit_count + finite.to(dtype=torch.float32).sum()
+
+    def compute(self) -> Tensor:
+        """Return finite mean top-k hit rate or ``NaN`` when empty."""
+
+        return _safe_mean(self.hit_total, self.hit_count)
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -473,6 +522,7 @@ __all__ = [
     "CandidateTableMetrics",
     "CandidateOrderConsistencyMetric",
     "CandidatePolicyEntropyMetric",
+    "CandidateTopKOracleHitMetric",
     "FiniteMeanMetric",
     "PolicyTableMetrics",
     "SelectedPathCostMetrics",

@@ -338,6 +338,91 @@ def candidate_policy_entropy(
     return torch.where(mass.squeeze(dim) > 0.0, entropy, torch.full_like(entropy, float("nan")))
 
 
+def candidate_topk_oracle_hit(
+    predicted_scores: Tensor,
+    oracle_values: Tensor,
+    valid_mask: Tensor | None = None,
+    *,
+    top_k: int = 1,
+    dim: int = -1,
+) -> Tensor:
+    """Report whether predicted top-k rows include an oracle-best candidate.
+
+    The oracle-best tied set is computed from finite oracle values under the
+    hard mask. Non-finite predicted scores are excluded from the predicted
+    top-k set without removing their oracle labels, so a model that emits
+    ``NaN`` on the true best row records a miss when other finite predictions
+    exist. Predicted ties at the kth boundary are included to avoid arbitrary
+    tie-breaking.
+
+    Args:
+        predicted_scores: Candidate scores produced by a model or policy.
+        oracle_values: Candidate oracle values with the same shape as
+            ``predicted_scores``.
+        valid_mask: Optional hard-validity mask broadcastable to
+            ``predicted_scores``.
+        top_k: Number of predicted candidates to consider before kth-boundary
+            ties are expanded.
+        dim: Candidate dimension.
+
+    Returns:
+        Float hit indicator per candidate table. Empty oracle-labeled tables or
+        tables with no finite predictions return ``NaN``.
+    """
+
+    if top_k < 1:
+        raise ValueError("top_k must be >= 1.")
+    if predicted_scores.shape != oracle_values.shape:
+        raise ValueError(
+            "Expected predicted_scores and oracle_values to have matching shapes, "
+            f"got {tuple(predicted_scores.shape)} and {tuple(oracle_values.shape)}.",
+        )
+    if dim < 0:
+        dim = predicted_scores.ndim + dim
+    if dim < 0 or dim >= predicted_scores.ndim:
+        raise ValueError(f"dim={dim} is outside tensor rank {predicted_scores.ndim}.")
+
+    scores = predicted_scores.to(dtype=torch.float32)
+    oracle = oracle_values.to(device=scores.device, dtype=torch.float32)
+    if valid_mask is None:
+        hard_mask = torch.ones_like(scores, dtype=torch.bool)
+    else:
+        hard_mask = torch.broadcast_to(valid_mask.to(device=scores.device, dtype=torch.bool), scores.shape)
+    if dim != scores.ndim - 1:
+        scores = scores.movedim(dim, -1)
+        oracle = oracle.movedim(dim, -1)
+        hard_mask = hard_mask.movedim(dim, -1)
+
+    table_shape = scores.shape[:-1]
+    num_candidates = scores.shape[-1]
+    if num_candidates == 0:
+        return torch.full(table_shape, float("nan"), device=scores.device, dtype=torch.float32)
+
+    scores_2d = scores.reshape(-1, num_candidates)
+    oracle_2d = oracle.reshape(-1, num_candidates)
+    mask_2d = hard_mask.reshape(-1, num_candidates)
+
+    oracle_valid = mask_2d & torch.isfinite(oracle_2d)
+    pred_valid = mask_2d & torch.isfinite(scores_2d)
+    oracle_filled = torch.where(oracle_valid, oracle_2d, torch.full_like(oracle_2d, -torch.inf))
+    oracle_best = oracle_filled.max(dim=-1).values
+    has_oracle = torch.isfinite(oracle_best)
+    oracle_best_set = oracle_valid & (oracle_2d == oracle_best.unsqueeze(-1))
+
+    pred_filled = torch.where(pred_valid, scores_2d, torch.full_like(scores_2d, -torch.inf))
+    pred_count = pred_valid.to(dtype=torch.long).sum(dim=-1)
+    has_prediction = pred_count > 0
+    topk_per_table = pred_count.clamp(max=int(top_k))
+    kth_index = topk_per_table.clamp_min(1) - 1
+    kth_score = pred_filled.sort(dim=-1, descending=True).values.gather(dim=-1, index=kth_index.unsqueeze(-1))
+    predicted_topk = pred_valid & (scores_2d >= kth_score)
+
+    comparable = has_oracle & has_prediction
+    hit = (predicted_topk & oracle_best_set).any(dim=-1).to(dtype=torch.float32)
+    result = torch.where(comparable, hit, torch.full_like(hit, float("nan")))
+    return result.reshape(table_shape)
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -436,6 +521,7 @@ __all__ = [
     "candidate_masked_mean",
     "candidate_order_consistency",
     "candidate_policy_entropy",
+    "candidate_topk_oracle_hit",
     "discounted_selected_return",
     "endpoint_log_gain_tensor",
     "endpoint_target_gain_tensor",
