@@ -200,6 +200,21 @@ def test_semidense_projection_features_shape() -> None:
     assert (proj_feat[..., 0] >= 0.0).all()
 
 
+def test_vin_model_v2_field_bundle_uses_soft_unknown() -> None:
+    """V2 should share the scorer scene-field contract with V3."""
+    model = VinModelV2(VinModelV2Config(point_encoder=None, traj_encoder=None))
+    out = _make_backbone_out(batch=1, grid=2)
+
+    bundle = model._build_field_bundle(out)
+
+    counts_norm = bundle.aux["counts_norm"]
+    assert torch.allclose(bundle.aux["unknown"], 1.0 - counts_norm)
+    assert torch.allclose(
+        bundle.aux["new_surface_prior"],
+        bundle.aux["unknown"] * bundle.aux["occ_pr"],
+    )
+
+
 def test_vin_model_v2_cached_batch_summary() -> None:
     model = VinModelV2(VinModelV2Config(point_encoder=None, traj_encoder=None))
     device = torch.device("cpu")

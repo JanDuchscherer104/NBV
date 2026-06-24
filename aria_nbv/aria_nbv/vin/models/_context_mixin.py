@@ -16,6 +16,7 @@ from torch import Tensor
 
 from ..geometry.semidense_schema import semidense_proj_feature_index
 from ..scorer_context import (
+    build_vin_scorer_scene_field,
     compute_global_context,
     encode_pose_features,
 )
@@ -103,6 +104,7 @@ class PoseFeatureGlobalContextMixin:
         )
 
     _semidense_proj_feature_index = staticmethod(semidense_proj_feature_index)
+    _build_vin_scorer_scene_field = staticmethod(build_vin_scorer_scene_field)
 
 
 __all__ = ["PoseFeatureGlobalContextMixin"]

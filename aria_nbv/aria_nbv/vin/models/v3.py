@@ -598,40 +598,11 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         if not isinstance(backbone_out.counts, torch.Tensor):
             raise RuntimeError("VIN v3 requires backbone_out.counts to be a Tensor.")
 
-        occ_pr = backbone_out.occ_pr.to(dtype=torch.float32)  # type: ignore
-        cent_pr = backbone_out.cent_pr.to(dtype=torch.float32)  # type: ignore
-        occ_input = backbone_out.occ_input.to(dtype=torch.float32)  # type: ignore
-        counts = backbone_out.counts.to(dtype=torch.float32)  # type: ignore
-
-        max_counts = counts.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1.0)  # B,1,1,1
-        counts_norm = torch.log1p(counts) / torch.log1p(max_counts)
-        counts_norm = counts_norm.unsqueeze(1).clamp(0.0, 1.0)
-        observed = (counts > 0).to(dtype=counts_norm.dtype).unsqueeze(1)
-        unknown = (1.0 - counts_norm).clamp(0.0, 1.0)
-        if isinstance(backbone_out.free_input, torch.Tensor):
-            free_input = backbone_out.free_input.to(dtype=torch.float32)
-        else:
-            free_input = observed * (1.0 - occ_input)
-        new_surface_prior = unknown * occ_pr
-
-        field_aux = {
-            "occ_pr": occ_pr,
-            "cent_pr": cent_pr,
-            "occ_input": occ_input,
-            "counts_norm": counts_norm,
-            "observed": observed,
-            "unknown": unknown,
-            "free_input": free_input,
-            "new_surface_prior": new_surface_prior,
-        }
-        missing = [name for name in self.config.scene_field_channels if name not in field_aux]
-        if missing:
-            raise ValueError(
-                f"VinModelV3.scene_field_channels contains unknown entries: {missing}. Available: {sorted(field_aux)}.",
-            )
-        field_parts = [field_aux[name] for name in self.config.scene_field_channels]
-        field_in = torch.cat(field_parts, dim=1)
-        field_in = field_in.to(device=backbone_out.voxel_extent.device)
+        field_in, field_aux = self._build_vin_scorer_scene_field(
+            backbone_out,
+            scene_field_channels=self.config.scene_field_channels,
+            model_name="VinModelV3",
+        )
         field = self.field_proj(field_in)
         return FieldBundle(field_in=field_in, field=field, aux=field_aux)
 
