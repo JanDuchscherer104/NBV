@@ -14,6 +14,7 @@ the same metric code.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import torch
@@ -423,6 +424,77 @@ def candidate_topk_oracle_hit(
     return result.reshape(table_shape)
 
 
+def candidate_provenance_share(
+    strategy_ids: Tensor,
+    position_ids: Tensor,
+    *,
+    strategy_family_ids: Sequence[int] | Tensor = (),
+    position_family_ids: Sequence[int] | Tensor = (),
+    valid_mask: Tensor | None = None,
+    dim: int = -1,
+) -> Tensor:
+    """Compute per-table share of candidates from selected provenance families.
+
+    Candidate generation stores view-direction provenance (`strategy_ids`) and
+    position-family provenance (`position_ids`) separately. This helper reports
+    the fraction of hard-valid rows whose strategy or position id belongs to the
+    requested family sets. It is intentionally id-based so rollout stores can
+    compute radial/backtrack diagnostics from persisted tensors without
+    importing pose-generation enums.
+
+    Args:
+        strategy_ids: Stable view-direction ids, such as radial-away or
+            radial-towards strategy ids.
+        position_ids: Stable position-family ids aligned with `strategy_ids`,
+            such as the revisit-backtrack position id.
+        strategy_family_ids: Strategy ids counted as part of the audited
+            family. Empty means no strategy id contributes.
+        position_family_ids: Position ids counted as part of the audited
+            family. Empty means no position id contributes.
+        valid_mask: Optional hard candidate validity mask. Rows with only
+            negative placeholder provenance ids are excluded from the
+            denominator.
+        dim: Candidate dimension reduced inside each table.
+
+    Returns:
+        Share tensor after reducing `dim`. Tables with no non-placeholder
+        provenance rows return ``NaN`` so missing provenance is not reported as
+        zero diversity.
+    """
+
+    if strategy_ids.shape != position_ids.shape:
+        raise ValueError(
+            "Expected strategy_ids and position_ids to have matching shapes, "
+            f"got {tuple(strategy_ids.shape)} and {tuple(position_ids.shape)}.",
+        )
+    if dim < 0:
+        dim = strategy_ids.ndim + dim
+    if dim < 0 or dim >= strategy_ids.ndim:
+        raise ValueError(f"dim={dim} is outside tensor rank {strategy_ids.ndim}.")
+
+    strategy = strategy_ids.to(dtype=torch.long)
+    position = position_ids.to(device=strategy.device, dtype=torch.long)
+    if dim != strategy.ndim - 1:
+        strategy = strategy.movedim(dim, -1)
+        position = position.movedim(dim, -1)
+        if valid_mask is not None:
+            valid_mask = valid_mask.movedim(dim, -1)
+
+    hard_valid = (strategy >= 0) | (position >= 0)
+    if valid_mask is not None:
+        hard_valid = hard_valid & torch.broadcast_to(
+            valid_mask.to(device=strategy.device, dtype=torch.bool), strategy.shape
+        )
+
+    selected = _id_membership(strategy, strategy_family_ids) | _id_membership(position, position_family_ids)
+    selected = selected & hard_valid
+    numerator = selected.to(dtype=torch.float32).sum(dim=-1)
+    denominator = hard_valid.to(dtype=torch.float32).sum(dim=-1)
+    return torch.where(
+        denominator > 0, numerator / denominator.clamp_min(1.0), torch.full_like(numerator, float("nan"))
+    )
+
+
 def candidate_masked_mean(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> Tensor:
     """Reduce candidate-table values with a hard validity mask.
 
@@ -514,6 +586,16 @@ def _valid_endpoint_errors(initial_error: Tensor, final_error: Tensor) -> Tensor
     return torch.isfinite(initial_error) & torch.isfinite(final_error) & (initial_error >= 0.0) & (final_error >= 0.0)
 
 
+def _id_membership(values: Tensor, family_ids: Sequence[int] | Tensor) -> Tensor:
+    if isinstance(family_ids, Tensor):
+        ids = family_ids.to(device=values.device, dtype=values.dtype).reshape(-1)
+    else:
+        ids = torch.as_tensor(tuple(family_ids), device=values.device, dtype=values.dtype).reshape(-1)
+    if ids.numel() == 0:
+        return torch.zeros_like(values, dtype=torch.bool)
+    return (values.unsqueeze(-1) == ids).any(dim=-1)
+
+
 __all__ = [
     "TorchRolloutMetrics",
     "CandidateOrderConsistency",
@@ -521,6 +603,7 @@ __all__ = [
     "candidate_masked_mean",
     "candidate_order_consistency",
     "candidate_policy_entropy",
+    "candidate_provenance_share",
     "candidate_topk_oracle_hit",
     "discounted_selected_return",
     "endpoint_log_gain_tensor",

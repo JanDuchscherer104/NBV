@@ -18,6 +18,7 @@ from .torch_rollout import (
     candidate_masked_mean,
     candidate_order_consistency,
     candidate_policy_entropy,
+    candidate_provenance_share,
     candidate_topk_oracle_hit,
     selected_path_length_tensor,
     summarize_selected_rollout_tensors,
@@ -405,6 +406,62 @@ class CandidateTopKOracleHitMetric(MetricBase):
         return _safe_mean(self.hit_total, self.hit_count)
 
 
+class CandidateProvenanceShareMetric(MetricBase):
+    """Accumulate candidate provenance-family share diagnostics.
+
+    The metric reports the finite mean fraction of hard-valid candidate rows
+    that belong to configured strategy or position id families. It is designed
+    for rollout-diversity audits such as radial-away/radial-towards plus
+    revisit-backtrack coverage. The ids are passed as persisted integer
+    provenance values, so callers do not need pose-generation enum imports.
+    """
+
+    full_state_update = False
+
+    def __init__(
+        self,
+        *,
+        strategy_family_ids: tuple[int, ...] = (),
+        position_family_ids: tuple[int, ...] = (),
+    ) -> None:
+        super().__init__()
+        if not strategy_family_ids and not position_family_ids:
+            raise ValueError("At least one strategy or position provenance family id is required.")
+        self.strategy_family_ids = tuple(int(value) for value in strategy_family_ids)
+        self.position_family_ids = tuple(int(value) for value in position_family_ids)
+        self.add_state("share_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("share_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        strategy_ids: Tensor,
+        position_ids: Tensor,
+        valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate provenance tables."""
+
+        shares = candidate_provenance_share(
+            strategy_ids.to(device=self.share_total.device),
+            position_ids.to(device=self.share_total.device),
+            strategy_family_ids=self.strategy_family_ids,
+            position_family_ids=self.position_family_ids,
+            valid_mask=None if valid_mask is None else valid_mask.to(device=self.share_total.device),
+            dim=dim,
+        ).reshape(-1)
+        finite = torch.isfinite(shares)
+        if not finite.any():
+            return
+        self.share_total = self.share_total + shares[finite].sum()
+        self.share_count = self.share_count + finite.to(dtype=torch.float32).sum()
+
+    def compute(self) -> Tensor:
+        """Return finite mean family share or ``NaN`` when no tables were valid."""
+
+        return _safe_mean(self.share_total, self.share_count)
+
+
 class PolicyTableMetrics(MetricBase):
     """Accumulate proposal policy-comparison table metrics.
 
@@ -522,6 +579,7 @@ __all__ = [
     "CandidateTableMetrics",
     "CandidateOrderConsistencyMetric",
     "CandidatePolicyEntropyMetric",
+    "CandidateProvenanceShareMetric",
     "CandidateTopKOracleHitMetric",
     "FiniteMeanMetric",
     "PolicyTableMetrics",

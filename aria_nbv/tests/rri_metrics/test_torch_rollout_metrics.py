@@ -11,6 +11,7 @@ from aria_nbv.rri_metrics import (
     CandidateOrderConsistency,
     CandidateOrderConsistencyMetric,
     CandidatePolicyEntropyMetric,
+    CandidateProvenanceShareMetric,
     CandidateTableMetrics,
     CandidateTopKOracleHitMetric,
     FiniteMeanMetric,
@@ -21,6 +22,7 @@ from aria_nbv.rri_metrics import (
     candidate_masked_mean,
     candidate_order_consistency,
     candidate_policy_entropy,
+    candidate_provenance_share,
     candidate_topk_oracle_hit,
     discounted_selected_return,
     endpoint_log_gain_tensor,
@@ -253,6 +255,66 @@ def test_candidate_topk_oracle_hit_supports_non_last_candidate_dim() -> None:
     assert torch.equal(result, torch.tensor([1.0, 1.0]))
 
 
+def test_candidate_provenance_share_reports_radial_backtrack_union() -> None:
+    strategy_ids = torch.tensor(
+        [
+            [1, 2, 0, 3],
+            [1, 0, 0, -1],
+            [-1, -1, -1, -1],
+        ],
+        dtype=torch.int64,
+    )
+    position_ids = torch.tensor(
+        [
+            [2, 2, 5, 2],
+            [1, 5, 1, -1],
+            [-1, -1, -1, -1],
+        ],
+        dtype=torch.int64,
+    )
+    valid = torch.tensor(
+        [
+            [True, True, True, False],
+            [True, True, True, True],
+            [True, True, True, True],
+        ],
+        dtype=torch.bool,
+    )
+
+    result = candidate_provenance_share(
+        strategy_ids,
+        position_ids,
+        strategy_family_ids=(1, 2),
+        position_family_ids=(5,),
+        valid_mask=valid,
+    )
+
+    assert torch.allclose(result, torch.tensor([1.0, 2.0 / 3.0, float("nan")]), equal_nan=True)
+
+
+def test_candidate_provenance_share_supports_non_last_candidate_dim() -> None:
+    strategy_ids = torch.tensor([[1, 0], [2, 0], [0, 0]], dtype=torch.int64)
+    position_ids = torch.tensor([[1, 5], [1, 1], [5, 1]], dtype=torch.int64)
+
+    result = candidate_provenance_share(
+        strategy_ids,
+        position_ids,
+        strategy_family_ids=(1, 2),
+        position_family_ids=(5,),
+        dim=0,
+    )
+
+    assert torch.allclose(result, torch.tensor([1.0, 1.0 / 3.0]))
+
+
+def test_candidate_provenance_share_validates_shapes_and_dim() -> None:
+    with pytest.raises(ValueError, match="matching shapes"):
+        candidate_provenance_share(torch.tensor([1]), torch.tensor([[1]]), strategy_family_ids=(1,))
+
+    with pytest.raises(ValueError, match="outside tensor rank"):
+        candidate_provenance_share(torch.tensor([1]), torch.tensor([1]), strategy_family_ids=(1,), dim=2)
+
+
 def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
     metric = FiniteMeanMetric()
 
@@ -421,6 +483,28 @@ def test_candidate_topk_oracle_hit_metric_returns_nan_when_all_tables_empty() ->
     metric.update(torch.tensor([[float("nan"), float("nan")]]), torch.tensor([[1.0, 0.0]]))
 
     assert torch.isnan(metric.compute())
+
+
+def test_candidate_provenance_share_metric_accumulates_valid_tables() -> None:
+    metric = CandidateProvenanceShareMetric(strategy_family_ids=(1, 2), position_family_ids=(5,))
+
+    metric.update(
+        torch.tensor([[1, 2, 0], [0, 0, 0]], dtype=torch.int64),
+        torch.tensor([[2, 2, 5], [1, 5, 1]], dtype=torch.int64),
+        torch.tensor([[True, True, True], [True, True, True]], dtype=torch.bool),
+    )
+    metric.update(
+        torch.tensor([[-1, -1]], dtype=torch.int64),
+        torch.tensor([[-1, -1]], dtype=torch.int64),
+        torch.tensor([[True, True]], dtype=torch.bool),
+    )
+
+    assert torch.allclose(metric.compute(), torch.tensor((1.0 + (1.0 / 3.0)) / 2.0))
+
+
+def test_candidate_provenance_share_metric_requires_a_family() -> None:
+    with pytest.raises(ValueError, match="At least one"):
+        CandidateProvenanceShareMetric()
 
 
 def test_policy_table_metrics_report_proposal_columns() -> None:
