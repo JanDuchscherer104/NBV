@@ -106,12 +106,9 @@ from .geometry.semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
-from .modules import PoseConditionedGlobalPool
+from .modules import PoseConditionedGlobalPool, largest_divisor_leq
 from .types import EvlBackboneOutput, FieldBundle, GlobalContext, PreparedInputs, VinPrediction, VinV3ForwardDiagnostics
-from .vin_utils import (
-    largest_divisor_leq,
-    validate_pos_grid_xyz_encoder,
-)
+from .vin_utils import validate_pos_grid_xyz_encoder
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch

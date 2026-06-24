@@ -12,28 +12,6 @@ from .geometry.voxel import pos_grid_from_pts_world
 from .types import GlobalContext, PoseFeatures
 
 
-def largest_divisor_leq(n: int, max_divisor: int) -> int:
-    """Return the largest divisor of ``n`` that is <= ``max_divisor``.
-
-    This helper is used to choose a valid GroupNorm group count. GroupNorm
-    requires ``num_groups`` to divide ``num_channels`` exactly. We therefore
-    compute:
-
-        g = max { d : d <= max_divisor and n % d == 0 }.
-
-    Args:
-        n: Channel dimension to be normalized.
-        max_divisor: Upper bound for the group count.
-
-    Returns:
-        Largest valid group count (>=1).
-    """
-    g = min(max_divisor, n)
-    while g > 1 and (n % g) != 0:
-        g -= 1
-    return max(1, g)
-
-
 def validate_pos_grid_xyz_encoder(
     value: LearnableFourierFeaturesConfig,
 ) -> LearnableFourierFeaturesConfig:

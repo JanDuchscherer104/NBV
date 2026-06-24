@@ -8,6 +8,7 @@ and planned VIN scorers, while top-level architecture orchestration remains in
 from __future__ import annotations
 
 from .heads import VinScorerHead, VinScorerHeadConfig
+from .normalization import largest_divisor_leq
 from .pooling import PoseConditionedGlobalPool
 
-__all__ = ["PoseConditionedGlobalPool", "VinScorerHead", "VinScorerHeadConfig"]
+__all__ = ["PoseConditionedGlobalPool", "VinScorerHead", "VinScorerHeadConfig", "largest_divisor_leq"]

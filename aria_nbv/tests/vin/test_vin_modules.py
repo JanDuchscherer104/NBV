@@ -4,7 +4,7 @@
 
 import torch
 
-from aria_nbv.vin.modules import VinScorerHead, VinScorerHeadConfig
+from aria_nbv.vin.modules import VinScorerHead, VinScorerHeadConfig, largest_divisor_leq
 
 
 def test_vin_scorer_head_config_builds_coral_logits() -> None:
@@ -16,3 +16,11 @@ def test_vin_scorer_head_config_builds_coral_logits() -> None:
 
     assert isinstance(head, VinScorerHead)
     assert logits.shape == (2, 3, 4)
+
+
+def test_largest_divisor_leq_returns_valid_group_count() -> None:
+    """Normalization configs should resolve to valid GroupNorm group counts."""
+    assert largest_divisor_leq(32, 8) == 8
+    assert largest_divisor_leq(30, 8) == 6
+    assert largest_divisor_leq(7, 8) == 7
+    assert largest_divisor_leq(7, 3) == 1
