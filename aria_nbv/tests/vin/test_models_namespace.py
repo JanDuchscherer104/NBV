@@ -68,7 +68,7 @@ def test_helper_sidecars_do_not_cycle_with_models_namespace() -> None:
 
 
 def test_planned_myopic_scorer_config_is_visible_but_not_runnable() -> None:
-    """The target-conditioned myopic scaffold should fail explicitly."""
+    """Positive-width target descriptors should fail until actor target tokens exist."""
 
     config = TargetConditionedMyopicScorerConfig(
         num_classes=5,
@@ -76,8 +76,20 @@ def test_planned_myopic_scorer_config_is_visible_but_not_runnable() -> None:
     )
 
     assert config.target_type is TargetConditionedMyopicScorer
-    with pytest.raises(NotImplementedError, match="scaffold only"):
+    with pytest.raises(NotImplementedError, match="target descriptor path is not implemented"):
         config.setup_target()
+
+
+def test_zero_descriptor_myopic_scorer_wraps_preserved_v3_baseline() -> None:
+    """The myopic family should expose a runnable v3-backed CORAL baseline."""
+
+    config = TargetConditionedMyopicScorerConfig(num_classes=5, target_descriptor_dim=0)
+    scorer = config.setup_target()
+
+    assert isinstance(scorer, TargetConditionedMyopicScorer)
+    assert isinstance(scorer.base_scorer, VinModelV3)
+    assert scorer.base_scorer.config.num_classes == 5
+    assert scorer.head_coral is scorer.base_scorer.head_coral
 
 
 def test_candidate_scorer_config_accepts_myopic_scaffold() -> None:
@@ -92,7 +104,7 @@ def test_candidate_scorer_config_accepts_myopic_scaffold() -> None:
     module_config = VinLightningModuleConfig(vin=scorer_config, num_classes=5)
 
     assert module_config.vin is scorer_config
-    with pytest.raises(NotImplementedError, match="scaffold only"):
+    with pytest.raises(NotImplementedError, match="target descriptor path is not implemented"):
         module_config.vin.setup_target()
 
 
@@ -159,10 +171,28 @@ def test_candidate_scorer_training_contract_classifies_configs() -> None:
 
     assert candidate_scorer_training_contract(VinModelV3Config()) == "coral_candidate"
     assert (
+        candidate_scorer_training_contract(TargetConditionedMyopicScorerConfig(target_descriptor_dim=0))
+        == "coral_candidate"
+    )
+    assert (
         candidate_scorer_training_contract(TargetConditionedMyopicScorerConfig(target_descriptor_dim=32))
         == "target_myopic_coral_scaffold"
     )
     assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=3)) == "finite_horizon_q_scaffold"
+
+
+def test_vin_lightning_module_rejects_nonzero_target_descriptor_scaffold_before_setup_target() -> None:
+    """Current Lightning should reject target descriptors before constructing the placeholder."""
+
+    from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
+
+    module_config = VinLightningModuleConfig(
+        vin=TargetConditionedMyopicScorerConfig(num_classes=5, target_descriptor_dim=32),
+        num_classes=5,
+    )
+
+    with pytest.raises(NotImplementedError, match="target descriptor path is not implemented.*target_descriptor_dim=0"):
+        VinLightningModule(config=module_config)
 
 
 def test_vin_lightning_module_rejects_multi_step_scaffold_before_setup_target() -> None:

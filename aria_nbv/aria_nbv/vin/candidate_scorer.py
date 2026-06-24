@@ -136,9 +136,12 @@ CandidateScorerTrainingContract: TypeAlias = Literal[
 
 `VinLightningModule` currently implements the ``"coral_candidate"`` contract:
 per-candidate `VinPrediction` rows with CORAL logits, probabilities, and a
-``head_coral`` helper. The finite-horizon ``Q_H`` scaffold is intentionally
-classified separately because it needs rollout-return targets and hard
-valid-action masks instead of one-step ordinal RRI labels.
+``head_coral`` helper. `TargetConditionedMyopicScorerConfig` with
+``target_descriptor_dim == 0`` uses that same contract as a v3-backed baseline;
+positive descriptor widths remain a scaffold until target-token ownership is
+implemented. The finite-horizon ``Q_H`` scaffold is intentionally classified
+separately because it needs rollout-return targets and hard valid-action masks
+instead of one-step ordinal RRI labels.
 """
 
 
@@ -157,6 +160,8 @@ def candidate_scorer_training_contract(config: CandidateScorerConfig) -> Candida
     if isinstance(config, MultiStepCandidateScorerConfig):
         return "finite_horizon_q_scaffold"
     if isinstance(config, TargetConditionedMyopicScorerConfig):
+        if int(config.target_descriptor_dim) == 0:
+            return "coral_candidate"
         return "target_myopic_coral_scaffold"
     return "coral_candidate"
 

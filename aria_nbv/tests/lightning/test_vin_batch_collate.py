@@ -12,6 +12,7 @@ from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinO
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
+from aria_nbv.vin import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 from aria_nbv.vin.models.v3 import VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
@@ -423,6 +424,23 @@ def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
     assert isinstance(module.config.vin, VinModelV3Config)  # noqa: S101
     state_keys = tuple(module.state_dict())
     assert any(key.startswith("vin.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
+def test_lightning_accepts_zero_descriptor_myopic_scorer_without_state_alias() -> None:
+    """The myopic baseline should train through the existing VIN module slot."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(num_classes=3, target_descriptor_dim=0),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.vin, TargetConditionedMyopicScorer)  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.base_scorer.") for key in state_keys)  # noqa: S101
     assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
 
 

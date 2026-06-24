@@ -208,6 +208,13 @@ class VinLightningModule(pl.LightningModule):
                 "the planned Q_H finite-horizon scorer, which needs a rollout "
                 "objective, hard valid-action masks, and a dedicated Lightning module.",
             )
+        if scorer_contract == "target_myopic_coral_scaffold":
+            raise NotImplementedError(
+                "VinLightningModule can train the target-conditioned myopic family "
+                "only when it emits the CORAL/VinPrediction contract. The actor-visible "
+                "target descriptor path is not implemented; use target_descriptor_dim=0 "
+                "for the v3-backed myopic baseline.",
+            )
         self.vin = config.vin.setup_target()
         self._binner: RriOrdinalBinner | None = None
         metrics_cfg = VinMetricsConfig(num_classes=self.config.num_classes)

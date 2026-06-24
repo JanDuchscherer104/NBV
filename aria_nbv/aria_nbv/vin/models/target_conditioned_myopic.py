@@ -1,28 +1,37 @@
-"""Scaffold for a target-conditioned myopic VIN scorer.
+"""Target-conditioned myopic VIN scorer family.
 
 This module names the one-step architecture family that should score each
 candidate from actor-visible scene evidence plus an actor-visible target
-descriptor. It is intentionally not wired into Lightning yet: the concrete
-target descriptor contract and feature ownership still need implementation
-tests before this can replace or extend `aria_nbv.vin.models.v3.VinModelV3`.
+descriptor. The zero-descriptor configuration is runnable today as a named
+myopic baseline backed by `aria_nbv.vin.models.v3.VinModelV3`; nonzero target
+descriptors remain blocked until the actor-visible target-token contract is
+implemented.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+from efm3d.aria.pose import PoseTW
 from pydantic import Field
+from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 from torch import nn
 
+from ...data_handling import EfmSnippetView, VinSnippetView
 from ...utils import TargetConfig
+from ..types import EvlBackboneOutput, VinPrediction
+from .v3 import VinModelV3, VinModelV3Config
 
 
 class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicScorer"]):
-    """Config-as-factory placeholder for the planned one-step target scorer.
+    """Config-as-factory for the one-step target-scorer family.
 
     Attributes:
         num_classes: Number of ordinal output classes for CORAL-style row
             scoring if the scorer uses the current VIN Lightning objective.
         target_descriptor_dim: Dimension of the actor-visible target token or
-            descriptor that conditions candidate scoring.
+            descriptor that conditions candidate scoring. ``0`` selects the
+            runnable v3-backed myopic baseline.
         candidate_token_dim: Internal candidate token width reserved for the
             first target-conditioned implementation.
     """
@@ -44,23 +53,65 @@ class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicS
 
 
 class TargetConditionedMyopicScorer(nn.Module):
-    """Non-runnable scaffold for the planned myopic target scorer.
+    """Runnable zero-target myopic scorer plus blocked target-conditioned scaffold.
 
-    The future implementation should satisfy
-    `aria_nbv.vin.candidate_scorer.CandidateScorer` when it produces
-    per-candidate ordinal logits compatible with the current Lightning loss.
-    Until then, construction fails explicitly so experiments cannot silently run
-    a placeholder model.
+    With ``target_descriptor_dim == 0`` this module delegates to
+    `VinModelV3`, preserving the current CORAL `VinPrediction` training
+    contract under a named myopic architecture family. Positive descriptor
+    widths fail during construction because target-token ownership, actor-input
+    visibility, and feature fusion are not implemented yet.
     """
 
     def __init__(self, config: TargetConditionedMyopicScorerConfig) -> None:
-        """Reject construction until the target-conditioned scorer is implemented."""
+        """Construct the v3-backed myopic baseline or reject true target conditioning."""
 
         super().__init__()
         self.config = config
-        raise NotImplementedError(
-            "TargetConditionedMyopicScorer is a scaffold only. Implement the "
-            "actor-visible target descriptor path before using this config in training.",
+        if int(config.target_descriptor_dim) != 0:
+            raise NotImplementedError(
+                "TargetConditionedMyopicScorer target descriptor path is not implemented. "
+                "Use target_descriptor_dim=0 for the v3-backed myopic CORAL baseline.",
+            )
+        self.base_scorer = VinModelV3(VinModelV3Config(num_classes=int(config.num_classes)))
+
+    @property
+    def head_coral(self) -> Any:
+        """CORAL head delegated to the underlying v3 myopic scorer."""
+
+        return self.base_scorer.head_coral
+
+    def forward(
+        self,
+        efm: EfmSnippetView | VinSnippetView,
+        *,
+        candidate_poses_world_cam: PoseTW,
+        reference_pose_world_rig: PoseTW,
+        p3d_cameras: PerspectiveCameras,
+        backbone_out: EvlBackboneOutput | None = None,
+    ) -> VinPrediction:
+        """Score candidates through the v3 one-step CORAL baseline."""
+
+        return self.base_scorer.forward(
+            efm,
+            candidate_poses_world_cam=candidate_poses_world_cam,
+            reference_pose_world_rig=reference_pose_world_rig,
+            p3d_cameras=p3d_cameras,
+            backbone_out=backbone_out,
+        )
+
+    def summarize_vin(
+        self,
+        batch: Any,
+        *,
+        include_torchsummary: bool = True,
+        torchsummary_depth: int = 3,
+    ) -> str:
+        """Return the underlying v3 debug summary for the myopic baseline."""
+
+        return self.base_scorer.summarize_vin(
+            batch,
+            include_torchsummary=include_torchsummary,
+            torchsummary_depth=torchsummary_depth,
         )
 
 
