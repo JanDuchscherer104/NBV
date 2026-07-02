@@ -12,7 +12,7 @@ The render-path boundary in @fig:qh-teacher-student-render-path makes this restr
 
 #figure(
   align(center, image(
-    "../../figures/qh_teacher_student_render_path.pdf",
+    "../../figures/teacher_student_render_path.pdf",
     width: 100%,
   )),
   caption: [Teacher/student render path for leakage-safe training. The student branch consumes actor-visible state and current-belief render products, while privileged @ground-truth:short meshes, target crops, and dense candidate renders may produce oracle returns, teacher values, or distillation targets only. Dense @ground-truth:short candidate depth is therefore label or teacher evidence, not a V1 actor input.],

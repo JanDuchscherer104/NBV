@@ -97,7 +97,7 @@ $
 
 #figure(
   image(
-    "../../figures/qh_rollout_replay_doubleq.pdf",
+    "../../figures/qh_learning_evidence_loop.pdf",
     width: 100%,
   ),
   caption: [Selected-transition replay contract for #symb.rl.qh. All valid candidates can receive one-step oracle target labels, but bootstrapped finite-horizon targets require materialized selected actions, successor counterfactual state, regenerated successor candidate tables, masks, terminal flags, and masked Double-Q targets.],

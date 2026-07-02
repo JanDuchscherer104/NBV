@@ -8,7 +8,7 @@
 
 // source: .agents/memory/state/DECISIONS.md:97-99 fixes finite-candidate #symb.rl.qh as a hard thesis deliverable; current wording instantiates it as candidate-to-state queries first.
 // source: aria_nbv/aria_nbv/vin/model_v3.py:1-64 fixes VINv3 as the myopic one-step baseline/control, not the final multi-step model.
-The value-model hypothesis is that a masked finite-candidate model can recover positive oracle-lookahead headroom from actor-visible state. #symb.rl.qh maps each valid candidate row to a finite-horizon value using actor-visible scene, target, selected-history, budget, candidate, mask, and reason-code features. Its outputs select actions, but thesis evidence comes from oracle re-scoring of the selected trajectories.
+The value-model hypothesis is that a masked finite-candidate model can recover positive oracle-lookahead headroom from actor-visible state. #symb.rl.qh maps each valid candidate row to a finite-horizon value using actor-visible scene, target, selected-history, budget, candidate, mask, and reason-code features. Its outputs select actions, but thesis evidence comes from oracle re-scoring of the selected trajectories. The model is therefore judged as a planner over a documented finite action table, not as a proxy reconstruction metric or an ungrounded scene encoder.
 
 The model class follows the structure of the decision problem. The action space is a masked finite set of candidate views, each defined relative to a target, selected history, and partially observed geometry. Geometric deep learning supplies vocabulary for these regularities without committing the thesis to a full equivariant tensor network @GeometricDeepLearning-bronstein2021. Candidate-row permutation requires equivariant per-candidate outputs; local camera and target frames reduce dependence on global coordinates; $bb(S)^2$ visibility memory records where the target has already been observed; and the target record acts as the query that determines which reconstruction errors matter.
 
@@ -73,15 +73,15 @@ $
   #eqs.model.qh_candidate_state_cross_attention
 $
 
-The candidate-query architecture in @fig:qh-vin-gnn-architecture expands the same contract into the architecture used for the thesis hypothesis and ablation ladder.
+The candidate-query architecture in @fig:qh-candidate-query-architecture expands the same contract into the default value-model hypothesis: one physical candidate row queries a fixed actor-visible state, optional set context remains an ablation, and oracle labels only supervise losses and evaluation outside the actor-input graph.
 
 #figure(
   image(
-    "../../figures/qh_vin_gnn_architecture.pdf",
+    "../../figures/qh_candidate_query_architecture.pdf",
     width: 100%,
   ),
-  caption: [Candidate-query #symb.rl.qh architecture sketch. Actor-visible @egocentric-voxel-lifting:short evidence, accumulated geometry, ray-aware memory, target descriptors, selected-history summaries, candidate geometry, masks, and directional memory feed candidate-to-state value queries; residual finite-horizon values, one-step auxiliary scores, and diagnostics are then decoded only over valid candidate rows. Oracle labels supervise training and evaluation outside this actor-input graph.],
-) <fig:qh-vin-gnn-architecture>
+  caption: [Default candidate-query #symb.rl.qh architecture contract. Actor-visible target, scene, history, budget, candidate self/relation, mask, and provenance descriptors feed a candidate-to-state query encoder; the residual value head decodes finite-horizon values only for hard-valid rows, while oracle target @relative-reconstruction-improvement:short, TD targets, and endpoint metrics supervise losses and evaluation outside the actor-input graph. Optional set context is an ablation rather than the default source of absolute value calibration.],
+) <fig:qh-candidate-query-architecture>
 
 No-interaction candidate MLP scoring and candidate-to-state cross-attention are required baselines before attributing gains to masked Set Transformer interaction or QCNet-style RPE. For immediate target-specific @relative-reconstruction-improvement:short, the physical oracle label of candidate $q_i$ does not change when unrelated rows are added to $cal(Q)_t$. Candidate interaction can therefore corrupt absolute calibration if it replaces the independent scorer. The safer finite-horizon ablation lets candidate context influence policy logits, diversity, or a separately regularized residual, but not an exact per-set mean-centred TD value.
 

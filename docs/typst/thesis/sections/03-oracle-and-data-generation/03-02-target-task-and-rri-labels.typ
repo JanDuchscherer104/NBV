@@ -21,6 +21,14 @@ In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise propos
 The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh under a calibrated camera/rasterization convention, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
 
 #figure(
+  align(center, image(
+    "../../figures/camera_frame_ray_contract.pdf",
+    width: 100%,
+  )),
+  caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the matched target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
+) <fig:camera-frame-ray-contract>
+
+#figure(
   table(
     columns: (0.86fr, 1.24fr, 1.16fr),
     toprule(),
@@ -62,7 +70,7 @@ Automatic target selection constitutes the first procedural layer in target-cent
 
 #figure(
   align(center, image(
-    "../../figures/oracle_target_task_sampler_contract.pdf",
+    "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
   caption: [Oracle target-task sampling contract. @ground-truth:short OBBs and meshes define identity-valid supervised target tasks through an IoU and ambiguity-gap gate, a deterministic capped sampler writes target-task rows with descriptor and audit fields, and rollout generation later measures target @relative-reconstruction-improvement:short and headroom. The actor-visible target selector remains a separate diagnostic or later deployment contract, not the source of thesis labels.],
@@ -129,6 +137,16 @@ $
   #eqs.action.capped_direction
 $
 
+The geometry behind this finite action table is easier to read as a gauge choice than as a list of Cartesian offsets. The sampler first draws a capped direction in the reference rig frame, then each family gives that direction a different semantic axis: egocentric forward motion, target-bearing motion, or lateral target bypass. The target-looking families additionally construct a camera frame whose optical axis points to the selected actor-visible target center.
+
+#figure(
+  align(center, image(
+    "../../figures/candidate_generation_geometry.pdf",
+    width: 100%,
+  )),
+  caption: [Schematic geometry of the target-conditioned three-family candidate shell. Panel A shows the root/reference-frame direction cap; panel B shows how the same shell support is reinterpreted by the forward-local, target-bearing, and lateral-bypass center families; panel C shows the target-look camera construction and the resulting target-frustum relation. Exact sampling densities, radius draws, and pruning constraints are defined by the surrounding equations, not by the schematic scale.],
+) <fig:candidate-generation-geometry>
+
 The three position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the actor-visible target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
 
 $
@@ -157,6 +175,14 @@ $
 
 The full shell is still retained with `position_id`, `strategy_id`, `mixture_id`, `sampler_probability`, rule masks, debug diagnostics, and invalid-reason bitsets. Invalid candidates are hard-masked constraints with explicit reasons. They are never low-@relative-reconstruction-improvement:short examples, and they must not enter #symb.rl.qh argmax, softmax, or loss targets. The canonical real config requires at least 15 valid root actions for a 60-row shell, matching the first production gate:
 
+#figure(
+  align(center, image(
+    "../../figures/candidate_validity_pruning_examples.pdf",
+    width: 100%,
+  )),
+  caption: [Candidate validity and pruning examples. The support envelope, mesh-clearance constraint, and path-collision check remove infeasible rows by setting #symb.rl.validity_mask to false and recording an invalid-reason code #symb.rl.invalid_reason. A candidate with low target support or low expected gain remains valid if it satisfies the feasibility rules; it is a supervised low-utility row rather than an invalid action.],
+) <fig:candidate-validity-pruning-examples>
+
 $
   #eqs.action.valid_support_threshold
 $
@@ -181,6 +207,16 @@ Rollout generation samples finite branches over the valid candidate table. The c
   caption: [Canonical rollout recipes for the real thesis profile. The recipes create replay diversity and oracle-lookahead references; they do not train #symb.rl.qh by themselves.],
 ) <tab:realistic-rollout-recipes>
 
+The bounded oracle-lookahead recipe differs from one-step greedy selection because it scores first actions by the best retained finite-horizon chain, not by immediate gain alone (@fig:oracle-lookahead-tree). Invalid candidates remain masked and are not expanded into oracle branches.
+
+#figure(
+  align(center, image(
+    "../../figures/oracle_lookahead_tree.pdf",
+    width: 100%,
+  )),
+  caption: [Bounded oracle-lookahead tree used as a rollout reference. Valid first-action rows may be expanded into selected-depth successor states and scored by cumulative root-normalized return #symb.rl.return_h; invalid rows are hard-masked and receive no branch. The selected first action can differ from the one-step greedy winner when a lower immediate reward opens a better second-step target view.],
+) <fig:oracle-lookahead-tree>
+
 For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is
 
 $
@@ -192,6 +228,14 @@ The downstream effect of these choices is scientific rather than cosmetic. The t
 === Target-Specific @relative-reconstruction-improvement:short
 
 Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated points to the matched target region. The target error is the target-cropped version of the VIN-NBV @relative-reconstruction-improvement:short objective @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness on the crop.
+
+#figure(
+  align(center, image(
+    "../../figures/target_rri_point_mesh_geometry.pdf",
+    width: 100%,
+  )),
+  caption: [Target-specific point-mesh error behind @relative-reconstruction-improvement:short labels. Blue points are the target crop of accumulated actor-visible geometry, green points are the selected candidate contribution, the orange curve is the matched target mesh, purple witnesses indicate point-to-mesh accuracy, and dashed red witnesses indicate mesh-to-point completeness. Adding a valid candidate view is useful only insofar as it reduces the target-cropped aggregate error used by the oracle reward.],
+) <fig:target-rri-point-mesh-geometry>
 
 $
   #eqs.entity.target_error

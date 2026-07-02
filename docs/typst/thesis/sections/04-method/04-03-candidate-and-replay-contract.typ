@@ -39,3 +39,11 @@ Candidate provenance is a model input only through typed scalar or embedding cha
 Candidate order has no semantics, so shuffled-candidate evaluation is required. The descriptor section defines the candidate self token, query-local relation encodings, and target-local directional memory used by the model. The replay contract stores the canonical facts those descriptors are derived from: poses in documented frames, selected-view lineage, candidate-family provenance, target/support counters, masks, and reason codes. This keeps row descriptors reproducible without making their current tensor encoding the immutable data format.
 
 The minimum replay row contains scene/snippet/target/step identifiers, counterfactual state, target descriptor, candidate table, masks, invalid reasons, selected action, target reward, successor state, successor candidates, successor masks, and policy/seed/sampler metadata. This row reproduces the mask, selected transition, value target, and oracle re-evaluation.
+
+#figure(
+  image(
+    "../../figures/rollout_replay_doubleq_process.pdf",
+    width: 100%,
+  ),
+  caption: [Replay-to-learning process for finite-candidate #symb.rl.qh. Panel A separates all-valid-row oracle labels from the one selected action that materializes successor geometry and a regenerated candidate table. Panel B shows the masked Double-Q backup: the online network selects a valid successor row, the target network evaluates that row, and held-out policy quality is measured only by oracle re-scoring selected trajectories @DoubleDQN-vanHasselt2015.],
+) <fig:rollout-replay-doubleq-process>

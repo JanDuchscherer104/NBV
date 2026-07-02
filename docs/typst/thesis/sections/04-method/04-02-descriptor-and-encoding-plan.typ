@@ -9,6 +9,8 @@
 // source: docs/contents/theory/efm3d_scene_embeddings.qmd keeps implementation notes for target lineage, replay fields, and feature-bank joins.
 This subsection defines the actor-visible descriptor protocol consumed by #symb.rl.qh. Its job is not to choose the neural architecture and not to restate the replay schema. Chapter 03 owns row identity, lineage, labels, masks, and selected-transition storage; @sec:thesis-method-geometry-contract and the value-model section own the encoder and ablation ladder. The descriptor protocol is the typed interface between them: a training reader derives versioned target, scene, history, candidate, relation, support, validity, and provenance tensors from replay facts without giving the actor oracle-only fields or arbitrary coordinate shortcuts.
 
+The order below is causal. The target descriptor fixes the entity whose reconstruction gain is optimized. Scene memory then defines the evidence that can be queried without leakage. Candidate self-pose and candidate-target relations define geometry in local frames. Support, ray, relation, directional-history, mask, and provenance descriptors are added only after those anchors exist. This order keeps descriptors falsifiable: each block can be ablated, shuffled, masked, or source-dropped without changing the meaning of the remaining blocks.
+
 The derived model input at step $t$ is
 
 $
@@ -49,7 +51,7 @@ $
 
 This planned DINO-on-point branch can represent observed points outside the root @egocentric-voxel-lifting:short voxel cube, but it does not create fresh RGB, DINO, detector, or @egocentric-voxel-lifting:short evidence at unvisited candidate poses.
 
-Candidate pose is only the candidate self descriptor, not the whole row. Canonical poses remain stored as rigid transforms; model readers derive a relative pose feature from a reference pose #symb.spatial.ref_pose. For logged root states, #symb.spatial.ref_pose is the current/root actor pose defining the decision state. For counterfactual successors, it is the preceding selected pose whose geometry/history has already been fused. It is therefore a gauge choice for descriptor construction, not a new observation and not a future-looking anchor.
+Candidate pose is only the candidate self descriptor, not the whole row. Canonical poses remain stored as rigid transforms; model readers derive a relative pose feature from a reference pose #symb.spatial.ref_pose. For logged root states, #symb.spatial.ref_pose is the current/root actor pose defining the decision state. For counterfactual successors, it is the preceding selected pose whose geometry/history has already been fused. It is therefore a gauge choice for descriptor construction, not a new observation and not a future-looking anchor. This follows the query-centric principle that coordinates should be expressed relative to the query or decision frame when that removes nuisance global degrees of freedom without erasing task geometry @GeometricDeepLearning-bronstein2021 @zhou2023query.
 
 The reference transform is
 
@@ -73,11 +75,21 @@ $
 
 This relation uses candidate-local target displacement, range, bearing or optical-axis alignment, elevation, and OBB/frustum overlap. It replaces the earlier overloaded pose vector that combined absolute translation, 6D rotation, target distance, angle, overlap, and sampler provenance. Sampler family and source lineage remain useful diagnostics, but they are provenance features, not geometric pose.
 
-Candidate support is then queried from the scene memory in three typed pools:
+Candidate support is then queried from the scene memory in three typed pools. These pools are deliberately simpler than a learned sparse scene encoder: they expose target support, candidate-frustum support, and their intersection as controlled sufficient-statistic candidates before heavier point, sparse-convolution, or attention modules are introduced:
 
 $
   #eqs.scene.candidate_query_pools
 $
+
+This spatial separation is the core feature-bank isomorphism: the same actor-visible point/ray/EVL carriers are not a single scene vector, but a queryable memory whose predicates are defined by the target, the candidate frustum, and their overlap (@fig:feature-bank-query-pools).
+
+#figure(
+  align(center, image(
+    "../../figures/feature_bank_query_pools.pdf",
+    width: 100%,
+  )),
+  caption: [Actor-visible feature-bank query pools for #symb.rl.qh. Panel A separates point carriers, optional logged DINO descriptors, ray-memory evidence, root-local @egocentric-voxel-lifting:short support, and missing-modality masks. Panel B shows that the target pool, candidate-frustum pool, target-frustum-intersection pool, and ray query are different spatial predicates over the same actor-visible memory, not fresh counterfactual visual observations.],
+) <fig:feature-bank-query-pools>
 
 The pools summarize selected-target support, candidate-frustum support, and the target-frustum intersection. They are cheap support descriptors, not visibility truth by themselves. The candidate observation branch also needs a ray-aware query over occupied, free, unknown, hit, target, support, uncertainty, and directional-novelty channels:
 
@@ -125,13 +137,13 @@ The directional-memory diagram in @fig:qh-directional-memory keeps this branch s
 
 #figure(
   align(center, image(
-    "../../figures/qh_directional_memory.pdf",
-    width: 72%,
+    "../../figures/directional_memory_view_novelty.pdf",
+    width: 100%,
   )),
   caption: [Actor-visible directional memory for target-local view novelty. The figure shows a planned descriptor branch, not an implemented performance result: selected view directions over observed points or voxels are summarized as low-order directional coefficients or second moments, and each valid candidate reads the memory to produce a candidate token feature for #symb.rl.qh.],
 ) <fig:qh-directional-memory>
 
-The row-level descriptor assembled for candidate scoring is
+The row-level descriptor assembled for candidate scoring is therefore a contract, not a single mandatory tensor layout:
 
 $
   #eqs.model.candidate_row_features
