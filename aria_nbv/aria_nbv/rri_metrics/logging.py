@@ -173,11 +173,17 @@ class Loss(Logable):
 class LabelHistogram(TorchMetric):
     """Accumulate label counts for ordinal classes."""
 
+    counts: Tensor
+    """``Tensor["K", int64]`` per-class counts, reduced by distributed sum."""
+
     full_state_update = False
 
     def __init__(self, num_classes: int) -> None:
+        num_classes = int(num_classes)
+        if num_classes < 1:
+            raise ValueError("num_classes must be >= 1.")
         super().__init__()
-        self.num_classes = int(num_classes)
+        self.num_classes = num_classes
         self.add_state(
             "counts",
             default=torch.zeros(self.num_classes, dtype=torch.long),
@@ -188,6 +194,8 @@ class LabelHistogram(TorchMetric):
         if target.numel() == 0:
             return
         labels = target.to(dtype=torch.int64).reshape(-1)
+        if bool(((labels < 0) | (labels >= self.num_classes)).any().item()):
+            raise ValueError(f"Expected labels within [0, {self.num_classes}), got {target}.")
         counts = torch.bincount(labels, minlength=self.num_classes)
         self.counts = self.counts + counts.to(device=self.counts.device)
 
@@ -196,9 +204,15 @@ class LabelHistogram(TorchMetric):
 
 
 class RriErrorStats(TorchMetric):
-    """Accumulate bias/variance statistics for RRI regression errors."""
+    """Accumulate finite-pair bias/variance statistics for RRI errors."""
 
     full_state_update = False
+    sum_error: Tensor
+    """``Tensor["", float32]`` sum of finite prediction-minus-label errors."""
+    sum_error_sq: Tensor
+    """``Tensor["", float32]`` sum of squared finite errors."""
+    count: Tensor
+    """``Tensor["", float32]`` count of finite error pairs."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -209,17 +223,20 @@ class RriErrorStats(TorchMetric):
     def update(self, pred_rri: Tensor, rri: Tensor) -> None:
         if pred_rri.numel() == 0 or rri.numel() == 0:
             return
-        pred_flat = pred_rri.reshape(-1).to(dtype=torch.float32)
-        rri_flat = rri.reshape(-1).to(dtype=torch.float32)
+        pred_flat = pred_rri.reshape(-1).to(device=self.sum_error.device, dtype=torch.float32)
+        rri_flat = rri.reshape(-1).to(device=self.sum_error.device, dtype=torch.float32)
         if pred_flat.shape != rri_flat.shape:
             raise ValueError(
                 "Expected pred_rri and rri to have matching shapes, "
                 f"got {tuple(pred_flat.shape)} and {tuple(rri_flat.shape)}.",
             )
-        error = pred_flat - rri_flat
+        finite = torch.isfinite(pred_flat) & torch.isfinite(rri_flat)
+        if not bool(finite.any().item()):
+            return
+        error = pred_flat[finite] - rri_flat[finite]
         self.sum_error = self.sum_error + error.sum()
         self.sum_error_sq = self.sum_error_sq + (error * error).sum()
-        self.count = self.count + torch.tensor(float(error.numel()), device=self.count.device)
+        self.count = self.count + torch.tensor(float(error.numel()), device=self.count.device, dtype=self.count.dtype)
 
     def compute(self) -> dict[str, Tensor]:
         if not bool(self.count.item()):
@@ -341,6 +358,8 @@ def topk_accuracy_from_probs(probs: Tensor, labels: Tensor, *, top_k: int) -> Te
     Returns:
         ``Tensor[""]`` scalar accuracy in ``[0, 1]``.
     """
+    if top_k < 1:
+        raise ValueError("top_k must be >= 1.")
     if probs.numel() == 0 or labels.numel() == 0:
         return torch.tensor(float("nan"), device=probs.device)
     if probs.ndim != 2:
@@ -351,8 +370,6 @@ def topk_accuracy_from_probs(probs: Tensor, labels: Tensor, *, top_k: int) -> Te
             f"Expected probs and labels to have matching first dimension, got {probs.shape[0]} and {labels.shape[0]}.",
         )
     k = min(int(top_k), probs.shape[-1])
-    if k < 1:
-        raise ValueError("top_k must be >= 1.")
     topk = probs.topk(k=k, dim=-1).indices
     correct = (topk == labels.unsqueeze(-1)).any(dim=-1)
     return correct.to(dtype=torch.float32).mean()

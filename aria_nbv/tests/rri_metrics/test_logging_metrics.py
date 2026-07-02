@@ -1,6 +1,7 @@
 import sys
 import types
 
+import pytest
 import torch
 
 if "power_spherical" not in sys.modules:
@@ -58,6 +59,21 @@ def test_label_histogram_counts() -> None:
     hist.update(labels)
     counts = hist.compute()
     assert counts.tolist() == [1, 2, 0, 3]
+
+
+def test_label_histogram_rejects_invalid_class_count() -> None:
+    with pytest.raises(ValueError, match="num_classes"):
+        LabelHistogram(num_classes=0)
+
+
+def test_label_histogram_rejects_out_of_range_labels() -> None:
+    hist = LabelHistogram(num_classes=3)
+
+    with pytest.raises(ValueError, match=r"\[0, 3\)"):
+        hist.update(torch.tensor([0, 3]))
+
+    with pytest.raises(ValueError, match=r"\[0, 3\)"):
+        hist.update(torch.tensor([-1]))
 
 
 def test_vin_metrics_empty_compute() -> None:
@@ -121,6 +137,14 @@ def test_topk_accuracy_from_probs() -> None:
     assert torch.isclose(acc_top2, torch.tensor(1.0))
 
 
+def test_topk_accuracy_validates_top_k_before_empty_inputs() -> None:
+    probs = torch.empty((0, 3), dtype=torch.float32)
+    labels = torch.empty((0,), dtype=torch.int64)
+
+    with pytest.raises(ValueError, match="top_k"):
+        topk_accuracy_from_probs(probs, labels, top_k=0)
+
+
 def test_rri_error_stats_bias_variance() -> None:
     stats = RriErrorStats()
     pred = torch.tensor([2.0, 4.0])
@@ -129,3 +153,23 @@ def test_rri_error_stats_bias_variance() -> None:
     result = stats.compute()
     assert torch.isclose(result["bias2"], torch.tensor(1.0))
     assert torch.isclose(result["variance"], torch.tensor(0.0))
+
+
+def test_rri_error_stats_ignores_nonfinite_pairs() -> None:
+    stats = RriErrorStats()
+    pred = torch.tensor([2.0, float("nan"), 4.0, float("inf")])
+    rri = torch.tensor([1.0, 1.0, 3.0, 2.0])
+
+    stats.update(pred, rri)
+    result = stats.compute()
+
+    assert torch.isclose(result["bias2"], torch.tensor(1.0))
+    assert torch.isclose(result["variance"], torch.tensor(0.0))
+
+
+def test_rri_error_stats_returns_empty_for_all_nonfinite_pairs() -> None:
+    stats = RriErrorStats()
+
+    stats.update(torch.tensor([float("nan"), 1.0]), torch.tensor([1.0, float("nan")]))
+
+    assert stats.compute() == {}
