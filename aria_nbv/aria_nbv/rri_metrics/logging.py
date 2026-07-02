@@ -17,7 +17,7 @@ from typing import Literal
 
 import torch
 from torch import Tensor
-from torchmetrics import Metric as MetricBase
+from torchmetrics import Metric as TorchMetric
 from torchmetrics.classification import MulticlassConfusionMatrix
 from torchmetrics.regression import SpearmanCorrCoef
 
@@ -170,7 +170,7 @@ class Loss(Logable):
         raise ValueError(f"Unknown Loss: {self}")
 
 
-class LabelHistogram(MetricBase):
+class LabelHistogram(TorchMetric):
     """Accumulate label counts for ordinal classes."""
 
     full_state_update = False
@@ -195,7 +195,7 @@ class LabelHistogram(MetricBase):
         return self.counts
 
 
-class RriErrorStats(MetricBase):
+class RriErrorStats(TorchMetric):
     """Accumulate bias/variance statistics for RRI regression errors."""
 
     full_state_update = False
@@ -238,7 +238,7 @@ class RriErrorStats(MetricBase):
         self.count.zero_()
 
 
-class VinMetrics(MetricBase):
+class VinMetrics(TorchMetric):
     """Container for VIN metrics computed from candidate rankings."""
 
     full_state_update = False
