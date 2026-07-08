@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ....vin.experimental.plotting import build_field_token_histograms
-from ....vin.plotting import build_field_slice_figures
+from ....vin.diagnostics import build_field_token_histograms
+from ....vin.diagnostics.plotting import build_field_slice_figures
 from ..common import _info_popover
 from .context import VinDiagContext
 

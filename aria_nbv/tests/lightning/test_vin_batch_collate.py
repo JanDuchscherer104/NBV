@@ -11,8 +11,11 @@ from efm3d.aria.pose import PoseTW
 from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinSnippetView
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
+from aria_nbv.rri_metrics.logging import Metric
 from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
-from aria_nbv.vin.model_v3 import VinModelV3Config
+from aria_nbv.utils import Stage
+from aria_nbv.vin.models.scene_myopic import VinModelV3Config
+from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 pytest.importorskip("pytorch_lightning")
@@ -374,7 +377,6 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
         candidate_valid=torch.ones((1, 4), dtype=torch.bool),
         voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
         semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
-        semidense_valid_frac=torch.ones((1, 4), dtype=torch.float32),
     )
     module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
 
@@ -407,6 +409,346 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
 
     assert loss is not None  # noqa: S101
     assert torch.isclose(loss, expected_loss)  # noqa: S101
+
+
+def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Oracle-hit logging should rank only hard-valid candidate rows."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+            aux_regression_loss=None,
+        ),
+    )
+    module._binner = RriOrdinalBinner.fit_from_iterable(
+        [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
+        num_classes=3,
+    )
+    module.prepare_for_inference()
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    logged: dict[str, torch.Tensor | float] = {}
+    log_dict_calls: list[tuple[dict[str, torch.Tensor | float], dict[str, object]]] = []
+
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        del args
+        logged.update(values)
+        log_dict_calls.append((values, kwargs))
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+
+    logits = torch.tensor(
+        [
+            [
+                [0.25, -0.10],
+                [0.05, 0.30],
+                [1.50, -1.25],
+                [-0.75, 0.80],
+            ]
+        ],
+        dtype=torch.float32,
+    )
+    probs = coral_logits_to_prob(logits)
+    expected, _ = coral_expected_from_logits(logits)
+    pred = VinPrediction(
+        logits=logits,
+        prob=probs,
+        expected=expected,
+        expected_normalized=torch.tensor([[0.9, 0.1, 1.0, 0.8]], dtype=torch.float32),
+        candidate_valid=torch.ones((1, 4), dtype=torch.bool),
+        voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
+        semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
+    )
+    module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
+
+    batch = VinOracleBatch(
+        efm_snippet_view=_make_snippet(),
+        candidate_poses_world_cam=_identity_pose(4),
+        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
+        pm_dist_before=torch.ones(4, dtype=torch.float32),
+        pm_dist_after=torch.ones(4, dtype=torch.float32),
+        pm_acc_before=torch.ones(4, dtype=torch.float32),
+        pm_comp_before=torch.ones(4, dtype=torch.float32),
+        pm_acc_after=torch.ones(4, dtype=torch.float32),
+        pm_comp_after=torch.ones(4, dtype=torch.float32),
+        p3d_cameras=_make_cameras(4),
+        scene_id="scene-a",
+        snippet_id="snip-a",
+        candidate_count=torch.tensor(2, dtype=torch.int64),
+        backbone_out=_make_backbone(),
+    )
+
+    loss = module.training_step(batch, batch_idx=0)
+
+    assert loss is not None
+    assert torch.allclose(logged["train-aux/candidate_top1_oracle_hit"], torch.tensor(0.0))
+    assert torch.allclose(logged["train-aux/candidate_top3_oracle_hit"], torch.tensor(1.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_regret"], torch.tensor(0.1))
+    assert torch.allclose(logged["train-aux/selected_oracle_rank"], torch.tensor(2.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_percentile"], torch.tensor(0.0))
+    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(1.0))
+    assert any(
+        "train-aux/candidate_top3_oracle_hit" in values and kwargs["batch_size"] == 1
+        for values, kwargs in log_dict_calls
+    )
+    assert any("train/loss" in values and kwargs["batch_size"] == 2 for values, kwargs in log_dict_calls)
+
+
+def test_lightning_table_metric_logging_uses_per_metric_denominators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(backbone=None, num_classes=3),
+            num_classes=3,
+        ),
+    )
+    calls: list[tuple[Metric, int]] = []
+
+    def capture_aux_scalars(
+        payload: dict[Metric, torch.Tensor | float],
+        *,
+        stage: Stage,
+        batch_size: int,
+    ) -> None:
+        assert stage is Stage.VAL
+        assert len(payload) == 1
+        calls.append((next(iter(payload)), batch_size))
+
+    monkeypatch.setattr(module, "_log_aux_scalars", capture_aux_scalars)
+
+    module._log_candidate_table_metrics(
+        stage=Stage.VAL,
+        top1_oracle_hit=torch.tensor([1.0, float("nan"), 0.0]),
+        top1_oracle_hit_mean=torch.tensor(0.5),
+        top3_oracle_hit=torch.tensor([1.0, float("nan"), float("nan")]),
+        top3_oracle_hit_mean=torch.tensor(1.0),
+        selected_oracle_regret=torch.tensor([0.2, float("nan"), float("nan")]),
+        selected_oracle_regret_mean=torch.tensor(0.2),
+        selected_oracle_rank=torch.tensor([1.0, 2.0, float("nan")]),
+        selected_oracle_rank_mean=torch.tensor(1.5),
+        selected_oracle_percentile=torch.tensor([float("nan"), 0.4, float("nan")]),
+        selected_oracle_percentile_mean=torch.tensor(0.4),
+        selected_oracle_valid_table=torch.tensor([True, False, True]),
+        selected_oracle_valid_rate=torch.tensor(2.0 / 3.0),
+    )
+
+    assert dict(calls) == {
+        Metric.CANDIDATE_TOP1_ORACLE_HIT: 2,
+        Metric.CANDIDATE_TOP3_ORACLE_HIT: 1,
+        Metric.SELECTED_ORACLE_REGRET: 1,
+        Metric.SELECTED_ORACLE_RANK: 2,
+        Metric.SELECTED_ORACLE_PERCENTILE: 1,
+        Metric.SELECTED_ORACLE_VALID_TABLE_RATE: 3,
+    }
+
+
+def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Selected-action oracle diagnostics should not select from all-nonfinite valid predictions."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+            aux_regression_loss=None,
+        ),
+    )
+    module._binner = RriOrdinalBinner.fit_from_iterable(
+        [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
+        num_classes=3,
+    )
+    module.prepare_for_inference()
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    logged: dict[str, torch.Tensor | float] = {}
+
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        logged.update(values)
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+
+    logits = torch.zeros((1, 4, 2), dtype=torch.float32)
+    probs = coral_logits_to_prob(logits)
+    expected, _ = coral_expected_from_logits(logits)
+    pred = VinPrediction(
+        logits=logits,
+        prob=probs,
+        expected=expected,
+        expected_normalized=torch.tensor([[float("nan"), float("nan"), 1.0, 0.8]], dtype=torch.float32),
+        candidate_valid=torch.ones((1, 4), dtype=torch.bool),
+        voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
+        semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
+    )
+    module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
+
+    batch = VinOracleBatch(
+        efm_snippet_view=_make_snippet(),
+        candidate_poses_world_cam=_identity_pose(4),
+        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
+        pm_dist_before=torch.ones(4, dtype=torch.float32),
+        pm_dist_after=torch.ones(4, dtype=torch.float32),
+        pm_acc_before=torch.ones(4, dtype=torch.float32),
+        pm_comp_before=torch.ones(4, dtype=torch.float32),
+        pm_acc_after=torch.ones(4, dtype=torch.float32),
+        pm_comp_after=torch.ones(4, dtype=torch.float32),
+        p3d_cameras=_make_cameras(4),
+        scene_id="scene-a",
+        snippet_id="snip-a",
+        candidate_count=torch.tensor(2, dtype=torch.int64),
+        backbone_out=_make_backbone(),
+    )
+
+    loss = module.training_step(batch, batch_idx=0)
+
+    assert loss is not None
+    assert torch.isnan(logged["train-aux/selected_oracle_regret"])
+    assert torch.isnan(logged["train-aux/selected_oracle_rank"])
+    assert torch.isnan(logged["train-aux/selected_oracle_percentile"])
+    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(0.0))
+
+
+def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
+    """The scorer seam should not rename existing VIN checkpoint parameters."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.config.vin, VinModelV3Config)  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
+def test_lightning_accepts_zero_descriptor_myopic_scorer_without_state_alias() -> None:
+    """The myopic baseline should train through the existing VIN module slot."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(num_classes=3, target_descriptor_dim=0),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.vin, TargetConditionedMyopicScorer)  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.base_scorer.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
+def test_lightning_accepts_custom_zero_descriptor_myopic_base_scorer() -> None:
+    """Custom v3 settings should survive the myopic wrapper without aliasing state."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(
+                num_classes=3,
+                target_descriptor_dim=0,
+                base_scorer=VinModelV3Config(num_classes=99, field_dim=12, head_dropout=0.2),
+            ),
+            num_classes=3,
+        ),
+    )
+
+    assert module.candidate_scorer is module.vin  # noqa: S101
+    assert isinstance(module.vin, TargetConditionedMyopicScorer)  # noqa: S101
+    assert module.vin.base_scorer.config.num_classes == 3  # noqa: S101
+    assert module.vin.base_scorer.config.field_dim == 12  # noqa: S101
+    assert module.vin.base_scorer.config.head_dropout == 0.2  # noqa: S101
+    assert module.vin.base_scorer.config is not module.config.vin.base_scorer  # noqa: S101
+    state_keys = tuple(module.state_dict())
+    assert any(key.startswith("vin.base_scorer.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+
+
+def test_lightning_can_disable_spearman_metric_buffering() -> None:
+    """Smoke modules can skip Spearman without disabling confusion/histogram metrics."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=TargetConditionedMyopicScorerConfig(num_classes=3, target_descriptor_dim=0),
+            num_classes=3,
+            log_spearman=False,
+        ),
+    )
+
+    for metrics in module._metrics.values():
+        assert metrics.spearman is None  # noqa: S101
+        assert metrics.confusion is not None  # noqa: S101
+        assert metrics.label_hist is not None  # noqa: S101
+    assert module._interval_metrics.spearman is None  # noqa: S101
+
+
+def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disabling Spearman should not break scalar logging or interval metrics."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(num_classes=3),
+            num_classes=3,
+            aux_regression_loss=None,
+            log_interval_steps=1,
+            log_spearman=False,
+        ),
+    )
+    module._binner = RriOrdinalBinner.fit_from_iterable(
+        [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
+        num_classes=3,
+    )
+    module.prepare_for_inference()
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    logged: dict[str, torch.Tensor | float] = {}
+
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        logged.update(values)
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+
+    logits = torch.tensor([[[0.25, -0.10], [0.05, 0.30]]], dtype=torch.float32)
+    probs = coral_logits_to_prob(logits)
+    expected, expected_norm = coral_expected_from_logits(logits)
+    pred = VinPrediction(
+        logits=logits,
+        prob=probs,
+        expected=expected,
+        expected_normalized=expected_norm,
+        candidate_valid=torch.ones((1, 2), dtype=torch.bool),
+        voxel_valid_frac=torch.ones((1, 2), dtype=torch.float32),
+        semidense_candidate_vis_frac=torch.ones((1, 2), dtype=torch.float32),
+    )
+    module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
+
+    batch = VinOracleBatch(
+        efm_snippet_view=_make_snippet(),
+        candidate_poses_world_cam=_identity_pose(2),
+        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        rri=torch.tensor([0.10, 0.20], dtype=torch.float32),
+        pm_dist_before=torch.ones(2, dtype=torch.float32),
+        pm_dist_after=torch.ones(2, dtype=torch.float32),
+        pm_acc_before=torch.ones(2, dtype=torch.float32),
+        pm_comp_before=torch.ones(2, dtype=torch.float32),
+        pm_acc_after=torch.ones(2, dtype=torch.float32),
+        pm_comp_after=torch.ones(2, dtype=torch.float32),
+        p3d_cameras=_make_cameras(2),
+        scene_id="scene-a",
+        snippet_id="snip-a",
+        candidate_count=torch.tensor(2, dtype=torch.int64),
+        backbone_out=_make_backbone(),
+    )
+
+    loss = module.training_step(batch, batch_idx=0)
+
+    assert loss is not None  # noqa: S101
+    assert "train/loss" in logged  # noqa: S101
+    assert "train-aux/spearman_step" not in logged  # noqa: S101
+    assert "train-aux/spearman" not in logged  # noqa: S101
 
 
 def test_shuffle_candidates_preserves_padded_tail_unbatched() -> None:

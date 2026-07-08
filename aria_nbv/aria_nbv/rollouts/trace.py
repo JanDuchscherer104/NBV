@@ -13,7 +13,7 @@ from typing import Any
 
 import torch
 
-from ..pose_generation.counterfactuals import (
+from .counterfactuals import (
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
     CounterfactualTrajectory,

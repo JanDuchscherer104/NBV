@@ -8,7 +8,7 @@ import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.vin.scene_feature_bank import (
+from aria_nbv.vin.feature_bank import (
     PointFeatureBank,
     compress_point_features,
     pool_multiview_point_features,

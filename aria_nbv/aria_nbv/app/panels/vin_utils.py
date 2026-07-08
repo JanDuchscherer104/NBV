@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -13,11 +14,18 @@ from ...data_handling import (
     VinSnippetView,
 )
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
-from ...lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from ...rri_metrics.rri_binning import RriOrdinalBinner
+from ...lightning.lit_module import VinLightningModule
 from ...utils import Stage
-from ...vin.experimental.types import VinForwardDiagnostics
 from ...vin.types import VinPrediction
+from ...vin.types.diagnostics import VinForwardDiagnostics
+
+
+@dataclass(frozen=True, slots=True)
+class _VinDiagnosticsRuntime:
+    """Runtime objects needed for one VIN diagnostics pass."""
+
+    module: VinLightningModule
+    datamodule: object
 
 
 def _build_experiment_config(
@@ -41,48 +49,26 @@ def _build_experiment_config(
     return cfg
 
 
-def _load_vin_module_from_checkpoint(
+def _setup_vin_diagnostics_runtime(
+    cfg: AriaNBVExperimentConfig,
     *,
-    checkpoint_path: Path,
-    device: torch.device | str,
-) -> VinLightningModule:
-    payload = torch.load(checkpoint_path, map_location="cpu")
-    hparams = payload.get("hyper_parameters", {})
-    if isinstance(hparams, dict) and "config" in hparams and isinstance(hparams["config"], dict):
-        config_payload = hparams["config"]
-    elif isinstance(hparams, dict):
-        config_payload = hparams
-    else:
-        config_payload = {}
-    config = VinLightningModuleConfig(**config_payload)
-    module = VinLightningModule(config=config)
-    module.on_load_checkpoint(payload)
-    state_dict = payload.get("state_dict")
-    if state_dict is None:
-        raise RuntimeError("Checkpoint missing state_dict.")
-    module.load_state_dict(state_dict, strict=False)
-    module.to(torch.device(device))
-    module.eval()
-    try:
-        if getattr(module, "_binner", None) is None:
-            binner = None
-            if module.config.binner_path is not None:
-                try:
-                    binner = module._load_binner_from_config()
-                except Exception:
-                    binner = None
-            if binner is None:
-                default_binner_path = Path(".logs") / "vin" / "rri_binner.json"
-                try:
-                    binner = RriOrdinalBinner.load(default_binner_path)
-                except Exception:
-                    binner = None
-            if binner is not None:
-                module._binner = binner
-        module._maybe_init_bin_values()
-    except Exception:
-        pass
-    return module
+    stage: Stage,
+) -> _VinDiagnosticsRuntime:
+    """Build checkpoint-backed VIN diagnostics runtime objects."""
+
+    ckpt_path = cfg._resolve_ckpt_path()
+    if ckpt_path is not None:
+        module = VinLightningModule.load_for_inference(
+            ckpt_path,
+            fallback_binner_path=cfg.module_config.binner_path,
+        )
+        datamodule = cfg.datamodule_config.setup_target()
+        datamodule.setup(stage=stage)
+        return _VinDiagnosticsRuntime(module=module, datamodule=datamodule)
+
+    _trainer, module, datamodule = cfg.setup_target(setup_stage=stage)
+    module.prepare_for_inference()
+    return _VinDiagnosticsRuntime(module=module, datamodule=datamodule)
 
 
 def _run_vin_debug(
@@ -130,6 +116,6 @@ def _run_vin_debug(
 
 __all__ = [
     "_build_experiment_config",
-    "_load_vin_module_from_checkpoint",
     "_run_vin_debug",
+    "_setup_vin_diagnostics_runtime",
 ]

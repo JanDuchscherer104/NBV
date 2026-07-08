@@ -8,8 +8,8 @@ import torch
 
 from ....data_handling import VinSnippetView
 from ....rri_metrics.coral import coral_loss
-from ....vin.experimental.plotting import build_alignment_figures
-from ....vin.plotting import build_geometry_overview_figure, build_semidense_projection_figure
+from ....vin.diagnostics import build_alignment_figures
+from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ..common import _info_popover
 from ..data import scene_plot_options_ui
 from .context import VinDiagContext
@@ -363,8 +363,6 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             values = pred.semidense_candidate_vis_frac
             if values is None:
                 values = getattr(debug, "semidense_candidate_vis_frac", None)
-            if values is None:
-                values = pred.semidense_valid_frac
             if values is None:
                 st.info("semidense_candidate_vis_frac unavailable; falling back to valid fraction.")
             else:

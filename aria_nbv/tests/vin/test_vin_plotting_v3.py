@@ -22,7 +22,7 @@ from efm3d.aria.aria_constants import (
 )
 
 from aria_nbv.data_handling.efm_views import EfmSnippetView
-from aria_nbv.vin.plotting import (
+from aria_nbv.vin.diagnostics.plotting import (
     build_backbone_evidence_figures,
     build_field_slice_figures,
     build_geometry_overview_figure,
@@ -260,6 +260,14 @@ def test_vin_plotting_semidense_projection() -> None:
         show_frustum=False,
     )
     assert fig.data
+
+    fig_with_frustum = build_semidense_projection_figure(
+        points_world,
+        p3d_cameras=cams,
+        candidate_index=0,
+        show_frustum=True,
+    )
+    assert any(getattr(trace, "name", "") == "candidate frustum" for trace in fig_with_frustum.data)
 
     fig_maps = build_semidense_projection_feature_figure(
         points_world,

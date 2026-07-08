@@ -18,9 +18,6 @@ from aria_nbv.data_handling import (
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
     CandidateViewGeneratorConfig,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
     ViewDirectionMode,
 )
 from aria_nbv.rerun_inspector._config import (
@@ -31,11 +28,16 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorRolloutDepthConfig,
 )
 from aria_nbv.rl import CounterfactualRLEnvConfig
-from aria_nbv.rollouts import RolloutDatasetWriterConfig, RolloutRecipeConfig, RolloutZarrStoreConfig
+from aria_nbv.rollouts import (
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualSelectionPolicy,
+    CounterfactualTargetOracleRriScorerConfig,
+    RolloutDatasetWriterConfig,
+    RolloutRecipeConfig,
+    RolloutZarrStoreConfig,
+)
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
-from aria_nbv.vin.experimental.model_v1_SH import VinModelConfig as ShVinModelConfig
-from aria_nbv.vin.pose_encoders import R6dLffPoseEncoderConfig
-from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 
 
 def _recipe(**kwargs: object) -> RolloutRecipeConfig:
@@ -64,6 +66,9 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (OracleTargetTaskSamplerConfig, {"identity_iou_thresholds": ()}),
         (_recipe, {"horizon": 0}),
         (_recipe, {"selection_temperature": 0.0}),
+        (_recipe, {"min_sibling_distance_m": -0.1}),
+        (_recipe, {"min_sibling_yaw_deg": -1.0}),
+        (_recipe, {"min_sibling_target_bearing_deg": -1.0}),
         (RolloutDatasetWriterConfig, {"max_samples": 0}),
         (RolloutZarrStoreConfig, {"discount_gamma": -0.1}),
         (VinOfflineWriterConfig, {"samples_per_shard": 0}),
@@ -71,6 +76,7 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (_mixture_component, {"count": 0}),
         (CounterfactualPoseGeneratorConfig, {"branch_factor": 0}),
         (CounterfactualPoseGeneratorConfig, {"seed": -1}),
+        (CounterfactualPoseGeneratorConfig, {"min_sibling_target_bearing_deg": -1.0}),
         (CounterfactualTargetOracleRriScorerConfig, {"target_crop_margin_m": -0.01}),
         (RerunInspectorOutputConfig, {"spawn_port": 0}),
         (RerunInspectorGeometryConfig, {"mesh_alpha": 256}),
@@ -81,8 +87,6 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (GradNormLoggingConfig, {"max_items": 0}),
         (LearnableFourierFeaturesConfig, {"fourier_dim": 7}),
         (R6dLffPoseEncoderConfig, {"pose_scale_init": (0.0, 1.0)}),
-        (ShVinModelConfig, {"frustum_depths_m": [float("nan")]}),
-        (ShVinModelConfig, {"frustum_depths_m": [0.0]}),
         (RlPageConfig, {"default_eval_episodes": 0}),
     ],
 )

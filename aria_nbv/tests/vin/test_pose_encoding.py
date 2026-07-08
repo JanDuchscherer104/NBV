@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from aria_nbv.vin.pose_encoding import LearnableFourierFeaturesConfig
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig
 
 
 def test_learnable_fourier_features_gamma_sets_projection_scale() -> None:

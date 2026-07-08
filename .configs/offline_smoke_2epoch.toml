@@ -1,0 +1,149 @@
+# Two-epoch VIN smoke training over a tiny immutable offline slice.
+#
+# Run `.configs/fit_binner_offline_smoke.toml` first so
+# `.logs/vin/offline-smoke/rri_binner.json` exists.
+run_mode = "train"
+run_name = "offline-smoke-2epoch"
+out_dir = ".logs/vin/offline-smoke"
+seed = 0
+inspect_config = false
+
+[datamodule_config]
+num_workers = 0
+batch_size = 4
+persistent_workers = false
+shuffle = true
+shuffle_candidates = true
+use_train_as_val = true
+
+    [datamodule_config.source]
+    kind = "offline"
+    train_split = "train"
+    val_split = "train"
+    load_candidates_for_batch = false
+    load_depths_for_batch = false
+    load_candidate_pcs_for_batch = false
+    load_gt_obbs_for_batch = false
+    load_detected_obbs_for_batch = false
+    load_trajectory_metadata_for_batch = false
+
+        [datamodule_config.source.offline]
+        include_efm_snippet = false
+        include_gt_mesh = false
+        load_backbone = true
+        load_candidates = false
+        load_depths = false
+        load_candidate_pcs = false
+        map_location = "cpu"
+        limit = 16
+        backbone_keep_fields = [
+            "t_world_voxel",
+            "voxel_extent",
+            "occ_pr",
+            "occ_input",
+            "counts",
+            "cent_pr",
+            "free_input",
+            "pts_world",
+        ]
+
+            [datamodule_config.source.offline.store]
+            store_dir = "vin_offline"
+
+[trainer_config]
+enable_validation = true
+check_val_every_n_epoch = 1
+num_sanity_val_steps = 0
+fast_dev_run = false
+max_epochs = 2
+accelerator = "cpu"
+devices = 1
+log_every_n_steps = 1
+gradient_clip_val = 1.0
+limit_train_batches = 2
+limit_val_batches = 1
+use_wandb = false
+enable_model_summary = false
+
+    [trainer_config.callbacks]
+    use_model_checkpoint = false
+    use_early_stopping = false
+    use_lr_monitor = false
+    use_rich_progress_bar = false
+    use_tqdm_progress_bar = true
+    tqdm_refresh_rate = 1
+    use_rich_model_summary = false
+
+[module_config]
+num_classes = 15
+save_binner = true
+binner_path = ".logs/vin/offline-smoke/rri_binner.json"
+aux_regression_loss = "none"
+coral_bias_init = "prior_logits"
+coral_loss_variant = "coral"
+coral_balance_source = "binner"
+coverage_weight_mode = "none"
+log_spearman = false
+
+    [module_config.grad_norms]
+    enabled = false
+
+    [module_config.optimizer]
+    learning_rate = 0.001
+    weight_decay = 0.0
+
+    [module_config.lr_scheduler]
+    mode = "min"
+    factor = 0.5
+    patience = 1
+    threshold = 1e-4
+    threshold_mode = "rel"
+    cooldown = 0
+    min_lr = 0.0
+    monitor = "val/loss"
+    interval = "epoch"
+    frequency = 1
+
+    [module_config.vin]
+    num_classes = 15
+    head_hidden_dim = 32
+    head_num_layers = 1
+    head_dropout = 0.0
+    field_dim = 8
+    field_gn_groups = 2
+    apply_cw90_correction = false
+    global_pool_grid_size = 2
+    semidense_proj_grid_size = 8
+    semidense_proj_max_points = 1024
+    semidense_cnn_enabled = false
+    use_traj_encoder = false
+    scene_field_channels = [
+        "occ_pr",
+        "occ_input",
+        "counts_norm",
+        "cent_pr",
+        "free_input",
+        "new_surface_prior",
+    ]
+
+        [module_config.vin.pose_encoder]
+        kind = "r6d_lff"
+        pose_scale_init = [1.0, 1.0]
+        pose_scale_learnable = true
+        pose_scale_eps = 1e-6
+
+            [module_config.vin.pose_encoder.pose_encoder_lff]
+            input_dim = 9
+            fourier_dim = 16
+            hidden_dim = 32
+            output_dim = 16
+            gamma = 1.0
+            include_input = false
+
+        [module_config.vin.pos_grid_encoder_lff]
+        input_dim = 3
+        fourier_dim = 12
+        hidden_dim = 16
+        output_dim = 8
+        gamma = 1.0
+        include_input = false

@@ -98,13 +98,13 @@ PACKAGE_SMOKE_RUFF_PATHS := \
 	aria_nbv/rendering/candidate_depth_renderer.py \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
-	tests/pose_generation/test_counterfactuals.py \
+	tests/rollouts/test_counterfactuals.py \
 	tests/rendering/test_candidate_renderer_cpu_backend.py \
 	tests/lightning/test_vin_batch_collate.py
 PACKAGE_SMOKE_TESTS := \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
-	tests/pose_generation/test_counterfactuals.py \
+	tests/rollouts/test_counterfactuals.py \
 	tests/rendering/test_candidate_renderer_cpu_backend.py \
 	tests/lightning/test_vin_batch_collate.py
 

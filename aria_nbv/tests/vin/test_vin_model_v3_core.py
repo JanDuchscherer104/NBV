@@ -2,6 +2,7 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 import torch
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
@@ -64,8 +65,13 @@ if "seaborn" not in sys.modules:
 from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.efm_views import VinSnippetView
-from aria_nbv.vin.backbone_evl import EvlBackboneConfig
-from aria_nbv.vin.model_v3 import SEMIDENSE_PROJ_DIM, VinModelV3, VinModelV3Config
+from aria_nbv.vin.backbones import EvlBackboneConfig
+from aria_nbv.vin.geometry.semidense_projection import (
+    SEMIDENSE_PROJ_DIM,
+    encode_projection_summary,
+    project_points_to_candidate_cameras,
+)
+from aria_nbv.vin.models.scene_myopic import VinModelV3, VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput
 
 
@@ -184,6 +190,115 @@ def test_vin_model_v3_gradients(monkeypatch) -> None:
         assert torch.isfinite(param.grad).all(), f"Non-finite grad for {name}"
 
 
+def test_vin_model_v3_requires_cached_backbone_out() -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None))
+    reference_pose, candidate_poses = _make_poses(batch=1, num_candidates=2)
+    snippet = _make_vin_snippet()
+    poses_cw = candidate_poses.inverse()
+    cameras = PerspectiveCameras(
+        device=torch.device("cpu"),
+        R=poses_cw.R.transpose(-1, -2).contiguous(),
+        T=poses_cw.t,
+        focal_length=torch.tensor([[40.0, 40.0]], dtype=torch.float32).expand(2, -1),
+        principal_point=torch.tensor([[32.0, 32.0]], dtype=torch.float32).expand(2, -1),
+        image_size=torch.tensor([[64.0, 64.0]], dtype=torch.float32).expand(2, -1),
+        in_ndc=False,
+    )
+
+    with pytest.raises(RuntimeError, match="backbone_out"):
+        model.forward(
+            efm=snippet,
+            candidate_poses_world_cam=candidate_poses,
+            reference_pose_world_rig=reference_pose,
+            p3d_cameras=cameras,
+            backbone_out=None,
+        )
+
+
+def test_vin_model_v3_cached_forward_does_not_move_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None))
+    batch = 1
+    num_candidates = 3
+    grid = 2
+    backbone_out = _make_backbone_out(batch=batch, grid=grid)
+    reference_pose, candidate_poses = _make_poses(batch=batch, num_candidates=num_candidates)
+    snippet = _make_vin_snippet()
+    poses_cw = candidate_poses.inverse()
+    cameras = PerspectiveCameras(
+        device=torch.device("cpu"),
+        R=poses_cw.R.transpose(-1, -2).contiguous(),
+        T=poses_cw.t,
+        focal_length=torch.tensor([[40.0, 40.0]], dtype=torch.float32).expand(num_candidates, -1),
+        principal_point=torch.tensor([[32.0, 32.0]], dtype=torch.float32).expand(num_candidates, -1),
+        image_size=torch.tensor([[64.0, 64.0]], dtype=torch.float32).expand(num_candidates, -1),
+        in_ndc=False,
+    )
+
+    def _fail_to(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("VinModelV3.forward must not move the module")
+
+    monkeypatch.setattr(model, "to", _fail_to)
+    monkeypatch.setattr(
+        model,
+        "parameters",
+        lambda: iter([types.SimpleNamespace(device=torch.device("meta"))]),
+    )
+
+    pred = model.forward(
+        efm=snippet,
+        candidate_poses_world_cam=candidate_poses,
+        reference_pose_world_rig=reference_pose,
+        p3d_cameras=cameras,
+        backbone_out=backbone_out,
+    )
+
+    assert pred.logits.shape[:2] == (batch, num_candidates)
+
+
+def test_v3_shared_head_preserves_checkpoint_keys() -> None:
+    """V3 should keep the public head_mlp/head_coral state-dict surface."""
+    model = VinModelV3(VinModelV3Config())
+    keys = set(model.state_dict())
+
+    assert any(key.startswith("head_mlp.") for key in keys)
+    assert any(key.startswith("head_coral.") for key in keys)
+    assert any(key.startswith("voxel_proj_film.") for key in keys)
+    assert any(key.startswith("voxel_proj_film_norm.") for key in keys)
+    assert not any(key.startswith("scorer_head.") for key in keys)
+    assert not any(key.startswith("film.") for key in keys)
+
+
+def test_v3_field_proj_preserves_checkpoint_keys() -> None:
+    """V3 field projection should keep historical numbered Sequential keys."""
+    model = VinModelV3(VinModelV3Config())
+    keys = set(model.state_dict())
+
+    assert {"field_proj.0.weight", "field_proj.1.weight", "field_proj.1.bias"}.issubset(keys)
+    assert "field_proj.0.bias" not in keys
+    assert not any(key.startswith("field_proj.proj.") for key in keys)
+    assert not any(key.startswith("field_proj.layers.") for key in keys)
+    assert not any(key.startswith("field_proj.module.") for key in keys)
+
+
+def test_v3_semidense_cnn_preserves_checkpoint_keys() -> None:
+    """Semidense CNN extraction must keep historical numbered layer keys."""
+    model = VinModelV3(VinModelV3Config())
+    keys = set(model.state_dict())
+
+    expected = {
+        "semidense_cnn.0.weight",
+        "semidense_cnn.0.bias",
+        "semidense_cnn.2.weight",
+        "semidense_cnn.2.bias",
+        "semidense_cnn.6.weight",
+        "semidense_cnn.6.bias",
+    }
+
+    assert expected.issubset(keys)
+    assert not any(key.startswith("semidense_cnn.encoder.") for key in keys)
+    assert not any(key.startswith("semidense_grid_encoder.") for key in keys)
+
+
 def test_semidense_projection_features_shape_v3() -> None:
     model = VinModelV3(VinModelV3Config())
     device = torch.device("cpu")
@@ -206,19 +321,23 @@ def test_semidense_projection_features_shape_v3() -> None:
         image_size=torch.tensor([[100.0, 100.0]], device=device),
         in_ndc=False,
     )
-    proj_data = model._project_semidense_points(
+    proj_data = project_points_to_candidate_cameras(
         points_world,
         cameras,
         batch_size=1,
         num_candidates=1,
         device=device,
     )
-    proj_feat = model._encode_semidense_projection_features(
+    proj_feat = encode_projection_summary(
         proj_data,
         batch_size=1,
         num_candidates=1,
         device=device,
         dtype=torch.float32,
+        grid_size=int(model.config.semidense_proj_grid_size),
+        obs_count_max=int(model.config.semidense_obs_count_max),
+        inv_dist_std_min=float(model.config.semidense_inv_dist_std_min),
+        inv_dist_std_p95=float(model.config.semidense_inv_dist_std_p95),
     )
     assert proj_feat.shape == (1, 1, SEMIDENSE_PROJ_DIM)
     assert (proj_feat[..., 0] >= 0.0).all()

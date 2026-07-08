@@ -75,9 +75,40 @@ from efm3d.aria.pose import PoseTW
 from aria_nbv.data_handling import is_vin_snippet_view_instance
 from aria_nbv.data_handling.efm_views import EfmSnippetView, VinSnippetView
 from aria_nbv.data_handling.vin_oracle_types import VinOracleBatch
-from aria_nbv.vin.model_v3 import SEMIDENSE_PROJ_DIM, VinModelV3, VinModelV3Config
-from aria_nbv.vin.traj_encoder import TrajectoryEncoderConfig
+from aria_nbv.vin.encoders import TrajectoryEncoderConfig
+from aria_nbv.vin.geometry import pool_voxel_points
+from aria_nbv.vin.geometry.semidense_projection import (
+    SEMIDENSE_PROJ_DIM,
+    encode_projection_summary,
+    project_points_to_candidate_cameras,
+    sample_semidense_points,
+)
+from aria_nbv.vin.geometry.semidense_schema import semidense_proj_feature_index
+from aria_nbv.vin.models.scene_myopic import VinModelV3, VinModelV3Config
+from aria_nbv.vin.scorer_context import apply_vin_scorer_film, compute_global_context, encode_pose_features
 from aria_nbv.vin.types import EvlBackboneOutput
+
+
+def _encode_projection_summary_for_model(
+    model: VinModelV3,
+    proj_data: dict[str, torch.Tensor] | None,
+    *,
+    batch_size: int,
+    num_candidates: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    return encode_projection_summary(
+        proj_data,
+        batch_size=batch_size,
+        num_candidates=num_candidates,
+        device=device,
+        dtype=dtype,
+        grid_size=int(model.config.semidense_proj_grid_size),
+        obs_count_max=int(model.config.semidense_obs_count_max),
+        inv_dist_std_min=float(model.config.semidense_inv_dist_std_min),
+        inv_dist_std_p95=float(model.config.semidense_inv_dist_std_p95),
+    )
 
 
 def _identity_pose(batch: int) -> PoseTW:
@@ -236,7 +267,11 @@ def test_encode_pose_features_shapes() -> None:
     model = _make_model()
     reference_pose = _identity_pose(1)
     candidates = _make_candidate_poses(num_candidates=3)
-    features = model._encode_pose_features(candidates.unsqueeze(0), reference_pose)
+    features = encode_pose_features(
+        pose_encoder=model.pose_encoder,
+        pose_world_cam=candidates.unsqueeze(0),
+        pose_world_rig_ref=reference_pose,
+    )
     assert features.pose_enc.shape[:2] == (1, 3)
     assert features.pose_vec.shape[:2] == (1, 3)
     assert features.candidate_center_rig_m.shape == (1, 3, 3)
@@ -269,10 +304,15 @@ def test_compute_global_context_shapes() -> None:
     bundle = model._build_field_bundle(backbone_out)
     candidates = _make_candidate_poses(num_candidates=2).unsqueeze(0)
     reference_pose = _identity_pose(1)
-    pose_feats = model._encode_pose_features(candidates, reference_pose)
-    ctx = model._compute_global_context(
-        bundle.field,
-        pose_feats.pose_enc,
+    pose_feats = encode_pose_features(
+        pose_encoder=model.pose_encoder,
+        pose_world_cam=candidates,
+        pose_world_rig_ref=reference_pose,
+    )
+    ctx = compute_global_context(
+        global_pooler=model.global_pooler,
+        field=bundle.field,
+        pose_enc=pose_feats.pose_enc,
         pts_world=backbone_out.pts_world,
         t_world_voxel=backbone_out.t_world_voxel,
         pose_world_rig_ref=reference_pose,
@@ -283,26 +323,24 @@ def test_compute_global_context_shapes() -> None:
 
 
 def test_pool_voxel_points_handles_flat_and_grid() -> None:
-    model = _make_model()
     grid = 3
     pts_world = torch.zeros((1, grid, grid, grid, 3), dtype=torch.float32)
-    tokens_grid = model._pool_voxel_points(pts_world, grid_shape=(grid, grid, grid), pool_grid=2)
+    tokens_grid = pool_voxel_points(pts_world, grid_shape=(grid, grid, grid), pool_grid=2)
     assert tokens_grid.shape == (1, 8, 3)
 
     flat = pts_world.reshape(1, -1, 3)
-    tokens_flat = model._pool_voxel_points(flat, grid_shape=(grid, grid, grid), pool_grid=2)
+    tokens_flat = pool_voxel_points(flat, grid_shape=(grid, grid, grid), pool_grid=2)
     assert tokens_flat.shape == (1, 8, 3)
 
 
 def test_apply_film_modulates() -> None:
-    model = _make_model()
     global_feat = torch.ones((1, 1, 4), dtype=torch.float32)
     proj_feat = torch.zeros((1, 1, SEMIDENSE_PROJ_DIM), dtype=torch.float32)
     film = torch.nn.Linear(SEMIDENSE_PROJ_DIM, 8, bias=True)
     with torch.no_grad():
         film.weight.zero_()
         film.bias.copy_(torch.tensor([0.1, 0.1, 0.1, 0.1, 0.5, 0.5, 0.5, 0.5]))
-    out = model._apply_film(global_feat, proj_feat, film=film, norm=None)
+    out = apply_vin_scorer_film(global_feat, proj_feat, film=film, norm=None)
     assert out.shape == global_feat.shape
     assert not torch.allclose(out, global_feat)
 
@@ -310,7 +348,11 @@ def test_apply_film_modulates() -> None:
 def test_sample_semidense_points_vin_view() -> None:
     model = _make_model()
     snippet = _make_vin_snippet(num_points=8)
-    points = model._sample_semidense_points(snippet, device=torch.device("cpu"))
+    points = sample_semidense_points(
+        snippet,
+        device=torch.device("cpu"),
+        max_points=int(model.config.semidense_proj_max_points),
+    )
     assert points is not None
     assert points.shape[-1] == 5
     assert points.dtype == torch.float32
@@ -325,7 +367,11 @@ def test_sample_semidense_points_accepts_optional_obs_count() -> None:
         lengths=snippet.lengths,
         t_world_rig=snippet.t_world_rig,
     )
-    sampled = model._sample_semidense_points(four_channel_snippet, device=torch.device("cpu"))
+    sampled = sample_semidense_points(
+        four_channel_snippet,
+        device=torch.device("cpu"),
+        max_points=int(model.config.semidense_proj_max_points),
+    )
     assert sampled is not None
     assert sampled.shape == four_channel_points.shape
     assert sampled.dtype == torch.float32
@@ -338,7 +384,11 @@ def test_sample_semidense_points_vin_batch() -> None:
     points = snippet.points_world.unsqueeze(0).expand(2, -1, -1)
     lengths = torch.tensor([16, 16], dtype=torch.int64)
     batch_snippet = VinSnippetView(points_world=points, lengths=lengths, t_world_rig=snippet.t_world_rig)
-    sampled = model._sample_semidense_points(batch_snippet, device=torch.device("cpu"))
+    sampled = sample_semidense_points(
+        batch_snippet,
+        device=torch.device("cpu"),
+        max_points=int(model.config.semidense_proj_max_points),
+    )
     assert sampled is not None
     assert sampled.shape[0] == 2
     assert sampled.shape[-1] == 5
@@ -350,7 +400,11 @@ def test_sample_semidense_points_invalid_channels() -> None:
     bad_points = snippet.points_world[:, :3]
     bad_snippet = VinSnippetView(points_world=bad_points, lengths=snippet.lengths, t_world_rig=snippet.t_world_rig)
     with pytest.raises(ValueError, match="at least 4 channels"):
-        model._sample_semidense_points(bad_snippet, device=torch.device("cpu"))
+        sample_semidense_points(
+            bad_snippet,
+            device=torch.device("cpu"),
+            max_points=int(model.config.semidense_proj_max_points),
+        )
 
 
 def test_encode_traj_features_vin_snippet() -> None:
@@ -372,10 +426,9 @@ def test_encode_traj_features_vin_snippet() -> None:
 
 
 def test_project_semidense_points_shapes() -> None:
-    model = _make_model()
     snippet = _make_vin_snippet(num_points=5)
     cameras = _make_cameras(2)
-    proj = model._project_semidense_points(
+    proj = project_points_to_candidate_cameras(
         snippet.points_world,
         cameras,
         batch_size=1,
@@ -388,11 +441,10 @@ def test_project_semidense_points_shapes() -> None:
 
 
 def test_project_semidense_points_errors() -> None:
-    model = _make_model()
     snippet = _make_vin_snippet(num_points=5)
     cameras = PerspectiveCameras(device=torch.device("cpu"))
     with pytest.raises(RuntimeError):
-        model._project_semidense_points(
+        project_points_to_candidate_cameras(
             snippet.points_world,
             cameras,
             batch_size=1,
@@ -402,7 +454,7 @@ def test_project_semidense_points_errors() -> None:
 
     cameras = _make_cameras(1)
     with pytest.raises(ValueError):
-        model._project_semidense_points(
+        project_points_to_candidate_cameras(
             snippet.points_world,
             cameras,
             batch_size=1,
@@ -415,14 +467,15 @@ def test_encode_semidense_projection_features() -> None:
     model = _make_model()
     snippet = _make_vin_snippet(num_points=4)
     cameras = _make_cameras(1)
-    proj = model._project_semidense_points(
+    proj = project_points_to_candidate_cameras(
         snippet.points_world,
         cameras,
         batch_size=1,
         num_candidates=1,
         device=torch.device("cpu"),
     )
-    feats = model._encode_semidense_projection_features(
+    feats = _encode_projection_summary_for_model(
+        model,
         proj,
         batch_size=1,
         num_candidates=1,
@@ -433,7 +486,8 @@ def test_encode_semidense_projection_features() -> None:
     assert torch.isfinite(feats).all()
 
     with pytest.raises(RuntimeError):
-        model._encode_semidense_projection_features(
+        _encode_projection_summary_for_model(
+            model,
             None,
             batch_size=1,
             num_candidates=1,
@@ -446,7 +500,7 @@ def test_encode_semidense_grid_features() -> None:
     model = _make_model()
     snippet = _make_vin_snippet(num_points=6)
     cameras = _make_cameras(1)
-    proj = model._project_semidense_points(
+    proj = project_points_to_candidate_cameras(
         snippet.points_world,
         cameras,
         batch_size=1,
@@ -464,11 +518,14 @@ def test_encode_semidense_grid_features() -> None:
     assert torch.isfinite(feats).all()
 
 
-def test_semidense_proj_feature_index_aliases() -> None:
-    assert VinModelV3._semidense_proj_feature_index("valid_frac") >= 0
-    assert VinModelV3._semidense_proj_feature_index("semidense_valid_frac") >= 0
+def test_semidense_proj_feature_index_uses_canonical_names_only() -> None:
+    assert semidense_proj_feature_index("semidense_candidate_vis_frac") >= 0
     with pytest.raises(ValueError):
-        VinModelV3._semidense_proj_feature_index("unknown_feature")
+        semidense_proj_feature_index("valid_frac")
+    with pytest.raises(ValueError):
+        semidense_proj_feature_index("semidense_valid_frac")
+    with pytest.raises(ValueError):
+        semidense_proj_feature_index("unknown_feature")
 
 
 def test_forward_impl_requires_cw90_tag() -> None:
@@ -587,7 +644,11 @@ def test_efm_snippet_semidense_path() -> None:
     }
     snippet = EfmSnippetView.from_cache_efm(efm)
     vin_snippet = model._ensure_vin_snippet(snippet, device=device)
-    sampled = model._sample_semidense_points(vin_snippet, device=device)
+    sampled = sample_semidense_points(
+        vin_snippet,
+        device=device,
+        max_points=int(model.config.semidense_proj_max_points),
+    )
     assert sampled is not None
     assert sampled.shape[-1] == 5
 

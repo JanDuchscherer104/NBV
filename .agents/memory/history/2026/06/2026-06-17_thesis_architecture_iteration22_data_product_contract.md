@@ -12,7 +12,6 @@ canonical_updates_needed:
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/rl_planning.qmd
   - .agents/work/rollout-scale-readiness/03-rollout-generation-preflight-plan.md
-  - .agents/work/scene-encoding-efm-backbone/01-evl-critique-directions-gpt55pro.md
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json

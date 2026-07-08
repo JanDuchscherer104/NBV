@@ -10,8 +10,8 @@ canonical_updates_needed:
   - docs/contents/thesis/roadmap.qmd
   - docs/contents/theory/candidate_sampling_target_selection.qmd
   - docs/contents/theory/rl_planning.qmd
-  - aria_nbv/aria_nbv/pose_generation/counterfactuals.py
-  - aria_nbv/tests/pose_generation/test_counterfactuals.py
+  - aria_nbv/aria_nbv/rollouts/counterfactuals.py
+  - aria_nbv/tests/rollouts/test_counterfactuals.py
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json
@@ -33,11 +33,11 @@ candidate `Q_H` replay and evaluation contract.
   preferred later diversity evidence, not a blocker.
 - `docs/contents/thesis/questions.qmd` and `roadmap.qmd` place Decision
   Transformer, CQL/BCQ/IQL, and Gumbel-Top-k behind deterministic rollout trust.
-- `aria_nbv/aria_nbv/pose_generation/counterfactuals.py` currently implements
+- `aria_nbv/aria_nbv/rollouts/counterfactuals.py` currently implements
   random/random-valid, oracle-greedy, and temperature-softmax selection, plus
   branch factor, beam width, stochastic branch-factor schedules, robust logits,
   and diversity guards.
-- `aria_nbv/tests/pose_generation/test_counterfactuals.py` verifies
+- `aria_nbv/tests/rollouts/test_counterfactuals.py` verifies
   temperature-softmax invalid masking, reproducibility, distinct candidate
   sampling, affine score-scale invariance, beam-width caps, and stochastic
   branch-factor reproducibility.

@@ -17,7 +17,7 @@ from typing import Literal
 
 import torch
 from torch import Tensor
-from torchmetrics import Metric as MetricBase
+from torchmetrics import Metric as TorchMetric
 from torchmetrics.classification import MulticlassConfusionMatrix
 from torchmetrics.regression import SpearmanCorrCoef
 
@@ -69,14 +69,18 @@ class Metric(Logable):
     PRED_RRI_BIAS2 = "pred_rri_bias2"
     PRED_RRI_VARIANCE = "pred_rri_variance"
     TOP3_ACCURACY = "top3_accuracy"
+    CANDIDATE_TOP1_ORACLE_HIT = "candidate_top1_oracle_hit"
+    CANDIDATE_TOP3_ORACLE_HIT = "candidate_top3_oracle_hit"
+    SELECTED_ORACLE_REGRET = "selected_oracle_regret"
+    SELECTED_ORACLE_RANK = "selected_oracle_rank"
+    SELECTED_ORACLE_PERCENTILE = "selected_oracle_percentile"
+    SELECTED_ORACLE_VALID_TABLE_RATE = "selected_oracle_valid_table_rate"
     AUX_REGRESSION_WEIGHT = "aux_regression_weight"
     CORAL_MONOTONICITY_VIOLATION_RATE = "coral_monotonicity_violation_rate"
     VOXEL_VALID_FRAC_MEAN = "voxel_valid_frac_mean"
     VOXEL_VALID_FRAC_STD = "voxel_valid_frac_std"
     SEMIDENSE_CANDIDATE_VIS_FRAC_MEAN = "semidense_candidate_vis_frac_mean"
     SEMIDENSE_CANDIDATE_VIS_FRAC_STD = "semidense_candidate_vis_frac_std"
-    SEMIDENSE_VALID_FRAC_MEAN = "semidense_valid_frac_mean"
-    SEMIDENSE_VALID_FRAC_STD = "semidense_valid_frac_std"
     CANDIDATE_VALID_FRAC = "candidate_valid_frac"
     COVERAGE_WEIGHT_MEAN = "coverage_weight_mean"
     COVERAGE_WEIGHT_STRENGTH = "coverage_weight_strength"
@@ -96,13 +100,17 @@ class Metric(Logable):
                 Metric.RRI_MEAN
                 | Metric.PRED_RRI_MEAN
                 | Metric.TOP3_ACCURACY
+                | Metric.CANDIDATE_TOP1_ORACLE_HIT
+                | Metric.CANDIDATE_TOP3_ORACLE_HIT
+                | Metric.SELECTED_ORACLE_REGRET
+                | Metric.SELECTED_ORACLE_RANK
+                | Metric.SELECTED_ORACLE_PERCENTILE
+                | Metric.SELECTED_ORACLE_VALID_TABLE_RATE
                 | Metric.AUX_REGRESSION_WEIGHT
                 | Metric.VOXEL_VALID_FRAC_MEAN
                 | Metric.VOXEL_VALID_FRAC_STD
                 | Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_MEAN
                 | Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_STD
-                | Metric.SEMIDENSE_VALID_FRAC_MEAN
-                | Metric.SEMIDENSE_VALID_FRAC_STD
                 | Metric.CANDIDATE_VALID_FRAC
                 | Metric.COVERAGE_WEIGHT_MEAN
                 | Metric.COVERAGE_WEIGHT_STRENGTH
@@ -158,14 +166,20 @@ class Loss(Logable):
         raise ValueError(f"Unknown Loss: {self}")
 
 
-class LabelHistogram(MetricBase):
+class LabelHistogram(TorchMetric):
     """Accumulate label counts for ordinal classes."""
+
+    counts: Tensor
+    """``Tensor["K", int64]`` per-class counts, reduced by distributed sum."""
 
     full_state_update = False
 
     def __init__(self, num_classes: int) -> None:
+        num_classes = int(num_classes)
+        if num_classes < 1:
+            raise ValueError("num_classes must be >= 1.")
         super().__init__()
-        self.num_classes = int(num_classes)
+        self.num_classes = num_classes
         self.add_state(
             "counts",
             default=torch.zeros(self.num_classes, dtype=torch.long),
@@ -176,6 +190,8 @@ class LabelHistogram(MetricBase):
         if target.numel() == 0:
             return
         labels = target.to(dtype=torch.int64).reshape(-1)
+        if bool(((labels < 0) | (labels >= self.num_classes)).any().item()):
+            raise ValueError(f"Expected labels within [0, {self.num_classes}), got {target}.")
         counts = torch.bincount(labels, minlength=self.num_classes)
         self.counts = self.counts + counts.to(device=self.counts.device)
 
@@ -183,10 +199,16 @@ class LabelHistogram(MetricBase):
         return self.counts
 
 
-class RriErrorStats(MetricBase):
-    """Accumulate bias/variance statistics for RRI regression errors."""
+class RriErrorStats(TorchMetric):
+    """Accumulate finite-pair bias/variance statistics for RRI errors."""
 
     full_state_update = False
+    sum_error: Tensor
+    """``Tensor["", float32]`` sum of finite prediction-minus-label errors."""
+    sum_error_sq: Tensor
+    """``Tensor["", float32]`` sum of squared finite errors."""
+    count: Tensor
+    """``Tensor["", float32]`` count of finite error pairs."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -197,17 +219,20 @@ class RriErrorStats(MetricBase):
     def update(self, pred_rri: Tensor, rri: Tensor) -> None:
         if pred_rri.numel() == 0 or rri.numel() == 0:
             return
-        pred_flat = pred_rri.reshape(-1).to(dtype=torch.float32)
-        rri_flat = rri.reshape(-1).to(dtype=torch.float32)
+        pred_flat = pred_rri.reshape(-1).to(device=self.sum_error.device, dtype=torch.float32)
+        rri_flat = rri.reshape(-1).to(device=self.sum_error.device, dtype=torch.float32)
         if pred_flat.shape != rri_flat.shape:
             raise ValueError(
                 "Expected pred_rri and rri to have matching shapes, "
                 f"got {tuple(pred_flat.shape)} and {tuple(rri_flat.shape)}.",
             )
-        error = pred_flat - rri_flat
+        finite = torch.isfinite(pred_flat) & torch.isfinite(rri_flat)
+        if not bool(finite.any().item()):
+            return
+        error = pred_flat[finite] - rri_flat[finite]
         self.sum_error = self.sum_error + error.sum()
         self.sum_error_sq = self.sum_error_sq + (error * error).sum()
-        self.count = self.count + torch.tensor(float(error.numel()), device=self.count.device)
+        self.count = self.count + torch.tensor(float(error.numel()), device=self.count.device, dtype=self.count.dtype)
 
     def compute(self) -> dict[str, Tensor]:
         if not bool(self.count.item()):
@@ -226,14 +251,15 @@ class RriErrorStats(MetricBase):
         self.count.zero_()
 
 
-class VinMetrics(MetricBase):
+class VinMetrics(TorchMetric):
     """Container for VIN metrics computed from candidate rankings."""
 
     full_state_update = False
 
-    def __init__(self, *, num_classes: int) -> None:
+    def __init__(self, *, num_classes: int, enable_spearman: bool = True) -> None:
         super().__init__()
-        self.spearman = SpearmanCorrCoef()
+        self.enable_spearman = bool(enable_spearman)
+        self.spearman = SpearmanCorrCoef() if self.enable_spearman else None
         self.confusion = MulticlassConfusionMatrix(num_classes=int(num_classes))
         self.label_hist = LabelHistogram(num_classes=int(num_classes))
         self.add_state("has_updates", default=torch.zeros((), dtype=torch.bool), dist_reduce_fx="max")
@@ -248,7 +274,8 @@ class VinMetrics(MetricBase):
     ) -> None:
         if pred_scores.numel() == 0:
             return
-        self.spearman.update(pred_scores, rri)
+        if self.spearman is not None:
+            self.spearman.update(pred_scores, rri)
         self.confusion.update(pred_class, labels)
         self.label_hist.update(labels)
         self.has_updates.fill_(True)
@@ -256,14 +283,17 @@ class VinMetrics(MetricBase):
     def compute(self) -> dict[str, Tensor]:
         if not bool(self.has_updates.item()):
             return {}
-        return {
-            "spearman": self.spearman.compute(),
+        metrics = {
             "confusion": self.confusion.compute(),
             "label_hist": self.label_hist.compute(),
         }
+        if self.spearman is not None:
+            metrics["spearman"] = self.spearman.compute()
+        return metrics
 
     def reset(self) -> None:  # type: ignore[override]
-        self.spearman.reset()
+        if self.spearman is not None:
+            self.spearman.reset()
         self.confusion.reset()
         self.label_hist.reset()
         self.has_updates.fill_(False)
@@ -280,8 +310,11 @@ class VinMetricsConfig(TargetConfig[VinMetrics]):
     num_classes: int
     """Number of ordinal classes used for confusion/histogram metrics."""
 
+    enable_spearman: bool = True
+    """Enable rank-correlation metrics that buffer all predictions/targets."""
+
     def setup_target(self) -> VinMetrics:
-        return self.target(num_classes=int(self.num_classes))
+        return self.target(num_classes=int(self.num_classes), enable_spearman=bool(self.enable_spearman))
 
 
 def _namespace_prefix(stage: Stage, *, namespace: Literal["main", "aux"]) -> str:
@@ -321,6 +354,8 @@ def topk_accuracy_from_probs(probs: Tensor, labels: Tensor, *, top_k: int) -> Te
     Returns:
         ``Tensor[""]`` scalar accuracy in ``[0, 1]``.
     """
+    if top_k < 1:
+        raise ValueError("top_k must be >= 1.")
     if probs.numel() == 0 or labels.numel() == 0:
         return torch.tensor(float("nan"), device=probs.device)
     if probs.ndim != 2:
@@ -331,8 +366,6 @@ def topk_accuracy_from_probs(probs: Tensor, labels: Tensor, *, top_k: int) -> Te
             f"Expected probs and labels to have matching first dimension, got {probs.shape[0]} and {labels.shape[0]}.",
         )
     k = min(int(top_k), probs.shape[-1])
-    if k < 1:
-        raise ValueError("top_k must be >= 1.")
     topk = probs.topk(k=k, dim=-1).indices
     correct = (topk == labels.unsqueeze(-1)).any(dim=-1)
     return correct.to(dtype=torch.float32).mean()

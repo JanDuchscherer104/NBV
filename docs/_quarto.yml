@@ -243,13 +243,13 @@ quartodoc:
         - name: pose_generation.candidate_mixture
           children: separate
           member_options: *embedded_members
-        - name: pose_generation.counterfactuals
-          children: separate
-          member_options: *embedded_members
-        - name: pose_generation.target_counterfactuals
-          children: separate
-          member_options: *embedded_members
         - name: pose_generation.types
+          children: separate
+          member_options: *embedded_members
+        - name: rollouts.counterfactuals
+          children: separate
+          member_options: *embedded_members
+        - name: rollouts.target_counterfactuals
           children: separate
           member_options: *embedded_members
         - name: rollouts.trace
@@ -285,22 +285,37 @@ quartodoc:
     - title: "VIN Core"
       desc: "Core model modules behind EVL-backed view scoring."
       contents:
-        - name: vin.backbone_evl
+        - name: vin.backbones.evl
           children: separate
           member_options: *embedded_members
-        - name: vin.model_v3
+        - name: vin.models.scene_myopic
           children: separate
           member_options: *embedded_members
-        - name: vin.pose_encoders
+        - name: vin.encoders.pose
           children: separate
           member_options: *embedded_members
-        - name: vin.pose_encoding
+        - name: vin.encoders.shell_pose
           children: separate
           member_options: *embedded_members
-        - name: vin.traj_encoder
+        - name: vin.encoders.spherical
+          children: separate
+          member_options: *embedded_members
+        - name: vin.encoders.fourier
+          children: separate
+          member_options: *embedded_members
+        - name: vin.encoders.pointnext
+          children: separate
+          member_options: *embedded_members
+        - name: vin.encoders.trajectory
           children: separate
           member_options: *embedded_members
         - name: vin.types
+          children: separate
+          member_options: *embedded_members
+        - name: vin.types.diagnostics
+          children: separate
+          member_options: *embedded_members
+        - name: vin.diagnostics.experimental_plotting
           children: separate
           member_options: *embedded_members
     - title: "Pipelines"

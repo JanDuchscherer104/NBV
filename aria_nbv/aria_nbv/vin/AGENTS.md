@@ -9,7 +9,7 @@ summary: VIN scorer, batch-contract, and candidate-context guidance for work und
 Apply this file when working under `aria_nbv/aria_nbv/vin/`.
 
 ## Public Contracts
-- Core scorer surface: `aria_nbv/aria_nbv/vin/model_v3.py`, `vin_utils.py`, `summarize_v3.py`
+- Core scorer surface: `aria_nbv/aria_nbv/vin/models/scene_myopic.py`, `scorer_context.py`, `diagnostics/summarize.py`
 - Shared batch and snippet containers: `aria_nbv/aria_nbv/data_handling/efm_views.py`, `aria_nbv/aria_nbv/data_handling/vin_oracle_types.py`
 - Training integration: `aria_nbv/aria_nbv/lightning/lit_module.py`, `lit_datamodule.py`
 - Narrative surfaces: `docs/typst/seminar_paper/sections/06-architecture.typ`, `docs/typst/seminar_paper/sections/07-training-objective.typ`, `docs/typst/seminar_paper/sections/12g-appendix-vin-v3-streamline.typ`

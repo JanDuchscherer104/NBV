@@ -2,7 +2,7 @@
 
 - [Stable package surface](data_handling.qmd)
 - [Implementation contracts](data_handling.efm_dataset.qmd)
-- [VIN core](vin.model_v3.qmd)
+- [VIN core](vin.models.scene_myopic.qmd)
 - [Pipelines](pipelines.oracle_rri_labeler.qmd)
 
 The detailed symbol pages are generated locally and in CI from package

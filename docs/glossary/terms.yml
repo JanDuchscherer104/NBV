@@ -714,7 +714,7 @@
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
   - docs/contents/thesis/questions.qmd#rq4-planning
-  - docs/reference/aria_nbv.pose_generation.CounterfactualPoseGenerator.qmd
+  - docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd
   related:
   - rollout-state
   - point-cloud

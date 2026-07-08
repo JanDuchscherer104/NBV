@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
 import matplotlib
 import pytorch_lightning as pl
@@ -22,33 +22,27 @@ from torch import Tensor, nn
 from torch.nn import functional as functional
 
 from ..configs import PathConfig
-from ..data_handling import (
-    VinOracleBatch,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
-)
-from ..rri_metrics import (
+from ..data_handling import VinOracleBatch
+from ..rri_metrics.coral import coral_logits_to_label, coral_loss, coral_monotonicity_violation_rate, coral_random_loss
+from ..rri_metrics.logging import (
     Loss,
     Metric,
     RriErrorStats,
-    RriOrdinalBinner,
     VinMetricsConfig,
-    coral_loss,
-    coral_random_loss,
     loss_key,
     metric_key,
     topk_accuracy_from_probs,
 )
-from ..rri_metrics.coral import coral_logits_to_label, coral_monotonicity_violation_rate
+from ..rri_metrics.rri_binning import RriOrdinalBinner
+from ..rri_metrics.torch_rollout import candidate_topk_oracle_hit, selected_action_oracle_comparison
 from ..utils import Console, Stage, TargetConfig
-from ..utils.grad_norms import (
-    GradNormLoggingConfig,
-    _collect_grad_norm_targets,
-    _grad_norm_from_params,
-)
-from ..vin.experimental.plotting import plot_vin_encodings_from_debug
-from ..vin.model_v3 import VinModelV3Config
-from ..vin.vin_utils import largest_divisor_leq
+from ..utils.grad_norms import GradNormLoggingConfig, _collect_grad_norm_targets, _grad_norm_from_params
+from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
+from ..vin.diagnostics import plot_vin_encodings_from_debug
+from ..vin.models import VinModelV3Config
+from ..vin.modules import largest_divisor_leq
+from ._candidate_scorer_batch import prepare_candidate_scorer_batch_inputs
+from ._candidate_scorer_contract import validate_vin_lightning_candidate_scorer_contract
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauConfig
 
 
@@ -59,7 +53,14 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
     def target_type(self) -> type["VinLightningModule"]:
         return VinLightningModule
 
-    vin: VinModelV3Config = Field(default_factory=VinModelV3Config)
+    vin: CandidateScorerConfig = Field(default_factory=VinModelV3Config)
+    """Candidate scorer configuration.
+
+    The field name remains ``vin`` to preserve existing TOML, checkpoint, and
+    experiment-config compatibility. New scorer architectures should enter via
+    `aria_nbv.vin.candidate_scorer.CandidateScorerConfig` instead of adding
+    Lightning-specific branches.
+    """
 
     optimizer: AdamWConfig = Field(default_factory=AdamWConfig)
     """Optimizer configuration."""
@@ -119,6 +120,14 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
 
     log_interval_steps: int | None = Field(default=None)
     """Step interval for logging rank/confusion/histogram metrics (train stage only). If ``None`` only log per-epoch metrics."""
+
+    log_spearman: bool = True
+    """Enable Spearman rank-correlation metrics.
+
+    Spearman uses :class:`torchmetrics.regression.SpearmanCorrCoef`, which buffers all
+    predictions and targets until compute time. Keep it enabled for normal
+    experiments; disable it for fast smoke runs that only need loop viability.
+    """
 
     grad_norms: GradNormLoggingConfig = Field(default_factory=GradNormLoggingConfig)
     """Configuration for gradient-norm logging."""
@@ -192,9 +201,13 @@ class VinLightningModule(pl.LightningModule):
 
         self.console = Console.with_prefix(self.__class__.__name__)
 
+        validate_vin_lightning_candidate_scorer_contract(config.vin)
         self.vin = config.vin.setup_target()
         self._binner: RriOrdinalBinner | None = None
-        metrics_cfg = VinMetricsConfig(num_classes=self.config.num_classes)
+        metrics_cfg = VinMetricsConfig(
+            num_classes=self.config.num_classes,
+            enable_spearman=self.config.log_spearman,
+        )
 
         self._metrics = nn.ModuleDict(
             {
@@ -206,6 +219,17 @@ class VinLightningModule(pl.LightningModule):
         self._interval_metrics = metrics_cfg.setup_target()
         self._rri_error_stats = nn.ModuleDict({f"{Stage.VAL.value}_stage": RriErrorStats()})
         self._logged_effective_config = False
+
+    @property
+    def candidate_scorer(self) -> CandidateScorer:
+        """Return the registered scorer through the structural VIN protocol.
+
+        `self.vin` intentionally remains the owning `torch.nn.Module` attribute
+        so historical checkpoints keep their ``vin.*`` state-dict prefix. This
+        property is a typed view only; it must not register a duplicate module.
+        """
+
+        return cast(CandidateScorer, self.vin)
 
     # --------------------------------------------------------------------- lifecycle
     def setup(self, stage: str) -> None:
@@ -287,6 +311,59 @@ class VinLightningModule(pl.LightningModule):
         if data is not None:
             self._binner = RriOrdinalBinner.from_dict(data)
 
+    @classmethod
+    def load_for_inference(
+        cls,
+        checkpoint_path: Path | str,
+        *,
+        device: torch.device | str = "cpu",
+        fallback_binner_path: Path | str | None = None,
+    ) -> "VinLightningModule":
+        """Load a VIN Lightning checkpoint with strict inference state validation."""
+
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        hparams = checkpoint.get("hyper_parameters", {})
+        if isinstance(hparams, dict) and isinstance(hparams.get("config"), dict):
+            config_payload = hparams["config"]
+        elif isinstance(hparams, dict):
+            config_payload = hparams
+        else:
+            config_payload = {}
+
+        module = cls(config=VinLightningModuleConfig(**config_payload))
+        module.on_load_checkpoint(checkpoint)
+        module.prepare_for_inference(fallback_binner_path=fallback_binner_path)
+
+        state_dict = checkpoint.get("state_dict")
+        if state_dict is None:
+            raise RuntimeError("Checkpoint missing state_dict.")
+        module.load_state_dict(state_dict, strict=True)
+        module.to(torch.device(device))
+        module.eval()
+        return module
+
+    def prepare_for_inference(
+        self,
+        *,
+        fallback_binner_path: Path | str | None = None,
+    ) -> None:
+        """Initialize binner-derived scorer state before inference or diagnostics."""
+
+        if self._binner is None:
+            if self.config.binner_path is not None:
+                self._binner = self._load_binner_from_config()
+            elif fallback_binner_path is not None:
+                self._binner = RriOrdinalBinner.load(Path(fallback_binner_path))
+
+        if self._binner is None:
+            raise RuntimeError(
+                "Cannot prepare VIN inference without an RRI binner. "
+                "Provide `VinLightningModuleConfig.binner_path`, save `rri_binner` in the checkpoint, "
+                "or pass `fallback_binner_path`.",
+            )
+        self._maybe_init_bin_values()
+        self._maybe_init_coral_bias()
+
     # ------------------------------------------------------------------ training/val/test
     def training_step(self, batch: VinOracleBatch, batch_idx: int) -> Tensor | None:
         return self._step(batch, batch_idx, stage=Stage.TRAIN)
@@ -364,38 +441,18 @@ class VinLightningModule(pl.LightningModule):
                 "or resume from a checkpoint that contains `rri_binner`.",
             )
 
-        efm_snippet_view = batch.efm_snippet_view
-        if is_efm_snippet_view_instance(efm_snippet_view) or is_vin_snippet_view_instance(efm_snippet_view):
-            efm = efm_snippet_view
-        else:
-            raise RuntimeError(
-                "VIN batch missing semidense snippet view; VinModelV3 requires VinSnippetView or EfmSnippetView.",
-            )
-        backbone_out = batch.backbone_out
-        if backbone_out is None and not is_efm_snippet_view_instance(efm_snippet_view):
-            raise RuntimeError(
-                "VIN batch missing both efm snippet view and cached backbone outputs.",
-            )
-
-        if backbone_out is not None:
-            backbone_out = backbone_out.to(self.device)
-
-        p3d_cameras = batch.p3d_cameras.to(self.device)
-        if p3d_cameras.device != self.device:
-            p3d_cameras = p3d_cameras.to(self.device)
-
-        candidate_poses_world_cam = batch.candidate_poses_world_cam.to(device=self.device)
-        reference_pose_world_rig = batch.reference_pose_world_rig.to(device=self.device)
-
-        pred = self.vin.forward(
-            efm,
-            candidate_poses_world_cam=candidate_poses_world_cam,
-            reference_pose_world_rig=reference_pose_world_rig,
-            p3d_cameras=p3d_cameras,
-            backbone_out=backbone_out,
+        scorer_inputs = prepare_candidate_scorer_batch_inputs(batch, device=self.device)
+        candidate_scorer = self.candidate_scorer
+        pred = candidate_scorer.forward(
+            scorer_inputs.efm,
+            candidate_poses_world_cam=scorer_inputs.candidate_poses_world_cam,
+            reference_pose_world_rig=scorer_inputs.reference_pose_world_rig,
+            p3d_cameras=scorer_inputs.p3d_cameras,
+            backbone_out=scorer_inputs.backbone_out,
         )
         log_enabled = not getattr(self.trainer, "sanity_checking", False)
-        candidate_mask = batch.candidate_valid_mask(device=self.device).reshape(-1)
+        candidate_mask_table = batch.candidate_valid_mask(device=self.device)
+        candidate_mask = candidate_mask_table.reshape(-1)
         log_batch_size = max(int(candidate_mask.sum().item()), 1)
         logits = pred.logits
         if logits.ndim == 2:
@@ -405,6 +462,7 @@ class VinLightningModule(pl.LightningModule):
 
         rri = batch.rri.to(device=logits.device)
         rri_flat = rri.reshape(-1)
+        candidate_mask_table = candidate_mask_table.to(device=logits.device)
         candidate_mask = candidate_mask.to(device=logits.device)
         mask_rri = torch.isfinite(rri_flat)
         valid_targets = candidate_mask & mask_rri
@@ -477,7 +535,7 @@ class VinLightningModule(pl.LightningModule):
         pred_rri_proxy_valid = None
         aux_loss = None
         if self.config.aux_regression_loss is not None or log_enabled:
-            pred_rri_proxy = self.vin.head_coral.expected_from_probs(probs)
+            pred_rri_proxy = candidate_scorer.head_coral.expected_from_probs(probs)
             pred_rri_proxy_valid = pred_rri_proxy.reshape(-1)[mask]
 
         combined_loss = coral_loss_value
@@ -544,11 +602,7 @@ class VinLightningModule(pl.LightningModule):
 
         nan_tensor = torch.tensor(float("nan"), device=combined_loss.device)
         voxel_valid = self._flatten_and_mask(getattr(pred, "voxel_valid_frac", None), mask)
-        semidense_valid_raw = getattr(
-            pred,
-            "semidense_candidate_vis_frac",
-            getattr(pred, "semidense_valid_frac", None),
-        )
+        semidense_valid_raw = getattr(pred, "semidense_candidate_vis_frac", None)
         semidense_valid = self._flatten_and_mask(semidense_valid_raw, mask)
         candidate_valid = self._flatten_and_mask(getattr(pred, "candidate_valid", None), mask)
         coverage_payload: dict[Metric, Tensor | float] = {
@@ -564,12 +618,6 @@ class VinLightningModule(pl.LightningModule):
             Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_STD: semidense_valid.std(unbiased=False)
             if semidense_valid is not None and semidense_valid.numel() > 1
             else nan_tensor,
-            Metric.SEMIDENSE_VALID_FRAC_MEAN: semidense_valid.mean()
-            if semidense_valid is not None and semidense_valid.numel() > 0
-            else nan_tensor,
-            Metric.SEMIDENSE_VALID_FRAC_STD: semidense_valid.std(unbiased=False)
-            if semidense_valid is not None and semidense_valid.numel() > 1
-            else nan_tensor,
             Metric.CANDIDATE_VALID_FRAC: candidate_valid.to(dtype=torch.float32).mean()
             if candidate_valid is not None and candidate_valid.numel() > 0
             else nan_tensor,
@@ -578,6 +626,75 @@ class VinLightningModule(pl.LightningModule):
             else nan_tensor,
             Metric.COVERAGE_WEIGHT_STRENGTH: float(coverage_strength) if coverage_strength is not None else nan_tensor,
         }
+        expected_scores = pred.expected_normalized.to(device=logits.device)
+        if rri.numel() != expected_scores.numel() or candidate_mask_table.numel() != expected_scores.numel():
+            raise ValueError(
+                "Expected RRI labels and candidate mask to align with predicted candidate scores, "
+                f"got rri={tuple(rri.shape)}, mask={tuple(candidate_mask_table.shape)}, "
+                f"scores={tuple(expected_scores.shape)}.",
+            )
+        rri_table = rri.reshape(expected_scores.shape)
+        candidate_mask_table = candidate_mask_table.reshape(expected_scores.shape)
+        with torch.no_grad():
+            top1_oracle_hit = candidate_topk_oracle_hit(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+                top_k=1,
+            )
+            top3_oracle_hit = candidate_topk_oracle_hit(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+                top_k=3,
+            )
+            pred_valid_table = candidate_mask_table & torch.isfinite(expected_scores)
+            filled_scores = torch.where(
+                pred_valid_table,
+                expected_scores.detach(),
+                torch.full_like(expected_scores, -torch.inf),
+            )
+            selected_indices = filled_scores.argmax(dim=-1)
+            has_prediction = pred_valid_table.any(dim=-1)
+            selected_indices = torch.where(
+                has_prediction,
+                selected_indices,
+                torch.full_like(selected_indices, -1),
+            )
+            selected_oracle = selected_action_oracle_comparison(
+                rri_table.detach(),
+                selected_indices.detach(),
+                candidate_mask_table,
+            )
+            top1_oracle_hit_mean = (
+                top1_oracle_hit[torch.isfinite(top1_oracle_hit)].mean()
+                if torch.isfinite(top1_oracle_hit).any()
+                else nan_tensor
+            )
+            top3_oracle_hit_mean = (
+                top3_oracle_hit[torch.isfinite(top3_oracle_hit)].mean()
+                if torch.isfinite(top3_oracle_hit).any()
+                else nan_tensor
+            )
+            selected_oracle_regret = selected_oracle.selected_oracle_regret
+            selected_oracle_rank = selected_oracle.selected_oracle_rank
+            selected_oracle_percentile = selected_oracle.selected_oracle_percentile
+            selected_oracle_regret_mean = (
+                selected_oracle_regret[torch.isfinite(selected_oracle_regret)].mean()
+                if torch.isfinite(selected_oracle_regret).any()
+                else nan_tensor
+            )
+            selected_oracle_rank_mean = (
+                selected_oracle_rank[torch.isfinite(selected_oracle_rank)].mean()
+                if torch.isfinite(selected_oracle_rank).any()
+                else nan_tensor
+            )
+            selected_oracle_percentile_mean = (
+                selected_oracle_percentile[torch.isfinite(selected_oracle_percentile)].mean()
+                if torch.isfinite(selected_oracle_percentile).any()
+                else nan_tensor
+            )
+            selected_oracle_valid_rate = selected_oracle.valid_table.to(dtype=torch.float32).mean()
         self._log_aux_scalars(
             {
                 Metric.RRI_MEAN: rri_valid.mean(),
@@ -596,6 +713,21 @@ class VinLightningModule(pl.LightningModule):
             },
             stage=stage,
             batch_size=log_batch_size,
+        )
+        self._log_candidate_table_metrics(
+            stage=stage,
+            top1_oracle_hit=top1_oracle_hit,
+            top1_oracle_hit_mean=top1_oracle_hit_mean,
+            top3_oracle_hit=top3_oracle_hit,
+            top3_oracle_hit_mean=top3_oracle_hit_mean,
+            selected_oracle_regret=selected_oracle_regret,
+            selected_oracle_regret_mean=selected_oracle_regret_mean,
+            selected_oracle_rank=selected_oracle_rank,
+            selected_oracle_rank_mean=selected_oracle_rank_mean,
+            selected_oracle_percentile=selected_oracle_percentile,
+            selected_oracle_percentile_mean=selected_oracle_percentile_mean,
+            selected_oracle_valid_table=selected_oracle.valid_table,
+            selected_oracle_valid_rate=selected_oracle_valid_rate,
         )
 
         pred_class = coral_logits_to_label(logits_valid)
@@ -680,11 +812,75 @@ class VinLightningModule(pl.LightningModule):
             return masked
         return torch.nan_to_num(masked, nan=0.0, posinf=0.0, neginf=0.0)
 
+    @staticmethod
+    def _finite_log_batch_size(values: Tensor) -> int:
+        """Return the number of finite scalar samples represented by a table metric."""
+
+        return max(int(torch.isfinite(values).sum().item()), 1)
+
+    @staticmethod
+    def _table_count_log_batch_size(values: Tensor) -> int:
+        """Return the number of candidate tables represented by a table-rate metric."""
+
+        return max(int(values.numel()), 1)
+
+    def _log_candidate_table_metrics(
+        self,
+        *,
+        stage: Stage,
+        top1_oracle_hit: Tensor,
+        top1_oracle_hit_mean: Tensor,
+        top3_oracle_hit: Tensor,
+        top3_oracle_hit_mean: Tensor,
+        selected_oracle_regret: Tensor,
+        selected_oracle_regret_mean: Tensor,
+        selected_oracle_rank: Tensor,
+        selected_oracle_rank_mean: Tensor,
+        selected_oracle_percentile: Tensor,
+        selected_oracle_percentile_mean: Tensor,
+        selected_oracle_valid_table: Tensor,
+        selected_oracle_valid_rate: Tensor,
+    ) -> None:
+        """Log table-level metrics with each metric's own valid denominator."""
+
+        table_metrics: tuple[tuple[Metric, Tensor, int], ...] = (
+            (
+                Metric.CANDIDATE_TOP1_ORACLE_HIT,
+                top1_oracle_hit_mean,
+                self._finite_log_batch_size(top1_oracle_hit),
+            ),
+            (
+                Metric.CANDIDATE_TOP3_ORACLE_HIT,
+                top3_oracle_hit_mean,
+                self._finite_log_batch_size(top3_oracle_hit),
+            ),
+            (
+                Metric.SELECTED_ORACLE_REGRET,
+                selected_oracle_regret_mean,
+                self._finite_log_batch_size(selected_oracle_regret),
+            ),
+            (
+                Metric.SELECTED_ORACLE_RANK,
+                selected_oracle_rank_mean,
+                self._finite_log_batch_size(selected_oracle_rank),
+            ),
+            (
+                Metric.SELECTED_ORACLE_PERCENTILE,
+                selected_oracle_percentile_mean,
+                self._finite_log_batch_size(selected_oracle_percentile),
+            ),
+            (
+                Metric.SELECTED_ORACLE_VALID_TABLE_RATE,
+                selected_oracle_valid_rate,
+                self._table_count_log_batch_size(selected_oracle_valid_table),
+            ),
+        )
+        for metric, value, batch_size in table_metrics:
+            self._log_aux_scalars({metric: value}, stage=stage, batch_size=batch_size)
+
     def _select_coverage_fraction(self, pred: Any) -> Tensor | None:
         voxel_frac = getattr(pred, "voxel_valid_frac", None)
         sem_frac = getattr(pred, "semidense_candidate_vis_frac", None)
-        if sem_frac is None:
-            sem_frac = getattr(pred, "semidense_valid_frac", None)
         match self.config.coverage_weight_mode:
             case "none":
                 return None
@@ -741,8 +937,8 @@ class VinLightningModule(pl.LightningModule):
             self._metrics[stage_key].reset()
             return
 
-        spearman = metrics["spearman"]
-        if torch.isfinite(spearman):
+        spearman = metrics.get("spearman")
+        if spearman is not None and torch.isfinite(spearman):
             self._log_aux_scalars(
                 {Metric.SPEARMAN: spearman},
                 stage=stage,
@@ -786,8 +982,8 @@ class VinLightningModule(pl.LightningModule):
             self._interval_metrics.reset()
             return
 
-        spearman = metrics["spearman"]
-        if torch.isfinite(spearman):
+        spearman = metrics.get("spearman")
+        if spearman is not None and torch.isfinite(spearman):
             self._log_aux_scalars(
                 {Metric.SPEARMAN_STEP: spearman},
                 stage=stage,
@@ -942,8 +1138,9 @@ class VinLightningModule(pl.LightningModule):
         """Initialize learnable CORAL bin values from the fitted binner."""
         if self._binner is None:
             return
-        head_coral = getattr(self.vin, "head_coral", None)
-        if head_coral is None or not hasattr(self.vin, "init_bin_values"):
+        scorer = self.candidate_scorer
+        head_coral = getattr(scorer, "head_coral", None)
+        if head_coral is None:
             return
 
         if self._binner.bin_means is not None:
@@ -953,7 +1150,7 @@ class VinLightningModule(pl.LightningModule):
 
         device = next(self.vin.parameters()).device
         target = target.to(device=device, dtype=torch.float32)
-        self.vin.init_bin_values(target, overwrite=False)
+        scorer.init_bin_values(target, overwrite=False)
 
     def _maybe_init_coral_bias(self) -> None:
         """Initialize CORAL biases from fitted class priors (if configured)."""

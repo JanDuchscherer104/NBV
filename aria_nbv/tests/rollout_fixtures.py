@@ -11,7 +11,14 @@ from efm3d.aria import CameraTW, PoseTW
 from aria_nbv.data_handling import TARGET_INVALID_REASON_VERSION
 from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
-from aria_nbv.pose_generation.counterfactuals import (
+from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy
+from aria_nbv.rollouts import (
+    INVALID_REASON_VERSION,
+    TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
+    RolloutLineage,
+    RolloutZarrRecord,
+)
+from aria_nbv.rollouts.counterfactuals import (
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
     CounterfactualPoseGenerator,
@@ -20,9 +27,6 @@ from aria_nbv.pose_generation.counterfactuals import (
     CounterfactualSelectionPolicy,
     CounterfactualTrajectory,
 )
-from aria_nbv.pose_generation.target_counterfactuals import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
-from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy
-from aria_nbv.rollouts import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from aria_nbv.utils.fingerprints import stable_config_hash
 
 if TYPE_CHECKING:

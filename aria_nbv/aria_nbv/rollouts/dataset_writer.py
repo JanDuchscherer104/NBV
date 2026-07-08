@@ -37,17 +37,18 @@ from ..data_handling._target_selection import (
 from ..pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureViewGeneratorConfig,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
-    TargetRriInvalidError,
 )
 from ..rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
+from .counterfactuals import (
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualRolloutResult,
+    CounterfactualSelectionPolicy,
+)
 from .manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
 from .shard_manifest import RolloutShardEntry
+from .target_counterfactuals import CounterfactualTargetOracleRriScorerConfig, TargetRriInvalidError
 from .trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from .zarr_store import (
     RolloutZarrStoreConfig,
@@ -117,6 +118,21 @@ class RolloutRecipeConfig(BaseConfig):
     selection_temperature: float = Field(default=1.0, gt=0.0)
     """Softmax temperature for stochastic selection policies."""
 
+    min_history_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum distance from previously selected poses during rollout selection."""
+
+    min_sibling_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum distance between sibling branches expanded from one rollout node."""
+
+    min_sibling_yaw_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum yaw separation between sibling branches expanded from one node."""
+
+    min_sibling_target_bearing_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum target-bearing separation between sibling branches."""
+
+    require_sibling_strategy_diversity: bool = False
+    """Require sibling branches to use distinct candidate strategy families when possible."""
+
     seed: int | None = 0
     """Recipe-local random seed for candidate/action sampling."""
 
@@ -154,6 +170,60 @@ class RolloutRecipeConfig(BaseConfig):
                 branch_factor=2,
                 beam_width=2,
                 selection_temperature=1.0,
+                seed=0,
+            ),
+        ]
+
+    @staticmethod
+    def diverse_suite() -> list["RolloutRecipeConfig"]:
+        """Return the radial/backtrack rollout-diversity recipe suite.
+
+        The suite mirrors `.configs/build_rollouts_v1_diverse.toml` and is
+        intended to pair with
+        `CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family`.
+        Sibling-diversity controls are best-effort after candidate validity
+        pruning, so the recipes record the intended action-family pressure
+        without changing rollout hard-mask semantics.
+        """
+
+        return [
+            RolloutRecipeConfig(
+                name="random_valid_diverse",
+                selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
+                seed=0,
+            ),
+            RolloutRecipeConfig(
+                name="oracle_lookahead_diverse",
+                selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
+                seed=0,
+            ),
+            RolloutRecipeConfig(
+                name="temperature_softmax_diverse",
+                selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+                horizon=2,
+                branch_factor=3,
+                beam_width=3,
+                selection_temperature=1.25,
+                require_sibling_strategy_diversity=True,
+                min_sibling_distance_m=0.2,
+                min_sibling_yaw_deg=20.0,
+                min_sibling_target_bearing_deg=20.0,
+                stochastic_branch_factors=[2, 3],
+                stochastic_branch_probabilities=[0.5, 0.5],
                 seed=0,
             ),
         ]
@@ -618,6 +688,11 @@ class RolloutDatasetWriter:
                 selection_policy=recipe.selection_policy,
                 selection_temperature=recipe.selection_temperature,
                 branch_schedule_id=recipe.name,
+                min_history_distance_m=recipe.min_history_distance_m,
+                min_sibling_distance_m=recipe.min_sibling_distance_m,
+                min_sibling_yaw_deg=recipe.min_sibling_yaw_deg,
+                min_sibling_target_bearing_deg=recipe.min_sibling_target_bearing_deg,
+                require_sibling_strategy_diversity=recipe.require_sibling_strategy_diversity,
                 seed=recipe.seed,
                 log_timing=self.config.log_timing,
                 verbosity=self.config.verbosity,

@@ -94,6 +94,24 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     fit_binner_only: bool = False
     """Fit the ordinal binner on oracle labels, save it, and exit (no training)."""
 
+    fit_binner_overwrite: bool = False
+    """Overwrite ``module_config.binner_path`` when ``run_mode="fit_binner"``.
+
+    The low-level `aria_nbv.rri_metrics.rri_binning.RriOrdinalBinner.save`
+    method keeps existing JSON files by default and writes numbered siblings.
+    This flag gives reproducible CLI preflight configs an explicit opt-in to
+    refresh the configured artifact path in place.
+    """
+
+    inspect_config: bool = True
+    """Print rich datamodule and LightningModule config summaries before running.
+
+    The summaries are rendered through `aria_nbv.utils.rich_summary` via
+    `aria_nbv.utils.BaseConfig.inspect`, so they are useful for interactive
+    debugging. Routine smoke configs can disable this to keep verification logs
+    focused on the binner or trainer outcome.
+    """
+
     paths: PathConfig = Field(default_factory=PathConfig)
     """Filesystem layout config (singleton)."""
 
@@ -289,6 +307,9 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
                 "checkpoint_dir",
                 self.paths.checkpoints,
             )
+
+        if self.trainer_config.default_root_dir is None:
+            object.__setattr__(self.trainer_config, "default_root_dir", out_dir)
 
         if self.module_config.binner_path is None and bool(
             self.module_config.save_binner,
@@ -732,7 +753,7 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
             case "dump_config":
                 self.save_config()
             case "fit_binner":
-                self.fit_binner_and_save()
+                self.fit_binner_and_save(overwrite=self.fit_binner_overwrite)
             case "optuna":
                 self.run_optuna_study()
             case "train":

@@ -197,6 +197,37 @@ def test_rich_local_five_family_is_named_ablation() -> None:
     assert [component.count for component in cfg.components] == [18, 18, 12, 6, 6]
 
 
+def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family()
+
+    assert cfg.total_count == 48
+    assert cfg.base.num_samples == 48
+    assert cfg.base.max_step_distance_m == pytest.approx(1.25)
+    assert cfg.base.max_height_delta_m == pytest.approx(0.35)
+    assert cfg.base.max_backward_step_m == pytest.approx(0.45)
+    assert cfg.base.max_yaw_delta_deg == pytest.approx(90.0)
+    assert cfg.base.collect_rule_masks is True
+    assert cfg.base.collect_debug_stats is True
+    assert [component.name for component in cfg.components] == [
+        "radial_towards_target_bearing",
+        "radial_away_target_bearing",
+        "revisit_backtrack",
+        "target_point_anchor",
+    ]
+    assert [component.count for component in cfg.components] == [16, 16, 12, 4]
+
+    component_by_name = {component.name: component for component in cfg.components}
+    assert component_by_name["radial_towards_target_bearing"].view_mode is ViewDirectionMode.RADIAL_TOWARDS
+    assert (
+        component_by_name["radial_towards_target_bearing"].position_mode is CandidatePositionMode.TARGET_BEARING_LOCAL
+    )
+    assert component_by_name["radial_away_target_bearing"].view_mode is ViewDirectionMode.RADIAL_AWAY
+    assert component_by_name["radial_away_target_bearing"].position_mode is CandidatePositionMode.TARGET_BEARING_LOCAL
+    assert component_by_name["revisit_backtrack"].view_mode is ViewDirectionMode.FORWARD_RIG
+    assert component_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert component_by_name["target_point_anchor"].view_mode is ViewDirectionMode.TARGET_POINT
+
+
 def test_upper_bound_free_shell_ablation_is_explicit() -> None:
     cfg = CandidateMixtureViewGeneratorConfig.upper_bound_free_shell(count=5)
 

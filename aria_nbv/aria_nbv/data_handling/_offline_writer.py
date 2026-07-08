@@ -34,7 +34,7 @@ from ..pipelines.oracle_rri_labeler import OracleRriLabelerConfig
 from ..utils import Console, TargetConfig, Verbosity
 from ..utils.fingerprints import stable_json_signature
 from ..utils.semantic_names import normalize_semantic_name_map
-from ..vin.backbone_evl import EvlBackboneConfig
+from ..vin.backbones import EvlBackboneConfig
 from ._offline_format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,

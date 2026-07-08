@@ -57,13 +57,20 @@ def test_ensure_run_mode_preserves_explicit_cli_mode() -> None:
     assert resolved == argv
 
 
+def test_extract_config_path_without_constructing_full_cli_config() -> None:
+    """The early config parser supports both split and equals-style flags."""
+    assert cli._extract_config_path(["--config-path", "offline_only.toml"]) == Path("offline_only.toml")
+    assert cli._extract_config_path(["--config_path=offline_only.toml"]) == Path("offline_only.toml")
+    assert cli._extract_config_path(["--run-mode", "train"]) is None
+
+
 def test_toml_merge_uses_cli_run_mode_over_train_config_and_disables_wandb(tmp_path: Path) -> None:
     """Direct merge keeps the summarize override above TOML training defaults."""
     config_path = tmp_path / "offline_only.toml"
     _write_train_wandb_toml(config_path)
     base_cfg = AriaNBVExperimentConfig.from_toml(config_path)
     cli_cfg = cli.CLIAriaNBVExperimentConfig(
-        _cli_parse_args=["--run-mode", "summarize-vin", "--config-path", str(config_path)]
+        **base_cfg.model_dump(), _cli_parse_args=["--run-mode", "summarize-vin", "--config-path", str(config_path)]
     )
     overrides = cli_cfg.model_dump(exclude_unset=True)
     overrides.pop("config_path", None)
@@ -121,6 +128,59 @@ def test_summarize_main_overrides_toml_train_mode_without_training(
     assert cfg.datamodule_config.shuffle is False
     assert isinstance(cfg.datamodule_config.source, VinOfflineSourceConfig)
     assert cfg.datamodule_config.source.offline.include_efm_snippet is False
+
+
+def test_main_skips_rich_config_inspection_when_disabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Smoke configs can keep CLI logs focused on the run outcome."""
+
+    config_path = tmp_path / "quiet.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                'run_mode = "dump_config"',
+                "inspect_config = false",
+                "",
+                "[trainer_config]",
+                "use_wandb = false",
+                "",
+                "[datamodule_config.source]",
+                'kind = "offline"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    inspect_calls = 0
+    captured: dict[str, AriaNBVExperimentConfig] = {}
+
+    def count_inspect(self: BaseConfig, show_docs: bool = False) -> None:
+        del self, show_docs
+        nonlocal inspect_calls
+        inspect_calls += 1
+
+    def capture_run(self: AriaNBVExperimentConfig) -> None:
+        captured["cfg"] = self
+
+    monkeypatch.setattr(BaseConfig, "inspect", count_inspect)
+    monkeypatch.setattr(AriaNBVExperimentConfig, "run", capture_run)
+
+    cli.main(["--config-path", str(config_path)])
+
+    assert captured["cfg"].inspect_config is False
+    assert inspect_calls == 0
+
+
+def test_offline_smoke_config_disables_heavy_debug_metrics() -> None:
+    """The checked-in two-epoch smoke config should stay quiet and bounded."""
+
+    repo_root = Path(__file__).resolve().parents[3]
+    cfg = AriaNBVExperimentConfig.from_toml(repo_root / ".configs" / "offline_smoke_2epoch.toml")
+
+    assert cfg.inspect_config is False
+    assert cfg.module_config.log_spearman is False
 
 
 def test_summary_and_plot_modes_use_smoke_datamodule_defaults_after_validation() -> None:
@@ -194,3 +254,16 @@ def test_train_mode_preserves_training_datamodule_defaults_after_validation() ->
     assert cfg.datamodule_config.shuffle is True
     assert isinstance(cfg.datamodule_config.source, VinOfflineSourceConfig)
     assert cfg.datamodule_config.source.offline.include_efm_snippet is True
+
+
+def test_experiment_defaults_trainer_root_to_run_output_dir(tmp_path: Path) -> None:
+    """Logger-free Lightning artifacts should stay under the experiment output dir."""
+    cfg = AriaNBVExperimentConfig.model_validate(
+        {
+            "out_dir": tmp_path / "offline-smoke",
+            "trainer_config": {"use_wandb": False},
+            "datamodule_config": {"source": {"kind": "offline"}},
+        }
+    )
+
+    assert cfg.trainer_config.default_root_dir == cfg.resolved_out_dir

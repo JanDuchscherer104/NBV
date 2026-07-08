@@ -20,13 +20,13 @@ from efm3d.aria.aria_constants import (
 )
 from matplotlib import pyplot as plt
 
+import aria_nbv.rri_metrics.plotting as rri_plotting
 from aria_nbv.data_handling.efm_views import EfmCameraView, EfmSnippetView
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
-from aria_nbv.rri_metrics import plotting as rri_plotting
 from aria_nbv.rri_metrics.types import RriResult
 from aria_nbv.utils import plotting as utils_plotting
 from aria_nbv.utils.data_plotting import pose_world_cam, semidense_points_for_frame
-from aria_nbv.vin.plotting import _parameter_distribution
+from aria_nbv.vin.diagnostics.plotting import _parameter_distribution
 
 
 def _make_camera(num_frames: int = 2) -> CameraTW:

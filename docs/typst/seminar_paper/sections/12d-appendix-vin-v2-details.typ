@@ -7,7 +7,7 @@
 This appendix collects implementation-level details of the VIN v2 architecture
 that are too dense for the main architecture section. The goal is to keep the
 main text readable while providing a precise mapping between theory and the
-current `VinModelV2` implementation.
+archived/deprecated `VinModelV2` implementation.
 
 == Pose representation and rotation-6D
 

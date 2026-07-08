@@ -7,6 +7,20 @@ Raw snippet access and immutable VIN offline stores remain in
 `aria_nbv.data_handling`.
 """
 
+from .counterfactuals import (
+    CounterfactualCandidateEvaluation,
+    CounterfactualEvaluatorFn,
+    CounterfactualMetricBundle,
+    CounterfactualOracleRriScorer,
+    CounterfactualOracleRriScorerConfig,
+    CounterfactualPoseGenerator,
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualRolloutResult,
+    CounterfactualSelectionPolicy,
+    CounterfactualSelectionRecord,
+    CounterfactualStepResult,
+    CounterfactualTrajectory,
+)
 from .dataset_writer import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
@@ -56,6 +70,13 @@ from .shards import (
     summarize_rollout_shard_campaign,
     write_rollout_shard_manifest_from_config,
 )
+from .target_counterfactuals import (
+    SCENE_CROP_POLICY_SNIPPET_EXTENT_V1,
+    TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
+    CounterfactualTargetOracleRriScorer,
+    CounterfactualTargetOracleRriScorerConfig,
+    TargetRriInvalidError,
+)
 from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
@@ -85,6 +106,23 @@ __all__ = [
     "ROLLOUT_SHARD_MANIFEST_VERSION",
     "ROLLOUT_SHARD_OWNER_FILENAME",
     "ROLLOUT_SHARD_SUCCESS_FILENAME",
+    "SCENE_CROP_POLICY_SNIPPET_EXTENT_V1",
+    "TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1",
+    "CounterfactualCandidateEvaluation",
+    "CounterfactualEvaluatorFn",
+    "CounterfactualMetricBundle",
+    "CounterfactualOracleRriScorer",
+    "CounterfactualOracleRriScorerConfig",
+    "CounterfactualPoseGenerator",
+    "CounterfactualPoseGeneratorConfig",
+    "CounterfactualRolloutResult",
+    "CounterfactualSelectionPolicy",
+    "CounterfactualSelectionRecord",
+    "CounterfactualStepResult",
+    "CounterfactualTargetOracleRriScorer",
+    "CounterfactualTargetOracleRriScorerConfig",
+    "CounterfactualTrajectory",
+    "TargetRriInvalidError",
     "RolloutDatasetWriter",
     "RolloutDatasetWriterConfig",
     "RolloutDatasetWriterStats",

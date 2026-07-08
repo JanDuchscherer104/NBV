@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -58,3 +59,37 @@ def test_auto_refit_binner_on_num_classes_mismatch(tmp_path: Path) -> None:
 
     new_binner = RriOrdinalBinner.load(binner_path)
     assert new_binner.num_classes == 5
+
+
+def test_fit_binner_run_mode_honors_overwrite_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Ensure CLI binner preflights can refresh their configured JSON path."""
+
+    captured: dict[str, bool] = {}
+
+    def _fit_binner_and_save(
+        self: AriaNBVExperimentConfig,
+        datamodule: Any | None = None,
+        *,
+        overwrite: bool = False,
+    ) -> Path:
+        del self, datamodule
+        captured["overwrite"] = overwrite
+        return tmp_path / "rri_binner.json"
+
+    monkeypatch.setattr(
+        AriaNBVExperimentConfig,
+        "fit_binner_and_save",
+        _fit_binner_and_save,
+    )
+
+    cfg = AriaNBVExperimentConfig(
+        run_mode="fit_binner",
+        fit_binner_overwrite=True,
+    )
+
+    cfg.run()
+
+    assert captured == {"overwrite": True}

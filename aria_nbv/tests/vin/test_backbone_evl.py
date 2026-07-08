@@ -7,7 +7,7 @@ from pathlib import Path
 import omegaconf
 import torch
 
-from aria_nbv.vin.backbone_evl import _normalize_evl_model_config_paths, filter_backbone_output_for_features_mode
+from aria_nbv.vin.backbones.evl import _normalize_evl_model_config_paths, filter_backbone_output_for_features_mode
 from aria_nbv.vin.types import EvlBackboneOutput
 
 PoseTW = __import__("efm3d.aria.pose", fromlist=["PoseTW"]).PoseTW

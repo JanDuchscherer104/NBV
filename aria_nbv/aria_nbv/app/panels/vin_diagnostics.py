@@ -26,7 +26,7 @@ from .vin_diag_tabs import (
     render_tokens_tab,
     render_transforms_tab,
 )
-from .vin_utils import _build_experiment_config, _run_vin_debug
+from .vin_utils import _build_experiment_config, _run_vin_debug, _setup_vin_diagnostics_runtime
 
 
 def _iter_stage_batches(datamodule: VinDataModule, *, stage: Stage) -> Iterator[VinOracleBatch]:
@@ -80,25 +80,13 @@ def render_vin_diagnostics_page() -> None:
             cfg_sig = config_signature(cfg)
 
             if state.cfg_sig != cfg_sig or state.module is None or state.datamodule is None:
-                trainer, module, datamodule = cfg.setup_target(setup_stage=stage)
-                _ = trainer
+                runtime = _setup_vin_diagnostics_runtime(cfg, stage=stage)
                 state.cfg_sig = cfg_sig
                 state.experiment = cfg
-                state.module = module
-                state.datamodule = datamodule
+                state.module = runtime.module
+                state.datamodule = runtime.datamodule
 
             assert state.module is not None and state.datamodule is not None
-            if getattr(state.module, "_binner", None) is None and hasattr(state.module, "_load_binner_from_config"):
-                try:
-                    state.module._binner = state.module._load_binner_from_config()  # type: ignore[attr-defined]
-                except Exception as exc:  # pragma: no cover - diagnostics guard
-                    st.sidebar.warning(f"Failed to load RRI binner: {type(exc).__name__}: {exc}")
-            try:
-                if hasattr(state.module, "_maybe_init_bin_values"):
-                    state.module._maybe_init_bin_values()  # type: ignore[attr-defined]
-            except Exception as exc:  # pragma: no cover - diagnostics guard
-                st.sidebar.warning(f"Failed to init CORAL bin values: {type(exc).__name__}: {exc}")
-
             with st.spinner("Running datamodule + VIN forward..."):
                 batch = next(_iter_stage_batches(state.datamodule, stage=stage))
                 pred, debug = _run_vin_debug(state.module, batch)

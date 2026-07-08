@@ -22,9 +22,9 @@ website:
       - reference/data_handling._target_selection.qmd
       - reference/pose_generation.candidate_generation.qmd
       - reference/pose_generation.candidate_mixture.qmd
-      - reference/pose_generation.counterfactuals.qmd
-      - reference/pose_generation.target_counterfactuals.qmd
       - reference/pose_generation.types.qmd
+      - reference/rollouts.counterfactuals.qmd
+      - reference/rollouts.target_counterfactuals.qmd
       - reference/rollouts.trace.qmd
       - reference/rollouts.dataset_writer.qmd
       - reference/rollouts.zarr_store.qmd
@@ -37,12 +37,17 @@ website:
       - reference/rri_metrics.types.qmd
       section: Implementation Contracts
     - contents:
-      - reference/vin.backbone_evl.qmd
-      - reference/vin.model_v3.qmd
-      - reference/vin.pose_encoders.qmd
-      - reference/vin.pose_encoding.qmd
-      - reference/vin.traj_encoder.qmd
+      - reference/vin.backbones.evl.qmd
+      - reference/vin.models.scene_myopic.qmd
+      - reference/vin.encoders.pose.qmd
+      - reference/vin.encoders.shell_pose.qmd
+      - reference/vin.encoders.spherical.qmd
+      - reference/vin.encoders.fourier.qmd
+      - reference/vin.encoders.pointnext.qmd
+      - reference/vin.encoders.trajectory.qmd
       - reference/vin.types.qmd
+      - reference/vin.types.diagnostics.qmd
+      - reference/vin.diagnostics.experimental_plotting.qmd
       section: VIN Core
     - contents:
       - reference/pipelines.oracle_rri_labeler.qmd

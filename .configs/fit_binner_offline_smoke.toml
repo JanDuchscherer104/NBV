@@ -1,0 +1,56 @@
+# Fit the VIN ordinal RRI binner from a tiny immutable offline slice.
+#
+# This config is intentionally small and CPU-only so it can be used as a
+# pre-flight step before `.configs/offline_smoke_2epoch.toml`.
+run_mode = "fit_binner"
+run_name = "offline-smoke-binner"
+out_dir = ".logs/vin/offline-smoke"
+seed = 0
+fit_binner_overwrite = true
+inspect_config = false
+
+[datamodule_config]
+num_workers = 0
+batch_size = 4
+persistent_workers = false
+shuffle = false
+shuffle_candidates = false
+use_train_as_val = true
+
+    [datamodule_config.source]
+    kind = "offline"
+    train_split = "train"
+    val_split = "train"
+    load_candidates_for_batch = false
+    load_depths_for_batch = false
+    load_candidate_pcs_for_batch = false
+    load_gt_obbs_for_batch = false
+    load_detected_obbs_for_batch = false
+    load_trajectory_metadata_for_batch = false
+
+        [datamodule_config.source.offline]
+        load_backbone = false
+        map_location = "cpu"
+        limit = 16
+
+            [datamodule_config.source.offline.store]
+            store_dir = "vin_offline"
+
+[trainer_config]
+use_wandb = false
+
+[module_config]
+num_classes = 15
+binner_fit_snippets = 4
+binner_max_attempts = 16
+save_binner = true
+binner_path = ".logs/vin/offline-smoke/rri_binner.json"
+aux_regression_loss = "none"
+coral_bias_init = "prior_logits"
+coverage_weight_mode = "none"
+
+    [module_config.grad_norms]
+    enabled = false
+
+    [module_config.vin]
+    num_classes = 15

@@ -266,6 +266,97 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
             ],
         )
 
+    @classmethod
+    def radial_target_backtrack_family(cls) -> "CandidateMixtureViewGeneratorConfig":
+        """Build the radial/backtrack rollout-diversity sampler.
+
+        This preset mirrors `.configs/build_rollouts_v1_diverse.toml`: most
+        rows probe radial-towards, radial-away, and revisit-backtrack action
+        families, with a small target-point anchor group for continuity with
+        the target-conditioned default sampler. It is a named data-generation
+        profile only; `CandidateMixtureViewGeneratorConfig()` keeps the
+        historical 60-row default.
+        """
+
+        return cls(
+            base=CandidateViewGeneratorConfig(
+                camera_label="rgb",
+                num_samples=48,
+                oversample_factor=2.0,
+                max_resamples=2,
+                align_to_gravity=True,
+                min_radius=0.25,
+                max_radius=1.1,
+                min_elev_deg=-12.0,
+                max_elev_deg=18.0,
+                delta_azimuth_deg=110.0,
+                sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+                kappa=8.0,
+                min_distance_to_mesh=0.2,
+                ensure_collision_free=True,
+                ensure_free_space=True,
+                collision_backend="pytorch3d",
+                ray_subsample=32,
+                step_clearance=0.1,
+                enforce_motion_realism=True,
+                max_step_distance_m=1.25,
+                max_height_delta_m=0.35,
+                max_backward_step_m=0.45,
+                max_yaw_delta_deg=90.0,
+                device="cpu",
+                verbosity=1,
+                collect_rule_masks=True,
+                collect_debug_stats=True,
+                view_max_angle_deg=0.0,
+                view_max_azimuth_deg=0.0,
+                view_max_elevation_deg=0.0,
+                view_roll_jitter_deg=0.0,
+                seed=0,
+            ),
+            components=[
+                CandidateMixtureComponentConfig(
+                    name="radial_towards_target_bearing",
+                    count=16,
+                    view_mode=ViewDirectionMode.RADIAL_TOWARDS,
+                    position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    min_radius=0.35,
+                    max_radius=1.1,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="radial_away_target_bearing",
+                    count=16,
+                    view_mode=ViewDirectionMode.RADIAL_AWAY,
+                    position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    min_radius=0.35,
+                    max_radius=1.1,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="revisit_backtrack",
+                    count=12,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    min_radius=0.25,
+                    max_radius=0.9,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="target_point_anchor",
+                    count=4,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    min_radius=0.35,
+                    max_radius=0.9,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=0.0,
+                ),
+            ],
+        )
+
     @property
     def device(self) -> torch.device:
         """Resolved base generator device."""
