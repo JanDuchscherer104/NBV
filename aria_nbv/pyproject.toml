@@ -67,8 +67,8 @@ dependencies = [
     # Reinforcement learning
     "gymnasium>=1.2.1",
     "stable-baselines3>=2.7.0",
-    # Openpoints
-    "openpoints-shim; sys_platform == 'linux'",
+    # OpenPoints support is optional because the shim builds PointNeXt CUDA
+    # extensions and should not participate in CPU-only package smoke tests.
     "pyyaml>=6.0; sys_platform == 'linux'",
     "multimethod>=1.7; sys_platform == 'linux'",
     "termcolor>=1.1.0; sys_platform == 'linux'",
@@ -107,6 +107,10 @@ dependencies = [
         "mypy>=1.0.0",
         "syrenka>=0.5.7",
         "debugpy>=1.8.17",
+    ]
+
+    pointnext = [
+        "openpoints-shim; sys_platform == 'linux'",
     ]
 
     notebook = [

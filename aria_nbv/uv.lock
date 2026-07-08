@@ -320,7 +320,6 @@ dependencies = [
     { name = "omegaconf" },
     { name = "open3d" },
     { name = "opencv-python" },
-    { name = "openpoints-shim", marker = "sys_platform == 'linux'" },
     { name = "optuna" },
     { name = "optuna-integration", extra = ["pytorch-lightning"] },
     { name = "pandas" },
@@ -385,6 +384,9 @@ notebook = [
     { name = "jupyterlab" },
     { name = "notebook" },
 ]
+pointnext = [
+    { name = "openpoints-shim", marker = "sys_platform == 'linux'" },
+]
 xformers = [
     { name = "xformers", marker = "sys_platform == 'linux'" },
 ]
@@ -418,7 +420,7 @@ requires-dist = [
     { name = "omegaconf", specifier = "==2.3.0" },
     { name = "open3d", specifier = ">=0.19.0" },
     { name = "opencv-python", specifier = "==4.10.0.84" },
-    { name = "openpoints-shim", marker = "sys_platform == 'linux'", directory = "../external/openpoints_shim" },
+    { name = "openpoints-shim", marker = "sys_platform == 'linux' and extra == 'pointnext'", directory = "../external/openpoints_shim" },
     { name = "optuna", specifier = ">=4.6.0" },
     { name = "optuna-integration", extras = ["pytorch-lightning"], specifier = ">=4.5.0" },
     { name = "pandas", specifier = "==2.2.2" },
@@ -470,7 +472,7 @@ requires-dist = [
     { name = "xformers", marker = "sys_platform == 'linux' and extra == 'xformers'", specifier = "==0.0.28.post1", index = "https://download.pytorch.org/whl/cu121" },
     { name = "zarr", specifier = ">=3.1.5" },
 ]
-provides-extras = ["dev", "notebook", "xformers"]
+provides-extras = ["dev", "pointnext", "notebook", "xformers"]
 
 [[package]]
 name = "arrow"
