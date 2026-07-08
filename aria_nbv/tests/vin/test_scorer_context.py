@@ -128,7 +128,7 @@ def test_build_vin_scorer_scene_field_preserves_free_input_and_channel_order() -
     field_in, aux = build_vin_scorer_scene_field(
         out,
         scene_field_channels=["cent_pr", "free_input", "occ_pr"],
-        model_name="VinModelV2",
+        model_name="VinModelV3",
     )
 
     assert torch.allclose(aux["free_input"], free_input)
@@ -141,11 +141,11 @@ def test_build_vin_scorer_scene_field_rejects_unknown_channel() -> None:
     """Invalid channel names should report the owning model config surface."""
     out = _make_backbone_out()
 
-    with pytest.raises(ValueError, match=r"VinModelV2\.scene_field_channels"):
+    with pytest.raises(ValueError, match=r"VinModelV3\.scene_field_channels"):
         build_vin_scorer_scene_field(
             out,
             scene_field_channels=["occ_pr", "not_a_channel"],
-            model_name="VinModelV2",
+            model_name="VinModelV3",
         )
 
 

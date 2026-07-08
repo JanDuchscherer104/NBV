@@ -17,11 +17,9 @@ from aria_nbv.vin import (
     VinModelV3Config,
 )
 from aria_nbv.vin.candidate_scorer import CandidateScorerConfig, candidate_scorer_training_contract
-from aria_nbv.vin.models import VinModelV2, VinModelV2Config
 from aria_nbv.vin.models import VinModelV3 as NamespacedVinModelV3
 from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
 from aria_nbv.vin.models import scene_myopic as namespaced_v3
-from aria_nbv.vin.models import v2 as namespaced_v2
 from aria_nbv.vin.models.scene_myopic import VinModelV3 as CanonicalVinModelV3
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config as CanonicalVinModelV3Config
 
@@ -36,14 +34,6 @@ def test_models_namespace_reexports_preserved_vin_v3() -> None:
     assert CanonicalVinModelV3Config in get_args(CandidateScorerConfig)
     assert namespaced_v3.FIELD_CHANNELS_V3
     assert namespaced_v3.SEMIDENSE_PROJ_DIM > 0
-
-
-def test_models_namespace_owns_vin_v2() -> None:
-    """The maintained historical V2 scorer should live under the models namespace."""
-
-    assert VinModelV2Config().target_type is VinModelV2
-    assert namespaced_v2.VinModelV2 is VinModelV2
-    assert namespaced_v2.FIELD_CHANNELS_V2
 
 
 def test_experimental_model_namespace_is_removed() -> None:
@@ -63,12 +53,18 @@ def test_legacy_root_v3_module_is_removed() -> None:
         importlib.import_module("aria_nbv.vin.models.v3")
 
 
+def test_legacy_v2_model_module_is_removed() -> None:
+    """The deprecated V2 scorer should not remain importable from active VIN."""
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("aria_nbv.vin.models.v2")
+
+
 def test_helper_sidecars_do_not_cycle_with_models_namespace() -> None:
     """Context and validation sidecars should import without model-package cycles."""
 
     assert importlib.import_module("aria_nbv.vin.scorer_context")
     assert importlib.import_module("aria_nbv.vin.encoders.validation")
-    assert importlib.import_module("aria_nbv.vin.models.v2")
 
 
 def test_planned_myopic_scorer_config_is_visible_but_not_runnable() -> None:

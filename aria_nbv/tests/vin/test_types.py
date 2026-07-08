@@ -15,7 +15,6 @@ from aria_nbv.vin.types import (
 from aria_nbv.vin.types.backbone import EfmDict as LeafEfmDict
 from aria_nbv.vin.types.backbone import EvlBackboneOutput as LeafEvlBackboneOutput
 from aria_nbv.vin.types.diagnostics import VinForwardDiagnostics as LeafVinForwardDiagnostics
-from aria_nbv.vin.types.diagnostics import VinV2ForwardDiagnostics as LeafVinV2ForwardDiagnostics
 from aria_nbv.vin.types.diagnostics import VinV3ForwardDiagnostics as LeafVinV3ForwardDiagnostics
 from aria_nbv.vin.types.model_inputs import FieldBundle as LeafFieldBundle
 from aria_nbv.vin.types.prediction import VinPrediction as LeafVinPrediction
@@ -74,7 +73,6 @@ def test_diagnostics_types_are_leaf_owned_and_aggregated() -> None:
     assert not hasattr(vin_types, "VinV2ForwardDiagnostics")
     assert VinV3ForwardDiagnostics is LeafVinV3ForwardDiagnostics
     assert LeafVinForwardDiagnostics is not None
-    assert LeafVinV2ForwardDiagnostics is not None
 
 
 def test_experimental_diagnostics_import_paths_are_removed() -> None:

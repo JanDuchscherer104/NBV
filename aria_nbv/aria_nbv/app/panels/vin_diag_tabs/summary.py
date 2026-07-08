@@ -12,7 +12,6 @@ import torch
 from ....data_handling import VinOfflineSourceConfig, VinSnippetView, collect_vin_offline_dataset_stats
 from ....utils.plotting import _histogram_overlay, _to_numpy
 from ....vin.diagnostics.plotting import _parameter_distribution
-from ....vin.models import FIELD_CHANNELS_V2
 from ..common import _info_popover, _pretty_label, _strip_ansi
 from .context import VinDiagContext
 
@@ -328,7 +327,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
         _info_popover(
             "field hists",
             "Per-channel scene-field distributions **before** projection. "
-            "VIN v2 builds channels from EVL heads: `occ_pr` (occupancy prob), "
+            "VIN builds channels from EVL heads: `occ_pr` (occupancy prob), "
             "`cent_pr` (centerness), `occ_input` (occupied evidence), "
             "`counts_norm` (log1p-normalized coverage), `observed`=counts_norm, "
             "`unknown`=1-counts_norm, `free_input` (EVL free-space or derived), "
@@ -336,10 +335,9 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
             "and plotted as |value|.",
         )
         channel_count = int(field_in.shape[1])
-        if channel_count == len(cfg.module_config.vin.scene_field_channels):
-            channel_names = list(cfg.module_config.vin.scene_field_channels)
-        elif channel_count == len(FIELD_CHANNELS_V2):
-            channel_names = list(FIELD_CHANNELS_V2)
+        configured_channels = list(getattr(cfg.module_config.vin, "scene_field_channels", ()))
+        if channel_count == len(configured_channels):
+            channel_names = configured_channels
         else:
             channel_names = [f"ch_{idx}" for idx in range(channel_count)]
         default_channels = channel_names[: min(len(channel_names), 6)]
