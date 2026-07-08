@@ -11,7 +11,9 @@ from efm3d.aria.pose import PoseTW
 from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinSnippetView
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
+from aria_nbv.rri_metrics.logging import Metric
 from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
+from aria_nbv.utils import Stage
 from aria_nbv.vin import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
@@ -493,6 +495,55 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
         for values, kwargs in log_dict_calls
     )
     assert any("train/loss" in values and kwargs["batch_size"] == 2 for values, kwargs in log_dict_calls)
+
+
+def test_lightning_table_metric_logging_uses_per_metric_denominators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(backbone=None, num_classes=3),
+            num_classes=3,
+        ),
+    )
+    calls: list[tuple[Metric, int]] = []
+
+    def capture_aux_scalars(
+        payload: dict[Metric, torch.Tensor | float],
+        *,
+        stage: Stage,
+        batch_size: int,
+    ) -> None:
+        assert stage is Stage.VAL
+        assert len(payload) == 1
+        calls.append((next(iter(payload)), batch_size))
+
+    monkeypatch.setattr(module, "_log_aux_scalars", capture_aux_scalars)
+
+    module._log_candidate_table_metrics(
+        stage=Stage.VAL,
+        top1_oracle_hit=torch.tensor([1.0, float("nan"), 0.0]),
+        top1_oracle_hit_mean=torch.tensor(0.5),
+        top3_oracle_hit=torch.tensor([1.0, float("nan"), float("nan")]),
+        top3_oracle_hit_mean=torch.tensor(1.0),
+        selected_oracle_regret=torch.tensor([0.2, float("nan"), float("nan")]),
+        selected_oracle_regret_mean=torch.tensor(0.2),
+        selected_oracle_rank=torch.tensor([1.0, 2.0, float("nan")]),
+        selected_oracle_rank_mean=torch.tensor(1.5),
+        selected_oracle_percentile=torch.tensor([float("nan"), 0.4, float("nan")]),
+        selected_oracle_percentile_mean=torch.tensor(0.4),
+        selected_oracle_valid_table=torch.tensor([True, False, True]),
+        selected_oracle_valid_rate=torch.tensor(2.0 / 3.0),
+    )
+
+    assert dict(calls) == {
+        Metric.CANDIDATE_TOP1_ORACLE_HIT: 2,
+        Metric.CANDIDATE_TOP3_ORACLE_HIT: 1,
+        Metric.SELECTED_ORACLE_REGRET: 1,
+        Metric.SELECTED_ORACLE_RANK: 2,
+        Metric.SELECTED_ORACLE_PERCENTILE: 1,
+        Metric.SELECTED_ORACLE_VALID_TABLE_RATE: 3,
+    }
 
 
 def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypatch: pytest.MonkeyPatch) -> None:

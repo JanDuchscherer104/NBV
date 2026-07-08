@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -17,6 +18,14 @@ from ...lightning.lit_module import VinLightningModule
 from ...utils import Stage
 from ...vin.types import VinPrediction
 from ...vin.types.diagnostics import VinForwardDiagnostics
+
+
+@dataclass(frozen=True, slots=True)
+class _VinDiagnosticsRuntime:
+    """Runtime objects needed for one VIN diagnostics pass."""
+
+    module: VinLightningModule
+    datamodule: object
 
 
 def _build_experiment_config(
@@ -38,6 +47,28 @@ def _build_experiment_config(
         cfg.datamodule_config.source = VinOracleOnlineDatasetConfig()
 
     return cfg
+
+
+def _setup_vin_diagnostics_runtime(
+    cfg: AriaNBVExperimentConfig,
+    *,
+    stage: Stage,
+) -> _VinDiagnosticsRuntime:
+    """Build checkpoint-backed VIN diagnostics runtime objects."""
+
+    ckpt_path = cfg._resolve_ckpt_path()
+    if ckpt_path is not None:
+        module = VinLightningModule.load_for_inference(
+            ckpt_path,
+            fallback_binner_path=cfg.module_config.binner_path,
+        )
+        datamodule = cfg.datamodule_config.setup_target()
+        datamodule.setup(stage=stage)
+        return _VinDiagnosticsRuntime(module=module, datamodule=datamodule)
+
+    _trainer, module, datamodule = cfg.setup_target(setup_stage=stage)
+    module.prepare_for_inference()
+    return _VinDiagnosticsRuntime(module=module, datamodule=datamodule)
 
 
 def _run_vin_debug(
@@ -86,4 +117,5 @@ def _run_vin_debug(
 __all__ = [
     "_build_experiment_config",
     "_run_vin_debug",
+    "_setup_vin_diagnostics_runtime",
 ]

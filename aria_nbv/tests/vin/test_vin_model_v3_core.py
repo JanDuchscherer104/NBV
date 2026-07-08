@@ -2,6 +2,7 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 import torch
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
@@ -187,6 +188,71 @@ def test_vin_model_v3_gradients(monkeypatch) -> None:
     for name, param in grad_params.items():
         assert param.grad is not None, f"Missing grad for {name}"
         assert torch.isfinite(param.grad).all(), f"Non-finite grad for {name}"
+
+
+def test_vin_model_v3_requires_cached_backbone_out() -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None))
+    reference_pose, candidate_poses = _make_poses(batch=1, num_candidates=2)
+    snippet = _make_vin_snippet()
+    poses_cw = candidate_poses.inverse()
+    cameras = PerspectiveCameras(
+        device=torch.device("cpu"),
+        R=poses_cw.R.transpose(-1, -2).contiguous(),
+        T=poses_cw.t,
+        focal_length=torch.tensor([[40.0, 40.0]], dtype=torch.float32).expand(2, -1),
+        principal_point=torch.tensor([[32.0, 32.0]], dtype=torch.float32).expand(2, -1),
+        image_size=torch.tensor([[64.0, 64.0]], dtype=torch.float32).expand(2, -1),
+        in_ndc=False,
+    )
+
+    with pytest.raises(RuntimeError, match="backbone_out"):
+        model.forward(
+            efm=snippet,
+            candidate_poses_world_cam=candidate_poses,
+            reference_pose_world_rig=reference_pose,
+            p3d_cameras=cameras,
+            backbone_out=None,
+        )
+
+
+def test_vin_model_v3_cached_forward_does_not_move_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None))
+    batch = 1
+    num_candidates = 3
+    grid = 2
+    backbone_out = _make_backbone_out(batch=batch, grid=grid)
+    reference_pose, candidate_poses = _make_poses(batch=batch, num_candidates=num_candidates)
+    snippet = _make_vin_snippet()
+    poses_cw = candidate_poses.inverse()
+    cameras = PerspectiveCameras(
+        device=torch.device("cpu"),
+        R=poses_cw.R.transpose(-1, -2).contiguous(),
+        T=poses_cw.t,
+        focal_length=torch.tensor([[40.0, 40.0]], dtype=torch.float32).expand(num_candidates, -1),
+        principal_point=torch.tensor([[32.0, 32.0]], dtype=torch.float32).expand(num_candidates, -1),
+        image_size=torch.tensor([[64.0, 64.0]], dtype=torch.float32).expand(num_candidates, -1),
+        in_ndc=False,
+    )
+
+    def _fail_to(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("VinModelV3.forward must not move the module")
+
+    monkeypatch.setattr(model, "to", _fail_to)
+    monkeypatch.setattr(
+        model,
+        "parameters",
+        lambda: iter([types.SimpleNamespace(device=torch.device("meta"))]),
+    )
+
+    pred = model.forward(
+        efm=snippet,
+        candidate_poses_world_cam=candidate_poses,
+        reference_pose_world_rig=reference_pose,
+        p3d_cameras=cameras,
+        backbone_out=backbone_out,
+    )
+
+    assert pred.logits.shape[:2] == (batch, num_candidates)
 
 
 def test_v3_shared_head_preserves_checkpoint_keys() -> None:

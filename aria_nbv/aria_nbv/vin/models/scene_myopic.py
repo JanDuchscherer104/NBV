@@ -65,7 +65,7 @@ directional memory over view directions, not folded into the pose encoding.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from efm3d.aria.pose import PoseTW
@@ -152,7 +152,7 @@ class VinModelV3Config(TargetConfig["VinModelV3"]):
         return VinModelV3
 
     backbone: EvlBackboneConfig | None = Field(default_factory=EvlBackboneConfig)
-    """Frozen EVL backbone configuration that supplies voxel features."""
+    """Optional EVL config kept for caller-side materialization of voxel features."""
 
     pose_encoder: R6dLffPoseEncoderConfig = Field(default_factory=R6dLffPoseEncoderConfig)
     """Pose encoder configuration (R6D + LFF; stable relative pose encoding)."""
@@ -297,9 +297,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         self.traj_attn: nn.MultiheadAttention | None = None
         self.traj_attn_norm: nn.GroupNorm | None = None
 
-        # Init backbone lazily during first forward pass iff backbone outputs are not provided
-        self.backbone = None
-
         self.pose_encoder: PoseEncoder = self.config.pose_encoder.setup_target()
         traj_encoder_cfg = self.config.traj_encoder if self.config.use_traj_encoder else None
         if self.config.use_traj_encoder and traj_encoder_cfg is None:
@@ -371,8 +368,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
                 num_groups=traj_norm_groups,
                 num_channels=pose_dim,
             )
-
-        self.to(self.backbone.device if self.backbone is not None else torch.device("cpu"))
 
     @property
     def pose_encoder_lff(self) -> LearnableFourierFeatures | None:
@@ -681,7 +676,8 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             reference_pose_world_rig (PoseTW["B, 12"]): Reference rig pose ``T_w_r``.
             p3d_cameras (PerspectiveCameras): PyTorch3D camera batch (size ``B*Nq``) aligned with candidates.
             return_debug (bool): If True, return `VinV3ForwardDiagnostics`.
-            backbone_out (EvlBackboneOutput | None): Optional cached EVL outputs (required for VinSnippetView).
+            backbone_out (EvlBackboneOutput | None): Materialized EVL outputs for the snippet.
+                Scorer forward requires this cached evidence and does not instantiate or run a backbone.
 
         Returns:
             Tuple[VinPrediction, VinV3ForwardDiagnostics | None]: Prediction plus optional diagnostics.
@@ -697,31 +693,18 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             )
         # Inputs: candidate_poses_world_cam is PoseTW (B, N_q, 12),
         # reference_pose_world_rig is PoseTW (B, 12), p3d_cameras batch is B*N_q.
-        efm_dict: dict[str, Any] | None
-        if is_efm_snippet_view_instance(efm):
-            efm_dict = efm.efm
-        elif is_vin_snippet_view_instance(efm):
-            efm_dict = None
-        else:
+        if not (is_efm_snippet_view_instance(efm) or is_vin_snippet_view_instance(efm)):
             raise TypeError(
                 f"VinModelV3 expects a VinSnippetView or EfmSnippetView for `efm`, got {type(efm)}.",
             )
         if backbone_out is None:
-            if self.backbone is None:  # type: ignore
-                self.backbone = self.config.backbone.setup_target() if self.config.backbone is not None else None  # type: ignore
-            if efm_dict is None:
-                raise RuntimeError(
-                    "VinModelV3 requires cached backbone outputs when using VinSnippetView.",
-                )
-            backbone_out = self.backbone.forward(efm_dict)  # type: ignore
+            raise RuntimeError(
+                "VinModelV3.forward requires cached EVL backbone evidence via `backbone_out`. "
+                "Materialize EvlBackboneOutput before calling the scorer; forward does not "
+                "instantiate or run `config.backbone`.",
+            )
 
         device = backbone_out.voxel_extent.device
-        try:
-            param_device = next(self.parameters()).device
-        except StopIteration:
-            param_device = device
-        if param_device != device:
-            self.to(device)
 
         # vin_snippet.points_world is in WORLD frame (x_w, y_w, z_w) with optional extras per point.
         vin_snippet = self._ensure_vin_snippet(efm, device=device)  # points_world: (B, P, C_sem)

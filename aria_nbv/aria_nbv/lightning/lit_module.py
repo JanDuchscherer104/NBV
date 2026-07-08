@@ -23,12 +23,7 @@ from torch.nn import functional as functional
 
 from ..configs import PathConfig
 from ..data_handling import VinOracleBatch
-from ..rri_metrics.coral import (
-    coral_logits_to_label,
-    coral_loss,
-    coral_monotonicity_violation_rate,
-    coral_random_loss,
-)
+from ..rri_metrics.coral import coral_logits_to_label, coral_loss, coral_monotonicity_violation_rate, coral_random_loss
 from ..rri_metrics.logging import (
     Loss,
     Metric,
@@ -41,11 +36,7 @@ from ..rri_metrics.logging import (
 from ..rri_metrics.rri_binning import RriOrdinalBinner
 from ..rri_metrics.torch_rollout import candidate_topk_oracle_hit, selected_action_oracle_comparison
 from ..utils import Console, Stage, TargetConfig
-from ..utils.grad_norms import (
-    GradNormLoggingConfig,
-    _collect_grad_norm_targets,
-    _grad_norm_from_params,
-)
+from ..utils.grad_norms import GradNormLoggingConfig, _collect_grad_norm_targets, _grad_norm_from_params
 from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.diagnostics import plot_vin_encodings_from_debug
 from ..vin.models import VinModelV3Config
@@ -133,7 +124,7 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
     log_spearman: bool = True
     """Enable Spearman rank-correlation metrics.
 
-    Spearman uses `torchmetrics.regression.SpearmanCorrCoef`, which buffers all
+    Spearman uses :class:`torchmetrics.regression.SpearmanCorrCoef`, which buffers all
     predictions and targets until compute time. Keep it enabled for normal
     experiments; disable it for fast smoke runs that only need loop viability.
     """
@@ -733,18 +724,20 @@ class VinLightningModule(pl.LightningModule):
             stage=stage,
             batch_size=log_batch_size,
         )
-        table_log_batch_size = max(int(selected_oracle.valid_table.sum().item()), 1)
-        self._log_aux_scalars(
-            {
-                Metric.CANDIDATE_TOP1_ORACLE_HIT: top1_oracle_hit_mean,
-                Metric.CANDIDATE_TOP3_ORACLE_HIT: top3_oracle_hit_mean,
-                Metric.SELECTED_ORACLE_REGRET: selected_oracle_regret_mean,
-                Metric.SELECTED_ORACLE_RANK: selected_oracle_rank_mean,
-                Metric.SELECTED_ORACLE_PERCENTILE: selected_oracle_percentile_mean,
-                Metric.SELECTED_ORACLE_VALID_TABLE_RATE: selected_oracle_valid_rate,
-            },
+        self._log_candidate_table_metrics(
             stage=stage,
-            batch_size=table_log_batch_size,
+            top1_oracle_hit=top1_oracle_hit,
+            top1_oracle_hit_mean=top1_oracle_hit_mean,
+            top3_oracle_hit=top3_oracle_hit,
+            top3_oracle_hit_mean=top3_oracle_hit_mean,
+            selected_oracle_regret=selected_oracle_regret,
+            selected_oracle_regret_mean=selected_oracle_regret_mean,
+            selected_oracle_rank=selected_oracle_rank,
+            selected_oracle_rank_mean=selected_oracle_rank_mean,
+            selected_oracle_percentile=selected_oracle_percentile,
+            selected_oracle_percentile_mean=selected_oracle_percentile_mean,
+            selected_oracle_valid_table=selected_oracle.valid_table,
+            selected_oracle_valid_rate=selected_oracle_valid_rate,
         )
 
         pred_class = coral_logits_to_label(logits_valid)
@@ -828,6 +821,72 @@ class VinLightningModule(pl.LightningModule):
         if not masked.is_floating_point():
             return masked
         return torch.nan_to_num(masked, nan=0.0, posinf=0.0, neginf=0.0)
+
+    @staticmethod
+    def _finite_log_batch_size(values: Tensor) -> int:
+        """Return the number of finite scalar samples represented by a table metric."""
+
+        return max(int(torch.isfinite(values).sum().item()), 1)
+
+    @staticmethod
+    def _table_count_log_batch_size(values: Tensor) -> int:
+        """Return the number of candidate tables represented by a table-rate metric."""
+
+        return max(int(values.numel()), 1)
+
+    def _log_candidate_table_metrics(
+        self,
+        *,
+        stage: Stage,
+        top1_oracle_hit: Tensor,
+        top1_oracle_hit_mean: Tensor,
+        top3_oracle_hit: Tensor,
+        top3_oracle_hit_mean: Tensor,
+        selected_oracle_regret: Tensor,
+        selected_oracle_regret_mean: Tensor,
+        selected_oracle_rank: Tensor,
+        selected_oracle_rank_mean: Tensor,
+        selected_oracle_percentile: Tensor,
+        selected_oracle_percentile_mean: Tensor,
+        selected_oracle_valid_table: Tensor,
+        selected_oracle_valid_rate: Tensor,
+    ) -> None:
+        """Log table-level metrics with each metric's own valid denominator."""
+
+        table_metrics: tuple[tuple[Metric, Tensor, int], ...] = (
+            (
+                Metric.CANDIDATE_TOP1_ORACLE_HIT,
+                top1_oracle_hit_mean,
+                self._finite_log_batch_size(top1_oracle_hit),
+            ),
+            (
+                Metric.CANDIDATE_TOP3_ORACLE_HIT,
+                top3_oracle_hit_mean,
+                self._finite_log_batch_size(top3_oracle_hit),
+            ),
+            (
+                Metric.SELECTED_ORACLE_REGRET,
+                selected_oracle_regret_mean,
+                self._finite_log_batch_size(selected_oracle_regret),
+            ),
+            (
+                Metric.SELECTED_ORACLE_RANK,
+                selected_oracle_rank_mean,
+                self._finite_log_batch_size(selected_oracle_rank),
+            ),
+            (
+                Metric.SELECTED_ORACLE_PERCENTILE,
+                selected_oracle_percentile_mean,
+                self._finite_log_batch_size(selected_oracle_percentile),
+            ),
+            (
+                Metric.SELECTED_ORACLE_VALID_TABLE_RATE,
+                selected_oracle_valid_rate,
+                self._table_count_log_batch_size(selected_oracle_valid_table),
+            ),
+        )
+        for metric, value, batch_size in table_metrics:
+            self._log_aux_scalars({metric: value}, stage=stage, batch_size=batch_size)
 
     def _select_coverage_fraction(self, pred: Any) -> Tensor | None:
         voxel_frac = getattr(pred, "voxel_valid_frac", None)

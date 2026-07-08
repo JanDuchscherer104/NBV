@@ -11,7 +11,7 @@ canonical_updates_needed:
   - docs/contents/theory/candidate_view_dependence.qmd
   - docs/contents/theory/rl_planning.qmd
   - docs/typst/shared/equations/features.typ
-  - aria_nbv/aria_nbv/vin/pose_encoders.py
+  - aria_nbv/aria_nbv/vin/encoders/pose.py
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json
