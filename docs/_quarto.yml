@@ -15,6 +15,9 @@ metadata-files:
 shortcodes:
   - _extensions/aria-glossary/aria-glossary.lua
 
+filters:
+  - _extensions/aria-python-roles/aria-python-roles.lua
+
 # Global execution defaults (fast iterations; deterministic rebuilds)
 execute: # see https://quarto.org/docs/computations/execution-options.html
   freeze: auto      # re-render only when source changes
