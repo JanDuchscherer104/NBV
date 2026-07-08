@@ -9,20 +9,17 @@ scorers.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from efm3d.aria.pose import PoseTW
 from torch import Tensor, nn
 
-from ..data_handling._raw import (
-    EfmSnippetView,
-    VinSnippetView,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
-)
 from .geometry.voxel import pos_grid_from_pts_world
 from .types import EvlBackboneOutput, GlobalContext, PoseFeatures
+
+if TYPE_CHECKING:
+    from ..data_handling import EfmSnippetView, VinSnippetView
 
 
 def build_vin_scorer_scene_field(
@@ -118,6 +115,31 @@ def apply_vin_scorer_film(
     return modulated
 
 
+def _snippet_trajectory_world_rig(snippet: Any | None) -> PoseTW | None:
+    """Return snippet trajectory poses without binding VIN to data handlers."""
+
+    if snippet is None:
+        return None
+    try:
+        direct_trajectory = snippet.t_world_rig
+    except Exception:
+        direct_trajectory = None
+    if isinstance(direct_trajectory, PoseTW):
+        return direct_trajectory
+
+    try:
+        trajectory = snippet.trajectory
+    except Exception:
+        return None
+    try:
+        nested_trajectory = trajectory.t_world_rig
+    except Exception:
+        return None
+    if isinstance(nested_trajectory, PoseTW):
+        return nested_trajectory
+    return None
+
+
 def encode_trajectory_context(
     *,
     traj_encoder: Any | None,
@@ -156,19 +178,7 @@ def encode_trajectory_context(
     if traj_encoder is None:
         return None, None, None
 
-    traj_world_rig: PoseTW | None = None
-    if snippet is not None and is_vin_snippet_view_instance(snippet):
-        traj_world_rig = snippet.t_world_rig
-    elif snippet is not None and is_efm_snippet_view_instance(snippet):
-        try:
-            traj_world_rig = snippet.trajectory.t_world_rig
-        except Exception:
-            traj_world_rig = None
-    elif snippet is not None:
-        try:
-            traj_world_rig = snippet.trajectory.t_world_rig
-        except Exception:
-            traj_world_rig = None
+    traj_world_rig = _snippet_trajectory_world_rig(snippet)
 
     if traj_world_rig is None or traj_world_rig.numel() == 0:
         traj_feat = torch.zeros(
