@@ -92,4 +92,37 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Native debriefs must follow `.agents/references/agent_memory_templates.md` and
   include `canonical_updates_needed` even when the list is empty.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
-  bucket; only checked-in `.codex/*.example.*` templates are allowed.
+  bucket; only checked-in `.codex/*.example.*` templates are allowed, except
+  the intentionally vendored `.codex/skills/graphify/**` project skill.
+
+## Graphify
+
+Graphify is the default ARIA-NBV navigation graph when
+`graphify-out/graph.json` exists. The graph is generated local state and should
+remain untracked unless a later artifact or LFS policy changes that.
+
+The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
+package code, docs, important `.agents/` guidance/memory/backlog, core config,
+scripts, `AGENTS.md`, and the vendored Graphify skill. It excludes runtime
+state, external repos, generated docs/sites, caches, large media, and
+`graphify-out/`.
+
+Rules:
+- For architecture, codebase, file-relationship, or project-content questions,
+  first run `graphify query "<question>"` when `graphify-out/graph.json`
+  exists. Use `graphify path "<A>" "<B>"` for relationships and
+  `graphify explain "<concept>"` for focused concepts.
+- Dirty `graphify-out/` files are expected after hooks or incremental updates;
+  dirty graph files are not a reason to skip Graphify. Only skip Graphify if
+  the task is about stale or incorrect graph output, or the user explicitly says
+  not to use it.
+- If `graphify-out/wiki/index.md` exists, use it for broad navigation before
+  raw source browsing. Read `graphify-out/GRAPH_REPORT.md` for broad
+  architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current
+  (AST-only, no API cost). Semantic refreshes for docs, papers, or media are
+  explicit Graphify extraction work, not an automatic edit hook requirement.
+- `litkg-rs` remains the source-authority layer for `kg-search`,
+  `kg-route`, `kg-claim-check`, Semantic Scholar/literature enrichment, and
+  thesis/advisor evidence. Use Graphify for navigation first; use litkg for
+  authority-sensitive claims.

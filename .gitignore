@@ -238,6 +238,9 @@ docs/_freeze/**/*.html
 .codex/config.toml
 .codex/hooks.json
 
+# Graphify
+graphify-out/
+
 # OMX operator state. Keep durable planning/spec/context artifacts reviewable,
 # but leave live runtime state, logs, caches, and bulky render outputs local.
 .omx/*

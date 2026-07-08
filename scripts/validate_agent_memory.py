@@ -3,7 +3,7 @@
 
 This checker intentionally stays narrow:
 
-- fail if legacy `.codex/*.md` notes reappear,
+- fail if legacy `.codex/*.md` notes reappear outside approved project skills,
 - require frontmatter on native debriefs under `.agents/memory/history/`, and
 - require the documented native-debrief keys for non-legacy records.
 """
@@ -60,6 +60,7 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/config.toml",
     ".codex/hooks.json",
 }
+ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 
 REQUIRED_NATIVE_KEYS = {
     "id",
@@ -137,11 +138,20 @@ def check_codex_notes() -> list[str]:
     if not codex_dir.exists():
         return []
 
-    notes = sorted(path.relative_to(REPO_ROOT).as_posix() for path in codex_dir.rglob("*.md"))
+    notes = sorted(
+        rel
+        for path in codex_dir.rglob("*.md")
+        if not any(
+            (rel := path.relative_to(REPO_ROOT).as_posix()).startswith(prefix)
+            for prefix in ALLOWED_CODEX_MD_PREFIXES
+        )
+    )
     if not notes:
         return []
 
-    errors = ["legacy `.codex/*.md` notes are not allowed:"] + [f"  - {note}" for note in notes]
+    errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
+        f"  - {note}" for note in notes
+    ]
     return errors
 
 
