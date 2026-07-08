@@ -50,15 +50,15 @@ metadata:
 
 ## Role Split With OMX
 
-OMX owns orchestration, autonomy, goals, loops, and handoffs. Use the external
-analysis workflow capability for domain-agnostic read-only causal ranking when
-no concrete failing command, artifact, metric, or runtime symptom is known yet.
+OMX owns orchestration, autonomy, goals, loops, and handoffs. Use external
+read-only causal ranking only when no concrete command, artifact, metric, or
+runtime symptom is known yet.
 
-`diagnose-aria` is the ARIA-NBV sidecar for concrete debugging tactics. Use it
-to pick the local reproducer, inspection command, or domain verification loop
-for an existing symptom. It should name the exact tool loop to run, including
-command, expected signal, and passing loop; it must not replace OMX workflow
-control.
+`diagnose-aria` is the ARIA-NBV sidecar for existing symptoms: it picks the
+local reproducer, inspection command, domain verification loop, expected signal,
+and passing loop. Use `references/upstream-mattpocock.md` only as optional
+generic debugging inspiration; ARIA repro and verification loops remain
+authoritative.
 
 ## When To Use
 
@@ -81,11 +81,9 @@ Use the smallest tool that can reproduce or inspect the symptom.
 - Streamlit smoke and panel tests:
   `cd aria_nbv && uv run pytest tests/test_streamlit_entry.py tests/app`
   Start with entrypoint or panel-specific tests before live UI inspection.
-- Offline VIN store inspection:
-  `make offline-info`, `make offline-tree`, `make offline-samples`, and
-  `make offline-sample-rerun-random`.
-- Rollout store inspection:
-  `make rollouts-info`, `make rollouts-stats`, and
+- Offline VIN store: `make offline-info`, `make offline-tree`,
+  `make offline-samples`, and `make offline-sample-rerun-random`.
+- Rollout store: `make rollouts-info`, `make rollouts-stats`, and
   `make rollouts-rerun-random`.
 - Rerun inspector:
   `cd aria_nbv && uv run nbv-rerun-inspect ...`.

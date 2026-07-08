@@ -78,6 +78,8 @@ Use this skill for behavior-preserving pruning of the current intended surface.
 - Move genuinely shared behavior to the canonical shared owner instead of
   leaving quasi-shared helpers in leaf modules.
 - Treat analyzer output as advisory; repo ownership and tests decide.
+- For optional upstream architecture cleanup prompts, see
+  `references/upstream-mattpocock.md`; use them as questions, not authority.
 
 ## Tooling
 

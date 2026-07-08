@@ -34,7 +34,7 @@ metadata:
     - "aria_nbv/AGENTS.md#core-rules"
     - ".agents/references/python_conventions.md#core-rules"
     - ".agents/references/external_stack_contracts.md#efm3d-and-evl"
-    - "docs/typst/thesis/sections/03-01-formal-state.typ"
+    - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
     - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/facebookresearch/pytorch3d"

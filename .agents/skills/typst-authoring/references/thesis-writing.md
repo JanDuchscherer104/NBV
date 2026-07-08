@@ -38,6 +38,30 @@ Do not import generic defaults that conflict with ARIA-NBV:
   schematic mandates, unless the task explicitly asks for generated bitmap
   figures.
 
+## Writing Modes
+
+Use these nested modes only inside `prose-draft` or `prose-polish`; they are
+ARIA adaptations of Matt writing skills, not activated upstream owners. See
+`upstream-matt-writing.md` for the pinned source links and update policy.
+
+`fragment-capture`: use before structure exists. Collect scratch claims,
+observations, advisor notes, possible phrasings, examples, objections, and
+evidence gaps into a scratch pile. Do not write final thesis claims directly
+from fragments; first classify scope, strength, evidence, limitation, and
+terminology.
+
+`shape-pass`: use when the input pile is fixed. Start from scoped
+claims/evidence, establish what the reader already knows, and draft paragraph
+by paragraph. Each paragraph must ground any new concept before later prose
+depends on it. If the pile lacks an example, citation, metric, or limitation
+the paragraph needs, mark the gap instead of fabricating.
+
+`beat-pass`: use to improve reader journey, transitions, and narrative rhythm.
+Advance one reader move at a time: motivation, gap, method consequence,
+evidence, limitation, or transition. This is useful for introductions, related
+work transitions, discussion, limitations, and advisor summaries; it must not
+override method-section contracts, notation rules, or evidence gates.
+
 ## Proposal And Thesis Rhetoric
 
 Use a compact ABT/CARS structure:

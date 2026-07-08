@@ -41,6 +41,12 @@
       "non_goals": ["Do not let Context7 replace local geometry owners or the nbv-geometry-contracts evidence loop."]
     },
     {
+      "id": "thesis-plan-grill-matt-collision",
+      "task": "Stress-test a thesis scope, advisor-facing decision, or ARIA plan-grill question that resembles generic Matt grilling.",
+      "expected_skills": ["agent-behavior", "plan-grill"],
+      "non_goals": ["Do not route ARIA thesis planning to generic Matt grilling, grill-with-docs, or domain-modeling."]
+    },
+    {
       "id": "context7-not-needed-target-rri-section",
       "task": "Find the source family and thesis target-RRI section owner for a local wording check.",
       "expected_skills": ["agent-behavior", "aria-nbv-context"],
@@ -88,13 +94,13 @@
       "id": "concrete-failure",
       "task": "Diagnose a failing command, traceback, suspicious metric, or bad runtime output.",
       "expected_skills": ["agent-behavior", "diagnose-aria"],
-      "non_goals": ["Do not patch by guesswork before a reproducer or explicit blocker exists."]
+      "non_goals": ["Do not patch by guesswork or route concrete ARIA failures to raw Matt diagnosing-bugs before a reproducer or explicit blocker exists."]
     },
     {
       "id": "code-review",
       "task": "Review ARIA-NBV working-tree or PR diffs and produce severity-ranked findings.",
       "expected_skills": ["agent-behavior", "code-review-aria-nbv"],
-      "non_goals": ["Do not substitute a generic review harness for ARIA-NBV domain routing."]
+      "non_goals": ["Do not substitute a generic review harness or raw Matt code-review for ARIA-NBV domain routing."]
     },
     {
       "id": "python-docstring-contract",
@@ -121,6 +127,12 @@
       "expected_skills": ["agent-behavior", "typst-authoring"],
       "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
       "non_goals": ["Do not use simplification Python analyzer tools for pure Typst prose and citation edits."]
+    },
+    {
+      "id": "typst-prose-matt-writing-modes",
+      "task": "Draft or polish ARIA thesis prose using fragment-capture, shape-pass, or beat-pass writing mechanics inspired by Matt writing modes.",
+      "expected_skills": ["agent-behavior", "typst-authoring"],
+      "non_goals": ["Do not route thesis prose to raw Matt writing-fragments, writing-shape, writing-beats, or docs-curator."]
     },
     {
       "id": "scaffold-cleanup",

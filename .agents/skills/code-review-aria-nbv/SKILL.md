@@ -61,8 +61,7 @@ metadata:
 ## Role Split
 
 - The external code-review workflow capability owns the generic review harness:
-  independent
-  `code-reviewer` and `architect` lanes, `CLEAR` / `WATCH` / `BLOCK`
+  independent `code-reviewer` and `architect` lanes, `CLEAR` / `WATCH` / `BLOCK`
   architecture status, deterministic merge gating, and final synthesis. Do not
   replace either required lane with this skill, the authoring agent, or an
   external model report.
@@ -72,7 +71,8 @@ metadata:
   inline anchors or resolution state matter.
 - This skill is the ARIA-NBV sidecar. It supplies local owner guidance,
   research/domain invariants, severity mapping, domain-specific handoffs, and
-  focused verification choices for ARIA review or review-follow-up work.
+  focused verification choices for ARIA review or review-follow-up work; use
+  `references/upstream-mattpocock.md` only as optional generic review framing.
 - External research/model reviews are advisory inputs. Accept, reject, or
   reproduce each finding from repo evidence before implementing it or feeding it
   into an OMX merge-ready verdict.

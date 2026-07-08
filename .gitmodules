@@ -16,6 +16,3 @@
 [submodule ".agents/external/litkg-rs"]
 	path = .agents/external/litkg-rs
 	url = https://github.com/JanDuchscherer104/litkg-rs.git
-[submodule ".agents/skills/skills"]
-	path = .agents/skills/skills
-	url = git@github.com:mattpocock/skills.git

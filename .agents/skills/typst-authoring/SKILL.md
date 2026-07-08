@@ -82,7 +82,8 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 - `notation-edit`: update shared modules before document-local use; read
   notation, math-attachment, and migration references.
 - `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
-  claim-discipline references; preserve claim strength and citations.
+  claim-discipline references; use the nested fragment, shape, or beat writing
+  modes only when useful; preserve claim strength and citations.
 - `claim-check`: classify claims and run `make kg-claim-check KG_CLAIM='...'`
   for advisor-facing literature or thesis claims.
 - `figure-table` / `visual-qa`: read figures/tables and workflow references,

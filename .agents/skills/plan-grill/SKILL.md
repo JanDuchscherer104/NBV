@@ -80,6 +80,9 @@ Before asking the user, resolve discoverable facts from
 Use `docs/typst/shared/glossary.typ` for overloaded terms and the nearest
 `AGENTS.md` for touched code or docs.
 
+For optional upstream questioning patterns, see
+`references/upstream-mattpocock.md`; keep ARIA source-order owners canonical.
+
 ## Plan-Mode Modifiers
 
 Keep the default path concise unless one of these modifiers applies.
