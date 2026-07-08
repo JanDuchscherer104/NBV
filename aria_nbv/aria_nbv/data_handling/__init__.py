@@ -20,6 +20,22 @@ be represented with masks and reason codes rather than low RRI values.
 
 from __future__ import annotations
 
+# Import order is intentional: raw view exports must be bound before dependent
+# modules that may indirectly import them back from ``aria_nbv.data_handling``.
+from ._raw import (
+    AseEfmDataset,
+    AseEfmDatasetConfig,
+    EfmCameraView,
+    EfmGTView,
+    EfmObbView,
+    EfmPointsView,
+    EfmSnippetView,
+    EfmTrajectoryView,
+    VinSnippetView,
+    infer_semidense_bounds,
+    is_efm_snippet_view_instance,
+    is_vin_snippet_view_instance,
+)
 from ._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ._offline_diagnostics import (
     NumericSummary,
@@ -45,23 +61,6 @@ from ._offline_writer import (
     VinOfflineWriterConfig,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
-)
-
-# Import order is intentional: raw view exports must be bound before dependent
-# modules that may indirectly import them back from ``aria_nbv.data_handling``.
-from ._raw import (
-    AseEfmDataset,
-    AseEfmDatasetConfig,
-    EfmCameraView,
-    EfmGTView,
-    EfmObbView,
-    EfmPointsView,
-    EfmSnippetView,
-    EfmTrajectoryView,
-    VinSnippetView,
-    infer_semidense_bounds,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
 )
 from ._target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
