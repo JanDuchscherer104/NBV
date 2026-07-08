@@ -1009,7 +1009,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-rollout-state">state</a> <a class="glossary-chip" href="#term-point-cloud">PC</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CounterfactualPoseGenerator.html" title="docs/reference/aria_nbv.pose_generation.CounterfactualPoseGenerator.qmd">CounterfactualPoseGenerator</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.rollouts.CounterfactualPoseGenerator.html" title="docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd">CounterfactualPoseGenerator</a></div></div>
 </div>
 </details>
 

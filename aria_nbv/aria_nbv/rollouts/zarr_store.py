@@ -60,7 +60,7 @@ from .trace import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from ..pose_generation.counterfactuals import CounterfactualStepResult, CounterfactualTrajectory
+    from .counterfactuals import CounterfactualStepResult, CounterfactualTrajectory
 
 ROLLOUT_ZARR_SCHEMA_ID = "aria_nbv.rollout_zarr_q_invalidity"
 """Schema id stored as a root attribute on rollout replay stores."""

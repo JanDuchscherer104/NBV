@@ -240,13 +240,13 @@ quartodoc:
         - name: pose_generation.candidate_mixture
           children: separate
           member_options: *embedded_members
-        - name: pose_generation.counterfactuals
-          children: separate
-          member_options: *embedded_members
-        - name: pose_generation.target_counterfactuals
-          children: separate
-          member_options: *embedded_members
         - name: pose_generation.types
+          children: separate
+          member_options: *embedded_members
+        - name: rollouts.counterfactuals
+          children: separate
+          member_options: *embedded_members
+        - name: rollouts.target_counterfactuals
           children: separate
           member_options: *embedded_members
         - name: rollouts.trace

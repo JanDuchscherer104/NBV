@@ -28,15 +28,18 @@ from aria_nbv.data_handling import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidateViewGeneratorConfig,
+    ViewDirectionMode,
+)
+from aria_nbv.pose_generation.types import CandidateSamplingResult
+from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
     CounterfactualStepResult,
     CounterfactualTargetOracleRriScorerConfig,
     CounterfactualTrajectory,
-    ViewDirectionMode,
+    RolloutZarrStoreReader,
+    write_rollout_zarr_store,
 )
-from aria_nbv.pose_generation.types import CandidateSamplingResult
-from aria_nbv.rollouts import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 _PATH_CONFIG_FIELDS = (

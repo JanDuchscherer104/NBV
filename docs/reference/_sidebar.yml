@@ -22,9 +22,9 @@ website:
       - reference/data_handling._target_selection.qmd
       - reference/pose_generation.candidate_generation.qmd
       - reference/pose_generation.candidate_mixture.qmd
-      - reference/pose_generation.counterfactuals.qmd
-      - reference/pose_generation.target_counterfactuals.qmd
       - reference/pose_generation.types.qmd
+      - reference/rollouts.counterfactuals.qmd
+      - reference/rollouts.target_counterfactuals.qmd
       - reference/rollouts.trace.qmd
       - reference/rollouts.dataset_writer.qmd
       - reference/rollouts.zarr_store.qmd

@@ -37,17 +37,18 @@ from ..data_handling._target_selection import (
 from ..pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureViewGeneratorConfig,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
-    TargetRriInvalidError,
 )
 from ..rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
+from .counterfactuals import (
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualRolloutResult,
+    CounterfactualSelectionPolicy,
+)
 from .manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
 from .shard_manifest import RolloutShardEntry
+from .target_counterfactuals import CounterfactualTargetOracleRriScorerConfig, TargetRriInvalidError
 from .trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from .zarr_store import (
     RolloutZarrStoreConfig,

@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from ..data_handling._offline_dataset import VinOfflineSample
     from ..data_handling._target_selection import TargetCandidateRow
     from ..data_handling.efm_views import EfmSnippetView
-    from .types import CandidateSamplingResult
+    from ..pose_generation.types import CandidateSamplingResult
 
 TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v1"
 """Target crop policy: keep mesh faces with any vertex inside the matched oriented GT OBB."""

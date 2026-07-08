@@ -20,6 +20,11 @@ def test_rollouts_owns_record_store_and_writer_contracts() -> None:
 
     module = importlib.import_module("aria_nbv.rollouts")
     expected = {
+        "CounterfactualPoseGenerator",
+        "CounterfactualPoseGeneratorConfig",
+        "CounterfactualRolloutResult",
+        "CounterfactualSelectionPolicy",
+        "CounterfactualTargetOracleRriScorerConfig",
         "RolloutLineage",
         "RolloutZarrRecord",
         "RolloutDatasetWriterConfig",

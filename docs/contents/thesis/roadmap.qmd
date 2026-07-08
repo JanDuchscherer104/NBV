@@ -527,7 +527,7 @@ offline-store payload extensions, and model diagnostics.
 headroom over one-step selection, and can learned $Q_H$ recover that headroom?
 
 **Implementation surfaces:** the
-[counterfactual rollout API](../../reference/aria_nbv.pose_generation.CounterfactualPoseGenerator.qmd),
+[counterfactual rollout API](../../reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd),
 candidate generation, target-aware scorer backends, rollout diagnostics, and
 the [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd).
 
@@ -573,7 +573,7 @@ justified after the mandatory offline finite-candidate $Q_H$ result and RQ4
 support evidence?
 
 **Implementation surfaces:** the
-[counterfactual RL API](../../reference/aria_nbv.pose_generation.CounterfactualRolloutResult.qmd),
+[counterfactual RL API](../../reference/aria_nbv.rollouts.CounterfactualRolloutResult.qmd),
 transition datasets, online discrete $Q_H$ in the ASE mesh/oracle loop, and
 actor-critic or continuous-control design notes. External mesh/oracle-compatible
 substrate notes remain RQ4 support evidence unless the task explicitly targets

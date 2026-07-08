@@ -17,8 +17,8 @@ from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 
 if TYPE_CHECKING:
     from ..data_handling import TargetCandidateRow, VinOfflineSample
+    from ..rollouts.counterfactuals import CounterfactualRolloutResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
-    from .counterfactuals import CounterfactualRolloutResult, CounterfactualTrajectory
     from .types import CandidateSamplingResult
 
 console = Console.with_prefix("pose_plotting")

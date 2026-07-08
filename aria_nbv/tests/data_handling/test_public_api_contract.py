@@ -113,7 +113,7 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
     package_root = Path(__file__).resolve().parents[2] / "aria_nbv"
     allowlist = {"vin/models/scene_myopic.py"}
     allowed_direct_imports = {
-        "pose_generation/target_counterfactuals.py": {
+        "rollouts/target_counterfactuals.py": {
             "data_handling._offline_dataset",
             "data_handling._target_selection",
             "data_handling.efm_views",

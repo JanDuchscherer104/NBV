@@ -30,7 +30,7 @@ from pydantic import Field, field_validator
 
 from ..data_handling import EfmSnippetView
 from ..pose_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
-from ..pose_generation.counterfactuals import (
+from ..rollouts.counterfactuals import (
     CounterfactualCandidateEvaluation,
     CounterfactualEvaluatorFn,
     CounterfactualOracleRriScorerConfig,

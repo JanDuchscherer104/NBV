@@ -17,17 +17,14 @@ import torch
 import trimesh
 from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.pose_generation import (
-    CandidateViewGeneratorConfig,
-    CounterfactualCandidateEvaluation,
-    SamplingStrategy,
-)
+from aria_nbv.pose_generation import CandidateViewGeneratorConfig, SamplingStrategy
 from aria_nbv.rl import (
     CounterfactualPPOConfig,
     CounterfactualRLEnv,
     CounterfactualRLEnvConfig,
     validate_counterfactual_env,
 )
+from aria_nbv.rollouts import CounterfactualCandidateEvaluation
 
 
 def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:

@@ -33,14 +33,6 @@ from ...pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateViewGeneratorConfig,
-    CounterfactualCandidateEvaluation,
-    CounterfactualMetricBundle,
-    CounterfactualOracleRriScorerConfig,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
-    TargetRriInvalidError,
     ViewDirectionMode,
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
@@ -51,7 +43,19 @@ from ...rendering.plotting import (
     depth_grid_with_box_overlays,
     project_world_points_to_image,
 )
-from ...rollouts import candidate_result_diagnostic_counts, decode_position_id, decode_strategy_id
+from ...rollouts import (
+    CounterfactualCandidateEvaluation,
+    CounterfactualMetricBundle,
+    CounterfactualOracleRriScorerConfig,
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualRolloutResult,
+    CounterfactualSelectionPolicy,
+    CounterfactualTargetOracleRriScorerConfig,
+    TargetRriInvalidError,
+    candidate_result_diagnostic_counts,
+    decode_position_id,
+    decode_strategy_id,
+)
 from ...rri_metrics.rollout import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -60,7 +64,7 @@ from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 if TYPE_CHECKING:
-    from ...pose_generation.counterfactuals import CounterfactualEvaluatorFn
+    from ...rollouts.counterfactuals import CounterfactualEvaluatorFn
 
 
 _SOURCE_TARGET_INFO = """

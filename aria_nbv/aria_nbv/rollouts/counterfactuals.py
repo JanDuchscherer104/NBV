@@ -43,6 +43,12 @@ import torch
 from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator, model_validator
 
+from ..pose_generation.candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
+from ..pose_generation.candidate_mixture import (  # noqa: TC001 - Pydantic config field.
+    CandidateMixtureViewGeneratorConfig,
+)
+from ..pose_generation.types import CandidateGenerationRuntimeContext, CandidateSamplingResult
+from ..pose_generation.utils import ensure_unbatched_pose
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
 from ..rendering.candidate_pointclouds import build_candidate_pointclouds
 from ..rri_metrics.eval_pointclouds import (
@@ -55,17 +61,13 @@ from ..rri_metrics.eval_pointclouds import (
 from ..rri_metrics.oracle_rri import OracleRRIConfig
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.frames import rotate_yaw_cw90
-from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
-from .candidate_mixture import CandidateMixtureViewGeneratorConfig  # noqa: TC001 - Pydantic config field.
-from .types import CandidateGenerationRuntimeContext, CandidateSamplingResult
-from .utils import ensure_unbatched_pose
 
 if TYPE_CHECKING:
     import trimesh
     from efm3d.aria.camera import CameraTW
 
     from ..data_handling import EfmSnippetView
-    from .candidate_mixture import CandidateMixtureViewGenerator
+    from ..pose_generation.candidate_mixture import CandidateMixtureViewGenerator
 
 
 def _pose_row(pose: PoseTW) -> torch.Tensor:

@@ -28,12 +28,6 @@ from aria_nbv.pose_generation import (
     CandidatePositionMode,
     CandidateSamplingResult,
     CandidateViewGeneratorConfig,
-    CounterfactualCandidateEvaluation,
-    CounterfactualPoseGenerator,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
-    CounterfactualTrajectory,
     SamplingStrategy,
     ViewDirectionMode,
 )
@@ -42,15 +36,24 @@ from aria_nbv.pose_generation.plotting import (
     plot_counterfactual_paths_simple,
     plot_counterfactual_step_simple,
 )
-from aria_nbv.pose_generation.target_counterfactuals import (
+from aria_nbv.rendering import CandidateDepthRendererConfig
+from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
+from aria_nbv.rollouts import (
+    CounterfactualCandidateEvaluation,
+    CounterfactualPoseGenerator,
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualSelectionPolicy,
+    CounterfactualTargetOracleRriScorerConfig,
+    CounterfactualTrajectory,
+    RolloutLineage,
+    RolloutZarrRecord,
+)
+from aria_nbv.rollouts.target_counterfactuals import (
     TargetRriInvalidError,
     _crop_mesh_to_obb,
     _crop_padded_pointclouds_to_obb,
     _crop_points_to_obb,
 )
-from aria_nbv.rendering import CandidateDepthRendererConfig
-from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
-from aria_nbv.rollouts import RolloutLineage, RolloutZarrRecord
 from aria_nbv.rri_metrics.eval_pointclouds import RriEvaluationPointCloudSource, RriRewardMode
 from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig
 from aria_nbv.utils.data_plotting import get_frustum_segments
@@ -268,7 +271,7 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
                 pm_comp_after=values + 6.0,
             )
 
-    import aria_nbv.pose_generation.target_counterfactuals as target_cf
+    import aria_nbv.rollouts.target_counterfactuals as target_cf
 
     renderer = _FakeDepthRenderer()
     oracle = _FakeOracle()
@@ -382,7 +385,7 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
                 pm_comp_after=values,
             )
 
-    import aria_nbv.pose_generation.target_counterfactuals as target_cf
+    import aria_nbv.rollouts.target_counterfactuals as target_cf
 
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: _FakeDepthRenderer())
     monkeypatch.setattr(OracleRRIConfig, "setup_target", lambda self: _FakeOracle())

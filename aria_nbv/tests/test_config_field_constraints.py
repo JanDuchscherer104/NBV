@@ -18,9 +18,6 @@ from aria_nbv.data_handling import (
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
     CandidateViewGeneratorConfig,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
     ViewDirectionMode,
 )
 from aria_nbv.rerun_inspector._config import (
@@ -31,7 +28,14 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorRolloutDepthConfig,
 )
 from aria_nbv.rl import CounterfactualRLEnvConfig
-from aria_nbv.rollouts import RolloutDatasetWriterConfig, RolloutRecipeConfig, RolloutZarrStoreConfig
+from aria_nbv.rollouts import (
+    CounterfactualPoseGeneratorConfig,
+    CounterfactualSelectionPolicy,
+    CounterfactualTargetOracleRriScorerConfig,
+    RolloutDatasetWriterConfig,
+    RolloutRecipeConfig,
+    RolloutZarrStoreConfig,
+)
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 
