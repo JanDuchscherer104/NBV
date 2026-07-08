@@ -20,6 +20,7 @@ URL, and compile command in the relevant package reference.
 Current package notes:
 
 - `booktabs.md` and `booktabs-*.typ` - table rules and examples.
+- `cetz.md` - native scientific geometry figures.
 - `fletcher.md` and `fletcher-*.typ` - diagram rules and examples.
 - `neural-netz.md` and `neural-netz-example.typ` - simple network schematic
   fallback.
