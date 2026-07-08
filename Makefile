@@ -794,9 +794,26 @@ mermaid-lint: _check_python ## 📊 Lint tracked Mermaid .mmd files (MERMAID_LIN
 #  📚 Documentation hygiene
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: api-docs docs-lint
+.PHONY: api-docs api-docs-filter api-docs-watch api-docs-refresh docs-lint
 api-docs: ## Generate API reference pages via Quartodoc (hard alias failures fail, warnings are non-blocking)
 	@./scripts/quarto_generate_api_docs.sh
+
+api-docs-filter: ## Incrementally generate API reference pages matching API_FILTER='data_handling*'
+	@if [ -z "$(strip $(API_FILTER))" ]; then \
+		echo "Set API_FILTER, for example: make api-docs-filter API_FILTER='data_handling*'"; \
+		exit 2; \
+	fi
+	@QUARTODOC_FILTER="$(API_FILTER)" QUARTODOC_INCREMENTAL=1 ./scripts/quarto_generate_api_docs.sh
+
+api-docs-watch: ## Watch and incrementally regenerate API reference pages matching API_FILTER='data_handling*'
+	@if [ -z "$(strip $(API_FILTER))" ]; then \
+		echo "Set API_FILTER, for example: make api-docs-watch API_FILTER='data_handling*'"; \
+		exit 2; \
+	fi
+	@QUARTODOC_FILTER="$(API_FILTER)" QUARTODOC_INCREMENTAL=1 QUARTODOC_WATCH=1 ./scripts/quarto_generate_api_docs.sh
+
+api-docs-refresh: ## Incrementally regenerate API docs and render API_PAGES with --no-clean --no-execute
+	@API_FILTER="$(API_FILTER)" API_PAGES="$(API_PAGES)" ./scripts/quarto_refresh_api_docs.sh
 
 .PHONY: docs-lint
 docs-lint: _check_python ## Format QMD lists, then run Quarto checks
