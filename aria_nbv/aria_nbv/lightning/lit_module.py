@@ -602,11 +602,7 @@ class VinLightningModule(pl.LightningModule):
 
         nan_tensor = torch.tensor(float("nan"), device=combined_loss.device)
         voxel_valid = self._flatten_and_mask(getattr(pred, "voxel_valid_frac", None), mask)
-        semidense_valid_raw = getattr(
-            pred,
-            "semidense_candidate_vis_frac",
-            getattr(pred, "semidense_valid_frac", None),
-        )
+        semidense_valid_raw = getattr(pred, "semidense_candidate_vis_frac", None)
         semidense_valid = self._flatten_and_mask(semidense_valid_raw, mask)
         candidate_valid = self._flatten_and_mask(getattr(pred, "candidate_valid", None), mask)
         coverage_payload: dict[Metric, Tensor | float] = {
@@ -620,12 +616,6 @@ class VinLightningModule(pl.LightningModule):
             if semidense_valid is not None and semidense_valid.numel() > 0
             else nan_tensor,
             Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_STD: semidense_valid.std(unbiased=False)
-            if semidense_valid is not None and semidense_valid.numel() > 1
-            else nan_tensor,
-            Metric.SEMIDENSE_VALID_FRAC_MEAN: semidense_valid.mean()
-            if semidense_valid is not None and semidense_valid.numel() > 0
-            else nan_tensor,
-            Metric.SEMIDENSE_VALID_FRAC_STD: semidense_valid.std(unbiased=False)
             if semidense_valid is not None and semidense_valid.numel() > 1
             else nan_tensor,
             Metric.CANDIDATE_VALID_FRAC: candidate_valid.to(dtype=torch.float32).mean()
@@ -891,8 +881,6 @@ class VinLightningModule(pl.LightningModule):
     def _select_coverage_fraction(self, pred: Any) -> Tensor | None:
         voxel_frac = getattr(pred, "voxel_valid_frac", None)
         sem_frac = getattr(pred, "semidense_candidate_vis_frac", None)
-        if sem_frac is None:
-            sem_frac = getattr(pred, "semidense_valid_frac", None)
         match self.config.coverage_weight_mode:
             case "none":
                 return None

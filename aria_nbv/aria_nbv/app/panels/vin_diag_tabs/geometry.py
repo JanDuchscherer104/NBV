@@ -364,8 +364,6 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             if values is None:
                 values = getattr(debug, "semidense_candidate_vis_frac", None)
             if values is None:
-                values = pred.semidense_valid_frac
-            if values is None:
                 st.info("semidense_candidate_vis_frac unavailable; falling back to valid fraction.")
             else:
                 candidate_plot_mode = "scalar"

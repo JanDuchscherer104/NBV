@@ -20,12 +20,6 @@ SEMIDENSE_PROJ_FEATURES: tuple[str, ...] = (
 SEMIDENSE_PROJ_DIM = len(SEMIDENSE_PROJ_FEATURES)
 """Feature dimension for semidense projection summary tensors."""
 
-SEMIDENSE_PROJ_FEATURE_ALIASES: dict[str, str] = {
-    "valid_frac": "semidense_candidate_vis_frac",
-    "semidense_valid_frac": "semidense_candidate_vis_frac",
-}
-"""Accepted aliases for historical projection feature lookups."""
-
 SEMIDENSE_GRID_FEATURES: tuple[str, ...] = (
     "occupancy",
     "depth_mean",
@@ -38,13 +32,12 @@ SEMIDENSE_GRID_CHANNELS = len(SEMIDENSE_GRID_FEATURES)
 
 
 def semidense_proj_feature_index(name: str) -> int:
-    """Resolve a semidense projection feature name or alias to its index.
+    """Resolve a canonical semidense projection feature name to its index.
 
     Parameters
     ----------
     name:
-        Canonical feature name from `SEMIDENSE_PROJ_FEATURES` or an alias from
-        `SEMIDENSE_PROJ_FEATURE_ALIASES`.
+        Canonical feature name from `SEMIDENSE_PROJ_FEATURES`.
 
     Returns
     -------
@@ -58,9 +51,6 @@ def semidense_proj_feature_index(name: str) -> int:
     """
     if name in SEMIDENSE_PROJ_FEATURES:
         return SEMIDENSE_PROJ_FEATURES.index(name)
-    alias = SEMIDENSE_PROJ_FEATURE_ALIASES.get(name)
-    if alias is not None and alias in SEMIDENSE_PROJ_FEATURES:
-        return SEMIDENSE_PROJ_FEATURES.index(alias)
     raise ValueError(f"Unknown semidense projection feature '{name}'.")
 
 
@@ -68,7 +58,6 @@ __all__ = [
     "SEMIDENSE_GRID_CHANNELS",
     "SEMIDENSE_GRID_FEATURES",
     "SEMIDENSE_PROJ_DIM",
-    "SEMIDENSE_PROJ_FEATURE_ALIASES",
     "SEMIDENSE_PROJ_FEATURES",
     "semidense_proj_feature_index",
 ]

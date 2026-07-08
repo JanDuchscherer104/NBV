@@ -107,7 +107,7 @@ from ..geometry.semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
-from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM
+from ..geometry.semidense_schema import SEMIDENSE_PROJ_DIM, semidense_proj_feature_index
 from ..modules import (
     PoseConditionedGlobalPool,
     SceneFieldProjectionConfig,
@@ -115,6 +115,13 @@ from ..modules import (
     SemidenseGridEncoderConfig,
     VinScorerHeadConfig,
     largest_divisor_leq,
+)
+from ..scorer_context import (
+    apply_vin_scorer_film,
+    build_vin_scorer_scene_field,
+    compute_global_context,
+    encode_pose_features,
+    encode_trajectory_context,
 )
 from ..types import (
     EvlBackboneOutput,
@@ -124,7 +131,6 @@ from ..types import (
     VinPrediction,
     VinV3ForwardDiagnostics,
 )
-from ._context_mixin import PoseFeatureGlobalContextMixin
 
 if TYPE_CHECKING:
     from aria_nbv.data_handling import VinOracleBatch
@@ -276,7 +282,7 @@ class VinModelV3Config(TargetConfig["VinModelV3"]):
     # NOTE: No additional model validators; VIN-Core keeps a fixed surface area.
 
 
-class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
+class VinModelV3(nn.Module):
     """VIN-Core head for one-step RRI prediction.
 
     VIN v3 focuses on pose encoding, compact voxel evidence, and semidense
@@ -513,7 +519,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             The per-frame encodings can optionally be attended by candidate pose
             tokens (``traj_attn``) to produce a per-candidate context ``traj_ctx``.
         """
-        return self._encode_trajectory_context(
+        return encode_trajectory_context(
             traj_encoder=self.traj_encoder,
             snippet=snippet,
             pose_world_rig_ref=pose_world_rig_ref,
@@ -555,7 +561,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         if not isinstance(backbone_out.counts, torch.Tensor):
             raise RuntimeError("VIN v3 requires backbone_out.counts to be a Tensor.")
 
-        field_in, field_aux = self._build_vin_scorer_scene_field(
+        field_in, field_aux = build_vin_scorer_scene_field(
             backbone_out,
             scene_field_channels=self.config.scene_field_channels,
             model_name="VinModelV3",
@@ -715,9 +721,10 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             backbone_out=backbone_out,
         )
         # prepared.pose_world_cam: (B, N_q, 12) as T_w_cq; prepared.pose_world_rig_ref: (B, 12) as T_w_r.
-        pose_feats = self._encode_pose_features(
-            prepared.pose_world_cam,
-            prepared.pose_world_rig_ref,
+        pose_feats = encode_pose_features(
+            pose_encoder=self.pose_encoder,
+            pose_world_cam=prepared.pose_world_cam,
+            pose_world_rig_ref=prepared.pose_world_rig_ref,
         )
         # pose_vec: (B, N_q, 9); pose_enc: (B, N_q, F_pose); candidate_center_rig_m: (B, N_q, 3) in rig_ref metres.
         field_bundle = self._build_field_bundle(backbone_out)
@@ -745,9 +752,10 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
                 "Missing backbone output 'voxel/pts_world' required for positional encoding.",
             )
         # pts_world contains WORLD-space voxel center coordinates x_w_v for each voxel cell.
-        global_ctx = self._compute_global_context(
-            field_bundle.field,
-            pose_feats.pose_enc,
+        global_ctx = compute_global_context(
+            global_pooler=self.global_pooler,
+            field=field_bundle.field,
+            pose_enc=pose_feats.pose_enc,
             pts_world=pts_world,
             t_world_voxel=prepared.t_world_voxel,
             pose_world_rig_ref=prepared.pose_world_rig_ref,
@@ -792,7 +800,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
         )
         # voxel_proj: (B, N_q, F_proj=5)
         if self.voxel_proj_film is not None:
-            global_feat = self._apply_film(
+            global_feat = apply_vin_scorer_film(
                 global_feat,
                 voxel_proj,
                 film=self.voxel_proj_film,
@@ -866,7 +874,7 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
                 if self.traj_attn_norm is not None:
                     traj_ctx = self.traj_attn_norm(traj_ctx.transpose(1, 2)).transpose(1, 2)
 
-        semidense_idx = self._semidense_proj_feature_index("semidense_candidate_vis_frac")
+        semidense_idx = semidense_proj_feature_index("semidense_candidate_vis_frac")
         semidense_candidate_vis_frac = semidense_proj[..., semidense_idx]
         # candidate_valid: (B, N_q); require finite pose + observed voxel + visible semidense.
         candidate_valid = pose_finite & (voxel_valid_frac > 0.0) & (semidense_candidate_vis_frac > 0.0)
@@ -908,7 +916,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             candidate_valid=candidate_valid,
             voxel_valid_frac=voxel_valid_frac,
             semidense_candidate_vis_frac=semidense_candidate_vis_frac,
-            semidense_valid_frac=semidense_candidate_vis_frac,
         )
 
         if not return_debug:
@@ -928,7 +935,6 @@ class VinModelV3(PoseFeatureGlobalContextMixin, nn.Module):
             candidate_valid=candidate_valid,
             voxel_valid_frac=voxel_valid_frac,
             semidense_candidate_vis_frac=semidense_candidate_vis_frac,
-            semidense_valid_frac=semidense_candidate_vis_frac,
             pos_grid=global_ctx.pos_grid,
             feats=feats,
             semidense_proj=semidense_proj,

@@ -67,8 +67,11 @@ class VinPrediction:
     projections.
     """
 
-    semidense_valid_frac: Tensor | None = None
-    """Deprecated alias for ``semidense_candidate_vis_frac``."""
+    @property
+    def semidense_valid_frac(self) -> Tensor | None:
+        """Read-only compatibility alias for ``semidense_candidate_vis_frac``."""
+
+        return self.semidense_candidate_vis_frac
 
 
 __all__ = ["VinPrediction"]

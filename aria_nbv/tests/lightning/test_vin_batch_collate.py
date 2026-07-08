@@ -14,8 +14,8 @@ from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_
 from aria_nbv.rri_metrics.logging import Metric
 from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
 from aria_nbv.utils import Stage
-from aria_nbv.vin import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config
+from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 pytest.importorskip("pytorch_lightning")
@@ -377,7 +377,6 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
         candidate_valid=torch.ones((1, 4), dtype=torch.bool),
         voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
         semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
-        semidense_valid_frac=torch.ones((1, 4), dtype=torch.float32),
     )
     module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
 
@@ -459,7 +458,6 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
         candidate_valid=torch.ones((1, 4), dtype=torch.bool),
         voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
         semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
-        semidense_valid_frac=torch.ones((1, 4), dtype=torch.float32),
     )
     module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
 
@@ -580,7 +578,6 @@ def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypa
         candidate_valid=torch.ones((1, 4), dtype=torch.bool),
         voxel_valid_frac=torch.ones((1, 4), dtype=torch.float32),
         semidense_candidate_vis_frac=torch.ones((1, 4), dtype=torch.float32),
-        semidense_valid_frac=torch.ones((1, 4), dtype=torch.float32),
     )
     module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
 
@@ -725,7 +722,6 @@ def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.Monke
         candidate_valid=torch.ones((1, 2), dtype=torch.bool),
         voxel_valid_frac=torch.ones((1, 2), dtype=torch.float32),
         semidense_candidate_vis_frac=torch.ones((1, 2), dtype=torch.float32),
-        semidense_valid_frac=torch.ones((1, 2), dtype=torch.float32),
     )
     module.vin.forward = lambda *args, **kwargs: pred  # type: ignore[method-assign]
 

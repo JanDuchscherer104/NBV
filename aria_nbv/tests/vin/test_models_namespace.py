@@ -8,20 +8,15 @@ from typing import get_args
 import pytest
 import torch
 
-from aria_nbv.vin import (
-    MultiStepCandidateScorer,
-    MultiStepCandidateScorerConfig,
-    TargetConditionedMyopicScorer,
-    TargetConditionedMyopicScorerConfig,
-    VinModelV3,
-    VinModelV3Config,
-)
+from aria_nbv.vin import VinModelV3, VinModelV3Config
 from aria_nbv.vin.candidate_scorer import CandidateScorerConfig, candidate_scorer_training_contract
 from aria_nbv.vin.models import VinModelV3 as NamespacedVinModelV3
 from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
 from aria_nbv.vin.models import scene_myopic as namespaced_v3
 from aria_nbv.vin.models.scene_myopic import VinModelV3 as CanonicalVinModelV3
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config as CanonicalVinModelV3Config
+from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorer, MultiStepCandidateScorerConfig
+from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 
 
 def test_models_namespace_reexports_preserved_vin_v3() -> None:
@@ -34,6 +29,22 @@ def test_models_namespace_reexports_preserved_vin_v3() -> None:
     assert CanonicalVinModelV3Config in get_args(CandidateScorerConfig)
     assert namespaced_v3.FIELD_CHANNELS_V3
     assert namespaced_v3.SEMIDENSE_PROJ_DIM > 0
+
+
+def test_root_vin_namespace_excludes_scaffold_scorers() -> None:
+    """Scaffold scorer families should stay leaf-only until they are runnable public APIs."""
+
+    vin_root = importlib.import_module("aria_nbv.vin")
+    model_root = importlib.import_module("aria_nbv.vin.models")
+
+    for name in (
+        "MultiStepCandidateScorer",
+        "MultiStepCandidateScorerConfig",
+        "TargetConditionedMyopicScorer",
+        "TargetConditionedMyopicScorerConfig",
+    ):
+        assert not hasattr(vin_root, name)
+        assert not hasattr(model_root, name)
 
 
 def test_experimental_model_namespace_is_removed() -> None:

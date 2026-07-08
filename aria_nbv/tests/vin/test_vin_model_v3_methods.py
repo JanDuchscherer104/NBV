@@ -83,7 +83,9 @@ from aria_nbv.vin.geometry.semidense_projection import (
     project_points_to_candidate_cameras,
     sample_semidense_points,
 )
+from aria_nbv.vin.geometry.semidense_schema import semidense_proj_feature_index
 from aria_nbv.vin.models.scene_myopic import VinModelV3, VinModelV3Config
+from aria_nbv.vin.scorer_context import apply_vin_scorer_film, compute_global_context, encode_pose_features
 from aria_nbv.vin.types import EvlBackboneOutput
 
 
@@ -265,7 +267,11 @@ def test_encode_pose_features_shapes() -> None:
     model = _make_model()
     reference_pose = _identity_pose(1)
     candidates = _make_candidate_poses(num_candidates=3)
-    features = model._encode_pose_features(candidates.unsqueeze(0), reference_pose)
+    features = encode_pose_features(
+        pose_encoder=model.pose_encoder,
+        pose_world_cam=candidates.unsqueeze(0),
+        pose_world_rig_ref=reference_pose,
+    )
     assert features.pose_enc.shape[:2] == (1, 3)
     assert features.pose_vec.shape[:2] == (1, 3)
     assert features.candidate_center_rig_m.shape == (1, 3, 3)
@@ -298,10 +304,15 @@ def test_compute_global_context_shapes() -> None:
     bundle = model._build_field_bundle(backbone_out)
     candidates = _make_candidate_poses(num_candidates=2).unsqueeze(0)
     reference_pose = _identity_pose(1)
-    pose_feats = model._encode_pose_features(candidates, reference_pose)
-    ctx = model._compute_global_context(
-        bundle.field,
-        pose_feats.pose_enc,
+    pose_feats = encode_pose_features(
+        pose_encoder=model.pose_encoder,
+        pose_world_cam=candidates,
+        pose_world_rig_ref=reference_pose,
+    )
+    ctx = compute_global_context(
+        global_pooler=model.global_pooler,
+        field=bundle.field,
+        pose_enc=pose_feats.pose_enc,
         pts_world=backbone_out.pts_world,
         t_world_voxel=backbone_out.t_world_voxel,
         pose_world_rig_ref=reference_pose,
@@ -323,14 +334,13 @@ def test_pool_voxel_points_handles_flat_and_grid() -> None:
 
 
 def test_apply_film_modulates() -> None:
-    model = _make_model()
     global_feat = torch.ones((1, 1, 4), dtype=torch.float32)
     proj_feat = torch.zeros((1, 1, SEMIDENSE_PROJ_DIM), dtype=torch.float32)
     film = torch.nn.Linear(SEMIDENSE_PROJ_DIM, 8, bias=True)
     with torch.no_grad():
         film.weight.zero_()
         film.bias.copy_(torch.tensor([0.1, 0.1, 0.1, 0.1, 0.5, 0.5, 0.5, 0.5]))
-    out = model._apply_film(global_feat, proj_feat, film=film, norm=None)
+    out = apply_vin_scorer_film(global_feat, proj_feat, film=film, norm=None)
     assert out.shape == global_feat.shape
     assert not torch.allclose(out, global_feat)
 
@@ -508,11 +518,14 @@ def test_encode_semidense_grid_features() -> None:
     assert torch.isfinite(feats).all()
 
 
-def test_semidense_proj_feature_index_aliases() -> None:
-    assert VinModelV3._semidense_proj_feature_index("valid_frac") >= 0
-    assert VinModelV3._semidense_proj_feature_index("semidense_valid_frac") >= 0
+def test_semidense_proj_feature_index_uses_canonical_names_only() -> None:
+    assert semidense_proj_feature_index("semidense_candidate_vis_frac") >= 0
     with pytest.raises(ValueError):
-        VinModelV3._semidense_proj_feature_index("unknown_feature")
+        semidense_proj_feature_index("valid_frac")
+    with pytest.raises(ValueError):
+        semidense_proj_feature_index("semidense_valid_frac")
+    with pytest.raises(ValueError):
+        semidense_proj_feature_index("unknown_feature")
 
 
 def test_forward_impl_requires_cw90_tag() -> None:

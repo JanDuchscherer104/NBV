@@ -81,8 +81,6 @@ class Metric(Logable):
     VOXEL_VALID_FRAC_STD = "voxel_valid_frac_std"
     SEMIDENSE_CANDIDATE_VIS_FRAC_MEAN = "semidense_candidate_vis_frac_mean"
     SEMIDENSE_CANDIDATE_VIS_FRAC_STD = "semidense_candidate_vis_frac_std"
-    SEMIDENSE_VALID_FRAC_MEAN = "semidense_valid_frac_mean"
-    SEMIDENSE_VALID_FRAC_STD = "semidense_valid_frac_std"
     CANDIDATE_VALID_FRAC = "candidate_valid_frac"
     COVERAGE_WEIGHT_MEAN = "coverage_weight_mean"
     COVERAGE_WEIGHT_STRENGTH = "coverage_weight_strength"
@@ -113,8 +111,6 @@ class Metric(Logable):
                 | Metric.VOXEL_VALID_FRAC_STD
                 | Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_MEAN
                 | Metric.SEMIDENSE_CANDIDATE_VIS_FRAC_STD
-                | Metric.SEMIDENSE_VALID_FRAC_MEAN
-                | Metric.SEMIDENSE_VALID_FRAC_STD
                 | Metric.CANDIDATE_VALID_FRAC
                 | Metric.COVERAGE_WEIGHT_MEAN
                 | Metric.COVERAGE_WEIGHT_STRENGTH

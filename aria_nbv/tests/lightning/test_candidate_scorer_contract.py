@@ -6,11 +6,9 @@ import pytest
 
 from aria_nbv.lightning._candidate_scorer_contract import validate_vin_lightning_candidate_scorer_contract
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from aria_nbv.vin import (
-    MultiStepCandidateScorerConfig,
-    TargetConditionedMyopicScorerConfig,
-    VinModelV3Config,
-)
+from aria_nbv.vin import VinModelV3Config
+from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
+from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorerConfig
 
 pytest.importorskip("pytorch_lightning")
 

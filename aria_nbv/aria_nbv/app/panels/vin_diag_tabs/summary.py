@@ -124,11 +124,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
         candidate_valid = pred.candidate_valid.reshape(-1).to(dtype=torch.bool)
         voxel_valid = pred.voxel_valid_frac.reshape(-1) if pred.voxel_valid_frac is not None else None
         sem_vis = (
-            pred.semidense_candidate_vis_frac.reshape(-1)
-            if pred.semidense_candidate_vis_frac is not None
-            else pred.semidense_valid_frac.reshape(-1)
-            if pred.semidense_valid_frac is not None
-            else None
+            pred.semidense_candidate_vis_frac.reshape(-1) if pred.semidense_candidate_vis_frac is not None else None
         )
         radius_m = torch.linalg.vector_norm(debug.candidate_center_rig_m, dim=-1).reshape(-1)
 

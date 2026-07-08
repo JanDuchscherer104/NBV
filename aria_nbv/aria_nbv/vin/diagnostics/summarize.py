@@ -226,7 +226,6 @@ def summarize_vin_v3(
             "candidate_valid": summarize(pred.candidate_valid),
             "voxel_valid_frac": summarize(pred.voxel_valid_frac, include_stats=True),
             "semidense_candidate_vis_frac": summarize(pred.semidense_candidate_vis_frac, include_stats=True),
-            "semidense_valid_frac": summarize(pred.semidense_valid_frac, include_stats=True),
         },
     }
     if traj_summary:

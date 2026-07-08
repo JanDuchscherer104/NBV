@@ -133,8 +133,11 @@ class VinV3ForwardDiagnostics:
     semidense_candidate_vis_frac: Tensor | None = None
     """``Tensor["B N", float32]`` Per-candidate semidense visibility proxy (if computed)."""
 
-    semidense_valid_frac: Tensor | None = None
-    """Deprecated alias for ``semidense_candidate_vis_frac``."""
+    @property
+    def semidense_valid_frac(self) -> Tensor | None:
+        """Read-only compatibility alias for ``semidense_candidate_vis_frac``."""
+
+        return self.semidense_candidate_vis_frac
 
     pos_grid: Tensor | None = None
     """``Tensor["B 3 D H W", float32]`` Normalized voxel position grid (if computed)."""

@@ -40,14 +40,7 @@ from .feature_bank import (
     sample_logged_image_features_at_world_points,
     validate_actor_feature_provenance,
 )
-from .models import (
-    MultiStepCandidateScorer,
-    MultiStepCandidateScorerConfig,
-    TargetConditionedMyopicScorer,
-    TargetConditionedMyopicScorerConfig,
-    VinModelV3,
-    VinModelV3Config,
-)
+from .models import VinModelV3, VinModelV3Config
 from .types import EvlBackboneOutput, VinPrediction, VinV3ForwardDiagnostics
 
 __all__ = [
@@ -60,16 +53,12 @@ __all__ = [
     "FeaturePoolingResult",
     "LearnableFourierFeatures",
     "LearnableFourierFeaturesConfig",
-    "MultiStepCandidateScorer",
-    "MultiStepCandidateScorerConfig",
     "PointFeatureBank",
     "PointQueryPool",
     "PoseEncoder",
     "PoseEncodingOutput",
     "R6dLffPoseEncoder",
     "R6dLffPoseEncoderConfig",
-    "TargetConditionedMyopicScorer",
-    "TargetConditionedMyopicScorerConfig",
     "TrajectoryEncoder",
     "TrajectoryEncoderConfig",
     "TrajectoryEncodingOutput",
