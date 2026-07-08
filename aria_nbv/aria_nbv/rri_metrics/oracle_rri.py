@@ -79,7 +79,7 @@ class OracleRRI:
         gt_faces: torch.Tensor,
         extend: torch.Tensor,
     ) -> RriResult:
-        """Compute RRI for one or more candidates in a single forward pass.
+        """Compute :class:`RriResult` for one or more candidates in a single forward pass.
 
         Args:
             points_t: ``Tensor['N_t', 3]`` current eval point cloud up to time *t*.
@@ -88,7 +88,7 @@ class OracleRRI:
             gt_faces: ``Tensor['F', 3]`` ground-truth mesh face indices (int64).
             extend: ``Tensor[6]`` [xmin, xmax, ymin, ymax, zmin, zmax] AABB in world frame used to crop the GT mesh.
         Returns:
-            ``RriResult`` containing scalar RRI and distance breakdowns.
+            :class:`RriResult` containing scalar RRI and distance breakdowns.
         """
 
         gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)

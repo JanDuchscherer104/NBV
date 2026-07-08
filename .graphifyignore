@@ -8,11 +8,7 @@
 *
 **
 
-!AGENTS.md
 !Makefile
-
-!.configs/
-!.configs/litkg.toml
 
 !aria_nbv/
 !aria_nbv/**
@@ -43,32 +39,16 @@
 !.agents/resolved.toml
 !.agents/references/
 !.agents/references/*.md
-!.agents/skills/
-!.agents/skills/*/
-!.agents/skills/*/SKILL.md
 !.agents/memory/
 !.agents/memory/state/
 !.agents/memory/state/*.md
 
-!.codex/
-!.codex/skills/
-!.codex/skills/graphify/
-!.codex/skills/graphify/**
-
-!scripts/
-!scripts/**
-
 # Prune broad directory reincludes down to the intended files.
 .agents/references/**
 !.agents/references/*.md
-.agents/skills/*/**
-!.agents/skills/*/SKILL.md
 .agents/memory/**
 !.agents/memory/state/
 !.agents/memory/state/*.md
-.codex/*.json
-.codex/config.toml
-.codex/hooks.json
 docs/figures/**
 !docs/figures/diagrams/
 !docs/figures/diagrams/**/*.svg
@@ -78,20 +58,28 @@ docs/literature/**
 !docs/literature/*.jsonl
 
 # Explicit exclusions after reincludes.
+AGENTS.md
 graphify-out/
 external/
+.agent/skills/
 .agents/external/
+.agents/skills/
 .agents/kg/
 .agents/memory/history/
 .agents/memory/transcripts/
 .agents/archive/
 .agents/work/
+.codex/
+.configs/
 .omx/
 .git/
 .claude/
 .venv/
 aria_nbv/.omc/
 aria_nbv/.venv/
+aria_nbv/scripts/
+aria_nbv/tests/
+scripts/
 
 docs/_build/
 docs/.quarto/

@@ -29,7 +29,7 @@ def _require_optuna() -> Any:
 
 
 class OptunaConfig(TargetConfig["optuna.Study"]):
-    """Configure an Optuna study used by `aria_nbv.lightning.AriaNBVExperimentConfig`."""
+    """Configure an Optuna study used by :class:`aria_nbv.lightning.AriaNBVExperimentConfig`."""
 
     study_name: str = "aria-nbv"
     """Study name (used for Optuna storage and W&B grouping)."""
@@ -208,9 +208,7 @@ class OptunaConfig(TargetConfig["optuna.Study"]):
     def get_pruning_callback(self, trial: "optuna.Trial") -> Callback:  # type: ignore[name-defined]
         """Return a PyTorch Lightning pruning callback for the configured monitor."""
         try:
-            from optuna_integration import (  # type: ignore[import-not-found]
-                PyTorchLightningPruningCallback,
-            )
+            from optuna_integration import PyTorchLightningPruningCallback  # type: ignore[import-not-found]
         except ModuleNotFoundError as exc:  # pragma: no cover - optional dep
             raise ModuleNotFoundError(
                 "Optuna pruning requires `optuna-integration`. Install with `pip install optuna optuna-integration`.",

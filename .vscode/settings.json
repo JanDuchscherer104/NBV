@@ -34,5 +34,6 @@
         "editor.formatOnSave": true
     },
     "tinymist.rootPath": "${workspaceFolder}/docs",
-    "chatgpt.openOnStartup": false
+    "chatgpt.openOnStartup": false,
+    "livePreview.defaultPreviewPath": "/.tmp/aria-nbv-package-architecture-report-20260702T162044Z.html"
 }

@@ -7,6 +7,15 @@ DOCS_DIR="${REPO_ROOT}/docs"
 REFERENCE_DIR="${DOCS_DIR}/reference"
 PYTHON_BIN=""
 TMP_LOG="$(mktemp)"
+QUARTODOC_ARGS=(build --config _quarto.yml)
+
+if [[ -n "${QUARTODOC_FILTER:-}" ]]; then
+  QUARTODOC_ARGS+=(--filter "${QUARTODOC_FILTER}")
+fi
+
+if [[ "${QUARTODOC_WATCH:-0}" == "1" ]]; then
+  QUARTODOC_ARGS+=(--watch)
+fi
 
 cd "${DOCS_DIR}"
 mkdir -p reference
@@ -48,9 +57,9 @@ clean_reference_pages() {
 run_quartodoc() {
   set +e
   if [[ "${UVX_QUARTODOC:-0}" == "1" ]]; then
-    uvx --from quartodoc quartodoc build --config _quarto.yml 2>&1 | tee "${TMP_LOG}"
+    uvx --from quartodoc quartodoc "${QUARTODOC_ARGS[@]}" 2>&1 | tee "${TMP_LOG}"
   else
-    "${PYTHON_BIN}" -m quartodoc build --config _quarto.yml 2>&1 | tee "${TMP_LOG}"
+    "${PYTHON_BIN}" -m quartodoc "${QUARTODOC_ARGS[@]}" 2>&1 | tee "${TMP_LOG}"
   fi
   BUILD_STATUS=${PIPESTATUS[0]}
   set -e
@@ -75,7 +84,11 @@ remove_stale_reference_pages() {
   return "${removed}"
 }
 
-clean_reference_pages
+if [[ "${QUARTODOC_INCREMENTAL:-0}" == "1" ]]; then
+  echo "Running incremental quartodoc build; existing generated reference pages are preserved."
+else
+  clean_reference_pages
+fi
 run_quartodoc
 
 if [[ "${BUILD_STATUS}" -ne 0 ]]; then

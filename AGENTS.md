@@ -102,10 +102,10 @@ Graphify is the default ARIA-NBV navigation graph when
 remain untracked unless a later artifact or LFS policy changes that.
 
 The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
-package code, docs, important `.agents/` guidance/memory/backlog, core config,
-scripts, `AGENTS.md`, and the vendored Graphify skill. It excludes runtime
-state, external repos, generated docs/sites, caches, large media, and
-`graphify-out/`.
+package code, docs, and important `.agents/` references/memory/backlog. It
+excludes runtime state, external repos, generated docs/sites, caches, large
+media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
+`.agents/skills/`, `aria_nbv/scripts/`, and `aria_nbv/tests/`.
 
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,

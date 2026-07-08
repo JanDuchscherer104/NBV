@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def ensure_unbatched_pose(pose: PoseTW) -> PoseTW:
-    """Squeeze a singleton batch from ``PoseTW`` while preserving unbatched poses."""
+    """Squeeze a singleton batch from :class:`PoseTW` while preserving unbatched poses."""
     if pose._data.ndim == 2 and pose._data.shape[0] == 1:
         return PoseTW(pose._data.squeeze(0))
     return pose

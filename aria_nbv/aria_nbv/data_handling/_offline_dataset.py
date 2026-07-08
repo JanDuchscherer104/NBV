@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class VinOfflineOracleBlock:
-    """Oracle-label block stored for one offline VIN sample."""
+    """Oracle-label block stored for one offline VIN sample. :py:module:`aria_nbv.data_handling` owns the typed boundary between upstream ASE/ATEK/EFM"""
 
     candidate_poses_world_cam: PoseTW
     """Candidate world←camera poses."""
@@ -134,7 +134,7 @@ class VinOfflineSample:
     """Optional cached candidate point clouds."""
 
     efm_snippet_view: EfmSnippetView | None = None
-    """Optional raw EFM snippet view attached live from the source dataset."""
+    """Optional raw EFM snippet view attached live from the source dataset in `aria_nbv.data_handling`."""
 
     gt_obbs: CompactObbBlock | None = None
     """Optional compact GT OBBs decoded from persisted blocks."""

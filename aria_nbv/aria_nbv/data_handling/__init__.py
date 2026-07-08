@@ -1,13 +1,13 @@
 # ruff: noqa: I001
 """Canonical data contracts for ASE/EFM snippets and derived NBV stores.
 
-`aria_nbv.data_handling` owns the typed boundary between upstream ASE/ATEK/EFM
+:mod:`aria_nbv.data_handling` owns the typed boundary between upstream ASE/ATEK/EFM
 payloads and the training/evaluation objects consumed by ARIA-NBV. The public
 surface exposes:
 
-- `EfmSnippetView` and stream-specific views for camera images, calibration,
+- :class:`EfmSnippetView` and stream-specific views for camera images, calibration,
   trajectory poses, semidense points, OBBs, GT annotations, and optional meshes;
-- `VinSnippetView` and `VinOracleBatch` for VIN-style one-step RRI scoring;
+- :class:`VinSnippetView` and :class:`VinOracleBatch` for VIN-style one-step RRI scoring;
 - strict immutable VIN offline-store readers/writers;
 - oracle target-task sampling for rollout/data-generation labels;
 - actor-visible target selection for diagnostics and deployable-policy studies.
@@ -20,25 +20,6 @@ be represented with masks and reason codes rather than low RRI values.
 
 from __future__ import annotations
 
-# Import order is intentional: raw view exports must be bound before dependent
-# modules that may indirectly import them back from ``aria_nbv.data_handling``.
-from ._raw import (
-    AseEfmDataset,
-    AseEfmDatasetConfig,
-    EfmCameraView,
-    EfmGTView,
-    EfmObbView,
-    EfmPointsView,
-    EfmSnippetView,
-    EfmTrajectoryView,
-    VinSnippetView,
-    infer_semidense_bounds,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
-)
-from .mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
-from .vin_adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view, empty_vin_snippet
-from .vin_oracle_types import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
 from ._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ._offline_diagnostics import (
     NumericSummary,
@@ -65,6 +46,23 @@ from ._offline_writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
+
+# Import order is intentional: raw view exports must be bound before dependent
+# modules that may indirectly import them back from ``aria_nbv.data_handling``.
+from ._raw import (
+    AseEfmDataset,
+    AseEfmDatasetConfig,
+    EfmCameraView,
+    EfmGTView,
+    EfmObbView,
+    EfmPointsView,
+    EfmSnippetView,
+    EfmTrajectoryView,
+    VinSnippetView,
+    infer_semidense_bounds,
+    is_efm_snippet_view_instance,
+    is_vin_snippet_view_instance,
+)
 from ._target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
@@ -89,7 +87,9 @@ from ._vin_sources import (
     VinOracleOnlineDataset,
     VinOracleOnlineDatasetConfig,
 )
-
+from .mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
+from .vin_adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view, empty_vin_snippet
+from .vin_oracle_types import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
 
 __all__ = [
     "ActorVisibleTargetSelector",

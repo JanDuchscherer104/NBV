@@ -53,7 +53,6 @@ Apply this file when working under `aria_nbv/`.
 ## Anti-Patterns
 - Do not instantiate internal runtime objects from raw `dict[str, Any]` blobs when a dedicated config model should exist.
 - Do not bypass a nested config object to construct one of its targets manually.
-- Do not use `Field(..., description=...)` as the primary documentation for config fields; prefer attribute or field docstrings.
 - Do not add compatibility wrappers or silent fallbacks when removing obsolete internal interfaces unless the task explicitly asks for compatibility.
 - Do not extract shared helpers into new modules without ensuring the new helper files are tracked and included in the same change.
 
@@ -61,9 +60,12 @@ Apply this file when working under `aria_nbv/`.
 - All interfaces must be fully typed and use modern builtins such as `list[str]` and `dict[str, Any]`.
 - Use `TYPE_CHECKING` guards for type-only imports.
 - Use `Literal` for constrained string values.
-- Public methods, functions, classes and modules must have Google-style docstrings. Each module doc-string must give a high-level overview of the module's purpose and contents.
-- When shapes, coordinate frames, or transform directionality are non-obvious, document them explicitly in code and docstrings by providing all relevsant equations, references.
-- See `.agents/references/python_conventions.md` for full examples and anti-patterns.
+- Public methods, functions, classes, modules, config models, dataclasses, and
+  typed payload fields must follow the `python-docstrings` skill. That skill
+  owns Google-style sections, Quartodoc behavior, Jaxtyping shape display,
+  equations, references, and field-docstring rules.
+- See `.agents/references/python_conventions.md` for non-docstring Python
+  typing, runtime, and config conventions.
 
 
 ## Verification
