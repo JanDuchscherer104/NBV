@@ -6,8 +6,8 @@ status: done
 topics: [thesis, literature, architecture, q-h, geometry]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/02-background.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/02-foundations/index.typ
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json

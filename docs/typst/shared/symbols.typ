@@ -7,6 +7,9 @@
 #import "symbols/entity.typ": entity
 #import "symbols/rl.typ": rl
 #import "symbols/vin.typ": vin
+#import "symbols/scene.typ": scene
+#import "symbols/spatial.typ": spatial
+#import "symbols/model.typ": model
 #import "symbols/shape.typ": shape
 
 #let symb = (
@@ -17,5 +20,8 @@
   entity: entity,
   rl: rl,
   vin: vin,
+  scene: scene,
+  spatial: spatial,
+  model: model,
   shape: shape,
 )

@@ -12,7 +12,7 @@ files_touched:
   - docs/contents/thesis/roadmap.qmd
   - docs/contents/thesis/questions.qmd
   - docs/typst/shared/equations/features.typ
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/04-method/index.typ
   - aria_nbv/aria_nbv/vin/scene_feature_bank.py
   - aria_nbv/aria_nbv/vin/__init__.py
   - aria_nbv/tests/vin/test_scene_feature_bank.py

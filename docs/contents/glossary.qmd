@@ -1130,13 +1130,13 @@ $$
 
 <p class="glossary-definition">Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</p>
 
-<p class="glossary-detail-text">The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.</p>
+<p class="glossary-detail-text">The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.</p>
 
 ::: {.glossary-formula}
 **Finite-horizon candidate value**
 
 $$
-Q_H(s_t^{\mathrm{cf0}},a_t,z_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,z_e\right]
+Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
 $$
 :::
 
@@ -1144,7 +1144,7 @@ $$
 **Masked Double-DQN selector**
 
 $$
-j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1}^{\mathrm{cf0}},a_{t+1,j},z_e)
+j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1}^{\mathrm{cf0}},a_{t+1,j},\boldsymbol{\phi}_e)
 $$
 :::
 
@@ -1152,7 +1152,7 @@ $$
 **Masked Double-DQN target**
 
 $$
-y_t=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1}^{\mathrm{cf0}},a_{t+1,j^*},z_e)
+y_t=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1}^{\mathrm{cf0}},a_{t+1,j^*},\boldsymbol{\phi}_e)
 $$
 :::
 

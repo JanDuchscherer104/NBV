@@ -11,7 +11,9 @@ files_touched:
   - docs/contents/literature/efm3d.qmd
   - docs/contents/theory/efm3d_scene_embeddings.qmd
   - docs/typst/shared/equations/features.typ
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ
+  - docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ
+  - docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ
 ---
 
 ## Task
@@ -44,7 +46,7 @@ theory page, thesis method section, and shared Typst feature equations.
 
 ## Verification
 
-- `git diff --check -- .agents/work/scene-encoding-efm-backbone/06-tractable-efm3d-evl-scene-encodings.md docs/contents/literature/efm3d.qmd docs/contents/theory/efm3d_scene_embeddings.qmd docs/typst/shared/equations/features.typ docs/typst/thesis/sections/03-method.typ .agents/memory/history/2026/06/2026-06-23_efm3d_evl_scene_encoding_consolidation.md`
+- `git diff --check -- .agents/work/scene-encoding-efm-backbone/06-tractable-efm3d-evl-scene-encodings.md docs/contents/literature/efm3d.qmd docs/contents/theory/efm3d_scene_embeddings.qmd docs/typst/shared/equations/features.typ docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ .agents/memory/history/2026/06/2026-06-23_efm3d_evl_scene_encoding_consolidation.md`
 - `make qmd-frontmatter-check`
 - `typst compile typst/thesis/main.typ /tmp/aria-nbv-thesis-efm3d-scene-encodings.pdf --root .`
 - `quarto render contents/literature/efm3d.qmd`

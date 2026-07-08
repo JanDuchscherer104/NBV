@@ -7,8 +7,8 @@ topics: [thesis, architecture, literature, litkg, q-h]
 confidence: high
 canonical_updates_needed:
   - docs/literature/sources.jsonl
-  - docs/typst/thesis/sections/02-background.typ
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/02-foundations/index.typ
+  - docs/typst/thesis/sections/04-method/index.typ
 files_touched:
   - docs/literature/sources.jsonl
   - .omx/specs/autoresearch-thesis-lit-review/report.md

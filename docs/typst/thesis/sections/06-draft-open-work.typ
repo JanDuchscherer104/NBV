@@ -21,11 +21,11 @@ The planned thesis window from the proposal ran from 29 April 2026 to 30 Septemb
 
 == Preliminary Thesis Outline
 
-The proposal outline split the thesis into motivation, background, data and geometry contracts, target-specific oracle labels, target-conditioned scoring, bounded #symb.rl.qh rollouts, and discussion. The current five-chapter skeleton can keep that logic by letting the method chapter own data generation, target-RRI, candidate/replay contracts, and the value model, while the evaluation chapter owns policy comparisons, scale, failures, and threats to validity. A later structure pass may split these roles into separate chapters if the final result tables require it.
+The active thesis body now uses the expanded chapter graph: foundations, oracle/data generation, method, experimental design, results, discussion, and conclusion. That split keeps oracle state, target-RRI labels, candidate validity, and rollout/replay stores out of the learned-method chapter, while Chapter 04 owns the scene representation, descriptor/query pools, candidate-row architecture, and finite-horizon #symb.rl.qh model.
 
 #research_todo(
-  [Decide whether the final thesis keeps the current five-chapter skeleton or expands to the more detailed outline above.],
-  source: [proposal outline; current main.typ skeleton],
+  [Freeze whether any remaining appendix-only draft material should be promoted into the active 01--08 chapter graph.],
+  source: [proposal outline; current main.typ chapter graph],
   gate: [thesis structure freeze],
 )
 

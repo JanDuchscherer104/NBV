@@ -20,10 +20,10 @@ config:
     .cluster-label { font-size: 18px; font-weight: 700; }
 ---
 flowchart TB
-  Hist["$$\begin{array}{c}\textbf{Actor-visible history}\\ \boldsymbol{\mathcal{P}}_{t},\ \mathbf{T}^{w}_{\mathrm{rig}}(t)\end{array}$$"]
-  Target["$$\begin{array}{c}\textbf{Target query}\\ \mathbf{z}_{e},\ \hat{\mathbf{B}}_{e}\end{array}$$"]
+  Hist["$$\begin{array}{c}\textbf{Actor-visible history}\\ \mathcal{P}_{t},\ \mathbf{T}^{w}_{\mathrm{rig}}(t)\end{array}$$"]
+  Target["$$\begin{array}{c}\textbf{Target query}\\ \boldsymbol{\phi}_{e},\ \hat{\mathbf{B}}_{e}\end{array}$$"]
   Cand["$$\begin{array}{c}\textbf{Unordered candidate table}\\ q_{t,i},\ m_{t,i},\ i=1,\ldots,N_q\end{array}$$"]
-  Oracle["$$\begin{array}{c}\textbf{Oracle-only assets}\\ \boldsymbol{\mathcal{M}}_{\mathrm{GT}},\ M_e\end{array}$$"]
+  Oracle["$$\begin{array}{c}\textbf{Oracle-only assets}\\ \mathcal{M}^{\mathrm{GT}},\ \mathcal{M}_{e}^{\mathrm{GT}}\end{array}$$"]
 
   subgraph Frames["Frame and provenance contract"]
     direction TB
@@ -36,7 +36,7 @@ flowchart TB
     direction TB
     DirIn["$$\begin{array}{c}\textbf{Selected directions}\\ d_k(v)\in\mathbb{S}^{2}\end{array}$$"]
     DirMem["$$\begin{array}{c}\textbf{Target-local memory}\\ \mathbf{V}_{\mathrm{dir}}\ \text{or }M_{\mathrm{dir}}(v)\end{array}$$"]
-    Novelty["$$\begin{array}{c}\textbf{Directional novelty}\\ \phi_{\mathrm{dir}}(q_{t,i},\mathbf{z}_{e})\end{array}$$"]
+    Novelty["$$\begin{array}{c}\textbf{Directional novelty}\\ \phi_{\mathrm{dir}}(q_{t,i},\boldsymbol{\phi}_{e})\end{array}$$"]
   end
 
   subgraph SetModel["Mask-safe candidate set model"]

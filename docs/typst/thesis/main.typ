@@ -65,10 +65,16 @@
     #heading(numbering: none, outlined: false)[List of Symbols]
     #print-thesis-symbols()
   ],
+  appendix_content: [
+    #include "appendix/index.typ"
+  ],
 )
 
 #include "sections/01-introduction.typ"
-#include "sections/02-background.typ"
-#include "sections/03-method.typ"
-#include "sections/04-evaluation.typ"
-#include "sections/05-conclusion.typ"
+#include "sections/02-foundations/index.typ"
+#include "sections/03-oracle-and-data-generation/index.typ"
+#include "sections/04-method/index.typ"
+#include "sections/05-experimental-design/index.typ"
+#include "sections/06-results.typ"
+#include "sections/07-discussion.typ"
+#include "sections/08-conclusion.typ"

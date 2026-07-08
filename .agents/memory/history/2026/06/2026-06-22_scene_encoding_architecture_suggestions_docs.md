@@ -23,9 +23,9 @@ files_touched:
   - docs/typst/shared/glossary.typ
   - docs/typst/thesis/advisor_meeting_2026_05_22.typ
   - docs/typst/thesis/sections/01-introduction.typ
-  - docs/typst/thesis/sections/02-01-related-work.typ
-  - docs/typst/thesis/sections/02-02-geometric-learning.typ
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/02-foundations/02-01-related-work.typ
+  - docs/typst/thesis/sections/02-foundations/02-02-geometric-learning.typ
+  - docs/typst/thesis/sections/04-method/index.typ
 ---
 
 ## Task

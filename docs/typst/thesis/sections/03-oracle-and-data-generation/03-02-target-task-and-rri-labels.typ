@@ -1,7 +1,7 @@
-#import "../../shared/macros.typ": *
-#import "../../shared/symbols.typ": symb
-#import "../../shared/equations.typ": eqs
-#import "../draft_markers.typ": *
+#import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
+#import "../../draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
 == Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
@@ -14,11 +14,19 @@ $
   #eqs.entity.target_descriptor
 $
 
-In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise proposed OBB geometry for the target task; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(p)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and @egocentric-voxel-lifting:short support counts; and $bold(T)_e^"rel"$ is relative target pose. These fields are not all target-task gates in the first implementation. Class, confidence, current projection, semidense support, @egocentric-voxel-lifting:short support, distance, and target bearing are retained as descriptor and audit fields so that later subsets can ask whether the target-conditioned model depends on semantic correctness or observation quality.
+In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise proposed OBB geometry for the target task; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(pi)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and @egocentric-voxel-lifting:short support counts; $omega_e^"EVL"$ records local @egocentric-voxel-lifting:short coverage; $ell_e^"src"$ records the actor-visible source mode; and $bold(T)_(r_t,e)$ / $bold(T)_(c_t,e)$ record reference- and current-frame target geometry. These fields are not all target-task gates in the first implementation. Class, confidence, current projection, semidense support, @egocentric-voxel-lifting:short support, distance, and target bearing are retained as descriptor and audit fields so that later subsets can ask whether the target-conditioned model depends on semantic correctness or observation quality.
 
 === Seminar Oracle Substrate and Thesis Delta
 
-The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh with the PyTorch3D camera path, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
+The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh under a calibrated camera/rasterization convention, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
+
+#figure(
+  align(center, image(
+    "../../figures/camera_frame_ray_contract.pdf",
+    width: 100%,
+  )),
+  caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the matched target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
+) <fig:camera-frame-ray-contract>
 
 #figure(
   table(
@@ -62,7 +70,7 @@ Automatic target selection constitutes the first procedural layer in target-cent
 
 #figure(
   align(center, image(
-    "../figures/oracle_target_task_sampler_contract.pdf",
+    "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
   caption: [Oracle target-task sampling contract. @ground-truth:short OBBs and meshes define identity-valid supervised target tasks through an IoU and ambiguity-gap gate, a deterministic capped sampler writes target-task rows with descriptor and audit fields, and rollout generation later measures target @relative-reconstruction-improvement:short and headroom. The actor-visible target selector remains a separate diagnostic or later deployment contract, not the source of thesis labels.],
@@ -71,18 +79,11 @@ Automatic target selection constitutes the first procedural layer in target-cent
 The cheap admission gate is identity matching. A proposed target OBB is identity-valid when it matches exactly one @ground-truth:short target OBB by configured 3D IoU and ambiguity margin:
 
 $
-  mu_"id" (hat(e), e)
-  =
-  op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e)
+  #eqs.entity.target_identity_iou
 $
 
 $
-  a_"id" (hat(e)) = 1
-  op("iff")
-  cases(
-    mu_1 >= tau_"IoU",
-    mu_1 - mu_2 >= tau_"gap",
-  )
+  #eqs.entity.target_identity_acceptance
 $
 
 Here $mu_1$ and $mu_2$ are the best and second-best target-to-@ground-truth:short IoU scores for the proposal. The threshold values are protocol parameters, not theory constants. The implementation should use a moderate default and report a threshold sweep so that coverage can be inspected under looser and stricter identity definitions.
@@ -97,14 +98,12 @@ Counterfactual trajectory naturalness is a candidate and rollout diagnostic, not
 
 === Candidate View Generation
 
-Candidate view generation is the second procedural layer: it turns one target task into a finite action table for one rollout state. The current thesis profile deliberately uses a small family mixture rather than the older unconstrained shell from the seminar paper. The data-generation config `.configs/build_rollouts_v1_realistic.toml` consumes the strict VIN offline store from `vin_offline`, uses the `train` split for the first real audit subset, samples one oracle target task per source sample, and writes a separate `rollouts_v1_realistic.zarr` store. The checked-in profile is an audit-scale thesis default with 25 source samples, not an LRZ path template and not final scale evidence.
+Candidate view generation is the second procedural layer: it turns one target task into a finite action table for one rollout state. The current thesis profile deliberately uses a small family mixture rather than the older unconstrained shell from the seminar paper. The checked-in data-generation profile consumes the strict offline actor-state store, uses a training split for the first real audit subset, samples one oracle target task per source sample, and writes a separate rollout/replay store. It is an audit-scale thesis default, not an LRZ path template and not final scale evidence.
 
 At rollout step $t$, candidate generation constructs a full shell
 
 $
-  cal(Q)_t = {q_(t,i)}_(i=1)^(N_q),
-  quad
-  N_q = 60,
+  #eqs.action.candidate_shell
 $
 
 with one fixed provenance component $k(i)$ per row. The canonical `v1_realistic_3family` mixture is
@@ -125,68 +124,45 @@ with one fixed provenance component $k(i)$ per row. The canonical `v1_realistic_
 For each row, the raw direction is sampled in the reference rig frame. The realistic profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
 
 $
-  bold(u)_i ~ "PS"(bold(e)_z, kappa),
-  quad
-  p(bold(u)) = c_kappa (1 + bold(e)_z^T bold(u))^kappa,
-  quad
-  kappa = 8.
+  #eqs.action.power_spherical_forward
 $
 
 The draw is mapped into configured azimuth and elevation caps without rejection. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the cap transform is
 
 $
-  psi' = psi Delta_psi / (2 pi),
-  quad
-  y' = sin theta_"min" + (u_y + 1) / 2 dot (sin theta_"max" - sin theta_"min"),
+  #eqs.action.angle_cap_transform
 $
 
 $
-  bold(d)_i^0 =
-  norm((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi')).
+  #eqs.action.capped_direction
 $
+
+The geometry behind this finite action table is easier to read as a gauge choice than as a list of Cartesian offsets. The sampler first draws a capped direction in the reference rig frame, then each family gives that direction a different semantic axis: egocentric forward motion, target-bearing motion, or lateral target bypass. The target-looking families additionally construct a camera frame whose optical axis points to the selected actor-visible target center.
+
+#figure(
+  align(center, image(
+    "../../figures/candidate_generation_geometry.pdf",
+    width: 100%,
+  )),
+  caption: [Schematic geometry of the target-conditioned three-family candidate shell. Panel A shows the root/reference-frame direction cap; panel B shows how the same shell support is reinterpreted by the forward-local, target-bearing, and lateral-bypass center families; panel C shows the target-look camera construction and the resulting target-frustum relation. Exact sampling densities, radius draws, and pruning constraints are defined by the surrounding equations, not by the schematic scale.],
+) <fig:candidate-generation-geometry>
 
 The three position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the actor-visible target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
 
 $
-  bold(d)_i^"forward" =
-  norm(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
-  quad
-  alpha_f = 0.45,
-$
-
-$
-  bold(d)_i^"target" =
-  norm(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
-  quad
-  alpha_t = 0.4,
-$
-
-$
-  bold(d)_i^"bypass" =
-  norm(
-    0.55 bold(b)_e
-    + 0.85 op("sign")(d_(i,x)^0) bold(l)_e
-    + op("clip")(d_(i,y)^0, -0.35, 0.35) bold(e)_y
-  ).
+  #eqs.action.family_directions
 $
 
 Finally, the sampler draws a radius and transforms the reference-frame offset into world coordinates:
 
 $
-  r_i ~ cal(U)(0.25, 1.1),
-  quad
-  bold(c)_i^w = bold(T)_r^w (r_i bold(d)_i^(k(i))).
+  #eqs.action.candidate_center_world
 $
 
 `forward_local` keeps the reference rig orientation. The two target-looking families orient the camera to the selected actor-visible target center $bold(p)_e$:
 
 $
-  bold(z)_i^w = norm(bold(p)_e - bold(c)_i^w),
-  quad
-  bold(y)_i^w =
-  norm(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
-  quad
-  bold(x)_i^w = bold(y)_i^w times bold(z)_i^w.
+  #eqs.action.target_lookat_frame
 $
 
 These equations are the mathematical description of the implemented sampler, not a claim that the mixture is optimal. The three-family design has a direct downstream impact: `forward_local` preserves egocentric motion continuity; `target_bearing_local` tests whether moving along the target bearing produces supervised target gain; and `lateral_target_bypass` creates side-step views that may improve occluded target surfaces without leaving the local walking envelope. If the target-aware families do not survive pruning, the resulting rollout dataset degenerates into a forward-only dataset and cannot support a target-conditioned planning claim.
@@ -194,16 +170,24 @@ These equations are the mathematical description of the implemented sampler, not
 Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
 
 $
-  ||bold(o)_i||_2 <= 1.0 "m",
-  quad
-  |Delta h_i| <= 0.25 "m",
-  quad
-  op("max")(0, -o_(i,z)) <= 0.25 "m",
-  quad
-  Delta psi_i <= 70 "deg".
+  #eqs.action.motion_pruning_limits
 $
 
-The full shell is still retained with `position_id`, `strategy_id`, `mixture_id`, `sampler_probability`, rule masks, debug diagnostics, and invalid-reason bitsets. Invalid candidates are hard-masked constraints with explicit reasons. They are never low-@relative-reconstruction-improvement:short examples, and they must not enter #symb.rl.qh argmax, softmax, or loss targets. The canonical real config requires at least 15 valid root actions for a 60-row shell, matching the first production gate $op("max")(12, op("ceil")(0.25 N_q))$. This threshold is a data-support guard: it prevents low-support roots from masquerading as planning evidence, while preflight still reports the blocked roots and per-family failure modes.
+The full shell is still retained with `position_id`, `strategy_id`, `mixture_id`, `sampler_probability`, rule masks, debug diagnostics, and invalid-reason bitsets. Invalid candidates are hard-masked constraints with explicit reasons. They are never low-@relative-reconstruction-improvement:short examples, and they must not enter #symb.rl.qh argmax, softmax, or loss targets. The canonical real config requires at least 15 valid root actions for a 60-row shell, matching the first production gate:
+
+#figure(
+  align(center, image(
+    "../../figures/candidate_validity_pruning_examples.pdf",
+    width: 100%,
+  )),
+  caption: [Candidate validity and pruning examples. The support envelope, mesh-clearance constraint, and path-collision check remove infeasible rows by setting #symb.rl.validity_mask to false and recording an invalid-reason code #symb.rl.invalid_reason. A candidate with low target support or low expected gain remains valid if it satisfies the feasibility rules; it is a supervised low-utility row rather than an invalid action.],
+) <fig:candidate-validity-pruning-examples>
+
+$
+  #eqs.action.valid_support_threshold
+$
+
+This threshold is a data-support guard: it prevents low-support roots from masquerading as planning evidence, while preflight still reports the blocked roots and per-family failure modes.
 
 === Rollout Branch Sampling and Dataset Impact
 
@@ -223,14 +207,20 @@ Rollout generation samples finite branches over the valid candidate table. The c
   caption: [Canonical rollout recipes for the real thesis profile. The recipes create replay diversity and oracle-lookahead references; they do not train #symb.rl.qh by themselves.],
 ) <tab:realistic-rollout-recipes>
 
+The bounded oracle-lookahead recipe differs from one-step greedy selection because it scores first actions by the best retained finite-horizon chain, not by immediate gain alone (@fig:oracle-lookahead-tree). Invalid candidates remain masked and are not expanded into oracle branches.
+
+#figure(
+  align(center, image(
+    "../../figures/oracle_lookahead_tree.pdf",
+    width: 100%,
+  )),
+  caption: [Bounded oracle-lookahead tree used as a rollout reference. Valid first-action rows may be expanded into selected-depth successor states and scored by cumulative root-normalized return #symb.rl.return_h; invalid rows are hard-masked and receive no branch. The selected first action can differ from the one-step greedy winner when a lower immediate reward opens a better second-step target view.],
+) <fig:oracle-lookahead-tree>
+
 For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is
 
 $
-  ell_i =
-  (s_i - op("median")(s)) / (op("IQR")(s) tau),
-  quad
-  P(i | m_i = 1) =
-  exp(ell_i) / sum_(j:m_j=1) exp(ell_j).
+  #eqs.action.robust_temperature_softmax
 $
 
 The downstream effect of these choices is scientific rather than cosmetic. The target source controls what counts as a supervised task; the candidate mixture controls the support on which #symb.rl.qh can learn finite-action values; the validity rules decide which actions are admissible; and the branch sampler determines whether the replay store contains only myopic winners or also valid lower-ranked alternatives. A trustworthy thesis dataset must therefore report, per scene and target, selected target counts, valid candidates, valid candidates by `position_id`, invalid reasons by family, selected-family histograms, marginal and cumulative target-root gain, diagnostic state-relative target @relative-reconstruction-improvement:short, and storage/retention settings. Only after these diagnostics show non-degenerate target-aware support should failures or successes be attributed to planning rather than to the data-generation profile.
@@ -238,6 +228,14 @@ The downstream effect of these choices is scientific rather than cosmetic. The t
 === Target-Specific @relative-reconstruction-improvement:short
 
 Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated points to the matched target region. The target error is the target-cropped version of the VIN-NBV @relative-reconstruction-improvement:short objective @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness on the crop.
+
+#figure(
+  align(center, image(
+    "../../figures/target_rri_point_mesh_geometry.pdf",
+    width: 100%,
+  )),
+  caption: [Target-specific point-mesh error behind @relative-reconstruction-improvement:short labels. Blue points are the target crop of accumulated actor-visible geometry, green points are the selected candidate contribution, the orange curve is the matched target mesh, purple witnesses indicate point-to-mesh accuracy, and dashed red witnesses indicate mesh-to-point completeness. Adding a valid candidate view is useful only insofar as it reduces the target-cropped aggregate error used by the oracle reward.],
+) <fig:target-rri-point-mesh-geometry>
 
 $
   #eqs.entity.target_error
@@ -275,10 +273,4 @@ $
   [Lock identity-IoU thresholds, ambiguity gap, per-snippet target cap, near-solved-target filtering policy for loaders, clipping, and final gamma policy.],
   source: [target-selection interview; target-selection autoresearch report],
   gate: [RQ1/RQ2 protocol freeze],
-)
-
-#validation_todo(
-  [Regenerate current manifest-backed counts for one-step labels, target-task samples, rollout rows, storage footprint, render cost, invalid reasons, and target-headroom strata before presenting scale or runtime claims.],
-  source: [seminar offline-cache appendix; current rollout-store contract],
-  gate: [M1/M2 data-generation evidence],
 )

@@ -17,9 +17,16 @@
     points_t: $cal(P)_t$,
     points_next: $cal(P)_(t+1)$,
     points_cand_ti: $cal(P)_(t,i)^"cand"$,
+    // Sparse ray-aware occupied / free / unknown scene memory.
+    ray_memory_t: $bold(M)_t^"ray"$,
+    ray_memory_next: $bold(M)_(t+1)^"ray"$,
+    selected_rays_ti: $cal(R)_(t,i)^"sel"$,
     // Tensor encodings of accumulated and candidate geometry.
     points_tensor_t: $bold(P)_t$,
     points_tensor_cand_ti: $bold(P)_(t,i)^"cand"$,
+    // Point-attached logged visual descriptor bank.
+    dino_point_bank_t: $bold(F)_t^"DINO@pt"$,
+    point_tokens_t: $bold(X)_t^"pt"$,
     // Counterfactual / rendered geometry point-cloud stream.
     points_cf: $cal(P)^"cf"$,
     // Geometry / voxel-grid observation bundle.

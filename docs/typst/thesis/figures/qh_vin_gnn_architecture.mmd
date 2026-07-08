@@ -23,7 +23,7 @@ flowchart LR
   subgraph Scene["Scene Memory Encoder"]
     direction TB
     EVLRoot["$$\begin{array}{c}\textbf{Frozen Root EVL}\\\\ \mathbf{F}_{0}^{\mathrm{EVL}}\end{array}$$"]
-    Points["$$\begin{array}{c}\textbf{Accumulated Points}\\\\ \boldsymbol{\mathcal{P}}_{t}\end{array}$$"]
+    Points["$$\begin{array}{c}\textbf{Accumulated Points}\\\\ \mathcal{P}_{t}\end{array}$$"]
     DirVol["$$\begin{array}{c}\textbf{Directional Memory}\\\\ \mathbf{V}_{\mathrm{dir}}\end{array}$$"]
     SceneEnc["$$\begin{array}{c}\textbf{3D Field Adapter}\\\\ E_{\mathrm{3D}}\end{array}$$"]
     SceneField["$$\begin{array}{c}\textbf{Scene Field}\\\\ \mathbf{F}_{t}^{\mathrm{scene}}\end{array}$$"]
@@ -31,9 +31,9 @@ flowchart LR
 
   subgraph TargetBranch["Target Encoder"]
     direction TB
-    TargetDesc["$$\begin{array}{c}\textbf{Actor-Visible Target}\\\\ \mathbf{z}_{e}\end{array}$$"]
+    TargetDesc["$$\begin{array}{c}\textbf{Actor-Visible Target}\\\\ \boldsymbol{\phi}_{e}\end{array}$$"]
     TargetRead["$$\begin{array}{c}\textbf{Target-Local Read}\\\\ \operatorname{ROI}_{e}(\mathbf{F}_{t}^{\mathrm{scene}})\end{array}$$"]
-    TargetTok["$$\begin{array}{c}\textbf{Target Token}\\\\ \mathbf{T}_{e}\end{array}$$"]
+    TargetTok["$$\begin{array}{c}\textbf{Target Token}\\\\ \mathbf{h}_{e}^{\mathrm{tgt}}\end{array}$$"]
   end
 
   subgraph HistoryBranch["History Encoder"]
@@ -47,7 +47,7 @@ flowchart LR
     PoseFeat["$$\begin{array}{c}\textbf{Pose and Provenance}\\\\ q_{t,i},\ \texttt{strategy},\ \texttt{cost}\end{array}$$"]
     RelFeat["$$\begin{array}{c}\textbf{Target-Relative Pose}\\\\ \mathbf{T}^{r}_{c_q},\ q_{t,i}\!\to\! e\end{array}$$"]
     FrustumPool["$$\begin{array}{c}\textbf{Frustum Pool}\\\\ \phi_{\mathrm{fr}}(\mathbf{F}_{t}^{\mathrm{scene}},q_{t,i})\end{array}$$"]
-    BeliefRender["$$\begin{array}{c}\textbf{Belief Render}\\\\ \hat{\mathbf{D}}_{t,i},\hat{\boldsymbol{\mathcal{P}}}_{t,i}\end{array}$$"]
+    BeliefRender["$$\begin{array}{c}\textbf{Belief Render}\\\\ \hat{\mathbf{D}}_{t,i},\hat{\mathcal{P}}_{t,i}\end{array}$$"]
     Novelty["$$\begin{array}{c}\textbf{Directional Novelty}\\\\ \nu_{t,i}^{\mathrm{dir}}\end{array}$$"]
     ValidFeat["$$\begin{array}{c}\textbf{Mask Features}\\\\ m_{t,i},\ \rho_{t,i}\end{array}$$"]
     CandTok["$$\begin{array}{c}\textbf{Candidate Token}\\\\ \mathbf{C}_{t,i}\end{array}$$"]
@@ -55,7 +55,7 @@ flowchart LR
 
   subgraph SetReasoner["Permutation-Equivariant Reasoner"]
     direction TB
-    Tokens["$$\begin{array}{c}\textbf{Token Set}\\\\ \{\mathbf{T}_e,\mathbf{H}_t,\mathbf{C}_{t,1:N_q}\}\end{array}$$"]
+    Tokens["$$\begin{array}{c}\textbf{Token Set}\\\\ \{\mathbf{h}_e^{\mathrm{tgt}},\mathbf{H}_t,\mathbf{x}_{t,1:N_q}\}\end{array}$$"]
     SetModule["$$\begin{array}{c}\textbf{Set Transformer / GNN}\\\\ E_{\mathrm{set}}\end{array}$$"]
     ContextTok["$$\begin{array}{c}\textbf{Context Tokens}\\\\ \mathbf{U}_{t,i}\end{array}$$"]
   end

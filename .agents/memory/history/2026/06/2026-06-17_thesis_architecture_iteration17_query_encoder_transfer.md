@@ -6,8 +6,8 @@ status: done
 topics: [thesis, architecture, q-h, qcnet, literature]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/02-background.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/02-foundations/index.typ
   - docs/literature/sources.jsonl
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
@@ -27,7 +27,7 @@ scene-level pooled confidence heads are not.
 - `docs/literature/tex-src/arXiv-QCNet/main.tex` describes the QCNet encoder as
   query-centric, local-spacetime-frame based, and driven by relative
   spatial-temporal positional embeddings.
-- `docs/typst/thesis/sections/03-method.typ` already requires independent MLP
+- `docs/typst/thesis/sections/04-method/index.typ` already requires independent MLP
   and pooled DeepSets controls before masked Set Transformer or QCNet-style
   relative positional encodings.
 - `docs/contents/ideas.qmd` records query-centric attention, frustum/space

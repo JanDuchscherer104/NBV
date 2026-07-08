@@ -6,9 +6,9 @@ status: done
 topics: [thesis, architecture, deja-view, recurrence, q-h, selected-history]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
-  - docs/typst/thesis/sections/05-conclusion.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
+  - docs/typst/thesis/sections/08-conclusion.typ
   - docs/contents/theory/rl_planning.qmd
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
@@ -39,7 +39,7 @@ target support, rollout lineage, and selected-history provenance are stable.
   `05_conclusion.tex` state that pushing inference beyond the trained range
   eventually degrades or collapses because feature channels drift.
 - `docs/contents/theory/rl_planning.qmd` and
-  `docs/typst/thesis/sections/03-method.typ` define selected-view history,
+  `docs/typst/thesis/sections/04-method/index.typ` define selected-view history,
   candidate tables, masks, and the finite-candidate `Q_H` state contract.
 - Iteration 14 already established that recurrence may only consume
   selected-history evidence and must not see unselected candidate renderings or

@@ -1,11 +1,7 @@
 // Canonical ARIA-NBV glossary source.
 // Humans edit this file; `make glossary` regenerates Quarto, Typst, YAML, and KG artifacts.
 
-#import "@preview/glossarium:0.5.10": (
-  make-glossary,
-  print-glossary,
-  register-glossary,
-)
+#import "@preview/glossarium:0.5.10": make-glossary, print-glossary, register-glossary
 #import "symbols.typ": symb
 #import "equations.typ": eqs
 
@@ -395,7 +391,9 @@
     key: "predicted-target-q",
     short: "PRED-Q",
     long: "Predicted-Target Q",
-    description: "Main thesis protocol component requiring the scorer or fitted Q_H model to condition on predicted or observed target descriptors rather than ground-truth target inputs. It covers target-conditioned one-step scoring and finite-candidate Q_H selection.",
+    description: [
+      Main thesis protocol component requiring the scorer or fitted #symb.rl.qh model to condition on predicted or observed target descriptors rather than ground-truth target inputs. It covers target-conditioned one-step scoring and finite-candidate #symb.rl.qh selection.
+    ],
     group: "Protocol",
     custom: (
       anchor: "term-predicted-target-q",
@@ -496,7 +494,9 @@
     key: "target-conditioned-nbv-mdp",
     short: "NBV MDP",
     long: "Target-Conditioned NBV MDP",
-    description: "Finite-horizon Markov decision process used to define ARIA-NBV's target-conditioned rollout and fitted Q_H training contract. The actor observes only current reconstruction state, sampled candidate views, validity masks, target descriptors, history, and budget state; oracle meshes and GT crops are supervision and evaluation signals.",
+    description: [
+      Finite-horizon Markov decision process used to define ARIA-NBV's target-conditioned rollout and fitted #symb.rl.qh training contract. The actor observes only current reconstruction state, sampled candidate views, validity masks, target descriptors, history, and budget state; oracle meshes and GT crops are supervision and evaluation signals.
+    ],
     group: "Planning",
     custom: (
       anchor: "term-target-conditioned-nbv-mdp",
@@ -730,7 +730,9 @@
     key: "minimal-counterfactual-state",
     short: "CF0 state",
     long: "Minimal Counterfactual Actor State",
-    description: "Main thesis-core actor-visible counterfactual rollout state. It keeps the fused point proxy P_t as broad scene state, optional lifted image-foundation features attached to points, local root EVL evidence for target support, selected-view history, target descriptor, budget, candidate table, validity masks and reason codes, and current candidate-query features, without exposing all-candidate GT renders.",
+    description: [
+      Main thesis-core actor-visible counterfactual rollout state. It keeps the fused point proxy #symb.obs.points_t as broad scene state, optional lifted image-foundation features attached to points, local root EVL evidence for target support, selected-view history, target descriptor, budget, candidate table, validity masks and reason codes, and current candidate-query features, without exposing all-candidate GT renders.
+    ],
     group: "Planning",
     custom: (
       anchor: "term-minimal-counterfactual-state",
@@ -879,7 +881,9 @@
     key: "finite-candidate-action-set",
     short: "action set",
     long: "Finite Candidate Action Set",
-    description: "Valid discrete action set for ARIA-NBV planning, obtained by masking a sampled candidate view table. The action is the candidate-table index, not a continuous pose; the selected pose is q_t = q_{t,a_t}. Invalid candidates are constraints, not low-quality actions.",
+    description: [
+      Valid discrete action set for ARIA-NBV planning, obtained by masking a sampled candidate view table. The action is the candidate-table index, not a continuous pose; the selected pose is $q_t = q_(t,a_t)$. Invalid candidates are constraints, not low-quality actions.
+    ],
     group: "Planning",
     custom: (
       anchor: "term-finite-candidate-action-set",
@@ -1050,7 +1054,9 @@
     key: "finite-horizon-return",
     short: "return",
     long: "Finite-Horizon Return",
-    description: "Symbolic H-step return used by ARIA-NBV rollout evaluation and Q_H targets. The formula keeps gamma explicit while the thesis-core comparison reports cumulative root-normalized target gain under equal acquisition budget.",
+    description: [
+      Symbolic H-step return used by ARIA-NBV rollout evaluation and #symb.rl.qh targets. The formula keeps $gamma$ explicit while the thesis-core comparison reports cumulative root-normalized target gain under equal acquisition budget.
+    ],
     group: "Planning",
     custom: (
       anchor: "term-finite-horizon-return",
@@ -1117,7 +1123,7 @@
       category: "model.value",
       parent: "target-conditioned-nbv-mdp",
       definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
-      definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor z_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
+      definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
       internal_links: (
         "docs/contents/thesis/questions.qmd#rq4-planning",
         "docs/contents/thesis/roadmap.qmd#roadmap-m5",
@@ -1158,16 +1164,16 @@
       ),
       formula: (
         label: "Finite-horizon candidate value",
-        tex: "Q_H(s_t^{\\mathrm{cf0}},a_t,z_e)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t,z_e\\right]",
+        tex: "Q_H(s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e\\right]",
       ),
       formulae: (
         (
           label: "Masked Double-DQN selector",
-          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j},z_e)",
+          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j},\\boldsymbol{\\phi}_e)",
         ),
         (
           label: "Masked Double-DQN target",
-          tex: "y_t=r_t^e+\\gamma(1-d_t)Q_{\\bar\\theta}(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j^*},z_e)",
+          tex: "y_t=r_t^e+\\gamma(1-d_t)Q_{\\bar\\theta}(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j^*},\\boldsymbol{\\phi}_e)",
         ),
       ),
     ),
@@ -1176,7 +1182,9 @@
     key: "validity-mask",
     short: "mask",
     long: "Validity Mask",
-    description: "Hard candidate-level feasibility mask used during candidate ranking, rollout generation, and Q_H training. Invalidity is represented separately from reconstruction quality and should not be encoded as the lowest RRI class.",
+    description: [
+      Hard candidate-level feasibility mask used during candidate ranking, rollout generation, and #symb.rl.qh training. Invalidity is represented separately from reconstruction quality and should not be encoded as the lowest RRI class.
+    ],
     group: "Planning",
     custom: (
       anchor: "term-validity-mask",
@@ -2161,7 +2169,9 @@
     key: "chamfer-distance",
     short: "CD",
     long: "Chamfer Distance",
-    description: "Historical bidirectional distance family used to compare reconstructed points against reference geometry. Thesis-facing ARIA-NBV notation uses point-mesh error D with directional components D_{P->M} and D_{M->P}; older seminar material may still call this CD.",
+    description: [
+      Historical bidirectional distance family used to compare reconstructed points against reference geometry. Thesis-facing ARIA-NBV notation uses point-mesh error #symb.oracle.err with directional components #symb.oracle.acc and #symb.oracle.comp#text[;] older seminar material may still call this CD.
+    ],
     group: "Metrics",
     custom: (
       anchor: "term-chamfer-distance",

@@ -10,10 +10,10 @@ files_touched:
   - docs/typst/shared/glossary.typ
   - docs/typst/thesis/main.typ
   - docs/typst/thesis/sections/01-introduction.typ
-  - docs/typst/thesis/sections/02-background.typ
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
-  - docs/typst/thesis/sections/05-conclusion.typ
+  - docs/typst/thesis/sections/02-foundations/index.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
+  - docs/typst/thesis/sections/08-conclusion.typ
   - docs/typst/thesis/sections/06-draft-open-work.typ
 ---
 

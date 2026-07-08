@@ -6,8 +6,8 @@ status: done
 topics: [thesis, literature, candidate-sampling, target-selection, q-h]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/sections/03-method.typ
-  - docs/typst/thesis/sections/04-evaluation.typ
+  - docs/typst/thesis/sections/04-method/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/candidate_sampling_target_selection.qmd
   - docs/contents/theory/rl_planning.qmd
 files_touched:

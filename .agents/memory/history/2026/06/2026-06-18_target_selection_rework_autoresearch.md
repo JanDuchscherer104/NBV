@@ -10,7 +10,7 @@ canonical_updates_needed:
   - aria_nbv/tests/data_handling/test_target_selection.py
   - aria_nbv/aria_nbv/rollouts/dataset_writer.py
   - aria_nbv/aria_nbv/rollouts/zarr_store.py
-  - docs/typst/thesis/sections/03-method.typ
+  - docs/typst/thesis/sections/04-method/index.typ
   - docs/contents/theory/candidate_sampling_target_selection.qmd
   - docs/contents/thesis/questions.qmd
   - .agents/memory/state/DECISIONS.md

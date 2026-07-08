@@ -42,7 +42,8 @@ omx --direct --yolo
 ```
 
 Keep `.omx/`, `.codex/config.toml`, and `.codex/hooks.json` operator-local.
-Only commit `.codex/*.example.*` templates.
+Only commit `.codex/*.example.*` templates, plus the deliberately vendored
+`.codex/skills/graphify/**` project skill.
 
 ## Recommended Workflows
 

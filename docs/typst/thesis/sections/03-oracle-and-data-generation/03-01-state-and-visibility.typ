@@ -1,17 +1,17 @@
-#import "../../shared/macros.typ": *
-#import "../../shared/symbols.typ": symb
-#import "../../shared/equations.typ": eqs
+#import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
 
-== Formal State and Visibility
+== State and Visibility Boundary
 
-The initial non-myopic experiment is a #emph[masked finite-horizon candidate-decision process], not a stationary deployment MDP. It is an offline, mesh-supervised #emph[controlled counterfactual replay] process: the oracle may render selected candidates and regenerate the next candidate table as part of the experimental protocol, while the actor sees only the typed state features below.
+The initial non-myopic experiment is a #emph[masked finite-horizon candidate-decision process], not a stationary deployment MDP. It is an offline, mesh-supervised #emph[controlled counterfactual replay] process over Project Aria-style @aria-synthetic-environments:short snippets: logged egocentric observations and frozen @egocentric-voxel-lifting:short evidence define the actor state, while @aria-synthetic-environments:short meshes and annotations provide target matching, rendered counterfactual geometry, labels, and evaluation @ProjectAria-ASE-2025 @EFM3D-straub2024 @VIN-NBV-frahm2025. The core scientific constraint is therefore a leakage boundary: oracle products may supervise a loss or report an upper bound, but they must not become inputs to the learned #symb.rl.qh actor unless the experiment is explicitly named as privileged.
 
 #figure(
   align(center, image(
-    "../figures/qh_actor_oracle_contract.pdf",
+    "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor-visible and oracle-only state boundary for the V1 thesis protocol. The learned #symb.rl.qh policy may consume accumulated geometry, frozen @egocentric-voxel-lifting:short evidence, target descriptors, history, budget, candidates, masks, and invalid reasons; @ground-truth:short meshes, boxes, dense candidate renders, target labels, and endpoint metrics supervise labels, upper bounds, evaluation, or explicitly named teacher ablations only.],
+  caption: [Actor-visible and oracle-only state boundary for the V1 thesis protocol. Solid arrows denote legal #symb.rl.qh inputs: accumulated geometry, frozen @egocentric-voxel-lifting:short evidence, target descriptors, history, budget, candidates, masks, and invalid reasons. @ground-truth:short meshes, @ground-truth:short boxes, target crops, dense candidate renders, target labels, returns, and endpoint metrics remain on the oracle side and can supervise labels, upper bounds, evaluation, or explicitly named teacher ablations only.],
 ) <fig:qh-actor-oracle-contract>
 
 The three state spaces referenced by the protocol tuple are the codomains of the shared state equations. The logged historic state contains only the original trajectory evidence,
@@ -33,18 +33,7 @@ $
 $
 
 $
-  cal(M)_"NBV"
-  =
-  (
-    cal(S)^"hist",
-    cal(S)^"cf0",
-    cal(S)^"oracle",
-    {cal(A)_t},
-    T,
-    r_t^e,
-    gamma,
-    H
-  ).
+  #eqs.rl.nbv_process_tuple
 $
 
 The model separates logged snippet state, counterfactual actor state, and privileged oracle state because real egocentric trajectories contain modalities that are not available after synthetic view choices. The raw historic state is available on the logged @aria-synthetic-environments:short trajectory. The planner state keeps local root @egocentric-voxel-lifting:short evidence fixed while updating the fused geometry proxy, optional point-feature bank, selected-view history, remaining horizon metadata, target descriptor, candidates, masks, and reason codes. The privileged oracle state augments this with @ground-truth:short geometry, the matched target mesh, all-candidate rendered points, and oracle labels for target-task selection, label generation, upper-bound planning, and evaluation.
