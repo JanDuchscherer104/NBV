@@ -23,7 +23,7 @@ from pytorch3d.loss.point_mesh_distance import (  # type: ignore[import-untyped]
 )
 from torch import Tensor
 
-from .types import DistanceBreakdown
+from ..types import DistanceBreakdown
 
 
 def chamfer_point_mesh(

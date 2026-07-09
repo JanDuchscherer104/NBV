@@ -9,9 +9,13 @@ summary: Oracle RRI, binning, and metric-contract guidance for work under aria_n
 Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
 
 ## Public Contracts
-- Canonical metric and oracle surface: `aria_nbv/aria_nbv/rri_metrics/oracle_rri.py`, `metrics.py`, `types.py`
-- Binning and ordinal surfaces: `rri_binning.py`, `coral.py`
-- Diagnostics and plotting helpers: `logging.py`, `plotting.py`
+- Shared result/distance DTOs: `types.py`
+- Point-mesh metric primitives: `metrics/point_mesh.py`
+- One-step metric reducers and TorchMetrics: `metrics/single_step.py`, `metrics/torchmetrics_single.py`
+- Multi-step rollout reducers and TorchMetrics: `metrics/multi_step.py`, `metrics/multi_step_tables.py`, `metrics/torchmetrics_multi.py`
+- Oracle evidence and scorer surfaces: `oracle/evidence.py`, `oracle/scorer.py`
+- Ordinal objective surfaces: `objectives/ordinal_binning.py`, `objectives/coral.py`
+- Logging keys and reporting helpers: `logging/names.py`, `reporting/plotting.py`
 - Narrative surfaces: `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/07a-binning.typ`, generated API docs under `docs/reference/`, `docs/contents/theory/rri_theory.qmd`
 
 ## Boundary Rules
@@ -20,6 +24,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
 - Keep metric names, logged summaries, and paper terminology aligned with the underlying definitions; do not silently reinterpret an existing name.
 - Prefer additive diagnostics over changing canonical RRI behavior unless the task explicitly asks for a semantic change.
 - Plotting helpers are secondary surfaces; core oracle and metric functions own the semantics.
+- Keep the root `aria_nbv.rri_metrics` interface compact. Import specialized rollout, logging, and TorchMetric helpers from their leaf modules.
 
 ## Verification
 - Run `ruff format` and `ruff check` on touched metrics files.

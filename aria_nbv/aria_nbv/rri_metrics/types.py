@@ -3,7 +3,7 @@
 This module centralises small, self-contained data structures that are shared
 between the RRI metrics utilities and the high-level ``OracleRRI`` facade.
 Keeping the types separate avoids circular imports between ``metrics`` and
-``aria_nbv.rri_metrics.oracle_rri`` while providing a single source of truth for shapes, units, and
+``aria_nbv.rri_metrics.oracle.scorer`` while providing a single source of truth for shapes, units, and
 semantic meaning.
 
 `RriResult` stores both the scalar improvement label and the directional

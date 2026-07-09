@@ -9,11 +9,11 @@ import plotly.graph_objects as go  # type: ignore[import-untyped]
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
-from ..data_handling import EfmSnippetView
-from ..rendering.candidate_pointclouds import CandidatePointClouds
-from ..rendering.plotting import RenderingPlotBuilder
-from ..utils.plotting import _histogram_overlay, _plot_hist_counts_mpl
-from .types import RriResult
+from ...data_handling import EfmSnippetView
+from ...rendering.candidate_pointclouds import CandidatePointClouds
+from ...rendering.plotting import RenderingPlotBuilder
+from ...utils.plotting import _histogram_overlay, _plot_hist_counts_mpl
+from ..types import RriResult
 
 
 def rri_color_map(

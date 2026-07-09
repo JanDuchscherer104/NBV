@@ -1,6 +1,6 @@
 """Torch-native rollout metrics for target-conditioned NBV.
 
-The helpers in `aria_nbv.rri_metrics.rollout` operate on Python mappings used
+The helpers in `aria_nbv.rri_metrics.metrics.multi_step_tables` operate on Python mappings used
 by CLI summaries and Streamlit tables. This module owns the tensor equivalent
 for training and batched evaluation code: selected-action returns, endpoint
 target gain, and validity-aware reductions over finite candidate tables.
@@ -21,6 +21,7 @@ import torch
 from torch import Tensor
 
 
+# TODO: All DTOs must be defined in dedicated types module!
 @dataclass(frozen=True, slots=True)
 class TorchRolloutMetrics:
     """Batched target-rollout metrics for selected trajectories.
@@ -64,6 +65,7 @@ class CandidateOrderConsistency:
     valid_table: Tensor
 
 
+# TODO: All DTOs must be defined in dedicated types module!
 @dataclass(frozen=True, slots=True)
 class SelectedActionOracleComparison:
     """Per-table oracle diagnostics for a selected candidate action.
@@ -88,6 +90,7 @@ class SelectedActionOracleComparison:
     valid_table: Tensor
 
 
+# TODO: All DTOs must be defined in dedicated types module!
 @dataclass(frozen=True, slots=True)
 class CandidatePathIncrementStats:
     """Per-table movement-cost diagnostics for candidate action rows.
@@ -111,6 +114,7 @@ class CandidatePathIncrementStats:
     valid_table: Tensor
 
 
+# TODO: All DTOs must be defined in dedicated types module!
 @dataclass(frozen=True, slots=True)
 class CandidatePrimaryInvalidReasonStats:
     """Per-table primary invalid-reason share among rejected candidate rows.
@@ -291,6 +295,7 @@ def selected_path_length_tensor(camera_centers_world: Tensor, segment_valid_mask
     return result.squeeze(0) if squeeze else result
 
 
+# TODO: This does not look like a core metric, but rather a helper!?
 def candidate_order_consistency(
     scores: Tensor,
     shuffled_scores: Tensor,

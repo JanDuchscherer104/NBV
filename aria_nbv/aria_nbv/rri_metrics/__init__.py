@@ -1,15 +1,15 @@
 """Stable root API for RRI metrics and VIN ordinal helpers."""
 
-from .coral import (
+from .metrics.point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
+from .objectives.coral import (
     CoralLayer,
     coral_expected_from_logits,
     coral_logits_to_prob,
     coral_loss,
     coral_random_loss,
 )
-from .metrics import chamfer_point_mesh, chamfer_point_mesh_batched
-from .oracle_rri import OracleRRI, OracleRRIConfig
-from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
+from .objectives.ordinal_binning import RriOrdinalBinner, ordinal_labels_to_levels
+from .oracle.scorer import OracleRRI, OracleRRIConfig
 from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [

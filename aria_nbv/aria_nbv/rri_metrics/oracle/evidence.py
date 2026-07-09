@@ -15,7 +15,7 @@ from typing import Literal
 import torch
 from efm3d.utils.depth import dist_im_to_point_cloud_im
 
-from ..data_handling import EfmSnippetView
+from ...data_handling import EfmSnippetView
 
 Tensor = torch.Tensor
 CameraLabel = Literal["rgb", "slaml", "slamr"]

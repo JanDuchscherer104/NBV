@@ -1,6 +1,6 @@
 """Stateful TorchMetrics for target-conditioned rollout evaluation.
 
-`aria_nbv.rri_metrics.torch_rollout` owns pure tensor reducers. This module
+`aria_nbv.rri_metrics.metrics.multi_step` owns pure tensor reducers. This module
 wraps those reducers in `torchmetrics.Metric` classes for Lightning, batched
 evaluation scripts, and future Q_H diagnostics. The stateful classes keep the
 proposal's hard-mask semantics: invalid candidates are ignored or counted as
@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from torchmetrics import Metric as MetricBase
 
-from .torch_rollout import (
+from .multi_step import (
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,

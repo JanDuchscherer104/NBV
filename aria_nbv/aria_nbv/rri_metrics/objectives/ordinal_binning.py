@@ -29,7 +29,7 @@ from typing import Any
 import torch
 from torch import Tensor
 
-from ..configs import PathConfig
+from ...configs import PathConfig
 
 
 def _unique_path(path: Path, *, overwrite: bool) -> Path:
