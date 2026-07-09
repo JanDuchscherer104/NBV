@@ -8,8 +8,7 @@ from pydantic import Field
 
 from ..data_handling import AseEfmDatasetConfig
 from ..pipelines import OracleRriLabelerConfig
-from ..rl import CounterfactualPPOConfig, CounterfactualRLEnvConfig
-from ..utils import BaseConfig, TargetConfig
+from ..utils import TargetConfig
 
 if TYPE_CHECKING:
     from .app import NbvStreamlitApp
@@ -34,42 +33,5 @@ class NbvStreamlitAppConfig(TargetConfig["NbvStreamlitApp"]):
     labeler: OracleRriLabelerConfig = Field(default_factory=OracleRriLabelerConfig)
     """Oracle label pipeline configuration (candidates → depth → RRI)."""
 
-    rl: "RlPageConfig" = Field(default_factory=lambda: RlPageConfig())
-    """Configuration for the optional RL-specific Streamlit page."""
 
-
-class RlPageConfig(BaseConfig):
-    """Config-gated controls for the bridge RL inspection page."""
-
-    enabled: bool = False
-    """Whether to expose the deprecated RL page in Streamlit navigation."""
-
-    enable_policy_comparison: bool = True
-    """Whether to show the multi-policy comparison tab."""
-
-    enable_checkpoint_policy: bool = False
-    """Whether to expose checkpoint loading and PPO policy playback controls."""
-
-    enable_action_shell_plot: bool = True
-    """Whether to show the initial action-shell plot for a chosen seed."""
-
-    enable_step_shell_plot: bool = True
-    """Whether to show per-step candidate-shell plots for completed episodes."""
-
-    enable_episode_table: bool = True
-    """Whether to show per-step episode tables."""
-
-    default_eval_episodes: int = Field(default=4, ge=1)
-    """Default number of episodes for policy comparison."""
-
-    max_eval_episodes: int = Field(default=16, ge=1)
-    """Maximum number of episodes exposed in the UI."""
-
-    env: CounterfactualRLEnvConfig = Field(default_factory=CounterfactualRLEnvConfig)
-    """Base RL environment configuration merged with the active labeler settings."""
-
-    ppo: CounterfactualPPOConfig = Field(default_factory=CounterfactualPPOConfig)
-    """Default PPO configuration used when loading or instantiating SB3 policies."""
-
-
-__all__ = ["NbvStreamlitAppConfig", "RlPageConfig"]
+__all__ = ["NbvStreamlitAppConfig"]

@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.config import RlPageConfig
 from aria_nbv.data_handling import (
     OracleTargetTaskSamplerConfig,
     TargetSelectorConfig,
@@ -27,7 +26,6 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorOutputConfig,
     RerunInspectorRolloutDepthConfig,
 )
-from aria_nbv.rl import CounterfactualRLEnvConfig
 from aria_nbv.rollouts import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
@@ -83,11 +81,9 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (RerunInspectorCandidateConfig, {"subset_indices": [-1]}),
         (RerunInspectorRolloutDepthConfig, {"point_fill_ratio": -0.1}),
         (RerunInspectorEfmVoxelConfig, {"occ_threshold": 1.1}),
-        (CounterfactualRLEnvConfig, {"horizon": 0}),
         (GradNormLoggingConfig, {"max_items": 0}),
         (LearnableFourierFeaturesConfig, {"fourier_dim": 7}),
         (R6dLffPoseEncoderConfig, {"pose_scale_init": (0.0, 1.0)}),
-        (RlPageConfig, {"default_eval_episodes": 0}),
     ],
 )
 def test_config_field_constraints_reject_invalid_values(

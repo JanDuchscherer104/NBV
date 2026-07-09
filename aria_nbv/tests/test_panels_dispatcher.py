@@ -9,7 +9,6 @@ from aria_nbv.app.panels import (
     data,
     depth,
     offline_dataset,
-    rl,
     rri,
     rri_binning,
     vin_diagnostics,
@@ -24,7 +23,6 @@ def test_panels_dispatcher_reexports() -> None:
     assert panels.render_data_page is data.render_data_page
     assert panels.render_depth_page is depth.render_depth_page
     assert panels.render_offline_dataset_page is offline_dataset.render_offline_dataset_page
-    assert panels.render_rl_page is rl.render_rl_page
     assert panels.render_rri_page is rri.render_rri_page
     assert panels.render_rri_binning_page is rri_binning.render_rri_binning_page
     assert panels.render_vin_diagnostics_page is vin_diagnostics.render_vin_diagnostics_page
