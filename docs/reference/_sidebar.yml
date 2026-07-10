@@ -4,54 +4,297 @@ website:
     contents:
     - reference/index.qmd
     - contents:
-      - reference/data_handling.qmd
-      - reference/pose_generation.qmd
-      - reference/rollouts.qmd
-      - reference/rendering.qmd
-      - reference/rri_metrics.qmd
-      - reference/lightning.qmd
-      - reference/configs.qmd
-      - reference/utils.qmd
+      - text: configs
+        file: reference/configs.qmd
+        contents:
+        - text: optuna_config
+          file: reference/configs.optuna_config.qmd
+        - text: path_config
+          file: reference/configs.path_config.qmd
+        - text: wandb_config
+          file: reference/configs.wandb_config.qmd
+      - text: data_handling
+        file: reference/data_handling.qmd
+        contents:
+        - text: efm_dataset
+          file: reference/data_handling.efm_dataset.qmd
+        - text: efm_dataset_utils
+          file: reference/data_handling.efm_dataset_utils.qmd
+        - text: efm_snippet_loader
+          file: reference/data_handling.efm_snippet_loader.qmd
+        - text: efm_views
+          file: reference/data_handling.efm_views.qmd
+        - text: mesh_cache
+          file: reference/data_handling.mesh_cache.qmd
+        - text: offline_cli
+          file: reference/data_handling.offline_cli.qmd
+        - text: offline_info_cli
+          file: reference/data_handling.offline_info_cli.qmd
+        - text: vin_adapter
+          file: reference/data_handling.vin_adapter.qmd
+        - text: vin_oracle_types
+          file: reference/data_handling.vin_oracle_types.qmd
+      - text: lightning
+        file: reference/lightning.qmd
+        contents:
+        - text: aria_nbv_experiment
+          file: reference/lightning.aria_nbv_experiment.qmd
+        - text: cli
+          file: reference/lightning.cli.qmd
+        - text: lit_datamodule
+          file: reference/lightning.lit_datamodule.qmd
+        - text: lit_module
+          file: reference/lightning.lit_module.qmd
+        - text: lit_trainer_callbacks
+          file: reference/lightning.lit_trainer_callbacks.qmd
+        - text: lit_trainer_factory
+          file: reference/lightning.lit_trainer_factory.qmd
+        - text: optimizers
+          file: reference/lightning.optimizers.qmd
+      - text: pipelines
+        file: reference/pipelines.qmd
+        contents:
+        - text: oracle_rri_labeler
+          file: reference/pipelines.oracle_rri_labeler.qmd
+      - text: pose_generation
+        file: reference/pose_generation.qmd
+        contents:
+        - text: candidate_generation
+          file: reference/pose_generation.candidate_generation.qmd
+        - text: candidate_generation_rules
+          file: reference/pose_generation.candidate_generation_rules.qmd
+        - text: candidate_mixture
+          file: reference/pose_generation.candidate_mixture.qmd
+        - text: geometry
+          file: reference/pose_generation.geometry.qmd
+        - text: orientations
+          file: reference/pose_generation.orientations.qmd
+        - text: plotting
+          file: reference/pose_generation.plotting.qmd
+        - text: positional_sampling
+          file: reference/pose_generation.positional_sampling.qmd
+        - text: types
+          file: reference/pose_generation.types.qmd
+        - text: utils
+          file: reference/pose_generation.utils.qmd
+      - text: rendering
+        file: reference/rendering.qmd
+        contents:
+        - text: candidate_depth_renderer
+          file: reference/rendering.candidate_depth_renderer.qmd
+        - text: candidate_pointclouds
+          file: reference/rendering.candidate_pointclouds.qmd
+        - text: efm3d_depth_renderer
+          file: reference/rendering.efm3d_depth_renderer.qmd
+        - text: plotting
+          file: reference/rendering.plotting.qmd
+        - text: pytorch3d_depth_renderer
+          file: reference/rendering.pytorch3d_depth_renderer.qmd
+        - text: unproject
+          file: reference/rendering.unproject.qmd
+      - text: rollouts
+        file: reference/rollouts.qmd
+        contents:
+        - text: cli
+          file: reference/rollouts.cli.qmd
+        - text: counterfactuals
+          file: reference/rollouts.counterfactuals.qmd
+        - text: dataset_writer
+          file: reference/rollouts.dataset_writer.qmd
+        - text: info_cli
+          file: reference/rollouts.info_cli.qmd
+        - text: inspection
+          file: reference/rollouts.inspection.qmd
+        - text: manifest
+          file: reference/rollouts.manifest.qmd
+        - text: shard_manifest
+          file: reference/rollouts.shard_manifest.qmd
+        - text: shards
+          file: reference/rollouts.shards.qmd
+        - text: target_counterfactuals
+          file: reference/rollouts.target_counterfactuals.qmd
+        - text: trace
+          file: reference/rollouts.trace.qmd
+        - text: zarr_store
+          file: reference/rollouts.zarr_store.qmd
+      - text: rri_metrics
+        file: reference/rri_metrics.qmd
+        contents:
+        - text: coral
+          file: reference/rri_metrics.coral.qmd
+        - text: eval_pointclouds
+          file: reference/rri_metrics.eval_pointclouds.qmd
+        - text: logging
+          file: reference/rri_metrics.logging.qmd
+        - text: metrics
+          file: reference/rri_metrics.metrics.qmd
+        - text: oracle_rri
+          file: reference/rri_metrics.oracle_rri.qmd
+        - text: plotting
+          file: reference/rri_metrics.plotting.qmd
+        - text: rollout
+          file: reference/rri_metrics.rollout.qmd
+        - text: rri_binning
+          file: reference/rri_metrics.rri_binning.qmd
+        - text: torch_rollout
+          file: reference/rri_metrics.torch_rollout.qmd
+        - text: torch_rollout_metrics
+          file: reference/rri_metrics.torch_rollout_metrics.qmd
+        - text: types
+          file: reference/rri_metrics.types.qmd
+      - text: utils
+        file: reference/utils.qmd
+        contents:
+        - text: base_config
+          file: reference/utils.base_config.qmd
+        - text: benchmark_plotting
+          file: reference/utils.benchmark_plotting.qmd
+        - text: cli_format
+          file: reference/utils.cli_format.qmd
+        - text: config_paths
+          file: reference/utils.config_paths.qmd
+        - text: console
+          file: reference/utils.console.qmd
+        - text: data_plotting
+          file: reference/utils.data_plotting.qmd
+        - text: fingerprints
+          file: reference/utils.fingerprints.qmd
+        - text: frames
+          file: reference/utils.frames.qmd
+        - text: grad_norms
+          file: reference/utils.grad_norms.qmd
+        - text: optuna_optimizable
+          file: reference/utils.optuna_optimizable.qmd
+        - text: plotting
+          file: reference/utils.plotting.qmd
+        - text: reporting
+          file: reference/utils.reporting.qmd
+        - text: rich_summary
+          file: reference/utils.rich_summary.qmd
+        - text: schemas
+          file: reference/utils.schemas.qmd
+        - text: semantic_names
+          file: reference/utils.semantic_names.qmd
+        - text: summary
+          file: reference/utils.summary.qmd
+        - text: typed_payloads
+          file: reference/utils.typed_payloads.qmd
+        - text: typer_cli
+          file: reference/utils.typer_cli.qmd
+        - text: viz_utils
+          file: reference/utils.viz_utils.qmd
+        - text: wandb_utils
+          file: reference/utils.wandb_utils.qmd
+      - text: vin
+        file: reference/vin.qmd
+        contents:
+        - text: backbones
+          file: reference/vin.backbones.qmd
+          contents:
+          - text: evl
+            file: reference/vin.backbones.evl.qmd
+        - text: candidate_scorer
+          file: reference/vin.candidate_scorer.qmd
+        - text: diagnostics
+          file: reference/vin.diagnostics.qmd
+          contents:
+          - text: experimental_plotting
+            file: reference/vin.diagnostics.experimental_plotting.qmd
+          - text: plotting
+            file: reference/vin.diagnostics.plotting.qmd
+          - text: summarize
+            file: reference/vin.diagnostics.summarize.qmd
+          - text: summary_stats
+            file: reference/vin.diagnostics.summary_stats.qmd
+        - text: encoders
+          file: reference/vin.encoders.qmd
+          contents:
+          - text: fixed_fourier
+            file: reference/vin.encoders.fixed_fourier.qmd
+          - text: fourier
+            file: reference/vin.encoders.fourier.qmd
+          - text: pointnext
+            file: reference/vin.encoders.pointnext.qmd
+          - text: pointnext_utils
+            file: reference/vin.encoders.pointnext_utils.qmd
+          - text: pose
+            file: reference/vin.encoders.pose.qmd
+          - text: shell_descriptor
+            file: reference/vin.encoders.shell_descriptor.qmd
+          - text: shell_pose
+            file: reference/vin.encoders.shell_pose.qmd
+          - text: spherical
+            file: reference/vin.encoders.spherical.qmd
+          - text: trajectory
+            file: reference/vin.encoders.trajectory.qmd
+          - text: validation
+            file: reference/vin.encoders.validation.qmd
+        - text: feature_bank
+          file: reference/vin.feature_bank.qmd
+          contents:
+          - text: compression
+            file: reference/vin.feature_bank.compression.qmd
+          - text: feature_pooling_result
+            file: reference/vin.feature_bank.feature_pooling_result.qmd
+          - text: point_feature_bank
+            file: reference/vin.feature_bank.point_feature_bank.qmd
+          - text: point_query_pool
+            file: reference/vin.feature_bank.point_query_pool.qmd
+          - text: pooling
+            file: reference/vin.feature_bank.pooling.qmd
+          - text: provenance
+            file: reference/vin.feature_bank.provenance.qmd
+          - text: sampling
+            file: reference/vin.feature_bank.sampling.qmd
+        - text: geometry
+          file: reference/vin.geometry.qmd
+          contents:
+          - text: frustum
+            file: reference/vin.geometry.frustum.qmd
+          - text: pose_batch
+            file: reference/vin.geometry.pose_batch.qmd
+          - text: semidense_projection
+            file: reference/vin.geometry.semidense_projection.qmd
+          - text: semidense_schema
+            file: reference/vin.geometry.semidense_schema.qmd
+          - text: voxel
+            file: reference/vin.geometry.voxel.qmd
+        - text: models
+          file: reference/vin.models.qmd
+          contents:
+          - text: scene_myopic
+            file: reference/vin.models.scene_myopic.qmd
+          - text: target_finite_horizon
+            file: reference/vin.models.target_finite_horizon.qmd
+          - text: target_myopic
+            file: reference/vin.models.target_myopic.qmd
+        - text: modules
+          file: reference/vin.modules.qmd
+          contents:
+          - text: heads
+            file: reference/vin.modules.heads.qmd
+          - text: normalization
+            file: reference/vin.modules.normalization.qmd
+          - text: pooling
+            file: reference/vin.modules.pooling.qmd
+          - text: scene_field
+            file: reference/vin.modules.scene_field.qmd
+          - text: semidense_grid
+            file: reference/vin.modules.semidense_grid.qmd
+        - text: scorer_context
+          file: reference/vin.scorer_context.qmd
+        - text: types
+          file: reference/vin.types.qmd
+          contents:
+          - text: backbone
+            file: reference/vin.types.backbone.qmd
+          - text: diagnostics
+            file: reference/vin.types.diagnostics.qmd
+          - text: model_inputs
+            file: reference/vin.types.model_inputs.qmd
+          - text: prediction
+            file: reference/vin.types.prediction.qmd
       section: Stable Package Surface
-    - contents:
-      - reference/data_handling.efm_dataset.qmd
-      - reference/data_handling.efm_views.qmd
-      - reference/data_handling._offline_dataset.qmd
-      - reference/data_handling._offline_format.qmd
-      - reference/data_handling._offline_store.qmd
-      - reference/data_handling._target_selection.qmd
-      - reference/pose_generation.candidate_generation.qmd
-      - reference/pose_generation.candidate_mixture.qmd
-      - reference/pose_generation.types.qmd
-      - reference/rollouts.counterfactuals.qmd
-      - reference/rollouts.target_counterfactuals.qmd
-      - reference/rollouts.trace.qmd
-      - reference/rollouts.dataset_writer.qmd
-      - reference/rollouts.zarr_store.qmd
-      - reference/rendering.candidate_depth_renderer.qmd
-      - reference/rendering.candidate_pointclouds.qmd
-      - reference/rendering.unproject.qmd
-      - reference/rri_metrics.oracle_rri.qmd
-      - reference/rri_metrics.metrics.qmd
-      - reference/rri_metrics.coral.qmd
-      - reference/rri_metrics.types.qmd
-      section: Implementation Contracts
-    - contents:
-      - reference/vin.backbones.evl.qmd
-      - reference/vin.models.scene_myopic.qmd
-      - reference/vin.encoders.pose.qmd
-      - reference/vin.encoders.shell_pose.qmd
-      - reference/vin.encoders.spherical.qmd
-      - reference/vin.encoders.fourier.qmd
-      - reference/vin.encoders.pointnext.qmd
-      - reference/vin.encoders.trajectory.qmd
-      - reference/vin.types.qmd
-      - reference/vin.types.diagnostics.qmd
-      - reference/vin.diagnostics.experimental_plotting.qmd
-      section: VIN Core
-    - contents:
-      - reference/pipelines.oracle_rri_labeler.qmd
-      section: Pipelines
     id: reference
     search: true
     style: docked

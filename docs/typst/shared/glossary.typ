@@ -312,8 +312,8 @@
       definition_long: "The scorer predicts target-specific utility so view ranking can prioritize a selected entity or region instead of only optimizing scene-level RRI.",
       internal_links: (
         "docs/contents/thesis/questions.qmd#rq4-planning",
-        "docs/reference/vin.model_v3.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/vin.models.scene_myopic.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -697,7 +697,7 @@
       definition_long: "The persisted offline sample state is not the full raw snippet. It is the compact immutable training and diagnostic payload: VinSnippetView, candidate poses/cameras/counts, labels and oracle metrics, optional candidate depths, compact OBB fields, trajectory metadata, and selected EVL numeric tensors needed to reproduce scoring diagnostics.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (),
       related: (
@@ -1329,8 +1329,8 @@
       definition_long: "The current project uses EFM3D and its EVL architecture to expose voxel occupancy, centerness, semantic, and OBB evidence for VIN-style RRI prediction.",
       internal_links: (
         "docs/contents/literature/efm3d.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
-        "docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd",
       ),
       citations: (
         "EFM3D-straub2024",
@@ -1370,8 +1370,8 @@
       internal_links: (
         "docs/contents/literature/efm3d.qmd",
         "docs/contents/theory/efm3d_scene_embeddings.qmd",
-        "docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
         "EFM3D-straub2024",
@@ -1451,7 +1451,7 @@
       definition_long: "Candidate-view frusta define which scene surfaces can project into a camera image and are therefore central to visibility, rendering, and RRI diagnostics.",
       internal_links: (
         "docs/contents/theory/rri_theory.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
         "Frustum-Wikipedia-2025",
@@ -1691,7 +1691,7 @@
       internal_links: (
         "docs/contents/ase_dataset.qmd",
         "docs/reference/data_handling.efm_dataset.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
         "ProjectAria-ASE-2025",
@@ -2107,8 +2107,8 @@
       definition_long: "ARIA-NBV adapts VIN-NBV by placing a lightweight RRI prediction head on top of frozen EVL features and candidate-pose evidence from ASE snippets.",
       internal_links: (
         "docs/contents/literature/vin_nbv.qmd",
-        "docs/reference/vin.model_v3.qmd",
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/vin.models.scene_myopic.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -2445,7 +2445,7 @@
       definition_short: "Spatial grid whose cells encode whether space is occupied, free, unknown, or represented by a related occupancy probability.",
       definition_long: "Occupancy-style voxel evidence appears in EVL outputs and VIN feature construction, where it helps summarize local 3D scene state for candidate scoring.",
       internal_links: (
-        "docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd",
+        "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
         "docs/typst/seminar_paper/sections/06-architecture.typ",
       ),
       citations: (

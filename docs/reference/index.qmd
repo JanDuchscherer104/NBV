@@ -9,16 +9,14 @@ This section is generated from Google-style docstrings in `aria_nbv/aria_nbv/`.
 The published GitHub Pages build refreshes these pages via `quartodoc` in
 `.github/workflows/quarto-publish.yml`.
 
-This is now the public implementation-contract surface. The retired manual
-implementation pages were archived because package docstrings are closer to the
-code and easier to keep current. Use the generated contracts for ASE/EFM
-snippets, strict VIN offline-store v7, target selection, rollout Zarr,
-finite-candidate generation, rendering, RRI metrics, and VIN one-step scoring.
+This is the public package-contract surface. The generated reference follows
+the importable `aria_nbv` package topology while excluding app, UI, data-cache,
+and experimental roots that are not stable package documentation surfaces.
 
-Prefer `aria_nbv.data_handling` for stable import surfaces. The
-`Implementation Contracts` section expands selected internal modules whose
-schema, masking, lineage, and actor/oracle boundaries are important for thesis
-experiments. The `VIN Core` entries document the active one-step model internals
-behind training and inference.
+Package docstrings own conceptual contracts, equations, shapes, references, and
+actor/oracle boundaries because they remain closest to the implementation. Use
+the nested module pages for ASE/EFM snippets, strict VIN offline stores, target
+selection, rollouts, rendering, RRI metrics, training entrypoints, and VIN
+one-step scoring internals.
 
 {{< include _api_index.md >}}

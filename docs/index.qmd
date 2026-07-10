@@ -91,12 +91,11 @@ thesis contract.
 - **[EFM3D & EVL](contents/literature/efm3d.qmd)**: Egocentric foundation models and voxel lifting
 - **[SceneScript](contents/literature/scene_script.qmd)**: Structured scene language and entity representation
 
-## Implementation Contracts
+## API Reference
 
-- **[API Reference](reference/index.qmd)**: Generated package contracts for
-  datasets, immutable VIN offline stores, target selection, rollout Zarr,
-  finite-candidate generation, rendering, RRI metrics, and VIN one-step
-  scoring.
+- **[API Reference](reference/index.qmd)**: Generated package topology for
+  stable ARIA-NBV modules, including data handling, rendering, RRI metrics,
+  training, and VIN scoring.
 - **[Setup Instructions](contents/setup.qmd)**: Environment, cache, and smoke
   commands for local validation.
 - **[Architecture Diagrams](contents/diagrams.qmd)**: Generated context diagrams

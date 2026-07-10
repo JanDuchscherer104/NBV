@@ -23,7 +23,7 @@ The questions are tied to the dated [roadmap](roadmap.qmd), the
 [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd), the
 [candidate sampling and target-selection theory page](../theory/candidate_sampling_target_selection.qmd), the
 [RRI metric API](../../reference/rri_metrics.qmd), the
-[VIN model API](../../reference/vin.model_v3.qmd), and the current ASE/EVL stack
+[VIN model API](../../reference/vin.models.scene_myopic.qmd), and the current ASE/EVL stack
 [@ProjectAria-ASE-2025; @EFM3D-straub2024]. The thesis builds on VIN-NBV's
 quality-driven candidate-ranking objective [@VIN-NBV-frahm2025], while treating
 GenNBV [@GenNBV-chen2024], Hestia [@Hestia-lu2026], and SceneScript
@@ -73,7 +73,7 @@ The core terms used by the research questions are maintained in the shared
 - {{< glsfull predicted-target-q >}}
 - {{< glsfull ground-truth-target-evaluation >}}
 
-Related implementation nodes remain [VINv3](../../reference/aria_nbv.vin.model_v3.VinModelV3.qmd),
+Related implementation nodes remain [VINv3](../../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd),
 [EVL literature notes](../literature/efm3d.qmd), and
 [candidate generation](../../reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd).
 
@@ -419,7 +419,7 @@ support must be named from an observed M3 failure mode.
 
 **Connected implementation surfaces.** Target fields should enter through
 data-handling containers, then flow into the
-[VIN model API](../../reference/aria_nbv.vin.model_v3.VinModelV3.qmd),
+[VIN model API](../../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd),
 $Q_{H,\theta}$ replay rows, and diagnostics rather than through ad hoc
 dictionaries.
 

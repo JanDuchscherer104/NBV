@@ -38,7 +38,7 @@ See the
 [RRI theory page](../theory/rri_theory.qmd), the
 [finite-candidate rollout and Q_H contract](../theory/rl_planning.qmd), the
 [candidate sampling and target-selection theory page](../theory/candidate_sampling_target_selection.qmd), the
-[VIN model API](../../reference/vin.model_v3.qmd), the
+[VIN model API](../../reference/vin.models.scene_myopic.qmd), the
 [generated implementation contracts](../../reference/index.qmd), and the
 [M1 contract report](m1_contract_report.qmd) for the main connected nodes. The
 advisor-facing proposal is maintained in
@@ -455,8 +455,8 @@ the [RRI metric API](../../reference/rri_metrics.qmd), and the
 **Primary question:** What is the reproducible one-step baseline before adding
 target conditioning?
 
-**Implementation surfaces:** the [VIN model module](../../reference/vin.model_v3.qmd),
-the [VinModelV3 API](../../reference/aria_nbv.vin.model_v3.VinModelV3.qmd), the
+**Implementation surfaces:** the [VIN model module](../../reference/vin.models.scene_myopic.qmd),
+the [VinModelV3 API](../../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd), the
 Lightning training surface, W&B/Optuna reports, and Streamlit diagnostics.
 
 **Exit checks:**

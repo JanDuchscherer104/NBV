@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-VIN-NBV/main.tex), [`sec/3_methods.tex`](../../literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex), and [`sec/4_experiments.tex`](../../literature/tex-src/arXiv-VIN-NBV/sec/4_experiments.tex).
 
-**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [VIN model API](../../reference/vin.model_v3.qmd), and [RL planning](rl_planning.qmd).
+**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [VIN model API](../../reference/vin.models.scene_myopic.qmd), and [RL planning](rl_planning.qmd).
 
 ![VIN-NBV architecture](../../figures/external/arXiv-VIN-NBV/VIN_arch.png){#fig-vin-arch width=80%}
 

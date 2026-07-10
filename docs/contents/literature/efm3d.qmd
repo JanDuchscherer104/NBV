@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-EFM3D/main.tex), [`method.tex`](../../literature/tex-src/arXiv-EFM3D/method.tex), [`experiments.tex`](../../literature/tex-src/arXiv-EFM3D/experiments.tex), and [`supplemental_text.tex`](../../literature/tex-src/arXiv-EFM3D/supplemental_text.tex).
 
-**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [ASE dataset](../ase_dataset.qmd), [EFM3D scene embeddings](../theory/efm3d_scene_embeddings.qmd), [VIN model API](../../reference/vin.model_v3.qmd), and [VIN feature contracts](../../reference/vin.types.qmd).
+**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [ASE dataset](../ase_dataset.qmd), [EFM3D scene embeddings](../theory/efm3d_scene_embeddings.qmd), [VIN model API](../../reference/vin.models.scene_myopic.qmd), and [VIN feature contracts](../../reference/vin.types.qmd).
 
 ### Core contribution
 

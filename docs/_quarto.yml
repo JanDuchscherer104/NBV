@@ -177,153 +177,17 @@ quartodoc:
     member_order: source
   sections:
     - title: "Stable Package Surface"
-      desc: "Preferred import surfaces for datasets, geometry, rendering, training, and utilities."
-      contents:
-        - name: data_handling
-          include_imports: true
-          children: separate
-          member_options: &embedded_members
-            children: embedded
-            include_attributes: true
-            include_private: false
-            include_imports: false
-            member_order: source
-        - name: pose_generation
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-        - name: rendering
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-        - name: rri_metrics
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-        - name: lightning
+      desc: "Generated package topology for the public ARIA-NBV API surface."
+      options:
+        include_imports: false
+        children: separate
+        member_options:
+          children: embedded
+          include_attributes: true
+          include_private: false
           include_imports: false
-          children: separate
-          member_options: *embedded_members
-        - name: configs
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-        - name: utils
-          include_imports: true
-          children: separate
-          member_options: *embedded_members
-    - title: "Implementation Contracts"
-      desc: "Generated package contracts replacing the retired manual implementation pages."
-      contents:
-        - name: data_handling.efm_dataset
-          children: separate
-          member_options: *embedded_members
-        - name: data_handling.efm_views
-          children: separate
-          member_options: *embedded_members
-        - name: data_handling._offline_dataset
-          children: separate
-          member_options: *embedded_members
-        - name: data_handling._offline_format
-          children: separate
-          member_options: *embedded_members
-        - name: data_handling._offline_store
-          children: separate
-          member_options: *embedded_members
-        - name: data_handling._target_selection
-          children: separate
-          member_options: *embedded_members
-        - name: pose_generation.candidate_generation
-          children: separate
-          member_options: *embedded_members
-        - name: pose_generation.candidate_mixture
-          children: separate
-          member_options: *embedded_members
-        - name: pose_generation.types
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts.counterfactuals
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts.target_counterfactuals
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts.trace
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts.dataset_writer
-          children: separate
-          member_options: *embedded_members
-        - name: rollouts.zarr_store
-          children: separate
-          member_options: *embedded_members
-        - name: rendering.candidate_depth_renderer
-          children: separate
-          member_options: *embedded_members
-        - name: rendering.candidate_pointclouds
-          children: separate
-          member_options: *embedded_members
-        - name: rendering.unproject
-          children: separate
-          member_options: *embedded_members
-        - name: rri_metrics.oracle_rri
-          children: separate
-          member_options: *embedded_members
-        - name: rri_metrics.metrics
-          children: separate
-          member_options: *embedded_members
-        - name: rri_metrics.coral
-          children: separate
-          member_options: *embedded_members
-        - name: rri_metrics.types
-          children: separate
-          member_options: *embedded_members
-    - title: "VIN Core"
-      desc: "Core model modules behind EVL-backed view scoring."
-      contents:
-        - name: vin.backbones.evl
-          children: separate
-          member_options: *embedded_members
-        - name: vin.models.scene_myopic
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.pose
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.shell_pose
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.spherical
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.fourier
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.pointnext
-          children: separate
-          member_options: *embedded_members
-        - name: vin.encoders.trajectory
-          children: separate
-          member_options: *embedded_members
-        - name: vin.types
-          children: separate
-          member_options: *embedded_members
-        - name: vin.types.diagnostics
-          children: separate
-          member_options: *embedded_members
-        - name: vin.diagnostics.experimental_plotting
-          children: separate
-          member_options: *embedded_members
-    - title: "Pipelines"
-      desc: "End-to-end orchestration modules that connect the typed data stack to oracle labelling."
-      contents:
-        - name: pipelines.oracle_rri_labeler
-          children: separate
-          member_options: *embedded_members
+          member_order: source
+      contents: []
 
 
 # export QUARTO_PYTHON=/home/jd/.local/share/mamba/envs/aria-nbv/bin/python # put in your shell rc if you like

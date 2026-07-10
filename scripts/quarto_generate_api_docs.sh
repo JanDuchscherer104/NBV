@@ -7,21 +7,17 @@ DOCS_DIR="${REPO_ROOT}/docs"
 REFERENCE_DIR="${DOCS_DIR}/reference"
 PYTHON_BIN=""
 TMP_LOG="$(mktemp)"
-QUARTODOC_ARGS=(build --config _quarto.yml)
-
-if [[ -n "${QUARTODOC_FILTER:-}" ]]; then
-  QUARTODOC_ARGS+=(--filter "${QUARTODOC_FILTER}")
-fi
-
-if [[ "${QUARTODOC_WATCH:-0}" == "1" ]]; then
-  QUARTODOC_ARGS+=(--watch)
-fi
+TMP_CONFIG=""
+QUARTODOC_ARGS=()
 
 cd "${DOCS_DIR}"
 mkdir -p reference
 
 cleanup() {
   rm -f "${TMP_LOG}"
+  if [[ -n "${TMP_CONFIG}" ]]; then
+    rm -f "${TMP_CONFIG}"
+  fi
 }
 trap cleanup EXIT
 
@@ -50,14 +46,38 @@ if ! "${PYTHON_BIN}" -m quartodoc --help >/dev/null 2>&1; then
   fi
 fi
 
+TMP_CONFIG="$(mktemp "${DOCS_DIR}/.quartodoc-expanded.XXXXXX.yml")"
+"${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_expand_config.py" \
+  --config "${DOCS_DIR}/_quarto.yml" \
+  --output "${TMP_CONFIG}"
+
+QUARTODOC_ARGS=(build --config "${TMP_CONFIG}")
+
+if [[ -n "${QUARTODOC_FILTER:-}" ]]; then
+  QUARTODOC_ARGS+=(--filter "${QUARTODOC_FILTER}")
+fi
+
+if [[ "${QUARTODOC_WATCH:-0}" == "1" ]]; then
+  QUARTODOC_ARGS+=(--watch)
+fi
+
+clean_reference_render_artifacts() {
+  find "${REFERENCE_DIR}" -maxdepth 1 -type f -name "*.html" -delete
+  find "${REFERENCE_DIR}" -maxdepth 1 -type d -name "*_files" -exec rm -rf {} +
+  if [[ -d "${DOCS_DIR}/.quarto/idx/reference" ]]; then
+    find "${DOCS_DIR}/.quarto/idx/reference" -maxdepth 1 -type f -name "*.json" -delete
+  fi
+}
+
 clean_reference_pages() {
   find "${REFERENCE_DIR}" -maxdepth 1 -type f -name "*.qmd" ! -name "_*.qmd" ! -name "index.qmd" -delete
+  clean_reference_render_artifacts
 }
 
 run_quartodoc() {
   set +e
   if [[ "${UVX_QUARTODOC:-0}" == "1" ]]; then
-    uvx --from quartodoc quartodoc "${QUARTODOC_ARGS[@]}" 2>&1 | tee "${TMP_LOG}"
+    uv run --project "${REPO_ROOT}/aria_nbv" --directory "${DOCS_DIR}" --frozen --with quartodoc quartodoc "${QUARTODOC_ARGS[@]}" 2>&1 | tee "${TMP_LOG}"
   else
     "${PYTHON_BIN}" -m quartodoc "${QUARTODOC_ARGS[@]}" 2>&1 | tee "${TMP_LOG}"
   fi
@@ -111,6 +131,9 @@ if [[ "${BUILD_STATUS}" -ne 0 ]]; then
     exit "${BUILD_STATUS}"
   fi
 fi
+
+clean_reference_render_artifacts
+"${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_nest_sidebar.py" "${REFERENCE_DIR}/_sidebar.yml"
 
 if grep -Eq "^WARNING:" "${TMP_LOG}"; then
   echo "quartodoc finished with non-blocking warnings. Review them before release."

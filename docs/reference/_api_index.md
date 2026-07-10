@@ -1,10 +1,16 @@
-## Generated Sections
+## Stable Package Surface
 
-- [Stable package surface](data_handling.qmd)
-- [Implementation contracts](data_handling.efm_dataset.qmd)
-- [VIN core](vin.models.scene_myopic.qmd)
-- [Pipelines](pipelines.oracle_rri_labeler.qmd)
+Generated from the importable `aria_nbv` package topology. Nested
+sidebar entries follow dotted module paths; package pages document
+their public reexports, while leaf module pages document local symbols.
 
-The detailed symbol pages are generated locally and in CI from package
-docstrings. They are intentionally ignored by Git; this index and the sidebar
-provide the tracked entrypoints.
+- [configs](configs.qmd)
+- [data_handling](data_handling.qmd)
+- [lightning](lightning.qmd)
+- [pipelines](pipelines.qmd)
+- [pose_generation](pose_generation.qmd)
+- [rendering](rendering.qmd)
+- [rollouts](rollouts.qmd)
+- [rri_metrics](rri_metrics.qmd)
+- [utils](utils.qmd)
+- [vin](vin.qmd)

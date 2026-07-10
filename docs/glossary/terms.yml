@@ -232,8 +232,8 @@
   - metrics.topk_acc
   internal_links:
   - docs/contents/thesis/questions.qmd#rq4-planning
-  - docs/reference/vin.model_v3.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/vin.models.scene_myopic.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
   - VIN-NBV-frahm2025
   related:
@@ -522,7 +522,7 @@
   - rl.s_off
   internal_links:
   - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   related:
   - historic-snippet-state
   - vin-nbv
@@ -981,8 +981,8 @@
     occupancy, centerness, semantic, and OBB evidence for VIN-style RRI prediction.
   internal_links:
   - docs/contents/literature/efm3d.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
-  - docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd
   citations:
   - EFM3D-straub2024
   related:
@@ -1013,8 +1013,8 @@
   internal_links:
   - docs/contents/literature/efm3d.qmd
   - docs/contents/theory/efm3d_scene_embeddings.qmd
-  - docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
   - EFM3D-straub2024
   - EVL-Doc-2025
@@ -1070,7 +1070,7 @@
     image and are therefore central to visibility, rendering, and RRI diagnostics.
   internal_links:
   - docs/contents/theory/rri_theory.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
   - Frustum-Wikipedia-2025
   related:
@@ -1235,7 +1235,7 @@
   internal_links:
   - docs/contents/ase_dataset.qmd
   - docs/reference/data_handling.efm_dataset.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
   - ProjectAria-ASE-2025
   - EFM3D-straub2024
@@ -1521,8 +1521,8 @@
     top of frozen EVL features and candidate-pose evidence from ASE snippets.
   internal_links:
   - docs/contents/literature/vin_nbv.qmd
-  - docs/reference/vin.model_v3.qmd
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/vin.models.scene_myopic.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
   - VIN-NBV-frahm2025
   related:
@@ -1750,7 +1750,7 @@
   definition_long: Occupancy-style voxel evidence appears in EVL outputs and VIN feature construction,
     where it helps summarize local 3D scene state for candidate scoring.
   internal_links:
-  - docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd
+  - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   - docs/typst/seminar_paper/sections/06-architecture.typ
   citations:
   - EFM3D-straub2024

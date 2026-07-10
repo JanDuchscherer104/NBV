@@ -543,7 +543,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-of-interest">target</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a> <a class="glossary-chip" href="../reference/vin.model_v3.html" title="docs/reference/vin.model_v3.qmd">model_v3</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="thesis/questions.html#rq4-planning" title="docs/contents/thesis/questions.qmd#rq4-planning">Master Thesis Research Questions</a> <a class="glossary-chip" href="../reference/vin.models.scene_myopic.html" title="docs/reference/vin.models.scene_myopic.qmd">scene_myopic</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -822,7 +822,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-vin-nbv">vin-nbv</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 </div>
 </details>
 
@@ -1409,7 +1409,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-aria-synthetic-environments">ASE</a> <a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="ase_dataset.html" title="docs/contents/ase_dataset.qmd">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../reference/data_handling.efm_dataset.html" title="docs/reference/data_handling.efm_dataset.qmd">efm_dataset</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="ase_dataset.html" title="docs/contents/ase_dataset.qmd">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../reference/data_handling.efm_dataset.html" title="docs/reference/data_handling.efm_dataset.qmd">efm_dataset</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-ProjectAria-ASE-2025">&#64;ProjectAria-ASE-2025</a> <a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
@@ -1625,7 +1625,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a> <a class="glossary-chip" href="#term-point-cloud">PC</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">Relative Reconstruction Improvement (RRI) Theory</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">Relative Reconstruction Improvement (RRI) Theory</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-Frustum-Wikipedia-2025">&#64;Frustum-Wikipedia-2025</a></div></div>
 </div>
 </details>
@@ -1843,7 +1843,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-aria-synthetic-environments">ASE</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbone_evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd">EvlBackbone</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbones.evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd">EvlBackbone</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
@@ -1873,7 +1873,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-egocentric-foundation-model-3d">EFM3D</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-oriented-bounding-box">OBB</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbone_evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbone_evl.EvlBackbone.qmd">EvlBackbone</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.backbones.evl.EvlBackbone.html" title="docs/reference/aria_nbv.vin.backbones.evl.EvlBackbone.qmd">EvlBackbone</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a> <a class="glossary-chip glossary-citation" href="#ref-EVL-Doc-2025">&#64;EVL-Doc-2025</a></div></div>
 </div>
 </details>
@@ -1903,7 +1903,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-relative-reconstruction-improvement">RRI</a> <a class="glossary-chip" href="#term-target-conditioned-scorer">target-conditioned scorer</a> <a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/vin_nbv.html" title="docs/contents/literature/vin_nbv.qmd">VIN-NBV</a> <a class="glossary-chip" href="../reference/vin.model_v3.html" title="docs/reference/vin.model_v3.qmd">model_v3</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="literature/vin_nbv.html" title="docs/contents/literature/vin_nbv.qmd">VIN-NBV</a> <a class="glossary-chip" href="../reference/vin.models.scene_myopic.html" title="docs/reference/vin.models.scene_myopic.qmd">scene_myopic</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -2134,7 +2134,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../reference/aria_nbv.vin.model_v3.VinModelV3.html" title="docs/reference/aria_nbv.vin.model_v3.VinModelV3.qmd">VinModelV3</a> <a class="glossary-chip" href="../typst/seminar_paper/sections/06-architecture.typ" title="docs/typst/seminar_paper/sections/06-architecture.typ">06 Architecture</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a> <a class="glossary-chip" href="../typst/seminar_paper/sections/06-architecture.typ" title="docs/typst/seminar_paper/sections/06-architecture.typ">06 Architecture</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
