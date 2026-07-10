@@ -972,7 +972,7 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:27:20.693866+00:00`
 
-Graphify refresh: `2026-07-10T16:27:20.693866+00:00`
+Graphify refresh: `2026-07-10T18:34:29+02:00`
 
 ### Symbol Ownership Matrix
 

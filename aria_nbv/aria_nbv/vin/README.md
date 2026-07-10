@@ -6,6 +6,8 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T15:58:15.078783+00:00`
 
+Graphify refresh: `2026-07-10T18:34:29+02:00`
+
 ## Current And Target Layout
 
 ```text
@@ -17,6 +19,10 @@ vin/
 ```
 
 ## Symbol Ownership Matrix
+
+### `__init__.py`
+
+No top-level AST definitions; imported names and `__all__` are excluded.
 
 ### `candidate_scorer.py`
 
