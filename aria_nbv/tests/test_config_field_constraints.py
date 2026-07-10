@@ -9,11 +9,9 @@ from pydantic import ValidationError
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.data_handling import (
-    OracleTargetTaskSamplerConfig,
-    VinOfflineWriterConfig,
-)
+from aria_nbv.data_handling import VinOfflineWriterConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
+from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
     CandidateViewGeneratorConfig,
@@ -56,8 +54,7 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
     ("factory", "kwargs"),
     [
         (OracleTargetTaskSamplerConfig, {"max_targets_per_sample": 0}),
-        (OracleTargetTaskSamplerConfig, {"min_identity_iou": -0.1}),
-        (OracleTargetTaskSamplerConfig, {"identity_iou_thresholds": ()}),
+        (OracleTargetTaskSamplerConfig, {"policy": "weighted"}),
         (_recipe, {"horizon": 0}),
         (_recipe, {"selection_temperature": 0.0}),
         (_recipe, {"min_sibling_distance_m": -0.1}),

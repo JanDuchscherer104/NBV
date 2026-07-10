@@ -8,8 +8,7 @@ surface exposes:
 - :class:`EfmSnippetView` and stream-specific views for camera images, calibration,
   trajectory poses, semidense points, OBBs, GT annotations, and optional meshes;
 - :class:`VinSnippetView` and :class:`VinOracleBatch` for VIN-style one-step RRI scoring;
-- strict immutable VIN offline-store readers/writers;
-- oracle target-task sampling for rollout/data-generation labels.
+- strict immutable VIN offline-store readers/writers.
 
 The central safety contract is actor/oracle separation. Observed EVL/MPS/OBB
 evidence is actor-visible; ASE meshes, GT OBBs, target crops, and oracle labels
@@ -61,19 +60,6 @@ from .offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from ._target_selection import (
-    ORACLE_TARGET_TASK_SOURCE,
-    TARGET_INVALID_REASON_CODES,
-    TARGET_INVALID_REASON_VERSION,
-    OracleTargetTaskRow,
-    OracleTargetTaskSampler,
-    OracleTargetTaskSamplerConfig,
-    OracleTargetTaskSamplingResult,
-    OracleTargetTaskSweepCell,
-    TargetCandidateRow,
-    TargetTaskIdentityStatus,
-    target_gt_obb_world,
-)
 from ._vin_sources import (
     VinDatasetSourceConfig,
     VinOfflineSourceConfig,
@@ -101,18 +87,7 @@ __all__ = [
     "OFFLINE_DATASET_VERSION",
     "OfflineVisualInventory",
     "OfflineVisualInventoryError",
-    "ORACLE_TARGET_TASK_SOURCE",
-    "OracleTargetTaskRow",
-    "OracleTargetTaskSampler",
-    "OracleTargetTaskSamplerConfig",
-    "OracleTargetTaskSamplingResult",
-    "OracleTargetTaskSweepCell",
     "ProcessedMesh",
-    "TARGET_INVALID_REASON_CODES",
-    "TARGET_INVALID_REASON_VERSION",
-    "TargetCandidateRow",
-    "TargetTaskIdentityStatus",
-    "target_gt_obb_world",
     "VinDatasetSourceConfig",
     "VinOfflineDataset",
     "VinOfflineBackboneDiagnostic",

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -14,7 +15,6 @@ import msgspec
 import pytest
 import torch
 
-from aria_nbv.data_handling import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRow, TargetTaskIdentityStatus
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
@@ -23,6 +23,7 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
+from aria_nbv.oracle.target_selection import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRow, TargetTaskIdentityStatus
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
@@ -185,9 +186,9 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
         semidense_support_count=0,
         evl_support_count=0,
         effective_support_count=0.0,
-        identity_iou=1.0,
-        identity_second_iou=0.0,
-        identity_ambiguity_gap=1.0,
+        identity_iou=None,
+        identity_second_iou=None,
+        identity_ambiguity_gap=None,
         identity_status=TargetTaskIdentityStatus.MATCHED.value,
         identity_valid=True,
         selected_rank=0,
@@ -199,6 +200,9 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
     assert target.gt_label_valid
     assert target.gt_match_status == "matched"
     assert target.gt_target_row_id == 2
+    assert target.gt_match_iou is None
+    assert target.gt_match_score is None
+    assert math.isnan(target.score)
     assert target.source == ORACLE_TARGET_TASK_SOURCE
     assert target.invalid_reason_bitset == 1
 

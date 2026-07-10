@@ -16,23 +16,13 @@ from typing import TypeAlias
 from aria_nbv.data_handling import (
     DEFAULT_VIN_SNIPPET_PAD_POINTS,
     OFFLINE_DATASET_VERSION,
-    ORACLE_TARGET_TASK_SOURCE,
-    TARGET_INVALID_REASON_CODES,
-    TARGET_INVALID_REASON_VERSION,
     CompactObbBlock,
     CompactTrajectoryBlock,
     MeshProcessSpec,
     NumericSummary,
     OfflineVisualInventory,
     OfflineVisualInventoryError,
-    OracleTargetTaskRow,
-    OracleTargetTaskSampler,
-    OracleTargetTaskSamplerConfig,
-    OracleTargetTaskSamplingResult,
-    OracleTargetTaskSweepCell,
     ProcessedMesh,
-    TargetCandidateRow,
-    TargetTaskIdentityStatus,
     VinDatasetSourceConfig,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
@@ -64,7 +54,6 @@ from aria_nbv.data_handling import (
     flush_prepared_samples_to_shard,
     load_or_process_mesh,
     prepare_vin_offline_sample,
-    target_gt_obb_world,
 )
 
 RootExportClasses: TypeAlias = tuple[
@@ -74,14 +63,7 @@ RootExportClasses: TypeAlias = tuple[
     type[NumericSummary],
     type[OfflineVisualInventory],
     type[OfflineVisualInventoryError],
-    type[OracleTargetTaskRow],
-    type[OracleTargetTaskSampler],
-    type[OracleTargetTaskSamplerConfig],
-    type[OracleTargetTaskSamplingResult],
-    type[OracleTargetTaskSweepCell],
     type[ProcessedMesh],
-    type[TargetCandidateRow],
-    type[TargetTaskIdentityStatus],
     type[VinOfflineBackboneDiagnostic],
     type[VinOfflineBlockDiagnostic],
     type[VinOfflineCoverageSceneDiagnostic],
@@ -112,14 +94,7 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
     NumericSummary,
     OfflineVisualInventory,
     OfflineVisualInventoryError,
-    OracleTargetTaskRow,
-    OracleTargetTaskSampler,
-    OracleTargetTaskSamplerConfig,
-    OracleTargetTaskSamplingResult,
-    OracleTargetTaskSweepCell,
     ProcessedMesh,
-    TargetCandidateRow,
-    TargetTaskIdentityStatus,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
     VinOfflineCoverageSceneDiagnostic,
@@ -145,9 +120,6 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
 
 DEFAULT_PAD_POINTS: int = DEFAULT_VIN_SNIPPET_PAD_POINTS
 DATASET_VERSION: int = OFFLINE_DATASET_VERSION
-ORACLE_TASK_SOURCE: str = ORACLE_TARGET_TASK_SOURCE
-TARGET_REASON_CODES: dict[str, int] = TARGET_INVALID_REASON_CODES
-TARGET_REASON_VERSION: str = TARGET_INVALID_REASON_VERSION
 
 BUILD_VIN_SNIPPET: Callable[..., VinSnippetView] = build_vin_snippet_view
 EMPTY_VIN_SNIPPET: Callable[..., VinSnippetView] = empty_vin_snippet
@@ -157,7 +129,6 @@ COLLECT_COVERAGE: Callable[..., VinOfflineCoverageStats] = collect_vin_offline_d
 COLLECT_STATS: Callable[..., VinOfflineDatasetStats] = collect_vin_offline_dataset_stats
 FLUSH_SHARD: Callable[..., object] = flush_prepared_samples_to_shard
 PREPARE_SAMPLE: Callable[..., object] = prepare_vin_offline_sample
-TARGET_GT_OBB: Callable[..., object] = target_gt_obb_world
 
 
 def accepts_source_config(config: VinDatasetSourceConfig) -> VinDatasetSourceConfig:

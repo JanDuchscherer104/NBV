@@ -117,12 +117,16 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
     allowed_direct_imports = {
         "rollouts/target_counterfactuals.py": {
             "data_handling.offline.dataset",
-            "data_handling._target_selection",
             "data_handling.efm_views",
         },
+        "oracle/evidence.py": {"data_handling.offline.dataset"},
         "oracle/pipelines/rollout_dataset.py": {
             "data_handling.offline.dataset",
-            "data_handling._target_selection",
+        },
+        "oracle/target_selection.py": {
+            "data_handling.efm_views",
+            "data_handling.offline.batch",
+            "data_handling.offline.dataset",
         },
         "rollouts/info_cli.py": {"data_handling.efm_dataset_utils"},
         "rollouts/zarr_store.py": {"data_handling.efm_dataset_utils"},
@@ -249,6 +253,7 @@ def test_removed_legacy_data_handling_modules_raise_import_error() -> None:
         "aria_nbv.data_handling.vin_provider",
         "aria_nbv.data_handling._vin_runtime",
         "aria_nbv.data_handling._sample_keys",
+        "aria_nbv.data_handling._target_selection",
     ]
 
     for module_name in removed_modules:

@@ -21,16 +21,17 @@ from dataclasses import dataclass, field
 import torch
 from pydantic import Field, field_validator
 
-from ...data_handling._target_selection import (
+from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from ...oracle.target_selection import (
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
     OracleTargetTaskRow,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
+    OracleTargetTaskSelectionPolicy,
     TargetCandidateRow,
     TargetTaskIdentityStatus,
 )
-from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureViewGeneratorConfig,
@@ -786,7 +787,7 @@ class RolloutDatasetWriter:
 
         result = oracle_sampler.sample(sample)
         selected = tuple(_oracle_target_task_to_candidate_row(row) for row in result.selected_rows)
-        reason = "no_identity_valid_oracle_target_tasks" if result.rows else "no_oracle_target_tasks"
+        reason = "no_geometry_valid_oracle_target_tasks" if result.rows else "no_oracle_target_tasks"
         return _RolloutTargetSelectionResult(
             rows=tuple(_oracle_target_task_to_candidate_row(row) for row in result.rows),
             selected_rows=selected,
@@ -854,7 +855,7 @@ class RolloutDatasetWriter:
         return None
 
     def _target_selection_policy(self) -> str:
-        return "oracle_identity_valid_uniform"
+        return OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT.value
 
 
 def _lineage_split(*, records: list[object], fallback: str) -> str:
@@ -892,7 +893,7 @@ def _oracle_target_task_to_candidate_row(row: OracleTargetTaskRow) -> TargetCand
         visibility_score=1.0,
         support_score=1.0,
         deficit_score=0.0,
-        score=float(row.identity_iou) if row.identity_iou is not None else float("nan"),
+        score=float("nan"),
         eligible=gt_valid,
         invalid_reason_bitset=reason_bitset,
         primary_invalid_reason=primary_reason,
@@ -901,8 +902,8 @@ def _oracle_target_task_to_candidate_row(row: OracleTargetTaskRow) -> TargetCand
         gt_label_valid=gt_valid,
         gt_target_row_id=row.source_index if gt_valid else None,
         gt_target_id=row.target_id if gt_valid else None,
-        gt_match_iou=row.identity_iou,
-        gt_match_score=row.identity_iou,
+        gt_match_iou=None,
+        gt_match_score=None,
         gt_match_status="matched" if gt_valid else row.identity_status,
     )
 

@@ -11,7 +11,7 @@ canonical_updates_needed:
   - .agents/memory/state/DECISIONS.md
   - .agents/memory/state/OPEN_QUESTIONS.md
   - .agents/memory/state/PROJECT_STATE.md
-  - aria_nbv/aria_nbv/data_handling/_target_selection.py
+  - aria_nbv/aria_nbv/oracle/target_selection.py
   - .configs/build_rollouts_v1_realistic.toml
 artifacts:
   - docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ

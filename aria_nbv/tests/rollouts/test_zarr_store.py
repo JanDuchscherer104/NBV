@@ -15,9 +15,7 @@ pytest.importorskip("efm3d")
 
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling import (
-    TARGET_INVALID_REASON_VERSION,
-)
+from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
 from aria_nbv.rollouts import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,

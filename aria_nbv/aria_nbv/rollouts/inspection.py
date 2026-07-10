@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 import zarr
 
-from ..data_handling import TARGET_INVALID_REASON_CODES
+from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import CandidatePositionMode, ViewDirectionMode, candidate_position_id, candidate_strategy_id
 from .manifest import read_rollout_store_manifest
 from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons

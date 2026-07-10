@@ -17,17 +17,19 @@ import torch
 from efm3d.aria.pose import PoseTW
 
 from ...data_handling import (
-    OracleTargetTaskSampler,
-    OracleTargetTaskSamplerConfig,
-    TargetCandidateRow,
     VinOfflineDatasetConfig,
     VinOfflineSample,
     VinOfflineStoreConfig,
-    target_gt_obb_world,
 )
+from ...oracle.evidence import target_gt_obb_world
 from ...oracle.pipelines.rollout_dataset import (
     _oracle_target_task_to_candidate_row,
     _target_descriptor_from_candidate_row,
+)
+from ...oracle.target_selection import (
+    OracleTargetTaskSampler,
+    OracleTargetTaskSamplerConfig,
+    TargetCandidateRow,
 )
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -76,7 +78,7 @@ This block chooses the immutable VIN offline root and the oracle-specified targe
 - `Split` / `Split-local sample index`: which source row is inspected.
 - `Max target tasks`: how many finite positive GT target tasks are sampled for rollout generation.
 - `Selection seed`: deterministic uniform-without-replacement oracle target-task sampling.
-- `Identity IoU` / `Identity gap`: minimal GT-row admission gates before evidence validation.
+- Oracle task admission: finite positive GT OBB geometry before evidence validation.
 """
 
 _LOADED_SAMPLE_INFO = """
@@ -1189,14 +1191,12 @@ def _render_live_rollouts_tab() -> None:
             target_k = int(st.slider("Max target tasks", min_value=1, max_value=12, value=3, step=1, key="cf_target_k"))
             target_seed = int(st.number_input("Selection seed", min_value=0, value=0, step=1, key="cf_target_seed"))
         with col_c:
-            min_identity_iou = float(st.slider("Identity IoU", 0.0, 1.0, 0.25, step=0.05, key="cf_identity_iou"))
-            identity_gap = float(st.slider("Identity gap", 0.0, 0.5, 0.05, step=0.01, key="cf_identity_gap"))
+            st.metric("Task admission", "finite GT OBB")
+            st.caption("Selection uses seeded uniform sampling without replacement.")
 
     selector_cfg = OracleTargetTaskSamplerConfig(
         max_targets_per_sample=int(target_k),
         seed=int(target_seed),
-        min_identity_iou=float(min_identity_iou),
-        identity_ambiguity_gap=float(identity_gap),
     )
     load_key = f"{store_dir.resolve() if store_dir.exists() else store_dir}|{split}|{sample_index}|{config_signature(selector_cfg)}"
     cache = st.session_state.setdefault("cf_live_source_cache", {})

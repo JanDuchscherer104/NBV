@@ -11,12 +11,14 @@ from efm3d.aria.pose import PoseTW
 from plotly.colors import sample_colorscale  # type: ignore[import]
 from plotly.subplots import make_subplots  # type: ignore[import]
 
-from ..data_handling import EfmSnippetView, target_gt_obb_world
+from ..data_handling import EfmSnippetView
+from ..oracle.evidence import target_gt_obb_world
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 
 if TYPE_CHECKING:
-    from ..data_handling import TargetCandidateRow, VinOfflineSample
+    from ..data_handling import VinOfflineSample
+    from ..oracle.target_selection import TargetCandidateRow
     from ..rollouts.counterfactuals import CounterfactualRolloutResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
     from .types import CandidateSamplingResult

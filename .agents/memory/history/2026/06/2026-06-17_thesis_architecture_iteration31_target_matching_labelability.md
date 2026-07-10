@@ -10,7 +10,7 @@ canonical_updates_needed:
   - docs/typst/thesis/sections/04-method/index.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/candidate_sampling_target_selection.qmd
-  - aria_nbv/tests/data_handling/test_target_selection.py
+  - aria_nbv/tests/oracle/test_target_selection.py
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json

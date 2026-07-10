@@ -2,9 +2,9 @@ r"""Oracle target-task sampling for ARIA-NBV.
 
 `OracleTargetTaskSampler` builds the data-generation target-task pool from
 oracle GT OBBs. It is the source for rollout labels and target-conditioned
-supervision. Identity validity is a GT OBB IoU/ambiguity contract; projected
-visibility, support, confidence, distance, and downstream headroom are audit
-fields, not first-pass eligibility gates.
+supervision. First-pass task admission is intentionally limited to finite,
+positive GT OBB geometry. Projected visibility, support, confidence, distance,
+and downstream headroom are audit fields, not first-pass eligibility gates.
 """
 
 from __future__ import annotations
@@ -15,19 +15,19 @@ from typing import TYPE_CHECKING
 
 import torch
 from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
-from efm3d.aria.obb import ObbTW, obb_iou3d
+from efm3d.aria.obb import ObbTW
 from efm3d.aria.pose import PoseTW
-from pydantic import Field, field_validator
+from pydantic import Field
 from torch import Tensor
 
+from ..data_handling.efm_views import EfmSnippetView, VinSnippetView
+from ..data_handling.offline.batch import CompactObbBlock
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
 from ..vin.types import EvlBackboneOutput
-from .efm_views import EfmSnippetView, VinSnippetView
-from .offline.batch import CompactObbBlock
 
 if TYPE_CHECKING:
-    from .offline.dataset import VinOfflineSample
+    from ..data_handling.offline.dataset import VinOfflineSample
 
 
 TARGET_INVALID_REASON_CODES: dict[str, int] = {
@@ -138,7 +138,7 @@ class TargetCandidateRow:
     """Unsaturated-support audit factor, or a sentinel for oracle-selected tasks."""
 
     score: float
-    """Selection score retained for lineage; oracle tasks use identity IoU."""
+    """Selection score retained for lineage; oracle tasks use ``NaN``."""
 
     eligible: bool
     """Whether the row is valid for target-RRI labeling."""
@@ -181,19 +181,26 @@ class TargetCandidateRow:
 
 
 class TargetTaskIdentityStatus(StrEnum):
-    """Identity-gate status for oracle target-task rows."""
+    """Task-admission status for oracle target-task rows."""
 
     MATCHED = "matched"
-    """The target passes geometry, IoU, and ambiguity thresholds."""
+    """The GT target has finite positive geometry and is admitted."""
 
     AMBIGUOUS = "ambiguous_identity"
-    """The best and second-best identity overlaps are insufficiently separated."""
+    """Legacy persisted status retained for reason-code decoding."""
 
     UNMATCHED = "unmatched_identity"
-    """No valid identity overlap reaches the configured IoU threshold."""
+    """Legacy persisted status retained for reason-code decoding."""
 
     INVALID_GEOMETRY = "invalid_geometry"
     """The target OBB has non-finite or non-positive geometry."""
+
+
+class OracleTargetTaskSelectionPolicy(StrEnum):
+    """Selection policies for admitted oracle target tasks."""
+
+    UNIFORM_WITHOUT_REPLACEMENT = "uniform_without_replacement"
+    """Seeded capped uniform sampling without replacement."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,11 +208,10 @@ class OracleTargetTaskRow:
     """One oracle target-task row for rollout/data-generation labeling.
 
     The sampler creates these rows from GT OBBs, not from actor-visible target
-    discovery. `identity_valid` is the first-pass task-pool gate: the source OBB
-    must have finite positive geometry, pass `min_identity_iou`, and have a
-    top-1/top-2 identity gap above `identity_ambiguity_gap`. Descriptor fields
-    such as projected area, semidense/EVL support, and confidence are preserved
-    as audit signals only and must not decide first-pass eligibility.
+    discovery. `identity_valid` is the first-pass task-pool gate: the source GT
+    OBB must have finite positive geometry. Descriptor fields such as projected
+    area, semidense/EVL support, and confidence are preserved as audit signals
+    only and must not decide first-pass eligibility.
 
     Headroom fields are intentionally optional. Target tasks survive sampling
     even when later rollout evidence proves little or no recoverable target
@@ -270,19 +276,19 @@ class OracleTargetTaskRow:
     """Semidense count plus the configured weight times the EVL count."""
 
     identity_iou: float | None
-    """Largest sampled 3D self-identity IoU, or ``None`` when geometry is invalid."""
+    """Deprecated identity score slot retained as ``None`` for lineage compatibility."""
 
     identity_second_iou: float | None
-    """Second-largest identity IoU, or ``None`` when identity evaluation failed."""
+    """Deprecated identity score slot retained as ``None`` for lineage compatibility."""
 
     identity_ambiguity_gap: float | None
-    """Difference between the largest and second-largest identity IoUs."""
+    """Deprecated identity score slot retained as ``None`` for lineage compatibility."""
 
     identity_status: str
-    """Serialized `TargetTaskIdentityStatus` produced by the identity gate."""
+    """Serialized `TargetTaskIdentityStatus` produced by the geometry gate."""
 
     identity_valid: bool
-    """Whether geometry, IoU, and ambiguity checks admit this task to sampling."""
+    """Whether finite positive geometry admits this task to sampling."""
 
     selected_rank: int | None = None
     """Zero-based rank in the seeded capped sample, or ``None`` when unselected."""
@@ -304,23 +310,6 @@ class OracleTargetTaskRow:
 
 
 @dataclass(frozen=True, slots=True)
-class OracleTargetTaskSweepCell:
-    """Coverage count for one oracle identity-threshold cell."""
-
-    min_identity_iou: float
-    """Minimum best-match identity IoU applied in this audit cell."""
-
-    identity_ambiguity_gap: float
-    """Required top-1/top-2 identity IoU gap applied in this audit cell."""
-
-    identity_valid_count: int
-    """Number of task rows passing both thresholds."""
-
-    identity_valid_fraction: float
-    """Fraction of all task rows passing both thresholds, in ``[0, 1]``."""
-
-
-@dataclass(frozen=True, slots=True)
 class OracleTargetTaskSamplingResult:
     """Oracle target-task pool and seeded capped sample for one snippet."""
 
@@ -328,10 +317,10 @@ class OracleTargetTaskSamplingResult:
     """All non-padded GT OBB rows interpreted as candidate target tasks."""
 
     identity_valid_rows: tuple[OracleTargetTaskRow, ...]
-    """Rows admitted by the configured geometry and identity gate."""
+    """Rows admitted by finite positive GT geometry."""
 
     selected_rows: tuple[OracleTargetTaskRow, ...]
-    """Uniformly sampled identity-valid rows with sampling audit fields populated."""
+    """Uniformly sampled geometry-valid rows with sampling audit fields populated."""
 
     max_targets_per_sample: int
     """Configured upper bound on selected target tasks per snippet."""
@@ -341,12 +330,6 @@ class OracleTargetTaskSamplingResult:
 
     source: str | None
     """Oracle OBB source name, or ``None`` when no GT source is available."""
-
-    identity_iou_thresholds: tuple[float, ...]
-    """IoU thresholds evaluated by `threshold_sweep`."""
-
-    identity_ambiguity_gaps: tuple[float, ...]
-    """Top-1/top-2 IoU gaps evaluated by `threshold_sweep`."""
 
     warnings: tuple[str, ...] = ()
     """Non-fatal source and sampling diagnostics."""
@@ -358,9 +341,6 @@ class OracleTargetTaskSamplingResult:
             "num_rows": len(self.rows),
             "num_identity_valid": len(self.identity_valid_rows),
             "num_selected": len(self.selected_rows),
-            "num_ambiguous_identity": sum(
-                row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value for row in self.rows
-            ),
             "num_invalid_geometry": sum(
                 row.identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value for row in self.rows
             ),
@@ -374,32 +354,6 @@ class OracleTargetTaskSamplingResult:
                 len(self.rows)
             )
         return summary
-
-    def threshold_sweep(self) -> tuple[OracleTargetTaskSweepCell, ...]:
-        """Report identity-valid coverage under configured threshold cells."""
-
-        total = float(len(self.rows))
-        cells: list[OracleTargetTaskSweepCell] = []
-        for min_iou in self.identity_iou_thresholds:
-            for gap in self.identity_ambiguity_gaps:
-                count = sum(
-                    1
-                    for row in self.rows
-                    if row.identity_iou is not None
-                    and row.identity_ambiguity_gap is not None
-                    and row.identity_iou >= min_iou
-                    and row.identity_ambiguity_gap > gap
-                    and row.identity_status != TargetTaskIdentityStatus.INVALID_GEOMETRY.value
-                )
-                cells.append(
-                    OracleTargetTaskSweepCell(
-                        min_identity_iou=float(min_iou),
-                        identity_ambiguity_gap=float(gap),
-                        identity_valid_count=int(count),
-                        identity_valid_fraction=0.0 if total == 0.0 else float(count) / total,
-                    )
-                )
-        return tuple(cells)
 
 
 @dataclass(slots=True)
@@ -433,25 +387,13 @@ class OracleTargetTaskSamplerConfig(TargetConfig["OracleTargetTaskSampler"]):
         return OracleTargetTaskSampler
 
     max_targets_per_sample: int = Field(default=3, ge=1)
-    """Maximum identity-valid GT target tasks sampled per snippet."""
+    """Maximum geometry-valid GT target tasks sampled per snippet."""
 
     seed: int | None = 0
     """Seed for uniform capped sampling without replacement."""
 
-    min_identity_iou: float = Field(default=0.25, ge=0.0, le=1.0)
-    """Minimum self-identity IoU for an oracle target-task row."""
-
-    identity_ambiguity_gap: float = Field(default=0.05, ge=0.0)
-    """Required top-1/top-2 IoU gap for an unambiguous target identity."""
-
-    identity_iou_samples: int = Field(default=8, ge=1)
-    """Samples per dimension for EFM's sampled OBB IoU fallback."""
-
-    identity_iou_thresholds: tuple[float, ...] = (0.1, 0.25, 0.5)
-    """Diagnostic IoU thresholds reported by `threshold_sweep`."""
-
-    identity_ambiguity_gaps: tuple[float, ...] = (0.0, 0.05, 0.1)
-    """Diagnostic ambiguity gaps reported by `threshold_sweep`."""
+    policy: OracleTargetTaskSelectionPolicy = OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT
+    """Policy used to select admitted GT target tasks."""
 
     projected_area_normalizer_pixels: float = Field(default=240.0 * 240.0, gt=0.0)
     """Image-area normalizer used for projected-area audit fractions."""
@@ -471,15 +413,6 @@ class OracleTargetTaskSamplerConfig(TargetConfig["OracleTargetTaskSampler"]):
     max_support_points: int = Field(default=20000, ge=1)
     """Maximum support points inspected per snippet, using deterministic prefix truncation."""
 
-    @field_validator("identity_iou_thresholds", "identity_ambiguity_gaps")
-    @classmethod
-    def _validate_threshold_tuple(cls, value: tuple[float, ...]) -> tuple[float, ...]:
-        if not value:
-            raise ValueError("threshold tuple must contain at least one value")
-        if any(not torch.isfinite(torch.tensor(float(item))) or float(item) < 0.0 for item in value):
-            raise ValueError("threshold tuple values must be finite and non-negative")
-        return tuple(float(item) for item in value)
-
 
 class OracleTargetTaskSampler:
     """Sample oracle GT target tasks for rollout/data-generation labeling."""
@@ -488,7 +421,7 @@ class OracleTargetTaskSampler:
         """Initialize the oracle sampler.
 
         Args:
-            config: Identity thresholds, audit-field settings, and sampling cap.
+            config: Audit-field settings, selection policy, and sampling cap.
         """
 
         self.config = config
@@ -501,12 +434,12 @@ class OracleTargetTaskSampler:
                 actor-visible audit sources.
 
         Returns:
-            Full GT target-task table, identity-valid pool, and capped seeded
+            Full GT target-task table, geometry-valid pool, and capped seeded
             sample. Support, projection, and later headroom fields are audit
             descriptors and do not filter first-pass target-task eligibility.
         """
 
-        from .offline.dataset import VinOfflineSample
+        from ..data_handling.offline.dataset import VinOfflineSample
 
         if not isinstance(sample, VinOfflineSample):
             raise TypeError("OracleTargetTaskSampler expects VinOfflineSample input.")
@@ -521,8 +454,6 @@ class OracleTargetTaskSampler:
                 max_targets_per_sample=self.config.max_targets_per_sample,
                 seed=self.config.seed,
                 source=None,
-                identity_iou_thresholds=self.config.identity_iou_thresholds,
-                identity_ambiguity_gaps=self.config.identity_ambiguity_gaps,
                 warnings=tuple(warnings),
             )
 
@@ -541,8 +472,6 @@ class OracleTargetTaskSampler:
             max_targets_per_sample=self.config.max_targets_per_sample,
             seed=self.config.seed,
             source=ORACLE_TARGET_TASK_SOURCE,
-            identity_iou_thresholds=self.config.identity_iou_thresholds,
-            identity_ambiguity_gaps=self.config.identity_ambiguity_gaps,
             warnings=tuple(warnings),
         )
 
@@ -583,7 +512,10 @@ class OracleTargetTaskSampler:
                 positive_counts=evl_counts,
             )
             effective_support = float(semidense_count) + float(self.config.evl_support_weight) * float(evl_count)
-            identity = self._identity_gate(gt_obbs, row_index=row_index)
+            geometry_valid = _obb_geometry_valid(obb)
+            identity_status = (
+                TargetTaskIdentityStatus.MATCHED if geometry_valid else TargetTaskIdentityStatus.INVALID_GEOMETRY
+            )
             source_index = int(source_indices[row_index])
             target_id = _target_id(
                 scene_id=scene_id,
@@ -614,50 +546,20 @@ class OracleTargetTaskSampler:
                     semidense_support_count=int(semidense_count),
                     evl_support_count=int(evl_count),
                     effective_support_count=float(effective_support),
-                    identity_iou=identity[0],
-                    identity_second_iou=identity[1],
-                    identity_ambiguity_gap=identity[2],
-                    identity_status=identity[3].value,
-                    identity_valid=identity[3] == TargetTaskIdentityStatus.MATCHED,
+                    identity_iou=None,
+                    identity_second_iou=None,
+                    identity_ambiguity_gap=None,
+                    identity_status=identity_status.value,
+                    identity_valid=identity_status == TargetTaskIdentityStatus.MATCHED,
                 )
             )
         return tuple(rows)
 
-    def _identity_gate(
-        self,
-        gt_obbs: ObbTW,
-        *,
-        row_index: int,
-    ) -> tuple[float | None, float | None, float | None, TargetTaskIdentityStatus]:
-        obb = ObbTW(gt_obbs._data[row_index].unsqueeze(0))
-        if not _obb_geometry_valid(obb):
-            return None, None, None, TargetTaskIdentityStatus.INVALID_GEOMETRY
-
-        ious: list[float] = []
-        for candidate_index in range(int(gt_obbs.shape[0])):
-            candidate = ObbTW(gt_obbs._data[candidate_index].unsqueeze(0))
-            if not _obb_geometry_valid(candidate):
-                continue
-            iou = _strict_obb_iou(obb, candidate, samples=self.config.identity_iou_samples)
-            if iou is None:
-                return None, None, None, TargetTaskIdentityStatus.UNMATCHED
-            ious.append(iou)
-        if not ious:
-            return None, None, None, TargetTaskIdentityStatus.UNMATCHED
-
-        ious.sort(reverse=True)
-        best = float(ious[0])
-        second = float(ious[1]) if len(ious) > 1 else 0.0
-        gap = float(best - second)
-        if best < self.config.min_identity_iou:
-            return best, second, gap, TargetTaskIdentityStatus.UNMATCHED
-        if gap <= self.config.identity_ambiguity_gap:
-            return best, second, gap, TargetTaskIdentityStatus.AMBIGUOUS
-        return best, second, gap, TargetTaskIdentityStatus.MATCHED
-
     def _sample_rows(self, rows: tuple[OracleTargetTaskRow, ...]) -> tuple[OracleTargetTaskRow, ...]:
         if not rows:
             return ()
+        if self.config.policy != OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT:
+            raise ValueError(f"Unsupported oracle target-task selection policy: {self.config.policy}")
         target_count = min(int(self.config.max_targets_per_sample), len(rows))
         generator = torch.Generator(device="cpu")
         if self.config.seed is not None:
@@ -687,35 +589,6 @@ def _compact_obb_block(value: CompactObbBlock | ObbTW | Tensor | None) -> tuple[
     if isinstance(obbs, ObbTW):
         return obbs, sem_id_to_name
     return ObbTW(torch.as_tensor(obbs, dtype=torch.float32)), sem_id_to_name
-
-
-def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> ObbTW:
-    """Resolve the matched GT target OBB in world coordinates.
-
-    Args:
-        row: Actor-visible target row after GT matching.
-        sample: VIN offline sample carrying ``gt_obbs`` and snippet transform.
-
-    Returns:
-        A single-row `ObbTW` in world coordinates.
-
-    Raises:
-        ValueError: If the row is not label-valid or the matched GT row cannot
-            be resolved.
-    """
-
-    if not row.gt_label_valid or row.gt_target_row_id is None:
-        raise ValueError("Target row is not GT-label valid; refusing to build target RRI crop.")
-    gt_block = _compact_obb_block(sample.gt_obbs)
-    if gt_block is None:
-        raise ValueError("Target RRI crop requires sample.gt_obbs.")
-    gt_world = _world_obbs_for_sample(gt_block[0], sample)
-    gt_data, gt_source_indices = _valid_obb_data_with_source_indices(gt_world)
-    try:
-        gt_index = gt_source_indices.index(int(row.gt_target_row_id))
-    except ValueError as exc:
-        raise ValueError(f"Matched GT target row {row.gt_target_row_id} is not present in sample.gt_obbs.") from exc
-    return ObbTW(gt_data[gt_index].unsqueeze(0))
 
 
 def _world_obbs_for_sample(obbs: ObbTW, sample: "VinOfflineSample") -> ObbTW:
@@ -850,16 +723,6 @@ def _max_projected_area(obb: ObbTW, *, config: OracleTargetTaskSamplerConfig) ->
     return max(areas) if areas else 0.0
 
 
-def _strict_obb_iou(pred: ObbTW, gt: ObbTW, *, samples: int) -> float | None:
-    try:
-        value = obb_iou3d(pred, gt, samp_per_dim=int(samples)).reshape(-1)[0]
-    except Exception:
-        return None
-    if not bool(torch.isfinite(value).item()):
-        return None
-    return float(value.item())
-
-
 def _obb_geometry_valid(obb: ObbTW) -> bool:
     data = obb.tensor().reshape(-1)
     extents = obb.bb3_diagonal.reshape(-1)
@@ -906,11 +769,10 @@ __all__ = [
     "OracleTargetTaskRow",
     "OracleTargetTaskSampler",
     "OracleTargetTaskSamplerConfig",
+    "OracleTargetTaskSelectionPolicy",
     "OracleTargetTaskSamplingResult",
-    "OracleTargetTaskSweepCell",
     "TARGET_INVALID_REASON_CODES",
     "TARGET_INVALID_REASON_VERSION",
     "TargetCandidateRow",
     "TargetTaskIdentityStatus",
-    "target_gt_obb_world",
 ]

@@ -8,7 +8,7 @@ import torch
 import trimesh  # type: ignore[import-untyped]
 from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.data_handling import TARGET_INVALID_REASON_VERSION
+from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
 from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
 from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy

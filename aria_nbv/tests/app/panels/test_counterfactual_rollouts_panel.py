@@ -23,7 +23,7 @@ from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling import TargetCandidateRow
+from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidateViewGeneratorConfig,

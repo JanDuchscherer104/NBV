@@ -6,8 +6,8 @@ status: done
 topics: [target-selection, rri, rollouts, thesis, autoresearch]
 confidence: high
 canonical_updates_needed:
-  - aria_nbv/aria_nbv/data_handling/_target_selection.py
-  - aria_nbv/tests/data_handling/test_target_selection.py
+  - aria_nbv/aria_nbv/oracle/target_selection.py
+  - aria_nbv/tests/oracle/test_target_selection.py
   - aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py
   - aria_nbv/aria_nbv/rollouts/zarr_store.py
   - docs/typst/thesis/sections/04-method/index.typ

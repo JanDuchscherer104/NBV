@@ -14,15 +14,16 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import (
-    ORACLE_TARGET_TASK_SOURCE,
     CompactObbBlock,
+    VinSnippetView,
+)
+from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.oracle.target_selection import (
+    ORACLE_TARGET_TASK_SOURCE,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetTaskIdentityStatus,
-    VinSnippetView,
 )
-from aria_nbv.data_handling import _target_selection as target_selection_module
-from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 
 
 def _poses(translations: list[list[float]]) -> PoseTW:
@@ -139,7 +140,7 @@ def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
     assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
 
 
-def test_oracle_target_task_sampler_rejects_ambiguous_duplicate_gt_identity() -> None:
+def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_tasks() -> None:
     sample = _sample(
         gt_obbs=_obb_block(
             [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
@@ -151,46 +152,11 @@ def test_oracle_target_task_sampler_rejects_ambiguous_duplicate_gt_identity() ->
     result = _oracle_sampler(max_targets_per_sample=3, seed=0).sample(sample)
 
     assert len(result.rows) == 3
-    assert len(result.identity_valid_rows) == 1
-    assert len(result.selected_rows) == 1
-    assert sum(row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value for row in result.rows) == 2
-    assert result.selected_rows[0].source_index == 2
-
-
-def test_oracle_target_task_sampler_rejects_identity_when_iou_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]))
-
-    def _raise_iou(*_args: object, **_kwargs: object) -> torch.Tensor:
-        raise RuntimeError("forced iou failure")
-
-    monkeypatch.setattr(target_selection_module, "obb_iou3d", _raise_iou)
-
-    result = _oracle_sampler(max_targets_per_sample=1).sample(sample)
-
-    assert len(result.rows) == 1
-    assert result.rows[0].identity_status == TargetTaskIdentityStatus.UNMATCHED.value
-    assert not result.rows[0].identity_valid
-    assert result.identity_valid_rows == ()
-    assert result.selected_rows == ()
-
-
-def test_oracle_target_task_sampler_threshold_sweep_reports_identity_coverage() -> None:
-    sample = _sample(
-        gt_obbs=_obb_block(
-            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
-            sem_ids=[0, 0, 1],
-            inst_ids=[10, 11, 12],
-        )
-    )
-
-    result = _oracle_sampler(
-        identity_iou_thresholds=(0.25,),
-        identity_ambiguity_gaps=(0.0, 0.05),
-    ).sample(sample)
-    cells = result.threshold_sweep()
-
-    assert [(cell.identity_ambiguity_gap, cell.identity_valid_count) for cell in cells] == [(0.0, 1), (0.05, 1)]
-    assert result.diagnostic_summary()["num_ambiguous_identity"] == 2
+    assert len(result.identity_valid_rows) == 3
+    assert len(result.selected_rows) == 3
+    assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in result.rows)
+    assert all(row.identity_iou is None for row in result.rows)
+    assert "num_ambiguous_identity" not in result.diagnostic_summary()
 
 
 def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_projection_gate() -> None:

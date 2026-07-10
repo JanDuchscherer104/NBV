@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ...data_handling import TARGET_INVALID_REASON_CODES, TargetCandidateRow
+from ...oracle.target_selection import TARGET_INVALID_REASON_CODES, TargetCandidateRow
 
 _TARGET_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 
