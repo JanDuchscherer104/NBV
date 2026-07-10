@@ -2183,7 +2183,7 @@
       definition_short: "Historical bidirectional distance family used to compare reconstructed points against reference geometry.",
       definition_long: "Thesis-facing ARIA-NBV notation uses point-mesh error D with directional components D_{P->M} and D_{M->P}; older seminar material may still call this CD.",
       internal_links: (
-        "docs/reference/rri_metrics.metrics.qmd",
+        "docs/reference/rri_metrics.point_mesh.qmd",
         "docs/contents/theory/rri_theory.qmd",
       ),
       citations: (

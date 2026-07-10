@@ -33,7 +33,7 @@ from ..rri_metrics.logging import (
     metric_key,
     topk_accuracy_from_probs,
 )
-from ..rri_metrics.rri_binning import RriOrdinalBinner
+from ..rri_metrics.ordinal import RriOrdinalBinner
 from ..rri_metrics.torch_rollout import candidate_topk_oracle_hit, selected_action_oracle_comparison
 from ..utils import Console, Stage, TargetConfig
 from ..utils.grad_norms import GradNormLoggingConfig, _collect_grad_norm_targets, _grad_norm_from_params

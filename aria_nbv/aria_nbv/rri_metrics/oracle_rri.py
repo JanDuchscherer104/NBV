@@ -1,7 +1,7 @@
 r"""High-level oracle RRI computation orchestrator.
 
 This module wires together rendering outputs (candidate depth → point clouds),
-distance primitives (see ``metrics.py``), and configuration defaults to produce
+distance primitives (see ``point_mesh.py``), and configuration defaults to produce
 per-candidate Relative Reconstruction Improvement (RRI) scores as defined in
 ``docs/contents/theory/rri_theory.qmd``. The implementation is intentionally
 kept modular:
@@ -33,7 +33,7 @@ from pydantic import Field
 from aria_nbv.utils.base_config import TargetConfig
 
 from .eval_pointclouds import canonical_fuse_points
-from .metrics import chamfer_point_mesh, chamfer_point_mesh_batched
+from .point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
 from .types import RriResult
 
 

@@ -7,9 +7,9 @@ from .coral import (
     coral_loss,
     coral_random_loss,
 )
-from .metrics import chamfer_point_mesh, chamfer_point_mesh_batched
 from .oracle_rri import OracleRRI, OracleRRIConfig
-from .rri_binning import RriOrdinalBinner, ordinal_labels_to_levels
+from .ordinal import RriOrdinalBinner, ordinal_labels_to_levels
+from .point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
 from .types import DistanceAggregation, DistanceBreakdown, RriResult
 
 __all__ = [

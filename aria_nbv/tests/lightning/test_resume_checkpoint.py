@@ -9,7 +9,7 @@ from pytest import MonkeyPatch
 from aria_nbv.configs import PathConfig
 from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from aria_nbv.rri_metrics.rri_binning import RriOrdinalBinner
+from aria_nbv.rri_metrics.ordinal import RriOrdinalBinner
 from aria_nbv.utils import Console
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config
 

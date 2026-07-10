@@ -97,7 +97,7 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     fit_binner_overwrite: bool = False
     """Overwrite ``module_config.binner_path`` when ``run_mode="fit_binner"``.
 
-    The low-level `aria_nbv.rri_metrics.rri_binning.RriOrdinalBinner.save`
+    The low-level `aria_nbv.rri_metrics.ordinal.RriOrdinalBinner.save`
     method keeps existing JSON files by default and writes numbered siblings.
     This flag gives reproducible CLI preflight configs an explicit opt-in to
     refresh the configured artifact path in place.
@@ -646,7 +646,7 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
         Returns:
             Path to the saved `rri_binner.json`.
         """
-        from ..rri_metrics.rri_binning import RriOrdinalBinner
+        from ..rri_metrics.ordinal import RriOrdinalBinner
 
         out_dir = self.resolved_out_dir
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -729,7 +729,7 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
         if not resolved.exists():
             return
 
-        from ..rri_metrics.rri_binning import RriOrdinalBinner
+        from ..rri_metrics.ordinal import RriOrdinalBinner
 
         binner = RriOrdinalBinner.load(resolved)
         expected = int(self.module_config.num_classes)

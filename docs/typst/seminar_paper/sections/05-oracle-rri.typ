@@ -497,7 +497,7 @@ Inspecting this single-snippet candidate RRI bar plot reaveals a highly skewed d
 == Ordinal binning for CORAL (label post-processing)
 
 To train with CORAL, we discretize continuous RRIs into $K$ ordered bins using
-empirical quantile edges (#gh("aria_nbv/aria_nbv/rri_metrics/rri_binning.py")).
+empirical quantile edges (#gh("aria_nbv/aria_nbv/rri_metrics/ordinal.py")).
 Given a stream of oracle RRIs $\{r_n\}_{n=1}^N$, we compute $K-1$ edges at the
 quantiles $k/K$:
 

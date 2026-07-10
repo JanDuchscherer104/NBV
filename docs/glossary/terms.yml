@@ -1580,7 +1580,7 @@
   equation_refs:
   - rri.cd
   internal_links:
-  - docs/reference/rri_metrics.metrics.qmd
+  - docs/reference/rri_metrics.point_mesh.qmd
   - docs/contents/theory/rri_theory.qmd
   citations:
   - VIN-NBV-frahm2025

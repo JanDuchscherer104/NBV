@@ -19,7 +19,7 @@ from ...data_handling import (
     collect_vin_offline_dataset_stats,
 )
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
-from ...rri_metrics.rri_binning import RriOrdinalBinner
+from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
 from .stored_rollouts import render_stored_rollouts_panel
 

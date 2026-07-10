@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import torch
 
-from ....rri_metrics.rri_binning import RriOrdinalBinner
+from ....rri_metrics.ordinal import RriOrdinalBinner
 from ..common import _info_popover, _pretty_label
 from .context import VinDiagContext
 
