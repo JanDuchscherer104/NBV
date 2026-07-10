@@ -8,23 +8,18 @@ import aria_nbv.rri_metrics as rri_metrics
 def test_rri_metrics_root_exports_stable_core_only() -> None:
     """The package root should not re-export rollout reducers or diagnostics helpers."""
 
-    expected = {
-        "DistanceAggregation",
-        "DistanceBreakdown",
-        "OracleRRI",
-        "OracleRRIConfig",
-        "RriOrdinalBinner",
-        "RriResult",
-        "chamfer_point_mesh",
-        "chamfer_point_mesh_batched",
-        "ordinal_labels_to_levels",
-    }
+    expected = {"RriConfig", "RriOrdinalBinner", "RriResult", "compute_rri"}
     assert set(rri_metrics.__all__) == expected
 
     hidden = {
         "CandidateTopKOracleHitMetric",
+        "DistanceBreakdown",
+        "OracleRRI",
+        "OracleRRIConfig",
         "TargetRolloutMetricSummary",
+        "chamfer_point_mesh",
         "candidate_topk_oracle_hit",
+        "ordinal_labels_to_levels",
         "summarize_target_rollout_metrics",
         "topk_accuracy_from_probs",
     }

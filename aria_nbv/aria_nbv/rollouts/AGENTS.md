@@ -14,6 +14,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 - Target-cropped oracle rollout scoring: `target_counterfactuals.py`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
+- Operational replay/store checks: `audits.py`
 - Rollout generation pipelines and CLI: `aria_nbv.oracle.pipelines`
 
 ## Boundary Rules

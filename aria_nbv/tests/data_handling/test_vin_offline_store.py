@@ -39,7 +39,7 @@ from aria_nbv.data_handling.offline.writer import _assign_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths
-from aria_nbv.rri_metrics.types import RriResult
+from aria_nbv.rri_metrics.rri import RriResult
 from aria_nbv.utils import Console, Stage
 from aria_nbv.vin.types import EvlBackboneOutput
 

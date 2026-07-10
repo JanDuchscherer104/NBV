@@ -40,14 +40,11 @@ if "e3nn" not in sys.modules:
     sys.modules["e3nn"] = e3nn
     sys.modules["e3nn.o3"] = o3
 
-from aria_nbv.rri_metrics.logging import (
+from aria_nbv.rri_metrics.logging import Loss, Metric, loss_key, metric_key
+from aria_nbv.rri_metrics.torchmetrics_single import (
     LabelHistogram,
-    Loss,
-    Metric,
     RriErrorStats,
     VinMetrics,
-    loss_key,
-    metric_key,
     topk_accuracy_from_probs,
 )
 from aria_nbv.utils import Stage

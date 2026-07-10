@@ -1,53 +1,30 @@
-"""Typed containers and enums for oracle RRI computation.
-
-This module centralises small, self-contained data structures that are shared
-between the RRI metrics utilities and the high-level ``OracleRRI`` facade.
-Keeping the types separate avoids circular imports between ``metrics`` and
-``aria_nbv.rri_metrics.oracle_rri`` while providing a single source of truth for shapes, units, and
-semantic meaning.
-
-`RriResult` stores both the scalar improvement label and the directional
-point-mesh diagnostics needed to audit target-vs-scene behavior. Downstream
-datasets should carry these diagnostics when feasible so improvements in RRI
-can be decomposed into accuracy and completeness changes.
-"""
+"""Prepared relative reconstruction improvement computation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 import torch
+from torch import Tensor
 
 from ..utils.typed_payloads import from_serializable, to_serializable
-
-Tensor = torch.Tensor
-
-
-class DistanceAggregation(StrEnum):
-    """Supported reduction modes for distance tensors.
-
-    - ``mean``: Average over the last dimension (preferred for Chamfer style).
-    - ``sum``: Sum over the last dimension.
-    - ``none``: Return per-point distances without reducing.
-    """
-
-    MEAN = "mean"
-    SUM = "sum"
-    NONE = "none"
+from .point_mesh import DistanceBreakdown
 
 
-@dataclass(slots=True)
-class DistanceBreakdown:
-    """Directional distance components used to form Chamfer-style metrics."""
+@dataclass(frozen=True, slots=True)
+class RriConfig:
+    """Numerical contract for prepared RRI computation."""
 
-    accuracy: Tensor
-    """Point→mesh (prediction to GT) distances."""
-    completeness: Tensor
-    """Mesh→point (GT to prediction) distances."""
-    bidirectional: Tensor
-    """Sum of accuracy and completeness (Chamfer when using L2 distances with mean reduction)."""
+    epsilon: float = 1e-12
+    """Positive denominator guard for zero-error roots."""
+
+    def __post_init__(self) -> None:
+        if self.epsilon <= 0.0:
+            raise ValueError("epsilon must be positive.")
+
+
+_DEFAULT_RRI_CONFIG = RriConfig()
 
 
 @dataclass(slots=True)
@@ -114,8 +91,29 @@ class RriResult:
         )
 
 
-__all__ = [
-    "DistanceAggregation",
-    "DistanceBreakdown",
-    "RriResult",
-]
+def compute_rri(
+    before: DistanceBreakdown,
+    after: DistanceBreakdown,
+    *,
+    config: RriConfig = _DEFAULT_RRI_CONFIG,
+) -> RriResult:
+    """Compute RRI from prepared before/after point-mesh distances.
+
+    The caller owns evidence preparation, cropping, and fusion. This function
+    owns only the differentiable reconstruction-improvement formula.
+    """
+
+    denominator = before.bidirectional.clamp_min(config.epsilon)
+    rri = (before.bidirectional - after.bidirectional) / denominator
+    return RriResult(
+        rri=rri,
+        pm_dist_before=before.bidirectional.expand_as(rri),
+        pm_dist_after=after.bidirectional,
+        pm_acc_before=before.accuracy.expand_as(rri),
+        pm_comp_before=before.completeness.expand_as(rri),
+        pm_acc_after=after.accuracy,
+        pm_comp_after=after.completeness,
+    )
+
+
+__all__ = ["RriConfig", "RriResult", "compute_rri"]

@@ -26,14 +26,12 @@ from ..data_handling import VinOracleBatch
 from ..rri_metrics.logging import (
     Loss,
     Metric,
-    RriErrorStats,
-    VinMetricsConfig,
     loss_key,
     metric_key,
-    topk_accuracy_from_probs,
 )
 from ..rri_metrics.ordinal import RriOrdinalBinner
-from ..rri_metrics.torch_rollout import candidate_topk_oracle_hit, selected_action_oracle_comparison
+from ..rri_metrics.ranking import candidate_topk_oracle_hit, selected_action_oracle_comparison
+from ..rri_metrics.torchmetrics_single import RriErrorStats, VinMetricsConfig, topk_accuracy_from_probs
 from ..utils import Console, Stage, TargetConfig
 from ..utils.grad_norms import GradNormLoggingConfig, _collect_grad_norm_targets, _grad_norm_from_params
 from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig

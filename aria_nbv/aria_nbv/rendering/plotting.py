@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
+import plotly.express as px  # type: ignore[import-untyped]
 import plotly.graph_objects as go  # type: ignore[import-untyped]
 import torch
 from efm3d.aria import CameraTW, PoseTW
@@ -18,7 +19,11 @@ from torch import Tensor
 from ..pose_generation.plotting import CandidatePlotBuilder
 from ..utils import rotate_yaw_cw90
 from ..utils.data_plotting import FrameGridBuilder, _depth_to_color
+from .candidate_pointclouds import CandidatePointClouds
 from .unproject import backproject_depths_p3d_batch
+
+if TYPE_CHECKING:
+    from ..data_handling import EfmSnippetView
 
 _BOX_EDGE_IDX = np.array(
     [
@@ -459,11 +464,62 @@ class RenderingPlotBuilder(CandidatePlotBuilder):
         return pose.transform(pts_cam)
 
 
+def plot_candidate_pointcloud_scene(
+    sample: EfmSnippetView,
+    poses: PoseTW,
+    camera: CameraTW,
+    pointclouds: CandidatePointClouds,
+    *,
+    candidate_ids: Sequence[int],
+    selected_ids: Sequence[int],
+    color_map: Mapping[str, str],
+    title: str,
+    max_sem_pts: int,
+    show_frusta: bool,
+) -> go.Figure:
+    """Plot a snippet and selected candidate point clouds in world coordinates."""
+
+    builder = (
+        RenderingPlotBuilder.from_snippet(sample, title=title)
+        .add_mesh()
+        .add_semidense(last_frame_only=False, max_points=max_sem_pts)
+    )
+    selected_set = {int(candidate_id) for candidate_id in selected_ids}
+    if show_frusta and selected_set:
+        candidate_to_local = {int(candidate_id): index for index, candidate_id in enumerate(candidate_ids)}
+        selected_local = [
+            candidate_to_local[candidate_id] for candidate_id in selected_set if candidate_id in candidate_to_local
+        ]
+        if selected_local:
+            builder.add_frusta_selection(
+                poses=poses,
+                camera=camera,
+                max_frustums=min(16, len(selected_local)),
+                candidate_indices=selected_local,
+            )
+
+    for index in range(min(len(candidate_ids), pointclouds.points.shape[0])):
+        candidate_id = int(candidate_ids[index])
+        if candidate_id not in selected_set:
+            continue
+        points = pointclouds.points[index, : int(pointclouds.lengths[index].item())]
+        fallback = px.colors.qualitative.Plotly[index % len(px.colors.qualitative.Plotly)]
+        builder.add_points(
+            points,
+            name=f"Candidate {candidate_id}",
+            color=color_map.get(str(candidate_id), fallback),
+            size=3,
+            opacity=0.7,
+        )
+    return builder.finalize()
+
+
 __all__ = [
     "DepthBoxOverlay",
     "depth_grid",
     "depth_grid_with_box_overlays",
     "depth_histogram",
     "project_world_points_to_image",
+    "plot_candidate_pointcloud_scene",
     "RenderingPlotBuilder",
 ]

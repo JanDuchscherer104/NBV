@@ -1,18 +1,6 @@
-"""Stable root API for reconstruction-improvement metrics."""
+"""Compact public API for relative reconstruction improvement."""
 
-from .oracle_rri import OracleRRI, OracleRRIConfig
-from .ordinal import RriOrdinalBinner, ordinal_labels_to_levels
-from .point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
-from .types import DistanceAggregation, DistanceBreakdown, RriResult
+from .ordinal import RriOrdinalBinner
+from .rri import RriConfig, RriResult, compute_rri
 
-__all__ = [
-    "DistanceAggregation",
-    "DistanceBreakdown",
-    "OracleRRI",
-    "OracleRRIConfig",
-    "RriOrdinalBinner",
-    "RriResult",
-    "chamfer_point_mesh",
-    "chamfer_point_mesh_batched",
-    "ordinal_labels_to_levels",
-]
+__all__ = ["RriConfig", "RriOrdinalBinner", "RriResult", "compute_rri"]

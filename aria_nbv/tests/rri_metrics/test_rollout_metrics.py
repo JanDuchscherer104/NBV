@@ -8,7 +8,7 @@ import math
 
 import pytest
 
-from aria_nbv.rri_metrics.rollout import (
+from aria_nbv.rri_metrics.returns import (
     endpoint_log_gain,
     endpoint_target_gain,
     finite_horizon_target_return,

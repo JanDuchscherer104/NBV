@@ -56,7 +56,7 @@ from ...rollouts import (
     decode_position_id,
     decode_strategy_id,
 )
-from ...rri_metrics.rollout import summarize_target_rollout_metrics
+from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
 from ..state_types import config_signature

@@ -13,7 +13,7 @@ from ..data_handling import EfmSnippetView
 from ..pose_generation.types import CandidateSamplingResult
 from ..rendering import CandidateDepths, build_candidate_pointclouds
 from ..rendering.candidate_pointclouds import CandidatePointClouds
-from ..rri_metrics.types import RriResult
+from ..rri_metrics.rri import RriResult
 from ..utils import Console
 from .state_types import (
     AppState,

@@ -15,6 +15,8 @@ their sum, which is the value consumed by `OracleRRI`.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 from pytorch3d.loss.point_mesh_distance import (  # type: ignore[import-untyped]
     _DEFAULT_MIN_TRIANGLE_AREA,
@@ -23,7 +25,19 @@ from pytorch3d.loss.point_mesh_distance import (  # type: ignore[import-untyped]
 )
 from torch import Tensor
 
-from .types import DistanceBreakdown
+
+@dataclass(slots=True)
+class DistanceBreakdown:
+    """Directional point-mesh distances produced by the Chamfer primitive."""
+
+    accuracy: Tensor
+    """Point-to-mesh distances from the reconstruction to ground truth."""
+
+    completeness: Tensor
+    """Mesh-to-point distances from ground truth to the reconstruction."""
+
+    bidirectional: Tensor
+    """Sum of accuracy and completeness."""
 
 
 def chamfer_point_mesh(

@@ -59,6 +59,7 @@ from ..rri_metrics.eval_pointclouds import (
     canonical_fuse_points,
 )
 from ..rri_metrics.oracle_rri import OracleRRIConfig
+from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.frames import rotate_yaw_cw90
 
@@ -135,14 +136,6 @@ def _root_error_tensor(
     if value is None:
         return fallback.reshape(-1)[0].to(device=device, dtype=dtype)
     return torch.tensor(float(value), device=device, dtype=dtype)
-
-
-def _root_normalized_gain(before: torch.Tensor, after: torch.Tensor, root_error: torch.Tensor) -> torch.Tensor:
-    return (before - after) / root_error.clamp_min(1e-12)
-
-
-def _log_error_gain(before: torch.Tensor, after: torch.Tensor) -> torch.Tensor:
-    return torch.log(before.clamp_min(1e-12)) - torch.log(after.clamp_min(1e-12))
 
 
 def _eval_depth_far_m(
@@ -788,8 +781,8 @@ class CounterfactualOracleRriScorer:
             device=rri.rri.device,
             dtype=rri.rri.dtype,
         )
-        root_gain = _root_normalized_gain(rri.pm_dist_before, rri.pm_dist_after, root_error_t)
-        log_gain = _log_error_gain(rri.pm_dist_before, rri.pm_dist_after)
+        root_gain = root_normalized_gain(rri.pm_dist_before, rri.pm_dist_after, root_error_t)
+        log_gain = log_error_gain(rri.pm_dist_before, rri.pm_dist_after)
         scores = root_gain if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else rri.rri
         score_label = (
             "oracle_root_gain" if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else "oracle_rri"

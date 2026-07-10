@@ -5,11 +5,12 @@ from __future__ import annotations
 import streamlit as st
 
 import aria_nbv.rri_metrics.plotting as rri_plotting
+from aria_nbv.rendering.plotting import plot_candidate_pointcloud_scene
 
 from ...data_handling import EfmSnippetView
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
-from ...rri_metrics.types import RriResult
+from ...rri_metrics.rri import RriResult
 from .common import _info_popover, _pretty_label
 
 
@@ -124,7 +125,7 @@ def render_rri_page(
         "new surface coverage rather than noisy points.",
     )
     st.plotly_chart(
-        rri_plotting.plot_rri_scene(
+        plot_candidate_pointcloud_scene(
             sample,
             depth_batch.poses,
             depth_batch.camera,

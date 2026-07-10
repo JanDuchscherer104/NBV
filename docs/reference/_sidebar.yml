@@ -134,6 +134,8 @@ website:
       - text: rollouts
         file: reference/rollouts.qmd
         contents:
+        - text: audits
+          file: reference/rollouts.audits.qmd
         - text: counterfactuals
           file: reference/rollouts.counterfactuals.qmd
         - text: info_cli
@@ -165,14 +167,16 @@ website:
           file: reference/rri_metrics.plotting.qmd
         - text: point_mesh
           file: reference/rri_metrics.point_mesh.qmd
-        - text: rollout
-          file: reference/rri_metrics.rollout.qmd
-        - text: torch_rollout
-          file: reference/rri_metrics.torch_rollout.qmd
-        - text: torch_rollout_metrics
-          file: reference/rri_metrics.torch_rollout_metrics.qmd
-        - text: types
-          file: reference/rri_metrics.types.qmd
+        - text: ranking
+          file: reference/rri_metrics.ranking.qmd
+        - text: returns
+          file: reference/rri_metrics.returns.qmd
+        - text: rri
+          file: reference/rri_metrics.rri.qmd
+        - text: torchmetrics_multi
+          file: reference/rri_metrics.torchmetrics_multi.qmd
+        - text: torchmetrics_single
+          file: reference/rri_metrics.torchmetrics_single.qmd
       - text: utils
         file: reference/utils.qmd
         contents:

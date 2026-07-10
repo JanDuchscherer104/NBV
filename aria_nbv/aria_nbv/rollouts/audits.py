@@ -1,15 +1,7 @@
-"""Torch-native rollout metrics for target-conditioned NBV.
+"""Operational validity, provenance, path, and policy audits for rollouts.
 
-The helpers in `aria_nbv.rri_metrics.rollout` operate on Python mappings used
-by CLI summaries and Streamlit tables. This module owns the tensor equivalent
-for training and batched evaluation code: selected-action returns, endpoint
-target gain, and validity-aware reductions over finite candidate tables.
-
-All functions preserve the hard-mask contract used by
-`aria_nbv.rollouts.zarr_store`: invalid or unsupervised candidates are ignored,
-not treated as low-reward labels. Shapes are intentionally simple so both the
-current one-step VIN scorer and future finite-candidate ``Q_H`` models can call
-the same metric code.
+These reducers are evaluation-only. They inspect replay/store behavior and are
+not reconstruction metrics or training objectives.
 """
 
 from __future__ import annotations
@@ -19,30 +11,7 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor
-
-
-@dataclass(frozen=True, slots=True)
-class TorchRolloutMetrics:
-    """Batched target-rollout metrics for selected trajectories.
-
-    Attributes:
-        discounted_return: ``Tensor["B"]`` discounted sum of selected
-            root-normalized target gains.
-        endpoint_gain: ``Tensor["B"]`` root-normalized endpoint target-error
-            gain ``(d_0 - d_H) / (d_0 + eps)``.
-        endpoint_log_gain: ``Tensor["B"]`` log target-error reduction
-            ``log(d_0 + eps) - log(d_H + eps)``.
-        valid_steps: ``Tensor["B"]`` count of finite selected rewards included
-            in `discounted_return`.
-        valid_endpoint: ``Tensor["B"]`` mask for trajectories with finite,
-            non-negative endpoint errors.
-    """
-
-    discounted_return: Tensor
-    endpoint_gain: Tensor
-    endpoint_log_gain: Tensor
-    valid_steps: Tensor
-    valid_endpoint: Tensor
+from torchmetrics import Metric as MetricBase
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,30 +30,6 @@ class CandidateOrderConsistency:
 
     score_mae: Tensor
     top1_match: Tensor
-    valid_table: Tensor
-
-
-@dataclass(frozen=True, slots=True)
-class SelectedActionOracleComparison:
-    """Per-table oracle diagnostics for a selected candidate action.
-
-    Attributes:
-        selected_oracle_regret: ``Tensor["B"]`` oracle-best value minus the
-            selected candidate's oracle value. Lower is better; oracle-best
-            ties have zero regret.
-        selected_oracle_rank: ``Tensor["B"]`` one-based selected-candidate rank
-            among finite hard-valid oracle labels. Tied oracle-best candidates
-            have rank ``1``.
-        selected_oracle_percentile: ``Tensor["B"]`` rank percentile in
-            ``[0, 1]`` where ``1`` means oracle-best and ``0`` means worst
-            among comparable finite labels.
-        valid_table: ``Tensor["B"]`` mask for tables with a finite valid
-            selected label and at least one finite valid oracle candidate.
-    """
-
-    selected_oracle_regret: Tensor
-    selected_oracle_rank: Tensor
-    selected_oracle_percentile: Tensor
     valid_table: Tensor
 
 
@@ -129,134 +74,6 @@ class CandidatePrimaryInvalidReasonStats:
 
     share_of_invalid: Tensor
     valid_table: Tensor
-
-
-def discounted_selected_return(
-    rewards: Tensor,
-    valid_mask: Tensor | None = None,
-    *,
-    gamma: float = 1.0,
-) -> Tensor:
-    """Compute discounted returns over selected rewards.
-
-    Args:
-        rewards: ``Tensor["B H"]`` or ``Tensor["H"]`` selected per-step
-            rewards, normally `target_root_gain`.
-        valid_mask: Optional boolean tensor with the same shape as `rewards`.
-            Non-finite rewards are ignored even when this mask is ``True``.
-        gamma: Non-negative discount factor.
-
-    Returns:
-        Tensor with shape ``Tensor["B"]`` for 2-D inputs or scalar shape for
-        1-D inputs. Rows with no valid finite rewards return ``NaN``.
-    """
-
-    if gamma < 0.0:
-        raise ValueError("gamma must be non-negative.")
-    batched, squeeze = _as_step_matrix(rewards)
-    valid = _finite_mask(batched, valid_mask)
-    weights = _discount_weights(batched.shape[1], gamma=gamma, device=batched.device, dtype=batched.dtype)
-    values = torch.where(valid, batched, torch.zeros_like(batched))
-    result = (values * weights.unsqueeze(0)).sum(dim=1)
-    result = torch.where(valid.any(dim=1), result, torch.full_like(result, float("nan")))
-    return result.squeeze(0) if squeeze else result
-
-
-def endpoint_target_gain_tensor(
-    initial_error: Tensor,
-    final_error: Tensor,
-    *,
-    eps: float = 1e-8,
-) -> Tensor:
-    """Compute root-normalized endpoint gain from target point-mesh errors.
-
-    Args:
-        initial_error: Initial target point-mesh error ``d_0``.
-        final_error: Final target point-mesh error ``d_H``.
-        eps: Positive denominator guard.
-
-    Returns:
-        Tensor broadcast from the input shapes. Entries with non-finite or
-        negative endpoint errors return ``NaN``.
-    """
-
-    initial, final = torch.broadcast_tensors(initial_error, final_error)
-    valid = _valid_endpoint_errors(initial, final)
-    gain = (initial - final) / (initial + float(eps))
-    return torch.where(valid, gain, torch.full_like(gain, float("nan")))
-
-
-def endpoint_log_gain_tensor(
-    initial_error: Tensor,
-    final_error: Tensor,
-    *,
-    eps: float = 1e-8,
-) -> Tensor:
-    """Compute endpoint log target-error reduction.
-
-    Args:
-        initial_error: Initial target point-mesh error ``d_0``.
-        final_error: Final target point-mesh error ``d_H``.
-        eps: Positive log guard.
-
-    Returns:
-        Tensor broadcast from the input shapes. Entries with non-finite or
-        negative endpoint errors return ``NaN``.
-    """
-
-    initial, final = torch.broadcast_tensors(initial_error, final_error)
-    valid = _valid_endpoint_errors(initial, final)
-    gain = torch.log(initial + float(eps)) - torch.log(final + float(eps))
-    return torch.where(valid, gain, torch.full_like(gain, float("nan")))
-
-
-def summarize_selected_rollout_tensors(
-    rewards: Tensor,
-    initial_error: Tensor,
-    final_error: Tensor,
-    valid_mask: Tensor | None = None,
-    *,
-    gamma: float = 1.0,
-    eps: float = 1e-8,
-) -> TorchRolloutMetrics:
-    """Summarize selected target-rollout tensors in one batched call.
-
-    Args:
-        rewards: ``Tensor["B H"]`` selected rewards, normally
-            root-normalized target gains.
-        initial_error: ``Tensor["B"]`` initial target point-mesh errors.
-        final_error: ``Tensor["B"]`` final target point-mesh errors.
-        valid_mask: Optional ``Tensor["B H"]`` mask for reward supervision.
-        gamma: Non-negative discount factor.
-        eps: Denominator and log guard for endpoint metrics.
-
-    Returns:
-        `TorchRolloutMetrics` with one value per trajectory.
-    """
-
-    rewards_2d, squeeze = _as_step_matrix(rewards)
-    valid = _finite_mask(rewards_2d, valid_mask)
-    discounted = discounted_selected_return(rewards_2d, valid, gamma=gamma)
-    initial, final = torch.broadcast_tensors(initial_error.reshape(-1), final_error.reshape(-1))
-    endpoint = endpoint_target_gain_tensor(initial, final, eps=eps)
-    log_gain = endpoint_log_gain_tensor(initial, final, eps=eps)
-    valid_endpoint = _valid_endpoint_errors(initial, final)
-    valid_steps = valid.sum(dim=1)
-    if squeeze:
-        return TorchRolloutMetrics(
-            discounted_return=discounted.squeeze(0),
-            endpoint_gain=endpoint.squeeze(0),
-            endpoint_log_gain=log_gain.squeeze(0),
-            valid_steps=valid_steps.squeeze(0),
-            valid_endpoint=valid_endpoint.squeeze(0),
-        )
-    return TorchRolloutMetrics(
-        discounted_return=discounted,
-        endpoint_gain=endpoint,
-        endpoint_log_gain=log_gain,
-        valid_steps=valid_steps,
-        valid_endpoint=valid_endpoint,
-    )
 
 
 def selected_path_length_tensor(camera_centers_world: Tensor, segment_valid_mask: Tensor | None = None) -> Tensor:
@@ -404,185 +221,6 @@ def candidate_policy_entropy(
     entropy_terms = torch.where(normalized > 0.0, normalized * normalized.log(), torch.zeros_like(normalized))
     entropy = -entropy_terms.sum(dim=dim)
     return torch.where(mass.squeeze(dim) > 0.0, entropy, torch.full_like(entropy, float("nan")))
-
-
-def candidate_topk_oracle_hit(
-    predicted_scores: Tensor,
-    oracle_values: Tensor,
-    valid_mask: Tensor | None = None,
-    *,
-    top_k: int = 1,
-    dim: int = -1,
-) -> Tensor:
-    """Report whether predicted top-k rows include an oracle-best candidate.
-
-    The oracle-best tied set is computed from finite oracle values under the
-    hard mask. Non-finite predicted scores are excluded from the predicted
-    top-k set without removing their oracle labels, so a model that emits
-    ``NaN`` on the true best row records a miss when other finite predictions
-    exist. Predicted ties at the kth boundary are included to avoid arbitrary
-    tie-breaking.
-
-    Args:
-        predicted_scores: Candidate scores produced by a model or policy.
-        oracle_values: Candidate oracle values with the same shape as
-            ``predicted_scores``.
-        valid_mask: Optional hard-validity mask broadcastable to
-            ``predicted_scores``.
-        top_k: Number of predicted candidates to consider before kth-boundary
-            ties are expanded.
-        dim: Candidate dimension.
-
-    Returns:
-        Float hit indicator per candidate table. Empty oracle-labeled tables or
-        tables with no finite predictions return ``NaN``.
-    """
-
-    if top_k < 1:
-        raise ValueError("top_k must be >= 1.")
-    if predicted_scores.shape != oracle_values.shape:
-        raise ValueError(
-            "Expected predicted_scores and oracle_values to have matching shapes, "
-            f"got {tuple(predicted_scores.shape)} and {tuple(oracle_values.shape)}.",
-        )
-    if dim < 0:
-        dim = predicted_scores.ndim + dim
-    if dim < 0 or dim >= predicted_scores.ndim:
-        raise ValueError(f"dim={dim} is outside tensor rank {predicted_scores.ndim}.")
-
-    scores = predicted_scores.to(dtype=torch.float32)
-    oracle = oracle_values.to(device=scores.device, dtype=torch.float32)
-    if valid_mask is None:
-        hard_mask = torch.ones_like(scores, dtype=torch.bool)
-    else:
-        hard_mask = torch.broadcast_to(valid_mask.to(device=scores.device, dtype=torch.bool), scores.shape)
-    if dim != scores.ndim - 1:
-        scores = scores.movedim(dim, -1)
-        oracle = oracle.movedim(dim, -1)
-        hard_mask = hard_mask.movedim(dim, -1)
-
-    table_shape = scores.shape[:-1]
-    num_candidates = scores.shape[-1]
-    if num_candidates == 0:
-        return torch.full(table_shape, float("nan"), device=scores.device, dtype=torch.float32)
-
-    scores_2d = scores.reshape(-1, num_candidates)
-    oracle_2d = oracle.reshape(-1, num_candidates)
-    mask_2d = hard_mask.reshape(-1, num_candidates)
-
-    oracle_valid = mask_2d & torch.isfinite(oracle_2d)
-    pred_valid = mask_2d & torch.isfinite(scores_2d)
-    oracle_filled = torch.where(oracle_valid, oracle_2d, torch.full_like(oracle_2d, -torch.inf))
-    oracle_best = oracle_filled.max(dim=-1).values
-    has_oracle = torch.isfinite(oracle_best)
-    oracle_best_set = oracle_valid & (oracle_2d == oracle_best.unsqueeze(-1))
-
-    pred_filled = torch.where(pred_valid, scores_2d, torch.full_like(scores_2d, -torch.inf))
-    pred_count = pred_valid.to(dtype=torch.long).sum(dim=-1)
-    has_prediction = pred_count > 0
-    topk_per_table = pred_count.clamp(max=int(top_k))
-    kth_index = topk_per_table.clamp_min(1) - 1
-    kth_score = pred_filled.sort(dim=-1, descending=True).values.gather(dim=-1, index=kth_index.unsqueeze(-1))
-    predicted_topk = pred_valid & (scores_2d >= kth_score)
-
-    comparable = has_oracle & has_prediction
-    hit = (predicted_topk & oracle_best_set).any(dim=-1).to(dtype=torch.float32)
-    result = torch.where(comparable, hit, torch.full_like(hit, float("nan")))
-    return result.reshape(table_shape)
-
-
-def selected_action_oracle_comparison(
-    oracle_values: Tensor,
-    selected_indices: Tensor,
-    valid_mask: Tensor,
-    *,
-    dim: int = -1,
-) -> SelectedActionOracleComparison:
-    """Compare selected candidate actions against oracle-best candidate labels.
-
-    This reducer is for policy evaluation, not supervision. It reads a selected
-    candidate index per table and reports how far that action is from the
-    finite oracle-best row under the hard action mask. Invalid selected indices,
-    masked selected rows, non-finite selected labels, and empty oracle tables
-    return ``NaN`` diagnostics with ``valid_table=False``.
-
-    Args:
-        oracle_values: Candidate oracle values, such as target reward or
-            finite-horizon oracle return.
-        selected_indices: Selected candidate indices with shape equal to
-            ``oracle_values`` after removing `dim`; values may be integer or
-            floating tensors, but non-finite or non-integral entries are
-            treated as invalid selections.
-        valid_mask: Boolean hard-validity mask broadcastable to
-            ``oracle_values``.
-        dim: Candidate dimension.
-
-    Returns:
-        `SelectedActionOracleComparison` with per-table regret, one-based rank,
-        rank percentile, and comparability mask.
-    """
-
-    if dim < 0:
-        dim = oracle_values.ndim + dim
-    if dim < 0 or dim >= oracle_values.ndim:
-        raise ValueError(f"dim={dim} is outside tensor rank {oracle_values.ndim}.")
-
-    oracle = oracle_values.to(dtype=torch.float32)
-    hard_mask = torch.broadcast_to(valid_mask.to(device=oracle.device, dtype=torch.bool), oracle.shape)
-    if dim != oracle.ndim - 1:
-        oracle = oracle.movedim(dim, -1)
-        hard_mask = hard_mask.movedim(dim, -1)
-
-    table_shape = oracle.shape[:-1]
-    num_candidates = oracle.shape[-1]
-    selected = torch.broadcast_to(selected_indices.to(device=oracle.device), table_shape)
-    if num_candidates == 0:
-        nan = torch.full(table_shape, float("nan"), device=oracle.device, dtype=torch.float32)
-        return SelectedActionOracleComparison(
-            selected_oracle_regret=nan,
-            selected_oracle_rank=nan,
-            selected_oracle_percentile=nan,
-            valid_table=torch.zeros(table_shape, device=oracle.device, dtype=torch.bool),
-        )
-
-    oracle_2d = oracle.reshape(-1, num_candidates)
-    hard_2d = hard_mask.reshape(-1, num_candidates)
-    selected_flat = selected.reshape(-1)
-    selected_float = selected_flat.to(dtype=torch.float32)
-    selected_integral = torch.isfinite(selected_float) & (selected_float == selected_float.round())
-    selected_long = torch.where(
-        selected_integral,
-        selected_float.to(dtype=torch.long),
-        torch.zeros_like(selected_float, dtype=torch.long),
-    )
-    selected_in_bounds = selected_integral & (selected_long >= 0) & (selected_long < num_candidates)
-    safe_selected = selected_long.clamp(min=0, max=num_candidates - 1)
-
-    oracle_valid = hard_2d & torch.isfinite(oracle_2d)
-    valid_count = oracle_valid.to(dtype=torch.float32).sum(dim=-1)
-    has_oracle = valid_count > 0
-    selected_hard_valid = hard_2d.gather(dim=-1, index=safe_selected.unsqueeze(-1)).squeeze(-1)
-    selected_value = oracle_2d.gather(dim=-1, index=safe_selected.unsqueeze(-1)).squeeze(-1)
-    selected_label_valid = selected_in_bounds & selected_hard_valid & torch.isfinite(selected_value)
-    valid_table = has_oracle & selected_label_valid
-
-    oracle_filled = torch.where(oracle_valid, oracle_2d, torch.full_like(oracle_2d, -torch.inf))
-    oracle_best = oracle_filled.max(dim=-1).values
-    regret = oracle_best - selected_value
-    better_count = (oracle_valid & (oracle_2d > selected_value.unsqueeze(-1))).to(dtype=torch.float32).sum(dim=-1)
-    rank = 1.0 + better_count
-    percentile = torch.where(
-        valid_count > 1.0,
-        1.0 - ((rank - 1.0) / (valid_count - 1.0).clamp_min(1.0)),
-        torch.ones_like(rank),
-    )
-    nan = torch.full_like(regret, float("nan"))
-    return SelectedActionOracleComparison(
-        selected_oracle_regret=torch.where(valid_table, regret, nan).reshape(table_shape),
-        selected_oracle_rank=torch.where(valid_table, rank, nan).reshape(table_shape),
-        selected_oracle_percentile=torch.where(valid_table, percentile, nan).reshape(table_shape),
-        valid_table=valid_table.reshape(table_shape),
-    )
 
 
 def candidate_provenance_share(
@@ -799,14 +437,6 @@ def candidate_best_value(values: Tensor, valid_mask: Tensor, *, dim: int = -1) -
     return torch.where(torch.isfinite(best), best, torch.full_like(best, float("nan")))
 
 
-def _as_step_matrix(values: Tensor) -> tuple[Tensor, bool]:
-    if values.ndim == 1:
-        return values.unsqueeze(0), True
-    if values.ndim == 2:
-        return values, False
-    raise ValueError(f"Expected rollout tensor with shape (H,) or (B,H), got {tuple(values.shape)}.")
-
-
 def _as_path_matrix(values: Tensor) -> tuple[Tensor, bool]:
     if values.ndim == 2 and values.shape[-1] == 3:
         return values.unsqueeze(0), True
@@ -836,21 +466,12 @@ def _masked_argmax(values: Tensor, valid_mask: Tensor) -> Tensor:
     return filled.argmax(dim=-1)
 
 
-def _discount_weights(length: int, *, gamma: float, device: torch.device, dtype: torch.dtype) -> Tensor:
-    steps = torch.arange(length, device=device, dtype=dtype)
-    return torch.pow(torch.as_tensor(float(gamma), device=device, dtype=dtype), steps)
-
-
 def _finite_mask(values: Tensor, valid_mask: Tensor | None) -> Tensor:
     valid = torch.isfinite(values)
     if valid_mask is None:
         return valid
     mask = torch.broadcast_to(valid_mask.to(device=values.device, dtype=torch.bool), values.shape)
     return valid & mask
-
-
-def _valid_endpoint_errors(initial_error: Tensor, final_error: Tensor) -> Tensor:
-    return torch.isfinite(initial_error) & torch.isfinite(final_error) & (initial_error >= 0.0) & (final_error >= 0.0)
 
 
 def _id_membership(values: Tensor, family_ids: Sequence[int] | Tensor) -> Tensor:
@@ -863,12 +484,413 @@ def _id_membership(values: Tensor, family_ids: Sequence[int] | Tensor) -> Tensor
     return (values.unsqueeze(-1) == ids).any(dim=-1)
 
 
+class CandidateTableMetrics(MetricBase):
+    """Accumulate hard-mask candidate-table diagnostics.
+
+    The metric reports valid/invalid fractions and validity-aware value
+    summaries over finite candidate tables. Invalid rows affect invalidity
+    diagnostics but never enter the value mean or best-value mean.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("valid_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("total_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mean_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mean_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("best_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("best_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update_validity(self, valid_mask: Tensor) -> None:
+        """Accumulate candidate hard-mask validity without value summaries."""
+
+        mask = valid_mask.to(device=self.valid_count.device, dtype=torch.bool)
+        self.valid_count = self.valid_count + mask.to(dtype=torch.float32).sum()
+        self.total_count = self.total_count + torch.tensor(float(mask.numel()), device=self.total_count.device)
+
+    def update(self, values: Tensor, valid_mask: Tensor, *, dim: int = -1) -> None:
+        """Accumulate validity-aware candidate table summaries.
+
+        Args:
+            values: Candidate values such as rewards, Q estimates, or coverage.
+            valid_mask: Boolean hard-validity mask broadcastable to ``values``.
+            dim: Candidate dimension reduced inside each table.
+        """
+
+        values_f = values.to(device=self.valid_count.device, dtype=torch.float32)
+        mask = torch.broadcast_to(valid_mask.to(device=self.valid_count.device, dtype=torch.bool), values_f.shape)
+        self.update_validity(mask)
+
+        means = candidate_masked_mean(values_f, mask, dim=dim).reshape(-1)
+        best = candidate_best_value(values_f, mask, dim=dim).reshape(-1)
+        mean_valid = torch.isfinite(means)
+        best_valid = torch.isfinite(best)
+        self.mean_total = self.mean_total + torch.where(mean_valid, means, torch.zeros_like(means)).sum()
+        self.mean_count = self.mean_count + mean_valid.to(dtype=torch.float32).sum()
+        self.best_total = self.best_total + torch.where(best_valid, best, torch.zeros_like(best)).sum()
+        self.best_count = self.best_count + best_valid.to(dtype=torch.float32).sum()
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return candidate validity and value diagnostics."""
+
+        valid_rate = _safe_mean(self.valid_count, self.total_count)
+        return {
+            "candidate_valid_rate": valid_rate,
+            "candidate_invalid_rate": 1.0 - valid_rate,
+            "candidate_value_mean": _safe_mean(self.mean_total, self.mean_count),
+            "candidate_best_value": _safe_mean(self.best_total, self.best_count),
+        }
+
+
+class CandidatePathIncrementMetric(MetricBase):
+    """Accumulate candidate action path-increment diagnostics in metres.
+
+    The metric summarizes the per-table distribution of hard-valid candidate
+    movement costs, usually sourced from rollout ``motion_step_length_m`` rows.
+    It is separate from selected policy cost: this class describes the action
+    set offered to the policy, not the action the policy selected.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("mean_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mean_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("min_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("min_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("max_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("max_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        path_increment_m: Tensor,
+        valid_mask: Tensor,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate path-increment tables."""
+
+        stats = candidate_path_increment_stats(
+            path_increment_m.to(device=self.mean_total.device, dtype=torch.float32),
+            valid_mask.to(device=self.mean_total.device),
+            dim=dim,
+        )
+        mean_m = stats.mean_m.reshape(-1)
+        min_m = stats.min_m.reshape(-1)
+        max_m = stats.max_m.reshape(-1)
+        valid_table = stats.valid_table.reshape(-1)
+
+        mean_valid = torch.isfinite(mean_m) & valid_table
+        min_valid = torch.isfinite(min_m) & valid_table
+        max_valid = torch.isfinite(max_m) & valid_table
+        if mean_valid.any():
+            self.mean_total = self.mean_total + mean_m[mean_valid].sum()
+            self.mean_count = self.mean_count + mean_valid.to(dtype=torch.float32).sum()
+        if min_valid.any():
+            self.min_total = self.min_total + min_m[min_valid].sum()
+            self.min_count = self.min_count + min_valid.to(dtype=torch.float32).sum()
+        if max_valid.any():
+            self.max_total = self.max_total + max_m[max_valid].sum()
+            self.max_count = self.max_count + max_valid.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return finite means of candidate path-increment table statistics."""
+
+        if self.table_count > 0:
+            valid_table_rate = self.valid_table_count / self.table_count.clamp_min(1.0)
+        else:
+            valid_table_rate = torch.zeros_like(self.valid_table_count)
+        return {
+            "candidate_path_increment_mean_m": _safe_mean(self.mean_total, self.mean_count),
+            "candidate_path_increment_min_m": _safe_mean(self.min_total, self.min_count),
+            "candidate_path_increment_max_m": _safe_mean(self.max_total, self.max_count),
+            "candidate_path_increment_valid_table_rate": valid_table_rate,
+        }
+
+
+class CandidatePrimaryInvalidReasonMetric(MetricBase):
+    """Accumulate primary invalid-reason share among rejected candidates.
+
+    The configured reason ids identify one stable rejection family, for example
+    path-collision or target-support failures. Shares are measured over
+    hard-invalid rows only; valid action rows stay out of the denominator so
+    this diagnostic complements, rather than redefines, aggregate invalidity.
+    """
+
+    full_state_update = False
+
+    def __init__(self, *, reason_ids: tuple[int, ...]) -> None:
+        super().__init__()
+        if not reason_ids:
+            raise ValueError("reason_ids must contain at least one primary invalid-reason id.")
+        self.reason_ids = tuple(int(value) for value in reason_ids)
+        self.add_state("share_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("share_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        primary_invalid_reason: Tensor,
+        valid_mask: Tensor,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of primary invalid-reason ids."""
+
+        stats = candidate_primary_invalid_reason_share(
+            primary_invalid_reason.to(device=self.share_total.device),
+            valid_mask.to(device=self.share_total.device),
+            reason_ids=self.reason_ids,
+            dim=dim,
+        )
+        shares = stats.share_of_invalid.reshape(-1)
+        valid_table = stats.valid_table.reshape(-1)
+        finite = torch.isfinite(shares) & valid_table
+        if finite.any():
+            self.share_total = self.share_total + shares[finite].sum()
+            self.share_count = self.share_count + finite.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return reason-group share and denominator-validity rate."""
+
+        if self.table_count > 0:
+            valid_table_rate = self.valid_table_count / self.table_count.clamp_min(1.0)
+        else:
+            valid_table_rate = torch.zeros_like(self.valid_table_count)
+        return {
+            "candidate_primary_invalid_reason_share_of_invalid": _safe_mean(self.share_total, self.share_count),
+            "candidate_primary_invalid_reason_valid_table_rate": valid_table_rate,
+        }
+
+
+class SelectedPathCostMetrics(MetricBase):
+    """Accumulate selected camera-center path cost in metres.
+
+    The metric expects root-plus-selected camera centers in world coordinates
+    and reports the finite mean path length. Invalid or non-finite path
+    segments are ignored via a hard segment mask; fully invalid paths contribute
+    no cost sample instead of contributing zero.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("path_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("path_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(self, camera_centers_world: Tensor, segment_valid_mask: Tensor | None = None) -> None:
+        """Accumulate one batch of selected rollout paths.
+
+        Args:
+            camera_centers_world: ``Tensor["H+1 3"]`` or
+                ``Tensor["B H+1 3"]`` camera centers in metres.
+            segment_valid_mask: Optional hard mask over the ``H`` path
+                segments. Masked or non-finite segments are excluded from the
+                path sum.
+        """
+
+        path_lengths = selected_path_length_tensor(
+            camera_centers_world.to(device=self.path_total.device, dtype=torch.float32),
+            None if segment_valid_mask is None else segment_valid_mask.to(device=self.path_total.device),
+        ).reshape(-1)
+        valid = torch.isfinite(path_lengths)
+        if not valid.any():
+            return
+        self.path_total = self.path_total + path_lengths[valid].sum()
+        self.path_count = self.path_count + valid.to(dtype=torch.float32).sum()
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return mean acquisition cost aliases for policy tables."""
+
+        path_length = _safe_mean(self.path_total, self.path_count)
+        return {"path_length_m": path_length, "cost": path_length}
+
+
+class CandidateOrderConsistencyMetric(MetricBase):
+    """Accumulate shuffled-candidate order-consistency diagnostics.
+
+    This metric supports the proposal's requirement that finite candidate rows
+    have no semantic ordering. It compares paired model scores from the same
+    candidate table before and after a known gather-style permutation, then
+    reports score agreement and top-1 stability over comparable valid tables.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("mae_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("mae_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("top1_match_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("valid_table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("table_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        scores: Tensor,
+        shuffled_scores: Tensor,
+        permutation: Tensor,
+        valid_mask: Tensor | None = None,
+        shuffled_valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one paired original/shuffled candidate-score batch."""
+
+        consistency = candidate_order_consistency(
+            scores.to(device=self.mae_total.device, dtype=torch.float32),
+            shuffled_scores.to(device=self.mae_total.device, dtype=torch.float32),
+            permutation.to(device=self.mae_total.device, dtype=torch.long),
+            None if valid_mask is None else valid_mask.to(device=self.mae_total.device),
+            None if shuffled_valid_mask is None else shuffled_valid_mask.to(device=self.mae_total.device),
+            dim=dim,
+        )
+        score_mae = consistency.score_mae.reshape(-1)
+        valid_table = consistency.valid_table.reshape(-1)
+        top1_match = consistency.top1_match.reshape(-1) & valid_table
+        finite_mae = torch.isfinite(score_mae) & valid_table
+        if finite_mae.any():
+            self.mae_total = self.mae_total + score_mae[finite_mae].sum()
+            self.mae_count = self.mae_count + finite_mae.to(dtype=torch.float32).sum()
+        self.top1_match_count = self.top1_match_count + top1_match.to(dtype=torch.float32).sum()
+        self.valid_table_count = self.valid_table_count + valid_table.to(dtype=torch.float32).sum()
+        self.table_count = self.table_count + torch.tensor(float(valid_table.numel()), device=self.table_count.device)
+
+    def compute(self) -> dict[str, Tensor]:
+        """Return shuffled-candidate consistency diagnostics."""
+
+        return {
+            "candidate_order_score_mae": _safe_mean(self.mae_total, self.mae_count),
+            "candidate_order_top1_match_rate": _safe_mean(self.top1_match_count, self.valid_table_count),
+            "candidate_order_valid_table_rate": _safe_mean(self.valid_table_count, self.table_count),
+        }
+
+
+class CandidatePolicyEntropyMetric(MetricBase):
+    """Accumulate masked candidate-policy entropy diagnostics.
+
+    The metric summarizes selection diversity for finite candidate tables. It
+    consumes probabilities or probability-like weights, delegates masking and
+    renormalization to `candidate_policy_entropy`, and reports the finite mean
+    entropy. Invalid candidates affect entropy support only; invalidity remains
+    owned by `CandidateTableMetrics`.
+    """
+
+    full_state_update = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_state("entropy_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("entropy_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        selection_probabilities: Tensor,
+        valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate selection probabilities."""
+
+        entropy = candidate_policy_entropy(
+            selection_probabilities.to(device=self.entropy_total.device, dtype=torch.float32),
+            None if valid_mask is None else valid_mask.to(device=self.entropy_total.device),
+            dim=dim,
+        ).reshape(-1)
+        finite = torch.isfinite(entropy)
+        if not finite.any():
+            return
+        self.entropy_total = self.entropy_total + entropy[finite].sum()
+        self.entropy_count = self.entropy_count + finite.to(dtype=torch.float32).sum()
+
+    def compute(self) -> Tensor:
+        """Return mean entropy or ``NaN`` when no table had positive mass."""
+
+        return _safe_mean(self.entropy_total, self.entropy_count)
+
+
+class CandidateProvenanceShareMetric(MetricBase):
+    """Accumulate candidate provenance-family share diagnostics.
+
+    The metric reports the finite mean fraction of hard-valid candidate rows
+    that belong to configured strategy or position id families. It is designed
+    for rollout-diversity audits such as radial-away/radial-towards plus
+    revisit-backtrack coverage. The ids are passed as persisted integer
+    provenance values, so callers do not need pose-generation enum imports.
+    """
+
+    full_state_update = False
+
+    def __init__(
+        self,
+        *,
+        strategy_family_ids: tuple[int, ...] = (),
+        position_family_ids: tuple[int, ...] = (),
+    ) -> None:
+        super().__init__()
+        if not strategy_family_ids and not position_family_ids:
+            raise ValueError("At least one strategy or position provenance family id is required.")
+        self.strategy_family_ids = tuple(int(value) for value in strategy_family_ids)
+        self.position_family_ids = tuple(int(value) for value in position_family_ids)
+        self.add_state("share_total", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("share_count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
+
+    def update(
+        self,
+        strategy_ids: Tensor,
+        position_ids: Tensor,
+        valid_mask: Tensor | None = None,
+        *,
+        dim: int = -1,
+    ) -> None:
+        """Accumulate one batch of candidate provenance tables."""
+
+        shares = candidate_provenance_share(
+            strategy_ids.to(device=self.share_total.device),
+            position_ids.to(device=self.share_total.device),
+            strategy_family_ids=self.strategy_family_ids,
+            position_family_ids=self.position_family_ids,
+            valid_mask=None if valid_mask is None else valid_mask.to(device=self.share_total.device),
+            dim=dim,
+        ).reshape(-1)
+        finite = torch.isfinite(shares)
+        if not finite.any():
+            return
+        self.share_total = self.share_total + shares[finite].sum()
+        self.share_count = self.share_count + finite.to(dtype=torch.float32).sum()
+
+    def compute(self) -> Tensor:
+        """Return finite mean family share or ``NaN`` when no tables were valid."""
+
+        return _safe_mean(self.share_total, self.share_count)
+
+
+def _safe_mean(total: Tensor, count: Tensor) -> Tensor:
+    return torch.where(count > 0, total / count.clamp_min(1.0), torch.full_like(total, float("nan")))
+
+
 __all__ = [
-    "TorchRolloutMetrics",
     "CandidateOrderConsistency",
+    "CandidateOrderConsistencyMetric",
+    "CandidatePathIncrementMetric",
     "CandidatePathIncrementStats",
+    "CandidatePolicyEntropyMetric",
+    "CandidatePrimaryInvalidReasonMetric",
     "CandidatePrimaryInvalidReasonStats",
-    "SelectedActionOracleComparison",
+    "CandidateProvenanceShareMetric",
+    "CandidateTableMetrics",
+    "SelectedPathCostMetrics",
     "candidate_best_value",
     "candidate_masked_mean",
     "candidate_order_consistency",
@@ -876,11 +898,5 @@ __all__ = [
     "candidate_policy_entropy",
     "candidate_primary_invalid_reason_share",
     "candidate_provenance_share",
-    "candidate_topk_oracle_hit",
-    "discounted_selected_return",
-    "endpoint_log_gain_tensor",
-    "endpoint_target_gain_tensor",
-    "selected_action_oracle_comparison",
     "selected_path_length_tensor",
-    "summarize_selected_rollout_tensors",
 ]

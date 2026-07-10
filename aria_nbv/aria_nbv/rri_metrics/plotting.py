@@ -7,13 +7,8 @@ from collections.abc import Mapping, Sequence
 import plotly.express as px  # type: ignore[import-untyped]
 import plotly.graph_objects as go  # type: ignore[import-untyped]
 import torch
-from efm3d.aria import CameraTW, PoseTW
 
-from ..data_handling import EfmSnippetView
-from ..rendering.candidate_pointclouds import CandidatePointClouds
-from ..rendering.plotting import RenderingPlotBuilder
-from ..utils.plotting import _histogram_overlay, _plot_hist_counts_mpl
-from .types import RriResult
+from .rri import RriResult
 
 
 def rri_color_map(
@@ -146,51 +141,6 @@ def plot_pm_completeness(
     return fig
 
 
-def plot_rri_scene(
-    sample: EfmSnippetView,
-    poses: PoseTW,
-    camera: CameraTW,
-    pcs: CandidatePointClouds,
-    *,
-    candidate_ids: Sequence[int],
-    selected_ids: Sequence[int],
-    color_map: Mapping[str, str],
-    title: str,
-    max_sem_pts: int,
-    show_frusta: bool,
-) -> go.Figure:
-    """Plot mesh/semidense/candidate point clouds for selected candidates."""
-    builder = (
-        RenderingPlotBuilder.from_snippet(sample, title=title)
-        .add_mesh()
-        .add_semidense(last_frame_only=False, max_points=max_sem_pts)
-    )
-
-    selected_set = {int(cid) for cid in selected_ids}
-    if show_frusta and selected_set:
-        cid_to_local = {int(cid): idx for idx, cid in enumerate(candidate_ids)}
-        selected_local = [cid_to_local[cid] for cid in selected_set if cid in cid_to_local]
-        if selected_local:
-            builder.add_frusta_selection(
-                poses=poses,
-                camera=camera,
-                max_frustums=min(16, len(selected_local)),
-                candidate_indices=selected_local,
-            )
-
-    max_idx = min(len(candidate_ids), pcs.points.shape[0])
-    for idx in range(max_idx):
-        cid_int = int(candidate_ids[idx])
-        if cid_int not in selected_set:
-            continue
-        pts = pcs.points[idx, : int(pcs.lengths[idx].item())]
-        fallback = px.colors.qualitative.Plotly[idx % len(px.colors.qualitative.Plotly)]
-        color = color_map.get(str(cid_int), fallback)
-        builder.add_points(pts, name=f"Candidate {cid_int}", color=color, size=3, opacity=0.7)
-
-    return builder.finalize()
-
-
 def _as_list(values: Sequence[float] | torch.Tensor) -> list[float]:
     if isinstance(values, torch.Tensor):
         return values.detach().cpu().flatten().tolist()
@@ -201,9 +151,6 @@ __all__ = [
     "plot_pm_accuracy",
     "plot_pm_completeness",
     "plot_pm_distances",
-    "plot_rri_scene",
     "plot_rri_scores",
     "rri_color_map",
-    "_histogram_overlay",
-    "_plot_hist_counts_mpl",
 ]

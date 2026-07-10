@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from ...pose_generation.types import CandidateSamplingResult
     from ...rendering.candidate_depth_renderer import CandidateDepths
     from ...rendering.candidate_pointclouds import CandidatePointClouds
-    from ...rri_metrics.types import RriResult
+    from ...rri_metrics.rri import RriResult
     from ...vin.types import EvlBackboneOutput
 
 DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (

@@ -26,7 +26,7 @@ from ..pose_generation.types import CandidateSamplingResult
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
 from ..rri_metrics.oracle_rri import OracleRRIConfig
-from ..rri_metrics.types import RriResult
+from ..rri_metrics.rri import RriResult
 from ..utils import BaseConfig, Console, TargetConfig
 
 

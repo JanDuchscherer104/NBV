@@ -23,7 +23,8 @@ from matplotlib import pyplot as plt
 import aria_nbv.rri_metrics.plotting as rri_plotting
 from aria_nbv.data_handling.efm_views import EfmCameraView, EfmSnippetView
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
-from aria_nbv.rri_metrics.types import RriResult
+from aria_nbv.rendering.plotting import plot_candidate_pointcloud_scene
+from aria_nbv.rri_metrics.rri import RriResult
 from aria_nbv.utils import plotting as utils_plotting
 from aria_nbv.utils.data_plotting import pose_world_cam, semidense_points_for_frame
 from aria_nbv.vin.diagnostics.plotting import _parameter_distribution
@@ -159,7 +160,7 @@ def test_utils_plotting_helpers_smoke() -> None:
 
 def test_rri_plotting_reexports() -> None:
     vals = np.array([0.0, 1.0, 2.0], dtype=float)
-    fig = rri_plotting._histogram_overlay(
+    fig = utils_plotting._histogram_overlay(
         [("a", vals)],
         bins=3,
         title="rri",
@@ -169,7 +170,7 @@ def test_rri_plotting_reexports() -> None:
     assert isinstance(fig, go.Figure)
 
     fig_mpl, ax = plt.subplots()
-    rri_plotting._plot_hist_counts_mpl(vals, bins=3, log_y=False, ax=ax)
+    utils_plotting._plot_hist_counts_mpl(vals, bins=3, log_y=False, ax=ax)
     assert ax.get_yscale() == "linear"
     plt.close(fig_mpl)
 
@@ -202,7 +203,7 @@ def test_rri_plotting_figures() -> None:
     )
     cam = _make_camera(num_frames=2)
     pcs = _make_candidate_pcs()
-    fig_scene = rri_plotting.plot_rri_scene(
+    fig_scene = plot_candidate_pointcloud_scene(
         sample,
         poses,
         cam,

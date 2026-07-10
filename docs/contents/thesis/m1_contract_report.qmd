@@ -64,7 +64,7 @@ training evidence.
 | Splits | `_assign_splits()` and `VinOfflineStoreReader.get_split_records()` | Split arrays reference global sample indices; selected records are returned in split-array order. |
 | Candidate shell | `CandidateSamplingResult` in `pose_generation/types.py` | `views` is normally the compact valid-candidate table; `mask_valid` and `shell_poses` describe the full sampled shell. |
 | Rendered candidates | `CandidateDepths` in `rendering/candidate_depth_renderer.py` | `candidate_indices` maps rendered rows back to full-shell indices. |
-| Oracle labels | `RriResult` in `rri_metrics/types.py` | RRI and point-to-mesh component vectors are candidate-major and must match rendered candidate count. |
+| Oracle labels | `RriResult` in `rri_metrics/rri.py` | RRI and point-to-mesh component vectors are candidate-major and must match rendered candidate count. |
 | Offline row prep | `prepare_vin_offline_sample()` | Fixed numeric blocks pad candidate-major arrays to `max_candidates`; invalid padded tails use `NaN`, `False`, `-1`, or zero depending on field type. |
 | VIN batch masking | `VinOracleBatch.candidate_valid_mask()` | Model/training paths use `candidate_count` to mask padded tails instead of treating finite tail values as labels. |
 | Rollout replay | `RolloutZarrRecord` and `rollouts.zarr` factual tables in `aria_nbv.rollouts` | Actor-visible full-shell pose/validity fields stay separate from oracle-only score and metric vectors. |

@@ -38,16 +38,15 @@ from ..rri_metrics.eval_pointclouds import (
     canonical_fuse_points,
 )
 from ..rri_metrics.oracle_rri import OracleRRIConfig
+from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from .counterfactuals import (
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
     CounterfactualTrajectory,
     _eval_depth_far_m,
-    _log_error_gain,
     _root_error_for_metric,
     _root_error_tensor,
-    _root_normalized_gain,
     _root_token,
 )
 
@@ -261,7 +260,7 @@ class CounterfactualTargetOracleRriScorer:
             device=device,
             dtype=dtype,
         )
-        target_root_gain = _root_normalized_gain(
+        target_root_gain = root_normalized_gain(
             target_rri.pm_dist_before,
             target_rri.pm_dist_after,
             target_root_error_t,
@@ -271,7 +270,7 @@ class CounterfactualTargetOracleRriScorer:
             target_rri=target_rri.rri,
             target_root_gain=target_root_gain,
             target_root_pm_dist=target_root_error_t.expand_as(target_rri.rri),
-            target_log_error_gain=_log_error_gain(target_rri.pm_dist_before, target_rri.pm_dist_after),
+            target_log_error_gain=log_error_gain(target_rri.pm_dist_before, target_rri.pm_dist_after),
             target_pm_dist_before=target_rri.pm_dist_before,
             target_pm_dist_after=target_rri.pm_dist_after,
             target_pm_acc_before=target_rri.pm_acc_before,
@@ -308,13 +307,13 @@ class CounterfactualTargetOracleRriScorer:
                 device=device,
                 dtype=dtype,
             )
-            metrics.scene_root_gain = _root_normalized_gain(
+            metrics.scene_root_gain = root_normalized_gain(
                 scene_rri.pm_dist_before,
                 scene_rri.pm_dist_after,
                 scene_root_error_t,
             )
             metrics.scene_root_pm_dist = scene_root_error_t.expand_as(scene_rri.rri)
-            metrics.scene_log_error_gain = _log_error_gain(scene_rri.pm_dist_before, scene_rri.pm_dist_after)
+            metrics.scene_log_error_gain = log_error_gain(scene_rri.pm_dist_before, scene_rri.pm_dist_after)
             metrics.scene_pm_dist_before = scene_rri.pm_dist_before
             metrics.scene_pm_dist_after = scene_rri.pm_dist_after
             metrics.scene_pm_acc_before = scene_rri.pm_acc_before

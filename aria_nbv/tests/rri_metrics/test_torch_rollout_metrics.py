@@ -7,11 +7,17 @@ from __future__ import annotations
 import pytest
 import torch
 
-from aria_nbv.rri_metrics.torch_rollout import (
+from aria_nbv.rollouts.audits import (
     CandidateOrderConsistency,
+    CandidateOrderConsistencyMetric,
+    CandidatePathIncrementMetric,
     CandidatePathIncrementStats,
+    CandidatePolicyEntropyMetric,
+    CandidatePrimaryInvalidReasonMetric,
     CandidatePrimaryInvalidReasonStats,
-    SelectedActionOracleComparison,
+    CandidateProvenanceShareMetric,
+    CandidateTableMetrics,
+    SelectedPathCostMetrics,
     candidate_best_value,
     candidate_masked_mean,
     candidate_order_consistency,
@@ -19,26 +25,25 @@ from aria_nbv.rri_metrics.torch_rollout import (
     candidate_policy_entropy,
     candidate_primary_invalid_reason_share,
     candidate_provenance_share,
+    selected_path_length_tensor,
+)
+from aria_nbv.rri_metrics.ranking import (
+    SelectedActionOracleComparison,
     candidate_topk_oracle_hit,
+    selected_action_oracle_comparison,
+)
+from aria_nbv.rri_metrics.returns import (
     discounted_selected_return,
     endpoint_log_gain_tensor,
     endpoint_target_gain_tensor,
-    selected_action_oracle_comparison,
-    selected_path_length_tensor,
+    log_error_gain,
+    root_normalized_gain,
     summarize_selected_rollout_tensors,
 )
-from aria_nbv.rri_metrics.torch_rollout_metrics import (
-    CandidateOrderConsistencyMetric,
-    CandidatePathIncrementMetric,
-    CandidatePolicyEntropyMetric,
-    CandidatePrimaryInvalidReasonMetric,
-    CandidateProvenanceShareMetric,
-    CandidateTableMetrics,
+from aria_nbv.rri_metrics.torchmetrics_multi import SelectedRolloutMetrics
+from aria_nbv.rri_metrics.torchmetrics_single import (
     CandidateTopKOracleHitMetric,
-    FiniteMeanMetric,
     SelectedActionOracleComparisonMetric,
-    SelectedPathCostMetrics,
-    SelectedRolloutMetrics,
 )
 
 
@@ -58,6 +63,26 @@ def test_discounted_selected_return_returns_nan_for_empty_rows() -> None:
     result = discounted_selected_return(rewards, valid)
 
     assert torch.isnan(result).all()
+
+
+def test_return_kernels_preserve_autograd() -> None:
+    rewards = torch.tensor([[0.2, 0.3]], requires_grad=True)
+    before = torch.tensor([10.0], requires_grad=True)
+    after = torch.tensor([5.0], requires_grad=True)
+    root = torch.tensor([12.0], requires_grad=True)
+
+    objective = (
+        discounted_selected_return(rewards).sum()
+        + endpoint_target_gain_tensor(before, after).sum()
+        + endpoint_log_gain_tensor(before, after).sum()
+        + root_normalized_gain(before, after, root).sum()
+        + log_error_gain(before, after).sum()
+    )
+    objective.backward()
+
+    for tensor in (rewards, before, after, root):
+        assert tensor.grad is not None
+        assert torch.isfinite(tensor.grad).all()
 
 
 def test_endpoint_metrics_use_root_error_and_mask_bad_inputs() -> None:
@@ -465,20 +490,6 @@ def test_candidate_primary_invalid_reason_share_validates_configuration() -> Non
 
     with pytest.raises(ValueError, match="outside tensor rank"):
         candidate_primary_invalid_reason_share(torch.tensor([1]), torch.tensor([False]), reason_ids=(1,), dim=2)
-
-
-def test_finite_mean_metric_ignores_nonfinite_and_masked_values() -> None:
-    metric = FiniteMeanMetric()
-
-    metric.update(
-        torch.tensor([1.0, float("nan"), 3.0, 100.0]),
-        torch.tensor([True, True, True, False]),
-    )
-
-    assert torch.isclose(metric.compute(), torch.tensor(2.0))
-    metric.reset()
-    metric.update(torch.tensor([1.0, float("nan")]), torch.tensor([False, True]))
-    assert torch.isnan(metric.compute())
 
 
 def test_selected_rollout_metrics_report_proposal_metrics() -> None:

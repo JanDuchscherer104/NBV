@@ -34,7 +34,7 @@ from aria_nbv.utils.base_config import TargetConfig
 
 from .eval_pointclouds import canonical_fuse_points
 from .point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
-from .types import RriResult
+from .rri import RriResult, compute_rri
 
 
 class OracleRRIConfig(TargetConfig["OracleRRI"]):
@@ -116,18 +116,7 @@ class OracleRRI:
 
         dist_after = chamfer_point_mesh_batched(points_tq, lengths_tq, gt_verts_crop, gt_faces_crop)
 
-        denom = dist_before.bidirectional.clamp_min(1e-12)
-        rri_all = (dist_before.bidirectional - dist_after.bidirectional) / denom
-
-        return RriResult(
-            rri=rri_all,
-            pm_dist_before=dist_before.bidirectional.expand_as(rri_all),
-            pm_dist_after=dist_after.bidirectional,
-            pm_acc_before=dist_before.accuracy.expand_as(rri_all),
-            pm_comp_before=dist_before.completeness.expand_as(rri_all),
-            pm_acc_after=dist_after.accuracy,
-            pm_comp_after=dist_after.completeness,
-        )
+        return compute_rri(dist_before, dist_after)
 
     def score_batch(
         self,

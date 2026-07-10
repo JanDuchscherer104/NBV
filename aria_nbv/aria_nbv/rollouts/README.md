@@ -1,11 +1,14 @@
 # Rollouts
 
-`aria_nbv.rollouts` owns replay transitions, persisted traces/stores, manifests, audits, and read-side inspection. Generation pipelines moved to `aria_nbv.oracle.pipelines`.
+`aria_nbv.rollouts` owns replay transitions, persisted traces/stores, manifests,
+audits, and read-side inspection. Rollout dataset/shard generation lives in
+`aria_nbv.oracle.pipelines`; the top-level scene labeler moves there in WP12.
 
 ## Layout
 
 ```text
 rollouts/
+  audits.py               # operational validity/provenance/path checks
   counterfactuals.py      # future replay split
   target_counterfactuals.py  # future oracle extraction
   inspection.py
@@ -28,6 +31,39 @@ Graphify refresh: `2026-07-10T18:34:29+02:00`
 
 No top-level AST definitions; imported names and `__all__` are excluded.
 
+### `audits.py`
+
+Operational audit reducers and TorchMetrics moved out of the former mixed
+metrics modules. These symbols are evaluation-only.
+
+| Symbol | Kind | Visibility | Final owner | Status |
+|---|---|---|---|---|
+| `CandidateOrderConsistency` | `DTO` | `public` | `rollouts.audits` | `moved` |
+| `CandidatePathIncrementStats` | `DTO` | `public` | `rollouts.audits` | `moved` |
+| `CandidatePrimaryInvalidReasonStats` | `DTO` | `public` | `rollouts.audits` | `moved` |
+| `selected_path_length_tensor` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_order_consistency` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_policy_entropy` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_provenance_share` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_path_increment_stats` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_primary_invalid_reason_share` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_masked_mean` | `function` | `public` | `rollouts.audits` | `moved` |
+| `candidate_best_value` | `function` | `public` | `rollouts.audits` | `moved` |
+| `_as_path_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
+| `_as_candidate_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
+| `_candidate_valid_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
+| `_masked_argmax` | `function` | `private` | `rollouts.audits` | `moved` |
+| `_finite_mask` | `function` | `private` | `rollouts.audits` | `moved` |
+| `_id_membership` | `function` | `private` | `rollouts.audits` | `moved` |
+| `CandidateTableMetrics` | `class` | `public` | `rollouts.audits` | `moved` |
+| `CandidatePathIncrementMetric` | `class` | `public` | `rollouts.audits` | `moved` |
+| `CandidatePrimaryInvalidReasonMetric` | `class` | `public` | `rollouts.audits` | `moved` |
+| `SelectedPathCostMetrics` | `class` | `public` | `rollouts.audits` | `moved` |
+| `CandidateOrderConsistencyMetric` | `class` | `public` | `rollouts.audits` | `moved` |
+| `CandidatePolicyEntropyMetric` | `class` | `public` | `rollouts.audits` | `moved` |
+| `CandidateProvenanceShareMetric` | `class` | `public` | `rollouts.audits` | `moved` |
+| `_safe_mean` | `function` | `private` | `rollouts.audits` | `moved` |
+
 ### `counterfactuals.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
@@ -41,8 +77,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_time_value` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_root_error_for_metric` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_root_error_tensor` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_root_normalized_gain` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_log_error_gain` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_eval_depth_far_m` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_robust_temperature_logits` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_valid_diversity_metadata` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
