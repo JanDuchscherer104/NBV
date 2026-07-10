@@ -24,9 +24,9 @@ from efm3d.dataset.efm_model_adaptor import EfmModelAdaptor, pipelinefilter
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from torch.utils.data import IterableDataset
 
-from ..configs import PathConfig
-from ..utils import BaseConfig, Console, TargetConfig, Verbosity
-from .efm_dataset_utils import (
+from ...configs import PathConfig
+from ...utils import BaseConfig, Console, TargetConfig, Verbosity
+from ..efm_dataset_utils import (
     _find_tar_for_sample,
     _infer_ids,
     _matches_snippet_token,
@@ -36,8 +36,8 @@ from .efm_dataset_utils import (
     _unique_preserve_order,
     infer_semidense_bounds,
 )
-from .efm_views import EfmSnippetView
-from .mesh_cache import MeshProcessSpec, load_or_process_mesh
+from ..efm_views import EfmSnippetView
+from ..mesh_cache import MeshProcessSpec, load_or_process_mesh
 
 
 class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):

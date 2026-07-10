@@ -36,8 +36,8 @@ from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.types import EvlBackboneOutput
-from .._raw import EfmSnippetLoader, EfmSnippetView, VinSnippetView
 from ..efm_dataset_utils import compact_ase_atek_sample_id, raw_ase_atek_sample_id
+from ..raw import EfmSnippetLoader, EfmSnippetView, VinSnippetView
 from .batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 

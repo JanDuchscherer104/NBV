@@ -35,8 +35,8 @@ from ...utils import Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_json_signature
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.backbones import EvlBackboneConfig
-from .._raw import AseEfmDatasetConfig, EfmSnippetView, VinSnippetView
 from ..efm_dataset_utils import compact_ase_atek_sample_id
+from ..raw import AseEfmDatasetConfig, EfmSnippetView, VinSnippetView
 from .adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view
 from .format import (
     VinOfflineIndexRecord,

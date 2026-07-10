@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..configs import PathConfig
-from ..utils import Verbosity
-from .efm_dataset import AseEfmDataset, AseEfmDatasetConfig
-from .efm_views import EfmSnippetView
+from ...configs import PathConfig
+from ...utils import Verbosity
+from ..efm_views import EfmSnippetView
+from .dataset import AseEfmDataset, AseEfmDatasetConfig
 
 
 class EfmSnippetLoader:

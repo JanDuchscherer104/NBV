@@ -11,9 +11,7 @@ presenting a single import surface for:
 
 from __future__ import annotations
 
-from .efm_dataset import AseEfmDataset, AseEfmDatasetConfig, infer_semidense_bounds
-from .efm_snippet_loader import EfmSnippetLoader
-from .efm_views import (
+from ..efm_views import (
     EfmCameraView,
     EfmGTView,
     EfmObbView,
@@ -24,6 +22,8 @@ from .efm_views import (
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
+from .dataset import AseEfmDataset, AseEfmDatasetConfig, infer_semidense_bounds
+from .loader import EfmSnippetLoader
 
 __all__ = [
     "AseEfmDataset",

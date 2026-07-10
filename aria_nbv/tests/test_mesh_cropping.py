@@ -1,7 +1,7 @@
 import torch
 from efm3d.aria.aria_constants import ARIA_POINTS_VOL_MAX, ARIA_POINTS_VOL_MIN, ARIA_POINTS_WORLD
 
-from aria_nbv.data_handling.efm_dataset import infer_semidense_bounds
+from aria_nbv.data_handling.raw.dataset import infer_semidense_bounds
 
 
 def test_infer_bounds_prefers_volume_keys():

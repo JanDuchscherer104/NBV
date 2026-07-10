@@ -77,13 +77,13 @@ from torch import Tensor, nn
 
 from aria_nbv.utils.frames import rotate_yaw_cw90
 
-from ...data_handling._raw import (
+from ...data_handling.offline.adapter import build_vin_snippet_view
+from ...data_handling.raw import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
-from ...data_handling.offline.adapter import build_vin_snippet_view
 from ...utils import TargetConfig
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v3

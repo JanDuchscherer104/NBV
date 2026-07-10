@@ -34,7 +34,7 @@ def test_ase_efm_snippet_lookup() -> None:
     tar_path = tar_paths[0]
     sample_key = _first_sample_key(tar_path)
 
-    from aria_nbv.data_handling.efm_dataset import AseEfmDatasetConfig
+    from aria_nbv.data_handling.raw.dataset import AseEfmDatasetConfig
 
     ds = AseEfmDatasetConfig(
         scene_ids=[scene_id],

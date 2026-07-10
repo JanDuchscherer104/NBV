@@ -962,7 +962,7 @@ or retained diagnostics change.
 ```text
 data_handling/
   offline/
-  raw/                 # added in G007
+  raw/
   atek_downloads/
   mesh_cache.py
   ...                  # mixed roots remain explicit below
@@ -970,17 +970,13 @@ data_handling/
 
 Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
-Inventory generated: `2026-07-10T16:19:49.706440+00:00`
+Inventory generated: `2026-07-10T16:27:20.693866+00:00`
 
-Graphify refresh: `2026-07-10T16:19:49.706440+00:00`
+Graphify refresh: `2026-07-10T16:27:20.693866+00:00`
 
 ### Symbol Ownership Matrix
 
 #### `__init__.py`
-
-No top-level AST definitions; imported names and `__all__` are excluded.
-
-#### `_raw.py`
 
 No top-level AST definitions; imported names and `__all__` are excluded.
 
@@ -1043,13 +1039,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
 | `VinDatasetSourceConfig` | `constant` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
 
-#### `efm_dataset.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `AseEfmDatasetConfig` | `config` | `public` | `data_handling.efm_dataset` | `data_handling.efm_dataset` | `data_handling.raw.dataset` | `deferred: semantic WP` |
-| `AseEfmDataset` | `class` | `public` | `data_handling.efm_dataset` | `data_handling.efm_dataset` | `data_handling.raw.dataset` | `deferred: semantic WP` |
-
 #### `efm_dataset_utils.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
@@ -1073,12 +1062,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
 | `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
 | `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-
-#### `efm_snippet_loader.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `EfmSnippetLoader` | `class` | `public` | `data_handling.efm_snippet_loader` | `data_handling.efm_snippet_loader` | `data_handling.raw.loader` | `deferred: semantic WP` |
 
 #### `efm_views.py`
 

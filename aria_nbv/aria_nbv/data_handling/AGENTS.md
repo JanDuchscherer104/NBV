@@ -10,7 +10,8 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
 
 ## Public Contracts
 - Public package surface: `aria_nbv/aria_nbv/data_handling/__init__.py`
-- Raw snippet and typed container surface: `efm_dataset.py`, `efm_views.py`, `efm_snippet_loader.py`
+- Raw snippet access: `raw/dataset.py` and `raw/loader.py`; shared typed views
+  remain in `efm_views.py`
 - Immutable offline store contracts: `offline/format.py`, `offline/store.py`,
   `offline/writer.py`, and `offline/dataset.py`
 - VIN datamodule source contracts: `_vin_sources.py`, `offline/adapter.py`, and

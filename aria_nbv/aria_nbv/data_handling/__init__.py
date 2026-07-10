@@ -22,7 +22,7 @@ from __future__ import annotations
 
 # Import order is intentional: raw view exports must be bound before dependent
 # modules that may indirectly import them back from ``aria_nbv.data_handling``.
-from ._raw import (
+from .raw import (
     AseEfmDataset,
     AseEfmDatasetConfig,
     EfmCameraView,

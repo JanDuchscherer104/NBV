@@ -12,9 +12,9 @@ from torch.utils.data import IterableDataset
 from ..configs import PathConfig
 from ..pipelines.oracle_rri_labeler import OracleRriLabeler, OracleRriLabelerConfig
 from ..utils import Console, Stage, TargetConfig, Verbosity
-from ._raw import AseEfmDatasetConfig, EfmSnippetView
 from .offline.batch import VinOracleBatch
 from .offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig
+from .raw import AseEfmDatasetConfig, EfmSnippetView
 
 
 class VinOracleOnlineDataset(IterableDataset[VinOracleBatch]):
