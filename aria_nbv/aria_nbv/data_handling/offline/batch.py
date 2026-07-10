@@ -10,8 +10,8 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 from torch import Tensor
 
-from ..vin.types import EvlBackboneOutput
-from .efm_views import (
+from ...vin.types import EvlBackboneOutput
+from ..efm_views import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,
@@ -21,7 +21,7 @@ from .efm_views import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from ..pipelines.oracle_rri_labeler import OracleRriSample
+    from ...pipelines.oracle_rri_labeler import OracleRriSample
 
 
 @dataclass(slots=True)

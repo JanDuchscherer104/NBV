@@ -29,26 +29,26 @@ import torch
 from efm3d.aria.aria_constants import ARIA_OBB_SEM_ID_TO_NAME
 from pydantic import Field
 
-from ..configs import PathConfig
-from ..pipelines.oracle_rri_labeler import OracleRriLabelerConfig
-from ..utils import Console, TargetConfig, Verbosity
-from ..utils.fingerprints import stable_json_signature
-from ..utils.semantic_names import normalize_semantic_name_map
-from ..vin.backbones import EvlBackboneConfig
-from ._offline_format import (
+from ...configs import PathConfig
+from ...pipelines.oracle_rri_labeler import OracleRriLabelerConfig
+from ...utils import Console, TargetConfig, Verbosity
+from ...utils.fingerprints import stable_json_signature
+from ...utils.semantic_names import normalize_semantic_name_map
+from ...vin.backbones import EvlBackboneConfig
+from .._raw import AseEfmDatasetConfig, EfmSnippetView, VinSnippetView
+from ..efm_dataset_utils import compact_ase_atek_sample_id
+from .adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view
+from .format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
-from ._offline_store import (
+from .store import (
     OFFLINE_DATASET_VERSION,
     VinOfflineShardWriter,
     VinOfflineStoreConfig,
 )
-from ._raw import AseEfmDatasetConfig, EfmSnippetView, VinSnippetView
-from .efm_dataset_utils import compact_ase_atek_sample_id
-from .vin_adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -57,12 +57,12 @@ if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
     from numpy.typing import DTypeLike, NDArray
 
-    from ..pipelines.oracle_rri_labeler import OracleRriSample
-    from ..pose_generation.types import CandidateSamplingResult
-    from ..rendering.candidate_depth_renderer import CandidateDepths
-    from ..rendering.candidate_pointclouds import CandidatePointClouds
-    from ..rri_metrics.types import RriResult
-    from ..vin.types import EvlBackboneOutput
+    from ...pipelines.oracle_rri_labeler import OracleRriSample
+    from ...pose_generation.types import CandidateSamplingResult
+    from ...rendering.candidate_depth_renderer import CandidateDepths
+    from ...rendering.candidate_pointclouds import CandidatePointClouds
+    from ...rri_metrics.types import RriResult
+    from ...vin.types import EvlBackboneOutput
 
 DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (
     "t_world_voxel",

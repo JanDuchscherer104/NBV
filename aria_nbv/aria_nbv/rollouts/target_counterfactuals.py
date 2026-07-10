@@ -54,9 +54,9 @@ from .counterfactuals import (
 if TYPE_CHECKING:
     from efm3d.aria.obb import ObbTW
 
-    from ..data_handling._offline_dataset import VinOfflineSample
     from ..data_handling._target_selection import TargetCandidateRow
     from ..data_handling.efm_views import EfmSnippetView
+    from ..data_handling.offline.dataset import VinOfflineSample
     from ..pose_generation.types import CandidateSamplingResult
 
 TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v1"

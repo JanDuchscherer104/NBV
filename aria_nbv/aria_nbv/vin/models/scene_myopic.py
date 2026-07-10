@@ -83,7 +83,7 @@ from ...data_handling._raw import (
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
-from ...data_handling.vin_adapter import build_vin_snippet_view
+from ...data_handling.offline.adapter import build_vin_snippet_view
 from ...utils import TargetConfig
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v3

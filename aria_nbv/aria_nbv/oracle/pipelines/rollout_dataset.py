@@ -22,7 +22,6 @@ from enum import StrEnum
 import torch
 from pydantic import Field, field_validator
 
-from ...data_handling._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...data_handling._target_selection import (
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
@@ -34,6 +33,7 @@ from ...data_handling._target_selection import (
     TargetSelectorConfig,
     TargetTaskIdentityStatus,
 )
+from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureViewGeneratorConfig,

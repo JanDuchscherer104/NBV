@@ -48,10 +48,10 @@ from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
 from ..vin.types import EvlBackboneOutput
 from .efm_views import EfmSnippetView, VinSnippetView
-from .vin_oracle_types import CompactObbBlock
+from .offline.batch import CompactObbBlock
 
 if TYPE_CHECKING:
-    from ._offline_dataset import VinOfflineSample
+    from .offline.dataset import VinOfflineSample
 
 
 class TargetSelectionPolicy(StrEnum):
@@ -701,7 +701,7 @@ class OracleTargetTaskSampler:
             descriptors and do not filter first-pass target-task eligibility.
         """
 
-        from ._offline_dataset import VinOfflineSample
+        from .offline.dataset import VinOfflineSample
 
         if not isinstance(sample, VinOfflineSample):
             raise TypeError("OracleTargetTaskSampler expects VinOfflineSample input.")
@@ -895,7 +895,7 @@ class ActorVisibleTargetSelector:
             Ranked target table and selected top-K rows.
         """
 
-        from ._offline_dataset import VinOfflineSample
+        from .offline.dataset import VinOfflineSample
 
         if not isinstance(sample, VinOfflineSample):
             raise TypeError("ActorVisibleTargetSelector expects VinOfflineSample input.")

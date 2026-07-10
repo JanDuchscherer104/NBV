@@ -20,7 +20,7 @@ from efm3d.aria.obb import ObbTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import CompactObbBlock, TargetCandidateRow
-from aria_nbv.data_handling._offline_dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,

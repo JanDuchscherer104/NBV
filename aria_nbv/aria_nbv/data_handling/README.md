@@ -950,3 +950,267 @@ done
 Broaden to Lightning datamodule tests when source selection or training-facing
 batch assembly changes. Broaden to Rerun/Streamlit tests when inspection flows
 or retained diagnostics change.
+
+---
+
+## Mechanical Layout Inventory
+
+`aria_nbv.data_handling` owns raw EFM access and immutable offline adapters. This move-only series preserves the root export contract while introducing shallow `offline` and `raw` owners.
+
+### Layout
+
+```text
+data_handling/
+  offline/
+  raw/                 # added in G007
+  atek_downloads/
+  mesh_cache.py
+  ...                  # mixed roots remain explicit below
+```
+
+Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
+
+Inventory generated: `2026-07-10T16:16:03.131034+00:00`
+
+Graphify refresh: `2026-07-10T16:16:03.131034+00:00`
+
+### Symbol Ownership Matrix
+
+#### `__init__.py`
+
+No top-level AST definitions; imported names and `__all__` are excluded.
+
+#### `_offline_diagnostics.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `RRI_COMPONENT_BLOCKS` | `constant` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `POSE_CAMERA_BLOCKS` | `constant` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `NumericSummary` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineMemoryDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineBackboneDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineBlockDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineSampleDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineCoverageSceneDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineCoverageStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `VinOfflineDatasetStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_finite_values` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_summary` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_component_key` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_collect_block_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_shards_by_id` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_has_record_block` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_read_valid_vector` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_normalise` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_broadcast_ref_pose` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_roll_about_forward` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_candidate_pose_values` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_component_for_memory_block` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_row_block_nbytes` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_memory_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_BackboneAccumulator` | `DTO` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_collect_backbone_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_batch_shape_preview` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `collect_vin_offline_dataset_stats` | `function` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_ARIA_SAMPLE_RE` | `constant` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_pair_from_tar_member` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_resolve_coverage_tar_paths` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_resolve_manifest_path` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `_scan_tar_pairs` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+| `collect_vin_offline_dataset_coverage` | `function` | `public` | `data_handling._offline_diagnostics` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `deferred: semantic WP` |
+
+#### `_offline_visual_inventory.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `OfflineVisualInventoryError` | `class` | `public` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `OfflineVisualInventory` | `DTO` | `public` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_missing` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_invalid` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_get_required` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_as_tensor` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_finite_prefix` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_shape_metadata` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_first_length` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_validate_vin_snippet` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_validate_pose` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_validate_p3d_cameras` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_candidate_count` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_validate_oracle` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_optional_inventory` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `_sample_metadata` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+| `collect_offline_visual_inventory` | `function` | `public` | `data_handling._offline_visual_inventory` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `deferred: semantic WP` |
+
+#### `_raw.py`
+
+No top-level AST definitions; imported names and `__all__` are excluded.
+
+#### `_target_selection.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `TargetSelectionPolicy` | `enum` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetSourceMode` | `enum` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TARGET_INVALID_REASON_CODES` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TARGET_INVALID_REASON_VERSION` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `ORACLE_TARGET_TASK_SOURCE` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetCandidateRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetSelectionResult` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetTaskIdentityStatus` | `enum` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskSweepCell` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskSamplingResult` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_TargetSource` | `DTO` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetSelectorConfig` | `config` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskSamplerConfig` | `config` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskSampler` | `class` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `ActorVisibleTargetSelector` | `class` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_compact_obb_block` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `target_gt_obb_world` | `function` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_world_obbs_for_sample` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_latest_valid_obb_slice` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_valid_obb_data_with_source_indices` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_sample_snippet_view` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_snippet_t_world_snippet` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_reference_pose_world_rig` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_pose_on_device` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_semidense_points` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_valid_prefix_points` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_evl_support_points` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_points_inside_count` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_max_projected_area` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_visibility_score` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_gt_match_score` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_target_reason_bitset` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_primary_reason` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_safe_obb_iou` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_strict_obb_iou` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_obb_geometry_valid` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_mark_duplicate_gt_matches` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_target_failure_bitset` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_ranking_key` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_class_name` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_target_id` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_first_scalar_string` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `_float_tuple` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+
+#### `_vin_sources.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `VinOracleOnlineDataset` | `class` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+| `_default_online_train_ds` | `function` | `private` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+| `VinOracleOnlineDatasetConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+| `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+| `VinDatasetSourceConfig` | `constant` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+
+#### `efm_dataset.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `AseEfmDatasetConfig` | `config` | `public` | `data_handling.efm_dataset` | `data_handling.efm_dataset` | `data_handling.raw.dataset` | `deferred: semantic WP` |
+| `AseEfmDataset` | `class` | `public` | `data_handling.efm_dataset` | `data_handling.efm_dataset` | `data_handling.raw.dataset` | `deferred: semantic WP` |
+
+#### `efm_dataset_utils.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `_RAW_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_COMPACT_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `compact_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `raw_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `compact_ase_atek_identifiers` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_ase_atek_identifier_variants` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_infer_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_unique_preserve_order` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_looks_like_sample_key` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_looks_like_shard_id` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_normalize_shard_stem` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_matches_snippet_token` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_tar_contains_snippet` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_resolve_tar_from_path` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_resolve_tar_for_shard` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_find_tar_for_sample` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+
+#### `efm_snippet_loader.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `EfmSnippetLoader` | `class` | `public` | `data_handling.efm_snippet_loader` | `data_handling.efm_snippet_loader` | `data_handling.raw.loader` | `deferred: semantic WP` |
+
+#### `efm_views.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `_FIELD_DOC_CACHE` | `constant` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `_extract_field_docs` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `_get_field_doc` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `_repr` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `BaseView` | `class` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmGtCameraObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `CamerasDict` | `constant` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmGtTimestampView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmGTView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmCameraView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmTrajectoryView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmPointsView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `EfmSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `VinSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `is_efm_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `is_vin_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+
+#### `mesh_cache.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `MeshProcessSpec` | `DTO` | `public` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+| `ProcessedMesh` | `DTO` | `public` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+| `_mesh_cache_lock` | `function` | `private` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+| `_processed_mesh_from_cache` | `function` | `private` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+| `_crop_mesh` | `function` | `private` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+| `load_or_process_mesh` | `function` | `public` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `data_handling.mesh_cache` | `already aligned` |
+
+#### `offline_cli.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `_HELP_SETTINGS` | `constant` | `private` | `data_handling.offline_cli` | `data_handling.offline_cli` | `data_handling.offline.cli` | `deferred: semantic WP` |
+| `app` | `constant` | `public` | `data_handling.offline_cli` | `data_handling.offline_cli` | `data_handling.offline.cli` | `deferred: semantic WP` |
+| `main` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline_cli` | `data_handling.offline.cli` | `deferred: semantic WP` |
+| `build_offline_command` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline_cli` | `data_handling.offline.cli` | `deferred: semantic WP` |
+
+#### `offline_info_cli.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `Split` | `enum` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_SPLITS` | `constant` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_HELP_SETTINGS` | `constant` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `StoreOption` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `JsonOption` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `app` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `main` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_normalize_default_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `summary_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `tree_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `samples_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `random_index_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_print_or_json` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_summary_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_tree_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_samples_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_random_index_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_sample_row` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_path_entry` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_shard_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_block_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_numeric_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_bytes_to_mib` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_print_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_print_tree` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_print_samples` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |
+| `_dict_rows` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `deferred: semantic WP` |

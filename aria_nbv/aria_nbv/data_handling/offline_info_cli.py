@@ -25,9 +25,9 @@ from ..utils.cli_format import (
 )
 from ..utils.typer_cli import run_typer_app
 from ._offline_diagnostics import NumericSummary, collect_vin_offline_dataset_stats
-from ._offline_format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
-from ._offline_store import VinOfflineStoreConfig, VinOfflineStoreReader
 from .efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from .offline.format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
+from .offline.store import VinOfflineStoreConfig, VinOfflineStoreReader
 
 
 class Split(StrEnum):

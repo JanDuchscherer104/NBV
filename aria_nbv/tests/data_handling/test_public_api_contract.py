@@ -116,12 +116,12 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
     allowlist = {"vin/models/scene_myopic.py"}
     allowed_direct_imports = {
         "rollouts/target_counterfactuals.py": {
-            "data_handling._offline_dataset",
+            "data_handling.offline.dataset",
             "data_handling._target_selection",
             "data_handling.efm_views",
         },
         "oracle/pipelines/rollout_dataset.py": {
-            "data_handling._offline_dataset",
+            "data_handling.offline.dataset",
             "data_handling._target_selection",
         },
         "rollouts/info_cli.py": {"data_handling.efm_dataset_utils"},

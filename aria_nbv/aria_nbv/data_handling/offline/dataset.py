@@ -29,20 +29,20 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from ..configs import PathConfig
-from ..pose_generation.types import CandidateSamplingResult
-from ..rendering.candidate_depth_renderer import CandidateDepths
-from ..rendering.candidate_pointclouds import CandidatePointClouds
-from ..utils import BaseConfig, Console, TargetConfig, Verbosity
-from ..utils.semantic_names import normalize_semantic_name_map
-from ..vin.types import EvlBackboneOutput
-from ._offline_store import VinOfflineStoreConfig, VinOfflineStoreReader
-from ._raw import EfmSnippetLoader, EfmSnippetView, VinSnippetView
-from .efm_dataset_utils import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from .vin_oracle_types import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
+from ...configs import PathConfig
+from ...pose_generation.types import CandidateSamplingResult
+from ...rendering.candidate_depth_renderer import CandidateDepths
+from ...rendering.candidate_pointclouds import CandidatePointClouds
+from ...utils import BaseConfig, Console, TargetConfig, Verbosity
+from ...utils.semantic_names import normalize_semantic_name_map
+from ...vin.types import EvlBackboneOutput
+from .._raw import EfmSnippetLoader, EfmSnippetView, VinSnippetView
+from ..efm_dataset_utils import compact_ase_atek_sample_id, raw_ase_atek_sample_id
+from .batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
+from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
 if TYPE_CHECKING:
-    from ._offline_format import VinOfflineIndexRecord
+    from .format import VinOfflineIndexRecord
 
 
 @dataclass(slots=True)

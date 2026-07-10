@@ -35,14 +35,25 @@ website:
           file: reference/data_handling.efm_views.qmd
         - text: mesh_cache
           file: reference/data_handling.mesh_cache.qmd
+        - text: offline
+          file: reference/data_handling.offline.qmd
+          contents:
+          - text: adapter
+            file: reference/data_handling.offline.adapter.qmd
+          - text: batch
+            file: reference/data_handling.offline.batch.qmd
+          - text: dataset
+            file: reference/data_handling.offline.dataset.qmd
+          - text: format
+            file: reference/data_handling.offline.format.qmd
+          - text: store
+            file: reference/data_handling.offline.store.qmd
+          - text: writer
+            file: reference/data_handling.offline.writer.qmd
         - text: offline_cli
           file: reference/data_handling.offline_cli.qmd
         - text: offline_info_cli
           file: reference/data_handling.offline_info_cli.qmd
-        - text: vin_adapter
-          file: reference/data_handling.vin_adapter.qmd
-        - text: vin_oracle_types
-          file: reference/data_handling.vin_oracle_types.qmd
       - text: lightning
         file: reference/lightning.qmd
         contents:

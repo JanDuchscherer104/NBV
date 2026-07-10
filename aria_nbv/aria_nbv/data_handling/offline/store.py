@@ -20,10 +20,10 @@ import numpy as np
 import zarr
 from pydantic import Field, field_validator
 
-from ..configs import PathConfig
-from ..utils import BaseConfig
-from ..utils.config_paths import resolve_cache_artifact_dir
-from ._offline_format import (
+from ...configs import PathConfig
+from ...utils import BaseConfig
+from ...utils.config_paths import resolve_cache_artifact_dir
+from .format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
     VinOfflineManifest,

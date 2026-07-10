@@ -33,9 +33,9 @@ from aria_nbv.data_handling import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from aria_nbv.data_handling._offline_format import VinOfflineBlockSpec
-from aria_nbv.data_handling._offline_store import VinOfflineStoreReader
-from aria_nbv.data_handling._offline_writer import _assign_splits
+from aria_nbv.data_handling.offline.format import VinOfflineBlockSpec
+from aria_nbv.data_handling.offline.store import VinOfflineStoreReader
+from aria_nbv.data_handling.offline.writer import _assign_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths

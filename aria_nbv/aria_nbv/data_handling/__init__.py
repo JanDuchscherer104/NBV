@@ -36,7 +36,7 @@ from ._raw import (
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
-from ._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from .offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ._offline_diagnostics import (
     NumericSummary,
     VinOfflineBackboneDiagnostic,
@@ -49,14 +49,14 @@ from ._offline_diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )
-from ._offline_format import VinOfflineIndexRecord, VinOfflineManifest, VinOfflineMaterializedBlocks
-from ._offline_store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
+from .offline.format import VinOfflineIndexRecord, VinOfflineManifest, VinOfflineMaterializedBlocks
+from .offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
 from ._offline_visual_inventory import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
     collect_offline_visual_inventory,
 )
-from ._offline_writer import (
+from .offline.writer import (
     VinOfflineWriter,
     VinOfflineWriterConfig,
     flush_prepared_samples_to_shard,
@@ -87,8 +87,8 @@ from ._vin_sources import (
     VinOracleOnlineDatasetConfig,
 )
 from .mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
-from .vin_adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view, empty_vin_snippet
-from .vin_oracle_types import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
+from .offline.adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view, empty_vin_snippet
+from .offline.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
 
 __all__ = [
     "ActorVisibleTargetSelector",

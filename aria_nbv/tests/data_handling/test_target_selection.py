@@ -28,7 +28,7 @@ from aria_nbv.data_handling import (
     VinSnippetView,
 )
 from aria_nbv.data_handling import _target_selection as target_selection_module
-from aria_nbv.data_handling._offline_dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.vin.types import EvlBackboneOutput
 
 

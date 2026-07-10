@@ -16,7 +16,7 @@ import typer
 from ..utils.cli_format import cli_console, key_value_panel
 from ..utils.config_paths import resolve_config_toml_path
 from ..utils.typer_cli import run_typer_app
-from ._offline_writer import VinOfflineWriterConfig
+from .offline.writer import VinOfflineWriterConfig
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
