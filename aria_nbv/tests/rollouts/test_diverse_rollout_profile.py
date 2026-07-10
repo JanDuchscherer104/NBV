@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig, CandidatePositionMode, ViewDirectionMode
-from aria_nbv.rollouts import RolloutDatasetWriterConfig, RolloutRecipeConfig
 
 
 def test_diverse_rollout_profile_emphasizes_radial_and_backtrack_families() -> None:

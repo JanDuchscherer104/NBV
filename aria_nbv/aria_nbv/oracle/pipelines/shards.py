@@ -8,9 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
-from .dataset_writer import RolloutDatasetWriterConfig, _RolloutSourceLineageBuilder
-from .manifest import (
+from ...rollouts.manifest import (
     RolloutStoreInvocation,
     collect_runtime_provenance,
     manifest_json_bytes,
@@ -18,7 +16,7 @@ from .manifest import (
     read_rollout_store_manifest,
     utc_timestamp,
 )
-from .shard_manifest import (
+from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_OWNER_FILENAME,
     ROLLOUT_SHARD_SUCCESS_FILENAME,
     RolloutShardEntry,
@@ -26,7 +24,9 @@ from .shard_manifest import (
     load_rollout_shard_entry,
     write_rollout_shard_manifest,
 )
-from .zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
+from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
+from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
+from .rollout_dataset import RolloutDatasetWriterConfig, _RolloutSourceLineageBuilder
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +288,7 @@ def load_rollout_shard_entry_for_cli(path: Path | str, shard_id: str | int) -> R
 def load_rollout_shard_manifest_for_status(path: Path | str) -> list[RolloutShardEntry]:
     """Load rollout shard entries for campaign status reporting."""
 
-    from .shard_manifest import read_rollout_shard_manifest
+    from ...rollouts.shard_manifest import read_rollout_shard_manifest
 
     return read_rollout_shard_manifest(path)
 

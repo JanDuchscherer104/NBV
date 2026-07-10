@@ -15,8 +15,7 @@ import pytest
 import torch
 
 from aria_nbv.data_handling import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRow, TargetTaskIdentityStatus
-from aria_nbv.rendering import CandidateDepthRendererConfig
-from aria_nbv.rollouts.dataset_writer import (
+from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
     RolloutTargetSource,
@@ -24,9 +23,10 @@ from aria_nbv.rollouts.dataset_writer import (
     _oracle_target_task_to_candidate_row,
     _RolloutSourceLineageBuilder,
 )
+from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
+from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
-from aria_nbv.rollouts.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 

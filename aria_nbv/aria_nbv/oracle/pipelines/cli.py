@@ -9,11 +9,11 @@ from typing import Annotated, Any
 import click
 import typer
 
-from ..utils.cli_format import cli_console, key_value_panel
-from ..utils.config_paths import resolve_config_toml_path
-from ..utils.typer_cli import run_typer_app
-from .dataset_writer import RolloutDatasetWriterConfig
-from .manifest import RolloutStoreInvocation
+from ...rollouts.manifest import RolloutStoreInvocation
+from ...utils.cli_format import cli_console, key_value_panel
+from ...utils.config_paths import resolve_config_toml_path
+from ...utils.typer_cli import run_typer_app
+from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
     load_rollout_shard_entry_for_cli,
     run_rollout_shard,
@@ -277,7 +277,7 @@ def status_rollout_shards_command(
         suffix = "" if len(problems) <= 20 else f", ... +{len(problems) - 20} more"
         console.print(f"Problem shards: {problem_ids}{suffix}")
     if output_json is not None:
-        from .manifest import manifest_json_bytes
+        from ...rollouts.manifest import manifest_json_bytes
 
         output_path = output_json.expanduser().resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)

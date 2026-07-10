@@ -22,8 +22,8 @@ from enum import StrEnum
 import torch
 from pydantic import Field, field_validator
 
-from ..data_handling._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
-from ..data_handling._target_selection import (
+from ...data_handling._offline_dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from ...data_handling._target_selection import (
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
     ActorVisibleTargetSelector,
@@ -34,28 +34,28 @@ from ..data_handling._target_selection import (
     TargetSelectorConfig,
     TargetTaskIdentityStatus,
 )
-from ..pose_generation import (
+from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureViewGeneratorConfig,
 )
-from ..rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
-from ..utils import BaseConfig, Console, TargetConfig, Verbosity
-from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
-from .counterfactuals import (
+from ...rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
+from ...rollouts.counterfactuals import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
 )
-from .manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
-from .shard_manifest import RolloutShardEntry
-from .target_counterfactuals import CounterfactualTargetOracleRriScorerConfig, TargetRriInvalidError
-from .trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
-from .zarr_store import (
+from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
+from ...rollouts.shard_manifest import RolloutShardEntry
+from ...rollouts.target_counterfactuals import CounterfactualTargetOracleRriScorerConfig, TargetRriInvalidError
+from ...rollouts.trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
+from ...rollouts.zarr_store import (
     RolloutZarrStoreConfig,
     RolloutZarrWriteResult,
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+from ...utils import BaseConfig, Console, TargetConfig, Verbosity
+from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 
 @dataclass(slots=True)

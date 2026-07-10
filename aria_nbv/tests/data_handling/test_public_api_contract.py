@@ -120,7 +120,7 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
             "data_handling._target_selection",
             "data_handling.efm_views",
         },
-        "rollouts/dataset_writer.py": {
+        "oracle/pipelines/rollout_dataset.py": {
             "data_handling._offline_dataset",
             "data_handling._target_selection",
         },

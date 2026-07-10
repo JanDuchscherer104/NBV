@@ -14,13 +14,13 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 - Target-cropped oracle rollout scoring: `target_counterfactuals.py`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
-- VIN-source rollout generator: `dataset_writer.py`
-- Generation CLI: `cli.py`
+- Rollout generation pipelines and CLI: `aria_nbv.oracle.pipelines`
 
 ## Boundary Rules
 - `aria_nbv.rollouts` owns multi-step rollout records, rollout Zarr/Q stores,
-  counterfactual transition replay, target-aware oracle rollout scorers,
-  rollout-generation recipes, and the `nbv-build-rollouts` CLI.
+  counterfactual transition replay, and the currently unsplit target-aware
+  oracle rollout scorers. `aria_nbv.oracle.pipelines` owns rollout generation,
+  shard execution, and the `nbv-build-rollouts` CLI.
 - `aria_nbv.data_handling` remains the owner of raw snippets, `VinOracleBatch`,
   `VinOfflineDataset`, immutable VIN offline stores, and actor-visible target
   selection DTOs. Rollout generation consumes `VinOfflineSample` roots only;
@@ -46,7 +46,9 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   for CLI/config wiring changes.
 
 ## Completion Criteria
-- Public imports come from `aria_nbv.rollouts` for rollout record/store/writer
+- Public imports come from `aria_nbv.rollouts` for rollout record/store
   contracts, counterfactual rollout policies, and target-RRI rollout scorers.
+- Generation callers import writer and shard symbols from
+  `aria_nbv.oracle.pipelines` leaf modules.
 - The standalone rollout store validates after writes.
 - Docs or package guidance reflect any changed ownership boundary.

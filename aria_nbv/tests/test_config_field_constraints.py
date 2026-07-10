@@ -14,6 +14,7 @@ from aria_nbv.data_handling import (
     TargetSelectorConfig,
     VinOfflineWriterConfig,
 )
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
     CandidateViewGeneratorConfig,
@@ -30,8 +31,6 @@ from aria_nbv.rollouts import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
     CounterfactualTargetOracleRriScorerConfig,
-    RolloutDatasetWriterConfig,
-    RolloutRecipeConfig,
     RolloutZarrStoreConfig,
 )
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig

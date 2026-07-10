@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from aria_nbv.rollouts import cli as rollout_cli
+from aria_nbv.oracle.pipelines import cli as rollout_cli
 
 runner = CliRunner()
 

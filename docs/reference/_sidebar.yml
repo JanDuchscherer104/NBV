@@ -60,6 +60,18 @@ website:
           file: reference/lightning.lit_trainer_factory.qmd
         - text: optimizers
           file: reference/lightning.optimizers.qmd
+      - text: oracle
+        file: reference/oracle.qmd
+        contents:
+        - text: pipelines
+          file: reference/oracle.pipelines.qmd
+          contents:
+          - text: cli
+            file: reference/oracle.pipelines.cli.qmd
+          - text: rollout_dataset
+            file: reference/oracle.pipelines.rollout_dataset.qmd
+          - text: shards
+            file: reference/oracle.pipelines.shards.qmd
       - text: pipelines
         file: reference/pipelines.qmd
         contents:
@@ -104,12 +116,8 @@ website:
       - text: rollouts
         file: reference/rollouts.qmd
         contents:
-        - text: cli
-          file: reference/rollouts.cli.qmd
         - text: counterfactuals
           file: reference/rollouts.counterfactuals.qmd
-        - text: dataset_writer
-          file: reference/rollouts.dataset_writer.qmd
         - text: info_cli
           file: reference/rollouts.info_cli.qmd
         - text: inspection
@@ -118,8 +126,6 @@ website:
           file: reference/rollouts.manifest.qmd
         - text: shard_manifest
           file: reference/rollouts.shard_manifest.qmd
-        - text: shards
-          file: reference/rollouts.shards.qmd
         - text: target_counterfactuals
           file: reference/rollouts.target_counterfactuals.qmd
         - text: trace

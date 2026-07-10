@@ -15,7 +15,7 @@ def test_rollouts_public_api_smoke_imports_all_exports() -> None:
     assert not missing
 
 
-def test_rollouts_owns_record_store_and_writer_contracts() -> None:
+def test_rollouts_owns_record_and_store_contracts() -> None:
     """The rollout root is the canonical import surface for replay contracts."""
 
     module = importlib.import_module("aria_nbv.rollouts")
@@ -27,7 +27,6 @@ def test_rollouts_owns_record_store_and_writer_contracts() -> None:
         "CounterfactualTargetOracleRriScorerConfig",
         "RolloutLineage",
         "RolloutZarrRecord",
-        "RolloutDatasetWriterConfig",
         "RolloutZarrStoreConfig",
         "RolloutZarrStoreReader",
         "write_rollout_zarr_store",
@@ -35,5 +34,6 @@ def test_rollouts_owns_record_store_and_writer_contracts() -> None:
     }
     assert expected <= set(module.__all__)
     assert "build_synthetic_rollout_traces" not in module.__all__
+    assert "RolloutDatasetWriterConfig" not in module.__all__
     assert "read_rollout_traces" not in module.__all__
     assert "write_rollout_traces" not in module.__all__
