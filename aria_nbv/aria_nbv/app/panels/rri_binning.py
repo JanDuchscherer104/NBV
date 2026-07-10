@@ -14,8 +14,8 @@ import torch
 
 from ...configs import PathConfig
 from ...data_handling import VinOfflineDatasetConfig, VinOfflineStoreConfig
-from ...rri_metrics.plotting import _histogram_overlay
 from ...rri_metrics.ordinal import RriOrdinalBinner
+from ...rri_metrics.plotting import _histogram_overlay
 from .common import _info_popover, _pretty_label, _report_exception
 
 
