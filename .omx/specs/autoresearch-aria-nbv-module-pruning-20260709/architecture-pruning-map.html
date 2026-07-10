@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARIA-NBV Module Ownership And Pruning Map</title>
+  <style>
+    :root {
+      --bg: #f6f7f3;
+      --ink: #17201d;
+      --muted: #5e6a64;
+      --line: #cdd5cd;
+      --panel: #ffffff;
+      --panel-2: #eef4ef;
+      --accent: #2f6f62;
+      --accent-2: #8a4f2a;
+      --danger: #a33a32;
+      --warn: #986c16;
+      --code: #13211c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 980px;
+      font-size: 40px;
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    p { margin: 0 0 12px; }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    code, pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    pre {
+      overflow-x: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--code);
+      color: #eef8f2;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--panel-2);
+      color: #24332e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .lead {
+      margin-top: 16px;
+      max-width: 980px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .card.soft { background: var(--panel-2); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #e3eee8;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .badge.warn {
+      background: #fff1cf;
+      color: var(--warn);
+    }
+
+    .badge.danger {
+      background: #ffe4e1;
+      color: var(--danger);
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef7f2;
+      padding: 14px 16px;
+      border-radius: 8px;
+    }
+
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: #fff0ee;
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .list li { margin: 6px 0; }
+
+    .owner-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .owner-strip span {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 8px 10px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    .timeline {
+      counter-reset: wp;
+      display: grid;
+      gap: 12px;
+    }
+
+    .wp {
+      counter-increment: wp;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px 14px 14px 54px;
+    }
+
+    .wp::before {
+      content: counter(wp);
+      position: absolute;
+      left: 14px;
+      top: 14px;
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 780;
+      font-size: 12px;
+    }
+
+    .diagram {
+      width: 100%;
+      min-height: 300px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .diagram text {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      fill: var(--ink);
+      font-size: 13px;
+    }
+
+    .diagram .small { font-size: 11px; fill: var(--muted); }
+    .diagram .box { fill: #f7fbf8; stroke: #9fb4a8; stroke-width: 1.4; rx: 8; }
+    .diagram .box.warn { fill: #fff8e6; stroke: #e2b650; }
+    .diagram .box.danger { fill: #fff0ee; stroke: #d2756d; }
+    .diagram .arrow { stroke: #547167; stroke-width: 1.8; marker-end: url(#arrow); fill: none; }
+    .diagram .bad { stroke: #a33a32; stroke-dasharray: 6 4; }
+
+    .two-col-flow {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section {
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 860px) {
+      .grid-2, .grid-3, .two-col-flow { grid-template-columns: 1fr; }
+      h1 { font-size: 30px; }
+      .wrap { padding: 22px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="eyebrow">ARIA-NBV autoresearch artifact - 2026-07-09</p>
+      <h1>Module ownership map for oracle supervision, metrics, rollouts, and data handling</h1>
+      <p class="lead">The central fix is to stop sharing ownership of the same scientific concept. Metrics own formulas. Oracle owns evidence and labels. Rollouts own replay and storage. Data handling owns source data and target source rows.</p>
+      <div class="owner-strip">
+        <span>data_handling = source/cache/targets</span>
+        <span>oracle = evidence/scorers/pipelines</span>
+        <span>metrics = formulas/objectives/reducers</span>
+        <span>rollouts = replay/storage/inspection</span>
+        <span>pipelines = historical shell</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="wrap">
+      <div class="grid grid-3">
+        <article class="card">
+          <span class="badge danger">Current codebase</span>
+          <h3>Architectural status: BLOCK</h3>
+          <p>`rollouts` still owns target scoring, generation orchestration, replay storage, and read-side inspection. `rri_metrics` still exports oracle scoring.</p>
+        </article>
+        <article class="card">
+          <span class="badge warn">Corrected plan</span>
+          <h3>Formula conflict resolved</h3>
+          <p>No `oracle.rewards` formula owner. Root/log/endpoint gains and selected returns belong to metrics.</p>
+        </article>
+        <article class="card">
+          <span class="badge">Implementation gate</span>
+          <h3>Reduced LOC required</h3>
+          <p>The final PR must remove wrappers, broad barrels, duplicate helpers, and old public paths rather than only shuffling files.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>One Rule</h2>
+        <div class="callout">
+          <strong>Metric formulas live in metrics. Oracle code prepares evidence and emits labels by calling those formulas. Rollouts replay and store generated evidence. Data handling owns source data, target rows, target selection, and offline caches.</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Current Responsibility Conflict</h2>
+        <svg class="diagram" viewBox="0 0 1120 360" role="img" aria-label="Current conflicting ownership diagram">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#547167"></path>
+            </marker>
+          </defs>
+          <rect class="box danger" x="30" y="40" width="250" height="110"></rect>
+          <text x="55" y="72">rollouts</text>
+          <text class="small" x="55" y="96">target scorer, scene scorer</text>
+          <text class="small" x="55" y="116">writer, shards, CLI</text>
+          <text class="small" x="55" y="136">Zarr store, inspection</text>
+
+          <rect class="box warn" x="430" y="40" width="250" height="110"></rect>
+          <text x="455" y="72">rri_metrics</text>
+          <text class="small" x="455" y="96">metric formulas</text>
+          <text class="small" x="455" y="116">oracle scorer export</text>
+          <text class="small" x="455" y="136">returns + diagnostics mixed</text>
+
+          <rect class="box warn" x="830" y="40" width="250" height="110"></rect>
+          <text x="855" y="72">pipelines</text>
+          <text class="small" x="855" y="96">single oracle labeler file</text>
+          <text class="small" x="855" y="116">not a real general owner</text>
+
+          <rect class="box" x="240" y="230" width="270" height="86"></rect>
+          <text x="265" y="262">data_handling</text>
+          <text class="small" x="265" y="286">raw/offline/target source rows</text>
+
+          <rect class="box danger" x="640" y="230" width="270" height="86"></rect>
+          <text x="665" y="262">duplicate formulas</text>
+          <text class="small" x="665" y="286">root gain, log gain, endpoint gain</text>
+
+          <path class="arrow bad" d="M280 92 C345 70 365 70 430 92"></path>
+          <path class="arrow bad" d="M680 92 C750 70 765 70 830 92"></path>
+          <path class="arrow bad" d="M280 130 C420 210 520 250 640 270"></path>
+          <path class="arrow" d="M510 270 C560 260 590 260 640 270"></path>
+          <path class="arrow" d="M510 260 C570 170 655 135 830 115"></path>
+        </svg>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Proposed Interaction Flow</h2>
+        <svg class="diagram" viewBox="0 0 1120 390" role="img" aria-label="Proposed module interaction flow">
+          <defs>
+            <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#547167"></path>
+            </marker>
+          </defs>
+          <rect class="box" x="40" y="48" width="210" height="92"></rect>
+          <text x="65" y="80">data_handling</text>
+          <text class="small" x="65" y="104">raw, offline, targets</text>
+          <text class="small" x="65" y="124">actor-visible + GT tasks</text>
+
+          <rect class="box" x="335" y="48" width="210" height="92"></rect>
+          <text x="360" y="80">oracle.evidence</text>
+          <text class="small" x="360" y="104">render/backproject/fuse</text>
+          <text class="small" x="360" y="124">scene + target inputs</text>
+
+          <rect class="box" x="630" y="48" width="210" height="92"></rect>
+          <text x="655" y="80">oracle.scorers</text>
+          <text class="small" x="655" y="104">scene_rri, target_rri</text>
+          <text class="small" x="655" y="124">label field semantics</text>
+
+          <rect class="box" x="335" y="240" width="210" height="92"></rect>
+          <text x="360" y="272">metrics</text>
+          <text class="small" x="360" y="296">point_mesh, rri, gains</text>
+          <text class="small" x="360" y="316">returns, objectives</text>
+
+          <rect class="box" x="910" y="48" width="170" height="92"></rect>
+          <text x="935" y="80">oracle.pipelines</text>
+          <text class="small" x="935" y="104">scene labels</text>
+          <text class="small" x="935" y="124">rollout generation</text>
+
+          <rect class="box" x="910" y="240" width="170" height="92"></rect>
+          <text x="935" y="272">rollouts</text>
+          <text class="small" x="935" y="296">trace, zarr_store</text>
+          <text class="small" x="935" y="316">inspection only</text>
+
+          <path class="arrow" marker-end="url(#arrow2)" d="M250 94 L335 94"></path>
+          <path class="arrow" marker-end="url(#arrow2)" d="M545 94 L630 94"></path>
+          <path class="arrow" marker-end="url(#arrow2)" d="M840 94 L910 94"></path>
+          <path class="arrow" marker-end="url(#arrow2)" d="M735 140 C680 220 610 270 545 286"></path>
+          <path class="arrow" marker-end="url(#arrow2)" d="M995 140 L995 240"></path>
+          <path class="arrow" marker-end="url(#arrow2)" d="M910 286 C770 320 675 320 545 296"></path>
+          <text class="small" x="585" y="206">oracle calls formulas; metrics never imports oracle</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap two-col-flow">
+        <div>
+          <h2>Before</h2>
+          <pre>aria_nbv/
+  data/                         # residual downloads/metadata
+  data_handling/                # raw + offline + target selection mixed flat
+  pipelines/
+    oracle_rri_labeler.py       # only active pipeline
+  rri_metrics/
+    metrics/multi_step.py       # core returns + diagnostics
+    metrics/multi_step_tables.py# duplicate scalar returns
+    oracle/evidence.py          # oracle evidence under metrics
+    oracle/scorer.py            # oracle scorer under metrics
+  rollouts/
+    counterfactuals.py          # replay + scene scorer + gain helpers
+    target_counterfactuals.py   # target scorer + crop policy
+    dataset_writer.py           # generation orchestration
+    cli.py, shards.py           # generation CLI/shards
+    zarr_store.py               # replay store + Q_H view
+  rl/                           # active but off-axis</pre>
+        </div>
+        <div>
+          <h2>After</h2>
+          <pre>aria_nbv/
+  data_handling/
+    raw/
+    downloads/
+    offline/
+    targets/
+  metrics/                      # or rri_metrics first, then rename
+    point_mesh.py
+    rri.py
+    gains.py
+    returns.py
+    diagnostics.py
+    torchmetrics.py
+    ordinal.py, coral.py
+  oracle/
+    evidence.py
+    crop.py
+    labels.py
+    scene_rri.py
+    target_rri.py
+    rollout_inputs.py
+    pipelines/
+      scene_labeler.py
+      rollout_dataset.py
+      shards.py
+      cli.py
+  rollouts/
+    transitions.py
+    trace.py
+    zarr_store.py
+    inspection.py
+    info_cli.py
+  pipelines/                    # temporary shim, then delete</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Single-Owner Matrix</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Concept</th>
+              <th>Canonical owner</th>
+              <th>Must not own</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Raw snippets and views</td><td><code>data_handling.raw</code></td><td><code>oracle</code>, <code>rollouts</code></td><td>Source loading is not label generation.</td></tr>
+            <tr><td>VIN offline cache</td><td><code>data_handling.offline</code></td><td><code>rollouts</code></td><td>It adapts source data to VIN-ready batches.</td></tr>
+            <tr><td>Actor-visible and GT target rows</td><td><code>data_handling.targets</code></td><td><code>oracle</code></td><td>Target observability and task identity are source contracts.</td></tr>
+            <tr><td>Point-mesh distances</td><td><code>metrics.point_mesh</code></td><td><code>oracle</code></td><td>Pure metric primitive.</td></tr>
+            <tr><td>RRI formula and result</td><td><code>metrics.rri</code></td><td><code>oracle</code></td><td>RRI is a metric value, even when used as oracle supervision.</td></tr>
+            <tr><td>Root/log/endpoint gain formulas</td><td><code>metrics.gains</code></td><td><code>oracle</code>, <code>rollouts</code></td><td>Same math feeds labels, diagnostics, and training returns.</td></tr>
+            <tr><td>Selected multi-step returns</td><td><code>metrics.returns</code></td><td><code>zarr_store</code></td><td>Differentiable/eval reduction, not persistence.</td></tr>
+            <tr><td>Scene and target RRI scoring</td><td><code>oracle.scene_rri</code>, <code>oracle.target_rri</code></td><td><code>rollouts</code></td><td>Scorers produce labels from evidence and metric formulas.</td></tr>
+            <tr><td>Generation CLIs and shard execution</td><td><code>oracle.pipelines</code></td><td><code>rollouts</code>, top-level <code>pipelines</code></td><td>Production workflow belongs with oracle supervision.</td></tr>
+            <tr><td>Replay store and Q_H view</td><td><code>rollouts.zarr_store</code></td><td><code>oracle</code>, <code>metrics</code></td><td>Storage materializes stored fields; formulas stay external.</td></tr>
+            <tr><td>Streamlit page logic</td><td><code>app.panels</code></td><td>domain modules</td><td>Panels render and wire UI only.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>DTO Ownership</h2>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>Producer-local by default</h3>
+            <p>A DTO should live beside the code that produces it unless several independent producers share it.</p>
+            <ul class="list">
+              <li><code>DistanceBreakdown</code> in <code>metrics.point_mesh</code></li>
+              <li><code>RriResult</code> in <code>metrics.rri</code></li>
+              <li>Root/eval point clouds in <code>oracle.evidence</code></li>
+              <li>Pipeline run summaries beside the pipeline</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Shared only when truly shared</h3>
+            <p>Do not keep expanding a package-wide <code>types.py</code> because it hides producer ownership and makes import cycles harder to reason about.</p>
+            <ul class="list">
+              <li>Target source rows in <code>data_handling.targets.types</code></li>
+              <li>Oracle label rows in <code>oracle.labels</code></li>
+              <li>Replay rows in <code>rollouts.trace</code> or <code>rollouts.zarr_store</code></li>
+              <li>TorchMetric states as typed attributes on classes</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Workpackage Order</h2>
+        <div class="timeline">
+          <div class="wp">
+            <h3>WP0 - Contract lock and baseline</h3>
+            <p>Add stale-import scans, formula parity tests, scorer parity tests, and baseline LOC counts before moving files.</p>
+          </div>
+          <div class="wp">
+            <h3>WP1 - Metrics formula de-duplication</h3>
+            <p>Create the metrics-owned gains/returns seam. Move core differentiable reductions away from diagnostics. Make TorchMetric states typed and documented.</p>
+          </div>
+          <div class="wp">
+            <h3>WP2 - Create the oracle scoring boundary</h3>
+            <p>Move evidence, scene RRI, target RRI, target crop policy, and label DTOs under <code>aria_nbv.oracle</code>. Oracle calls metrics formulas.</p>
+          </div>
+          <div class="wp">
+            <h3>WP3 - Move generation pipelines under oracle</h3>
+            <p>Move scene labeler, rollout dataset writer, shards, and CLI under <code>oracle.pipelines</code>. Keep command names stable.</p>
+          </div>
+          <div class="wp">
+            <h3>WP4 - Narrow rollouts to replay/storage</h3>
+            <p>Remove scorer and writer exports, keep transitions, trace, Zarr store, inspection, and store-status CLI.</p>
+          </div>
+          <div class="wp">
+            <h3>WP5 - Split data_handling internals later</h3>
+            <p>Keep data handling as source owner now. Split <code>_target_selection.py</code> into <code>targets/</code> after oracle extraction unless cycles force it sooner.</p>
+          </div>
+          <div class="wp">
+            <h3>WP6 - Move app pure helpers after domain owners exist</h3>
+            <p>Streamlit pages should consume oracle pipeline/read models and rollout inspection summaries, not construct domain workflows.</p>
+          </div>
+          <div class="wp">
+            <h3>WP7 - Off-axis pruning</h3>
+            <p>Archive active <code>rl/</code> and <code>interpretability/</code> in a separate PR because app and tests still import them.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Pruning Targets</h2>
+        <div class="grid grid-3">
+          <article class="card">
+            <h3>Immediate small wins</h3>
+            <ul class="list">
+              <li>Delete shadowed duplicate <code>_read_string_array</code> in <code>rollouts.zarr_store</code>.</li>
+              <li>Collapse repeated <code>_component_names</code> and <code>_safe_fraction</code> helpers.</li>
+              <li>Use one invalid-reason decoder instead of app-local copies.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>High-value moves</h3>
+            <ul class="list">
+              <li>Move scorer ownership out of <code>rollouts</code>.</li>
+              <li>Move generation ownership out of <code>rollouts</code> and top-level <code>pipelines</code>.</li>
+              <li>Split returns from diagnostics in current <code>multi_step.py</code>.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Defer</h3>
+            <ul class="list">
+              <li>Do not schema-refactor <code>zarr_store.py</code> in the same PR.</li>
+              <li>Do not split all of <code>data_handling</code> before oracle extraction.</li>
+              <li>Do not archive active <code>rl/</code> inside the oracle move.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Open Decisions</h2>
+        <table>
+          <thead>
+            <tr><th>Decision</th><th>Recommendation</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Rename <code>rri_metrics</code> to <code>metrics</code>?</td><td>Later, after formula de-dup and oracle extraction.</td><td>Package rename plus ownership move is too much churn for one PR.</td></tr>
+            <tr><td>Allow compatibility shims?</td><td>Only when public contract tests require them, with a deletion target.</td><td>Broad shims preserve the same degrees of freedom this refactor removes.</td></tr>
+            <tr><td>Move residual <code>aria_nbv.data</code> now?</td><td>Later, into <code>data_handling.downloads</code>.</td><td>Useful cleanup, but not blocking scorer/formula coherence.</td></tr>
+            <tr><td>Archive <code>rl/</code> now?</td><td>Separate PR.</td><td>It has active app and test imports.</td></tr>
+            <tr><td>Refactor <code>zarr_store.py</code> schema engine now?</td><td>No.</td><td>Compatibility-sensitive and orthogonal to ownership moves.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Validation Gates For Implementation PR</h2>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>Static and unit validation</h3>
+            <ul class="list">
+              <li><code>uv run ruff format --check</code> and <code>uv run ruff check</code> for touched packages.</li>
+              <li><code>uv run pytest tests/rri_metrics</code></li>
+              <li><code>uv run pytest tests/rollouts</code></li>
+              <li><code>uv run pytest tests/data_handling</code></li>
+              <li>Stale import scans for old oracle/rollout/pipeline paths.</li>
+              <li>LOC report showing net reduction.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Functional validation</h3>
+            <ul class="list">
+              <li>Generate a new limited rollout dataset.</li>
+              <li>Smoke related Streamlit pages: rollout, stored rollout, target audit, oracle label views.</li>
+              <li>Open a new PR and wait for succeeding CI.</li>
+              <li>Confirm docs/guidance no longer route scorers or generation into <code>rollouts</code>.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Review Evidence</h2>
+        <div class="grid grid-3">
+          <article class="card">
+            <span class="badge danger">architect</span>
+            <h3>BLOCK on current code</h3>
+            <p>The architect lane found that `rollouts` still owns target scoring, generation orchestration, and replay/storage simultaneously.</p>
+          </article>
+          <article class="card">
+            <span class="badge">code-simplifier</span>
+            <h3>Concrete pruning list</h3>
+            <p>The simplification lane identified duplicate helpers, rollout generation leakage, app pure logic, broad root exports, and safe/deferred pruning boundaries.</p>
+          </article>
+          <article class="card">
+            <span class="badge warn">code-reviewer</span>
+            <h3>REQUEST CHANGES on stale plans</h3>
+            <p>The review lane flagged contradictory older artifacts and the `oracle/rewards.py` category mistake. This artifact marks those plans superseded/corrected.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Source Artifacts</h2>
+        <ul class="list">
+          <li><a href="report.md">Markdown report</a></li>
+          <li><a href="mission.md">Mission</a></li>
+          <li><a href="sandbox.md">Sandbox notes</a></li>
+          <li><a href="completion.json">Completion JSON</a></li>
+          <li>Superseded plan: <code>.omx/plans/ralplan-rri-rollouts-oracle-pipelines-architecture-20260709T115007Z.md</code></li>
+          <li>Corrected plan: <code>.omx/plans/plan-aria-nbv-oracle-module-refactor-20260709T123231Z.md</code></li>
+        </ul>
+        <p class="small-note">This HTML is a planning artifact. It intentionally does not claim source refactor completion.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

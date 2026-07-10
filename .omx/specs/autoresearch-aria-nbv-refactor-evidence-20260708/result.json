@@ -1,0 +1,15 @@
+{
+  "validator_prompt": "Review whether the report grounds recommendations in recent persisted plans and live code evidence, covers data_handling restructuring, Oracle RRI pipeline unification under aria_nbv.pipelines, and rl/ archive guidance, and separates now/next/later refactors with scope risks.",
+  "architect_review": {
+    "verdict": "approved",
+    "confidence": "high",
+    "reviewed_at": "2026-07-08",
+    "summary": "The report uses the July 2 ralplan/handoff as the recency-weighted source, cross-checks the live code owners, and separates the immediate PR15 stop line from follow-up packages. It accepts the user's stricter pipeline-ownership direction for Oracle RRI while preserving rri_metrics as the primitive metric owner and rollouts as the replay/store owner. It correctly challenges the claim that rl/ is unused: the package is non-core but still app/test/public-config active, so archive requires a deliberate API contraction.",
+    "conditions": [
+      "Do not combine Oracle RRI pipeline relocation with metric semantic changes.",
+      "Do not split all of data_handling; start with the private target-selection module split and preserve public root exports.",
+      "Do not move rl/ to archive without removing or quarantining app config, app panel, and tests in the same package."
+    ]
+  },
+  "output_artifact_path": ".omx/specs/autoresearch-aria-nbv-refactor-evidence-20260708/report.md"
+}

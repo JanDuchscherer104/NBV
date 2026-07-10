@@ -1,0 +1,1 @@
+Each iteration must generate one disposable rollout sample/store, validate schema and preflight outputs, inspect target-source and invalidity/reward metadata, check geometric coherence from tensors and cheap plots/artifacts where available, emit an exact Rerun inspection command for the sample, and record pass/fail/blocker evidence before proceeding.

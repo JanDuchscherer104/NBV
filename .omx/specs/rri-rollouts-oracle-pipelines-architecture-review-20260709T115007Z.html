@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review - ARIA-NBV RRI, Rollouts, Oracle, Pipelines</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .leak { color: #dc2626; }
+      .seam { border-style: dashed; }
+      .module-shadow { box-shadow: 0 18px 40px rgb(15 23 42 / 0.10); }
+      .tiny { font-size: 0.68rem; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900">
+    <main class="mx-auto max-w-6xl space-y-10 px-6 py-10">
+      <header class="space-y-4">
+        <div class="text-xs uppercase tracking-wider text-slate-500">ARIA-NBV architecture review - 2026-07-09</div>
+        <h1 class="text-4xl font-semibold tracking-tight">RRI, Rollout, Oracle, and Pipeline Ownership</h1>
+        <div class="grid gap-3 text-sm md:grid-cols-4">
+          <div class="rounded border bg-white p-3"><b>Solid box</b><br />module</div>
+          <div class="rounded border border-dashed bg-white p-3"><b>Dashed box</b><br />seam</div>
+          <div class="rounded border bg-white p-3"><b class="leak">Red arrow</b><br />leakage</div>
+          <div class="rounded border bg-slate-900 p-3 text-white"><b>Dark box</b><br />deep module</div>
+        </div>
+      </header>
+
+      <section class="rounded-lg border bg-white p-5 module-shadow">
+        <h2 class="text-xl font-semibold">Current Pressure</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-3">
+          <div class="rounded border p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">rollouts</div>
+            <div class="mt-2 text-3xl font-semibold">8.9k LOC</div>
+            <p class="mt-2 text-sm text-slate-600">Replay, storage, target scoring, writer, shards, CLI, and inspection share one package.</p>
+          </div>
+          <div class="rounded border p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">rri_metrics</div>
+            <div class="mt-2 text-3xl font-semibold">4.2k LOC</div>
+            <p class="mt-2 text-sm text-slate-600">Metric returns, diagnostics, TorchMetrics, oracle evidence, logging, plotting, and ordinal objectives are still broad.</p>
+          </div>
+          <div class="rounded border p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500">pipelines</div>
+            <div class="mt-2 text-3xl font-semibold">164 LOC</div>
+            <p class="mt-2 text-sm text-slate-600">Only the single-step label pipeline is here, while rollout generation lives elsewhere.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="candidates" class="space-y-8">
+        <article class="rounded-lg border bg-white p-5 module-shadow">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-2xl font-semibold">1. Move Oracle Rollout Scorers into RRI Oracle</h2>
+            <span class="rounded bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">in-process</span>
+          </div>
+          <p class="mt-3 font-mono text-sm text-slate-600">Files: rollouts/counterfactuals.py, rollouts/target_counterfactuals.py, rri_metrics/oracle/{scorer,evidence}.py</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Before</div>
+              <pre class="mermaid">
+flowchart TB
+  R[rollouts.counterfactuals] --> OR[rri_metrics.oracle.scorer]
+  T[rollouts.target_counterfactuals] --> OE[rri_metrics.oracle.evidence]
+  T --> OR
+  T -. target crop / invalidity / reward .-> T
+  R -. scene scorer / root gain .-> R
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class T,R leak
+              </pre>
+            </div>
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">After</div>
+              <pre class="mermaid">
+flowchart TB
+  subgraph O[rri_metrics.oracle]
+    S[scorer.py]
+    E[evidence.py]
+    C[target_crop.py]
+    W[rollout_scorers.py]
+    G[rewards.py]
+  end
+  W --> S
+  W --> E
+  W --> C
+  W --> G
+  P[pipelines.rollout_generation] --> W
+  P --> R[rollouts replay DTOs]
+              </pre>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <p><b>Problem.</b> Oracle label meaning leaks across the rollout seam.</p>
+            <p><b>Solution.</b> Put scene and target scorer adapters behind `rri_metrics.oracle`.</p>
+            <ul class="list-disc pl-5 text-sm text-slate-700">
+              <li>locality: label bugs concentrate</li>
+              <li>leverage: one scorer skeleton</li>
+              <li>interface: RRI semantics visible</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rounded-lg border bg-white p-5 module-shadow">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-2xl font-semibold">2. Move Rollout Data Generation into Pipelines</h2>
+            <span class="rounded bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">in-process</span>
+          </div>
+          <p class="mt-3 font-mono text-sm text-slate-600">Files: rollouts/{dataset_writer,shards,shard_manifest,cli}.py, pipelines/oracle_rri_labeler.py</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Before</div>
+              <div class="space-y-2">
+                <div class="rounded border bg-white p-2">pipelines: single-step labeler</div>
+                <div class="rounded border-2 border-red-300 bg-red-50 p-2">rollouts: writer + shards + CLI</div>
+                <div class="rounded border bg-white p-2">rollouts: replay + Zarr + inspection</div>
+              </div>
+            </div>
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">After</div>
+              <div class="space-y-2">
+                <div class="deep rounded p-3 text-white">pipelines.rollout_generation: writer + shards + CLI</div>
+                <div class="rounded border bg-white p-2">rollouts: replay + Zarr + inspection</div>
+                <div class="rounded border bg-white p-2">rri_metrics.oracle: label scorers</div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <p><b>Problem.</b> Generation orchestration lives in the replay package.</p>
+            <p><b>Solution.</b> Pipelines own the writer, shard campaign, and CLI implementation.</p>
+            <ul class="list-disc pl-5 text-sm text-slate-700">
+              <li>locality: jobs live together</li>
+              <li>leverage: stable command seam</li>
+              <li>interface: rollouts shrink</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rounded-lg border bg-white p-5 module-shadow">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-2xl font-semibold">3. Split Core Rollout Returns from Diagnostics</h2>
+            <span class="rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">in-process</span>
+          </div>
+          <p class="mt-3 font-mono text-sm text-slate-600">Files: rri_metrics/metrics/multi_step.py, rri_metrics/metrics/torchmetrics_multi.py</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Before</div>
+              <div class="grid gap-2">
+                <div class="rounded border bg-white p-2">discounted return</div>
+                <div class="rounded border bg-white p-2">endpoint target gain</div>
+                <div class="rounded border bg-white p-2">top-k oracle hit</div>
+                <div class="rounded border bg-white p-2">provenance share</div>
+                <div class="rounded border bg-white p-2">invalid reason share</div>
+              </div>
+            </div>
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">After</div>
+              <div class="grid gap-2">
+                <div class="deep rounded p-3 text-white">rollout/returns.py: differentiable core</div>
+                <div class="rounded border bg-white p-2">rollout/diagnostics.py: sanity checks</div>
+                <div class="rounded border bg-white p-2">rollout/torchmetrics.py: stateful adapters</div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <p><b>Problem.</b> Core training quantities and audit helpers have equal visual weight.</p>
+            <p><b>Solution.</b> Use a `rollout` submodule with returns, diagnostics, tables, and TorchMetrics leaves.</p>
+            <ul class="list-disc pl-5 text-sm text-slate-700">
+              <li>locality: objectives stand out</li>
+              <li>interface: diagnostics named</li>
+              <li>tests hit leaf seams</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rounded-lg border bg-white p-5 module-shadow">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-2xl font-semibold">4. Reject Top-Level Oracle for Now</h2>
+            <span class="rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Worth exploring later</span>
+            <span class="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">seam discipline</span>
+          </div>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Premature</div>
+              <div class="rounded border-2 border-red-300 bg-red-50 p-4">aria_nbv.oracle<br /><span class="tiny">one real adapter today: RRI</span></div>
+            </div>
+            <div class="rounded border bg-stone-50 p-4">
+              <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Chosen</div>
+              <div class="deep rounded p-4 text-white">rri_metrics.oracle<br /><span class="tiny">scene + target RRI labels behind one interface</span></div>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <p><b>Problem.</b> A top-level package would name importance, not depth.</p>
+            <p><b>Solution.</b> Reopen only when a second oracle family exists.</p>
+            <ul class="list-disc pl-5 text-sm text-slate-700">
+              <li>one adapter is hypothetical</li>
+              <li>two adapters justify seam</li>
+              <li>avoid taxonomy churn</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="rounded-lg border bg-slate-900 p-6 text-white module-shadow">
+        <div class="text-xs uppercase tracking-wider text-slate-300">Top recommendation</div>
+        <h2 class="mt-2 text-2xl font-semibold">Start with Oracle Rollout Scorers, then Pipeline Ownership</h2>
+        <p class="mt-3 max-w-3xl text-slate-200">Move scene and target RRI scorer semantics into `rri_metrics.oracle` first, because that is the scientific interface. Then move writer/shard/CLI orchestration into `pipelines.rollout_generation`, and only then finish the narrower `rri_metrics` cleanup.</p>
+      </section>
+    </main>
+  </body>
+</html>

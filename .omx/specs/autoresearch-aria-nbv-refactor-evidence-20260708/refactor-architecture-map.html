@@ -1,0 +1,1646 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARIA-NBV Module Architecture Refactor Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5d6977;
+      --paper: #f6f8fb;
+      --panel: #ffffff;
+      --line: #d8e0ea;
+      --blue: #2454a6;
+      --green: #177c5a;
+      --amber: #a05f00;
+      --red: #a43333;
+      --violet: #6d4bb4;
+      --cyan: #0d7083;
+      --shadow: 0 18px 46px rgba(28, 45, 66, 0.12);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(120deg, rgba(36, 84, 166, 0.09), transparent 34rem),
+        linear-gradient(290deg, rgba(23, 124, 90, 0.08), transparent 30rem),
+        var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--blue);
+    }
+
+    .shell {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 24px;
+    }
+
+    .hero-main,
+    .hero-side,
+    .panel,
+    .card,
+    details.module-card {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(216, 224, 234, 0.95);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-main {
+      padding: 34px;
+    }
+
+    .hero-side {
+      padding: 22px;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 10px 0 12px;
+      max-width: 900px;
+      font-size: clamp(2rem, 5vw, 4.1rem);
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.42rem;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 1.04rem;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    .lead {
+      max-width: 900px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .meta-grid,
+    .score-grid,
+    .work-grid,
+    .module-grid,
+    .matrix-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .meta-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .score-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 24px 0;
+    }
+
+    .work-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .module-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .matrix-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .road-step {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .step-num {
+      display: grid;
+      place-items: center;
+      align-self: start;
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: #eef3f8;
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 1.12rem;
+      font-family: var(--mono);
+    }
+
+    .step-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .step-head h3 {
+      margin: 0;
+    }
+
+    .dependency-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .check-grid,
+    .deliverable-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .check-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .deliverable-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .check-box,
+    .deliverable {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .check-box strong,
+    .deliverable strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #24364b;
+    }
+
+    .lane-map {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(86px, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .lane {
+      min-height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      position: relative;
+    }
+
+    .lane::after {
+      content: "->";
+      position: absolute;
+      right: -11px;
+      top: 36px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+
+    .lane:last-child::after {
+      content: "";
+    }
+
+    .lane strong {
+      display: block;
+      font-family: var(--mono);
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+
+    .lane span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+
+    .stat,
+    .mini,
+    .work,
+    .matrix {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.8rem;
+      line-height: 1.05;
+    }
+
+    .stat span,
+    .mini span,
+    .source-note,
+    .tree-caption,
+    .risk-text {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .panel {
+      margin: 24px 0;
+      padding: 24px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin: 12px 0 0;
+    }
+
+    .search {
+      flex: 1 1 280px;
+      min-width: 240px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--ink);
+      background: #fff;
+      font: inherit;
+    }
+
+    .pill,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pill button {
+      all: unset;
+      cursor: pointer;
+    }
+
+    .badge.now {
+      color: var(--green);
+      background: rgba(23, 124, 90, 0.08);
+      border-color: rgba(23, 124, 90, 0.24);
+    }
+
+    .badge.next {
+      color: var(--blue);
+      background: rgba(36, 84, 166, 0.08);
+      border-color: rgba(36, 84, 166, 0.24);
+    }
+
+    .badge.later {
+      color: var(--amber);
+      background: rgba(160, 95, 0, 0.08);
+      border-color: rgba(160, 95, 0, 0.24);
+    }
+
+    .badge.stop {
+      color: var(--red);
+      background: rgba(164, 51, 51, 0.08);
+      border-color: rgba(164, 51, 51, 0.24);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      position: relative;
+    }
+
+    .flow-card {
+      min-height: 132px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      position: relative;
+    }
+
+    .flow-card::after {
+      content: "->";
+      position: absolute;
+      top: 42%;
+      right: -16px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+
+    .flow-card:last-child::after {
+      content: "";
+    }
+
+    .flow-card h3 {
+      color: var(--blue);
+    }
+
+    .scatter {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .scatter .current {
+      border-left: 5px solid var(--red);
+    }
+
+    .scatter .target {
+      border-left: 5px solid var(--green);
+    }
+
+    .tree-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    pre.tree {
+      margin: 0;
+      min-height: 100%;
+      overflow-x: auto;
+      white-space: pre;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #101820;
+      color: #edf5ff;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.42;
+    }
+
+    pre.tree .add,
+    .legend .add {
+      color: #86efac;
+    }
+
+    pre.tree .move,
+    .legend .move {
+      color: #93c5fd;
+    }
+
+    pre.tree .del,
+    .legend .del {
+      color: #fca5a5;
+    }
+
+    pre.tree .keep,
+    .legend .keep {
+      color: #dbeafe;
+    }
+
+    pre.tree .defer,
+    .legend .defer {
+      color: #fcd34d;
+    }
+
+    details.module-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    details.module-card summary {
+      cursor: pointer;
+      padding: 16px 18px;
+      list-style: none;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    details.module-card summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .module-body {
+      padding: 18px;
+    }
+
+    .module-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .module-title code {
+      font-size: 0.98rem;
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.9em;
+      background: rgba(36, 84, 166, 0.08);
+      border: 1px solid rgba(36, 84, 166, 0.12);
+      border-radius: 5px;
+      padding: 1px 4px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .phase {
+      border: 1px solid var(--line);
+      border-top: 6px solid var(--blue);
+      border-radius: 10px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .phase.now {
+      border-top-color: var(--green);
+    }
+
+    .phase.next {
+      border-top-color: var(--blue);
+    }
+
+    .phase.later {
+      border-top-color: var(--amber);
+    }
+
+    .phase.stop {
+      border-top-color: var(--red);
+    }
+
+    .risk {
+      display: grid;
+      grid-template-columns: 140px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      margin: 8px 0;
+    }
+
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      background: #e8edf4;
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.94rem;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f8;
+      color: #24364b;
+    }
+
+    .evidence-list {
+      columns: 2 380px;
+      column-gap: 28px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .footer {
+      margin-top: 32px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .score-grid,
+      .work-grid,
+      .module-grid,
+      .matrix-grid,
+      .roadmap-grid,
+      .check-grid,
+      .deliverable-grid,
+      .timeline,
+      .flow,
+      .scatter,
+      .tree-wrap,
+      .lane-map {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-card::after {
+        content: "down";
+        right: 14px;
+        top: auto;
+        bottom: -20px;
+      }
+
+      .road-step {
+        grid-template-columns: 1fr;
+      }
+
+      .lane::after {
+        content: "down";
+        right: 12px;
+        top: auto;
+        bottom: -19px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-main">
+        <div class="eyebrow">ARIA-NBV architecture evidence map</div>
+        <h1>Module-boundary refactor map for the Oracle RRI, rollout, data, and RL seams</h1>
+        <p class="lead">
+          Generated from the July 8 autoresearch artifact. This is a planning and review
+          artifact: it summarizes suggested changes, module-tree deltas, validation paths,
+          and stop lines without changing package code.
+        </p>
+        <div class="toolbar">
+          <input id="filter" class="search" type="search" placeholder="Filter sections, modules, files, risks, tests..." aria-label="Filter report sections">
+          <span class="pill"><button type="button" data-open="all">Open all modules</button></span>
+          <span class="pill"><button type="button" data-open="none">Close modules</button></span>
+          <span class="badge now">Now: keep PR15 narrow</span>
+          <span class="badge next">Next: pipeline owner</span>
+          <span class="badge later">Later: schema/read-model</span>
+        </div>
+      </div>
+      <aside class="hero-side">
+        <h2>Source Artifacts</h2>
+        <div class="meta-grid">
+          <div class="mini">
+            <strong>Report</strong><br>
+            <a href="report.md">report.md</a>
+            <span>Evidence and suggestions.</span>
+          </div>
+          <div class="mini">
+            <strong>Validator</strong><br>
+            <a href="result.json">result.json</a>
+            <span>Verdict: approved.</span>
+          </div>
+          <div class="mini">
+            <strong>Graph query</strong><br>
+            <span>Oracle RRI, rollout, target selection, RL owner cluster.</span>
+          </div>
+          <div class="mini">
+            <strong>Generated</strong><br>
+            <span>2026-07-08</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="score-grid" data-search="summary metrics hotspots validation">
+      <div class="stat">
+        <strong>9</strong>
+        <span>Concrete packages from merge guard through deferred schema/read-model/geometry cleanup.</span>
+      </div>
+      <div class="stat">
+        <strong>1</strong>
+        <span>Pre-PR15 code package remains justified: rollout-boundary cleanup only.</span>
+      </div>
+      <div class="stat">
+        <strong>14.2k</strong>
+        <span>LOC in directly relevant hot files inspected for this map.</span>
+      </div>
+      <div class="stat">
+        <strong>0</strong>
+        <span>Package code edits in this artifact. It is a report and visualization only.</span>
+      </div>
+    </section>
+
+    <section class="panel" data-search="ownership final rule pipelines rri_metrics rollouts data_handling pose_generation">
+      <h2>Target Ownership Rule</h2>
+      <p>
+        The stable architecture is not "move everything into one place." It is a
+        four-owner split: finite candidate tables in <code>pose_generation</code>,
+        Oracle RRI orchestration in <code>pipelines</code>, pure metric math in
+        <code>rri_metrics</code>, and replay/store/read contracts in <code>rollouts</code>.
+      </p>
+      <div class="flow" aria-label="Target ownership flow">
+        <div class="flow-card">
+          <h3>pose_generation</h3>
+          <p>Generate and validate finite candidate tables, orientations, and provenance.</p>
+        </div>
+        <div class="flow-card">
+          <h3>pipelines</h3>
+          <p>Own render, backproject, scene/target eval-region policy, scorer configs, and labeler lifecycle.</p>
+        </div>
+        <div class="flow-card">
+          <h3>rri_metrics</h3>
+          <p>Keep <code>OracleRRI.score</code>, CORAL, bins, and pure metric DTOs free of orchestration.</p>
+        </div>
+        <div class="flow-card">
+          <h3>rollouts</h3>
+          <p>Own selected-transition replay, trace DTOs, zarr stores, shards, and dataset writer plumbing.</p>
+        </div>
+        <div class="flow-card">
+          <h3>app / rerun</h3>
+          <p>Consume typed read models and diagnostics; keep UI glue thin.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-search="current scatter oracle rri target scorer scene scorer labeler target_counterfactuals counterfactuals">
+      <h2>Oracle RRI Scatter: Current vs Target</h2>
+      <div class="scatter">
+        <div class="card current" style="padding:18px">
+          <h3>Current scatter</h3>
+          <ul>
+            <li><code>pipelines/oracle_rri_labeler.py</code>: one-step scene labeler.</li>
+            <li><code>pose_generation/counterfactuals.py</code>: scene rollout scorer and replay contracts in the main checkout.</li>
+            <li><code>pose_generation/target_counterfactuals.py</code>: target rollout scorer, GT OBB crop, target/scene RRI payloads.</li>
+            <li>PR15 cleanup worktree moves those counterfactual files to <code>rollouts</code>, but that is only an intermediate boundary repair.</li>
+          </ul>
+        </div>
+        <div class="card target" style="padding:18px">
+          <h3>Target consolidation</h3>
+          <ul>
+            <li><code>pipelines/rollout_oracle_rri.py</code>: unified scene and target rollout RRI scorer skeleton.</li>
+            <li><code>pipelines/oracle_rri_regions.py</code>: scene extent vs GT-OBB target policy.</li>
+            <li><code>rri_metrics/oracle_rri.py</code>: unchanged primitive metric owner.</li>
+            <li><code>rollouts/dataset_writer.py</code>: consumes pipeline scorer; it does not own scoring semantics.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-search="timeline phase order before pr15 after merge later stop lines">
+      <h2>Ordering</h2>
+      <div class="timeline">
+        <div class="phase now">
+          <span class="badge now">Before PR15 merge</span>
+          <h3>Stop expanding</h3>
+          <p>Keep only the rollout-boundary package if needed. Do not start data, RRI unification, or RL archive work in the same diff.</p>
+        </div>
+        <div class="phase next">
+          <span class="badge next">After PR15</span>
+          <h3>Unify Oracle RRI pipelines</h3>
+          <p>Move scorer orchestration to <code>pipelines</code> and deduplicate scene/target scorer skeletons behind eval-region policy.</p>
+        </div>
+        <div class="phase next">
+          <span class="badge next">After owner seam</span>
+          <h3>Quarantine RL and split target selection</h3>
+          <p>Make RL archival an API contraction, then split private target-selection helpers while preserving root exports.</p>
+        </div>
+        <div class="phase later">
+          <span class="badge later">Later</span>
+          <h3>Schema/read-model/geometry</h3>
+          <p>Zarr schema engine, rollout read-model, and geometry/CW90 consolidation remain follow-up work once core owners are stable.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-search="concrete ordered workpackages dependencies entry exit criteria wp0 wp1 wp2 wp3 wp4 wp5 wp6 wp7 wp8">
+      <h2>Concrete Resolution Roadmap</h2>
+      <p>
+        Resolve these packages in dependency order. The first package is a gate,
+        not a refactor. Packages 1-3 form the next high-value architecture pass.
+        Packages 4-8 are deliberately staged so they do not blur label semantics,
+        public API contraction, and storage/read-model churn.
+      </p>
+
+      <div class="lane-map" aria-label="Ordered workpackage dependency map">
+        <div class="lane"><strong>WP0</strong><span>PR15 merge gate</span></div>
+        <div class="lane"><strong>WP1</strong><span>Oracle RRI parity harness</span></div>
+        <div class="lane"><strong>WP2</strong><span>Pipeline scorer owner</span></div>
+        <div class="lane"><strong>WP3</strong><span>Docs/API cleanup</span></div>
+        <div class="lane"><strong>WP4</strong><span>RL archive/quarantine</span></div>
+        <div class="lane"><strong>WP5</strong><span>Target-selection split</span></div>
+        <div class="lane"><strong>WP6</strong><span>Rollout read model</span></div>
+        <div class="lane"><strong>WP7</strong><span>Zarr schema engine</span></div>
+        <div class="lane"><strong>WP8</strong><span>Geometry/CW90 cleanup</span></div>
+      </div>
+
+      <div class="roadmap-grid">
+        <article class="road-step" data-search="wp0 pr15 gate merge green rollout boundary stop expand">
+          <div class="step-num">WP0</div>
+          <div>
+            <div class="step-head">
+              <span class="badge now">Gate</span>
+              <h3>Freeze PR15 scope and choose the follow-up base</h3>
+            </div>
+            <p>
+              Keep PR15 limited to the already-approved rollout-boundary cleanup.
+              Do not add Oracle RRI unification, RL archival, or target-selection
+              splitting before this gate is closed.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> current PR15 branch status and root CI.
+              <strong>Unblocks:</strong> every post-merge package.
+            </div>
+            <div class="check-grid">
+              <div class="check-box">
+                <strong>File scope</strong>
+                <span class="source-note">Only stale imports/docs for the counterfactual move if they remain.</span>
+              </div>
+              <div class="check-box">
+                <strong>Exit criteria</strong>
+                <span class="source-note">PR15 is green/merged, or follow-up branch is cut from the PR15 head.</span>
+              </div>
+              <div class="check-box">
+                <strong>Stop condition</strong>
+                <span class="source-note">No new architecture package is added to PR15.</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp1 oracle rri behavior lock parity fixtures tests before moving scorer">
+          <div class="step-num">WP1</div>
+          <div>
+            <div class="step-head">
+              <span class="badge next">First code package</span>
+              <h3>Lock existing Oracle RRI rollout behavior before moving owners</h3>
+            </div>
+            <p>
+              Add targeted parity coverage for the scene and target rollout
+              scorers before changing their package owner. This is the guard
+              against silent label drift.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP0.
+              <strong>Unblocks:</strong> WP2 pipeline move.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Add <code>tests/pipelines/test_rollout_oracle_rri_parity.py</code> or extend the existing rollout/counterfactual tests.</li>
+                  <li>Cover root eval cache, current eval construction, reward-mode postprocessing, invalid target crop, and optional scene-RRI payload behavior.</li>
+                  <li>Do not move production code in this package unless fixtures require tiny test helpers.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Tests pass against the pre-move implementation.</li>
+                  <li>Expected scene and target scorer outputs are named clearly in assertions.</li>
+                  <li>Failure messages distinguish semantic drift from import churn.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp2 pipelines rollout_oracle_rri oracle_rri_regions move scorers update imports dataset_writer app panels">
+          <div class="step-num">WP2</div>
+          <div>
+            <div class="step-head">
+              <span class="badge next">Highest leverage</span>
+              <h3>Move Oracle RRI rollout orchestration to <code>pipelines</code></h3>
+            </div>
+            <p>
+              Create the final scorer owner under <code>aria_nbv.pipelines</code>.
+              Consolidate shared scene/target scorer machinery while keeping the
+              scene-vs-target difference as an eval-region policy.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP1.
+              <strong>Unblocks:</strong> WP3, WP4, WP5.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Add <code>aria_nbv/aria_nbv/pipelines/rollout_oracle_rri.py</code>.</li>
+                  <li>Add <code>aria_nbv/aria_nbv/pipelines/oracle_rri_regions.py</code> if policy code is non-trivial.</li>
+                  <li>Move <code>CounterfactualOracleRriScorer*</code> and <code>CounterfactualTargetOracleRriScorer*</code> imports to the pipeline owner.</li>
+                  <li>Update <code>rollouts/dataset_writer.py</code>, app rollout panels, tests, and public API contracts to consume the pipeline scorer.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>No active imports of scorer classes from <code>pose_generation</code> or final <code>rollouts</code> locations.</li>
+                  <li><code>rri_metrics/oracle_rri.py</code> is unchanged except import-only fallout, ideally no diff.</li>
+                  <li>Parity tests from WP1 still pass.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp3 docs api reference quarto thesis pipelines target_counterfactuals stale references">
+          <div class="step-num">WP3</div>
+          <div>
+            <div class="step-head">
+              <span class="badge next">Follow-up cleanup</span>
+              <h3>Update docs, API navigation, and stale architecture references</h3>
+            </div>
+            <p>
+              Keep documentation synchronized with the new owner after the move.
+              This should be a narrow cleanup package, not a thesis rewrite.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP2.
+              <strong>Unblocks:</strong> reviewers trusting module boundaries.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Update <code>docs/_quarto.yml</code>, <code>docs/reference/_sidebar.yml</code>, and API index entries.</li>
+                  <li>Retarget the thesis sentence that names <code>aria_nbv.pose_generation.target_counterfactuals</code>.</li>
+                  <li>Update <code>pipelines/__init__.py</code> only if the scorer is part of the public pipeline API.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Stale path scan is clean for moved scorer owners outside archive/history artifacts.</li>
+                  <li>Docs still say target-conditioned scoring and Q_H are not implemented if that remains true.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp4 rl archive quarantine app config panels tests public api contraction">
+          <div class="step-num">WP4</div>
+          <div>
+            <div class="step-head">
+              <span class="badge next">API contraction</span>
+              <h3>Archive or quarantine the current <code>rl/</code> surface</h3>
+            </div>
+            <p>
+              Prefer archive if online RL is not part of the active thesis/app
+              surface. Quarantine in-package only if local playback still matters.
+              Do this after WP2 so scorer imports are not churned twice.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP2, because <code>rl/counterfactual_env.py</code> imports the counterfactual scorer config.
+              <strong>Unblocks:</strong> cleaner app/config API surface.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Move code/tests/panel notes to <code>.agents/archive/aria_nbv/rl/</code>, or move code to <code>aria_nbv/experimental/rl/</code>.</li>
+                  <li>Remove <code>RlPageConfig</code> and RL panel imports from active app config/dispatcher if archiving.</li>
+                  <li>Delete or archive active RL tests in the same package; do not leave skipped tests as active API promises.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li><code>rg</code> finds no active <code>aria_nbv.rl</code>, <code>CounterfactualRLEnv</code>, or <code>render_rl_page</code> imports outside archive if archiving.</li>
+                  <li>App dispatcher and config constraint tests pass.</li>
+                  <li>The final report states this is a deliberate non-core contraction, not dead-code deletion.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp5 data_handling target selection split target types sampler obb geometry root exports">
+          <div class="step-num">WP5</div>
+          <div>
+            <div class="step-head">
+              <span class="badge next">Focused split</span>
+              <h3>Split <code>data_handling._target_selection</code> privately</h3>
+            </div>
+            <p>
+              Split the high-churn target selection file after the scorer owner
+              is settled. Keep the root <code>data_handling</code> public API
+              stable; this is not the moment for a public <code>targets/</code>
+              package.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP2 and preferably WP4.
+              <strong>Unblocks:</strong> later target-conditioned descriptor work without changing current semantics.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Add <code>_target_types.py</code> for enums, invalid reasons, DTO rows/results.</li>
+                  <li>Add <code>_target_sampler.py</code> for <code>OracleTargetTaskSampler*</code>.</li>
+                  <li>Keep <code>_target_selection.py</code> focused on <code>ActorVisibleTargetSelector*</code>.</li>
+                  <li>Add <code>_target_obb_geometry.py</code> for OBB/support/visibility/IoU helpers.</li>
+                  <li>Preserve <code>data_handling.__init__</code> exports.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Public API contract tests pass.</li>
+                  <li>No new import cycle with offline datasets, VIN source adapters, or pipeline scorers.</li>
+                  <li>File split is behavior-preserving; no target descriptor implementation appears.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp6 rollout read model rerun streamlit inspection inventory implementation later">
+          <div class="step-num">WP6</div>
+          <div>
+            <div class="step-head">
+              <span class="badge later">Later</span>
+              <h3>Introduce a shared rollout read model for Rerun and Streamlit</h3>
+            </div>
+            <p>
+              First produce an inventory; implement only after app and rollout
+              surfaces have stopped moving. The goal is one typed row/payload
+              summary consumed by Rerun and Streamlit.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP2-WP5.
+              <strong>Unblocks:</strong> app/panel helper pruning and cleaner diagnostics.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Prep package: map duplicated logic in <code>rollouts/inspection.py</code>, <code>rerun_inspector/_rollout_zarr.py</code>, and rollout panels.</li>
+                  <li>Implementation package: add <code>rollouts/read_model.py</code> and migrate consumers one surface at a time.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Rerun and Streamlit display tests or smoke fixtures consume the same read model.</li>
+                  <li>No UI-only dependencies enter <code>rollouts</code>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp7 zarr store schema table append read write compatibility">
+          <div class="step-num">WP7</div>
+          <div>
+            <div class="step-head">
+              <span class="badge later">Later</span>
+              <h3>Finish schema-driven rollout zarr tables</h3>
+            </div>
+            <p>
+              Turn the existing half-used table schema into the single source
+              for append/read/write/validate behavior. This waits until scorer
+              and read-model ownership are stable.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> WP6, or at least stable rollout payload contracts.
+              <strong>Unblocks:</strong> adding future replay fields with lower risk.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Write compatibility tests around existing zarr fixtures first.</li>
+                  <li>Move table field declarations into schema definitions.</li>
+                  <li>Generate append/read/write/validate helpers from those declarations.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Existing rollout stores round-trip without migration.</li>
+                  <li>Q_H or future values are not implemented as part of this cleanup.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="road-step" data-search="wp8 geometry cw90 frustum camera wrapper later">
+          <div class="step-num">WP8</div>
+          <div>
+            <div class="step-head">
+              <span class="badge later">Later</span>
+              <h3>Consolidate frustum and CW90 display-rotation contracts</h3>
+            </div>
+            <p>
+              This is real architecture debt, but it touches training/display
+              frame semantics. Do it after the data/scorer/read-model seams are
+              no longer moving.
+            </p>
+            <div class="dependency-line">
+              <strong>Depends on:</strong> stable pipeline and diagnostics owners.
+              <strong>Unblocks:</strong> removal of monkey-patched display-rotation protocols.
+            </div>
+            <div class="deliverable-grid">
+              <div class="deliverable">
+                <strong>Concrete edits</strong>
+                <ul>
+                  <li>Centralize frustum vertices/segments in one geometry owner.</li>
+                  <li>Replace implicit <code>cw90_corrected</code> flag checks with an explicit typed camera/display wrapper.</li>
+                  <li>Update Rerun, plotting, VIN utility, and rendering callers surgically.</li>
+                </ul>
+              </div>
+              <div class="deliverable">
+                <strong>Exit criteria</strong>
+                <ul>
+                  <li>Display-only rotation and training-frame projection semantics remain separate.</li>
+                  <li>Geometry visual smoke checks pass on representative frusta.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" data-search="module trees tree deltas before after">
+      <h2>Module Tree Deltas</h2>
+      <p class="source-note">
+        Legend: <span class="legend add">+ add</span>,
+        <span class="legend move">~ move or change owner</span>,
+        <span class="legend del">- remove from active owner</span>,
+        <span class="legend keep">= keep</span>,
+        <span class="legend defer">? defer</span>.
+      </p>
+
+      <div class="module-grid">
+        <details class="module-card" open data-search="pipelines oracle rri labeler rollout oracle rri regions">
+          <summary>
+            <span class="module-title"><span class="badge next">Workpackage 1</span><code>aria_nbv.pipelines</code></span>
+            <span class="source-note">Oracle RRI orchestration owner</span>
+          </summary>
+          <div class="module-body">
+            <p>Promote pipelines from one-step labeler-only to the owner of all Oracle RRI orchestration.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current</div>
+                <pre class="tree"><span class="keep">aria_nbv/pipelines/</span>
+<span class="keep">  __init__.py</span>
+<span class="keep">  oracle_rri_labeler.py</span>   # one-step scene labeler</pre>
+              </div>
+              <div>
+                <div class="tree-caption">Target</div>
+                <pre class="tree"><span class="keep">aria_nbv/pipelines/</span>
+<span class="keep">  __init__.py</span>
+<span class="keep">  oracle_rri_labeler.py</span>       # existing offline scene labeler
+<span class="add">+ rollout_oracle_rri.py</span>       # scene + target rollout scorer orchestration
+<span class="add">+ oracle_rri_regions.py</span>       # SceneExtentPolicy, TargetObbPolicy
+<span class="add">+ oracle_rri_payloads.py</span>      # optional typed outputs if shared by app/tests</pre>
+              </div>
+            </div>
+            <ul>
+              <li>Move shared renderer, backproject, root-eval cache, current-eval construction, and reward-mode postprocessing here.</li>
+              <li>Keep the semantic difference as policy, not copy-pasted scorer classes.</li>
+              <li>Do not change metric math or target semantics in the move.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="module-card" open data-search="rollouts counterfactuals trace zarr dataset writer replay store">
+          <summary>
+            <span class="module-title"><span class="badge now">Boundary</span><code>aria_nbv.rollouts</code></span>
+            <span class="source-note">Replay/store owner</span>
+          </summary>
+          <div class="module-body">
+            <p>PR15 can use <code>rollouts</code> as an intermediate home for counterfactual replay contracts. Long term, scoring orchestration leaves for <code>pipelines</code>.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">PR15 intermediate</div>
+                <pre class="tree"><span class="keep">aria_nbv/rollouts/</span>
+<span class="move">~ counterfactuals.py</span>          # moved from pose_generation
+<span class="move">~ target_counterfactuals.py</span>   # moved from pose_generation
+<span class="keep">  dataset_writer.py</span>
+<span class="keep">  trace.py</span>
+<span class="keep">  zarr_store.py</span>
+<span class="keep">  inspection.py</span></pre>
+              </div>
+              <div>
+                <div class="tree-caption">Final owner split</div>
+                <pre class="tree"><span class="keep">aria_nbv/rollouts/</span>
+<span class="keep">  dataset_writer.py</span>           # consumes pipelines scorer
+<span class="keep">  trace.py</span>                    # selected transitions and payload DTOs
+<span class="keep">  zarr_store.py</span>               # persisted rollout tables
+<span class="keep">  inspection.py</span>               # read-side summaries until read-model pass
+<span class="del">- counterfactuals.py</span>          # scoring orchestration leaves
+<span class="del">- target_counterfactuals.py</span>   # scoring orchestration leaves</pre>
+              </div>
+            </div>
+            <ul>
+              <li>Keep replay trace, dataset writing, shard manifests, and store schemas here.</li>
+              <li>Later work: schema-driven zarr tables and shared rollout read model.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="module-card" open data-search="pose_generation candidate tables remove counterfactuals finite candidates">
+          <summary>
+            <span class="module-title"><span class="badge now">Boundary</span><code>aria_nbv.pose_generation</code></span>
+            <span class="source-note">Candidate-table owner</span>
+          </summary>
+          <div class="module-body">
+            <p>Strip this package back to finite candidate table generation, validation, orientation, and provenance.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current main checkout</div>
+                <pre class="tree"><span class="keep">aria_nbv/pose_generation/</span>
+<span class="keep">  candidate_generation.py</span>
+<span class="keep">  candidate_generation_rules.py</span>
+<span class="keep">  candidate_mixture.py</span>
+<span class="keep">  geometry.py</span>
+<span class="keep">  orientations.py</span>
+<span class="keep">  positional_sampling.py</span>
+<span class="del">  counterfactuals.py</span>          # not candidate generation
+<span class="del">  target_counterfactuals.py</span>   # not candidate generation</pre>
+              </div>
+              <div>
+                <div class="tree-caption">Target</div>
+                <pre class="tree"><span class="keep">aria_nbv/pose_generation/</span>
+<span class="keep">  candidate_generation.py</span>
+<span class="keep">  candidate_generation_rules.py</span>
+<span class="keep">  candidate_mixture.py</span>
+<span class="keep">  geometry.py</span>
+<span class="keep">  orientations.py</span>
+<span class="keep">  positional_sampling.py</span>
+<span class="keep">  plotting.py</span>
+<span class="keep">  types.py</span>
+<span class="keep">  utils.py</span></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module-card" open data-search="rri_metrics oracle rri pure metric primitive unchanged">
+          <summary>
+            <span class="module-title"><span class="badge next">Keep</span><code>aria_nbv.rri_metrics</code></span>
+            <span class="source-note">Pure metric owner</span>
+          </summary>
+          <div class="module-body">
+            <p>Keep <code>OracleRRI.score</code> as the primitive. Do not absorb labeler lifecycle, rendering, or eval-region policy here.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current</div>
+                <pre class="tree"><span class="keep">aria_nbv/rri_metrics/</span>
+<span class="keep">  oracle_rri.py</span>
+<span class="keep">  eval_pointclouds.py</span>
+<span class="keep">  coral.py</span>
+<span class="keep">  metrics.py</span>
+<span class="keep">  rollout.py</span>
+<span class="keep">  rri_binning.py</span>
+<span class="keep">  types.py</span></pre>
+              </div>
+              <div>
+                <div class="tree-caption">Target</div>
+                <pre class="tree"><span class="keep">aria_nbv/rri_metrics/</span>
+<span class="keep">  oracle_rri.py</span>        # score primitive stays here
+<span class="keep">  eval_pointclouds.py</span>  # GT-depth / semidense eval point helpers
+<span class="keep">  coral.py</span>
+<span class="keep">  metrics.py</span>
+<span class="keep">  rollout.py</span>
+<span class="keep">  rri_binning.py</span>
+<span class="keep">  types.py</span></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module-card" open data-search="data_handling target selection split private modules root exports">
+          <summary>
+            <span class="module-title"><span class="badge next">Workpackage 2</span><code>aria_nbv.data_handling</code></span>
+            <span class="source-note">Focused private target split</span>
+          </summary>
+          <div class="module-body">
+            <p>Do not split the whole package. The high-value change is decomposing <code>_target_selection.py</code> while preserving root API exports.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current hotspot</div>
+                <pre class="tree"><span class="keep">aria_nbv/data_handling/</span>
+<span class="keep">  __init__.py</span>             # public re-exports
+<span class="keep">  efm_dataset.py</span>
+<span class="keep">  efm_snippet_loader.py</span>
+<span class="keep">  efm_views.py</span>
+<span class="keep">  mesh_cache.py</span>
+<span class="keep">  vin_adapter.py</span>
+<span class="keep">  vin_oracle_types.py</span>
+<span class="del">  _target_selection.py</span>   # 1,389 LOC: DTOs, samplers, selectors, geometry</pre>
+              </div>
+              <div>
+                <div class="tree-caption">Target private split</div>
+                <pre class="tree"><span class="keep">aria_nbv/data_handling/</span>
+<span class="keep">  __init__.py</span>             # same public import surface
+<span class="add">+ _target_types.py</span>       # enums, invalid reasons, DTO rows/results
+<span class="add">+ _target_sampler.py</span>     # OracleTargetTaskSampler + config
+<span class="move">~ _target_selection.py</span>  # ActorVisibleTargetSelector + config
+<span class="add">+ _target_obb_geometry.py</span> # OBB/world/support/visibility/IoU helpers
+<span class="keep">  _offline_dataset.py</span>
+<span class="keep">  _offline_store.py</span>
+<span class="keep">  _offline_writer.py</span>
+<span class="keep">  _vin_sources.py</span></pre>
+              </div>
+            </div>
+            <ul>
+              <li>Delay a public <code>targets/</code> package until target-conditioned scoring really needs it.</li>
+              <li>Keep data/public API tests as the contract guard.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="module-card" open data-search="rl archive quarantine app config panel tests gymnasium sb3">
+          <summary>
+            <span class="module-title"><span class="badge next">Workpackage 3</span><code>aria_nbv.rl</code></span>
+            <span class="source-note">Archive or quarantine</span>
+          </summary>
+          <div class="module-body">
+            <p><code>rl/</code> is non-core, but not unused. It is wired into app config, panels, dispatcher exports, and tests.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current active surface</div>
+                <pre class="tree"><span class="keep">aria_nbv/rl/</span>
+<span class="keep">  __init__.py</span>
+<span class="keep">  counterfactual_env.py</span>   # 568 LOC
+<span class="keep">aria_nbv/app/config.py</span>    # RlPageConfig
+<span class="keep">aria_nbv/app/panels/rl.py</span>
+<span class="keep">tests/rl/test_counterfactual_env.py</span>
+<span class="keep">tests/app/panels/test_rl_panel.py</span></pre>
+              </div>
+              <div>
+                <div class="tree-caption">Option A: archive</div>
+                <pre class="tree"><span class="add">+ .agents/archive/aria_nbv/rl/</span>
+<span class="move">~   counterfactual_env.py</span>
+<span class="move">~   __init__.py</span>
+<span class="move">~   tests/test_counterfactual_env.py</span>
+<span class="move">~   app_panel_rl.py</span>
+<span class="del">- aria_nbv/app/config.py RlPageConfig imports</span>
+<span class="del">- aria_nbv/app/panels/rl.py active page</span>
+<span class="del">- active rl tests/import contracts</span></pre>
+              </div>
+            </div>
+            <div class="tree-wrap" style="margin-top:12px">
+              <div>
+                <div class="tree-caption">Option B: in-package quarantine</div>
+                <pre class="tree"><span class="add">+ aria_nbv/experimental/rl/</span>
+<span class="move">~   counterfactual_env.py</span>
+<span class="move">~   __init__.py</span>
+<span class="del">- aria_nbv.rl root API</span>
+<span class="del">- default app page wiring</span></pre>
+              </div>
+              <div>
+                <div class="tree-caption">Recommendation</div>
+                <pre class="tree"><span class="defer">? Pick one API decision before moving files.</span>
+<span class="keep">= Archive when thesis/public app should drop RL.</span>
+<span class="keep">= Quarantine when local playback remains useful.</span>
+<span class="del">- Do not delete rl/ alone.</span></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module-card" data-search="app rerun inspector read model streamlit rollout panels later">
+          <summary>
+            <span class="module-title"><span class="badge later">Later</span><code>aria_nbv.app</code> and <code>rerun_inspector</code></span>
+            <span class="source-note">Shared read-model consumer</span>
+          </summary>
+          <div class="module-body">
+            <p>Four read-side stacks re-summarize rollout rows today. This is real cleanup, but not pre-PR15 work.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current parallel stacks</div>
+                <pre class="tree"><span class="keep">rollouts/inspection.py</span>                  # 1,410 LOC
+<span class="keep">rerun_inspector/_rollout_zarr.py</span>         # 1,866 LOC
+<span class="keep">app/panels/stored_rollouts.py</span>            # 1,729 LOC
+<span class="keep">app/panels/counterfactual_rollouts.py</span>    # 2,030 LOC</pre>
+              </div>
+              <div>
+                <div class="tree-caption">Later target</div>
+                <pre class="tree"><span class="add">+ rollouts/read_model.py</span>        # typed rows/payload summaries
+<span class="move">~ rerun_inspector/_rollout_zarr.py</span> consumes read model
+<span class="move">~ app/panels/*rollouts*.py</span> consumes read model
+<span class="keep">= Streamlit/Rerun remain UI/logging glue</span></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module-card" data-search="zarr store schema refactor later table schema q_h">
+          <summary>
+            <span class="module-title"><span class="badge later">Later</span><code>rollouts.zarr_store</code></span>
+            <span class="source-note">Schema engine prep</span>
+          </summary>
+          <div class="module-body">
+            <p>The 3,056-line zarr store hand-rolls table read/write/append families. Prepare this later, after owner seams settle.</p>
+            <div class="tree-wrap">
+              <div>
+                <div class="tree-caption">Current</div>
+                <pre class="tree"><span class="keep">rollouts/zarr_store.py</span>
+<span class="keep">  _TableSchema</span>           # exists but only half-used
+<span class="keep">  _empty_* functions</span>
+<span class="keep">  _append_* functions</span>
+<span class="keep">  _rows_to_numpy_* functions</span>
+<span class="keep">  _read_*_table functions</span></pre>
+              </div>
+              <div>
+                <div class="tree-caption">Later target</div>
+                <pre class="tree"><span class="add">+ schema declarations per table</span>
+<span class="add">+ generated append/read/write/validate helpers</span>
+<span class="keep">= store compatibility locked by tests first</span>
+<span class="del">- duplicate Q_H derivation paths</span></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="panel" data-search="workpackages objective edits validation risk primary high value">
+      <h2>Primary High-Value Workpackage Cards</h2>
+      <p>
+        These are the packages with the strongest near-term payoff after the
+        PR15 gate. The full dependency-ordered backlog is WP0-WP8 above; these
+        cards intentionally highlight the highest-value execution clusters.
+      </p>
+      <div class="work-grid">
+        <article class="work">
+          <span class="badge next">WP1-WP3</span>
+          <h3>Oracle RRI pipeline ownership</h3>
+          <p>Move scene and target rollout RRI orchestration under <code>pipelines</code> and deduplicate the scorer skeleton.</p>
+          <ul>
+            <li>Add regression fixtures before moving logic.</li>
+            <li>Extract eval-region policy.</li>
+            <li>Leave <code>OracleRRI.score</code> unchanged.</li>
+          </ul>
+          <div class="risk"><span>Label drift risk</span><div class="bar"><span style="width:82%"></span></div></div>
+        </article>
+        <article class="work">
+          <span class="badge next">WP5</span>
+          <h3>Private target-selection split</h3>
+          <p>Split one high-churn private file into types, sampler, selector, and OBB geometry modules.</p>
+          <ul>
+            <li>Preserve <code>data_handling.__init__</code> exports.</li>
+            <li>Do not create a public <code>targets/</code> package yet.</li>
+            <li>Guard with public API contract tests.</li>
+          </ul>
+          <div class="risk"><span>Import-cycle risk</span><div class="bar"><span style="width:58%"></span></div></div>
+        </article>
+        <article class="work">
+          <span class="badge next">WP4</span>
+          <h3>RL archive or quarantine</h3>
+          <p>Remove online RL from the active thesis/app surface only after choosing archive vs quarantine.</p>
+          <ul>
+            <li>Update app config, panel exports, and tests in same commit.</li>
+            <li>Do not leave broken public API imports.</li>
+            <li>Prefer archive if no local playback need remains.</li>
+          </ul>
+          <div class="risk"><span>API break risk</span><div class="bar"><span style="width:70%"></span></div></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" data-search="validation commands tests pytest ruff rg">
+      <h2>Validation Matrix</h2>
+      <div class="matrix-grid">
+        <div class="matrix">
+          <h3>WP1-WP3: Oracle RRI pipeline pass</h3>
+          <ul>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/rollouts/test_counterfactuals.py</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/rollouts</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/rri_metrics</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/integration/test_oracle_rri_labeler_real_data.py</code></li>
+            <li><code>rg -n "Counterfactual.*OracleRriScorer|target_counterfactuals|oracle_rri_labeler" aria_nbv/aria_nbv aria_nbv/tests</code></li>
+          </ul>
+        </div>
+        <div class="matrix">
+          <h3>WP5: data_handling split</h3>
+          <ul>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/data_handling/test_target_selection.py</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/data_handling/test_public_api_contract.py</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run ruff check aria_nbv/data_handling tests/data_handling</code></li>
+            <li><code>rg -n "from aria_nbv.data_handling._target" aria_nbv/aria_nbv aria_nbv/tests</code></li>
+          </ul>
+        </div>
+        <div class="matrix">
+          <h3>WP4: RL archive/quarantine</h3>
+          <ul>
+            <li><code>rg -n "aria_nbv\.rl|CounterfactualRLEnv|CounterfactualPPO|render_rl_page|RlPageConfig" aria_nbv/aria_nbv aria_nbv/tests</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/app tests/test_config_field_constraints.py</code></li>
+            <li><code>cd aria_nbv &amp;&amp; uv run pytest tests/data_handling/test_public_api_contract.py</code></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-search="stop lines forbidden scope target descriptors q_h scene memory broad data handling">
+      <h2>Stop Lines</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Forbidden in these cleanup packages</th>
+            <th>Why</th>
+            <th>Allowed alternative</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Target descriptors or real target-conditioned scoring</td>
+            <td>Changes scientific contract and model semantics.</td>
+            <td>Only move existing target RRI orchestration with parity tests.</td>
+          </tr>
+          <tr>
+            <td>Q_H implementation, scene memory, new online RL baselines</td>
+            <td>Future model work, not package-boundary cleanup.</td>
+            <td>Keep TODOs or follow-up issue text only.</td>
+          </tr>
+          <tr>
+            <td>Broad <code>data_handling</code> or <code>utils</code> restructure</td>
+            <td>Large churn and import-cycle risk before PR15 is settled.</td>
+            <td>Split only <code>_target_selection.py</code> privately.</td>
+          </tr>
+          <tr>
+            <td>Metric primitive rewrite while moving scorers</td>
+            <td>Would make label drift impossible to attribute.</td>
+            <td>Keep <code>OracleRRI.score</code> behavior locked.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel" data-search="evidence sources persisted plans live code graphify loc">
+      <h2>Evidence Index</h2>
+      <div class="evidence-list">
+        <ul>
+          <li><code>.omx/plans/aria-nbv-package-boundary-cleanup-handoff-20260702T162044Z.json:19-28</code> - PR15 counterfactual move and deferrals.</li>
+          <li><code>.omx/plans/aria-nbv-package-boundary-cleanup-handoff-20260702T162044Z.json:79-90</code> - broad restructuring stop line.</li>
+          <li><code>.omx/plans/aria-nbv-package-boundary-cleanup-handoff-20260702T162044Z.json:106-115</code> - duplicated Oracle RRI scorer finding.</li>
+          <li><code>.omc/plans/plan-aria-nbv-refactor-20260702.md:75-97</code> - shared scorer base and eval-region policy plan.</li>
+          <li><code>.omc/plans/plan-aria-nbv-refactor-20260702.md:175-191</code> - target-selection private split.</li>
+          <li><code>.agents/memory/history/2026/07/2026-07-02_aria_nbv_slop_audit.md:35-76</code> - scorer duplication, zarr/read-model, RL, target-selection hotspots.</li>
+          <li><code>aria_nbv/aria_nbv/pipelines/oracle_rri_labeler.py:80-149</code> - current one-step Oracle RRI labeler.</li>
+          <li><code>aria_nbv/aria_nbv/rri_metrics/oracle_rri.py:72-151</code> - pure metric primitive.</li>
+          <li><code>aria_nbv/aria_nbv/pose_generation/counterfactuals.py:700-848</code> - scene counterfactual scorer skeleton.</li>
+          <li><code>aria_nbv/aria_nbv/pose_generation/target_counterfactuals.py:73-390</code> - target scorer, GT OBB crop, target payloads.</li>
+          <li><code>aria_nbv/aria_nbv/data_handling/_target_selection.py</code> - 1,389 LOC mixed target owner.</li>
+          <li><code>aria_nbv/aria_nbv/rl/counterfactual_env.py</code> - 568 LOC active RL package, not dead code.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" data-search="heatmap risk labels imports public api">
+      <h2>Risk Heatmap</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Change</th>
+            <th>Risk</th>
+            <th>Primary guard</th>
+            <th>Review note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Oracle RRI scorer unification</td>
+            <td>High</td>
+            <td>Before/after parity fixtures and integration labeler smoke.</td>
+            <td>Highest leverage, but label drift is the key failure mode.</td>
+          </tr>
+          <tr>
+            <td>RL archive/quarantine</td>
+            <td>Medium-high</td>
+            <td>Config, app, panel dispatcher, and public API contract tests.</td>
+            <td>Not unused; must remove every active import path in one package.</td>
+          </tr>
+          <tr>
+            <td>Target-selection private split</td>
+            <td>Medium</td>
+            <td>Public root exports and target-selection tests.</td>
+            <td>Worth doing after pipeline owner is settled.</td>
+          </tr>
+          <tr>
+            <td>Zarr schema engine</td>
+            <td>Medium-high</td>
+            <td>Store compatibility tests and fixture round trips.</td>
+            <td>Defer until PR15 is green and owner churn is done.</td>
+          </tr>
+          <tr>
+            <td>Rollout read-model</td>
+            <td>Medium</td>
+            <td>Rerun and Streamlit panel fixture tests.</td>
+            <td>Good cleanup, but app surfaces are already noisy.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="footer">
+      <p>
+        This HTML is generated as a local OMX planning artifact. It should not be
+        treated as public documentation until the owning refactor packages are accepted.
+      </p>
+    </footer>
+  </main>
+
+  <script>
+    const filter = document.getElementById("filter");
+    const searchable = Array.from(document.querySelectorAll("[data-search]"));
+    const cards = Array.from(document.querySelectorAll("details.module-card"));
+
+    filter.addEventListener("input", () => {
+      const query = filter.value.trim().toLowerCase();
+      searchable.forEach((node) => {
+        const haystack = `${node.dataset.search || ""} ${node.textContent || ""}`.toLowerCase();
+        node.classList.toggle("hidden", query.length > 0 && !haystack.includes(query));
+      });
+    });
+
+    document.querySelectorAll("[data-open]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const open = button.dataset.open === "all";
+        cards.forEach((card) => {
+          card.open = open;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "status": "passed",
+  "passed": true,
+  "summary": "Classified current mattpocock/skills against ARIA-NBV local skill ownership and produced an activation/integration policy.",
+  "checked_upstream": {
+    "source": "mattpocock/skills",
+    "url": "https://github.com/mattpocock/skills.git",
+    "ref": "896f14d9c25659f03b24e08e4efc3ee69bbade08",
+    "skill_count": 38,
+    "license": "MIT"
+  },
+  "recommended_installs": [
+    "codebase-design",
+    "improve-codebase-architecture",
+    "prototype",
+    "tdd",
+    "writing-great-skills"
+  ],
+  "optional_explicit_installs": [
+    "to-prd",
+    "to-issues",
+    "teach",
+    "handoff",
+    "resolving-merge-conflicts"
+  ],
+  "reference_only": [
+    "code-review",
+    "diagnosing-bugs",
+    "research",
+    "domain-modeling",
+    "grill-me",
+    "grill-with-docs",
+    "grilling",
+    "edit-article",
+    "writing-shape",
+    "writing-beats",
+    "writing-fragments",
+    "triage",
+    "qa",
+    "request-refactor-plan",
+    "implement",
+    "ask-matt",
+    "setup-matt-pocock-skills",
+    "design-an-interface"
+  ],
+  "skip": [
+    "claude-handoff",
+    "git-guardrails-claude-code",
+    "loop-me",
+    "migrate-to-shoehorn",
+    "obsidian-vault",
+    "scaffold-exercises",
+    "setup-pre-commit",
+    "ubiquitous-language",
+    "wayfinder",
+    "wizard"
+  ],
+  "output_artifact_path": ".omx/specs/autoresearch-mattpocock-aria-skill-integration/report.md"
+}

@@ -1,0 +1,130 @@
+{
+  "handoff_type": "ralplan_consensus",
+  "created_at": "2026-07-09T10:05:21Z",
+  "repo": "/home/jd/repos/ARIA-NBV",
+  "subject": "archive aria_nbv.rl and aria_nbv.interpretability",
+  "status": "complete",
+  "scope": {
+    "planning_only": true,
+    "package_code_edited": false,
+    "modules_to_archive": [
+      "aria_nbv/aria_nbv/rl",
+      "aria_nbv/aria_nbv/interpretability"
+    ],
+    "archive_destinations": [
+      ".agents/archive/aria_nbv/aria_nbv/rl",
+      ".agents/archive/aria_nbv/aria_nbv/interpretability"
+    ],
+    "non_goals": [
+      "Do not keep compatibility shims for aria_nbv.rl or aria_nbv.interpretability.",
+      "Do not treat historical docs or memory references as active package imports.",
+      "Do not force dependency or Quartodoc cleanup if that broadens execution beyond active-surface archival."
+    ]
+  },
+  "artifacts": {
+    "context": ".omx/context/archive-rl-interpretability-20260709T100521Z.md",
+    "plan": ".omx/plans/ralplan-archive-rl-interpretability-20260709T100521Z.md",
+    "test_spec": ".omx/plans/test-spec-archive-rl-interpretability-20260709T100521Z.md",
+    "architect_review": ".omx/plans/ralplan-archive-rl-interpretability-architect-review-20260709T100521Z.md",
+    "critic_review": ".omx/plans/ralplan-archive-rl-interpretability-critic-review-20260709T100521Z.md"
+  },
+  "decision": {
+    "summary": "Hard-archive aria_nbv.rl and aria_nbv.interpretability, remove their active Streamlit config/page/export contacts, and delete or retarget tests that keep those modules in the active package surface.",
+    "chosen_option": "hard_archive_plus_active_surface_removal",
+    "rejected_options": [
+      "archive source but keep compatibility shims",
+      "hide Streamlit pages only",
+      "move directories first and discover breakage during execution"
+    ]
+  },
+  "active_contact_points": {
+    "streamlit": [
+      "aria_nbv/aria_nbv/app/config.py",
+      "aria_nbv/aria_nbv/app/app.py",
+      "aria_nbv/aria_nbv/app/panels.py",
+      "aria_nbv/aria_nbv/app/panels/__init__.py",
+      "aria_nbv/aria_nbv/app/panels/rl.py",
+      "aria_nbv/aria_nbv/app/panels/testing_attribution.py"
+    ],
+    "tests": [
+      "aria_nbv/tests/rl/test_counterfactual_env.py",
+      "aria_nbv/tests/interpretability/test_attribution.py",
+      "aria_nbv/tests/app/panels/test_rl_panel.py",
+      "aria_nbv/tests/app/panels/test_counterfactual_rollouts_panel.py",
+      "aria_nbv/tests/test_config_field_constraints.py",
+      "aria_nbv/tests/test_panels_dispatcher.py"
+    ],
+    "optional_metadata": [
+      "aria_nbv/pyproject.toml",
+      "aria_nbv/uv.lock",
+      "scripts/quartodoc_expand_config.py",
+      "docs/typst/thesis/advisor_meeting_2026_05_22.typ",
+      ".agents/todos.toml"
+    ]
+  },
+  "work_packages": [
+    {
+      "id": "WP0",
+      "title": "Preflight dirty-state inventory",
+      "summary": "Record focused status and inspect overlapping dirty diffs before touching app, tests, package metadata, or archive paths."
+    },
+    {
+      "id": "WP1",
+      "title": "Cut Streamlit active edges",
+      "summary": "Remove RL config/page registration and Testing & Attribution registration from the app entrypoint and panel dispatch exports."
+    },
+    {
+      "id": "WP2",
+      "title": "Archive module directories",
+      "summary": "Move `aria_nbv/aria_nbv/rl` and `aria_nbv/aria_nbv/interpretability` to the requested `.agents/archive/aria_nbv/aria_nbv/` destinations."
+    },
+    {
+      "id": "WP3",
+      "title": "Remove or retarget tests",
+      "summary": "Delete module-specific tests and update config, dispatcher, and counterfactual-rollout panel tests so no active test imports `RlPageConfig`, `CounterfactualRLEnvConfig`, or attribution classes."
+    },
+    {
+      "id": "WP4",
+      "title": "Bound optional cleanup",
+      "summary": "Remove Captum/Gymnasium/SB3 dependencies and stale Quartodoc exclusions only after active source/test references are gone and only if lock/docs churn stays scoped."
+    },
+    {
+      "id": "WP5",
+      "title": "Verify active-surface removal",
+      "summary": "Run active-contact `rg`, focused app/config tests, lint/format on touched active Python, `git diff --check`, and `graphify update .`."
+    }
+  ],
+  "consensus_gate": {
+    "order": [
+      "architect",
+      "critic"
+    ],
+    "architect": {
+      "agent_id": "019f4668-0037-7ee2-8f08-8b23cb691529",
+      "verdict": "APPROVE",
+      "required_changes": []
+    },
+    "critic": {
+      "agent_id": "019f4672-65f0-7d32-b4f0-02ea32e436bc",
+      "verdict": "APPROVE",
+      "required_changes": []
+    },
+    "complete": true
+  },
+  "validation_plan": [
+    "rg -n \"aria_nbv\\\\.(rl|interpretability)|from \\\\.\\\\.\\\\.(rl|interpretability)|CounterfactualRLEnv|CounterfactualPPOConfig|InterpretabilityConfig|AttributionEngine|RlPageConfig|render_rl_page|render_testing_attribution_page|RL Inspector|Testing & Attribution\" aria_nbv/aria_nbv aria_nbv/tests",
+    "cd aria_nbv && uv run pytest tests/test_panels_dispatcher.py tests/test_config_field_constraints.py tests/app/panels/test_counterfactual_rollouts_panel.py",
+    "cd aria_nbv && uv run pytest tests/test_app*.py tests/app",
+    "/home/jd/repos/ARIA-NBV/aria_nbv/.venv/bin/ruff format <touched-active-python-files>",
+    "/home/jd/repos/ARIA-NBV/aria_nbv/.venv/bin/ruff check <touched-active-python-files>",
+    "git diff --check",
+    "graphify update ."
+  ],
+  "implementation_cautions": [
+    "Remove Streamlit active edges before moving module directories to avoid import-time breakage.",
+    "Preserve unrelated dirty work in app, tests, docs, and package files.",
+    "Do not add compatibility facades or stale import wrappers.",
+    "Treat historical docs and agent memory references as non-blocking unless active docs/API generation fails.",
+    "Defer dependency lock or Quartodoc cleanup if it creates broad unrelated churn."
+  ]
+}

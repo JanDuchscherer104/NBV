@@ -1,0 +1,157 @@
+{
+  "handoff_type": "ralplan_consensus",
+  "created_at": "2026-07-09T09:45:53Z",
+  "repo": "/home/jd/repos/ARIA-NBV",
+  "subject": "aria_nbv.rri_metrics module architecture cleanup",
+  "status": "complete",
+  "scope": {
+    "planning_only": true,
+    "package_code_edited": false,
+    "primary_package": "aria_nbv/aria_nbv/rri_metrics",
+    "non_goals": [
+      "Do not implement Q_H.",
+      "Do not implement target descriptors.",
+      "Do not change target-conditioned scoring semantics.",
+      "Do not rewrite VIN, Lightning, app panels, rollouts, or data_handling beyond mechanical import retargeting during later execution.",
+      "Do not add broad compatibility facades unless a public contract test proves a stable external import."
+    ]
+  },
+  "artifacts": {
+    "context": ".omx/context/rri-metrics-architecture-20260709T094553Z.md",
+    "plan": ".omx/plans/ralplan-rri-metrics-architecture-20260709T094553Z.md",
+    "visual_review": ".omx/specs/rri-metrics-architecture-review-20260709T094553Z.html",
+    "architect_review": ".omx/plans/ralplan-rri-metrics-architecture-architect-review-20260709T094553Z.md",
+    "critic_review_initial": ".omx/plans/ralplan-rri-metrics-architecture-critic-review-20260709T094553Z.md",
+    "critic_review_final": ".omx/plans/ralplan-rri-metrics-architecture-critic-final-20260709T094553Z.md"
+  },
+  "context_heavy_evidence": [
+    {
+      "path": "docs/_generated/context/context_snapshot.md",
+      "lines": "1-29",
+      "note": "make context-heavy source ladder and generated timestamp"
+    },
+    {
+      "path": "docs/_generated/context/aria_nbv_tree.md",
+      "lines": "152-178",
+      "note": "current rri_metrics tree with shallow logging/reporting folders and broad metrics package"
+    },
+    {
+      "path": "docs/_generated/context/context_snapshot.md",
+      "lines": "4986-5228",
+      "note": "generated rri_metrics class/module surface"
+    },
+    {
+      "path": "docs/_generated/context/data_contracts.md",
+      "lines": "1393-1420",
+      "note": "named rri_metrics data contracts"
+    }
+  ],
+  "decision": {
+    "summary": "Use one justified nested module family, rri_metrics.rollout, while collapsing shallow logging/reporting folders, removing broad midpoint reexports, and keeping DTOs producer-local unless they are stable cross-seam contracts.",
+    "target_tree": [
+      "rri_metrics/__init__.py",
+      "rri_metrics/types.py",
+      "rri_metrics/distance.py",
+      "rri_metrics/logging.py",
+      "rri_metrics/plotting.py",
+      "rri_metrics/single_step.py",
+      "rri_metrics/oracle/scorer.py",
+      "rri_metrics/oracle/evidence.py",
+      "rri_metrics/objectives/coral.py",
+      "rri_metrics/objectives/ordinal_binning.py",
+      "rri_metrics/rollout/returns.py",
+      "rri_metrics/rollout/diagnostics.py",
+      "rri_metrics/rollout/tables.py",
+      "rri_metrics/rollout/torchmetrics.py"
+    ],
+    "dto_policy": [
+      "Cross-seam DTOs stay in types.py.",
+      "Return-shape DTOs live beside the producer function.",
+      "Diagnostic DTOs live beside diagnostic producers.",
+      "Config/factory DTOs live beside the constructed class.",
+      "Do not create types/rollout.py unless a real cycle or stable cross-seam contract appears."
+    ],
+    "public_import_policy": [
+      "Keep root rri_metrics.__all__ compact.",
+      "Delete or narrow the broad rri_metrics.metrics.__all__ midpoint surface.",
+      "Prefer leaf imports such as rri_metrics.rollout.returns and rri_metrics.rollout.diagnostics.",
+      "Keep rollout/__init__.py, oracle/__init__.py, and objectives/__init__.py empty or narrow."
+    ]
+  },
+  "work_packages": [
+    {
+      "id": "WP0",
+      "title": "Lock public intent",
+      "summary": "Strengthen public API tests so the root stays compact and midpoint barrels cannot reappear unnoticed."
+    },
+    {
+      "id": "WP1",
+      "title": "Collapse shallow folders",
+      "summary": "Move logging/names.py to logging.py and reporting/plotting.py to plotting.py; update only mechanical imports and docs refs."
+    },
+    {
+      "id": "WP2",
+      "title": "Split rollout metrics by semantic role",
+      "summary": "Create rollout/returns.py, rollout/diagnostics.py, rollout/tables.py, and rollout/torchmetrics.py. Keep selected_path_length_tensor in diagnostics."
+    },
+    {
+      "id": "WP3",
+      "title": "Type and document TorchMetric states",
+      "summary": "Add class-level Tensor annotations and field docstrings for every add_state tensor, plus a focused state-contract test."
+    },
+    {
+      "id": "WP4",
+      "title": "Collapse the old metrics package",
+      "summary": "Move point_mesh to distance.py and one-step reducers/TorchMetrics to single_step.py; delete or narrow metrics/__init__.py."
+    },
+    {
+      "id": "WP5",
+      "title": "Keep oracle and objectives narrow",
+      "summary": "Keep oracle/ and objectives/ as justified subpackages for the first pass; do not rename objectives/ to ordinal/ in this cleanup."
+    }
+  ],
+  "consensus_gate": {
+    "order": [
+      "architect",
+      "critic",
+      "critic_final"
+    ],
+    "architect": {
+      "agent_id": "019f464f-5701-7fa2-b0a0-8ba374ab38b5",
+      "verdict": "APPROVE",
+      "required_changes": []
+    },
+    "critic_initial": {
+      "agent_id": "019f465e-03d1-75d2-9220-d726446637bc",
+      "verdict": "APPROVE_WITH_CHANGES",
+      "required_edits_integrated": true
+    },
+    "critic_final": {
+      "agent_id": "019f465e-03d1-75d2-9220-d726446637bc",
+      "verdict": "APPROVE",
+      "new_blocker": false
+    },
+    "complete": true
+  },
+  "validation_plan": [
+    "cd aria_nbv && uv run ruff format --check aria_nbv/rri_metrics tests/rri_metrics",
+    "cd aria_nbv && uv run ruff check aria_nbv/rri_metrics tests/rri_metrics",
+    "cd aria_nbv && uv run pytest tests/rri_metrics",
+    "cd aria_nbv && uv run pytest tests/rri_metrics/test_torchmetric_state_contracts.py",
+    "cd aria_nbv && uv run pytest tests/vin/test_rri_binning.py tests/vin/test_coral.py",
+    "cd aria_nbv && uv run pytest tests/lightning/test_vin_batch_collate.py",
+    "cd aria_nbv && uv run pytest tests/rollouts/test_counterfactuals.py",
+    "cd aria_nbv && uv run pytest tests/data_handling/test_vin_offline_store.py",
+    "rg -n \"rri_metrics\\.(logging\\.names|reporting\\.plotting)\" aria_nbv docs",
+    "rg -n \"rri_metrics\\.metrics\\.(multi_step|multi_step_tables|point_mesh|single_step|torchmetrics_multi|torchmetrics_single)\" aria_nbv docs",
+    "./scripts/quarto_generate_api_docs.sh",
+    "make context-heavy"
+  ],
+  "implementation_cautions": [
+    "All cross-surface edits outside rri_metrics should be mechanical import retargeting only.",
+    "Keep _histogram_overlay and _plot_hist_counts_mpl owned by utils.plotting, not re-exported from rri_metrics.plotting.",
+    "Keep private helpers in the leaf that uses them; do not add rollout/utils.py without a real cycle or repeated helper body.",
+    "Keep DistanceBreakdown in types.py for the first pass.",
+    "Do not recreate metrics.__all__ through rollout/__init__.py, oracle/__init__.py, or objectives/__init__.py."
+  ]
+}

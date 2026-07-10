@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "passed": true,
+  "summary": "The report identifies current issues in the python-docstrings skill, explains the single-owner migration from python_conventions.md, and includes Quarto/Quartodoc-specific additions and verification.",
+  "report_path": ".omx/specs/autoresearch-python-docstrings-quartodoc-skill/report.md",
+  "validator": "mission-validator-script",
+  "evidence": [
+    ".agents/skills/python-docstrings/SKILL.md",
+    ".agents/references/python_conventions.md",
+    "docs/_quarto.yml",
+    "scripts/quarto_generate_api_docs.sh",
+    ".agents/references/skill_style_guide.md",
+    "Quartodoc docs for parser/config/content/examples/linking",
+    "Griffe docstring parser docs",
+    "Google Python Style Guide",
+    "Quarto Markdown and technical-writing docs"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "session": "019edf35-6ede-7ab1-907a-44fb067d5221",
+  "workflow": "ralplan",
+  "task_slug": "visual-patterns",
+  "status": "approved_ready_for_execution_handoff",
+  "context": ".omx/context/visual-patterns-20260621T172534Z.md",
+  "prd": ".omx/plans/prd-visual-patterns-20260621T172534Z.md",
+  "test_spec": ".omx/plans/test-spec-visual-patterns-20260621T172534Z.md",
+  "reviews": [
+    {
+      "role": "architect",
+      "verdict": "APPROVE_AFTER_ITERATION",
+      "summary": "Initial draft was too broad and underdefined selected-depth. Revised plan now puts selected-depth in aria_nbv.rollouts.inspection, keeps UI additive to stored_rollouts.py, and preserves existing row-scoped Rerun launch boundaries."
+    },
+    {
+      "role": "critic",
+      "verdict": "APPROVE",
+      "summary": "Ready for execution handoff. Guardrails: bounded selected-depth reads, required Streamlit panel smoke coverage, possible rollouts __init__ export, and no page-local selected-depth Zarr joins."
+    }
+  ],
+  "execution_guardrails": [
+    "Add selected-depth tests before implementation.",
+    "Keep selected-depth data joins in aria_nbv.rollouts.inspection.",
+    "Use hard rollout/step/preview limits for dense depth arrays.",
+    "Wire stored_rollouts.py additively; avoid broad page rewrite.",
+    "Run rollout tests, app panel smoke tests, ruff, and git diff --check."
+  ]
+}
