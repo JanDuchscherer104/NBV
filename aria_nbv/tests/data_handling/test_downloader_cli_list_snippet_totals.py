@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from aria_nbv.configs import PathConfig
-from aria_nbv.data.downloader import ASEDownloaderConfig, cli_list
+from aria_nbv.data_handling.atek_downloads.downloader import ASEDownloaderConfig, cli_list
 from aria_nbv.utils import Verbosity
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")

@@ -17,8 +17,8 @@ from pydantic_settings import (
 )
 from tqdm import tqdm
 
-from ..configs import PathConfig
-from ..utils import Console, TargetConfig, Verbosity
+from ...configs import PathConfig
+from ...utils import Console, TargetConfig, Verbosity
 from .download_stats import compute_downloaded_atek_stats
 from .metadata import ASEMetadata, SceneMetadata
 
@@ -31,11 +31,11 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
         2. List mode: List available scenes
 
     Example (CLI - Download):
-        $ python -m aria_nbv.data.downloader download --n_scenes=5 --max_shards=2
-        $ python -m aria_nbv.data.downloader download --ns=10 --skip_meshes
+        $ python -m aria_nbv.data_handling.atek_downloads.downloader download --n_scenes=5 --max_shards=2
+        $ python -m aria_nbv.data_handling.atek_downloads.downloader download --ns=10 --skip_meshes
 
     Example (CLI - List):
-        $ python -m aria_nbv.data.downloader list --n=10
+        $ python -m aria_nbv.data_handling.atek_downloads.downloader list --n=10
     """
 
     @property
@@ -397,8 +397,8 @@ def cli_download(config: ASEDownloaderConfig | None = None) -> None:
     """CLI entry point for downloading scenes.
 
     Usage:
-        python -m aria_nbv.data.downloader download --n_scenes=5 --max_shards=2
-        python -m aria_nbv.data.downloader download --ns=10 --skip_meshes
+        python -m aria_nbv.data_handling.atek_downloads.downloader download --n_scenes=5 --max_shards=2
+        python -m aria_nbv.data_handling.atek_downloads.downloader download --ns=10 --skip_meshes
     """
     config = config or ASEDownloaderConfig()
     console = Console.with_prefix("DownloaderCLI").set_verbosity(config.verbosity).set_debug(config.is_debug)
@@ -468,8 +468,8 @@ def cli_list(config: ASEDownloaderConfig, n: int | None = None) -> None:
         n: Number of scenes to list (None = all)
 
     Usage:
-        python -m aria_nbv.data.downloader list
-        python -m aria_nbv.data.downloader list --n=10
+        python -m aria_nbv.data_handling.atek_downloads.downloader list
+        python -m aria_nbv.data_handling.atek_downloads.downloader list --n=10
     """
     console = Console.with_prefix("DownloaderCLI").set_verbosity(config.verbosity).set_debug(config.is_debug)
     downloader = config.setup_target()

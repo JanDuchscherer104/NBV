@@ -1,4 +1,4 @@
-"""Tests for the EFM snippet loader."""
+"""Tests for the main data-handling EFM snippet loader."""
 
 from __future__ import annotations
 

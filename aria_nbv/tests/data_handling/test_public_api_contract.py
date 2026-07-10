@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -102,9 +103,10 @@ def test_pyproject_omits_legacy_cache_entrypoints() -> None:
 
     pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
     pyproject_text = pyproject_path.read_text(encoding="utf-8")
+    project_scripts = tomllib.loads(pyproject_text)["project"]["scripts"]
     assert "nbv-cache-samples" not in pyproject_text  # noqa: S101
     assert "nbv-cache-vin-snippets" not in pyproject_text  # noqa: S101
-    assert 'nbv-build-offline      = "aria_nbv.data_handling.offline_cli:main"' in pyproject_text  # noqa: S101
+    assert project_scripts["nbv-build-offline"] == "aria_nbv.data_handling.offline_cli:main"  # noqa: S101
 
 
 def test_runtime_modules_do_not_import_data_handling_submodules() -> None:

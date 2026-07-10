@@ -1,1 +1,1 @@
-"""Tests for aria_nbv.data module."""
+"""Tests for aria_nbv.data_handling."""

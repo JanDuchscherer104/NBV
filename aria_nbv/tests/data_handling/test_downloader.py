@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aria_nbv.data.downloader import ASEDownloader, ASEDownloaderConfig
+from aria_nbv.data_handling.atek_downloads.downloader import ASEDownloader, ASEDownloaderConfig
 from aria_nbv.utils import Console, Verbosity
 
 pytest.skip("Downloader API deprecated for current aria_nbv; skipping.", allow_module_level=True)
@@ -100,7 +100,7 @@ class TestASEDownloader:
         assert len(downloader.metadata.scenes) > 0
         assert downloader.mesh_dir.exists()
 
-    @patch("aria_nbv.data.downloader.requests.get")
+    @patch("aria_nbv.data_handling.atek_downloads.downloader.requests.get")
     def test_download_single_mesh(
         self,
         mock_get: MagicMock,

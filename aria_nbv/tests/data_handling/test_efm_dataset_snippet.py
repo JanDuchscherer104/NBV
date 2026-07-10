@@ -1,4 +1,4 @@
-"""Integration checks for scene/snippet lookup in AseEfmDataset."""
+"""Integration checks for scene/snippet lookup in the main data-handling dataset."""
 
 from __future__ import annotations
 

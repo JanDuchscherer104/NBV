@@ -7,11 +7,11 @@ import tarfile
 from io import BytesIO
 from typing import TYPE_CHECKING
 
-from aria_nbv.data.download_stats import (
+from aria_nbv.data_handling.atek_downloads.download_stats import (
     compute_downloaded_atek_stats,
     count_snippets_in_tar,
 )
-from aria_nbv.data.metadata import ASEMetadata
+from aria_nbv.data_handling.atek_downloads.metadata import ASEMetadata
 
 if TYPE_CHECKING:
     from pathlib import Path
