@@ -22,6 +22,7 @@ import torch
 from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
+from ..targets import TargetDescriptor
 from ..utils.typed_payloads import from_serializable, to_serializable
 
 if TYPE_CHECKING:
@@ -94,17 +95,26 @@ class CollisionBackend(StrEnum):
 class CandidateGenerationRuntimeContext:
     """Runtime-only context for target-conditioned candidate generation.
 
-    The context is actor-visible. It may contain a target center selected from
-    observed/predicted OBBs or target records; it must not contain matched GT
-    target geometry. Missing target context is a configuration error for
-    `TARGET_POINT` mixture components.
+    The context carries an actor-safe target descriptor. Missing target context
+    is a configuration error for `TARGET_POINT` mixture components.
     """
 
-    target_center_world: torch.Tensor | None = None
-    """Actor-visible target center in world coordinates, shape ``(3,)``."""
+    descriptor: TargetDescriptor | None = None
+    """Sanitized target instruction shared by candidate-generation consumers."""
 
-    target_id: str | None = None
-    """Optional stable actor-visible target id for diagnostics."""
+    @property
+    def target_center_world(self) -> torch.Tensor | None:
+        """Target center in world coordinates, shape ``(3,)``."""
+
+        if self.descriptor is None:
+            return None
+        return self.descriptor.center_world_tensor()
+
+    @property
+    def target_id(self) -> str | None:
+        """Stable target identifier for diagnostics."""
+
+        return None if self.descriptor is None else self.descriptor.target_id
 
 
 @dataclass

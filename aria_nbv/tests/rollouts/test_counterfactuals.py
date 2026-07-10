@@ -56,6 +56,7 @@ from aria_nbv.rollouts.target_counterfactuals import (
 )
 from aria_nbv.rri_metrics.eval_pointclouds import RriEvaluationPointCloudSource, RriRewardMode
 from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig
+from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 
 
@@ -133,6 +134,17 @@ def _target_row(*, gt_target_row_id: int) -> TargetCandidateRow:
         gt_match_iou=1.0,
         gt_match_score=1.0,
         gt_match_status="matched",
+    )
+
+
+def _target_descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetDescriptor:
+    return TargetDescriptor(
+        target_id="target",
+        sem_id=1,
+        class_name="chair",
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),
+        extents_m=(1.0, 1.0, 1.0),
+        relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),
     )
 
 
@@ -1160,7 +1172,7 @@ def test_counterfactual_rollout_passes_target_runtime_context_to_mixed_sampler()
         mesh_faces=faces,
         camera_calib_template=_dummy_camera(cfg.candidate_config.device),
         occupancy_extent=_default_extent(cfg.candidate_config.device),
-        candidate_runtime_context=CandidateGenerationRuntimeContext(target_center_world=torch.zeros(3)),
+        candidate_runtime_context=CandidateGenerationRuntimeContext(descriptor=_target_descriptor()),
     )
 
     step = rollouts.trajectories[0].steps[0]

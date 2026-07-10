@@ -23,6 +23,7 @@ from aria_nbv.pose_generation import (
     candidate_position_id,
     candidate_strategy_id,
 )
+from aria_nbv.targets import TargetDescriptor
 
 
 def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
@@ -80,7 +81,7 @@ def _run_generate(cfg: CandidateMixtureViewGeneratorConfig):
         mesh_faces=faces,
         camera_calib_template=_dummy_camera(cfg.device),
         occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
-        runtime_context=CandidateGenerationRuntimeContext(target_center_world=torch.zeros(3)),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor()),
     )
 
 
@@ -236,3 +237,14 @@ def test_upper_bound_free_shell_ablation_is_explicit() -> None:
     assert result.component_name == ("upper_bound_free_shell",) * 5
     assert result.position_id is not None
     assert result.position_id.tolist() == [candidate_position_id(CandidatePositionMode.UPPER_BOUND_FREE_SHELL)] * 5
+
+
+def _descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetDescriptor:
+    return TargetDescriptor(
+        target_id="target",
+        sem_id=1,
+        class_name="chair",
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),
+        extents_m=(0.5, 0.5, 0.5),
+        relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),
+    )

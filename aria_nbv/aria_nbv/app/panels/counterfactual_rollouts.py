@@ -25,7 +25,10 @@ from ...data_handling import (
     VinOfflineStoreConfig,
     target_gt_obb_world,
 )
-from ...oracle.pipelines.rollout_dataset import _oracle_target_task_to_candidate_row
+from ...oracle.pipelines.rollout_dataset import (
+    _oracle_target_task_to_candidate_row,
+    _target_descriptor_from_candidate_row,
+)
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
@@ -623,10 +626,7 @@ def _score_context_for_mode(
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
         evaluator=scorer,
-        runtime_context=CandidateGenerationRuntimeContext(
-            target_center_world=torch.tensor(target.center_world, dtype=torch.float32),
-            target_id=target.target_id,
-        ),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=_target_descriptor_from_candidate_row(target)),
     )
 
 

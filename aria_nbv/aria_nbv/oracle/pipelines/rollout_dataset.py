@@ -51,6 +51,7 @@ from ...rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+from ...targets import TargetDescriptor
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
@@ -636,10 +637,7 @@ class RolloutDatasetWriter:
         source_lineage: _RolloutSourceLineageBuilder,
     ) -> list[RolloutZarrRecord]:
         records: list[RolloutZarrRecord] = []
-        runtime_context = CandidateGenerationRuntimeContext(
-            target_center_world=torch.tensor(target.center_world, dtype=torch.float32),
-            target_id=target.target_id,
-        )
+        runtime_context = CandidateGenerationRuntimeContext(descriptor=_target_descriptor_from_candidate_row(target))
         try:
             scorer = self.config.target_scorer.setup_target(
                 sample=sample.efm_snippet_view,
@@ -906,6 +904,19 @@ def _oracle_target_task_to_candidate_row(row: OracleTargetTaskRow) -> TargetCand
         gt_match_iou=row.identity_iou,
         gt_match_score=row.identity_iou,
         gt_match_status="matched" if gt_valid else row.identity_status,
+    )
+
+
+def _target_descriptor_from_candidate_row(row: TargetCandidateRow) -> TargetDescriptor:
+    """Build the actor-safe target descriptor from a rollout target row."""
+
+    return TargetDescriptor(
+        target_id=row.target_id,
+        sem_id=row.sem_id,
+        class_name=row.class_name,
+        pose_world_object=row.pose_world_object,
+        extents_m=row.extents,
+        relative_pose_reference_object=row.relative_pose_reference_object,
     )
 
 
