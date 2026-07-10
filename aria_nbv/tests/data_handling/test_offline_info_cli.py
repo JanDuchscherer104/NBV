@@ -9,8 +9,8 @@ import json
 from typer.testing import CliRunner
 
 from aria_nbv.data_handling import VinOfflineIndexRecord
-from aria_nbv.data_handling.offline_info_cli import app as offline_info_app
-from aria_nbv.data_handling.offline_info_cli import main as offline_info_main
+from aria_nbv.data_handling.offline.info_cli import app as offline_info_app
+from aria_nbv.data_handling.offline.info_cli import main as offline_info_main
 from tests.data_handling.test_vin_offline_store import _write_sample_index, _write_test_store
 
 runner = CliRunner()

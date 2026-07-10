@@ -13,10 +13,10 @@ from typing import Annotated
 
 import typer
 
-from ..utils.cli_format import cli_console, key_value_panel
-from ..utils.config_paths import resolve_config_toml_path
-from ..utils.typer_cli import run_typer_app
-from .offline.writer import VinOfflineWriterConfig
+from ...utils.cli_format import cli_console, key_value_panel
+from ...utils.config_paths import resolve_config_toml_path
+from ...utils.typer_cli import run_typer_app
+from .writer import VinOfflineWriterConfig
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
 

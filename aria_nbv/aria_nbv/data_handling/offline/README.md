@@ -1,6 +1,6 @@
 # Offline Data
 
-`aria_nbv.data_handling.offline` owns immutable VIN offline formats, stores, datasets, writers, batches, and view adapters. Package-root convenience exports remain minimal; stable compatibility is provided only by `aria_nbv.data_handling`.
+`aria_nbv.data_handling.offline` owns immutable VIN offline formats, stores, datasets, writers, diagnostics, CLIs, batches, and view adapters. Package-root convenience exports remain minimal; stable compatibility is provided only by `aria_nbv.data_handling`.
 
 ## Layout
 
@@ -12,13 +12,17 @@ data_handling/offline/
   writer.py
   batch.py
   adapter.py
+  diagnostics.py
+  inventory.py
+  cli.py
+  info_cli.py
 ```
 
 Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
-Inventory generated: `2026-07-10T16:16:03.131034+00:00`
+Inventory generated: `2026-07-10T16:19:49.706440+00:00`
 
-Graphify refresh: `2026-07-10T16:16:03.131034+00:00`
+Graphify refresh: `2026-07-10T16:19:49.706440+00:00`
 
 ## Symbol Ownership Matrix
 
@@ -105,3 +109,105 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `pad_vin_points` | `function` | `public` | `data_handling.vin_adapter` | `data_handling.offline.adapter` | `data_handling.offline.adapter` | `moved` |
 | `build_vin_snippet_view` | `function` | `public` | `data_handling.vin_adapter` | `data_handling.offline.adapter` | `data_handling.offline.adapter` | `moved` |
 | `empty_vin_snippet` | `function` | `public` | `data_handling.vin_adapter` | `data_handling.offline.adapter` | `data_handling.offline.adapter` | `moved` |
+
+### `diagnostics.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `RRI_COMPONENT_BLOCKS` | `constant` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `POSE_CAMERA_BLOCKS` | `constant` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `NumericSummary` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineMemoryDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineBackboneDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineBlockDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineSampleDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineCoverageSceneDiagnostic` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineCoverageStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `VinOfflineDatasetStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_finite_values` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_summary` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_component_key` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_collect_block_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_shards_by_id` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_has_record_block` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_read_valid_vector` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_normalise` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_broadcast_ref_pose` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_roll_about_forward` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_candidate_pose_values` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_component_for_memory_block` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_row_block_nbytes` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_memory_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_BackboneAccumulator` | `DTO` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_collect_backbone_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_batch_shape_preview` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `collect_vin_offline_dataset_stats` | `function` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_ARIA_SAMPLE_RE` | `constant` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_pair_from_tar_member` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_resolve_coverage_tar_paths` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_resolve_manifest_path` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `_scan_tar_pairs` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+| `collect_vin_offline_dataset_coverage` | `function` | `public` | `data_handling._offline_diagnostics` | `data_handling.offline.diagnostics` | `data_handling.offline.diagnostics` | `moved` |
+
+### `inventory.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `OfflineVisualInventoryError` | `class` | `public` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `OfflineVisualInventory` | `DTO` | `public` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_missing` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_invalid` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_get_required` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_as_tensor` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_finite_prefix` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_shape_metadata` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_first_length` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_validate_vin_snippet` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_validate_pose` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_validate_p3d_cameras` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_candidate_count` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_validate_oracle` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_optional_inventory` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `_sample_metadata` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+| `collect_offline_visual_inventory` | `function` | `public` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
+
+### `cli.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `_HELP_SETTINGS` | `constant` | `private` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
+| `app` | `constant` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
+| `main` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
+| `build_offline_command` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
+
+### `info_cli.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `Split` | `enum` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_SPLITS` | `constant` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_HELP_SETTINGS` | `constant` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `StoreOption` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `JsonOption` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `app` | `constant` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `main` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_normalize_default_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `summary_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `tree_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `samples_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `random_index_command` | `function` | `public` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_print_or_json` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_summary_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_tree_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_samples_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_random_index_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_sample_row` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_path_entry` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_shard_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_block_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_numeric_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_bytes_to_mib` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_print_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_print_tree` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_print_samples` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+| `_dict_rows` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |

@@ -19,11 +19,11 @@ import numpy as np
 import torch
 from efm3d.aria.pose import PoseTW
 
-from ..configs import PathConfig
-from ..configs.path_config import PROJECT_ROOT
-from .efm_dataset_utils import compact_ase_atek_sample_id
-from .offline.format import VinOfflineIndexRecord, VinOfflineShardSpec
-from .offline.store import VinOfflineStoreConfig, VinOfflineStoreReader
+from ...configs import PathConfig
+from ...configs.path_config import PROJECT_ROOT
+from ..efm_dataset_utils import compact_ase_atek_sample_id
+from .format import VinOfflineIndexRecord, VinOfflineShardSpec
+from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
 # TODO: what is this shit. Can't we just iterate over the fields of the respective data class?
 RRI_COMPONENT_BLOCKS: tuple[str, ...] = (
@@ -736,7 +736,7 @@ def _collect_backbone_diagnostics(
 def _batch_shape_preview(store: VinOfflineStoreConfig) -> dict[str, str]:
     """Return one lean VIN-batch shape preview for the store."""
 
-    from .offline.dataset import VinOfflineDatasetConfig
+    from .dataset import VinOfflineDatasetConfig
 
     dataset = VinOfflineDatasetConfig(
         store=store,

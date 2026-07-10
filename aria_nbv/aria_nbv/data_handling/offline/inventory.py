@@ -15,8 +15,8 @@ from typing import Any
 import torch
 from torch import Tensor
 
-from .efm_dataset_utils import compact_ase_atek_sample_id
-from .offline.dataset import VinOfflineSample
+from ..efm_dataset_utils import compact_ase_atek_sample_id
+from .dataset import VinOfflineSample
 
 
 class OfflineVisualInventoryError(ValueError):

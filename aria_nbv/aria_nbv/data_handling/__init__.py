@@ -37,7 +37,7 @@ from ._raw import (
     is_vin_snippet_view_instance,
 )
 from .offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
-from ._offline_diagnostics import (
+from .offline.diagnostics import (
     NumericSummary,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
@@ -51,7 +51,7 @@ from ._offline_diagnostics import (
 )
 from .offline.format import VinOfflineIndexRecord, VinOfflineManifest, VinOfflineMaterializedBlocks
 from .offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
-from ._offline_visual_inventory import (
+from .offline.inventory import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
     collect_offline_visual_inventory,

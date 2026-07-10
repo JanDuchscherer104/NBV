@@ -15,7 +15,7 @@ import numpy as np
 import typer
 from rich.tree import Tree
 
-from ..utils.cli_format import (
+from ...utils.cli_format import (
     cli_console,
     counts_table,
     format_value,
@@ -23,11 +23,11 @@ from ..utils.cli_format import (
     rows_table,
     summary_table,
 )
-from ..utils.typer_cli import run_typer_app
-from ._offline_diagnostics import NumericSummary, collect_vin_offline_dataset_stats
-from .efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
-from .offline.format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
-from .offline.store import VinOfflineStoreConfig, VinOfflineStoreReader
+from ...utils.typer_cli import run_typer_app
+from ..efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from .diagnostics import NumericSummary, collect_vin_offline_dataset_stats
+from .format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
+from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
 
 class Split(StrEnum):

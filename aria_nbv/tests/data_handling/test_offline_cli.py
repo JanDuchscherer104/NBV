@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from aria_nbv.data_handling import offline_cli
+from aria_nbv.data_handling.offline import cli as offline_cli
 
 runner = CliRunner()
 

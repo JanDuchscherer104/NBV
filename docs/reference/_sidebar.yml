@@ -42,18 +42,22 @@ website:
             file: reference/data_handling.offline.adapter.qmd
           - text: batch
             file: reference/data_handling.offline.batch.qmd
+          - text: cli
+            file: reference/data_handling.offline.cli.qmd
           - text: dataset
             file: reference/data_handling.offline.dataset.qmd
+          - text: diagnostics
+            file: reference/data_handling.offline.diagnostics.qmd
           - text: format
             file: reference/data_handling.offline.format.qmd
+          - text: info_cli
+            file: reference/data_handling.offline.info_cli.qmd
+          - text: inventory
+            file: reference/data_handling.offline.inventory.qmd
           - text: store
             file: reference/data_handling.offline.store.qmd
           - text: writer
             file: reference/data_handling.offline.writer.qmd
-        - text: offline_cli
-          file: reference/data_handling.offline_cli.qmd
-        - text: offline_info_cli
-          file: reference/data_handling.offline_info_cli.qmd
       - text: lightning
         file: reference/lightning.qmd
         contents:
