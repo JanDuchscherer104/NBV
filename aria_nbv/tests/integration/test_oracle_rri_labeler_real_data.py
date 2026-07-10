@@ -102,7 +102,6 @@ def test_oracle_rri_labeler_runs_real_data(efm_sample):
             dtype="float32",
         ),
         max_candidates_final=3,
-        oversample_factor=1.0,
         resolution_scale=0.1,
         verbosity=Verbosity.QUIET,
         is_debug=False,
