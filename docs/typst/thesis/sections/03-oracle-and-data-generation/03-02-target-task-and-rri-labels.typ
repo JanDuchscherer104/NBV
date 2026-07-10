@@ -16,7 +16,19 @@ $
 
 In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise proposed OBB geometry for the target task; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(pi)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and @egocentric-voxel-lifting:short support counts; $omega_e^"EVL"$ records local @egocentric-voxel-lifting:short coverage; $ell_e^"src"$ records the actor-visible source mode; and $bold(T)_(r_t,e)$ / $bold(T)_(c_t,e)$ record reference- and current-frame target geometry. These fields are not all target-task gates in the first implementation. Class, confidence, current projection, semidense support, @egocentric-voxel-lifting:short support, distance, and target bearing are retained as descriptor and audit fields so that later subsets can ask whether the target-conditioned model depends on semantic correctness or observation quality.
 
+#conflict_todo(
+  [Separate the oracle target-task record from the actor-visible target descriptor in notation and provenance. The current wording combines GT-defined supervised tasks with observed/predicted proposals and leaves a leakage ambiguity.],
+  source: [thesis peer review; target-selection roadmap and questions],
+  gate: [V0 oracle-task and V1 actor-descriptor contract freeze],
+)
+
 === Seminar Oracle Substrate and Thesis Delta
+
+#prune_todo(
+  [This seminar-to-thesis migration ledger is valuable development history but not final scientific method prose. Retain only the implemented provenance needed to understand the final target-label pipeline; move migration placement and historical W&B/cache notes to the development appendix or remove them.],
+  source: [thesis peer review; source-order contract],
+  gate: [final method and appendix split],
+)
 
 The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh under a calibrated camera/rasterization convention, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
 
@@ -68,6 +80,12 @@ The seminar paper is implemented evidence for the one-step scene-level oracle su
 
 Automatic target selection constitutes the first procedural layer in target-centric oracle data generation. Given a historic snippet and its egocentric encodings, the sampler chooses target tasks for which supervised target-conditioned @next-best-view:short is meaningful. A useful target task must be identifiable, evaluable, and potentially action-sensitive: the oracle must know which @ground-truth:short object the task refers to, target-specific error must be computable, and at least some feasible candidate views should expose non-marginal target-specific @relative-reconstruction-improvement:short after oracle evaluation. Near-solved targets are therefore not discarded before storage, but their low headroom must be measured and preserved as evidence.
 
+#conflict_todo(
+  [Resolve the admission rule. The canonical protocol admits identity-valid, evaluable targets before headroom measurement and preserves near-zero-headroom cases; non-marginal candidate gain therefore cannot also be a target-admission requirement.],
+  source: [same section target-selection protocol; roadmap; candidate-sampling theory],
+  gate: [target-task eligibility freeze],
+)
+
 #figure(
   align(center, image(
     "../../figures/target_task_sampler_contract.pdf",
@@ -99,6 +117,12 @@ Counterfactual trajectory naturalness is a candidate and rollout diagnostic, not
 === Candidate View Generation
 
 Candidate view generation is the second procedural layer: it turns one target task into a finite action table for one rollout state. The current thesis profile deliberately uses a small family mixture rather than the older unconstrained shell from the seminar paper. The checked-in data-generation profile consumes the strict offline actor-state store, uses a training split for the first real audit subset, samples one oracle target task per source sample, and writes a separate rollout/replay store. It is an audit-scale thesis default, not an LRZ path template and not final scale evidence.
+
+#validation_todo(
+  [Replace the current/canonical/audit-profile language and every numeric sampler, pruning, horizon, beam, and temperature setting below with the versioned final experiment configuration and manifest statistics. Reconcile the candidate-family vocabulary with the thesis roadmap.],
+  source: [thesis peer review; current roadmap; final experiment manifests],
+  gate: [candidate and rollout protocol freeze],
+)
 
 At rollout step $t$, candidate generation constructs a full shell
 
@@ -243,6 +267,18 @@ $
 
 Area weighting or uniformly sampled target-surface points prevent target-specific @relative-reconstruction-improvement:short from reflecting mesh tessellation density. For reproducibility, the current implementation computes the point-mesh distances through `OracleRRI.score` and `chamfer_point_mesh_batched`, while `aria_nbv.rollouts.target_counterfactuals` owns the target crop. Empty or unsupported target crops are invalid label cases, not low-@relative-reconstruction-improvement:short samples.
 
+#validation_todo(
+  [Do not retain the tessellation-invariance claim until the actual metric uses documented area weighting or uniform surface sampling and passes a triangulation-density test. The current face-mean path can change weighting when a surface is subdivided.],
+  source: [thesis peer review; active oracle metric implementation],
+  gate: [target-RRI metric validation],
+)
+
+#validation_todo(
+  [Specify and validate homogeneous root/candidate evaluation geometry before using target-RRI labels as thesis evidence: point source, render stride, fusion/downsampling, point cap, crop policy, and density-parity test must be matched or their bias quantified.],
+  source: [RRI theory review; thesis peer review],
+  gate: [oracle label validity study],
+)
+
 The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
 
 $
@@ -262,6 +298,12 @@ $
 $
 
 The log-gain variant is retained as a scale-sensitivity ablation, mirroring the broader NBV literature's use of logarithmic error reduction while keeping the root-normalized endpoint gain as the default thesis metric:
+
+#research_todo(
+  [Either cite a reviewed NBV source that specifically supports logarithmic error reduction or remove the literature-generalization clause. The current repo evidence supports log gain only as an internal scale-sensitivity ablation.],
+  source: [thesis questions; literature cross-check],
+  gate: [final metric-citation audit],
+)
 
 $
   #eqs.entity.log_gain

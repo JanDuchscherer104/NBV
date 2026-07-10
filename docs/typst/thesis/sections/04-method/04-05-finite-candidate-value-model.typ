@@ -22,6 +22,18 @@ $
 
 The residual can be kept small with a norm penalty or dataset-level regularization, but it should not be exactly mean-centred within each sampled candidate table. Per-set centering changes absolute Q values when duplicate or unrelated valid rows are added, which is unsafe for TD targets. Candidate-candidate interaction remains useful for policy logits, diversity, or top-$k$ selection ablations, but the default finite-horizon value head stays in continuous target-gain units. Recent object-centric view-planning work reinforces this separation: target-centric visibility and feasibility should be explicit scoring factors, while difficulty, reachability, budget, and object saturation must be reported separately because they can change planner rankings and failure modes @OANBV-hu2026 @ObjViewBench-pan2026.
 
+#validation_todo(
+  [Do not use OANBV or ObjViewBench to support the uncentred-residual decomposition. They support visibility, feasibility, difficulty, and reporting factors; the residual architecture needs its own derivation or ablation evidence.],
+  source: [literature cross-check; bibliography records],
+  gate: [architecture claim and citation audit],
+)
+
+#prune_todo(
+  [The adopt/reject architecture table below is a design memo. Replace it with the final implemented architecture and concise rationale; move rejected alternatives to ablations or Discussion only when evidence makes them relevant.],
+  source: [thesis peer review],
+  gate: [final model implementation freeze],
+)
+
 #figure(
   text(size: 8.6pt, table(
     columns: (0.68fr, 1.22fr, 1.28fr),
@@ -58,6 +70,12 @@ The residual can be kept small with a norm penalty or dataset-level regularizati
 ) <tab:thesis-qh-clean-architecture>
 
 The one-step target scorer is adapted to counterfactual rollout rows rather than reusing the seminar @view-introspection-network:short checkpoint unchanged. It remains myopic and predicts immediate target-specific @relative-reconstruction-improvement:short evidence for each candidate; the seminar VINv3 scorer is therefore a control architecture and implementation substrate, not already a target-conditioned finite-horizon #symb.rl.qh result. #symb.rl.qh is residual around this calibrated base, with an uncentred continuous residual head as the canonical finite-horizon value definition. The myopic scorer uses the CORAL ordinal-regression interface of Cao et al., adapted to ARIA-NBV's skewed oracle @relative-reconstruction-improvement:short labels @CORAL-cao2019:
+
+#validation_todo(
+  [Establish and report the target-specific label distribution before calling it skewed. VIN-NBV motivates ordinal calibration, but scene-level or source-paper label behavior is not evidence for the final target-task distribution.],
+  source: [VIN-NBV literature review; thesis peer review],
+  gate: [target-label distribution audit],
+)
 
 $
   #eqs.rl.qh_coral_interface
@@ -114,6 +132,12 @@ $
   ),
   caption: [Value-model hypothesis, controls, and ablations. Dense @ground-truth:short candidate renders may supervise later ablations, while learned policy inputs use the configured state and target-task descriptors.],
 ) <tab:thesis-value-ladder>
+
+#prune_todo(
+  [The hypothesis/control/ablation/bridge ledger above is not a final Method description. Replace it with the trained architecture, loss, target-network update, masks, hyperparameters, and frozen/fine-tuned components; retain only executed ablations.],
+  source: [thesis peer review],
+  gate: [final model and ablation inventory],
+)
 
 #impl_todo(
   [Confirm which architecture ladder levels are implemented, planned, or deferred once the final code state is frozen.],

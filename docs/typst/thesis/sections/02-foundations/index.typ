@@ -12,6 +12,12 @@ The project combines @aria-synthetic-environments scene assets, @egocentric-foun
 
 The literature is used here to assign roles, not to broaden the thesis claim. Older active perception motivates action-conditioned sensing; VIN-NBV supplies the quality-driven candidate-ranking precedent; Project Aria, @aria-synthetic-environments, and @egocentric-foundation-model-3d:short motivate the logged egocentric state; and offline value learning supplies replay and overestimation controls for the finite candidate table.
 
+#prune_todo(
+  [The following adopt/defer table is an internal literature-routing ledger. Before submission, replace it with non-duplicative scientific synthesis or remove it; planning status and thesis-management language do not belong in the final Foundations chapter.],
+  source: [thesis peer review; local literature-review pages],
+  gate: [final related-work synthesis],
+)
+
 #figure(
   table(
     columns: (1.05fr, 1.32fr, 1.48fr),
@@ -55,6 +61,12 @@ Coverage and uncertainty remain diagnostics, not the thesis utility. @ground-tru
 ) <fig:thesis-system-flow>
 
 Hestia informs a deferred hierarchy in which a target or look-at point is proposed before choosing a feasible pose conditioned on it @Hestia-lu2026. In ARIA-NBV this factorization keeps target-specific @relative-reconstruction-improvement:short as supervision/evaluation and treats feasibility projection or masks as constraints:
+
+#prune_todo(
+  [Keep this deferred hierarchy and its equation only if a final experiment or a focused Discussion argument uses it. Otherwise move it to future work; an untested bridge design is not part of the thesis foundations.],
+  source: [Hestia literature review; thesis scope contract],
+  gate: [final bridge-literature decision],
+)
 
 $
   #eqs.rl.target_pose_factorization

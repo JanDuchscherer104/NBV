@@ -1,15 +1,17 @@
 #import "@preview/dashy-todo:0.1.3": todo as dashy_todo
 
-#let todo_marker(kind, body, stroke: orange, source: none, gate: none) = text(size: 9pt)[
-  #dashy_todo(position: "inline", stroke: stroke)[
-    *#kind:* #body
-    #if source != none [
-      \
-      #text(size: 7.6pt)[Source: #source]
-    ]
-    #if gate != none [
-      \
-      #text(size: 7.6pt)[Gate: #gate]
+#let todo_marker(kind, body, stroke: orange, source: none, gate: none) = block(breakable: false)[
+  #text(size: 9pt)[
+    #dashy_todo(position: "inline", stroke: stroke)[
+      *#kind:* #body
+      #if source != none [
+        \
+        #text(size: 7.6pt)[Source: #source]
+      ]
+      #if gate != none [
+        \
+        #text(size: 7.6pt)[Gate: #gate]
+      ]
     ]
   ]
 ]
@@ -20,6 +22,7 @@
 #let question_todo(body, source: none, gate: none) = todo_marker([Open question], body, stroke: teal, source: source, gate: gate)
 #let conflict_todo(body, source: none, gate: none) = todo_marker([Conflict], body, stroke: red, source: source, gate: gate)
 #let validation_todo(body, source: none, gate: none) = todo_marker([Validation TODO], body, stroke: olive, source: source, gate: gate)
+#let prune_todo(body, source: none, gate: none) = todo_marker([Remove or rewrite before submission], body, stroke: gray, source: source, gate: gate)
 #let archive_note(body, source: none) = todo_marker([Archived source note], body, stroke: gray, source: source)
 
 #let thesis_box(title, body) = block(above: 0.9em, below: 1em, breakable: true)[

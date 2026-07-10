@@ -69,6 +69,12 @@ The one-step scorer is trained on all valid candidate rows with oracle immediate
   caption: [Substrate-to-thesis evidence matrix used to avoid treating historical seminar results as final target-Q_H claims.],
 ) <tab:seminar-to-thesis-evidence>
 
+#prune_todo(
+  [This seminar-to-thesis evidence matrix is an internal migration checklist. Final Experimental Design should specify the actual evidence and controls directly; historical substrate routing belongs in the development appendix.],
+  source: [thesis peer review],
+  gate: [final experiment-design pass],
+)
+
 The finite-candidate value model decodes actions only over valid candidate tokens:
 
 $

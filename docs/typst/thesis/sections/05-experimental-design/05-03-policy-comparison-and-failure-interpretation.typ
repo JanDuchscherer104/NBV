@@ -30,7 +30,25 @@ All selected actions are oracle-evaluated under the same acquisition and candida
   caption: [Leakage-aware policy comparison. Report #symb.entity.endpoint_gain, #symb.entity.return_h, scene @relative-reconstruction-improvement:short, cost, invalidity, runtime, and coverage for each row.],
 ) <tab:thesis-policy-comparison>
 
+#conflict_todo(
+  [Separate acquisition horizon from planner/lookahead depth. The table currently gives random, learned-one-step, and oracle-greedy policies $H=1$ while the comparison prose requires equal selected-view horizon $H$; all policies need the same acquisition budget even when their decision rule is myopic.],
+  source: [thesis questions and roadmap; literature cross-check],
+  gate: [policy-comparison protocol freeze],
+)
+
+#conflict_todo(
+  [Do not call the one-step oracle policy an unrestricted upper bound. It is an immediate-reward oracle-greedy comparator over the current valid candidate set; bounded oracle lookahead is a separate finite-horizon reference, and neither bounds policies outside the evaluated candidate/support regime.],
+  source: [policy table; independent peer-review critic],
+  gate: [policy-role terminology freeze],
+)
+
 Policy comparisons are paired by root snippet, target, candidate seed, candidate budget, and horizon. Report mean, median, bootstrap confidence intervals, and per-scene win rates for #symb.entity.endpoint_gain, #symb.entity.return_h, and invalidity; scene-level failures are reported separately from global averages.
+
+#validation_todo(
+  [Freeze the statistical protocol: resampling unit and bootstrap interval/level, scene and target clustering, seed policy, repeated snippets/targets within scenes, invalid or missing outcomes, confirmatory versus exploratory comparisons, multiplicity handling, and reported effect sizes.],
+  source: [scientific peer review; independent critic],
+  gate: [analysis plan before final experiment aggregation],
+)
 
 == Failure Interpretation
 

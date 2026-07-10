@@ -15,6 +15,12 @@ The data-generation pipeline deliberately materializes two different stores. The
 
 The implementation anchors for this contract are the #gh-wip("aria_nbv/aria_nbv/data_handling/_offline_store.py", body: [VIN offline-store owner], line: 1), #gh-wip("aria_nbv/aria_nbv/rollouts/dataset_writer.py", body: [rollout writer], line: 1), and #gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", body: [rollout schema owner], line: 1). These anchors support reproducibility of the data contract; manifest-backed store audits remain the source for reported counts.
 
+#prune_todo(
+  [The live v7 and dated audit-store snapshots below are development evidence. Remove them from the final Method chapter or replace and relocate them with manifest-backed final split statistics in Results or a reproducibility appendix.],
+  source: [thesis peer review; final manifest requirement],
+  gate: [final dataset and rollout manifests],
+)
+
 The source store is immutable because it defines the logged actor substrate. In the current local v7 store, `vin_offline/` contains 48 samples, split into 38 train and 10 validation rows, and materializes backbone fields, candidate point clouds, and candidate depth blocks. A row contains frozen local EVL/VIN fields, one-step candidate poses and labels, rendered depth/camera payloads, and semi-dense VIN geometry/history. These are valid source evidence for myopic scorer training and rollout construction, but they do not themselves define a target-conditioned finite-horizon dataset.
 
 #figure(
@@ -86,6 +92,12 @@ The current audit-scale store `rollouts_v1_realistic_35_train_20260621.zarr` val
 The thesis should show this layout because the representation and learning claims depend on it: the actor state, candidate mask, selected-depth history, target reward, and successor candidate table must all be reproducible for a #symb.rl.qh row. It should not, however, spend main-text space on every chunk shape, byte count, local absolute path, or cluster job flag. A master's thesis needs enough layout detail to prove leakage safety, replay reproducibility, and scalability of the proposed experiment. Exact shard sizing, compression, cache paths, and Slurm-array mechanics belong in a reproducibility appendix once the final build manifests exist. Until then, local audit stores should be labeled as audit-scale evidence.
 
 The Streamlit app already covers the diagnostic figures needed before interpreting value-model results. The thesis result chapter should not jump directly from a trained policy to endpoint gain; it should first show target validity, candidate support, selected-action diversity, invalidity, and selected-depth sanity checks.
+
+#prune_todo(
+  [Replace the following Streamlit/Python-file inventory with the scientific diagnostics actually reported in figures and tables. UI tabs and implementation routing belong in developer documentation or a reproducibility appendix, not the final main narrative.],
+  source: [thesis peer review],
+  gate: [final diagnostic figures],
+)
 
 #figure(
   table(

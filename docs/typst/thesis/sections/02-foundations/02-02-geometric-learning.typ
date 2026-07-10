@@ -57,6 +57,12 @@ The third required structure is directional visibility memory. A candidate view 
 
 This contract implies an architecture ladder with conservative attribution. The independent scorer tests whether candidate self-features already solve the target task. Candidate-to-state cross-attention tests whether fixed target, map, history, and budget tokens explain finite-horizon value without candidate-candidate coupling. A pooled DeepSets context tests whether valid-set summaries help without pairwise attention. A masked Set Transformer tests candidate-candidate interaction. QCNet-style relative positional encoding tests whether local candidate-target/history relations are the missing signal. Directional support and overlap biases test whether visibility memory or surface-support hypotheses add value. Only after these controls pass should point backbones, sparse convolutions, exact equivariant graphs, or looped refinement be treated as thesis-relevant architecture changes @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019 @dejaviewloopingtransformersburzio2026.
 
+#prune_todo(
+  [The architecture ladder below is a development and ablation plan, not geometric-learning theory. In the final thesis, move the implemented levels to Method, tested comparisons to Experimental Design/Results, and unevaluated bridge levels to Discussion or remove them.],
+  source: [thesis peer review; section contract],
+  gate: [final architecture and ablation freeze],
+)
+
 #figure(
   table(
     columns: (0.52fr, 1.02fr, 1.45fr),

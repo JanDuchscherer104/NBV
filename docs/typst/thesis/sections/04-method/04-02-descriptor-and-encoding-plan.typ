@@ -6,6 +6,12 @@
 
 == Descriptor and Encoding Protocol
 
+#impl_todo(
+  [Separate implemented descriptor inputs from planned branches throughout this section. The final Method must retain only persisted/readable fields used by the trained models; optional DINO-on-point, directional-memory, spherical-harmonic, sparse-ray, and relation-bias branches must move to evaluated ablations or future work.],
+  source: [thesis peer review; EFM3D literature review],
+  gate: [descriptor reader and model-input freeze],
+)
+
 // source: docs/contents/theory/efm3d_scene_embeddings.qmd keeps implementation notes for target lineage, replay fields, and feature-bank joins.
 This subsection defines the actor-visible descriptor protocol consumed by #symb.rl.qh. Its job is not to choose the neural architecture and not to restate the replay schema. Chapter 03 owns row identity, lineage, labels, masks, and selected-transition storage; @sec:thesis-method-geometry-contract and the value-model section own the encoder and ablation ladder. The descriptor protocol is the typed interface between them: a training reader derives versioned target, scene, history, candidate, relation, support, validity, and provenance tensors from replay facts without giving the actor oracle-only fields or arbitrary coordinate shortcuts.
 
@@ -82,6 +88,12 @@ $
 $
 
 This spatial separation is the core feature-bank isomorphism: the same actor-visible point/ray/EVL carriers are not a single scene vector, but a queryable memory whose predicates are defined by the target, the candidate frustum, and their overlap (@fig:feature-bank-query-pools).
+
+#prune_todo(
+  [Replace “sufficient-statistic candidates” and “feature-bank isomorphism” with descriptive terms such as controlled summary features and query decomposition unless sufficiency and a structure-preserving mapping are formally defined and tested.],
+  source: [thesis peer review],
+  gate: [final terminology audit],
+)
 
 #figure(
   align(center, image(

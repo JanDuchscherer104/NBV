@@ -10,6 +10,12 @@
 // source: docs/contents/theory/efm3d_scene_embeddings.qmd explains EVL as local evidence and semidense/fused points as broad scene memory.
 The planned value model needs more than a generic 3D feature extractor. A thesis-grade perception stack must provide actor-visible target hypotheses, especially @oriented-bounding-box:short detections, while the scene memory must preserve reusable geometry, uncertainty, free/unknown evidence, and history for target-, history-, and candidate-conditioned #symb.rl.qh queries. These are separate interfaces: a detector can propose the target without being the scene memory, and a scene memory can support candidate scoring without predicting OBBs. The current default therefore remains @egocentric-foundation-model-3d:short / @egocentric-voxel-lifting:short for Aria-native target and local evidence: it is trained for the Project Aria / @aria-synthetic-environments:short regime, lifts multi-frame image features into a gravity-aligned 3D volume, uses semi-dense support, and exposes OBB/object evidence @EFM3D-straub2024 @EVL-Doc-2025. A replacement perception backbone is only thesis-relevant if it preserves this target-detection contract; a replacement memory is relevant if it improves candidate-conditioned evidence without breaking actor-visible provenance.
 
+#validation_todo(
+  [Rewrite this section as the implemented scene representation and evaluated ablations. Current/planned requirements are legitimate development guidance, but final Method prose must state which state carriers, target proposer, support memory, and missing-modality rules were actually used.],
+  source: [thesis peer review; EFM3D literature review],
+  gate: [representation implementation freeze],
+)
+
 The central asymmetry is that the historic state is rich and multimodal, while counterfactual states are not. Logged snippets contain calibrated RGB/SLAM streams, poses, semidense points, EVL evidence, and observed or predicted OBBs. Counterfactual successors can reliably add selected geometry, support counts, visibility history, oracle-rendered labels, and actor-visible summaries derived from those sources; they cannot assume fresh RGB, DINO, semantic, or detector outputs at unvisited candidate poses unless a separate renderable or learned modality generator is introduced and validated. This boundary is methodological rather than merely practical: it prevents a model from winning by consuming modalities that exist only for the logged trajectory or only inside the oracle.
 
 // source: docs/contents/theory/efm3d_scene_embeddings.qmd records implementation pointers for EVL support reads and semidense candidate visibility.
@@ -22,6 +28,12 @@ $
 Here $x_(t,i,k)$ are target-crop, frustum, or target-frustum-intersection query points for candidate $i$, $cal(V)_0^"EVL"$ is the root EVL support volume, $omega_(t,i)^"EVL"$ is the actor-visible local-support fraction, and #symb.scene.evl_support_token is a pooled local evidence token. Low $omega_(t,i)^"EVL"$ should usually be a support feature, uncertainty feature, or preflight warning; it becomes hard invalidity only when the row cannot be evaluated or cannot produce a meaningful actor-state transition.
 
 This is why the final @egocentric-voxel-lifting:short head fields are a baseline, not the thesis memory optimum. Fields such as `occ_pr`, `cent_pr`, `bbox_pr`, and `clas_pr` are compact actor-visible predictions, but they are local, task-collapsed, and tied to the root snippet. They do not by themselves preserve broad free/unknown space, target-candidate visibility, directional history, or logged appearance ambiguity. Enlarging the @egocentric-voxel-lifting:short cube is therefore a useful ablation for local-support failure, not the default state design: dense 3D cost grows with volume, and a larger root cube still cannot create counterfactual RGB, DINO, detector, or history evidence. The tractable optimum is local @egocentric-voxel-lifting:short evidence plus sparse ray-aware actor-visible memory, with compressed logged descriptors only after visibility and provenance are enforced.
+
+#decision_todo(
+  [Replace “the tractable optimum” with a scoped hypothesis unless the final representation ablations establish it. EFM3D supports the local evidence/OBB role; sparse ray memory and logged descriptors remain ARIA-NBV design candidates until measured.],
+  source: [EFM3D literature review; thesis peer review],
+  gate: [representation ablation results],
+)
 
 #figure(
   table(
@@ -55,6 +67,12 @@ This is why the final @egocentric-voxel-lifting:short head fields are a baseline
 ) <tab:thesis-backbone-requirements>
 
 This makes @egocentric-voxel-lifting:short an anchor, not a ceiling. The near-term representation question is whether the current final-pose voxel field hides useful evidence. The first ablations should keep the EFM3D/EVL target detector and add better actor-visible conditioning: semidense/fused point support, a sparse ray-aware occupied/free/unknown memory, EVL internal or crop reads around target hypotheses, selected-depth successor summaries, explicit directional visibility memory, and only then compressed DINO-on-point features lifted from logged views. These products can give #symb.rl.qh a broader queryable state without claiming that a new model has solved Aria-native OBB detection.
+
+#prune_todo(
+  [This near-term ablation roadmap does not belong in final Method prose. Retain implemented branches, move tested alternatives to Experimental Design/Results, and route unimplemented branches to Discussion or the development appendix.],
+  source: [thesis peer review],
+  gate: [final representation ablation inventory],
+)
 
 The logged DINO-on-point ablation uses the same calibrated projection contract as EFM3D lifting, but the carrier is a semidense or fused world point rather than a local voxel center. DINOv2 supplies the visual feature family, while EFM3D supplies the egocentric multi-frame lifting precedent; ARIA-NBV's contribution is the visibility-gated point attachment and candidate-query use, not a new image foundation model @DINOv2-oquab2023 @EFM3D-straub2024:
 

@@ -34,6 +34,12 @@ $
 
 Success is measured by oracle-rescored selected actions, not predicted values. If oracle lookahead itself has little headroom, the thesis reports that the current objective and candidate distribution are effectively myopic. If lookahead has headroom but #symb.rl.qh fails to recover it, the analysis reports whether the limiting factor is target observability, candidate support, rollout coverage, reward definition, or model capacity.
 
+#conflict_todo(
+  [A null lookahead result supports only a scoped negative finding for the evaluated split, target set, horizon, branch factor, and candidate distribution. Do not call the objective or candidate distribution generally myopic.],
+  source: [thesis questions and roadmap; literature cross-check],
+  gate: [final negative-result wording],
+)
+
 #figure(
   table(
     columns: (0.86fr, 1.32fr, 1.48fr),

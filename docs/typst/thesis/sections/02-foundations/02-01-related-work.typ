@@ -1,4 +1,5 @@
 #import "../../../shared/macros.typ": *
+#import "../../draft_markers.typ": *
 
 == Related Work
 
@@ -10,7 +11,19 @@ Project Aria, @aria-synthetic-environments, and @egocentric-foundation-model-3d 
 
 Coverage and information-based @next-best-view methods provide useful diagnostic channels but not the primary reward. SCONE and MACARONS estimate surface visibility or coverage from learned scene representations, while ActiveNeRF, FisherRF, and Next Best Sense use information gain and uncertainty in radiance-field or Gaussian-splatting settings @SCONE-guedon2022 @MACARONS-guedon2023 @ActiveNeRF-pan2022 @FisherRF-jiang2024 @NextBestSense-strong2024. ARIA-NBV can adopt support, overlap, uncertainty, and directional-history features from this family, but the thesis compares those proxies against @target-specific-rri rather than replacing the mesh-supervised label. Object-centric, occlusion-aware, and benchmark work similarly motivates target-aware utility and semantic failure analysis, while remaining a bridge once the mesh/oracle target protocol is stable @ObjectCentricNBV-jeong2026 @OANBV-hu2026 @ObjViewBench-pan2026 @GaussianSplatting-kerbl2023.
 
+#research_todo(
+  [Audit the last citation cluster source by source. The general 3D Gaussian Splatting paper supports the representation substrate, not target-aware utility or semantic failure analysis; each retained source must be assigned only the claim it actually supports.],
+  source: [active 3DGS/NBV literature review; thesis peer review],
+  gate: [final citation-role audit],
+)
+
 Continuous-policy @next-best-view papers define an important boundary for the thesis. GenNBV learns a generalizable continuous policy for active reconstruction, PB-NBV emphasizes efficient projection-based candidate scoring, and Hestia introduces a hierarchical target-then-pose formulation with directional observability @GenNBV-chen2024 @PB-NBV-jia2025 @Hestia-lu2026. These works motivate later actor-critic, projection-shortlist, and hierarchy experiments. The core thesis remains narrower: finite candidate tables over @aria-synthetic-environments snippets, oracle target labels from @ground-truth-target-evaluation, and a masked #symb.rl.qh model whose selected actions are re-evaluated by the same oracle.
+
+#conflict_todo(
+  [Do not classify PB-NBV as a continuous-policy method. Recast this paragraph so PB-NBV supports finite projection-based proposal/scoring, while GenNBV and Hestia support the continuous or hierarchical boundary.],
+  source: [docs/contents/literature/pb_nbv.qmd; thesis peer review],
+  gate: [final related-work taxonomy],
+)
 
 The planned value model also borrows structure from set and geometric learning. Deep Sets gives a pooled symmetry baseline for unordered candidate or point sets; Set Transformer supplies masked candidate-candidate interaction as an ablation; and query-centric trajectory forecasting motivates local relative positional encodings without importing a motion-forecasting decoder @DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query. Geometric deep learning frames the broader design question as matching model symmetries to the output map, not making the whole system invariant @GeometricDeepLearning-bronstein2021. For ARIA-NBV this means candidate-row permutation equivariance for #symb.rl.qh scores, candidate-to-state queries before candidate-candidate self-attention, mask isolation for invalid rows, explicit target/current/candidate frames, and gravity-aware rather than full rotation-invariant features. The dedicated theory treatment in @sec:thesis-geometric-learning-theory turns those literature roles into the architecture ladder and acceptance tests.
 
@@ -18,7 +31,19 @@ Point and sparse scene encoders are best treated as representation ablations aft
 
 Finally, offline and recurrent decision-modeling papers inform the training and ablation ladder without changing the problem definition. Double DQN and dueling heads motivate selector/evaluator separation and value/advantage structure for finite candidate tables @DoubleDQN-vanHasselt2015 @DuelingDQN-wang2016. IQL, CQL, and BCQ motivate explicit support constraints and skepticism about out-of-distribution bootstrapping, not an immediate switch away from the finite-candidate replay contract @IQL-kostrikov2021 @CQL-kumar2020 @BCQ-fujimoto2019. Trajectory Transformer, Decision Transformer, and Gumbel-Top-k provide vocabulary for sequence modeling, return conditioning, and stochastic branch generation only after the target/candidate/mask/evaluation contract is shared with the simpler baselines @TrajectoryTransformer-janner2021 @DecisionTransformer-chen2021 @GumbelTopK-kool2019. Deja View suggests a bounded weight-tied refinement ablation for candidate-context tokens, but not a claim that reconstruction-loop recurrence transfers directly to ARIA-NBV planning @dejaviewloopingtransformersburzio2026.
 
+#prune_todo(
+  [Condense this catalogue to the sources that materially justify the implemented method: Double-Q for selector/evaluator separation and offline-RL work for the support warning. Move sequence, recurrence, and stochastic-branch bridges to Discussion or the development appendix unless they are evaluated.],
+  source: [RL planning literature review; thesis peer review],
+  gate: [final literature significance pass],
+)
+
 === Literature Roles and Boundaries
+
+#prune_todo(
+  [This subsection repeats the preceding related-work paragraphs as an adoption ledger. Remove it or replace both versions with one non-redundant synthesis in connected prose.],
+  source: [thesis peer review],
+  gate: [final related-work structure],
+)
 
 *VIN-NBV and ordinal scoring.* This family provides the closest label precedent: oracle @relative-reconstruction-improvement, one-step candidate ranking, and CORAL-style calibration. ARIA-NBV adopts those elements as controls for target-specific label quality and scorer behavior, while treating finite-horizon lookahead as a separate question rather than stopping at myopic ranking.
 
