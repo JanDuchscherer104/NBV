@@ -23,7 +23,6 @@ from torch.nn import functional as functional
 
 from ..configs import PathConfig
 from ..data_handling import VinOracleBatch
-from ..rri_metrics.coral import coral_logits_to_label, coral_loss, coral_monotonicity_violation_rate, coral_random_loss
 from ..rri_metrics.logging import (
     Loss,
     Metric,
@@ -41,6 +40,7 @@ from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
 from ..vin.diagnostics import plot_vin_encodings_from_debug
 from ..vin.models import VinModelV3Config
 from ..vin.modules import largest_divisor_leq
+from ..vin.ordinal import coral_logits_to_label, coral_loss, coral_monotonicity_violation_rate, coral_random_loss
 from ._candidate_scorer_batch import prepare_candidate_scorer_batch_inputs
 from ._candidate_scorer_contract import validate_vin_lightning_candidate_scorer_contract
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauConfig

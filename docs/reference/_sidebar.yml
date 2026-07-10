@@ -129,8 +129,6 @@ website:
       - text: rri_metrics
         file: reference/rri_metrics.qmd
         contents:
-        - text: coral
-          file: reference/rri_metrics.coral.qmd
         - text: eval_pointclouds
           file: reference/rri_metrics.eval_pointclouds.qmd
         - text: logging
@@ -290,6 +288,8 @@ website:
             file: reference/vin.modules.scene_field.qmd
           - text: semidense_grid
             file: reference/vin.modules.semidense_grid.qmd
+        - text: ordinal
+          file: reference/vin.ordinal.qmd
         - text: scorer_context
           file: reference/vin.scorer_context.qmd
         - text: types

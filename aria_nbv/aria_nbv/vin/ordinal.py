@@ -20,7 +20,7 @@ from coral_pytorch.layers import CoralLayer as _CoralLayer
 from coral_pytorch.losses import coral_loss as _coral_loss
 from torch import Tensor, nn
 
-from .ordinal import ordinal_labels_to_levels
+from ..rri_metrics.ordinal import ordinal_labels_to_levels
 
 
 def coral_loss(

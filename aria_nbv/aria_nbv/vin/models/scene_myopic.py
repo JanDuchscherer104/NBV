@@ -84,7 +84,6 @@ from ...data_handling._raw import (
     is_vin_snippet_view_instance,
 )
 from ...data_handling.vin_adapter import build_vin_snippet_view
-from ...rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from ...utils import TargetConfig
 from ..backbones import EvlBackboneConfig
 from ..diagnostics import summarize_vin_v3
@@ -116,6 +115,7 @@ from ..modules import (
     VinScorerHeadConfig,
     largest_divisor_leq,
 )
+from ..ordinal import coral_expected_from_logits, coral_logits_to_prob
 from ..scorer_context import (
     apply_vin_scorer_film,
     build_vin_scorer_scene_field,

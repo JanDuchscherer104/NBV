@@ -6,8 +6,8 @@ import plotly.graph_objects as go
 import streamlit as st
 import torch
 
-from ....rri_metrics.coral import coral_loss, coral_monotonicity_violation_rate
 from ....utils.plotting import _histogram_overlay
+from ....vin.ordinal import coral_loss, coral_monotonicity_violation_rate
 from ..common import _info_popover, _pretty_label
 from .context import VinDiagContext
 

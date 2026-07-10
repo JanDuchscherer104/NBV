@@ -13,8 +13,8 @@ from typing import Literal
 from pydantic import Field
 from torch import Tensor, nn
 
-from ...rri_metrics.coral import CoralLayer
 from ...utils import TargetConfig
+from ..ordinal import CoralLayer
 
 
 class VinScorerHead(nn.Module):
@@ -23,7 +23,7 @@ class VinScorerHead(nn.Module):
     `VinScorerHead` is the shared MLP-plus-CORAL head used when a VIN scorer
     represents candidate quality as ordinal Relative Reconstruction Improvement
     bins. It consumes the final feature tensor produced by an architecture and
-    returns threshold logits compatible with `aria_nbv.rri_metrics.coral`.
+    returns threshold logits compatible with `aria_nbv.vin.ordinal`.
     """
 
     def __init__(self, config: "VinScorerHeadConfig", *, in_dim: int | None = None) -> None:

@@ -10,7 +10,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
 
 ## Public Contracts
 - Canonical metric and oracle surface: `aria_nbv/aria_nbv/rri_metrics/oracle_rri.py`, `point_mesh.py`, `types.py`
-- Binning and ordinal surfaces: `ordinal.py`, `coral.py`
+- Binning surface: `ordinal.py`; CORAL model/loss behavior lives in `aria_nbv.vin.ordinal`.
 - Diagnostics and plotting helpers: `logging.py`, `plotting.py`
 - Narrative surfaces: `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/07a-binning.typ`, generated API docs under `docs/reference/`, `docs/contents/theory/rri_theory.qmd`
 

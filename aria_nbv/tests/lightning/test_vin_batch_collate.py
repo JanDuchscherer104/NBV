@@ -10,12 +10,12 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinSnippetView
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from aria_nbv.rri_metrics.coral import coral_expected_from_logits, coral_logits_to_prob
 from aria_nbv.rri_metrics.logging import Metric
 from aria_nbv.rri_metrics.ordinal import RriOrdinalBinner
 from aria_nbv.utils import Stage
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config
 from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
+from aria_nbv.vin.ordinal import coral_expected_from_logits, coral_logits_to_prob
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 pytest.importorskip("pytorch_lightning")

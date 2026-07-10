@@ -5,7 +5,8 @@
 import math
 
 import torch
-from aria_nbv.rri_metrics import (
+
+from aria_nbv.vin.ordinal import (
     coral_logits_to_prob,
     coral_loss,
     coral_random_loss,

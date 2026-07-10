@@ -7,9 +7,9 @@ import streamlit as st
 import torch
 
 from ....data_handling import VinSnippetView
-from ....rri_metrics.coral import coral_loss
 from ....vin.diagnostics import build_alignment_figures
 from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
+from ....vin.ordinal import coral_loss
 from ..common import _info_popover
 from ..data import scene_plot_options_ui
 from .context import VinDiagContext

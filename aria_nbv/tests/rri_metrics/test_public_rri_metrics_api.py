@@ -9,7 +9,6 @@ def test_rri_metrics_root_exports_stable_core_only() -> None:
     """The package root should not re-export rollout reducers or diagnostics helpers."""
 
     expected = {
-        "CoralLayer",
         "DistanceAggregation",
         "DistanceBreakdown",
         "OracleRRI",
@@ -18,10 +17,6 @@ def test_rri_metrics_root_exports_stable_core_only() -> None:
         "RriResult",
         "chamfer_point_mesh",
         "chamfer_point_mesh_batched",
-        "coral_expected_from_logits",
-        "coral_logits_to_prob",
-        "coral_loss",
-        "coral_random_loss",
         "ordinal_labels_to_levels",
     }
     assert set(rri_metrics.__all__) == expected

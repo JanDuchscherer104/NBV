@@ -8,7 +8,6 @@
 rri_metrics/
   point_mesh.py        # moved from metrics.py
   ordinal.py           # moved from rri_binning.py
-  coral.py             # moves to vin.ordinal in the next mechanical commit
   ...                   # mixed modules remain until symbol-level WPs
 ```
 
@@ -19,20 +18,6 @@ Inventory generated: `2026-07-10T15:58:15.078783+00:00`
 Graphify state: baseline refresh recorded by Ultragoal G001.
 
 ## Symbol Ownership Matrix
-
-### `coral.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `coral_loss` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `coral_logits_to_prob` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `coral_random_loss` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `_softplus_inverse` | `function` | `private` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `MonotoneBinValues` | `class` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `coral_expected_from_logits` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `coral_logits_to_label` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `coral_monotonicity_violation_rate` | `function` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
-| `CoralLayer` | `class` | `public` | `rri_metrics.coral` | `rri_metrics.coral` | `vin.ordinal` | `deferred: semantic WP` |
 
 ### `eval_pointclouds.py`
 

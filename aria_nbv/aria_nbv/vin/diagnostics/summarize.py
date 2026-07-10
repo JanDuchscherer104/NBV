@@ -18,8 +18,8 @@ from ...data_handling import (
     is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
-from ...rri_metrics.coral import coral_monotonicity_violation_rate
 from ...utils.rich_summary import capture_tree, rich_summary, summarize
+from ..ordinal import coral_monotonicity_violation_rate
 from .summary_stats import pearson_corr, quantile_stats, spearman_corr
 
 if TYPE_CHECKING:
