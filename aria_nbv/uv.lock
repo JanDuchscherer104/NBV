@@ -300,7 +300,6 @@ name = "aria-nbv"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "captum" },
     { name = "coral-pytorch" },
     { name = "devtools" },
     { name = "e3nn" },
@@ -309,7 +308,6 @@ dependencies = [
     { name = "einops" },
     { name = "fast-simplification" },
     { name = "fsspec" },
-    { name = "gymnasium" },
     { name = "hydra-core" },
     { name = "jaxtyping" },
     { name = "matplotlib" },
@@ -342,7 +340,6 @@ dependencies = [
     { name = "seaborn" },
     { name = "setuptools" },
     { name = "shortuuid", marker = "sys_platform == 'linux'" },
-    { name = "stable-baselines3" },
     { name = "streamlit" },
     { name = "tensorboard" },
     { name = "termcolor", marker = "sys_platform == 'linux'" },
@@ -393,7 +390,6 @@ xformers = [
 
 [package.metadata]
 requires-dist = [
-    { name = "captum", specifier = ">=0.8.0" },
     { name = "coral-pytorch", specifier = "==1.4.0" },
     { name = "debugpy", marker = "extra == 'dev'", specifier = ">=1.8.17" },
     { name = "devtools", specifier = ">=0.12.2" },
@@ -403,7 +399,6 @@ requires-dist = [
     { name = "einops", specifier = "==0.8.0" },
     { name = "fast-simplification", specifier = ">=0.1.13" },
     { name = "fsspec", specifier = "==2024.6.0" },
-    { name = "gymnasium", specifier = ">=1.2.1" },
     { name = "hydra-core", specifier = "==1.3.2" },
     { name = "ipykernel", marker = "extra == 'notebook'", specifier = ">=7.1.0" },
     { name = "ipympl", marker = "extra == 'notebook'", specifier = ">=0.9.0" },
@@ -446,7 +441,6 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "setuptools", specifier = "<81" },
     { name = "shortuuid", marker = "sys_platform == 'linux'", specifier = ">=1.0.11" },
-    { name = "stable-baselines3", specifier = ">=2.7.0" },
     { name = "streamlit", specifier = ">=1.52.2" },
     { name = "syrenka", marker = "extra == 'dev'", specifier = ">=0.5.7" },
     { name = "tensorboard", specifier = "==2.14.0" },
@@ -619,23 +613,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ff/e2/85f227594656000ff4d8adadae91a21f536d4a84c6c716a86bd6685874be/cachetools-7.1.1.tar.gz", hash = "sha256:27bdf856d68fd3c71c26c01b5edc312124ed427524d1ddb31aa2b7746fe20d4b", size = 40202, upload-time = "2026-05-03T20:00:29.391Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/0f/f897abe4ea0a8c408ae65c8c83bffab4936ad65d6032d4fb4cd35bbdc3ee/cachetools-7.1.1-py3-none-any.whl", hash = "sha256:0335cd7a0952d2b22327441fb0628139e234c565559eeb91a8a4ac7551c5353d", size = 16775, upload-time = "2026-05-03T20:00:27.857Z" },
-]
-
-[[package]]
-name = "captum"
-version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "torch", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.4.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform == 'linux'" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/9e/f31758e20c3d2b42b05420936b75f663e7aeae9ba63b84aee5cad1b044a3/captum-0.9.0.tar.gz", hash = "sha256:e4868e22b68224f1a5355d2b7966803c021cf9fe5d893f51f587b4002a666b54", size = 363381, upload-time = "2026-04-17T06:11:39.577Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/75/c99571fee171bb9d34d3e1df5fdb16d57e2c4c15339eb220e6e6e4539f1c/captum-0.9.0-py3-none-any.whl", hash = "sha256:cda38e1d42c37591d71560bb2f5813ac4cae8d8543afac45279c7efd5945997e", size = 455196, upload-time = "2026-04-17T06:11:38.229Z" },
 ]
 
 [[package]]
@@ -816,15 +793,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bb/63/f9e1ea081ce35720d8b92acde70daaedace594dc93b693c869e0d5910718/click-8.3.3.tar.gz", hash = "sha256:398329ad4837b2ff7cbe1dd166a4c0f8900c3ca3a218de04466f38f6497f18a2", size = 328061, upload-time = "2026-04-22T15:11:27.506Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ae/44/c1221527f6a71a01ec6fbad7fa78f1d50dfa02217385cf0fa3eec7087d59/click-8.3.3-py3-none-any.whl", hash = "sha256:a2bf429bb3033c89fa4936ffb35d5cb471e3719e1f3c8a7c3fff0b8314305613", size = 110502, upload-time = "2026-04-22T15:11:25.044Z" },
-]
-
-[[package]]
-name = "cloudpickle"
-version = "3.1.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/27/fb/576f067976d320f5f0114a8d9fa1215425441bb35627b1993e5afd8111e5/cloudpickle-3.1.2.tar.gz", hash = "sha256:7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414", size = 22330, upload-time = "2025-11-03T09:25:26.604Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl", hash = "sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a", size = 22228, upload-time = "2025-11-03T09:25:25.534Z" },
 ]
 
 [[package]]
@@ -1279,15 +1247,6 @@ wheels = [
 ]
 
 [[package]]
-name = "farama-notifications"
-version = "0.0.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ec/91/14397890dde30adc4bee6462158933806207bc5dd10d7b4d09d5c33845cf/farama_notifications-0.0.6.tar.gz", hash = "sha256:b19acac4bb41d76e59e03394b5dd165f4761c86fa327f56307a35cbee3b60158", size = 2517, upload-time = "2026-04-24T08:43:57.603Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/f0/21f81892e4ed10f4ec3ef2e7cf8635fb76e7c0907c55d0da66be50094760/farama_notifications-0.0.6-py3-none-any.whl", hash = "sha256:f84839188efa1ce5bb361c2a84881b2dc2c0d0d7fb661ff00421820170930935", size = 2897, upload-time = "2026-04-24T08:43:56.785Z" },
-]
-
-[[package]]
 name = "fast-simplification"
 version = "0.1.13"
 source = { registry = "https://pypi.org/simple" }
@@ -1729,21 +1688,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/68/67f4947ed55d2e69f2cc199ab9fd85e0a0034d813bbeef84df6d2ba4d4b7/grpcio-1.80.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:31b9ac4ad1aa28ffee5503821fafd09e4da0a261ce1c1281c6c8da0423c83b6e", size = 7828477, upload-time = "2026-03-30T08:48:32.054Z" },
     { url = "https://files.pythonhosted.org/packages/44/b6/8d4096691b2e385e8271911a0de4f35f0a6c7d05aff7098e296c3de86939/grpcio-1.80.0-cp314-cp314-win32.whl", hash = "sha256:367ce30ba67d05e0592470428f0ec1c31714cab9ef19b8f2e37be1f4c7d32fae", size = 4218563, upload-time = "2026-03-30T08:48:34.538Z" },
     { url = "https://files.pythonhosted.org/packages/e5/8c/bbe6baf2557262834f2070cf668515fa308b2d38a4bbf771f8f7872a7036/grpcio-1.80.0-cp314-cp314-win_amd64.whl", hash = "sha256:3b01e1f5464c583d2f567b2e46ff0d516ef979978f72091fd81f5ab7fa6e2e7f", size = 5019457, upload-time = "2026-03-30T08:48:37.308Z" },
-]
-
-[[package]]
-name = "gymnasium"
-version = "1.2.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cloudpickle" },
-    { name = "farama-notifications" },
-    { name = "numpy" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/76/59/653a9417d98ed3e29ef9734ba52c3495f6c6823b8d5c0c75369f25111708/gymnasium-1.2.3.tar.gz", hash = "sha256:2b2cb5b5fbbbdf3afb9f38ca952cc48aa6aa3e26561400d940747fda3ad42509", size = 829230, upload-time = "2025-12-18T16:51:10.234Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/d3/ea5f088e3638dbab12e5c20d6559d5b3bdaeaa1f2af74e526e6815836285/gymnasium-1.2.3-py3-none-any.whl", hash = "sha256:e6314bba8f549c7fdcc8677f7cd786b64908af6e79b57ddaa5ce1825bffb5373", size = 952113, upload-time = "2025-12-18T16:51:08.445Z" },
 ]
 
 [[package]]
@@ -5183,24 +5127,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/c3/c80fcdb41905a2df650c2a3e0337198b6848876e63d66fe9188ef9003d24/sqlalchemy-2.0.49-cp314-cp314t-win32.whl", hash = "sha256:6270d717b11c5476b0cbb21eedc8d4dbb7d1a956fd6c15a23e96f197a6193158", size = 2149151, upload-time = "2026-04-03T17:02:07.281Z" },
     { url = "https://files.pythonhosted.org/packages/05/52/9f1a62feab6ed368aff068524ff414f26a6daebc7361861035ae00b05530/sqlalchemy-2.0.49-cp314-cp314t-win_amd64.whl", hash = "sha256:275424295f4256fd301744b8f335cff367825d270f155d522b30c7bf49903ee7", size = 2184178, upload-time = "2026-04-03T17:02:08.623Z" },
     { url = "https://files.pythonhosted.org/packages/e5/30/8519fdde58a7bdf155b714359791ad1dc018b47d60269d5d160d311fdc36/sqlalchemy-2.0.49-py3-none-any.whl", hash = "sha256:ec44cfa7ef1a728e88ad41674de50f6db8cfdb3e2af84af86e0041aaf02d43d0", size = 1942158, upload-time = "2026-04-03T16:53:44.135Z" },
-]
-
-[[package]]
-name = "stable-baselines3"
-version = "2.8.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cloudpickle" },
-    { name = "gymnasium" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "torch", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.4.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform == 'linux'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e2/07/01a2aa6a6a58f911085981dad1af2f1877d04886768c0df33930945fb98c/stable_baselines3-2.8.0.tar.gz", hash = "sha256:fe976d102b596c8001ca619638901721bcf97e8934a397e235b2d277fa9216c2", size = 220224, upload-time = "2026-04-01T10:49:29.738Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/1b/8046baf1e7756006eab991cd3260c4342c515dd6b536bc2d03df4b6f35aa/stable_baselines3-2.8.0-py3-none-any.whl", hash = "sha256:8c19d960b534a909f46dac5227662fc2d6be380e5c66cb04e1ad23edb23dc5a2", size = 187458, upload-time = "2026-04-01T10:49:28.132Z" },
 ]
 
 [[package]]

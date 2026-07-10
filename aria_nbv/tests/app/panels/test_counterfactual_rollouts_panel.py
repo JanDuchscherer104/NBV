@@ -19,7 +19,6 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
-from aria_nbv.app.config import RlPageConfig
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
@@ -833,7 +832,3 @@ def test_live_rollout_metric_info_contains_canonical_equations() -> None:
     assert r"L_e^{(H)}" in info_text
     assert r"\operatorname{TopK}" in info_text
     assert "not a statistical confidence interval" in info_text
-
-
-def test_rl_page_is_hidden_by_default() -> None:
-    assert RlPageConfig().enabled is False

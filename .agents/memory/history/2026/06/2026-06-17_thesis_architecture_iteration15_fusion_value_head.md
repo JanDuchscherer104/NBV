@@ -9,7 +9,6 @@ canonical_updates_needed:
   - docs/typst/thesis/sections/04-method/index.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/candidate_view_dependence.qmd
-  - aria_nbv/aria_nbv/rl
 files_touched:
   - .omx/specs/autoresearch-thesis-lit-review/report.md
   - .omx/specs/autoresearch-thesis-lit-review/result.json
@@ -43,5 +42,7 @@ masks instead of using a monolithic Transformer regressor.
 - Add implementation tests for absolute-head contamination, valid-row mean
   subtraction, invalid-row firewalling, token-source ablations, and early/late
   fusion comparisons.
+- The earlier `aria_nbv/aria_nbv/rl` implementation follow-up is stale as of
+  2026-07-09 because that package surface was archived out of active code.
 - Decide whether Wayformer, Perceiver, VectorNet, Scene Transformer, and HiVT
   should become explicit `docs/literature/sources.jsonl` entries.

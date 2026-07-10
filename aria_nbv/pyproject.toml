@@ -63,10 +63,6 @@ dependencies = [
     "torch-summary>=1.4.5",
     "optuna>=4.6.0",
     "optuna-integration[pytorch-lightning]>=4.5.0",
-    "captum>=0.8.0",
-    # Reinforcement learning
-    "gymnasium>=1.2.1",
-    "stable-baselines3>=2.7.0",
     # OpenPoints support is optional because the shim builds PointNeXt CUDA
     # extensions and should not participate in CPU-only package smoke tests.
     "pyyaml>=6.0; sys_platform == 'linux'",
