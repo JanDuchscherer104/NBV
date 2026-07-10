@@ -1,3 +1,4 @@
+# TODO: Target Selection should be handled in a dedicated rollouts/target_selection module. This file is way too monolitic, also consider docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ: We are not interested in any kind of target selection that only sees the actor visible state. target slection is only a part of the target task sampling where we can use the full orcale visibly state to select suitable targets for which to generate multi-step rollout samples. Keep StrEnum based TargetSelection configuration.
 r"""Target-task sampling and actor-visible target selection for ARIA-NBV.
 
 This module separates two target-facing contracts that must not be conflated:
@@ -57,14 +58,20 @@ class TargetSelectionPolicy(StrEnum):
     """Supported top-K target selection policies."""
 
     GREEDY_TOP_K = "greedy_top_k"
+    """Select the highest-scoring eligible rows deterministically."""
+
     TEMPERATURE_SOFTMAX_TOP_K = "temperature_softmax_top_k"
+    """Sample eligible rows without replacement from temperature-scaled scores."""
 
 
 class TargetSourceMode(StrEnum):
-    """Selector source protocol."""
+    """Control whether selection may consume actor-visible or oracle OBBs."""
 
     V1_ACTOR_VISIBLE = "v1_actor_visible"
+    """Use detected or predicted OBBs and reserve GT OBBs for evaluation."""
+
     V0_GT_SANITY = "v0_gt_sanity"
+    """Use GT OBBs directly for explicit oracle sanity or upper-bound runs."""
 
 
 TARGET_INVALID_REASON_CODES: dict[str, int] = {
@@ -109,41 +116,112 @@ class TargetCandidateRow:
     """
 
     scene_id: str | None
+    """Dataset scene identifier, or ``None`` when the source omits scene metadata."""
+
     snippet_id: str | None
+    """Snippet identifier within `scene_id`, or ``None`` when unavailable."""
+
     source: str
+    """Actor-visible OBB source name used to construct this row."""
+
     source_index: int
+    """Row index in the source OBB table before padded rows are removed."""
+
     target_row_id: int
+    """Dense selector-local row identifier persisted with target audit data."""
+
     target_id: str
+    """Stable target identifier derived from snippet, source, semantic, and row identity."""
+
     sem_id: int
+    """Semantic class identifier carried by the source OBB."""
+
     inst_id: int
+    """Instance identifier carried by the source OBB."""
+
     class_name: str
+    """Human-readable semantic class name, with a deterministic fallback for unknown ids."""
+
     confidence: float
+    """Actor-visible OBB confidence used by the eligibility gate and selection score."""
+
     center_world: tuple[float, float, float]
+    """OBB center ``(x, y, z)`` in the world frame, metres."""
+
     extents: tuple[float, float, float]
+    """Full OBB side lengths ``(x, y, z)`` in object axes, metres."""
+
     pose_world_object: tuple[float, ...]
+    """Flattened 12-value EFM `PoseTW` transform from object to world frame."""
+
     relative_pose_reference_object: tuple[float, ...]
+    """Flattened 12-value transform from object to the snippet reference frame."""
+
     projected_area_pixels: float
+    """Largest clipped actor-visible OBB projection area, square pixels."""
+
     projected_area_fraction: float
+    """Projected area divided by the configured image-area normalizer."""
+
     semidense_support_count: int
+    """Number of sampled semidense world points inside the scaled OBB."""
+
     evl_support_count: int
+    """Number of positive EVL support points inside the scaled OBB."""
+
     effective_support_count: float
+    """Semidense count plus the configured weight times the EVL count."""
+
     visibility_score: float
+    """Projected-visibility factor used in actor-visible target ranking."""
+
     support_score: float
+    """Support sufficiency factor in ``[0, 1]`` used by the ranking score."""
+
     deficit_score: float
+    """Unsaturated-support factor in ``[0, 1]`` that favors improvable targets."""
+
     score: float
+    """Actor-visible target interest score, or ``NaN`` when the row is ineligible."""
+
     eligible: bool
+    """Whether every hard actor-visible eligibility check passed."""
+
     invalid_reason_bitset: int
+    """Bitset of `TARGET_INVALID_REASON_CODES` values observed for this row."""
+
     primary_invalid_reason: int
+    """Canonical numeric reason selected from `invalid_reason_bitset`."""
+
     selected_rank: int | None = None
+    """Zero-based policy rank, or ``None`` when the row was not selected."""
+
     selection_probability: float | None = None
+    """Conditional selection probability, or ``None`` before policy selection."""
+
     selection_log_probability: float | None = None
+    """Natural logarithm of `selection_probability`, when defined."""
+
     selection_entropy: float | None = None
+    """Policy entropy at the selection step, in nats, when stochastic selection is used."""
+
     gt_label_valid: bool = False
+    """Whether post-selection oracle matching produced an unambiguous GT label."""
+
     gt_target_row_id: int | None = None
+    """Matched GT OBB source row, or ``None`` when no valid match exists."""
+
     gt_target_id: str | None = None
+    """Stable identifier of the matched GT target, or ``None`` when unmatched."""
+
     gt_match_iou: float | None = None
+    """Sampled 3D IoU of the best GT match, or ``None`` when matching was unavailable."""
+
     gt_match_score: float | None = None
+    """Geometry-only score of the best GT match, or ``None`` when unavailable."""
+
     gt_match_status: str = "not_requested"
+    """Stable audit status describing whether and how GT matching completed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,16 +240,37 @@ class TargetSelectionResult:
     """
 
     rows: tuple[TargetCandidateRow, ...]
+    """All non-padded candidates interpreted from the resolved OBB source."""
+
     ranked_rows: tuple[TargetCandidateRow, ...]
+    """Eligible rows sorted by the configured policy ranking key."""
+
     selected_rows: tuple[TargetCandidateRow, ...]
+    """Policy-selected rows with rank and sampling audit fields populated."""
+
     k: int
+    """Requested maximum number of selected targets."""
+
     policy: str
+    """Serialized `TargetSelectionPolicy` value used for selection."""
+
     source_mode: str
+    """Serialized `TargetSourceMode` value controlling permitted OBB sources."""
+
     source: str | None
+    """Resolved OBB source name, or ``None`` when no permitted source exists."""
+
     seed: int | None
+    """Random seed used by stochastic selection, or ``None`` for an unseeded generator."""
+
     temperature: float | None
+    """Softmax temperature for stochastic selection, otherwise ``None``."""
+
     warnings: tuple[str, ...] = ()
+    """Non-fatal source-resolution and selection diagnostics."""
+
     reason_code_version: str = TARGET_INVALID_REASON_VERSION
+    """Version of the numeric invalid-reason mapping used by every row."""
 
     def diagnostic_summary(self) -> dict[str, int | float]:
         """Return compact stratified counts for selector threshold audits."""
@@ -201,9 +300,16 @@ class TargetTaskIdentityStatus(StrEnum):
     """Identity-gate status for oracle target-task rows."""
 
     MATCHED = "matched"
+    """The target passes geometry, IoU, and ambiguity thresholds."""
+
     AMBIGUOUS = "ambiguous_identity"
+    """The best and second-best identity overlaps are insufficiently separated."""
+
     UNMATCHED = "unmatched_identity"
+    """No valid identity overlap reaches the configured IoU threshold."""
+
     INVALID_GEOMETRY = "invalid_geometry"
+    """The target OBB has non-finite or non-positive geometry."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,35 +329,94 @@ class OracleTargetTaskRow:
     """
 
     scene_id: str | None
+    """Dataset scene identifier, or ``None`` when the source omits scene metadata."""
+
     snippet_id: str | None
+    """Snippet identifier within `scene_id`, or ``None`` when unavailable."""
+
     source: str
+    """Oracle OBB source name used to construct this target task."""
+
     source_index: int
+    """Row index in the oracle GT OBB table before padded rows are removed."""
+
     target_row_id: int
+    """Dense task-pool row identifier for this snippet."""
+
     target_id: str
+    """Stable target identifier derived from snippet and GT object identity."""
+
     sem_id: int
+    """Semantic class identifier carried by the GT OBB."""
+
     inst_id: int
+    """Instance identifier carried by the GT OBB."""
+
     class_name: str
+    """Human-readable semantic class name, with a deterministic fallback for unknown ids."""
+
     confidence: float
+    """GT OBB confidence retained for audit; it does not gate task eligibility."""
+
     center_world: tuple[float, float, float]
+    """GT OBB center ``(x, y, z)`` in the world frame, metres."""
+
     extents: tuple[float, float, float]
+    """Full GT OBB side lengths ``(x, y, z)`` in object axes, metres."""
+
     pose_world_object: tuple[float, ...]
+    """Flattened 12-value EFM `PoseTW` transform from object to world frame."""
+
     relative_pose_reference_object: tuple[float, ...]
+    """Flattened 12-value transform from object to the snippet reference frame."""
+
     projected_area_pixels: float
+    """Largest clipped OBB projection area, square pixels, retained for audit."""
+
     projected_area_fraction: float
+    """Projected area divided by the configured image-area normalizer."""
+
     semidense_support_count: int
+    """Number of sampled semidense world points inside the scaled GT OBB."""
+
     evl_support_count: int
+    """Number of positive EVL support points inside the scaled GT OBB."""
+
     effective_support_count: float
+    """Semidense count plus the configured weight times the EVL count."""
+
     identity_iou: float | None
+    """Largest sampled 3D self-identity IoU, or ``None`` when geometry is invalid."""
+
     identity_second_iou: float | None
+    """Second-largest identity IoU, or ``None`` when identity evaluation failed."""
+
     identity_ambiguity_gap: float | None
+    """Difference between the largest and second-largest identity IoUs."""
+
     identity_status: str
+    """Serialized `TargetTaskIdentityStatus` produced by the identity gate."""
+
     identity_valid: bool
+    """Whether geometry, IoU, and ambiguity checks admit this task to sampling."""
+
     selected_rank: int | None = None
+    """Zero-based rank in the seeded capped sample, or ``None`` when unselected."""
+
     selection_probability: float | None = None
+    """Inclusion probability under uniform capped sampling, when selected."""
+
     selection_seed: int | None = None
+    """Seed used to select this row, or ``None`` for an unseeded sample."""
+
     target_root_error: float | None = None
+    """Root target reconstruction error supplied by downstream oracle scoring."""
+
     max_candidate_gain: float | None = None
+    """Largest candidate target gain supplied by downstream oracle scoring."""
+
     headroom_band: str | None = None
+    """Downstream headroom stratum, or ``None`` before oracle scoring."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,9 +424,16 @@ class OracleTargetTaskSweepCell:
     """Coverage count for one oracle identity-threshold cell."""
 
     min_identity_iou: float
+    """Minimum best-match identity IoU applied in this audit cell."""
+
     identity_ambiguity_gap: float
+    """Required top-1/top-2 identity IoU gap applied in this audit cell."""
+
     identity_valid_count: int
+    """Number of task rows passing both thresholds."""
+
     identity_valid_fraction: float
+    """Fraction of all task rows passing both thresholds, in ``[0, 1]``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,14 +441,31 @@ class OracleTargetTaskSamplingResult:
     """Oracle target-task pool and seeded capped sample for one snippet."""
 
     rows: tuple[OracleTargetTaskRow, ...]
+    """All non-padded GT OBB rows interpreted as candidate target tasks."""
+
     identity_valid_rows: tuple[OracleTargetTaskRow, ...]
+    """Rows admitted by the configured geometry and identity gate."""
+
     selected_rows: tuple[OracleTargetTaskRow, ...]
+    """Uniformly sampled identity-valid rows with sampling audit fields populated."""
+
     max_targets_per_sample: int
+    """Configured upper bound on selected target tasks per snippet."""
+
     seed: int | None
+    """Random seed used for capped sampling, or ``None`` for an unseeded generator."""
+
     source: str | None
+    """Oracle OBB source name, or ``None`` when no GT source is available."""
+
     identity_iou_thresholds: tuple[float, ...]
+    """IoU thresholds evaluated by `threshold_sweep`."""
+
     identity_ambiguity_gaps: tuple[float, ...]
+    """Top-1/top-2 IoU gaps evaluated by `threshold_sweep`."""
+
     warnings: tuple[str, ...] = ()
+    """Non-fatal source and sampling diagnostics."""
 
     def diagnostic_summary(self) -> dict[str, int | float]:
         """Return compact counts for target-task pool and sample audits."""
@@ -341,8 +530,13 @@ class _TargetSource:
     """
 
     source: str
+    """Name of the resolved detected, predicted, or GT OBB source."""
+
     obbs: ObbTW
+    """Padded EFM `ObbTW` payload, typically shaped ``(1, K, 34)`` per snippet."""
+
     sem_id_to_name: SemanticNameMap | None = None
+    """Optional semantic-id name mapping associated with `obbs`."""
 
 
 class TargetSelectorConfig(TargetConfig["ActorVisibleTargetSelector"]):
