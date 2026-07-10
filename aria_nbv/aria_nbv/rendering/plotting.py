@@ -18,7 +18,7 @@ from torch import Tensor
 from ..pose_generation.plotting import CandidatePlotBuilder
 from ..utils import rotate_yaw_cw90
 from ..utils.data_plotting import FrameGridBuilder, _depth_to_color
-from .unproject import backproject_depth_with_p3d
+from .unproject import backproject_depths_p3d_batch
 
 _BOX_EDGE_IDX = np.array(
     [
@@ -348,17 +348,15 @@ class RenderingPlotBuilder(CandidatePlotBuilder):
 
         all_indices = list(range(min(depths.shape[0], poses.shape[0])))
         use_indices = candidate_indices if candidate_indices is not None else all_indices
-        pts_all: list[torch.Tensor] = []
-        for i in use_indices:
-            pts = backproject_depth_with_p3d(
-                depth=depths[i],
-                cameras=camera[i],
-                valid_mask=valid_masks[i],
-                stride=stride,
-                max_points=max_points,
-            )
-            if pts.numel() > 0:
-                pts_all.append(pts)
+
+        idx_t = torch.tensor(use_indices, device=depths.device)
+        padded, lengths = backproject_depths_p3d_batch(
+            depths=depths[idx_t],
+            mask_valid=valid_masks[idx_t],
+            cameras=camera[idx_t],
+            stride=stride,
+        )
+        pts_all = [padded[i, : int(lengths[i].item())] for i in range(len(use_indices)) if lengths[i] > 0]
 
         if not pts_all:
             return self

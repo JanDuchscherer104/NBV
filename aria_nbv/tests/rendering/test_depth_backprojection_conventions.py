@@ -25,7 +25,7 @@ sys.path.append(str(Path(__file__).resolve().parents[3] / "external" / "efm3d"))
 from efm3d.aria import CameraTW, PoseTW  # noqa: E402
 
 from aria_nbv.rendering.pytorch3d_depth_renderer import Pytorch3DDepthRendererConfig  # noqa: E402
-from aria_nbv.rendering.unproject import backproject_depth_with_p3d, backproject_depths_p3d_batch  # noqa: E402
+from aria_nbv.rendering.unproject import backproject_depths_p3d_batch  # noqa: E402
 
 
 def test_p3d_world_to_view_matches_pose_inverse_transform() -> None:
@@ -115,13 +115,13 @@ def test_backproject_depth_matches_pinhole_signs(dx_px: int) -> None:
     # synthetic plane + explicit valid mask we only need the single pixel.
     assert pix_to_face.shape[-2:] == (height, width)
 
-    pts = backproject_depth_with_p3d(
-        depth=depth,
+    padded, lengths = backproject_depths_p3d_batch(
+        depths=depth.unsqueeze(0),
+        mask_valid=valid.unsqueeze(0),
         cameras=cameras[0],
-        valid_mask=valid,
         stride=1,
-        max_points=None,
     )
+    pts = padded[0, : int(lengths[0].item())]
     assert pts.shape == (1, 3)
 
     expected_sign = -1.0 if dx_px > 0 else 1.0
@@ -168,12 +168,5 @@ def test_backproject_batch_matches_single_pixel() -> None:
     assert lengths.tolist() == [1]
     assert padded.shape == (1, 1, 3)
 
-    single = backproject_depth_with_p3d(
-        depth=depths[0],
-        cameras=cameras[0],
-        valid_mask=mask[0],
-        stride=1,
-        max_points=None,
-    )
-    assert single.shape == (1, 3)
-    assert torch.allclose(padded[0, 0], single[0], atol=1e-6)
+    # Pixel is at cx+10 (right of centre) → X world-coord should be negative (P3D NDC sign).
+    assert torch.sign(padded[0, 0, 0]).item() == -1.0

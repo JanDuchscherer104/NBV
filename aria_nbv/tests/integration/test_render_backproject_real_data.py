@@ -13,7 +13,7 @@ import torch
 
 from aria_nbv.data_handling import AseEfmDatasetConfig, EfmSnippetView
 from aria_nbv.rendering.pytorch3d_depth_renderer import Pytorch3DDepthRendererConfig
-from aria_nbv.rendering.unproject import backproject_depth_with_p3d
+from aria_nbv.rendering.unproject import backproject_depths_p3d_batch
 
 
 def _first_mesh_sample() -> EfmSnippetView:
@@ -96,13 +96,13 @@ def test_render_and_backproject_pixel_signs_real() -> None:
         mask_single = torch.zeros_like(hits)
         depth_single[y, x_px] = depth[y, x_px]
         mask_single[y, x_px] = True
-        pts_world = backproject_depth_with_p3d(
-            depth=depth_single,
+        padded, lengths = backproject_depths_p3d_batch(
+            depths=depth_single.unsqueeze(0),
+            mask_valid=mask_single.unsqueeze(0),
             cameras=cameras[0],
-            valid_mask=mask_single,
             stride=1,
-            max_points=None,
         )
+        pts_world = padded[0, : int(lengths[0].item())]
         assert pts_world.shape == (1, 3)
         return pts_world[0]
 
