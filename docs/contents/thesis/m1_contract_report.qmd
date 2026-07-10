@@ -20,7 +20,7 @@ evidence that must be collected before scale-up.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Offline store layout | Pass for source contract | Immutable format is owned by `aria_nbv/aria_nbv/data_handling/_offline_store.py`, `_offline_format.py`, `_offline_writer.py`, and `_offline_dataset.py`. |
+| Offline store layout | Pass for source contract | Immutable format is owned by `aria_nbv/aria_nbv/data_handling/offline/store.py`, `offline/format.py`, `offline/writer.py`, and `offline/dataset.py`. |
 | Split contract | Pass for source contract | `splits/*.npy` contain global sample indices; `_assign_splits` uses stable sample-key hashing and preserves sample-index order inside each split. |
 | Candidate order | Pass for synthetic guard | `CandidateSamplingResult.candidate_shell_indices()` maps compact valid views to full-shell indices and rejects ambiguous layouts. |
 | Candidate-label alignment | Pass for synthetic guard | `prepare_vin_offline_sample()` validates candidate poses, depth rows, camera rows, RRI vectors, optional point clouds, and candidate shell indices before writing rows. |

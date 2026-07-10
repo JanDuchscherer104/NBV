@@ -8,12 +8,12 @@
 
 == Replay Stores and Diagnostic Evidence
 
-// source: aria_nbv/aria_nbv/data_handling/_offline_store.py:1-9 owns the immutable VIN offline layout.
-// source: aria_nbv/aria_nbv/rollouts/dataset_writer.py:1-14 defines rollout stores as standalone target-conditioned replay artifacts.
+// source: aria_nbv/aria_nbv/data_handling/offline/store.py:1-9 owns the immutable VIN offline layout.
+// source: aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py:1-14 defines rollout stores as standalone target-conditioned replay artifacts.
 // source: aria_nbv/aria_nbv/rollouts/zarr_store.py:1-18 defines row tables, masks, derived q_h arrays, and invalidity semantics.
 The data-generation pipeline deliberately materializes two different stores. The immutable `vin_offline/` store is a source substrate: it caches expensive logged-state evidence and one-step oracle products for ASE snippets so that scorer training and audits do not repeatedly run EFM3D/VIN extraction, mesh rendering, backprojection, and point-mesh scoring. The standalone `rollouts.zarr/` store is a target-conditioned replay sidecar: it references VIN source rows, creates target-task rows, regenerates finite candidate tables for each rollout state, records masks and invalidity reasons, persists selected-action successor evidence, and exposes a derived #symb.rl.qh training view. This separation is scientific, not only operational. It prevents selected-transition experiments from mutating the immutable one-step substrate, and it prevents the thesis from treating all-candidate oracle labels as if they were already multi-step replay.
 
-The implementation anchors for this contract are the #gh-wip("aria_nbv/aria_nbv/data_handling/_offline_store.py", body: [VIN offline-store owner], line: 1), #gh-wip("aria_nbv/aria_nbv/rollouts/dataset_writer.py", body: [rollout writer], line: 1), and #gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", body: [rollout schema owner], line: 1). These anchors support reproducibility of the data contract; manifest-backed store audits remain the source for reported counts.
+The implementation anchors for this contract are the #gh-wip("aria_nbv/aria_nbv/data_handling/offline/store.py", body: [VIN offline-store owner], line: 1), #gh-wip("aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py", body: [rollout writer], line: 1), and #gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", body: [rollout schema owner], line: 1). These anchors support reproducibility of the data contract; manifest-backed store audits remain the source for reported counts.
 
 #prune_todo(
   [The live v7 and dated audit-store snapshots below are development evidence. Remove them from the final Method chapter or replace and relocate them with manifest-backed final split statistics in Results or a reproducibility appendix.],
