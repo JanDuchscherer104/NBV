@@ -2,7 +2,7 @@
 
 This writer is the first rollout-data generation path, not a migration of the
 immutable VIN offline cache. It reads `VinOfflineDataset` samples with live
-`EfmSnippetView` snippets and GT meshes attached, selects actor-visible targets,
+`EfmSnippetView` snippets and GT meshes attached, samples oracle target tasks,
 generates fixed-count mixed candidate tables, scores valid candidates with the
 target-cropped oracle, and writes a separate `rollouts.zarr` store.
 
@@ -17,7 +17,6 @@ encoded as low target RRI.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 
 import torch
 from pydantic import Field, field_validator
@@ -25,12 +24,10 @@ from pydantic import Field, field_validator
 from ...data_handling._target_selection import (
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
-    ActorVisibleTargetSelector,
     OracleTargetTaskRow,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetCandidateRow,
-    TargetSelectorConfig,
     TargetTaskIdentityStatus,
 )
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
@@ -258,13 +255,6 @@ class SelectedDepthRetentionConfig(BaseConfig):
         )
 
 
-class RolloutTargetSource(StrEnum):
-    """Target source protocol used by the rollout writer."""
-
-    ORACLE_TARGET_TASK_SAMPLER = "oracle_target_task_sampler"
-    ACTOR_VISIBLE_SELECTOR = "actor_visible_selector"
-
-
 class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Configuration for building standalone target-RRI rollout Zarr stores.
 
@@ -294,14 +284,8 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     )
     """VIN strict-v7 source reader; must return samples with live snippet and GT mesh."""
 
-    target_selector: TargetSelectorConfig = Field(default_factory=TargetSelectorConfig)
-    """Actor-visible target selector used only for V1 diagnostic/deployable-input rollout profiles."""
-
     oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
     """Oracle GT target-task sampler used by default for rollout data generation."""
-
-    target_source: RolloutTargetSource = RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER
-    """Target source policy: oracle target tasks for data generation, actor-visible selector for V1 diagnostics."""
 
     candidate_mixture: CandidateMixtureViewGeneratorConfig = Field(default_factory=CandidateMixtureViewGeneratorConfig)
     """Fixed-count mixed finite-candidate generator regenerated at every rollout step."""
@@ -502,7 +486,6 @@ class RolloutDatasetWriter:
             raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
-        selector = ActorVisibleTargetSelector(self.config.target_selector)
         oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
         max_samples = (
             len(dataset)
@@ -523,7 +506,7 @@ class RolloutDatasetWriter:
                 self.stats.samples_without_snippet_or_mesh += 1
                 self.stats.skip("missing_snippet_or_mesh")
                 continue
-            target_result = self._select_targets(sample, selector=selector, oracle_sampler=oracle_sampler)
+            target_result = self._select_targets(sample, oracle_sampler=oracle_sampler)
             if not target_result.selected_rows:
                 reason = target_result.empty_reason
                 self.stats.skip(reason)
@@ -799,21 +782,9 @@ class RolloutDatasetWriter:
         self,
         sample: VinOfflineSample,
         *,
-        selector: ActorVisibleTargetSelector,
         oracle_sampler: OracleTargetTaskSampler,
     ) -> _RolloutTargetSelectionResult:
-        """Return rollout-ready target rows for the configured target-source policy."""
-
-        if self.config.target_source == RolloutTargetSource.ACTOR_VISIBLE_SELECTOR:
-            result = selector.select(sample)
-            reason = "no_ranked_targets" if result.rows and not result.ranked_rows else "no_actor_visible_targets"
-            return _RolloutTargetSelectionResult(
-                rows=result.rows,
-                selected_rows=result.selected_rows,
-                source=result.source,
-                warnings=result.warnings,
-                empty_reason=reason,
-            )
+        """Return rollout-ready target rows from oracle target-task sampling."""
 
         result = oracle_sampler.sample(sample)
         selected = tuple(_oracle_target_task_to_candidate_row(row) for row in result.selected_rows)
@@ -882,16 +853,10 @@ class RolloutDatasetWriter:
                 step.selected_depth_image_size_hw = (int(size_wh[1].item()), int(size_wh[0].item()))
 
     def _target_selection_temperature(self) -> float | None:
-        if self.config.target_source == RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER:
-            return None
-        if self.config.target_selector.policy.value == "temperature_softmax_top_k":
-            return float(self.config.target_selector.temperature)
         return None
 
     def _target_selection_policy(self) -> str:
-        if self.config.target_source == RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER:
-            return "oracle_identity_valid_uniform"
-        return self.config.target_selector.policy.value
+        return "oracle_identity_valid_uniform"
 
 
 def _lineage_split(*, records: list[object], fallback: str) -> str:
@@ -960,7 +925,6 @@ __all__ = [
     "RolloutDatasetWriter",
     "RolloutDatasetWriterConfig",
     "RolloutDatasetWriterStats",
-    "RolloutTargetSource",
     "RolloutRecipeConfig",
     "SelectedDepthRetentionConfig",
 ]

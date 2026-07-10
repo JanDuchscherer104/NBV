@@ -14,7 +14,6 @@
 
 max_samples            = 25
 max_targets_per_sample = 1
-target_source          = "oracle_target_task_sampler"
 require_label_valid    = true
 min_valid_root_candidates = 15
 log_timing             = true
@@ -38,27 +37,6 @@ verbosity                = 1
 
     [source.store]
     store_dir = "vin_offline"
-
-[target_selector]
-k                                 = 3
-source_mode                       = "v1_actor_visible"
-policy                            = "greedy_top_k"
-match_gt                          = true
-min_confidence                    = 0.2
-min_projected_area_pixels         = 16.0
-require_projected_visibility      = false
-projected_area_normalizer_pixels  = 57600.0
-projected_area_full_score_fraction = 0.05
-min_support_points                = 3
-support_saturation_points         = 128
-evl_support_weight                = 1.0
-missing_projection_visibility_score = 0.35
-obb_support_scale                 = 1.0
-max_support_points                = 20000
-min_gt_iou                        = 0.1
-min_gt_match_score                = 0.05
-gt_iou_samples                    = 8
-gt_ambiguity_margin               = 0.02
 
 [candidate_mixture.base]
 camera_label           = "rgb"

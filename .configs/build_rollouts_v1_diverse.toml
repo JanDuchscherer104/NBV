@@ -1,6 +1,5 @@
 max_samples = 1
 max_targets_per_sample = 2
-target_source = "oracle_target_task_sampler"
 require_label_valid = true
 min_valid_root_candidates = 2
 log_timing = true
@@ -24,14 +23,6 @@ verbosity = 1
 
 [source.store]
 store_dir = "vin_offline"
-
-[target_selector]
-k = 4
-source_mode = "v1_actor_visible"
-policy = "greedy_top_k"
-match_gt = true
-require_projected_visibility = false
-min_support_points = 3
 
 [candidate_mixture.base]
 camera_label = "rgb"

@@ -18,7 +18,6 @@ from aria_nbv.data_handling import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRo
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
-    RolloutTargetSource,
     SelectedDepthRetentionConfig,
     _oracle_target_task_to_candidate_row,
     _RolloutSourceLineageBuilder,
@@ -197,7 +196,6 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
 
     target = _oracle_target_task_to_candidate_row(row)
 
-    assert RolloutTargetSource.ORACLE_TARGET_TASK_SAMPLER.value == "oracle_target_task_sampler"
     assert target.gt_label_valid
     assert target.gt_match_status == "matched"
     assert target.gt_target_row_id == 2

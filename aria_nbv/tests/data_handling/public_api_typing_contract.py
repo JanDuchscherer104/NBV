@@ -19,7 +19,6 @@ from aria_nbv.data_handling import (
     ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
-    ActorVisibleTargetSelector,
     CompactObbBlock,
     CompactTrajectoryBlock,
     MeshProcessSpec,
@@ -33,10 +32,6 @@ from aria_nbv.data_handling import (
     OracleTargetTaskSweepCell,
     ProcessedMesh,
     TargetCandidateRow,
-    TargetSelectionPolicy,
-    TargetSelectionResult,
-    TargetSelectorConfig,
-    TargetSourceMode,
     TargetTaskIdentityStatus,
     VinDatasetSourceConfig,
     VinOfflineBackboneDiagnostic,
@@ -73,7 +68,6 @@ from aria_nbv.data_handling import (
 )
 
 RootExportClasses: TypeAlias = tuple[
-    type[ActorVisibleTargetSelector],
     type[CompactObbBlock],
     type[CompactTrajectoryBlock],
     type[MeshProcessSpec],
@@ -87,10 +81,6 @@ RootExportClasses: TypeAlias = tuple[
     type[OracleTargetTaskSweepCell],
     type[ProcessedMesh],
     type[TargetCandidateRow],
-    type[TargetSelectionPolicy],
-    type[TargetSelectionResult],
-    type[TargetSelectorConfig],
-    type[TargetSourceMode],
     type[TargetTaskIdentityStatus],
     type[VinOfflineBackboneDiagnostic],
     type[VinOfflineBlockDiagnostic],
@@ -116,7 +106,6 @@ RootExportClasses: TypeAlias = tuple[
 ]
 
 ROOT_EXPORT_CLASSES: RootExportClasses = (
-    ActorVisibleTargetSelector,
     CompactObbBlock,
     CompactTrajectoryBlock,
     MeshProcessSpec,
@@ -130,10 +119,6 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
     OracleTargetTaskSweepCell,
     ProcessedMesh,
     TargetCandidateRow,
-    TargetSelectionPolicy,
-    TargetSelectionResult,
-    TargetSelectorConfig,
-    TargetSourceMode,
     TargetTaskIdentityStatus,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,

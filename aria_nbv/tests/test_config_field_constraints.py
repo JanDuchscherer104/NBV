@@ -11,7 +11,6 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.data_handling import (
     OracleTargetTaskSamplerConfig,
-    TargetSelectorConfig,
     VinOfflineWriterConfig,
 )
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
@@ -56,8 +55,6 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
 @pytest.mark.parametrize(
     ("factory", "kwargs"),
     [
-        (TargetSelectorConfig, {"min_confidence": -0.1}),
-        (TargetSelectorConfig, {"k": 0}),
         (OracleTargetTaskSamplerConfig, {"max_targets_per_sample": 0}),
         (OracleTargetTaskSamplerConfig, {"min_identity_iou": -0.1}),
         (OracleTargetTaskSamplerConfig, {"identity_iou_thresholds": ()}),

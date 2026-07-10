@@ -1,34 +1,10 @@
-# TODO: Target Selection should be handled in a dedicated rollouts/target_selection module. This file is way too monolitic, also consider docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ: We are not interested in any kind of target selection that only sees the actor visible state. target slection is only a part of the target task sampling where we can use the full orcale visibly state to select suitable targets for which to generate multi-step rollout samples. Keep StrEnum based TargetSelection configuration.
-r"""Target-task sampling and actor-visible target selection for ARIA-NBV.
+r"""Oracle target-task sampling for ARIA-NBV.
 
-This module separates two target-facing contracts that must not be conflated:
-
-* `OracleTargetTaskSampler` builds the data-generation target-task pool from
-  oracle GT OBBs. It is the source for rollout labels and target-conditioned
-  supervision. Identity validity is a GT OBB IoU/ambiguity contract; projected
-  visibility, support, confidence, distance, and downstream headroom are
-  descriptor/audit fields, not first-pass eligibility gates.
-* `ActorVisibleTargetSelector` is the legacy/diagnostic V1
-  `OBS-SEL / PRED-Q / GT-EVAL` selector. It resolves observed or predicted OBB
-  records by actor-visible evidence only: OBB confidence, clipped projected
-  visible area, semidense support, EVL support, and support deficit. GT OBBs are
-  allowed only in explicit V0 sanity/upper-bound mode or after selection for
-  label/evaluation matching.
-
-Both contracts store actor-facing descriptors and oracle-side audit fields.
-Unmatched, ambiguous, empty-crop, or no-source cases are target-invalid states,
-not low target-RRI examples.
-
-Theory:
-    Target handling is a three-stage contract. First, hard eligibility checks
-    confidence, finite OBB geometry, clipped projected visibility policy, and
-    effective actor-visible support. Second, an interest score ranks or samples
-    eligible rows; the current baseline interest remains
-    $S_e=p_e s_e^{\mathrm{vis}}s_e^{\mathrm{sup}}s_e^{\mathrm{def}}$ while
-    stratified target sampling is deferred to scale audits. Third, GT matching
-    is a deterministic oracle/evaluation association based on semantic
-    compatibility, 3D IoU, and top-1/top-2 ambiguity. Support and visibility
-    are eligibility/audit fields, not GT-match ranking multipliers.
+`OracleTargetTaskSampler` builds the data-generation target-task pool from
+oracle GT OBBs. It is the source for rollout labels and target-conditioned
+supervision. Identity validity is a GT OBB IoU/ambiguity contract; projected
+visibility, support, confidence, distance, and downstream headroom are audit
+fields, not first-pass eligibility gates.
 """
 
 from __future__ import annotations
@@ -52,26 +28,6 @@ from .offline.batch import CompactObbBlock
 
 if TYPE_CHECKING:
     from .offline.dataset import VinOfflineSample
-
-
-class TargetSelectionPolicy(StrEnum):
-    """Supported top-K target selection policies."""
-
-    GREEDY_TOP_K = "greedy_top_k"
-    """Select the highest-scoring eligible rows deterministically."""
-
-    TEMPERATURE_SOFTMAX_TOP_K = "temperature_softmax_top_k"
-    """Sample eligible rows without replacement from temperature-scaled scores."""
-
-
-class TargetSourceMode(StrEnum):
-    """Control whether selection may consume actor-visible or oracle OBBs."""
-
-    V1_ACTOR_VISIBLE = "v1_actor_visible"
-    """Use detected or predicted OBBs and reserve GT OBBs for evaluation."""
-
-    V0_GT_SANITY = "v0_gt_sanity"
-    """Use GT OBBs directly for explicit oracle sanity or upper-bound runs."""
 
 
 TARGET_INVALID_REASON_CODES: dict[str, int] = {
@@ -99,7 +55,7 @@ ORACLE_TARGET_TASK_SOURCE = "gt_obbs_oracle"
 
 @dataclass(frozen=True, slots=True)
 class TargetCandidateRow:
-    """One actor-visible target candidate and its oracle audit fields.
+    """One rollout target candidate and its oracle audit fields.
 
     This is the row-level DTO for the OBS-SEL/PRED-Q/GT-EVAL boundary. The
     actor-visible part is derived from detected or predicted OBBs: class id,
@@ -122,7 +78,7 @@ class TargetCandidateRow:
     """Snippet identifier within `scene_id`, or ``None`` when unavailable."""
 
     source: str
-    """Actor-visible OBB source name used to construct this row."""
+    """OBB source name used to construct this row."""
 
     source_index: int
     """Row index in the source OBB table before padded rows are removed."""
@@ -143,7 +99,7 @@ class TargetCandidateRow:
     """Human-readable semantic class name, with a deterministic fallback for unknown ids."""
 
     confidence: float
-    """Actor-visible OBB confidence used by the eligibility gate and selection score."""
+    """OBB confidence retained for frozen lineage/audit columns."""
 
     center_world: tuple[float, float, float]
     """OBB center ``(x, y, z)`` in the world frame, metres."""
@@ -158,7 +114,7 @@ class TargetCandidateRow:
     """Flattened 12-value transform from object to the snippet reference frame."""
 
     projected_area_pixels: float
-    """Largest clipped actor-visible OBB projection area, square pixels."""
+    """Largest clipped OBB projection area, square pixels."""
 
     projected_area_fraction: float
     """Projected area divided by the configured image-area normalizer."""
@@ -173,19 +129,19 @@ class TargetCandidateRow:
     """Semidense count plus the configured weight times the EVL count."""
 
     visibility_score: float
-    """Projected-visibility factor used in actor-visible target ranking."""
+    """Projected-visibility audit factor, or a sentinel for oracle-selected tasks."""
 
     support_score: float
-    """Support sufficiency factor in ``[0, 1]`` used by the ranking score."""
+    """Support sufficiency audit factor, or a sentinel for oracle-selected tasks."""
 
     deficit_score: float
-    """Unsaturated-support factor in ``[0, 1]`` that favors improvable targets."""
+    """Unsaturated-support audit factor, or a sentinel for oracle-selected tasks."""
 
     score: float
-    """Actor-visible target interest score, or ``NaN`` when the row is ineligible."""
+    """Selection score retained for lineage; oracle tasks use identity IoU."""
 
     eligible: bool
-    """Whether every hard actor-visible eligibility check passed."""
+    """Whether the row is valid for target-RRI labeling."""
 
     invalid_reason_bitset: int
     """Bitset of `TARGET_INVALID_REASON_CODES` values observed for this row."""
@@ -222,78 +178,6 @@ class TargetCandidateRow:
 
     gt_match_status: str = "not_requested"
     """Stable audit status describing whether and how GT matching completed."""
-
-
-@dataclass(frozen=True, slots=True)
-class TargetSelectionResult:
-    """Ranked target table and selected top-K rows for one snippet.
-
-    `rows` contains every non-padded candidate target that could be interpreted
-    from the resolved actor-visible source. `ranked_rows` filters that table to
-    eligible rows and sorts it by the configured selection score. `selected_rows`
-    is the top-K or stochastic policy output used to condition candidate
-    generation and target-RRI labeling.
-
-    `source` records the resolved target source, for example `detected_obbs` or
-    `backbone.obb_pred_viz`. In V1, GT OBBs can appear only in GT match fields;
-    if GT was the selection source, `source_mode` must be `v0_gt_sanity`.
-    """
-
-    rows: tuple[TargetCandidateRow, ...]
-    """All non-padded candidates interpreted from the resolved OBB source."""
-
-    ranked_rows: tuple[TargetCandidateRow, ...]
-    """Eligible rows sorted by the configured policy ranking key."""
-
-    selected_rows: tuple[TargetCandidateRow, ...]
-    """Policy-selected rows with rank and sampling audit fields populated."""
-
-    k: int
-    """Requested maximum number of selected targets."""
-
-    policy: str
-    """Serialized `TargetSelectionPolicy` value used for selection."""
-
-    source_mode: str
-    """Serialized `TargetSourceMode` value controlling permitted OBB sources."""
-
-    source: str | None
-    """Resolved OBB source name, or ``None`` when no permitted source exists."""
-
-    seed: int | None
-    """Random seed used by stochastic selection, or ``None`` for an unseeded generator."""
-
-    temperature: float | None
-    """Softmax temperature for stochastic selection, otherwise ``None``."""
-
-    warnings: tuple[str, ...] = ()
-    """Non-fatal source-resolution and selection diagnostics."""
-
-    reason_code_version: str = TARGET_INVALID_REASON_VERSION
-    """Version of the numeric invalid-reason mapping used by every row."""
-
-    def diagnostic_summary(self) -> dict[str, int | float]:
-        """Return compact stratified counts for selector threshold audits."""
-
-        summary: dict[str, int | float] = {
-            "num_rows": len(self.rows),
-            "num_ranked": len(self.ranked_rows),
-            "num_selected": len(self.selected_rows),
-            "num_gt_label_valid": sum(1 for row in self.selected_rows if row.gt_label_valid),
-            "num_gt_unmatched": sum(1 for row in self.selected_rows if row.gt_match_status == "unmatched_gt"),
-            "num_gt_ambiguous": sum("ambiguous" in row.gt_match_status for row in self.selected_rows),
-            "num_duplicate_gt": sum(row.gt_match_status == "ambiguous_pred_to_gt" for row in self.selected_rows),
-            "num_missing_projection": sum(1 for row in self.rows if row.projected_area_pixels <= 0.0),
-        }
-        if self.rows:
-            summary["mean_confidence"] = sum(row.confidence for row in self.rows) / float(len(self.rows))
-            summary["mean_projected_area_pixels"] = sum(row.projected_area_pixels for row in self.rows) / float(
-                len(self.rows)
-            )
-            summary["mean_effective_support_count"] = sum(row.effective_support_count for row in self.rows) / float(
-                len(self.rows)
-            )
-        return summary
 
 
 class TargetTaskIdentityStatus(StrEnum):
@@ -537,85 +421,6 @@ class _TargetSource:
 
     sem_id_to_name: SemanticNameMap | None = None
     """Optional semantic-id name mapping associated with `obbs`."""
-
-
-class TargetSelectorConfig(TargetConfig["ActorVisibleTargetSelector"]):
-    """Configuration for `ActorVisibleTargetSelector`."""
-
-    @property
-    def target_type(self) -> type["ActorVisibleTargetSelector"]:
-        """Factory target for `BaseConfig.setup_target`."""
-
-        return ActorVisibleTargetSelector
-
-    k: int = Field(default=3, ge=1)
-    """Number of selected targets to materialize."""
-
-    policy: TargetSelectionPolicy = TargetSelectionPolicy.GREEDY_TOP_K
-    """Top-K policy applied after hard target eligibility masking."""
-
-    source_mode: TargetSourceMode = TargetSourceMode.V1_ACTOR_VISIBLE
-    """Whether to use V1 actor-visible sources or the V0 GT sanity source."""
-
-    seed: int | None = 0
-    """Seed for stochastic target selection policies."""
-
-    temperature: float = Field(default=1.0, gt=0.0)
-    """Softmax temperature for ``temperature_softmax_top_k``."""
-
-    min_confidence: float = Field(default=0.2, ge=0.0)
-    """Minimum observed/predicted OBB confidence for V1 eligibility."""
-
-    min_projected_area_pixels: float = Field(default=16.0, gt=0.0)
-    """Minimum clipped visible 2D area over RGB/SLAM OBB boxes."""
-
-    require_projected_visibility: bool = False
-    """Whether missing 2D OBB boxes hard-mask otherwise supported 3D target records."""
-
-    projected_area_normalizer_pixels: float = Field(default=240.0 * 240.0, gt=0.0)
-    """Image-area normalizer used for projected-area fractions."""
-
-    projected_area_image_width_px: float = Field(default=240.0, gt=0.0)
-    """Image width used to clip projected OBB boxes for visibility scoring."""
-
-    projected_area_image_height_px: float = Field(default=240.0, gt=0.0)
-    """Image height used to clip projected OBB boxes for visibility scoring."""
-
-    projected_area_full_score_fraction: float = Field(default=0.05, gt=0.0)
-    """Projected-area fraction that saturates the visibility score."""
-
-    min_support_points: int = Field(default=3, ge=1)
-    """Minimum effective semidense plus weighted EVL points inside the target OBB."""
-
-    support_saturation_points: int = Field(default=128, ge=1)
-    """Support count at which the deficit score reaches zero."""
-
-    evl_support_weight: float = Field(default=1.0, ge=0.0)
-    """Weight applied to EVL support points when computing effective support."""
-
-    missing_projection_visibility_score: float = Field(default=0.35, ge=0.0, le=1.0)
-    """Visibility multiplier for supported targets without any actor-visible 2D projection."""
-
-    obb_support_scale: float = Field(default=1.0, gt=0.0)
-    """OBB scale used when counting semidense/EVL points inside a target."""
-
-    max_support_points: int = Field(default=20000, ge=1)
-    """Maximum support points inspected per snippet, using deterministic prefix truncation."""
-
-    match_gt: bool = True
-    """Match selected V1 targets to GT OBBs after ranking when GT is available."""
-
-    min_gt_iou: float = Field(default=0.1, ge=0.0)
-    """Minimum sampled 3D OBB IoU for a GT target match."""
-
-    min_gt_match_score: float = Field(default=0.05, ge=0.0)
-    """Minimum geometry-only GT match score for V1 label acceptance."""
-
-    gt_iou_samples: int = Field(default=8, ge=1)
-    """Samples per dimension for EFM's sampled OBB IoU fallback."""
-
-    gt_ambiguity_margin: float = Field(default=0.02, ge=0.0)
-    """IoU margin below which competing GT matches are considered ambiguous."""
 
 
 class OracleTargetTaskSamplerConfig(TargetConfig["OracleTargetTaskSampler"]):
@@ -872,365 +677,6 @@ class OracleTargetTaskSampler:
         return tuple(selected)
 
 
-class ActorVisibleTargetSelector:
-    """Select top-K target OBBs from actor-visible snippet evidence."""
-
-    def __init__(self, config: TargetSelectorConfig) -> None:
-        """Initialize the selector.
-
-        Args:
-            config: Selection thresholds, policy, and source mode.
-        """
-
-        self.config = config
-
-    def select(self, sample: "VinOfflineSample") -> TargetSelectionResult:
-        """Select top-K targets from a VIN offline sample.
-
-        Args:
-            sample: Object carrying ``detected_obbs`` or ``backbone_out`` for
-                V1, plus optional ``gt_obbs`` for post-selection matching.
-
-        Returns:
-            Ranked target table and selected top-K rows.
-        """
-
-        from .offline.dataset import VinOfflineSample
-
-        if not isinstance(sample, VinOfflineSample):
-            raise TypeError("ActorVisibleTargetSelector expects VinOfflineSample input.")
-        warnings: list[str] = []
-        source = self._resolve_source(sample, warnings=warnings)
-        if source is None:
-            return TargetSelectionResult(
-                rows=(),
-                ranked_rows=(),
-                selected_rows=(),
-                k=self.config.k,
-                policy=self.config.policy.value,
-                source_mode=self.config.source_mode.value,
-                source=None,
-                seed=self.config.seed,
-                temperature=self._policy_temperature(),
-                warnings=tuple(warnings),
-            )
-
-        world_obbs = _world_obbs_for_sample(source.obbs, sample)
-        rows = self._build_rows(sample, source=source, world_obbs=world_obbs)
-        ranked = tuple(sorted((row for row in rows if row.eligible), key=_ranking_key))
-        selected = self._select_rows(ranked)
-        selected = self._match_selected_to_gt(selected, sample=sample, pred_obbs_world=world_obbs)
-        selected_by_id = {row.target_id: row for row in selected}
-        rows = tuple(selected_by_id.get(row.target_id, row) for row in rows)
-        ranked = tuple(selected_by_id.get(row.target_id, row) for row in ranked)
-
-        return TargetSelectionResult(
-            rows=rows,
-            ranked_rows=ranked,
-            selected_rows=selected,
-            k=self.config.k,
-            policy=self.config.policy.value,
-            source_mode=self.config.source_mode.value,
-            source=source.source,
-            seed=self.config.seed,
-            temperature=self._policy_temperature(),
-            warnings=tuple(warnings),
-        )
-
-    def _resolve_source(self, sample: "VinOfflineSample", *, warnings: list[str]) -> _TargetSource | None:
-        """Resolve the OBB source allowed by the selector mode.
-
-        V0 sanity mode intentionally reads GT OBBs. V1 first prefers
-        actor-visible detected OBBs, then EVL-predicted OBBs from the cached
-        backbone output. GT OBBs are refused in V1 and only surfaced as a
-        warning so they remain GT-EVAL labels, not OBS-SEL input.
-
-        Args:
-            sample: Data container exposing GT, detected, and backbone OBB
-                sources.
-            warnings: Mutable warning list propagated to the selection result.
-
-        Returns:
-            The resolved source block, or ``None`` when no permitted source is
-            available.
-        """
-
-        if self.config.source_mode == TargetSourceMode.V0_GT_SANITY:
-            gt = _compact_obb_block(sample.gt_obbs)
-            if gt is None:
-                warnings.append("V0 GT target selection requested, but sample has no GT OBB block.")
-                return None
-            return _TargetSource(source="gt_obbs_v0_sanity", obbs=gt[0], sem_id_to_name=gt[1])
-
-        detected = _compact_obb_block(sample.detected_obbs)
-        if detected is not None:
-            return _TargetSource(source="detected_obbs", obbs=detected[0], sem_id_to_name=detected[1])
-
-        backbone = sample.backbone_out
-        if isinstance(backbone, EvlBackboneOutput):
-            obb = backbone.obb_pred_viz if backbone.obb_pred_viz is not None else backbone.obb_pred
-            if obb is not None:
-                source_name = "backbone.obb_pred_viz" if backbone.obb_pred_viz is not None else "backbone.obb_pred"
-                return _TargetSource(source=source_name, obbs=obb, sem_id_to_name=backbone.obb_pred_sem_id_to_name)
-
-        if sample.gt_obbs is not None:
-            warnings.append("V1 target selection refused GT OBBs because they are oracle-only labels/evaluation data.")
-        warnings.append("No actor-visible detected/predicted OBB source was available for target selection.")
-        return None
-
-    def _build_rows(
-        self,
-        sample: "VinOfflineSample",
-        *,
-        source: _TargetSource,
-        world_obbs: ObbTW,
-    ) -> tuple[TargetCandidateRow, ...]:
-        valid_data, source_indices = _valid_obb_data_with_source_indices(world_obbs)
-        if valid_data.numel() == 0:
-            return ()
-        obbs = ObbTW(valid_data)
-        semidense_points = _semidense_points(sample, max_points=self.config.max_support_points)
-        evl_points, evl_counts = _evl_support_points(sample, max_points=self.config.max_support_points)
-        reference_pose = _pose_on_device(_reference_pose_world_rig(sample), device=valid_data.device)
-        scene_id = _first_scalar_string(sample.scene_id)
-        snippet_id = _first_scalar_string(sample.snippet_id)
-
-        rows: list[TargetCandidateRow] = []
-        for row_index in range(int(obbs.shape[0])):
-            obb = ObbTW(obbs._data[row_index])
-            sem_id = int(obb.sem_id.reshape(-1)[0].item())
-            inst_id = int(obb.inst_id.reshape(-1)[0].item())
-            confidence = float(obb.prob.reshape(-1)[0].item())
-            extents_t = obb.bb3_diagonal.detach().cpu().reshape(-1).to(dtype=torch.float32)
-            center_t = obb.bb3_center_world.detach().cpu().reshape(-1).to(dtype=torch.float32)
-            pose_world = obb.T_world_object.tensor().detach().cpu().reshape(-1).to(dtype=torch.float32)
-            relative_pose = (reference_pose.inverse() @ obb.T_world_object).tensor().detach().cpu().reshape(-1)
-            projected_area = _max_projected_area(obb, config=self.config)
-            projected_fraction = projected_area / float(self.config.projected_area_normalizer_pixels)
-            visibility_score = _visibility_score(
-                projected_area=projected_area,
-                projected_fraction=projected_fraction,
-                config=self.config,
-            )
-            semidense_count = _points_inside_count(obb, semidense_points, scale=self.config.obb_support_scale)
-            evl_count = _points_inside_count(
-                obb,
-                evl_points,
-                scale=self.config.obb_support_scale,
-                positive_counts=evl_counts,
-            )
-            effective_support = float(semidense_count) + float(self.config.evl_support_weight) * float(evl_count)
-            support_score = max(0.0, min(float(effective_support / float(self.config.min_support_points)), 1.0))
-            deficit_score = 1.0 - max(
-                0.0, min(float(effective_support / float(self.config.support_saturation_points)), 1.0)
-            )
-            reason_bitset = _target_reason_bitset(
-                obb=obb,
-                confidence=confidence,
-                projected_area=projected_area,
-                effective_support=effective_support,
-                config=self.config,
-            )
-            eligible = reason_bitset == (1 << TARGET_INVALID_REASON_CODES["VALID"])
-            score = confidence * visibility_score * support_score * deficit_score if eligible else float("nan")
-            source_index = int(source_indices[row_index])
-            target_id = _target_id(
-                scene_id=scene_id,
-                snippet_id=snippet_id,
-                source=source.source,
-                sem_id=sem_id,
-                inst_id=inst_id,
-                source_index=source_index,
-            )
-            rows.append(
-                TargetCandidateRow(
-                    scene_id=scene_id,
-                    snippet_id=snippet_id,
-                    source=source.source,
-                    source_index=source_index,
-                    target_row_id=source_index,
-                    target_id=target_id,
-                    sem_id=sem_id,
-                    inst_id=inst_id,
-                    class_name=_class_name(sem_id, source.sem_id_to_name),
-                    confidence=confidence,
-                    center_world=_float_tuple(center_t, length=3),  # type: ignore[assignment]
-                    extents=_float_tuple(extents_t, length=3),  # type: ignore[assignment]
-                    pose_world_object=_float_tuple(pose_world),
-                    relative_pose_reference_object=_float_tuple(relative_pose),
-                    projected_area_pixels=float(projected_area),
-                    projected_area_fraction=float(projected_fraction),
-                    semidense_support_count=int(semidense_count),
-                    evl_support_count=int(evl_count),
-                    effective_support_count=float(effective_support),
-                    visibility_score=float(visibility_score),
-                    support_score=float(support_score),
-                    deficit_score=float(deficit_score),
-                    score=float(score),
-                    eligible=bool(eligible),
-                    invalid_reason_bitset=int(reason_bitset),
-                    primary_invalid_reason=_primary_reason(reason_bitset),
-                )
-            )
-        return tuple(rows)
-
-    def _select_rows(self, ranked_rows: tuple[TargetCandidateRow, ...]) -> tuple[TargetCandidateRow, ...]:
-        if not ranked_rows:
-            return ()
-        if self.config.policy == TargetSelectionPolicy.GREEDY_TOP_K:
-            return tuple(
-                replace(row, selected_rank=rank, selection_probability=1.0, selection_log_probability=0.0)
-                for rank, row in enumerate(ranked_rows[: self.config.k])
-            )
-        return self._sample_rows_without_replacement(ranked_rows)
-
-    def _sample_rows_without_replacement(
-        self, ranked_rows: tuple[TargetCandidateRow, ...]
-    ) -> tuple[TargetCandidateRow, ...]:
-        scores = torch.tensor([row.score for row in ranked_rows], dtype=torch.float32)
-        remaining = torch.ones(scores.shape[0], dtype=torch.bool)
-        selected: list[TargetCandidateRow] = []
-        generator = torch.Generator(device="cpu")
-        if self.config.seed is not None:
-            generator.manual_seed(int(self.config.seed))
-
-        for rank in range(min(self.config.k, len(ranked_rows))):
-            logits = scores / float(self.config.temperature)
-            masked_logits = torch.where(remaining, logits, torch.full_like(logits, float("-inf")))
-            probabilities = torch.softmax(masked_logits, dim=0)
-            entropy = -torch.sum(probabilities[remaining] * torch.log(probabilities[remaining].clamp_min(1e-12)))
-            sampled = int(torch.multinomial(probabilities, 1, replacement=False, generator=generator).item())
-            selected.append(
-                replace(
-                    ranked_rows[sampled],
-                    selected_rank=rank,
-                    selection_probability=float(probabilities[sampled].item()),
-                    selection_log_probability=float(torch.log(probabilities[sampled].clamp_min(1e-12)).item()),
-                    selection_entropy=float(entropy.item()),
-                )
-            )
-            remaining[sampled] = False
-            if not bool(remaining.any().item()):
-                break
-        return tuple(selected)
-
-    def _match_selected_to_gt(
-        self,
-        selected_rows: tuple[TargetCandidateRow, ...],
-        *,
-        sample: "VinOfflineSample",
-        pred_obbs_world: ObbTW,
-    ) -> tuple[TargetCandidateRow, ...]:
-        if not selected_rows:
-            return ()
-        if self.config.source_mode == TargetSourceMode.V0_GT_SANITY:
-            return tuple(
-                replace(
-                    row,
-                    gt_label_valid=True,
-                    gt_target_row_id=row.target_row_id,
-                    gt_target_id=row.target_id,
-                    gt_match_iou=1.0,
-                    gt_match_score=1.0,
-                    gt_match_status="v0_gt_input",
-                )
-                for row in selected_rows
-            )
-        if not self.config.match_gt:
-            return selected_rows
-        gt_block = _compact_obb_block(sample.gt_obbs)
-        if gt_block is None:
-            return tuple(replace(row, gt_match_status="missing_gt") for row in selected_rows)
-
-        gt_world = _world_obbs_for_sample(gt_block[0], sample)
-        gt_data, gt_source_indices = _valid_obb_data_with_source_indices(gt_world)
-        pred_data, pred_source_indices = _valid_obb_data_with_source_indices(pred_obbs_world)
-        if gt_data.numel() == 0:
-            return tuple(replace(row, gt_match_status="missing_gt") for row in selected_rows)
-
-        gt_obbs = ObbTW(gt_data)
-        pred_obbs = ObbTW(pred_data)
-        pred_index_by_source = {int(source_index): index for index, source_index in enumerate(pred_source_indices)}
-        matched: list[TargetCandidateRow] = []
-        for row in selected_rows:
-            pred_index = pred_index_by_source.get(row.source_index)
-            if pred_index is None:
-                matched.append(replace(row, gt_match_status="unmatched_gt"))
-                continue
-            pred = ObbTW(pred_obbs._data[pred_index].unsqueeze(0))
-            candidate_matches: list[tuple[int, float, float]] = []
-            for gt_index in range(int(gt_obbs.shape[0])):
-                gt = ObbTW(gt_obbs._data[gt_index].unsqueeze(0))
-                if int(gt.sem_id.reshape(-1)[0].item()) != row.sem_id:
-                    continue
-                iou = _safe_obb_iou(pred, gt, samples=self.config.gt_iou_samples)
-                match_score = _gt_match_score(iou=iou)
-                if iou >= self.config.min_gt_iou and match_score >= self.config.min_gt_match_score:
-                    candidate_matches.append((gt_index, iou, match_score))
-            candidate_matches.sort(key=lambda item: item[2], reverse=True)
-            if not candidate_matches:
-                matched.append(
-                    replace(
-                        row,
-                        gt_label_valid=False,
-                        gt_match_status="unmatched_gt",
-                        invalid_reason_bitset=_target_failure_bitset(
-                            row.invalid_reason_bitset,
-                            TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"],
-                        ),
-                        primary_invalid_reason=TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"],
-                    )
-                )
-                continue
-            if len(candidate_matches) > 1 and (
-                candidate_matches[0][2] - candidate_matches[1][2] <= self.config.gt_ambiguity_margin
-            ):
-                matched.append(
-                    replace(
-                        row,
-                        gt_label_valid=False,
-                        gt_match_iou=float(candidate_matches[0][1]),
-                        gt_match_score=float(candidate_matches[0][2]),
-                        gt_match_status="ambiguous_gt",
-                        invalid_reason_bitset=_target_failure_bitset(
-                            row.invalid_reason_bitset,
-                            TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"],
-                        ),
-                        primary_invalid_reason=TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"],
-                    )
-                )
-                continue
-            gt_index, best_iou, best_match_score = candidate_matches[0]
-            gt_source_index = int(gt_source_indices[gt_index])
-            matched.append(
-                replace(
-                    row,
-                    gt_label_valid=True,
-                    gt_target_row_id=gt_source_index,
-                    gt_target_id=_target_id(
-                        scene_id=row.scene_id,
-                        snippet_id=row.snippet_id,
-                        source="gt_obbs",
-                        sem_id=row.sem_id,
-                        inst_id=int(gt_obbs.inst_id.reshape(-1)[gt_index].item()),
-                        source_index=gt_source_index,
-                    ),
-                    gt_match_iou=float(best_iou),
-                    gt_match_score=float(best_match_score),
-                    gt_match_status="matched",
-                )
-            )
-
-        return _mark_duplicate_gt_matches(tuple(matched))
-
-    def _policy_temperature(self) -> float | None:
-        return (
-            float(self.config.temperature)
-            if self.config.policy == TargetSelectionPolicy.TEMPERATURE_SOFTMAX_TOP_K
-            else None
-        )
-
-
 def _compact_obb_block(value: CompactObbBlock | ObbTW | Tensor | None) -> tuple[ObbTW, SemanticNameMap | None] | None:
     if value is None:
         return None
@@ -1386,7 +832,7 @@ def _points_inside_count(obb: ObbTW, points: Tensor, *, scale: float, positive_c
     return int(inside.sum().item())
 
 
-def _max_projected_area(obb: ObbTW, *, config: TargetSelectorConfig | OracleTargetTaskSamplerConfig) -> float:
+def _max_projected_area(obb: ObbTW, *, config: OracleTargetTaskSamplerConfig) -> float:
     areas: list[float] = []
     image_width = float(config.projected_area_image_width_px)
     image_height = float(config.projected_area_image_height_px)
@@ -1402,80 +848,6 @@ def _max_projected_area(obb: ObbTW, *, config: TargetSelectorConfig | OracleTarg
         if area.numel():
             areas.append(float(area.max().item()))
     return max(areas) if areas else 0.0
-
-
-def _visibility_score(
-    *,
-    projected_area: float,
-    projected_fraction: float,
-    config: TargetSelectorConfig,
-) -> float:
-    """Compute a smooth actor-visible projected-area score."""
-
-    if projected_area <= 0.0:
-        return 0.0 if config.require_projected_visibility else float(config.missing_projection_visibility_score)
-    normalized = max(0.0, min(float(projected_fraction / config.projected_area_full_score_fraction), 1.0))
-    return float(normalized * normalized * (3.0 - 2.0 * normalized))
-
-
-def _gt_match_score(*, iou: float) -> float:
-    """Return the geometry-only GT association score.
-
-    Target support and projected visibility decide whether an actor-visible row
-    is labelable and interesting. Once selected, GT association is kept as
-    class-compatible 3D IoU so labelability failures are not conflated with
-    geometric mismatch.
-    """
-
-    return float(max(0.0, iou))
-
-
-def _target_reason_bitset(
-    *,
-    obb: ObbTW,
-    confidence: float,
-    projected_area: float,
-    effective_support: float,
-    config: TargetSelectorConfig,
-) -> int:
-    bitset = 0
-    data = obb.tensor().reshape(-1)
-    extents = obb.bb3_diagonal.reshape(-1)
-    if not torch.isfinite(data).all():
-        bitset |= 1 << TARGET_INVALID_REASON_CODES["OBB_NONFINITE"]
-    if not torch.isfinite(extents).all() or bool((extents <= 0).any().item()):
-        bitset |= 1 << TARGET_INVALID_REASON_CODES["OBB_EXTENT_INVALID"]
-    if confidence < config.min_confidence:
-        bitset |= 1 << TARGET_INVALID_REASON_CODES["CONFIDENCE_TOO_LOW"]
-    if config.require_projected_visibility:
-        if projected_area <= 0.0:
-            bitset |= 1 << TARGET_INVALID_REASON_CODES["NO_PROJECTED_VISIBILITY"]
-        if projected_area < config.min_projected_area_pixels:
-            bitset |= 1 << TARGET_INVALID_REASON_CODES["PROJECTED_AREA_TOO_SMALL"]
-    if effective_support < config.min_support_points:
-        bitset |= 1 << TARGET_INVALID_REASON_CODES["TARGET_SUPPORT_TOO_LOW"]
-    return (1 << TARGET_INVALID_REASON_CODES["VALID"]) if bitset == 0 else bitset
-
-
-def _primary_reason(bitset: int) -> int:
-    if bitset == (1 << TARGET_INVALID_REASON_CODES["VALID"]):
-        return TARGET_INVALID_REASON_CODES["VALID"]
-    for _name, bit in sorted(TARGET_INVALID_REASON_CODES.items(), key=lambda item: item[1]):
-        if bit != TARGET_INVALID_REASON_CODES["VALID"] and bitset & (1 << bit):
-            return bit
-    return TARGET_INVALID_REASON_CODES["VALID"]
-
-
-def _safe_obb_iou(pred: ObbTW, gt: ObbTW, *, samples: int) -> float:
-    try:
-        value = obb_iou3d(pred, gt, samp_per_dim=int(samples))
-        return float(value.reshape(-1)[0].item())
-    except Exception:
-        pred_center = pred.bb3_center_world.reshape(-1, 3)[0]
-        gt_center = gt.bb3_center_world.reshape(-1, 3)[0]
-        pred_diag = torch.linalg.norm(pred.bb3_diagonal.reshape(-1, 3)[0]).clamp_min(1e-6)
-        gt_diag = torch.linalg.norm(gt.bb3_diagonal.reshape(-1, 3)[0]).clamp_min(1e-6)
-        return float((1.0 - torch.linalg.norm(pred_center - gt_center) / (pred_diag + gt_diag)).clamp(0.0, 1.0))
 
 
 def _strict_obb_iou(pred: ObbTW, gt: ObbTW, *, samples: int) -> float | None:
@@ -1496,40 +868,6 @@ def _obb_geometry_valid(obb: ObbTW) -> bool:
         and bool(torch.isfinite(extents).all().item())
         and not bool((extents <= 0).any().item())
     )
-
-
-def _mark_duplicate_gt_matches(rows: tuple[TargetCandidateRow, ...]) -> tuple[TargetCandidateRow, ...]:
-    counts: dict[int, int] = {}
-    for row in rows:
-        if row.gt_label_valid and row.gt_target_row_id is not None:
-            counts[row.gt_target_row_id] = counts.get(row.gt_target_row_id, 0) + 1
-    output: list[TargetCandidateRow] = []
-    for row in rows:
-        if row.gt_label_valid and row.gt_target_row_id is not None and counts.get(row.gt_target_row_id, 0) > 1:
-            output.append(
-                replace(
-                    row,
-                    gt_label_valid=False,
-                    gt_match_status="ambiguous_pred_to_gt",
-                    invalid_reason_bitset=_target_failure_bitset(
-                        row.invalid_reason_bitset,
-                        TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"],
-                    ),
-                    primary_invalid_reason=TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"],
-                )
-            )
-        else:
-            output.append(row)
-    return tuple(output)
-
-
-def _target_failure_bitset(current: int, reason: int) -> int:
-    valid = 1 << TARGET_INVALID_REASON_CODES["VALID"]
-    return (int(current) & ~valid) | (1 << int(reason))
-
-
-def _ranking_key(row: TargetCandidateRow) -> tuple[float, int, str]:
-    return (-float(row.score), int(row.source_index), row.target_id)
 
 
 def _class_name(sem_id: int, sem_id_to_name: SemanticNameMap | None) -> str:
@@ -1564,7 +902,6 @@ def _float_tuple(values: Tensor, *, length: int | None = None) -> tuple[float, .
 
 
 __all__ = [
-    "ActorVisibleTargetSelector",
     "ORACLE_TARGET_TASK_SOURCE",
     "OracleTargetTaskRow",
     "OracleTargetTaskSampler",
@@ -1575,9 +912,5 @@ __all__ = [
     "TARGET_INVALID_REASON_VERSION",
     "TargetCandidateRow",
     "TargetTaskIdentityStatus",
-    "TargetSelectionPolicy",
-    "TargetSelectionResult",
-    "TargetSelectorConfig",
-    "TargetSourceMode",
     "target_gt_obb_world",
 ]

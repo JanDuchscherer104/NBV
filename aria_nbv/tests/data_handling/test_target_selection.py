@@ -1,10 +1,9 @@
-"""Tests for actor-visible top-K target selection."""
+"""Tests for oracle target-task sampling."""
 
 # ruff: noqa: S101
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 import torch
 
@@ -16,20 +15,14 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import (
     ORACLE_TARGET_TASK_SOURCE,
-    TARGET_INVALID_REASON_CODES,
-    ActorVisibleTargetSelector,
     CompactObbBlock,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
-    TargetSelectionPolicy,
-    TargetSelectorConfig,
-    TargetSourceMode,
     TargetTaskIdentityStatus,
     VinSnippetView,
 )
 from aria_nbv.data_handling import _target_selection as target_selection_module
 from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
-from aria_nbv.vin.types import EvlBackboneOutput
 
 
 def _poses(translations: list[list[float]]) -> PoseTW:
@@ -84,7 +77,7 @@ def _sample(
     *,
     detected_obbs: CompactObbBlock | None = None,
     gt_obbs: CompactObbBlock | None = None,
-    backbone_out: EvlBackboneOutput | None = None,
+    backbone_out: object | None = None,
     points: list[list[float]] | None = None,
 ) -> VinOfflineSample:
     point_tensor = torch.tensor(points or [], dtype=torch.float32).reshape(-1, 3)
@@ -116,11 +109,6 @@ def _sample(
         gt_obbs=gt_obbs,
         backbone_out=backbone_out,
     )
-
-
-def _selector(**kwargs: object) -> ActorVisibleTargetSelector:
-    config = TargetSelectorConfig(min_support_points=1, support_saturation_points=10, **kwargs)
-    return ActorVisibleTargetSelector(config)
 
 
 def _oracle_sampler(**kwargs: object) -> OracleTargetTaskSampler:
@@ -228,261 +216,3 @@ def test_oracle_target_task_sampler_rejects_vin_oracle_batch_input() -> None:
 
     with pytest.raises(TypeError, match="VinOfflineSample"):
         _oracle_sampler().sample(sample.to_vin_oracle_batch())
-
-
-def test_greedy_top_k_returns_deterministic_deficit_ranked_rows() -> None:
-    sample = _sample(
-        detected_obbs=_obb_block([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]]),
-        points=[
-            [0.0, 0.0, 0.0],
-            [3.0, 0.0, 0.0],
-            [3.1, 0.0, 0.0],
-            [3.2, 0.0, 0.0],
-            [3.3, 0.0, 0.0],
-            [3.4, 0.0, 0.0],
-            [6.0, 0.0, 0.0],
-            [6.1, 0.0, 0.0],
-            [6.2, 0.0, 0.0],
-        ],
-    )
-
-    result = _selector(k=2).select(sample)
-
-    assert result.source == "detected_obbs"
-    assert [row.source_index for row in result.selected_rows] == [0, 2]
-    assert [row.selected_rank for row in result.selected_rows] == [0, 1]
-    assert result.selected_rows[0].score >= result.selected_rows[1].score
-    assert all(row.eligible for row in result.selected_rows)
-
-
-def test_temperature_softmax_top_k_is_seeded_and_samples_distinct_rows() -> None:
-    sample = _sample(
-        detected_obbs=_obb_block([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]]),
-        points=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
-    )
-
-    first = _selector(k=2, policy=TargetSelectionPolicy.TEMPERATURE_SOFTMAX_TOP_K, seed=42).select(sample)
-    second = _selector(k=2, policy=TargetSelectionPolicy.TEMPERATURE_SOFTMAX_TOP_K, seed=42).select(sample)
-
-    assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
-    assert len({row.source_index for row in first.selected_rows}) == 2
-    for row in first.selected_rows:
-        assert row.selection_probability is not None
-        assert row.selection_log_probability is not None
-        assert row.selection_entropy is not None
-
-
-def test_invalid_low_support_target_is_hard_masked() -> None:
-    sample = _sample(detected_obbs=_obb_block([[0.0, 0.0, 0.0]]), points=[])
-
-    result = _selector(k=1).select(sample)
-
-    assert result.selected_rows == ()
-    assert len(result.rows) == 1
-    row = result.rows[0]
-    assert not row.eligible
-    assert row.primary_invalid_reason == TARGET_INVALID_REASON_CODES["TARGET_SUPPORT_TOO_LOW"]
-
-
-def test_v1_refuses_gt_only_source() -> None:
-    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]), points=[[0.0, 0.0, 0.0]])
-
-    result = _selector(k=1).select(sample)
-
-    assert result.rows == ()
-    assert result.selected_rows == ()
-    assert any("refused GT OBBs" in warning for warning in result.warnings)
-
-
-def test_selector_falls_back_to_backbone_obbs_when_detected_block_is_missing() -> None:
-    backbone = EvlBackboneOutput(
-        t_world_voxel=_poses([[0.0, 0.0, 0.0]]),
-        voxel_extent=torch.tensor([-1.0, 1.0, -1.0, 1.0, -1.0, 1.0], dtype=torch.float32),
-        obb_pred_viz=ObbTW(_obb_block([[0.0, 0.0, 0.0]]).obbs),
-        obb_pred_sem_id_to_name={0: "chair"},
-        pts_world=torch.tensor([[[0.0, 0.0, 0.0]]], dtype=torch.float32),
-        counts=torch.ones((1, 1), dtype=torch.int64),
-    )
-    sample = _sample(backbone_out=backbone, points=[])
-
-    result = _selector(k=1).select(sample)
-
-    assert result.source == "backbone.obb_pred_viz"
-    assert len(result.selected_rows) == 1
-
-
-def test_selector_resolves_sparse_backbone_semantic_names_after_payload_decode() -> None:
-    source = EvlBackboneOutput(
-        t_world_voxel=_poses([[0.0, 0.0, 0.0]]),
-        voxel_extent=torch.tensor([-1.0, 1.0, -1.0, 1.0, -1.0, 1.0], dtype=torch.float32),
-        obb_pred_viz=ObbTW(_obb_block([[0.0, 0.0, 0.0]], sem_ids=[28]).obbs),
-        obb_pred_sem_id_to_name={28: "window"},
-        pts_world=torch.tensor([[[0.0, 0.0, 0.0]]], dtype=torch.float32),
-        counts=torch.ones((1, 1), dtype=torch.int64),
-    )
-    backbone = EvlBackboneOutput.from_serializable(source.to_serializable(), device=torch.device("cpu"))
-    sample = _sample(backbone_out=backbone, points=[])
-
-    result = _selector(k=1).select(sample)
-
-    assert result.source == "backbone.obb_pred_viz"
-    assert result.selected_rows[0].class_name == "window"
-
-
-def test_backbone_obb_without_2d_projection_can_use_3d_support() -> None:
-    backbone = EvlBackboneOutput(
-        t_world_voxel=_poses([[0.0, 0.0, 0.0]]),
-        voxel_extent=torch.tensor([-1.0, 1.0, -1.0, 1.0, -1.0, 1.0], dtype=torch.float32),
-        obb_pred_viz=ObbTW(_obb_block([[0.0, 0.0, 0.0]], box_size=0.0).obbs),
-        obb_pred_sem_id_to_name={0: "chair"},
-        pts_world=torch.tensor([[[0.0, 0.0, 0.0]]], dtype=torch.float32),
-        counts=torch.ones((1, 1), dtype=torch.int64),
-    )
-    sample = _sample(backbone_out=backbone, points=[])
-
-    result = _selector(k=1).select(sample)
-
-    assert len(result.selected_rows) == 1
-    assert result.selected_rows[0].projected_area_pixels == 0.0
-    assert 0.0 < result.selected_rows[0].visibility_score < 1.0
-
-
-def test_missing_projection_is_penalized_against_visible_supported_target() -> None:
-    sample = _sample(
-        detected_obbs=_obb_block([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], box_size=0.0),
-        points=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
-    )
-    visible = _obb_block([[3.0, 0.0, 0.0]], box_size=100.0)
-    detected = torch.cat([sample.detected_obbs.obbs[:1], visible.obbs], dim=0)
-    sample.detected_obbs = CompactObbBlock(obbs=detected, sem_id_to_name={0: "chair"})
-
-    result = _selector(k=2).select(sample)
-
-    assert result.rows[0].projected_area_pixels == 0.0
-    assert result.rows[0].visibility_score == pytest.approx(0.35)
-    assert result.rows[1].visibility_score == pytest.approx(1.0)
-    assert result.selected_rows[0].source_index == 1
-
-
-def test_projected_visibility_can_still_be_required() -> None:
-    sample = _sample(
-        detected_obbs=_obb_block([[0.0, 0.0, 0.0]], box_size=0.0),
-        points=[[0.0, 0.0, 0.0]],
-    )
-
-    result = _selector(k=1, require_projected_visibility=True).select(sample)
-
-    assert result.selected_rows == ()
-    assert result.rows[0].primary_invalid_reason == TARGET_INVALID_REASON_CODES["NO_PROJECTED_VISIBILITY"]
-
-
-def test_selector_rejects_vin_oracle_batch_input() -> None:
-    sample = _sample(detected_obbs=_obb_block([[0.0, 0.0, 0.0]]), points=[[0.0, 0.0, 0.0]])
-
-    with pytest.raises(TypeError, match="VinOfflineSample"):
-        _selector(k=1).select(sample.to_vin_oracle_batch())
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
-def test_selector_handles_cuda_reference_pose_with_cpu_obbs() -> None:
-    sample = _sample(detected_obbs=_obb_block([[0.0, 0.0, 0.0]]), points=[[0.0, 0.0, 0.0]])
-    sample.oracle.reference_pose_world_rig = PoseTW(sample.oracle.reference_pose_world_rig.tensor().cuda())
-
-    result = _selector(k=1).select(sample)
-
-    assert len(result.selected_rows) == 1
-    assert result.selected_rows[0].relative_pose_reference_object == pytest.approx(
-        (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
-    )
-
-
-def test_selected_target_matches_compatible_gt_obb() -> None:
-    detected = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[10])
-    gt = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
-    sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0]])
-
-    row = _selector(k=1).select(sample).selected_rows[0]
-
-    assert row.gt_label_valid
-    assert row.gt_match_status == "matched"
-    assert row.gt_target_row_id == 0
-    assert np.isclose(row.gt_match_iou, 1.0)
-    assert np.isclose(row.gt_match_score, 1.0)
-
-
-def test_gt_match_score_is_geometry_only_after_target_eligibility() -> None:
-    detected = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[10], box_size=0.0)
-    gt = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
-    sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0]])
-
-    row = _selector(k=1).select(sample).selected_rows[0]
-
-    assert row.gt_label_valid
-    assert row.gt_match_iou == pytest.approx(1.0)
-    assert row.visibility_score < 1.0
-    assert row.gt_match_score == pytest.approx(row.gt_match_iou)
-
-
-def test_projected_area_is_clipped_visible_image_overlap() -> None:
-    boxes = torch.tensor([[-20.0, 20.0, -10.0, 30.0]], dtype=torch.float32)
-    sample = _sample(
-        detected_obbs=_obb_block([[0.0, 0.0, 0.0]], bb2=boxes),
-        points=[[0.0, 0.0, 0.0]],
-    )
-
-    row = _selector(k=1).select(sample).selected_rows[0]
-
-    assert row.projected_area_pixels == pytest.approx(20.0 * 30.0)
-    assert row.projected_area_fraction == pytest.approx((20.0 * 30.0) / (240.0 * 240.0))
-
-
-def test_duplicate_predicted_targets_make_gt_match_ambiguous() -> None:
-    detected = _obb_block([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]], sem_ids=[1, 1], inst_ids=[10, 11])
-    gt = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
-    sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]])
-
-    selected = _selector(k=2).select(sample).selected_rows
-
-    assert len(selected) == 2
-    assert {row.gt_match_status for row in selected} == {"ambiguous_pred_to_gt"}
-    assert not any(row.gt_label_valid for row in selected)
-    assert {row.primary_invalid_reason for row in selected} == {TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"]}
-    assert not any(row.invalid_reason_bitset & (1 << TARGET_INVALID_REASON_CODES["VALID"]) for row in selected)
-
-
-def test_selected_target_without_gt_match_is_not_label_valid() -> None:
-    detected = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[10])
-    gt = _obb_block([[10.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
-    sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0]])
-
-    row = _selector(k=1).select(sample).selected_rows[0]
-
-    assert not row.gt_label_valid
-    assert row.gt_match_status == "unmatched_gt"
-    assert row.primary_invalid_reason == TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
-    assert not row.invalid_reason_bitset & (1 << TARGET_INVALID_REASON_CODES["VALID"])
-
-
-def test_v0_gt_sanity_source_is_opt_in() -> None:
-    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]), points=[[0.0, 0.0, 0.0]])
-
-    result = _selector(k=1, source_mode=TargetSourceMode.V0_GT_SANITY).select(sample)
-
-    assert result.source == "gt_obbs_v0_sanity"
-    assert len(result.selected_rows) == 1
-    assert result.selected_rows[0].gt_label_valid
-    assert result.selected_rows[0].gt_match_status == "v0_gt_input"
-
-
-def test_target_selection_diagnostic_summary_counts_selection_strata() -> None:
-    detected = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[10], box_size=0.0)
-    gt = _obb_block([[0.0, 0.0, 0.0]], sem_ids=[1], inst_ids=[99])
-    sample = _sample(detected_obbs=detected, gt_obbs=gt, points=[[0.0, 0.0, 0.0]])
-
-    summary = _selector(k=1).select(sample).diagnostic_summary()
-
-    assert summary["num_rows"] == 1
-    assert summary["num_selected"] == 1
-    assert summary["num_gt_label_valid"] == 1
-    assert summary["num_missing_projection"] == 1
-    assert summary["mean_effective_support_count"] == pytest.approx(1.0)

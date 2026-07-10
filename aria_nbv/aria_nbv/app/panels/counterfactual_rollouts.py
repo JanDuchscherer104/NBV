@@ -17,16 +17,15 @@ import torch
 from efm3d.aria.pose import PoseTW
 
 from ...data_handling import (
-    ActorVisibleTargetSelector,
+    OracleTargetTaskSampler,
+    OracleTargetTaskSamplerConfig,
     TargetCandidateRow,
-    TargetSelectionPolicy,
-    TargetSelectorConfig,
-    TargetSourceMode,
     VinOfflineDatasetConfig,
     VinOfflineSample,
     VinOfflineStoreConfig,
     target_gt_obb_world,
 )
+from ...oracle.pipelines.rollout_dataset import _oracle_target_task_to_candidate_row
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
@@ -68,15 +67,13 @@ if TYPE_CHECKING:
 
 
 _SOURCE_TARGET_INFO = """
-This block chooses the immutable VIN offline root and the actor-visible target candidates.
+This block chooses the immutable VIN offline root and the oracle-specified target tasks.
 
 - `VIN offline store`: source rows with cached EFM/backbone state and attached mesh assets.
 - `Split` / `Split-local sample index`: which source row is inspected.
-- `Target source mode`: V1 should use actor-visible target records; GT-only modes are sanity/evaluation paths.
-- `Target top-k` / `Target policy`: how many eligible actor-visible targets are retained and how they are ranked.
-- `Min target confidence` / `Min target support`: actor-side quality filters before rollout generation.
-- `Min GT IoU` / `GT ambiguity gap`: GT matching gates for labels and evaluation crops only.
-- `Target softmax temperature`: stochastic target-selection temperature when a sampling policy is used.
+- `Max target tasks`: how many finite positive GT target tasks are sampled for rollout generation.
+- `Selection seed`: deterministic uniform-without-replacement oracle target-task sampling.
+- `Identity IoU` / `Identity gap`: minimal GT-row admission gates before evidence validation.
 """
 
 _LOADED_SAMPLE_INFO = """
@@ -326,6 +323,16 @@ class LiveRolloutScoringMode(StrEnum):
     TARGET_RRI = "target_rri"
     SCENE_RRI = "scene_rri"
     GEOMETRY = "geometry"
+
+
+@dataclass(frozen=True, slots=True)
+class _LiveTargetSelectionResult:
+    """Oracle target-task rows adapted for the live rollout UI."""
+
+    rows: tuple[TargetCandidateRow, ...]
+    selected_rows: tuple[TargetCandidateRow, ...]
+    source: str | None
+    warnings: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -1179,46 +1186,30 @@ def _render_live_rollouts_tab() -> None:
                 st.number_input("Split-local sample index", min_value=0, value=0, step=1, key="cf_sample_index")
             )
         with col_b:
-            source_mode = st.selectbox(
-                "Target source mode",
-                options=list(TargetSourceMode),
-                index=list(TargetSourceMode).index(TargetSourceMode.V1_ACTOR_VISIBLE),
-                format_func=lambda mode: mode.value,
-                key="cf_target_source_mode",
-            )
-            target_k = int(st.slider("Target top-k", min_value=1, max_value=12, value=3, step=1, key="cf_target_k"))
-            target_policy = st.selectbox(
-                "Target policy",
-                options=list(TargetSelectionPolicy),
-                index=0,
-                format_func=lambda policy: policy.value,
-                key="cf_target_policy",
-            )
+            target_k = int(st.slider("Max target tasks", min_value=1, max_value=12, value=3, step=1, key="cf_target_k"))
+            target_seed = int(st.number_input("Selection seed", min_value=0, value=0, step=1, key="cf_target_seed"))
         with col_c:
-            min_conf = float(st.slider("Min target confidence", 0.0, 1.0, 0.2, step=0.05, key="cf_min_conf"))
-            min_support = int(st.slider("Min target support", 1, 256, 1, step=1, key="cf_min_support"))
-            min_gt_iou = float(st.slider("Min GT IoU", 0.0, 1.0, 0.1, step=0.05, key="cf_min_gt_iou"))
-            gt_gap = float(st.slider("GT ambiguity gap", 0.0, 0.5, 0.02, step=0.01, key="cf_gt_gap"))
-            target_temperature = float(
-                st.slider("Target softmax temperature", 0.05, 5.0, 1.0, step=0.05, key="cf_target_temperature")
-            )
+            min_identity_iou = float(st.slider("Identity IoU", 0.0, 1.0, 0.25, step=0.05, key="cf_identity_iou"))
+            identity_gap = float(st.slider("Identity gap", 0.0, 0.5, 0.05, step=0.01, key="cf_identity_gap"))
 
-    selector_cfg = TargetSelectorConfig(
-        k=int(target_k),
-        policy=target_policy,
-        source_mode=source_mode,
-        min_confidence=float(min_conf),
-        min_support_points=int(min_support),
-        min_gt_iou=float(min_gt_iou),
-        gt_ambiguity_margin=float(gt_gap),
-        temperature=float(target_temperature),
+    selector_cfg = OracleTargetTaskSamplerConfig(
+        max_targets_per_sample=int(target_k),
+        seed=int(target_seed),
+        min_identity_iou=float(min_identity_iou),
+        identity_ambiguity_gap=float(identity_gap),
     )
     load_key = f"{store_dir.resolve() if store_dir.exists() else store_dir}|{split}|{sample_index}|{config_signature(selector_cfg)}"
     cache = st.session_state.setdefault("cf_live_source_cache", {})
     if st.button("Load sample and targets", key="cf_load_sample_targets"):
         try:
             sample = _load_vin_offline_sample(store_dir=store_dir, split=str(split), sample_index=int(sample_index))
-            target_result = ActorVisibleTargetSelector(selector_cfg).select(sample)
+            sampled = OracleTargetTaskSampler(selector_cfg).sample(sample)
+            target_result = _LiveTargetSelectionResult(
+                rows=tuple(_oracle_target_task_to_candidate_row(row) for row in sampled.rows),
+                selected_rows=tuple(_oracle_target_task_to_candidate_row(row) for row in sampled.selected_rows),
+                source=sampled.source,
+                warnings=sampled.warnings,
+            )
             cache[load_key] = {"sample": sample, "target_result": target_result}
         except Exception as exc:  # pragma: no cover - UI guard
             _report_exception(exc, context="Failed to load VIN offline sample and targets")
@@ -1226,7 +1217,7 @@ def _render_live_rollouts_tab() -> None:
 
     payload = cache.get(load_key)
     if payload is None:
-        st.info("Load a VIN offline sample to inspect actor-visible targets and generate live rollouts.")
+        st.info("Load a VIN offline sample to inspect oracle target tasks and generate live rollouts.")
         return
 
     sample = payload["sample"]
@@ -1243,7 +1234,7 @@ def _render_live_rollouts_tab() -> None:
 
     st.dataframe(_target_rows_table(target_result.rows), width="stretch", hide_index=True)
     with st.expander("Target-selection score audit", expanded=False):
-        render_target_selection_audit(target_result.rows, title="Actor-Visible Target Selection")
+        render_target_selection_audit(target_result.rows, title="Oracle Target Tasks")
     selected_target = None
     if target_result.selected_rows:
         _info_popover("active target label", _ACTIVE_TARGET_INFO)

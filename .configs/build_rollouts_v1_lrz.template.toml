@@ -3,7 +3,6 @@
 # Environment variables are intentionally not interpolated by ARIA-NBV configs.
 
 max_samples = 1
-target_source = "oracle_target_task_sampler"
 require_label_valid = true
 verbosity = 1
 
@@ -25,12 +24,6 @@ verbosity = 1
 
 [source.store]
 store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin_offline"
-
-[target_selector]
-k = 3
-source_mode = "v1_actor_visible"
-policy = "greedy_top_k"
-match_gt = true
 
 [candidate_mixture.base]
 num_samples = 8

@@ -9,8 +9,7 @@ surface exposes:
   trajectory poses, semidense points, OBBs, GT annotations, and optional meshes;
 - :class:`VinSnippetView` and :class:`VinOracleBatch` for VIN-style one-step RRI scoring;
 - strict immutable VIN offline-store readers/writers;
-- oracle target-task sampling for rollout/data-generation labels;
-- actor-visible target selection for diagnostics and deployable-policy studies.
+- oracle target-task sampling for rollout/data-generation labels.
 
 The central safety contract is actor/oracle separation. Observed EVL/MPS/OBB
 evidence is actor-visible; ASE meshes, GT OBBs, target crops, and oracle labels
@@ -66,17 +65,12 @@ from ._target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
-    ActorVisibleTargetSelector,
     OracleTargetTaskRow,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     OracleTargetTaskSamplingResult,
     OracleTargetTaskSweepCell,
     TargetCandidateRow,
-    TargetSelectionPolicy,
-    TargetSelectionResult,
-    TargetSelectorConfig,
-    TargetSourceMode,
     TargetTaskIdentityStatus,
     target_gt_obb_world,
 )
@@ -91,7 +85,6 @@ from .offline.adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_v
 from .offline.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
 
 __all__ = [
-    "ActorVisibleTargetSelector",
     "AseEfmDataset",
     "AseEfmDatasetConfig",
     "CompactObbBlock",
@@ -118,10 +111,6 @@ __all__ = [
     "TARGET_INVALID_REASON_CODES",
     "TARGET_INVALID_REASON_VERSION",
     "TargetCandidateRow",
-    "TargetSelectionPolicy",
-    "TargetSelectionResult",
-    "TargetSelectorConfig",
-    "TargetSourceMode",
     "TargetTaskIdentityStatus",
     "target_gt_obb_world",
     "VinDatasetSourceConfig",
