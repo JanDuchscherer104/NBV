@@ -43,23 +43,13 @@ import torch
 from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator, model_validator
 
+from ..oracle.scene_rri import SceneRriEvaluation
 from ..pose_generation.candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
 from ..pose_generation.candidate_mixture import (  # noqa: TC001 - Pydantic config field.
     CandidateMixtureViewGeneratorConfig,
 )
 from ..pose_generation.types import CandidateGenerationRuntimeContext, CandidateSamplingResult
 from ..pose_generation.utils import ensure_unbatched_pose
-from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
-from ..rendering.candidate_pointclouds import build_candidate_pointclouds
-from ..rri_metrics.eval_pointclouds import (
-    RootEvalPointCloud,
-    RriEvaluationPointCloudSource,
-    RriRewardMode,
-    build_root_eval_pointcloud,
-    canonical_fuse_points,
-)
-from ..rri_metrics.oracle_rri import OracleRRIConfig
-from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.frames import rotate_yaw_cw90
 
@@ -88,20 +78,6 @@ def _pose_at(poses: PoseTW, index: int) -> PoseTW:
     return ensure_unbatched_pose(poses[index])
 
 
-def _pose_token(pose: PoseTW) -> tuple[float, ...]:
-    tensor = ensure_unbatched_pose(pose).tensor().detach().cpu().reshape(-1)
-    return tuple(round(float(value), 6) for value in tensor.tolist())
-
-
-def _root_token(trajectory: "CounterfactualTrajectory") -> tuple[float, ...]:
-    return (
-        *_pose_token(trajectory.root_pose_world),
-        float(-1 if trajectory.root_time_ns is None else trajectory.root_time_ns),
-        float(-1 if trajectory.root_trajectory_index is None else trajectory.root_trajectory_index),
-        float(-1 if trajectory.root_frame_index is None else trajectory.root_frame_index),
-    )
-
-
 def _exact_pose_index(poses: PoseTW, pose: PoseTW) -> int | None:
     pose_rows = poses.tensor().reshape(-1, 12)
     query = ensure_unbatched_pose(pose).tensor().reshape(1, 12).to(device=pose_rows.device, dtype=pose_rows.dtype)
@@ -124,32 +100,6 @@ def _root_error_for_metric(trajectory: "CounterfactualTrajectory", key: str) -> 
         if value is not None and bool(torch.isfinite(torch.tensor(float(value))).item()):
             return float(value)
     return None
-
-
-def _root_error_tensor(
-    value: float | None,
-    *,
-    fallback: torch.Tensor,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> torch.Tensor:
-    if value is None:
-        return fallback.reshape(-1)[0].to(device=device, dtype=dtype)
-    return torch.tensor(float(value), device=device, dtype=dtype)
-
-
-def _eval_depth_far_m(
-    *,
-    source: RriEvaluationPointCloudSource,
-    configured: float | None,
-    depth_renderer: object,
-) -> float | None:
-    if configured is not None or source is not RriEvaluationPointCloudSource.ASE_GT_DEPTH_ROOT:
-        return configured
-    renderer = getattr(depth_renderer, "renderer", None)
-    config = getattr(renderer, "config", None)
-    zfar = getattr(config, "zfar", None)
-    return 20.0 if zfar is None else float(zfar)
 
 
 def _robust_temperature_logits(*, scores: torch.Tensor, temperature: float) -> torch.Tensor:
@@ -559,6 +509,12 @@ class CounterfactualTrajectory:
     cumulative_rri: float | None = None
     terminated_early: bool = False
 
+    @property
+    def root_pm_dist(self) -> float | None:
+        """Return the first finite scene root point-mesh distance, if known."""
+
+        return _root_error_for_metric(self, "root_pm_dist")
+
     def final_pose_world(self) -> PoseTW:
         if not self.steps:
             return self.root_pose_world
@@ -622,7 +578,7 @@ class CounterfactualRolloutResult:
 
 CounterfactualEvaluatorFn = Callable[
     [CandidateSamplingResult, CounterfactualTrajectory, int],
-    CounterfactualCandidateEvaluation | torch.Tensor,
+    CounterfactualCandidateEvaluation | SceneRriEvaluation | torch.Tensor,
 ]
 
 
@@ -690,157 +646,6 @@ class CounterfactualPoseGeneratorConfig(TargetConfig["CounterfactualPoseGenerato
             if sum(float(value) for value in self.stochastic_branch_probabilities) <= 0.0:
                 raise ValueError("stochastic_branch_probabilities must have positive total mass.")
         return self
-
-
-class CounterfactualOracleRriScorerConfig(TargetConfig["CounterfactualOracleRriScorer"]):
-    """Config-as-factory wrapper for oracle-RRI rollout scoring."""
-
-    @property
-    def target_type(self) -> type["CounterfactualOracleRriScorer"]:
-        return CounterfactualOracleRriScorer
-
-    depth: CandidateDepthRendererConfig = Field(default_factory=CandidateDepthRendererConfig)
-    oracle: OracleRRIConfig = Field(
-        default_factory=lambda: OracleRRIConfig(fusion_voxel_size_m=0.02, fusion_max_points=200_000)
-    )
-    backprojection_stride: int = Field(default=1, ge=1)
-    eval_point_cloud_source: RriEvaluationPointCloudSource = RriEvaluationPointCloudSource.ASE_GT_DEPTH_ROOT
-    """Oracle current/root point-cloud source used for scene RRI labels."""
-
-    eval_camera_label: str = "rgb"
-    """Camera stream used for ASE-depth root evaluation points."""
-
-    eval_depth_far_m: float | None = None
-    """Maximum ASE root depth to retain; defaults to the renderer zfar."""
-
-    eval_fusion_voxel_size_m: float = Field(default=0.02, ge=0.0)
-    """Voxel size used to canonical-fuse root and selected-history eval points."""
-
-    eval_fusion_max_points: int | None = Field(default=200_000, ge=1)
-    """Maximum retained current-eval points after canonical fusion."""
-
-    reward_mode: RriRewardMode = RriRewardMode.ROOT_NORMALIZED_GAIN
-    """Candidate score used for rollout selection."""
-
-    verbosity: Verbosity = Field(default=Verbosity.NORMAL)
-    is_debug: bool = False
-
-    _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
-
-
-class CounterfactualOracleRriScorer:
-    """Evaluate valid candidates with oracle RRI relative to the current trajectory."""
-
-    def __init__(self, config: CounterfactualOracleRriScorerConfig, *, sample: EfmSnippetView) -> None:
-        self.config = config
-        self.sample = sample
-        self.console = (
-            Console.with_prefix(self.__class__.__name__)
-            .set_verbosity(self.config.verbosity)
-            .set_debug(self.config.is_debug)
-        )
-        self._depth_renderer = self.config.depth.setup_target()
-        self._oracle = self.config.oracle.setup_target()
-        self._root_eval: RootEvalPointCloud | None = None
-        self._root_eval_token: tuple[float, ...] | None = None
-
-    def __call__(
-        self,
-        candidates: CandidateSamplingResult,
-        trajectory: CounterfactualTrajectory,
-        step_index: int,
-    ) -> CounterfactualCandidateEvaluation:
-        del step_index
-
-        if self.sample.mesh_verts is None or self.sample.mesh_faces is None:
-            raise ValueError("CounterfactualOracleRriScorer requires sample.mesh_verts and sample.mesh_faces.")
-
-        depths = self._depth_renderer.render(self.sample, candidates)
-        point_clouds = build_candidate_pointclouds(
-            self.sample,
-            depths,
-            stride=self.config.backprojection_stride,
-        )
-
-        points_t = self._current_eval_points(
-            trajectory, device=point_clouds.points.device, dtype=point_clouds.points.dtype
-        )
-
-        rri = self._oracle.score(
-            points_t=points_t,
-            points_q=point_clouds.points,
-            lengths_q=point_clouds.lengths,
-            gt_verts=self.sample.mesh_verts.to(device=point_clouds.points.device, dtype=point_clouds.points.dtype),
-            gt_faces=self.sample.mesh_faces.to(device=point_clouds.points.device),
-            extend=point_clouds.occupancy_bounds,
-        )
-        root_error = _root_error_for_metric(trajectory, "root_pm_dist")
-        root_error_t = _root_error_tensor(
-            root_error,
-            fallback=rri.pm_dist_before,
-            device=rri.rri.device,
-            dtype=rri.rri.dtype,
-        )
-        root_gain = root_normalized_gain(rri.pm_dist_before, rri.pm_dist_after, root_error_t)
-        log_gain = log_error_gain(rri.pm_dist_before, rri.pm_dist_after)
-        scores = root_gain if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else rri.rri
-        score_label = (
-            "oracle_root_gain" if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else "oracle_rri"
-        )
-
-        return CounterfactualCandidateEvaluation(
-            scores=scores,
-            score_label=score_label,
-            metrics=CounterfactualMetricBundle(
-                rri=rri.rri,
-                root_gain=root_gain,
-                root_pm_dist=root_error_t.expand_as(rri.rri),
-                log_error_gain=log_gain,
-            ),
-            candidate_point_clouds_world=point_clouds.points,
-            candidate_point_cloud_lengths=point_clouds.lengths,
-        )
-
-    def _current_eval_points(
-        self,
-        trajectory: CounterfactualTrajectory,
-        *,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> torch.Tensor:
-        root_eval = self._root_eval_for(trajectory)
-        points_t = root_eval.points_world.to(device=device, dtype=dtype)
-        history_points = trajectory.accumulated_points_world()
-        if history_points.numel() > 0:
-            points_t = torch.cat([points_t, history_points.to(device=device, dtype=dtype)], dim=0)
-        return canonical_fuse_points(
-            points_t,
-            voxel_size_m=float(self.config.eval_fusion_voxel_size_m),
-            max_points=self.config.eval_fusion_max_points,
-        )
-
-    def _root_eval_for(self, trajectory: CounterfactualTrajectory) -> RootEvalPointCloud:
-        token = _root_token(trajectory)
-        if self._root_eval is None or self._root_eval_token != token:
-            self._root_eval = build_root_eval_pointcloud(
-                self.sample,
-                source=self.config.eval_point_cloud_source,
-                camera_label=self.config.eval_camera_label,  # type: ignore[arg-type]
-                reference_pose_world=trajectory.root_pose_world,
-                reference_time_ns=trajectory.root_time_ns,
-                reference_trajectory_index=trajectory.root_trajectory_index,
-                reference_frame_index=trajectory.root_frame_index,
-                stride=int(self.config.backprojection_stride),
-                far_m=_eval_depth_far_m(
-                    source=self.config.eval_point_cloud_source,
-                    configured=self.config.eval_depth_far_m,
-                    depth_renderer=self._depth_renderer,
-                ),
-                voxel_size_m=float(self.config.eval_fusion_voxel_size_m),
-                max_points=self.config.eval_fusion_max_points,
-            )
-            self._root_eval_token = token
-        return self._root_eval
 
 
 class CounterfactualPoseGenerator:
@@ -1148,6 +953,14 @@ class CounterfactualPoseGenerator:
             raw_eval = score_candidates(result, trajectory, step_index)
             if isinstance(raw_eval, CounterfactualCandidateEvaluation):
                 return raw_eval.validate(num_valid=num_valid, device=device, dtype=dtype)
+            if isinstance(raw_eval, SceneRriEvaluation):
+                return CounterfactualCandidateEvaluation(
+                    scores=raw_eval.scores,
+                    score_label=raw_eval.score_label,
+                    metric_vectors=raw_eval.metric_vectors,
+                    candidate_point_clouds_world=raw_eval.candidate_point_clouds_world,
+                    candidate_point_cloud_lengths=raw_eval.candidate_point_cloud_lengths,
+                ).validate(num_valid=num_valid, device=device, dtype=dtype)
             return CounterfactualCandidateEvaluation(
                 scores=torch.as_tensor(raw_eval, device=device, dtype=dtype),
                 score_label="score",
@@ -1523,8 +1336,6 @@ __all__ = [
     "CounterfactualCandidateEvaluation",
     "CounterfactualEvaluatorFn",
     "CounterfactualMetricBundle",
-    "CounterfactualOracleRriScorer",
-    "CounterfactualOracleRriScorerConfig",
     "CounterfactualPoseGenerator",
     "CounterfactualPoseGeneratorConfig",
     "CounterfactualRolloutResult",

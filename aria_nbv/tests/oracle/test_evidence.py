@@ -10,9 +10,9 @@ import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
-import aria_nbv.rri_metrics.eval_pointclouds as eval_pointclouds
+import aria_nbv.oracle.evidence as evidence
 from aria_nbv.data_handling import EfmCameraView, EfmTrajectoryView
-from aria_nbv.rri_metrics.eval_pointclouds import (
+from aria_nbv.oracle.evidence import (
     RriEvaluationPointCloudSource,
     build_root_eval_pointcloud,
     canonical_fuse_points,
@@ -145,13 +145,13 @@ def test_ase_depth_root_uses_ray_distance_frames_and_far_clip() -> None:
 def test_ase_depth_root_calls_efm3d_ray_distance_unprojector(monkeypatch: pytest.MonkeyPatch) -> None:
     sample = _DepthSample(torch.ones((3, 1, 8, 8), dtype=torch.float32))
     calls: list[tuple[int, ...]] = []
-    original = eval_pointclouds.dist_im_to_point_cloud_im
+    original = evidence.dist_im_to_point_cloud_im
 
     def wrapped(depths: torch.Tensor, calibs: CameraTW):
         calls.append(tuple(depths.shape))
         return original(depths, calibs)
 
-    monkeypatch.setattr(eval_pointclouds, "dist_im_to_point_cloud_im", wrapped)
+    monkeypatch.setattr(evidence, "dist_im_to_point_cloud_im", wrapped)
 
     build_root_eval_pointcloud(sample, source=RriEvaluationPointCloudSource.ASE_GT_DEPTH_ROOT)
 

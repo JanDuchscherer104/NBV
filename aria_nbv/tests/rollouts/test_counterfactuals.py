@@ -21,6 +21,8 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import CompactObbBlock
 from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.oracle._scoring import PreparedRriScorerConfig
+from aria_nbv.oracle.evidence import RriEvaluationPointCloudSource, RriRewardMode
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -55,8 +57,6 @@ from aria_nbv.rollouts.target_counterfactuals import (
     _crop_padded_pointclouds_to_obb,
     _crop_points_to_obb,
 )
-from aria_nbv.rri_metrics.eval_pointclouds import RriEvaluationPointCloudSource, RriRewardMode
-from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 
@@ -308,7 +308,7 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
 
     monkeypatch.setattr(target_cf, "build_candidate_pointclouds", _fake_pointclouds)
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: renderer)
-    monkeypatch.setattr(OracleRRIConfig, "setup_target", lambda self: oracle)
+    monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: oracle)
     target_obb = _obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
     row = _target_row(gt_target_row_id=0)
     zero = torch.zeros(1, dtype=torch.float32)
@@ -400,7 +400,7 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
     import aria_nbv.rollouts.target_counterfactuals as target_cf
 
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: _FakeDepthRenderer())
-    monkeypatch.setattr(OracleRRIConfig, "setup_target", lambda self: _FakeOracle())
+    monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: _FakeOracle())
     monkeypatch.setattr(
         target_cf,
         "build_candidate_pointclouds",

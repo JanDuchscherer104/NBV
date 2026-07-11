@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-project-aria/main.tex), [`device.tex`](../../literature/tex-src/arXiv-project-aria/device.tex), [`tools.tex`](../../literature/tex-src/arXiv-project-aria/tools.tex), and [`mps.tex`](../../literature/tex-src/arXiv-project-aria/mps.tex).
 
-**Related ARIA-NBV pages.** [EFM3D/EVL](efm3d.qmd), [ASE dataset](../ase_dataset.qmd), [semi-dense point clouds](../theory/semi-dense-pc.qmd), and [oracle RRI API](../../reference/rri_metrics.oracle_rri.qmd).
+**Related ARIA-NBV pages.** [EFM3D/EVL](efm3d.qmd), [ASE dataset](../ase_dataset.qmd), [semi-dense point clouds](../theory/semi-dense-pc.qmd), and [oracle RRI API](../../reference/oracle.scene_rri.qmd).
 
 ### Core contribution
 

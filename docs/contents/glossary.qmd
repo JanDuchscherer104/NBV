@@ -297,7 +297,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-candidate-view">candidate</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">Relative Reconstruction Improvement (RRI) Theory</a> <a class="glossary-chip" href="../reference/rri_metrics.oracle_rri.html" title="docs/reference/rri_metrics.oracle_rri.qmd">oracle_rri</a> <a class="glossary-chip" href="literature/vin_nbv.html" title="docs/contents/literature/vin_nbv.qmd">VIN-NBV</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">Relative Reconstruction Improvement (RRI) Theory</a> <a class="glossary-chip" href="../reference/oracle.scene_rri.html" title="docs/reference/oracle.scene_rri.qmd">scene_rri</a> <a class="glossary-chip" href="literature/vin_nbv.html" title="docs/contents/literature/vin_nbv.qmd">VIN-NBV</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>

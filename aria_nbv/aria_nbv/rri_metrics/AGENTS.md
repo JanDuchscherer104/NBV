@@ -1,7 +1,7 @@
 ---
 scope: module
 applies_to: aria_nbv/aria_nbv/rri_metrics/**
-summary: Oracle RRI, binning, and metric-contract guidance for work under aria_nbv/aria_nbv/rri_metrics/.
+summary: RRI formulas, binning, and metric-contract guidance for work under aria_nbv/aria_nbv/rri_metrics/.
 ---
 
 # RRI Metrics Boundary
@@ -14,7 +14,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
 - Stateful evaluation: `torchmetrics_single.py` and `torchmetrics_multi.py`.
 - Binning: `ordinal.py`; CORAL model/loss behavior lives in `aria_nbv.vin.ordinal`.
 - Names and lightweight plots: `logging.py`, `plotting.py`.
-- `oracle_rri.py` and `eval_pointclouds.py` are temporary owners until WP08.
+- Privileged evidence and scorer facades live in `aria_nbv.oracle`.
 - Narrative surfaces: `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/07a-binning.typ`, generated API docs under `docs/reference/`, `docs/contents/theory/rri_theory.qmd`
 
 ## Boundary Rules

@@ -9,7 +9,7 @@ audits, and read-side inspection. Rollout dataset/shard generation lives in
 ```text
 rollouts/
   audits.py               # operational validity/provenance/path checks
-  counterfactuals.py      # future replay split
+  counterfactuals.py      # replay and Oracle-result adaptation; future replay split
   target_counterfactuals.py  # future oracle extraction
   inspection.py
   manifest.py
@@ -71,13 +71,9 @@ metrics modules. These symbols are evaluation-only.
 | `_pose_row` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_pose_batch_len` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_pose_at` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_pose_token` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_root_token` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_exact_pose_index` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_time_value` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_root_error_for_metric` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_root_error_tensor` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_eval_depth_far_m` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_robust_temperature_logits` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_valid_diversity_metadata` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `_pose_yaw_rad` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
@@ -94,8 +90,6 @@ metrics modules. These symbols are evaluation-only.
 | `CounterfactualRolloutResult` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualEvaluatorFn` | `constant` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualPoseGeneratorConfig` | `config` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualOracleRriScorerConfig` | `config` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualOracleRriScorer` | `class` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualPoseGenerator` | `class` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 
 ### `info_cli.py`

@@ -18,11 +18,11 @@ import pytest  # isort: split
 
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling import AseEfmDatasetConfig
+from aria_nbv.oracle._scoring import PreparedRriScorerConfig
 from aria_nbv.pipelines import OracleRriLabelerConfig
 from aria_nbv.pose_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.types import ViewDirectionMode
 from aria_nbv.rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
-from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig
 from aria_nbv.utils import Verbosity
 
 
@@ -107,7 +107,7 @@ def test_oracle_rri_labeler_runs_real_data(efm_sample):
         is_debug=False,
     )
 
-    oracle_cfg = OracleRRIConfig()
+    oracle_cfg = PreparedRriScorerConfig()
 
     cfg = OracleRriLabelerConfig(
         generator=generator_cfg,

@@ -10,7 +10,7 @@ expose the accuracy/completeness split described in ``surface_metrics.qmd``.
 
 For a point set $P$ and mesh $M$, `accuracy` is point-to-mesh error and
 `completeness` is mesh-to-point error. The current scalar point-mesh error is
-their sum, which is the value consumed by `OracleRRI`.
+their sum, which is consumed by the Oracle prepared-RRI scorer.
 """
 
 from __future__ import annotations

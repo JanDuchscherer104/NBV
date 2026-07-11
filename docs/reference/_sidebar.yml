@@ -81,6 +81,12 @@ website:
       - text: oracle
         file: reference/oracle.qmd
         contents:
+        - text: evidence
+          file: reference/oracle.evidence.qmd
+        - text: scene_rri
+          file: reference/oracle.scene_rri.qmd
+        - text: target_selection
+          file: reference/oracle.target_selection.qmd
         - text: pipelines
           file: reference/oracle.pipelines.qmd
           contents:
@@ -155,12 +161,8 @@ website:
       - text: rri_metrics
         file: reference/rri_metrics.qmd
         contents:
-        - text: eval_pointclouds
-          file: reference/rri_metrics.eval_pointclouds.qmd
         - text: logging
           file: reference/rri_metrics.logging.qmd
-        - text: oracle_rri
-          file: reference/rri_metrics.oracle_rri.qmd
         - text: ordinal
           file: reference/rri_metrics.ordinal.qmd
         - text: plotting

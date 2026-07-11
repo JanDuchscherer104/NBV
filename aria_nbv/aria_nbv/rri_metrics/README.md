@@ -1,8 +1,8 @@
 # RRI Metrics
 
 `aria_nbv.rri_metrics` owns reconstruction formulas and reusable evaluation
-adapters. Oracle evidence/scorers remain temporarily in this package until
-WP08; rollout operational checks now live in `aria_nbv.rollouts.audits`.
+adapters. Oracle evidence and scorers live in `aria_nbv.oracle`; rollout
+operational checks live in `aria_nbv.rollouts.audits`.
 
 ## Current Layout
 
@@ -17,8 +17,6 @@ rri_metrics/
   torchmetrics_multi.py
   logging.py
   plotting.py
-  eval_pointclouds.py   # temporary until WP08
-  oracle_rri.py         # temporary until WP08
 ```
 
 The package root exports only `compute_rri`, `RriConfig`, `RriResult`, and
@@ -50,24 +48,6 @@ Owner role: four-symbol stable root.
 
 No top-level definitions.
 
-### `eval_pointclouds.py`
-
-Owner role: temporary privileged evidence owner; moves in WP08.
-
-| Symbol | Kind | Visibility | Current module | Status |
-|---|---|---|---|---|
-| `Tensor` | `constant` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `CameraLabel` | `constant` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `RriEvaluationPointCloudSource` | `class` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `RriRewardMode` | `class` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `RootEvalPointCloud` | `DTO` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `canonical_fuse_points` | `function` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `build_root_eval_pointcloud` | `function` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `observed_prefix_frame_indices` | `function` | `public` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `_root_time_ns` | `function` | `private` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `_root_trajectory_index` | `function` | `private` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-| `_exact_trajectory_index` | `function` | `private` | `rri_metrics.eval_pointclouds` | `deferred: WP08` |
-
 ### `logging.py`
 
 Owner role: log names and key policy.
@@ -81,18 +61,6 @@ Owner role: log names and key policy.
 | `_namespace_prefix` | `function` | `private` | `rri_metrics.logging` | `landed` |
 | `metric_key` | `function` | `public` | `rri_metrics.logging` | `landed` |
 | `loss_key` | `function` | `public` | `rri_metrics.logging` | `landed` |
-
-### `oracle_rri.py`
-
-Owner role: temporary scene scorer facade; moves in WP08.
-
-| Symbol | Kind | Visibility | Current module | Status |
-|---|---|---|---|---|
-| `OracleRRIConfig` | `config` | `public` | `rri_metrics.oracle_rri` | `deferred: WP08` |
-| `OracleRRI` | `class` | `public` | `rri_metrics.oracle_rri` | `deferred: WP08` |
-| `_crop_mesh_to_aabb` | `function` | `private` | `rri_metrics.oracle_rri` | `deferred: WP08` |
-| `_canonical_fused_unions` | `function` | `private` | `rri_metrics.oracle_rri` | `deferred: WP08` |
-| `_source_balanced_capped_union` | `function` | `private` | `rri_metrics.oracle_rri` | `deferred: WP08` |
 
 ### `ordinal.py`
 
@@ -210,8 +178,6 @@ Owner role: stateful one-step evaluation.
 
 - Final metric modules do not import `oracle`, `rollouts`, VIN, Lightning,
   app, or rendering.
-- `oracle_rri.py` and `eval_pointclouds.py` are explicit temporary exceptions
-  removed by WP08.
 - Oracle facades call `compute_rri`; they do not own its formula.
 - Lightning owns metric lifecycle, not reducer implementations.
 - Rollout provenance, invalidity, path, entropy, and order checks stay in
@@ -229,5 +195,4 @@ updated from `VinOracleBatch`: that one-step contract has neither trajectory
 rewards nor endpoint errors. The future finite-horizon Lightning path must
 connect it only when those tensors are real batch fields.
 
-WP08 next moves privileged evidence and the scene scorer into
-`aria_nbv.oracle`.
+WP08 moved privileged evidence and scene scoring into `aria_nbv.oracle`.

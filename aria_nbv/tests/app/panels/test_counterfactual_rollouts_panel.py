@@ -614,7 +614,7 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
         sample=fake_sample,  # type: ignore[arg-type]
         target=target,
         target_scorer_config=CounterfactualTargetOracleRriScorerConfig(),
-        scene_scorer_config=rollout_panel.CounterfactualOracleRriScorerConfig(),
+        scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
     )
 
     assert context.score_label == "target_rri"
@@ -632,7 +632,7 @@ def test_target_rri_score_context_rejects_gt_invalid_target() -> None:
             sample=SimpleNamespace(efm_snippet_view=object()),  # type: ignore[arg-type]
             target=_target_row(gt_label_valid=False),
             target_scorer_config=CounterfactualTargetOracleRriScorerConfig(),
-            scene_scorer_config=rollout_panel.CounterfactualOracleRriScorerConfig(),
+            scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
         )
 
 

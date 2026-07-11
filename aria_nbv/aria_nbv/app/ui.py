@@ -6,10 +6,10 @@ import streamlit as st
 import torch
 
 from ..data_handling import AseEfmDatasetConfig
+from ..oracle._scoring import PreparedRriScorerConfig
 from ..pose_generation import CandidateViewGeneratorConfig
 from ..pose_generation.types import CollisionBackend, SamplingStrategy, ViewDirectionMode
 from ..rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
-from ..rri_metrics.oracle_rri import OracleRRIConfig
 from ..utils import Verbosity
 
 
@@ -284,7 +284,10 @@ def renderer_config_ui(
     )
 
 
-def oracle_config_ui(default: OracleRRIConfig, ui: st.delta_generator.DeltaGenerator) -> OracleRRIConfig:
+def oracle_config_ui(
+    default: PreparedRriScorerConfig,
+    ui: st.delta_generator.DeltaGenerator,
+) -> PreparedRriScorerConfig:
     ui.subheader("Oracle RRI")
     # chunk = ui.number_input(
     #     "candidate_chunk_size (0 = disabled)",

@@ -10,7 +10,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 
 ## Public Contracts
 - Public package surface: `aria_nbv/aria_nbv/rollouts/__init__.py`
-- Counterfactual transition replay and rollout policies: `counterfactuals.py`
+- Counterfactual transition replay, Oracle-result adaptation, and rollout policies: `counterfactuals.py`
 - Target-cropped oracle rollout scoring: `target_counterfactuals.py`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
@@ -20,7 +20,8 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 ## Boundary Rules
 - `aria_nbv.rollouts` owns multi-step rollout records, rollout Zarr/Q stores,
   counterfactual transition replay, and the currently unsplit target-aware
-  oracle rollout scorers. `aria_nbv.oracle.pipelines` owns rollout generation,
+  Oracle rollout scorer. Scene scoring lives in `aria_nbv.oracle.scene_rri`.
+  `aria_nbv.oracle.pipelines` owns rollout generation,
   shard execution, and the `nbv-build-rollouts` CLI.
 - `aria_nbv.data_handling` owns raw snippets, `VinOracleBatch`,
   `VinOfflineDataset`, and immutable VIN offline stores. `aria_nbv.targets`
@@ -49,7 +50,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 
 ## Completion Criteria
 - Public imports come from `aria_nbv.rollouts` for rollout record/store
-  contracts, counterfactual rollout policies, and target-RRI rollout scorers.
+  contracts, counterfactual rollout policies, and the target-RRI rollout scorer.
 - Generation callers import writer and shard symbols from
   `aria_nbv.oracle.pipelines` leaf modules.
 - The standalone rollout store validates after writes.

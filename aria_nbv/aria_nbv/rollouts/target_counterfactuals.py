@@ -26,27 +26,26 @@ from typing import TYPE_CHECKING
 import torch
 from pydantic import Field, field_validator
 
-from ..oracle.evidence import target_gt_obb_world
-from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
-from ..rendering.candidate_pointclouds import build_candidate_pointclouds
-from ..rri_metrics.eval_pointclouds import (
+from ..oracle._scoring import PreparedRriScorerConfig, _root_error_tensor
+from ..oracle.evidence import (
     RootEvalPointCloud,
     RriEvaluationPointCloudSource,
     RriRewardMode,
+    _eval_depth_far_m,
+    _root_evidence_token,
     build_root_eval_pointcloud,
     canonical_fuse_points,
+    target_gt_obb_world,
 )
-from ..rri_metrics.oracle_rri import OracleRRIConfig
+from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
+from ..rendering.candidate_pointclouds import build_candidate_pointclouds
 from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from .counterfactuals import (
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
     CounterfactualTrajectory,
-    _eval_depth_far_m,
     _root_error_for_metric,
-    _root_error_tensor,
-    _root_token,
 )
 
 if TYPE_CHECKING:
@@ -78,8 +77,8 @@ class CounterfactualTargetOracleRriScorerConfig(TargetConfig["CounterfactualTarg
     depth: CandidateDepthRendererConfig = Field(default_factory=lambda: CandidateDepthRendererConfig())
     """Depth renderer used once per candidate table before target/scene scoring."""
 
-    oracle: OracleRRIConfig = Field(
-        default_factory=lambda: OracleRRIConfig(fusion_voxel_size_m=0.02, fusion_max_points=200_000)
+    oracle: PreparedRriScorerConfig = Field(
+        default_factory=lambda: PreparedRriScorerConfig(fusion_voxel_size_m=0.02, fusion_max_points=200_000)
     )
     """Point-mesh oracle metric configuration shared by target and scene RRI."""
 
@@ -368,7 +367,12 @@ class CounterfactualTargetOracleRriScorer:
         )
 
     def _root_eval_for(self, trajectory: CounterfactualTrajectory) -> RootEvalPointCloud:
-        token = _root_token(trajectory)
+        token = _root_evidence_token(
+            trajectory.root_pose_world,
+            root_time_ns=trajectory.root_time_ns,
+            root_trajectory_index=trajectory.root_trajectory_index,
+            root_frame_index=trajectory.root_frame_index,
+        )
         if self._root_eval is None or self._root_eval_token != token:
             self._root_eval = build_root_eval_pointcloud(
                 self.sample,

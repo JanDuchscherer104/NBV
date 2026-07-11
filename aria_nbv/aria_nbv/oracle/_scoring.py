@@ -1,28 +1,7 @@
-r"""High-level oracle RRI computation orchestrator.
+r"""Private prepared point-mesh scoring shared by Oracle facades.
 
-This module wires together rendering outputs (candidate depth → point clouds),
-distance primitives (see ``point_mesh.py``), and configuration defaults to produce
-per-candidate Relative Reconstruction Improvement (RRI) scores as defined in
-``docs/contents/theory/rri_theory.qmd``. The implementation is intentionally
-kept modular:
-
-* **Sampling / downsampling** is delegated to callers (or future helpers) so
-  that density can be harmonised between ``P_t`` and ``P_{t∪q}``.
-* **Distance evaluation** is performed via PyTorch3D on GPU for efficiency.
-* **Config-as-factory** pattern is used to keep runtime objects
-  serialisable and consistent with the rest of the codebase.
-
-The implemented scalar score is
-
-$$
-\mathrm{RRI}(q) =
-\frac{\Delta(P_t, M) - \Delta(P_t \cup P_q, M)}
-     {\max(\Delta(P_t, M), \epsilon)}
-$$
-
-where $\Delta$ is the configured point-mesh error. Target-specific callers pass
-target-cropped points and meshes; invalid crops raise upstream and must not be
-silently converted to scene-level labels.
+Callers prepare scene or target evidence; this module computes point-mesh
+distances and delegates the RRI formula to :mod:`aria_nbv.rri_metrics.rri`.
 """
 
 from __future__ import annotations
@@ -30,19 +9,18 @@ from __future__ import annotations
 import torch
 from pydantic import Field
 
-from aria_nbv.utils.base_config import TargetConfig
+from ..rri_metrics.point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
+from ..rri_metrics.rri import RriResult, compute_rri
+from ..utils.base_config import TargetConfig
+from .evidence import canonical_fuse_points
 
-from .eval_pointclouds import canonical_fuse_points
-from .point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
-from .rri import RriResult, compute_rri
 
-
-class OracleRRIConfig(TargetConfig["OracleRRI"]):
-    """Config-as-factory wrapper for oracle RRI computation."""
+class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
+    """Configure prepared point-mesh RRI scoring shared by Oracle facades."""
 
     @property
-    def target_type(self) -> type["OracleRRI"]:
-        return OracleRRI
+    def target_type(self) -> type["PreparedRriScorer"]:
+        return PreparedRriScorer
 
     fusion_voxel_size_m: float = Field(default=0.0, ge=0.0)
     """Optional deterministic voxel-fusion size for ``P_t`` and ``P_t ∪ P_q``."""
@@ -51,8 +29,8 @@ class OracleRRIConfig(TargetConfig["OracleRRI"]):
     """Optional deterministic point cap applied after voxel fusion."""
 
 
-class OracleRRI:
-    """Facade to compute oracle RRI for one or more candidates.
+class PreparedRriScorer:
+    """Compute RRI from already prepared current, candidate, and mesh evidence.
 
     Conceptual steps:
         1. Merge ``P_t`` (current eval points) with candidate view point cloud
@@ -64,9 +42,9 @@ class OracleRRI:
         4. Form RRI = (d_before - d_after) / d_before and return diagnostics.
     """
 
-    config: OracleRRIConfig
+    config: PreparedRriScorerConfig
 
-    def __init__(self, config: OracleRRIConfig) -> None:
+    def __init__(self, config: PreparedRriScorerConfig) -> None:
         self.config = config
 
     def score(
@@ -118,26 +96,19 @@ class OracleRRI:
 
         return compute_rri(dist_before, dist_after)
 
-    def score_batch(
-        self,
-        *,
-        points_t: torch.Tensor,
-        points_q: torch.Tensor,
-        lengths_q: torch.Tensor,
-        gt_verts: torch.Tensor,
-        gt_faces: torch.Tensor,
-        extend: torch.Tensor,
-    ) -> RriResult:
-        """Alias kept for callers using the old batch name."""
 
-        return self.score(
-            points_t=points_t,
-            points_q=points_q,
-            lengths_q=lengths_q,
-            gt_verts=gt_verts,
-            gt_faces=gt_faces,
-            extend=extend,
-        )
+def _root_error_tensor(
+    value: float | None,
+    *,
+    fallback: torch.Tensor,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Resolve a persisted root error or use the current state's first error."""
+
+    if value is None:
+        return fallback.reshape(-1)[0].to(device=device, dtype=dtype)
+    return torch.tensor(float(value), device=device, dtype=dtype)
 
 
 def _crop_mesh_to_aabb(
@@ -249,4 +220,4 @@ def _source_balanced_capped_union(
     return torch.cat([root_keep, query_keep], dim=0)
 
 
-__all__ = ["OracleRRI", "OracleRRIConfig"]
+__all__ = ["PreparedRriScorer", "PreparedRriScorerConfig"]

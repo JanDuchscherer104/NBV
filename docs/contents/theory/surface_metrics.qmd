@@ -166,5 +166,5 @@ Both ATEK and EFM3D provide implementations:
 - **EFM3D**: [`eval_mesh_to_mesh()`](https://github.com/facebookresearch/efm3d/blob/main/efm3d/utils/mesh_utils.py) - Includes visualization utilities
 
 See the [RRI metric API](../../reference/rri_metrics.qmd) and
-[oracle RRI API](../../reference/rri_metrics.oracle_rri.qmd) for the active
+[oracle RRI API](../../reference/oracle.scene_rri.qmd) for the active
 ARIA-NBV contract.

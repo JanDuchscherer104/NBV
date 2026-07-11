@@ -10,14 +10,16 @@ replay or persistence contracts.
 ```text
 oracle/
   __init__.py
+  _scoring.py
   evidence.py
+  scene_rri.py
   target_selection.py
   pipelines/
 ```
 
-WP07 establishes target-task ownership. WP08-WP09 add scene and target scorer
-facades plus their shared private scoring engine. Pipeline relocation remains
-WP12.
+WP07 established target-task ownership. WP08 established scene scoring and the
+shared private prepared-RRI engine. Target scorer extraction remains WP09;
+pipeline relocation remains WP12.
 
 Baseline: `4daf9d4`
 
@@ -27,13 +29,48 @@ Graphify refresh: `2026-07-11`
 
 ### `__init__.py`
 
-No top-level AST definitions; imported names and `__all__` are excluded.
+No top-level AST definitions. The package exports only `SceneRriScorer` and
+`SceneRriScorerConfig`; imported names and `__all__` are excluded from the
+matrix.
+
+### `_scoring.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `PreparedRriScorerConfig` | config | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
+| `PreparedRriScorer` | class | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
+| `_root_error_tensor` | function | private | duplicated scorer helpers | `oracle._scoring` | `oracle._scoring` | moved |
+| `_crop_mesh_to_aabb` | function | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
+| `_canonical_fused_unions` | function | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
+| `_source_balanced_capped_union` | function | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
 
 ### `evidence.py`
 
 | Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
 |---|---|---|---|---|---|---|
+| `Tensor` | alias | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `CameraLabel` | alias | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `RriEvaluationPointCloudSource` | enum | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `RriRewardMode` | enum | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `RootEvalPointCloud` | DTO | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `canonical_fuse_points` | function | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `_root_evidence_token` | function | private | duplicated scorer helpers | `oracle.evidence` | `oracle.evidence` | moved |
+| `_eval_depth_far_m` | function | private | duplicated scorer helpers | `oracle.evidence` | `oracle.evidence` | moved |
 | `target_gt_obb_world` | function | public | `data_handling._target_selection` | `oracle.evidence` | `oracle.evidence` | moved |
+| `build_root_eval_pointcloud` | function | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `observed_prefix_frame_indices` | function | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `_root_time_ns` | function | private | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `_root_trajectory_index` | function | private | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `_exact_trajectory_index` | function | private | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+
+### `scene_rri.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `SceneRriState` | protocol | public | rollout trajectory coupling | `oracle.scene_rri` | `oracle.scene_rri` | moved |
+| `SceneRriEvaluation` | DTO | public | rollout evaluation coupling | `oracle.scene_rri` | `oracle.scene_rri` | moved |
+| `SceneRriScorerConfig` | config | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
+| `SceneRriScorer` | class | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 
 ### `target_selection.py`
 

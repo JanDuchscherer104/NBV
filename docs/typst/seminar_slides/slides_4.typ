@@ -518,7 +518,7 @@
 )
 
 //  TODO: motivate usage of offline dataset:
-// OracleRRI Pipeline uses pytorch - cannot be parallelized; pipeline run takes approx 30s per snippet for #symb.shape.Nq = 60 candidates
+// Oracle RRI pipeline uses PyTorch and takes about 30s per snippet for #symb.shape.Nq = 60 candidates.
 // Should cache backbone outputs once (for each of the 4608 snippets) as single forward requires 8+ GB GPU memory and takes up to 60s
 // Training signal is very noisy - higher batch size stabilizes gradients
 // Now we can easily train with B >= 16; single epoch on 798 samples takes approx 8 minutes vs > 24 hours if we compute oracle and EVL scene encoding on-line.

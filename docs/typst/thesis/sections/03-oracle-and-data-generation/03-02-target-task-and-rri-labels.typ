@@ -265,7 +265,7 @@ $
   #eqs.entity.target_error
 $
 
-Area weighting or uniformly sampled target-surface points prevent target-specific @relative-reconstruction-improvement:short from reflecting mesh tessellation density. For reproducibility, the current implementation computes the point-mesh distances through `OracleRRI.score` and `chamfer_point_mesh_batched`, while `aria_nbv.rollouts.target_counterfactuals` owns the target crop. Empty or unsupported target crops are invalid label cases, not low-@relative-reconstruction-improvement:short samples.
+Area weighting or uniformly sampled target-surface points prevent target-specific @relative-reconstruction-improvement:short from reflecting mesh tessellation density. For reproducibility, the current implementation computes the point-mesh distances through `PreparedRriScorer.score` and `chamfer_point_mesh_batched`, while `aria_nbv.rollouts.target_counterfactuals` owns the target crop. Empty or unsupported target crops are invalid label cases, not low-@relative-reconstruction-improvement:short samples.
 
 #validation_todo(
   [Do not retain the tessellation-invariance claim until the actual metric uses documented area weighting or uniform surface sampling and passes a triangulation-density test. The current face-mean path can change weighting when a surface is subdivided.],

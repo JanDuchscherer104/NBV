@@ -69,7 +69,7 @@ flowchart TB
     PadRow4["<span style='display:inline-block;width:360px'></span>"]:::spacer
     subgraph Oracle["<span class='title'>Oracle RRI Computation</span>"]
       direction LR
-      OracleR["$$\\begin{array}{c}\\texttt{OracleRRI.score}\\\\\\mathrm{RRI}(\\mathcal{P}_t,\\mathcal{P}_q)\\end{array}$$"]
+      OracleR["$$\\begin{array}{c}\\texttt{PreparedRriScorer.score}\\\\\\mathrm{RRI}(\\mathcal{P}_t,\\mathcal{P}_q)\\end{array}$$"]
       Chamfer["$$\\begin{array}{c}\\texttt{chamfer\\_point\\_mesh}\\\\\\mathrm{CD}(\\mathcal{P},\\mathcal{M}_{GT})\\end{array}$$"]
       Rri["$$\\begin{array}{c}\\texttt{RriResult}\\\\\\mathrm{RRI},\\mathcal{A},\\mathcal{C}\\end{array}$$"]
     end

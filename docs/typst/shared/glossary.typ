@@ -75,7 +75,7 @@
       definition_long: "ARIA-NBV computes RRI by comparing reconstruction error before and after fusing candidate-view geometry, usually against an ASE ground-truth mesh for oracle supervision and evaluation.",
       internal_links: (
         "docs/contents/theory/rri_theory.qmd",
-        "docs/reference/rri_metrics.oracle_rri.qmd",
+        "docs/reference/oracle.scene_rri.qmd",
         "docs/contents/literature/vin_nbv.qmd",
       ),
       citations: (

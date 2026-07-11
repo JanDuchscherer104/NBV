@@ -2,7 +2,7 @@
 
 This folder contains **flowchart-style** architecture diagrams for the **oracle RRI labeler pipeline**:
 
-`AseEfmDataset -> CandidateViewGenerator -> CandidateDepthRenderer -> build_candidate_pointclouds -> OracleRRI`.
+`AseEfmDataset -> CandidateViewGenerator -> CandidateDepthRenderer -> build_candidate_pointclouds -> PreparedRriScorer`.
 
 - `mermaid/` contains Mermaid equivalents (one `.mmd` file per diagram).
 - `renders/mermaid/` contains rendered outputs (SVG + PNG).

@@ -21,11 +21,11 @@ from pydantic import Field, field_validator
 from aria_nbv.utils.console import Verbosity
 
 from ..data_handling import EfmSnippetView
+from ..oracle._scoring import PreparedRriScorerConfig
 from ..pose_generation import CandidateViewGeneratorConfig
 from ..pose_generation.types import CandidateSamplingResult
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
-from ..rri_metrics.oracle_rri import OracleRRIConfig
 from ..rri_metrics.rri import RriResult
 from ..utils import BaseConfig, Console, TargetConfig
 
@@ -66,7 +66,7 @@ class OracleRriLabelerConfig(TargetConfig["OracleRriLabeler"]):
     )
     """Depth rendering configuration."""
 
-    oracle: OracleRRIConfig = Field(default_factory=OracleRRIConfig)
+    oracle: PreparedRriScorerConfig = Field(default_factory=PreparedRriScorerConfig)
     """Oracle RRI scoring configuration."""
 
     backprojection_stride: int = 1

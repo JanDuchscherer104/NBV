@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from aria_nbv.rri_metrics.oracle_rri import OracleRRIConfig, _canonical_fused_unions, _crop_mesh_to_aabb
+from aria_nbv.oracle._scoring import PreparedRriScorerConfig, _canonical_fused_unions, _crop_mesh_to_aabb
 
 
 def _unit_square_mesh(device: torch.device, *, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
@@ -21,44 +21,6 @@ def _unit_square_mesh(device: torch.device, *, dtype: torch.dtype) -> tuple[torc
     return verts, faces
 
 
-def test_oracle_rri_score_matches_score_batch_alias():
-    torch.manual_seed(0)
-    device = torch.device("cpu")
-    dtype = torch.float32
-
-    gt_verts, gt_faces = _unit_square_mesh(device, dtype=dtype)
-    points_t = torch.randn((128, 3), device=device, dtype=dtype)
-
-    num_candidates = 7
-    max_points_q = 32
-    points_q = torch.randn((num_candidates, max_points_q, 3), device=device, dtype=dtype)
-    lengths_q = torch.full((num_candidates,), max_points_q, device=device, dtype=torch.long)
-    extend = torch.tensor([-2, 2, -2, 2, -2, 2], device=device, dtype=dtype)
-
-    oracle = OracleRRIConfig().setup_target()
-    out_score = oracle.score(
-        points_t=points_t,
-        points_q=points_q,
-        lengths_q=lengths_q,
-        gt_verts=gt_verts,
-        gt_faces=gt_faces,
-        extend=extend,
-    )
-    out_batch = oracle.score_batch(
-        points_t=points_t,
-        points_q=points_q,
-        lengths_q=lengths_q,
-        gt_verts=gt_verts,
-        gt_faces=gt_faces,
-        extend=extend,
-    )
-
-    assert torch.allclose(out_score.rri, out_batch.rri, atol=1e-6)
-    assert torch.allclose(out_score.pm_dist_after, out_batch.pm_dist_after, atol=1e-6)
-    assert torch.allclose(out_score.pm_acc_after, out_batch.pm_acc_after, atol=1e-6)
-    assert torch.allclose(out_score.pm_comp_after, out_batch.pm_comp_after, atol=1e-6)
-
-
 def test_oracle_rri_handles_empty_candidate_pointclouds():
     """If a candidate contributes zero points, then P_{t∪q} == P_t and RRI==0."""
 
@@ -76,7 +38,7 @@ def test_oracle_rri_handles_empty_candidate_pointclouds():
     extend = torch.tensor([-2, 2, -2, 2, -2, 2], device=device, dtype=dtype)
 
     out = (
-        OracleRRIConfig()
+        PreparedRriScorerConfig()
         .setup_target()
         .score(
             points_t=points_t,

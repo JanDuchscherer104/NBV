@@ -1,6 +1,14 @@
-# TorchMetrics And Lightning Lifecycle
+---
+id: 2026-07-11_torchmetrics_lightning_lifecycle
+date: 2026-07-11
+title: "TorchMetrics And Lightning Lifecycle"
+status: done
+topics: [torchmetrics, lightning, rri-metrics]
+confidence: high
+canonical_updates_needed: []
+---
 
-Date: 2026-07-11
+# TorchMetrics And Lightning Lifecycle
 
 ## Outcome
 
@@ -33,8 +41,3 @@ Date: 2026-07-11
 - Connect `SelectedRolloutMetrics` only in a future finite-horizon Lightning
   path whose batch contract supplies real rewards and endpoint errors.
 - Join the independently committed WP07 target-ownership lane before WP08.
-
-## Canonical Updates Needed
-
-- None. The canonical report already records the WP06 ownership and lifecycle
-  contract.

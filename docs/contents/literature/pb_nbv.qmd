@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`jzz_2025_ral_resub.tex`](../../literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex) and [`sections/method.tex`](../../literature/tex-src/arXiv-PB-NBV/sections/method.tex).
 
-**Related ARIA-NBV pages.** [NBV background](../theory/nbv_background.qmd), [RRI theory](../theory/rri_theory.qmd), [oracle RRI API](../../reference/rri_metrics.oracle_rri.qmd), and [Hestia](hestia.qmd).
+**Related ARIA-NBV pages.** [NBV background](../theory/nbv_background.qmd), [RRI theory](../theory/rri_theory.qmd), [oracle RRI API](../../reference/oracle.scene_rri.qmd), and [Hestia](hestia.qmd).
 
 ### Core contribution
 

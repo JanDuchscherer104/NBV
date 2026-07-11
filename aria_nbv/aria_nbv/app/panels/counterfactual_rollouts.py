@@ -22,6 +22,7 @@ from ...data_handling import (
     VinOfflineStoreConfig,
 )
 from ...oracle.evidence import target_gt_obb_world
+from ...oracle.scene_rri import SceneRriScorerConfig
 from ...oracle.target_selection import (
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -48,7 +49,6 @@ from ...rendering.plotting import (
 from ...rollouts import (
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
-    CounterfactualOracleRriScorerConfig,
     CounterfactualPoseGeneratorConfig,
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
@@ -592,7 +592,7 @@ def _score_context_for_mode(
     sample: VinOfflineSample,
     target: TargetCandidateRow | None,
     target_scorer_config: CounterfactualTargetOracleRriScorerConfig,
-    scene_scorer_config: CounterfactualOracleRriScorerConfig,
+    scene_scorer_config: SceneRriScorerConfig,
 ) -> LiveRolloutScoreContext:
     """Create the scorer and target runtime context for a live rollout."""
 
@@ -638,7 +638,7 @@ def _run_live_rollout(
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig,
     rollout_config: CounterfactualPoseGeneratorConfig,
     target_scorer_config: CounterfactualTargetOracleRriScorerConfig,
-    scene_scorer_config: CounterfactualOracleRriScorerConfig,
+    scene_scorer_config: SceneRriScorerConfig,
 ) -> tuple[CounterfactualRolloutResult, str]:
     """Generate one live rollout result and capture Console logs for display."""
 
@@ -1382,7 +1382,7 @@ def _render_live_rollouts_tab() -> None:
         include_scene_rri=bool(include_scene_audit),
         log_timing=bool(log_timing),
     )
-    scene_scorer_cfg = CounterfactualOracleRriScorerConfig(
+    scene_scorer_cfg = SceneRriScorerConfig(
         depth=depth_cfg,
         backprojection_stride=int(backprojection_stride),
     )
