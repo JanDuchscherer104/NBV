@@ -6,8 +6,39 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig, CandidatePositionMode, ViewDirectionMode
+from aria_nbv.rollouts import CounterfactualPoseGeneratorConfig, RolloutPolicySpec
+
+
+def test_replay_and_recipe_configs_each_have_one_policy_field() -> None:
+    assert set(CounterfactualPoseGeneratorConfig.model_fields) == {
+        "candidate_config",
+        "policy",
+        "log_timing",
+        "verbosity",
+        "is_debug",
+    }
+    assert set(RolloutRecipeConfig.model_fields) == {"name", "policy"}
+
+
+def test_legacy_flat_rollout_policy_fields_are_rejected() -> None:
+    """Canonical configs compose one policy object without a legacy facade."""
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        CounterfactualPoseGeneratorConfig(horizon=2)
+    with pytest.raises(ValidationError, match="Field required"):
+        RolloutRecipeConfig(name="legacy", horizon=2)
+
+
+def test_rollout_policy_spec_is_immutable() -> None:
+    policy = RolloutPolicySpec(horizon=2)
+
+    with pytest.raises(ValidationError, match="frozen"):
+        policy.horizon = 3
 
 
 def test_diverse_rollout_profile_emphasizes_radial_and_backtrack_families() -> None:
@@ -39,12 +70,12 @@ def test_diverse_rollout_profile_enables_sibling_diversity_controls() -> None:
         "temperature_softmax_diverse",
     }
     for recipe in config.recipes:
-        assert recipe.branch_factor == 3
-        assert recipe.beam_width == 3
-        assert recipe.require_sibling_strategy_diversity is True
-        assert recipe.min_sibling_distance_m > 0.0
-        assert recipe.min_sibling_yaw_deg == 20.0
-        assert recipe.min_sibling_target_bearing_deg == 20.0
+        assert recipe.policy.branch_factor == 3
+        assert recipe.policy.beam_width == 3
+        assert recipe.policy.require_sibling_strategy_diversity is True
+        assert recipe.policy.min_sibling_distance_m > 0.0
+        assert recipe.policy.min_sibling_yaw_deg == 20.0
+        assert recipe.policy.min_sibling_target_bearing_deg == 20.0
 
 
 def test_diverse_rollout_profile_matches_named_code_presets() -> None:

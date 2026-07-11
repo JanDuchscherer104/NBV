@@ -17,12 +17,13 @@ encoded as low target RRI.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch
 from pydantic import Field, field_validator
 
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
-from ...oracle.target_rri import TargetRriScorerConfig
+from ...oracle.target_rri import TargetRriEvaluation, TargetRriInvalidity, TargetRriScorer, TargetRriScorerConfig
 from ...oracle.target_selection import (
     TARGET_INVALID_REASON_VERSION,
     OracleTargetTaskSampler,
@@ -37,13 +38,13 @@ from ...pose_generation import (
     CandidateMixtureViewGeneratorConfig,
 )
 from ...rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
-from ...rollouts.counterfactuals import (
-    CounterfactualEvaluatorInvalidityError,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-)
 from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
+from ...rollouts.replay.engine import (
+    CounterfactualCandidateEvaluation,
+    CounterfactualPoseGeneratorConfig,
+)
+from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
+from ...rollouts.replay.state import CounterfactualRolloutResult
 from ...rollouts.shard_manifest import RolloutShardEntry
 from ...rollouts.trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from ...rollouts.zarr_store import (
@@ -54,6 +55,10 @@ from ...rollouts.zarr_store import (
 )
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
+
+if TYPE_CHECKING:
+    from ...pose_generation.types import CandidateSamplingResult
+    from ...rollouts.replay.state import CounterfactualTrajectory
 
 
 @dataclass(slots=True)
@@ -80,6 +85,46 @@ class RolloutDatasetWriterStats:
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
 
 
+class _TargetRriInvalidityError(ValueError):
+    """Pipeline control flow carrying one typed target-evidence invalidity."""
+
+    def __init__(self, invalidity: TargetRriInvalidity) -> None:
+        super().__init__(f"{invalidity.reason.value}: {invalidity.message}")
+        self.invalidity = invalidity
+
+
+class _TargetRriScoreAdapter:
+    """Adapt Oracle target labels to the current replay evaluation payload."""
+
+    def __init__(self, scorer: TargetRriScorer) -> None:
+        self.scorer = scorer
+
+    def __call__(
+        self,
+        candidates: CandidateSamplingResult,
+        trajectory: CounterfactualTrajectory,
+        step_index: int,
+    ) -> CounterfactualCandidateEvaluation:
+        outcome = self.scorer(candidates, trajectory, step_index)
+        if isinstance(outcome, TargetRriInvalidity):
+            raise _TargetRriInvalidityError(outcome)
+        if not isinstance(outcome, TargetRriEvaluation):
+            raise TypeError(f"Target scorer returned unsupported outcome {type(outcome).__name__}.")
+        return CounterfactualCandidateEvaluation(
+            scores=outcome.scores,
+            score_label=outcome.score_label,
+            metric_vectors=outcome.metric_vectors,
+            candidate_point_clouds_world=outcome.candidate_point_clouds_world,
+            candidate_point_cloud_lengths=outcome.candidate_point_cloud_lengths,
+            target_eval_current_points_world=outcome.target_eval_current_points_world,
+            target_eval_candidate_points_world=outcome.target_eval_candidate_points_world,
+            target_eval_candidate_point_lengths=outcome.target_eval_candidate_point_lengths,
+            target_eval_crop_policy=outcome.target_eval_crop_policy,
+            target_eval_voxel_size_m=outcome.target_eval_voxel_size_m,
+            target_eval_max_points=outcome.target_eval_max_points,
+        )
+
+
 class RolloutRecipeConfig(BaseConfig):
     """One rollout policy recipe materialized into the replay store.
 
@@ -92,47 +137,8 @@ class RolloutRecipeConfig(BaseConfig):
     name: str
     """Stable recipe name stored as branch schedule lineage."""
 
-    selection_policy: CounterfactualSelectionPolicy
-    """Action-selection policy used inside the rollout tree."""
-
-    horizon: int = Field(default=2, ge=1)
-    """Maximum number of rollout steps."""
-
-    branch_factor: int = Field(default=1, ge=1)
-    """Number of actions sampled/expanded per non-terminal step."""
-
-    beam_width: int | None = Field(default=None, ge=1)
-    """Retained beam width; ``None`` keeps the generator default."""
-
-    branch_factor_schedule: list[int] | None = None
-    """Optional deterministic per-step branch counts; last entry repeats."""
-
-    stochastic_branch_factors: list[int] | None = None
-    """Optional seeded branch-count choices sampled per expanded rollout node."""
-
-    stochastic_branch_probabilities: list[float] | None = None
-    """Optional probabilities aligned with ``stochastic_branch_factors``."""
-
-    selection_temperature: float = Field(default=1.0, gt=0.0)
-    """Softmax temperature for stochastic selection policies."""
-
-    min_history_distance_m: float = Field(default=0.0, ge=0.0)
-    """Minimum distance from previously selected poses during rollout selection."""
-
-    min_sibling_distance_m: float = Field(default=0.0, ge=0.0)
-    """Minimum distance between sibling branches expanded from one rollout node."""
-
-    min_sibling_yaw_deg: float = Field(default=0.0, ge=0.0)
-    """Minimum yaw separation between sibling branches expanded from one node."""
-
-    min_sibling_target_bearing_deg: float = Field(default=0.0, ge=0.0)
-    """Minimum target-bearing separation between sibling branches."""
-
-    require_sibling_strategy_diversity: bool = False
-    """Require sibling branches to use distinct candidate strategy families when possible."""
-
-    seed: int | None = 0
-    """Recipe-local random seed for candidate/action sampling."""
+    policy: RolloutPolicySpec
+    """Complete branching and action-selection policy for this recipe."""
 
     @staticmethod
     def default_suite() -> list["RolloutRecipeConfig"]:
@@ -141,34 +147,42 @@ class RolloutRecipeConfig(BaseConfig):
         return [
             RolloutRecipeConfig(
                 name="random_valid",
-                selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
-                horizon=2,
-                branch_factor=1,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+                    horizon=2,
+                    branch_factor=1,
+                    seed=0,
+                ),
             ),
             RolloutRecipeConfig(
                 name="oracle_greedy",
-                selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-                horizon=2,
-                branch_factor=1,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+                    horizon=2,
+                    branch_factor=1,
+                    seed=0,
+                ),
             ),
             RolloutRecipeConfig(
                 name="oracle_lookahead",
-                selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-                horizon=2,
-                branch_factor=2,
-                beam_width=2,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+                    horizon=2,
+                    branch_factor=2,
+                    beam_width=2,
+                    seed=0,
+                ),
             ),
             RolloutRecipeConfig(
                 name="temperature_softmax",
-                selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
-                horizon=2,
-                branch_factor=2,
-                beam_width=2,
-                selection_temperature=1.0,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+                    horizon=2,
+                    branch_factor=2,
+                    beam_width=2,
+                    selection_temperature=1.0,
+                    seed=0,
+                ),
             ),
         ]
 
@@ -187,42 +201,48 @@ class RolloutRecipeConfig(BaseConfig):
         return [
             RolloutRecipeConfig(
                 name="random_valid_diverse",
-                selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
-                horizon=2,
-                branch_factor=3,
-                beam_width=3,
-                require_sibling_strategy_diversity=True,
-                min_sibling_distance_m=0.2,
-                min_sibling_yaw_deg=20.0,
-                min_sibling_target_bearing_deg=20.0,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+                    horizon=2,
+                    branch_factor=3,
+                    beam_width=3,
+                    require_sibling_strategy_diversity=True,
+                    min_sibling_distance_m=0.2,
+                    min_sibling_yaw_deg=20.0,
+                    min_sibling_target_bearing_deg=20.0,
+                    seed=0,
+                ),
             ),
             RolloutRecipeConfig(
                 name="oracle_lookahead_diverse",
-                selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-                horizon=2,
-                branch_factor=3,
-                beam_width=3,
-                require_sibling_strategy_diversity=True,
-                min_sibling_distance_m=0.2,
-                min_sibling_yaw_deg=20.0,
-                min_sibling_target_bearing_deg=20.0,
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+                    horizon=2,
+                    branch_factor=3,
+                    beam_width=3,
+                    require_sibling_strategy_diversity=True,
+                    min_sibling_distance_m=0.2,
+                    min_sibling_yaw_deg=20.0,
+                    min_sibling_target_bearing_deg=20.0,
+                    seed=0,
+                ),
             ),
             RolloutRecipeConfig(
                 name="temperature_softmax_diverse",
-                selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
-                horizon=2,
-                branch_factor=3,
-                beam_width=3,
-                selection_temperature=1.25,
-                require_sibling_strategy_diversity=True,
-                min_sibling_distance_m=0.2,
-                min_sibling_yaw_deg=20.0,
-                min_sibling_target_bearing_deg=20.0,
-                stochastic_branch_factors=[2, 3],
-                stochastic_branch_probabilities=[0.5, 0.5],
-                seed=0,
+                policy=RolloutPolicySpec(
+                    selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+                    horizon=2,
+                    branch_factor=3,
+                    beam_width=3,
+                    selection_temperature=1.25,
+                    require_sibling_strategy_diversity=True,
+                    min_sibling_distance_m=0.2,
+                    min_sibling_yaw_deg=20.0,
+                    min_sibling_target_bearing_deg=20.0,
+                    stochastic_branch_factors=(2, 3),
+                    stochastic_branch_probabilities=(0.5, 0.5),
+                    seed=0,
+                ),
             ),
         ]
 
@@ -654,24 +674,11 @@ class RolloutDatasetWriter:
             if self.config.selected_depth.enabled
             else None
         )
+        score_candidates = _TargetRriScoreAdapter(scorer)
         for recipe in self.config.recipes:
             rollout_cfg = CounterfactualPoseGeneratorConfig(
                 candidate_config=self.config.candidate_mixture,
-                horizon=recipe.horizon,
-                branch_factor=recipe.branch_factor,
-                beam_width=recipe.beam_width,
-                branch_factor_schedule=recipe.branch_factor_schedule,
-                stochastic_branch_factors=recipe.stochastic_branch_factors,
-                stochastic_branch_probabilities=recipe.stochastic_branch_probabilities,
-                selection_policy=recipe.selection_policy,
-                selection_temperature=recipe.selection_temperature,
-                branch_schedule_id=recipe.name,
-                min_history_distance_m=recipe.min_history_distance_m,
-                min_sibling_distance_m=recipe.min_sibling_distance_m,
-                min_sibling_yaw_deg=recipe.min_sibling_yaw_deg,
-                min_sibling_target_bearing_deg=recipe.min_sibling_target_bearing_deg,
-                require_sibling_strategy_diversity=recipe.require_sibling_strategy_diversity,
-                seed=recipe.seed,
+                policy=recipe.policy,
                 log_timing=self.config.log_timing,
                 verbosity=self.config.verbosity,
                 is_debug=self.config.is_debug,
@@ -679,10 +686,10 @@ class RolloutDatasetWriter:
             try:
                 result = rollout_cfg.setup_target().generate_from_typed_sample(
                     sample.efm_snippet_view,
-                    score_candidates=scorer,
+                    score_candidates=score_candidates,
                     candidate_runtime_context=runtime_context,
                 )
-            except CounterfactualEvaluatorInvalidityError as exc:
+            except _TargetRriInvalidityError as exc:
                 self.stats.rollout_invalid_skips += 1
                 self.stats.skip(f"{recipe.name}:{exc.invalidity.reason.value}")
                 self.console.warn(
@@ -717,7 +724,7 @@ class RolloutDatasetWriter:
                         mesh_version=source_lineage.mesh_version(sample),
                         candidate_config_hash=source_lineage.config_hash(self.config.candidate_mixture),
                         oracle_config_hash=source_lineage.config_hash(self.config.target_scorer),
-                        random_seed=recipe.seed,
+                        random_seed=recipe.policy.seed,
                         source_cache_version=source_lineage.source_cache_version,
                         source_row_id=sample.sample_index,
                         source_sample_index=sample.sample_index,
@@ -735,7 +742,7 @@ class RolloutDatasetWriter:
                         target_crop_policy=self.config.target_scorer.target_crop_policy,
                         reason_code_version=INVALID_REASON_VERSION,
                         selection_rng_state_hash=(
-                            f"seed-once:{recipe.seed}:split-manifest:{source_lineage.split_manifest_hash}"
+                            f"seed-once:{recipe.policy.seed}:split-manifest:{source_lineage.split_manifest_hash}"
                         ),
                         target_selection_policy=self._target_selection_policy(),
                         target_selection_rank=target.selected_rank if target.selected_rank is not None else target_rank,

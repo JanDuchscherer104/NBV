@@ -9,7 +9,7 @@ audits, and read-side inspection. Rollout dataset/shard generation lives in
 ```text
 rollouts/
   audits.py               # operational validity/provenance/path checks
-  counterfactuals.py      # replay and Oracle-result adaptation; future replay split
+  replay/                 # policy, state, score contracts, and replay engine
   inspection.py
   manifest.py
   shard_manifest.py
@@ -22,7 +22,7 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:10:28.231382+00:00`
 
-Graphify refresh: `2026-07-11T18:23:00+02:00`
+Graphify refresh: `2026-07-11T19:40:59+02:00`
 
 ## Symbol Ownership Matrix
 
@@ -63,34 +63,10 @@ metrics modules. These symbols are evaluation-only.
 | `CandidateProvenanceShareMetric` | `class` | `public` | `rollouts.audits` | `moved` |
 | `_safe_mean` | `function` | `private` | `rollouts.audits` | `moved` |
 
-### `counterfactuals.py`
+### `replay/`
 
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `_pose_row` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_pose_batch_len` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_pose_at` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_exact_pose_index` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_time_value` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_root_error_for_metric` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_robust_temperature_logits` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_valid_diversity_metadata` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_pose_yaw_rad` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_angular_separation` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_circular_min_delta` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_append_diversity_selection` | `function` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualSelectionPolicy` | `enum` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualSelectionRecord` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `_CandidateDiversityMetadata` | `DTO` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualMetricBundle` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualCandidateEvaluation` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualEvaluatorInvalidityError` | `class` | `public` | typed Oracle adaptation | `rollouts.counterfactuals` | `rollouts.replay` | `deferred: WP10` |
-| `CounterfactualStepResult` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualTrajectory` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualRolloutResult` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualEvaluatorFn` | `constant` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualPoseGeneratorConfig` | `config` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
-| `CounterfactualPoseGenerator` | `class` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
+The nested package owns replay policy, score, state, and engine symbols. Its
+complete current/final symbol matrix is in [`replay/README.md`](replay/README.md).
 
 ### `info_cli.py`
 

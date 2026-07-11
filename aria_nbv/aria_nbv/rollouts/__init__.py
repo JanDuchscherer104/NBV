@@ -6,18 +6,6 @@ raw snippet access and immutable VIN offline stores remain in
 `aria_nbv.data_handling`.
 """
 
-from .counterfactuals import (
-    CounterfactualCandidateEvaluation,
-    CounterfactualEvaluatorFn,
-    CounterfactualMetricBundle,
-    CounterfactualPoseGenerator,
-    CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualSelectionRecord,
-    CounterfactualStepResult,
-    CounterfactualTrajectory,
-)
 from .inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
@@ -43,6 +31,21 @@ from .manifest import (
     RolloutStoreInvocation,
     RolloutStoreManifestContext,
 )
+from .replay.engine import (
+    CounterfactualCandidateEvaluation,
+    CounterfactualEvaluatorFn,
+    CounterfactualMetricBundle,
+    CounterfactualPoseGenerator,
+    CounterfactualPoseGeneratorConfig,
+)
+from .replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
+from .replay.state import (
+    CounterfactualRolloutResult,
+    CounterfactualSelectionRecord,
+    CounterfactualStepResult,
+    CounterfactualTrajectory,
+)
+from .replay.types import CandidateScores
 from .shard_manifest import (
     ROLLOUT_SHARD_MANIFEST_VERSION,
     ROLLOUT_SHARD_OWNER_FILENAME,
@@ -89,6 +92,8 @@ __all__ = [
     "CounterfactualSelectionRecord",
     "CounterfactualStepResult",
     "CounterfactualTrajectory",
+    "CandidateScores",
+    "RolloutPolicySpec",
     "RolloutLineage",
     "RolloutSuspiciousQueryConfig",
     "RolloutShardEntry",

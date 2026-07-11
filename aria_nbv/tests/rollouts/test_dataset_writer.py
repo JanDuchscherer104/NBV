@@ -22,6 +22,7 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriterStats,
     SelectedDepthRetentionConfig,
     _RolloutSourceLineageBuilder,
+    _TargetRriInvalidityError,
 )
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
@@ -33,11 +34,9 @@ from aria_nbv.oracle.target_selection import (
 )
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.rendering import CandidateDepthRendererConfig
-from aria_nbv.rollouts.counterfactuals import (
-    CounterfactualEvaluatorInvalidityError,
-    CounterfactualPoseGeneratorConfig,
-)
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
+from aria_nbv.rollouts.replay.engine import CounterfactualPoseGeneratorConfig
+from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets import TargetDescriptor
@@ -280,24 +279,16 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
 
     class _Replay:
         def generate_from_typed_sample(self, *_args, **_kwargs):
-            raise CounterfactualEvaluatorInvalidityError(invalidity)
+            raise _TargetRriInvalidityError(invalidity)
 
     recipe = SimpleNamespace(
         name="oracle_greedy",
-        horizon=1,
-        branch_factor=1,
-        beam_width=None,
-        branch_factor_schedule=None,
-        stochastic_branch_factors=None,
-        stochastic_branch_probabilities=None,
-        selection_policy="oracle_greedy",
-        selection_temperature=1.0,
-        min_history_distance_m=0.0,
-        min_sibling_distance_m=0.0,
-        min_sibling_yaw_deg=0.0,
-        min_sibling_target_bearing_deg=0.0,
-        require_sibling_strategy_diversity=False,
-        seed=0,
+        policy=RolloutPolicySpec(
+            horizon=1,
+            branch_factor=1,
+            selection_policy="oracle_greedy",
+            seed=0,
+        ),
     )
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(

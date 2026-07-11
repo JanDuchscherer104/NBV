@@ -26,8 +26,8 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorRolloutDepthConfig,
 )
 from aria_nbv.rollouts import (
-    CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
+    RolloutPolicySpec,
     RolloutZarrStoreConfig,
 )
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
@@ -37,8 +37,10 @@ from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEnco
 def _recipe(**kwargs: object) -> RolloutRecipeConfig:
     return RolloutRecipeConfig(
         name="constraint-test",
-        selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-        **kwargs,
+        policy=RolloutPolicySpec(
+            selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+            **kwargs,
+        ),
     )
 
 
@@ -65,9 +67,9 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (VinOfflineWriterConfig, {"samples_per_shard": 0}),
         (CandidateViewGeneratorConfig, {"view_max_angle_deg": -1.0}),
         (_mixture_component, {"count": 0}),
-        (CounterfactualPoseGeneratorConfig, {"branch_factor": 0}),
-        (CounterfactualPoseGeneratorConfig, {"seed": -1}),
-        (CounterfactualPoseGeneratorConfig, {"min_sibling_target_bearing_deg": -1.0}),
+        (RolloutPolicySpec, {"branch_factor": 0}),
+        (RolloutPolicySpec, {"seed": -1}),
+        (RolloutPolicySpec, {"min_sibling_target_bearing_deg": -1.0}),
         (TargetRriScorerConfig, {"target_crop_margin_m": -0.01}),
         (RerunInspectorOutputConfig, {"spawn_port": 0}),
         (RerunInspectorGeometryConfig, {"mesh_alpha": 256}),

@@ -144,14 +144,23 @@ website:
         contents:
         - text: audits
           file: reference/rollouts.audits.qmd
-        - text: counterfactuals
-          file: reference/rollouts.counterfactuals.qmd
         - text: info_cli
           file: reference/rollouts.info_cli.qmd
         - text: inspection
           file: reference/rollouts.inspection.qmd
         - text: manifest
           file: reference/rollouts.manifest.qmd
+        - text: replay
+          file: reference/rollouts.replay.qmd
+          contents:
+          - text: engine
+            file: reference/rollouts.replay.engine.qmd
+          - text: policy
+            file: reference/rollouts.replay.policy.qmd
+          - text: state
+            file: reference/rollouts.replay.state.qmd
+          - text: types
+            file: reference/rollouts.replay.types.qmd
         - text: shard_manifest
           file: reference/rollouts.shard_manifest.qmd
         - text: trace

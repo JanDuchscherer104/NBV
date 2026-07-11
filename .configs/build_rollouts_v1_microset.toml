@@ -87,6 +87,7 @@ discount_gamma = 1.0
 
 [[recipes]]
 name = "oracle_lookahead"
+[recipes.policy]
 selection_policy = "oracle_greedy"
 horizon = 2
 branch_factor = 2

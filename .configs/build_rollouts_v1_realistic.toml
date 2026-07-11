@@ -135,21 +135,24 @@ q_h_chunk_states             = 64
 target_eval_crop_max_points  = 50000
 
 [[recipes]]
-name             = "random_valid"
+name = "random_valid"
+[recipes.policy]
 selection_policy = "random_valid"
 horizon          = 1
 branch_factor    = 1
 seed             = 0
 
 [[recipes]]
-name             = "oracle_greedy"
+name = "oracle_greedy"
+[recipes.policy]
 selection_policy = "oracle_greedy"
 horizon          = 1
 branch_factor    = 1
 seed             = 0
 
 [[recipes]]
-name             = "oracle_lookahead"
+name = "oracle_lookahead"
+[recipes.policy]
 selection_policy = "oracle_greedy"
 horizon          = 2
 branch_factor    = 2
@@ -157,7 +160,8 @@ beam_width       = 2
 seed             = 0
 
 [[recipes]]
-name                  = "temperature_softmax"
+name = "temperature_softmax"
+[recipes.policy]
 selection_policy      = "temperature_softmax"
 horizon               = 2
 branch_factor         = 2

@@ -136,6 +136,7 @@ target_eval_crop_max_points = 50000
 
 [[recipes]]
 name = "random_valid_diverse"
+[recipes.policy]
 selection_policy = "random_valid"
 horizon = 2
 branch_factor = 3
@@ -148,6 +149,7 @@ seed = 0
 
 [[recipes]]
 name = "oracle_lookahead_diverse"
+[recipes.policy]
 selection_policy = "oracle_greedy"
 horizon = 2
 branch_factor = 3
@@ -160,6 +162,7 @@ seed = 0
 
 [[recipes]]
 name = "temperature_softmax_diverse"
+[recipes.policy]
 selection_policy = "temperature_softmax"
 horizon = 2
 branch_factor = 3

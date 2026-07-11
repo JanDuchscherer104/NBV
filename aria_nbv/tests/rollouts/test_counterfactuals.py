@@ -51,15 +51,16 @@ from aria_nbv.pose_generation.plotting import (
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
 from aria_nbv.rollouts import (
+    CandidateScores,
     CounterfactualCandidateEvaluation,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
     CounterfactualTrajectory,
     RolloutLineage,
+    RolloutPolicySpec,
     RolloutZarrRecord,
 )
-from aria_nbv.rollouts.counterfactuals import CounterfactualEvaluatorInvalidityError
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 
@@ -300,24 +301,6 @@ def test_target_scorer_maps_root_evidence_failure_to_typed_invalidity(monkeypatc
 
     assert isinstance(outcome, TargetRriInvalidity)
     assert outcome.reason is OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING
-
-
-def test_rollout_adapter_preserves_typed_target_invalidity() -> None:
-    invalidity = TargetRriInvalidity(
-        reason=OracleEvidenceInvalidReason.TARGET_CURRENT_SUPPORT_INSUFFICIENT,
-        message="insufficient target support",
-    )
-    generator = CounterfactualPoseGeneratorConfig().setup_target()
-
-    with pytest.raises(CounterfactualEvaluatorInvalidityError) as exc_info:
-        generator._evaluate_valid_candidates(
-            result=_candidate_result_for_pose(_identity_pose()),
-            trajectory=CounterfactualTrajectory(root_pose_world=_identity_pose()),
-            step_index=0,
-            score_candidates=lambda *_: invalidity,
-        )
-
-    assert exc_info.value.invalidity is invalidity
 
 
 def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(monkeypatch) -> None:
@@ -564,17 +547,21 @@ def _make_rollout_config(
     )
     return CounterfactualPoseGeneratorConfig(
         candidate_config=candidate_cfg,
-        horizon=horizon,
-        branch_factor=branch_factor,
-        beam_width=beam_width,
-        branch_factor_schedule=branch_factor_schedule,
-        stochastic_branch_factors=stochastic_branch_factors,
-        stochastic_branch_probabilities=stochastic_branch_probabilities,
-        selection_policy=selection_policy,
-        selection_temperature=selection_temperature,
-        robust_temperature_logits=robust_temperature_logits,
-        min_sibling_yaw_deg=min_sibling_yaw_deg,
-        require_sibling_strategy_diversity=require_sibling_strategy_diversity,
+        policy=RolloutPolicySpec(
+            horizon=horizon,
+            branch_factor=branch_factor,
+            beam_width=beam_width,
+            branch_factor_schedule=None if branch_factor_schedule is None else tuple(branch_factor_schedule),
+            stochastic_branch_factors=(None if stochastic_branch_factors is None else tuple(stochastic_branch_factors)),
+            stochastic_branch_probabilities=(
+                None if stochastic_branch_probabilities is None else tuple(stochastic_branch_probabilities)
+            ),
+            selection_policy=selection_policy,
+            selection_temperature=selection_temperature,
+            robust_temperature_logits=robust_temperature_logits,
+            min_sibling_yaw_deg=min_sibling_yaw_deg,
+            require_sibling_strategy_diversity=require_sibling_strategy_diversity,
+        ),
         verbosity=0,
     )
 
@@ -632,6 +619,49 @@ def _fake_rri_evaluator(result, trajectory, step_index):
         candidate_point_clouds_world=candidate_points,
         candidate_point_cloud_lengths=lengths,
     )
+
+
+def test_candidate_scores_bind_values_to_hard_mask_and_shell_order() -> None:
+    candidates = _candidate_result_for_pose(_identity_pose(), count=3)
+    candidates.mask_valid = torch.tensor([True, False, True])
+    scores = CandidateScores.from_valid_values(
+        torch.tensor([0.25, 0.75]),
+        name="target_root_gain",
+        candidates=candidates,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+
+    assert scores.action_mask.tolist() == [True, False, True]
+    assert scores.candidate_shell_indices.tolist() == [0, 2]
+    assert scores.values.tolist() == pytest.approx([0.25, 0.75])
+
+    reordered = CandidateScores(
+        values=scores.values,
+        action_mask=scores.action_mask,
+        candidate_shell_indices=torch.tensor([2, 0]),
+        name=scores.name,
+    )
+    with pytest.raises(ValueError, match="preserve hard-valid candidate order"):
+        reordered.validate_for(candidates, device=torch.device("cpu"), dtype=torch.float32)
+
+
+def test_rollout_engine_accepts_minimal_candidate_scores() -> None:
+    def _scores(result, trajectory, step_index):
+        del trajectory, step_index
+        values = torch.arange(1, int(result.mask_valid.sum().item()) + 1, dtype=torch.float32)
+        return CandidateScores.from_valid_values(
+            values,
+            name="minimal_scores",
+            candidates=result,
+            device=values.device,
+            dtype=values.dtype,
+        )
+
+    rollouts = _run_rollouts(horizon=1, branch_factor=1, score_candidates=_scores)
+
+    assert rollouts.score_label == "minimal_scores"
+    assert all(trajectory.steps[0].selection_score_label == "minimal_scores" for trajectory in rollouts.trajectories)
 
 
 def _expected_frustum_trace(cam: CameraTW, pose: PoseTW, *, scale: float) -> np.ndarray:
@@ -970,10 +1000,12 @@ def test_greedy_branch_selection_can_require_strategy_diversity() -> None:
     )
     cfg = CounterfactualPoseGeneratorConfig(
         candidate_config=mixture_cfg,
-        horizon=1,
-        branch_factor=3,
-        selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-        require_sibling_strategy_diversity=True,
+        policy=RolloutPolicySpec(
+            horizon=1,
+            branch_factor=3,
+            selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+            require_sibling_strategy_diversity=True,
+        ),
         verbosity=0,
     )
     generator = CounterfactualPoseGenerator(cfg)
@@ -1214,9 +1246,11 @@ def test_counterfactual_rollout_passes_target_runtime_context_to_mixed_sampler()
                 CandidateMixtureComponentConfig(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT)
             ],
         ),
-        horizon=1,
-        branch_factor=1,
-        selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+        policy=RolloutPolicySpec(
+            horizon=1,
+            branch_factor=1,
+            selection_policy=CounterfactualSelectionPolicy.RANDOM_VALID,
+        ),
         verbosity=0,
     )
     generator = CounterfactualPoseGenerator(cfg)

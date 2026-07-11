@@ -18,15 +18,14 @@ from aria_nbv.rollouts import (
     RolloutLineage,
     RolloutZarrRecord,
 )
-from aria_nbv.rollouts.counterfactuals import (
+from aria_nbv.rollouts.replay.engine import (
     CounterfactualCandidateEvaluation,
     CounterfactualMetricBundle,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualTrajectory,
 )
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
+from aria_nbv.rollouts.replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
 from aria_nbv.utils.fingerprints import stable_config_hash
 
 if TYPE_CHECKING:
@@ -67,11 +66,13 @@ def build_rollout_records(
                 verbosity=0,
                 is_debug=True,
             ),
-            horizon=horizon,
-            branch_factor=1,
-            selection_policy=policy,
-            selection_temperature=1.0,
-            seed=seed,
+            policy=RolloutPolicySpec(
+                horizon=horizon,
+                branch_factor=1,
+                selection_policy=policy,
+                selection_temperature=1.0,
+                seed=seed,
+            ),
             verbosity=0,
         )
         mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
@@ -96,7 +97,7 @@ def build_rollout_records(
                     candidate_config_hash=_config_hash(cfg.candidate_config),
                     oracle_config_hash="fixture-oracle",
                     rollout_config_hash=_config_hash(cfg),
-                    branch_schedule_id=cfg.branch_schedule_id,
+                    branch_schedule_id=None,
                     random_seed=seed,
                     source_cache_version="7",
                     source_row_id=source_row_id,

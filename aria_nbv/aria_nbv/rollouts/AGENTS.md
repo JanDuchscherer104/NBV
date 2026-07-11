@@ -10,7 +10,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 
 ## Public Contracts
 - Public package surface: `aria_nbv/aria_nbv/rollouts/__init__.py`
-- Counterfactual transition replay, Oracle-result adaptation, and rollout policies: `counterfactuals.py`
+- Counterfactual transition replay, score contracts, and rollout policies: `replay/`
 - Scene/target Oracle scoring: `aria_nbv.oracle.scene_rri` and `aria_nbv.oracle.target_rri`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
@@ -19,8 +19,9 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 
 ## Boundary Rules
 - `aria_nbv.rollouts` owns multi-step rollout records, rollout Zarr/Q stores,
-  counterfactual transition replay, and Oracle-result adaptation. Scene and
+  and counterfactual transition replay. Scene and
   target scoring live in `aria_nbv.oracle`.
+  Oracle-to-replay adaptation lives only at pipeline or UI composition edges.
   `aria_nbv.oracle.pipelines` owns rollout generation,
   shard execution, and the `nbv-build-rollouts` CLI.
 - `aria_nbv.data_handling` owns raw snippets, `VinOracleBatch`,

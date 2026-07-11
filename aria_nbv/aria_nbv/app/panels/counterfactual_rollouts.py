@@ -23,7 +23,7 @@ from ...data_handling import (
 )
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.scene_rri import SceneRriScorerConfig
-from ...oracle.target_rri import TargetRriScorerConfig
+from ...oracle.target_rri import TargetRriEvaluation, TargetRriInvalidity, TargetRriScorer, TargetRriScorerConfig
 from ...oracle.target_selection import (
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -53,11 +53,11 @@ from ...rollouts import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
+    RolloutPolicySpec,
     candidate_result_diagnostic_counts,
     decode_position_id,
     decode_strategy_id,
 )
-from ...rollouts.counterfactuals import CounterfactualEvaluatorInvalidityError
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -66,7 +66,9 @@ from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 if TYPE_CHECKING:
-    from ...rollouts.counterfactuals import CounterfactualEvaluatorFn
+    from ...pose_generation.types import CandidateSamplingResult
+    from ...rollouts.replay.engine import CounterfactualEvaluatorFn
+    from ...rollouts.replay.state import CounterfactualTrajectory
 
 
 _SOURCE_TARGET_INFO = """
@@ -433,6 +435,46 @@ class _SceneRriScoreAdapter:
         )
 
 
+class _TargetRriInvalidityError(ValueError):
+    """UI control flow carrying one typed target-evidence invalidity."""
+
+    def __init__(self, invalidity: TargetRriInvalidity) -> None:
+        super().__init__(f"{invalidity.reason.value}: {invalidity.message}")
+        self.invalidity = invalidity
+
+
+class _TargetRriScoreAdapter:
+    """Adapt Oracle target labels to the current replay evaluation payload."""
+
+    def __init__(self, scorer: TargetRriScorer) -> None:
+        self.scorer = scorer
+
+    def __call__(
+        self,
+        candidates: CandidateSamplingResult,
+        trajectory: CounterfactualTrajectory,
+        step_index: int,
+    ) -> CounterfactualCandidateEvaluation:
+        outcome = self.scorer(candidates, trajectory, step_index)
+        if isinstance(outcome, TargetRriInvalidity):
+            raise _TargetRriInvalidityError(outcome)
+        if not isinstance(outcome, TargetRriEvaluation):
+            raise TypeError(f"Target scorer returned unsupported outcome {type(outcome).__name__}.")
+        return CounterfactualCandidateEvaluation(
+            scores=outcome.scores,
+            score_label=outcome.score_label,
+            metric_vectors=outcome.metric_vectors,
+            candidate_point_clouds_world=outcome.candidate_point_clouds_world,
+            candidate_point_cloud_lengths=outcome.candidate_point_cloud_lengths,
+            target_eval_current_points_world=outcome.target_eval_current_points_world,
+            target_eval_candidate_points_world=outcome.target_eval_candidate_points_world,
+            target_eval_candidate_point_lengths=outcome.target_eval_candidate_point_lengths,
+            target_eval_crop_policy=outcome.target_eval_crop_policy,
+            target_eval_voxel_size_m=outcome.target_eval_voxel_size_m,
+            target_eval_max_points=outcome.target_eval_max_points,
+        )
+
+
 def _build_live_dataset_config(*, store_dir: Path, split: str) -> VinOfflineDatasetConfig:
     """Return the VIN offline reader config required by live target-RRI rollouts."""
 
@@ -625,7 +667,7 @@ def _score_context_for_mode(
     )
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
-        evaluator=scorer,
+        evaluator=_TargetRriScoreAdapter(scorer),
         runtime_context=CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target)),
     )
 
@@ -647,7 +689,7 @@ def _run_live_rollout(
     _validate_live_rollout_device(_candidate_config_device(candidate_config))
     _validate_policy_for_scoring_mode(
         scoring_mode=scoring_mode,
-        selection_policy=rollout_config.selection_policy,
+        selection_policy=rollout_config.policy.selection_policy,
     )
     context = _score_context_for_mode(
         scoring_mode=scoring_mode,
@@ -1361,14 +1403,16 @@ def _render_live_rollouts_tab() -> None:
     )
     rollout_cfg = CounterfactualPoseGeneratorConfig(
         candidate_config=candidate_config,
-        horizon=int(horizon),
-        branch_factor=int(branch_factor),
-        beam_width=beam_width,
-        selection_policy=selection_policy,
-        selection_temperature=float(temperature),
-        min_history_distance_m=float(min_history_distance),
-        min_sibling_distance_m=float(min_sibling_distance),
-        seed=int(seed),
+        policy=RolloutPolicySpec(
+            horizon=int(horizon),
+            branch_factor=int(branch_factor),
+            beam_width=beam_width,
+            selection_policy=selection_policy,
+            selection_temperature=float(temperature),
+            min_history_distance_m=float(min_history_distance),
+            min_sibling_distance_m=float(min_sibling_distance),
+            seed=int(seed),
+        ),
         log_timing=bool(log_timing),
         verbosity=Verbosity.NORMAL,
     )
@@ -1412,7 +1456,7 @@ def _render_live_rollouts_tab() -> None:
                     scene_scorer_config=scene_scorer_cfg,
                 )
             rollout_cache[run_key] = {"rollouts": rollouts, "logs": log_text}
-        except CounterfactualEvaluatorInvalidityError as exc:
+        except _TargetRriInvalidityError as exc:
             st.error(f"Target-RRI invalid ({exc.invalidity.reason.value}): {exc.invalidity.message}")
             rollout_cache.pop(run_key, None)
         except Exception as exc:  # pragma: no cover - UI guard

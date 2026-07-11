@@ -1080,7 +1080,7 @@
           - Rollout code reuses the same candidate-shell contract as one-step NBV.
           - Oracle scorer and plotting surfaces expose incremental/cumulative RRI, horizon, branching, pruning, guards, selected frusta, and trajectory replay.
           - #link(gymnasium_url)[Gymnasium] and #link(sb3_url)[SB3] are diagnostic tools for the discrete shell, not thesis-grade online evidence by themselves.
-          - Relevant code surfaces: #gh("aria_nbv/aria_nbv/rollouts/counterfactuals.py"), #gh("aria_nbv/aria_nbv/pose_generation/plotting.py"), #gh("aria_nbv/aria_nbv/rl/counterfactual_env.py"), #gh("aria_nbv/aria_nbv/app/panels/rl.py").
+          - Relevant code surfaces: #gh("aria_nbv/aria_nbv/rollouts/replay/engine.py"), #gh("aria_nbv/aria_nbv/pose_generation/plotting.py"), #gh("aria_nbv/aria_nbv/rl/counterfactual_env.py"), #gh("aria_nbv/aria_nbv/app/panels/rl.py").
         ]
       ]
     ],

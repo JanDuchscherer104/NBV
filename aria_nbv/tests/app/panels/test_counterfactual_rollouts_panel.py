@@ -618,7 +618,7 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
     )
 
     assert context.score_label == "target_rri"
-    assert context.evaluator is fake_evaluator
+    assert context.evaluator.scorer is fake_evaluator
     assert context.runtime_context is not None
     assert context.runtime_context.target_id.startswith("target-")
     assert context.runtime_context.target_id != target.target_id

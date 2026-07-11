@@ -19,7 +19,7 @@ from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 if TYPE_CHECKING:
     from ..data_handling import VinOfflineSample
     from ..oracle.target_selection import TargetCandidateRow
-    from ..rollouts.counterfactuals import CounterfactualRolloutResult, CounterfactualTrajectory
+    from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
     from .types import CandidateSamplingResult
 

@@ -13,11 +13,8 @@ from typing import Any
 
 import torch
 
-from .counterfactuals import (
-    CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualTrajectory,
-)
+from .replay.policy import CounterfactualSelectionPolicy
+from .replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
 
 INVALID_REASON_CODES: dict[str, int] = {
     "VALID": 0,
