@@ -10,7 +10,6 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinSnippetView
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
-from aria_nbv.rri_metrics.logging import Metric
 from aria_nbv.rri_metrics.ordinal import RriOrdinalBinner
 from aria_nbv.utils import Stage
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config
@@ -504,22 +503,22 @@ def test_lightning_table_metric_logging_uses_per_metric_denominators(
             num_classes=3,
         ),
     )
-    calls: list[tuple[Metric, int]] = []
+    calls: list[tuple[str, int]] = []
 
-    def capture_aux_scalars(
-        payload: dict[Metric, torch.Tensor | float],
-        *,
-        stage: Stage,
-        batch_size: int,
+    def capture_log_dict(
+        payload: dict[str, torch.Tensor | float],
+        *args: object,
+        **kwargs: object,
     ) -> None:
-        assert stage is Stage.VAL
+        del args
         assert len(payload) == 1
-        calls.append((next(iter(payload)), batch_size))
+        assert kwargs["on_step"] is True
+        assert kwargs["on_epoch"] is False
+        calls.append((next(iter(payload)), int(kwargs["batch_size"])))
 
-    monkeypatch.setattr(module, "_log_aux_scalars", capture_aux_scalars)
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
 
-    module._log_candidate_table_metrics(
-        stage=Stage.VAL,
+    module._log_candidate_table_step_metrics(
         top1_oracle_hit=torch.tensor([1.0, float("nan"), 0.0]),
         top1_oracle_hit_mean=torch.tensor(0.5),
         top3_oracle_hit=torch.tensor([1.0, float("nan"), float("nan")]),
@@ -535,13 +534,66 @@ def test_lightning_table_metric_logging_uses_per_metric_denominators(
     )
 
     assert dict(calls) == {
-        Metric.CANDIDATE_TOP1_ORACLE_HIT: 2,
-        Metric.CANDIDATE_TOP3_ORACLE_HIT: 1,
-        Metric.SELECTED_ORACLE_REGRET: 1,
-        Metric.SELECTED_ORACLE_RANK: 2,
-        Metric.SELECTED_ORACLE_PERCENTILE: 1,
-        Metric.SELECTED_ORACLE_VALID_TABLE_RATE: 3,
+        "train-aux/candidate_top1_oracle_hit": 2,
+        "train-aux/candidate_top3_oracle_hit": 1,
+        "train-aux/selected_oracle_regret": 1,
+        "train-aux/selected_oracle_rank": 2,
+        "train-aux/selected_oracle_percentile": 1,
+        "train-aux/selected_oracle_valid_table_rate": 3,
     }
+
+
+def test_lightning_candidate_metrics_weight_tables_and_reset_per_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Epoch metrics weight candidate tables, remain stage-local, and reset."""
+
+    module = VinLightningModule(
+        config=VinLightningModuleConfig(
+            vin=VinModelV3Config(backbone=None, num_classes=3),
+            num_classes=3,
+        ),
+    )
+    module._trainer = SimpleNamespace(sanity_checking=False)
+    captured: dict[str, torch.Tensor] = {}
+
+    def capture_log_dict(
+        payload: dict[str, torch.Tensor],
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del args
+        assert kwargs["on_step"] is False
+        assert kwargs["on_epoch"] is True
+        captured.update(payload)
+
+    monkeypatch.setattr(module, "log_dict", capture_log_dict)
+    stage_key = f"{Stage.VAL.value}_stage"
+    batches = (
+        (
+            torch.tensor([[0.9, 0.1]]),
+            torch.tensor([[1.0, 0.0]]),
+        ),
+        (
+            torch.tensor([[0.9, 0.1], [0.8, 0.2], [0.7, 0.3]]),
+            torch.tensor([[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]),
+        ),
+    )
+    for predicted, oracle in batches:
+        valid = torch.ones_like(predicted, dtype=torch.bool)
+        selected = predicted.argmax(dim=-1)
+        module._candidate_top1_metrics[stage_key].update(predicted, oracle, valid)
+        module._candidate_top3_metrics[stage_key].update(predicted, oracle, valid)
+        module._selected_action_metrics[stage_key].update(oracle, selected, valid)
+
+    module._log_candidate_ranking_epoch_metrics(Stage.VAL)
+
+    assert torch.allclose(captured["val-aux/candidate_top1_oracle_hit"], torch.tensor(0.25))
+    assert torch.allclose(captured["val-aux/candidate_top3_oracle_hit"], torch.tensor(1.0))
+    assert torch.allclose(captured["val-aux/selected_oracle_regret"], torch.tensor(0.75))
+    assert module._candidate_top1_metrics[stage_key].hit_count.item() == 0.0
+    assert module._selected_action_metrics[stage_key].table_count.item() == 0.0
+    assert module._candidate_top1_metrics[f"{Stage.TRAIN.value}_stage"].hit_count.item() == 0.0
 
 
 def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -623,6 +675,7 @@ def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
     state_keys = tuple(module.state_dict())
     assert any(key.startswith("vin.") for key in state_keys)  # noqa: S101
     assert not any(key.startswith("candidate_scorer.") for key in state_keys)  # noqa: S101
+    assert not any(key.startswith("_candidate_") for key in state_keys)  # noqa: S101
 
 
 def test_lightning_accepts_zero_descriptor_myopic_scorer_without_state_alias() -> None:

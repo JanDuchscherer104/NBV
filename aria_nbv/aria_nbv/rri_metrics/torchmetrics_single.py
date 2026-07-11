@@ -92,15 +92,21 @@ class RriErrorStats(TorchMetric):
         }
 
     def reset(self) -> None:  # type: ignore[override]
-        self.sum_error.zero_()
-        self.sum_error_sq.zero_()
-        self.count.zero_()
+        super().reset()
 
 
 class VinMetrics(TorchMetric):
     """Container for VIN metrics computed from candidate rankings."""
 
     full_state_update = False
+    spearman: SpearmanCorrCoef | None
+    """Optional buffered Spearman correlation metric for this stage."""
+    confusion: MulticlassConfusionMatrix
+    """Stateful ordinal-class confusion matrix for this stage."""
+    label_hist: LabelHistogram
+    """Stateful ordinal-label histogram for this stage."""
+    has_updates: Tensor
+    """``Tensor["", bool]`` indicating whether this stage received data."""
 
     def __init__(self, *, num_classes: int, enable_spearman: bool = True) -> None:
         super().__init__()
@@ -138,11 +144,11 @@ class VinMetrics(TorchMetric):
         return metrics
 
     def reset(self) -> None:  # type: ignore[override]
+        super().reset()
         if self.spearman is not None:
             self.spearman.reset()
         self.confusion.reset()
         self.label_hist.reset()
-        self.has_updates.fill_(False)
 
 
 class VinMetricsConfig(TargetConfig[VinMetrics]):
@@ -201,6 +207,10 @@ class CandidateTopKOracleHitMetric(TorchMetric):
     """
 
     full_state_update = False
+    hit_total: Tensor
+    """``Tensor["", float32]`` sum of finite table-level oracle hits."""
+    hit_count: Tensor
+    """``Tensor["", float32]`` number of comparable candidate tables."""
 
     def __init__(self, *, top_k: int = 1) -> None:
         super().__init__()
@@ -250,6 +260,22 @@ class SelectedActionOracleComparisonMetric(TorchMetric):
     """
 
     full_state_update = False
+    regret_total: Tensor
+    """``Tensor["", float32]`` sum of finite selected-action regrets."""
+    regret_count: Tensor
+    """``Tensor["", float32]`` number of finite regret samples."""
+    rank_total: Tensor
+    """``Tensor["", float32]`` sum of finite selected-action oracle ranks."""
+    rank_count: Tensor
+    """``Tensor["", float32]`` number of finite rank samples."""
+    percentile_total: Tensor
+    """``Tensor["", float32]`` sum of finite selected-action percentiles."""
+    percentile_count: Tensor
+    """``Tensor["", float32]`` number of finite percentile samples."""
+    valid_table_count: Tensor
+    """``Tensor["", float32]`` number of comparable candidate tables."""
+    table_count: Tensor
+    """``Tensor["", float32]`` number of candidate tables presented."""
 
     def __init__(self) -> None:
         super().__init__()

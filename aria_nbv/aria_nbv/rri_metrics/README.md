@@ -217,8 +217,17 @@ Owner role: stateful one-step evaluation.
 - Rollout provenance, invalidity, path, entropy, and order checks stay in
   `rollouts.audits`.
 
-## Next Boundary
+## Lightning Lifecycle
 
-WP06 types and documents every TorchMetric state and integrates applicable
-single/multi-step adapters into Lightning. WP08 moves privileged evidence and
-the scene scorer into `aria_nbv.oracle`.
+WP06 types and documents every TorchMetric state. Lightning owns separate
+candidate-ranking accumulators for train, validation, and test stages, logs
+table-weighted epoch results, and resets each stage explicitly. The existing
+training-step ranking keys remain available without driving epoch reduction.
+
+`SelectedRolloutMetrics` remains the reusable multi-step adapter. It is not
+updated from `VinOracleBatch`: that one-step contract has neither trajectory
+rewards nor endpoint errors. The future finite-horizon Lightning path must
+connect it only when those tensors are real batch fields.
+
+WP08 next moves privileged evidence and the scene scorer into
+`aria_nbv.oracle`.

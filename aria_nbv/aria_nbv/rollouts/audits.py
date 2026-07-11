@@ -493,6 +493,18 @@ class CandidateTableMetrics(MetricBase):
     """
 
     full_state_update = False
+    valid_count: Tensor
+    """``Tensor["", float32]`` number of hard-valid candidate rows."""
+    total_count: Tensor
+    """``Tensor["", float32]`` number of candidate rows presented."""
+    mean_total: Tensor
+    """``Tensor["", float32]`` sum of finite per-table candidate means."""
+    mean_count: Tensor
+    """``Tensor["", float32]`` number of finite per-table candidate means."""
+    best_total: Tensor
+    """``Tensor["", float32]`` sum of finite per-table best values."""
+    best_count: Tensor
+    """``Tensor["", float32]`` number of finite per-table best values."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -554,6 +566,22 @@ class CandidatePathIncrementMetric(MetricBase):
     """
 
     full_state_update = False
+    mean_total: Tensor
+    """``Tensor["", float32]`` sum of finite table mean increments."""
+    mean_count: Tensor
+    """``Tensor["", float32]`` number of finite table mean increments."""
+    min_total: Tensor
+    """``Tensor["", float32]`` sum of finite table minimum increments."""
+    min_count: Tensor
+    """``Tensor["", float32]`` number of finite table minimum increments."""
+    max_total: Tensor
+    """``Tensor["", float32]`` sum of finite table maximum increments."""
+    max_count: Tensor
+    """``Tensor["", float32]`` number of finite table maximum increments."""
+    valid_table_count: Tensor
+    """``Tensor["", float32]`` number of tables with finite increments."""
+    table_count: Tensor
+    """``Tensor["", float32]`` number of candidate tables presented."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -625,6 +653,14 @@ class CandidatePrimaryInvalidReasonMetric(MetricBase):
     """
 
     full_state_update = False
+    share_total: Tensor
+    """``Tensor["", float32]`` sum of finite invalid-reason shares."""
+    share_count: Tensor
+    """``Tensor["", float32]`` number of finite invalid-reason shares."""
+    valid_table_count: Tensor
+    """``Tensor["", float32]`` number of tables with invalid rows."""
+    table_count: Tensor
+    """``Tensor["", float32]`` number of candidate tables presented."""
 
     def __init__(self, *, reason_ids: tuple[int, ...]) -> None:
         super().__init__()
@@ -683,6 +719,10 @@ class SelectedPathCostMetrics(MetricBase):
     """
 
     full_state_update = False
+    path_total: Tensor
+    """``Tensor["", float32]`` sum of finite selected path lengths."""
+    path_count: Tensor
+    """``Tensor["", float32]`` number of finite selected paths."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -727,6 +767,16 @@ class CandidateOrderConsistencyMetric(MetricBase):
     """
 
     full_state_update = False
+    mae_total: Tensor
+    """``Tensor["", float32]`` sum of finite paired score errors."""
+    mae_count: Tensor
+    """``Tensor["", float32]`` number of finite paired score errors."""
+    top1_match_count: Tensor
+    """``Tensor["", float32]`` number of comparable top-1 matches."""
+    valid_table_count: Tensor
+    """``Tensor["", float32]`` number of comparable candidate tables."""
+    table_count: Tensor
+    """``Tensor["", float32]`` number of paired candidate tables presented."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -788,6 +838,10 @@ class CandidatePolicyEntropyMetric(MetricBase):
     """
 
     full_state_update = False
+    entropy_total: Tensor
+    """``Tensor["", float32]`` sum of finite candidate-policy entropies."""
+    entropy_count: Tensor
+    """``Tensor["", float32]`` number of finite candidate-policy entropies."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -831,6 +885,10 @@ class CandidateProvenanceShareMetric(MetricBase):
     """
 
     full_state_update = False
+    share_total: Tensor
+    """``Tensor["", float32]`` sum of finite provenance-family shares."""
+    share_count: Tensor
+    """``Tensor["", float32]`` number of finite provenance-family shares."""
 
     def __init__(
         self,

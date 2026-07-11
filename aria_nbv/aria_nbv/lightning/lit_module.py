@@ -31,7 +31,13 @@ from ..rri_metrics.logging import (
 )
 from ..rri_metrics.ordinal import RriOrdinalBinner
 from ..rri_metrics.ranking import candidate_topk_oracle_hit, selected_action_oracle_comparison
-from ..rri_metrics.torchmetrics_single import RriErrorStats, VinMetricsConfig, topk_accuracy_from_probs
+from ..rri_metrics.torchmetrics_single import (
+    CandidateTopKOracleHitMetric,
+    RriErrorStats,
+    SelectedActionOracleComparisonMetric,
+    VinMetricsConfig,
+    topk_accuracy_from_probs,
+)
 from ..utils import Console, Stage, TargetConfig
 from ..utils.grad_norms import GradNormLoggingConfig, _collect_grad_norm_targets, _grad_norm_from_params
 from ..vin.candidate_scorer import CandidateScorer, CandidateScorerConfig
@@ -216,6 +222,24 @@ class VinLightningModule(pl.LightningModule):
         )
         self._interval_metrics = metrics_cfg.setup_target()
         self._rri_error_stats = nn.ModuleDict({f"{Stage.VAL.value}_stage": RriErrorStats()})
+        self._candidate_top1_metrics = nn.ModuleDict(
+            {
+                f"{stage.value}_stage": CandidateTopKOracleHitMetric(top_k=1)
+                for stage in (Stage.TRAIN, Stage.VAL, Stage.TEST)
+            },
+        )
+        self._candidate_top3_metrics = nn.ModuleDict(
+            {
+                f"{stage.value}_stage": CandidateTopKOracleHitMetric(top_k=3)
+                for stage in (Stage.TRAIN, Stage.VAL, Stage.TEST)
+            },
+        )
+        self._selected_action_metrics = nn.ModuleDict(
+            {
+                f"{stage.value}_stage": SelectedActionOracleComparisonMetric()
+                for stage in (Stage.TRAIN, Stage.VAL, Stage.TEST)
+            },
+        )
         self._logged_effective_config = False
 
     @property
@@ -375,14 +399,17 @@ class VinLightningModule(pl.LightningModule):
     # ------------------------------------------------------------------ epoch-end metrics
     def on_train_epoch_end(self) -> None:
         self._log_epoch_metrics(Stage.TRAIN)
+        self._log_candidate_ranking_epoch_metrics(Stage.TRAIN)
         self._interval_metrics.reset()
 
     def on_validation_epoch_end(self) -> None:
         self._log_epoch_metrics(Stage.VAL)
+        self._log_candidate_ranking_epoch_metrics(Stage.VAL)
         self._log_rri_error_stats()
 
     def on_test_epoch_end(self) -> None:
         self._log_epoch_metrics(Stage.TEST)
+        self._log_candidate_ranking_epoch_metrics(Stage.TEST)
 
     def on_after_backward(self) -> None:
         grad_cfg = self.config.grad_norms
@@ -664,6 +691,22 @@ class VinLightningModule(pl.LightningModule):
                 selected_indices.detach(),
                 candidate_mask_table,
             )
+            stage_key = f"{stage.value}_stage"
+            self._candidate_top1_metrics[stage_key].update(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+            )
+            self._candidate_top3_metrics[stage_key].update(
+                expected_scores.detach(),
+                rri_table.detach(),
+                candidate_mask_table,
+            )
+            self._selected_action_metrics[stage_key].update(
+                rri_table.detach(),
+                selected_indices.detach(),
+                candidate_mask_table,
+            )
             top1_oracle_hit_mean = (
                 top1_oracle_hit[torch.isfinite(top1_oracle_hit)].mean()
                 if torch.isfinite(top1_oracle_hit).any()
@@ -712,21 +755,21 @@ class VinLightningModule(pl.LightningModule):
             stage=stage,
             batch_size=log_batch_size,
         )
-        self._log_candidate_table_metrics(
-            stage=stage,
-            top1_oracle_hit=top1_oracle_hit,
-            top1_oracle_hit_mean=top1_oracle_hit_mean,
-            top3_oracle_hit=top3_oracle_hit,
-            top3_oracle_hit_mean=top3_oracle_hit_mean,
-            selected_oracle_regret=selected_oracle_regret,
-            selected_oracle_regret_mean=selected_oracle_regret_mean,
-            selected_oracle_rank=selected_oracle_rank,
-            selected_oracle_rank_mean=selected_oracle_rank_mean,
-            selected_oracle_percentile=selected_oracle_percentile,
-            selected_oracle_percentile_mean=selected_oracle_percentile_mean,
-            selected_oracle_valid_table=selected_oracle.valid_table,
-            selected_oracle_valid_rate=selected_oracle_valid_rate,
-        )
+        if stage is Stage.TRAIN:
+            self._log_candidate_table_step_metrics(
+                top1_oracle_hit=top1_oracle_hit,
+                top1_oracle_hit_mean=top1_oracle_hit_mean,
+                top3_oracle_hit=top3_oracle_hit,
+                top3_oracle_hit_mean=top3_oracle_hit_mean,
+                selected_oracle_regret=selected_oracle_regret,
+                selected_oracle_regret_mean=selected_oracle_regret_mean,
+                selected_oracle_rank=selected_oracle_rank,
+                selected_oracle_rank_mean=selected_oracle_rank_mean,
+                selected_oracle_percentile=selected_oracle_percentile,
+                selected_oracle_percentile_mean=selected_oracle_percentile_mean,
+                selected_oracle_valid_table=selected_oracle.valid_table,
+                selected_oracle_valid_rate=selected_oracle_valid_rate,
+            )
 
         pred_class = coral_logits_to_label(logits_valid)
         monotonicity_rate = coral_monotonicity_violation_rate(logits_valid).mean()
@@ -822,10 +865,9 @@ class VinLightningModule(pl.LightningModule):
 
         return max(int(values.numel()), 1)
 
-    def _log_candidate_table_metrics(
+    def _log_candidate_table_step_metrics(
         self,
         *,
-        stage: Stage,
         top1_oracle_hit: Tensor,
         top1_oracle_hit_mean: Tensor,
         top3_oracle_hit: Tensor,
@@ -839,7 +881,7 @@ class VinLightningModule(pl.LightningModule):
         selected_oracle_valid_table: Tensor,
         selected_oracle_valid_rate: Tensor,
     ) -> None:
-        """Log table-level metrics with each metric's own valid denominator."""
+        """Log training-step table metrics with metric-specific denominators."""
 
         table_metrics: tuple[tuple[Metric, Tensor, int], ...] = (
             (
@@ -874,7 +916,51 @@ class VinLightningModule(pl.LightningModule):
             ),
         )
         for metric, value, batch_size in table_metrics:
-            self._log_aux_scalars({metric: value}, stage=stage, batch_size=batch_size)
+            self.log_dict(
+                {metric_key(Stage.TRAIN, metric, namespace="aux"): value},
+                on_step=True,
+                on_epoch=False,
+                prog_bar=False,
+                batch_size=batch_size,
+            )
+
+    def _log_candidate_ranking_epoch_metrics(self, stage: Stage) -> None:
+        """Log and reset stage-owned candidate ranking accumulators."""
+
+        stage_key = f"{stage.value}_stage"
+        top1_metric = self._candidate_top1_metrics[stage_key]
+        top3_metric = self._candidate_top3_metrics[stage_key]
+        selected_metric = self._selected_action_metrics[stage_key]
+        if getattr(self.trainer, "sanity_checking", False):
+            top1_metric.reset()
+            top3_metric.reset()
+            selected_metric.reset()
+            return
+        # Every rank must enter TorchMetric.compute() so distributed state
+        # reduction cannot deadlock when local batches have unequal validity.
+        selected = selected_metric.compute()
+        payload: dict[str, Tensor] = {
+            metric_key(stage, Metric.CANDIDATE_TOP1_ORACLE_HIT, namespace="aux"): top1_metric.compute(),
+            metric_key(stage, Metric.CANDIDATE_TOP3_ORACLE_HIT, namespace="aux"): top3_metric.compute(),
+            metric_key(stage, Metric.SELECTED_ORACLE_REGRET, namespace="aux"): selected["selected_oracle_regret"],
+            metric_key(stage, Metric.SELECTED_ORACLE_RANK, namespace="aux"): selected["selected_oracle_rank"],
+            metric_key(stage, Metric.SELECTED_ORACLE_PERCENTILE, namespace="aux"): selected[
+                "selected_oracle_percentile"
+            ],
+            metric_key(stage, Metric.SELECTED_ORACLE_VALID_TABLE_RATE, namespace="aux"): selected[
+                "selected_oracle_valid_table_rate"
+            ],
+        }
+        self.log_dict(
+            payload,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            batch_size=1,
+        )
+        top1_metric.reset()
+        top3_metric.reset()
+        selected_metric.reset()
 
     def _select_coverage_fraction(self, pred: Any) -> Tensor | None:
         voxel_frac = getattr(pred, "voxel_valid_frac", None)

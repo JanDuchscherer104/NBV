@@ -91,6 +91,21 @@ def test_vin_metrics_compute() -> None:
     assert result["label_hist"].shape == (3,)
 
 
+def test_vin_metrics_reset_invalidates_cached_compute() -> None:
+    metrics = VinMetrics(num_classes=3, enable_spearman=False)
+    metrics.update(
+        pred_scores=torch.tensor([0.1, 0.2]),
+        rri=torch.tensor([0.0, 0.5]),
+        pred_class=torch.tensor([0, 1]),
+        labels=torch.tensor([0, 1]),
+    )
+    assert metrics.compute()
+
+    metrics.reset()
+
+    assert metrics.compute() == {}
+
+
 def test_vin_metrics_can_disable_spearman_buffering() -> None:
     metrics = VinMetrics(num_classes=3, enable_spearman=False)
     pred_scores = torch.tensor([0.1, 0.2, 0.3, 0.4])
@@ -162,6 +177,16 @@ def test_rri_error_stats_ignores_nonfinite_pairs() -> None:
 
     assert torch.isclose(result["bias2"], torch.tensor(1.0))
     assert torch.isclose(result["variance"], torch.tensor(0.0))
+
+
+def test_rri_error_stats_reset_invalidates_cached_compute() -> None:
+    stats = RriErrorStats()
+    stats.update(torch.tensor([2.0]), torch.tensor([1.0]))
+    assert stats.compute()
+
+    stats.reset()
+
+    assert stats.compute() == {}
 
 
 def test_rri_error_stats_returns_empty_for_all_nonfinite_pairs() -> None:

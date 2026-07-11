@@ -4,9 +4,15 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
+from aria_nbv.rollouts import audits as rollout_audits
 from aria_nbv.rollouts.audits import (
     CandidateOrderConsistency,
     CandidateOrderConsistencyMetric,
@@ -27,6 +33,7 @@ from aria_nbv.rollouts.audits import (
     candidate_provenance_share,
     selected_path_length_tensor,
 )
+from aria_nbv.rri_metrics import torchmetrics_multi, torchmetrics_single
 from aria_nbv.rri_metrics.ranking import (
     SelectedActionOracleComparison,
     candidate_topk_oracle_hit,
@@ -45,6 +52,103 @@ from aria_nbv.rri_metrics.torchmetrics_single import (
     CandidateTopKOracleHitMetric,
     SelectedActionOracleComparisonMetric,
 )
+
+
+def _distributed_candidate_metric_worker(
+    rank: int,
+    world_size: int,
+    init_file: str,
+    output_dir: str,
+) -> None:
+    dist.init_process_group(
+        "gloo",
+        init_method=f"file://{init_file}",
+        rank=rank,
+        world_size=world_size,
+    )
+    try:
+        metric = CandidateTopKOracleHitMetric(top_k=1)
+        if rank == 0:
+            metric.update(
+                torch.tensor([[0.9, 0.1]]),
+                torch.tensor([[1.0, 0.0]]),
+            )
+        result = metric.compute()
+        Path(output_dir, f"rank-{rank}.txt").write_text(str(float(result.item())))
+    finally:
+        dist.destroy_process_group()
+
+
+@pytest.mark.parametrize(
+    "module_path",
+    [
+        Path(torchmetrics_single.__file__),
+        Path(torchmetrics_multi.__file__),
+        Path(rollout_audits.__file__),
+    ],
+)
+def test_torchmetric_states_are_typed_and_documented(module_path: Path) -> None:
+    """Every literal ``add_state`` owner declares and documents its state."""
+
+    tree = ast.parse(module_path.read_text(), filename=str(module_path))
+    for class_node in (node for node in tree.body if isinstance(node, ast.ClassDef)):
+        state_names = {
+            call.args[0].value
+            for call in ast.walk(class_node)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "add_state"
+            and call.args
+            and isinstance(call.args[0], ast.Constant)
+            and isinstance(call.args[0].value, str)
+        }
+        if not state_names:
+            continue
+        state_calls = [
+            call
+            for call in ast.walk(class_node)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "add_state"
+            and call.args
+            and isinstance(call.args[0], ast.Constant)
+            and isinstance(call.args[0].value, str)
+        ]
+        for call in state_calls:
+            assert any(keyword.arg == "dist_reduce_fx" for keyword in call.keywords), (
+                f"{class_node.name}.{call.args[0].value} lacks distributed reduction"
+            )
+        annotations = {
+            statement.target.id: index
+            for index, statement in enumerate(class_node.body)
+            if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name)
+        }
+        assert state_names <= annotations.keys(), (
+            f"{class_node.name} has untyped states: {state_names - annotations.keys()}"
+        )
+        for state_name in state_names:
+            annotation_index = annotations[state_name]
+            following = class_node.body[annotation_index + 1]
+            assert isinstance(following, ast.Expr)
+            assert isinstance(following.value, ast.Constant)
+            assert isinstance(following.value.value, str), (
+                f"{class_node.name}.{state_name} lacks an attribute docstring"
+            )
+
+
+@pytest.mark.skipif(not dist.is_available() or not dist.is_gloo_available(), reason="Gloo is unavailable")
+def test_candidate_metric_reduces_when_only_one_rank_has_updates(tmp_path: Path) -> None:
+    """All ranks compute the same global metric under asymmetric validity."""
+
+    mp.spawn(
+        _distributed_candidate_metric_worker,
+        args=(2, str(tmp_path / "dist-init"), str(tmp_path)),
+        nprocs=2,
+        join=True,
+    )
+
+    assert (tmp_path / "rank-0.txt").read_text() == "1.0"
+    assert (tmp_path / "rank-1.txt").read_text() == "1.0"
 
 
 def test_discounted_selected_return_ignores_invalid_and_nonfinite_rewards() -> None:
@@ -530,6 +634,23 @@ def test_selected_rollout_metrics_accept_one_dimensional_rollouts() -> None:
     assert torch.allclose(result["return_h"], torch.tensor(1.0))
     assert torch.allclose(result["endpoint_gain"], torch.tensor(0.4), atol=1e-6)
     assert torch.allclose(result["valid_steps"], torch.tensor(3.0))
+
+
+def test_selected_rollout_metrics_reset_clears_all_accumulators() -> None:
+    metric = SelectedRolloutMetrics()
+    metric.update(
+        torch.tensor([[0.2, 0.3]]),
+        initial_error=torch.tensor([10.0]),
+        final_error=torch.tensor([5.0]),
+    )
+
+    metric.reset()
+
+    assert metric.return_count.item() == 0.0
+    assert metric.endpoint_gain_count.item() == 0.0
+    assert metric.endpoint_log_gain_count.item() == 0.0
+    assert metric.rollout_count.item() == 0.0
+    assert metric.valid_endpoint_count.item() == 0.0
 
 
 def test_candidate_table_metrics_report_invalidity_and_values() -> None:

@@ -19,6 +19,24 @@ class SelectedRolloutMetrics(MetricBase):
     """
 
     full_state_update = False
+    return_total: Tensor
+    """``Tensor["", float32]`` sum of finite trajectory returns."""
+    return_count: Tensor
+    """``Tensor["", float32]`` number of finite trajectory returns."""
+    endpoint_gain_total: Tensor
+    """``Tensor["", float32]`` sum of finite endpoint target gains."""
+    endpoint_gain_count: Tensor
+    """``Tensor["", float32]`` number of finite endpoint target gains."""
+    endpoint_log_gain_total: Tensor
+    """``Tensor["", float32]`` sum of finite endpoint log gains."""
+    endpoint_log_gain_count: Tensor
+    """``Tensor["", float32]`` number of finite endpoint log gains."""
+    valid_steps_total: Tensor
+    """``Tensor["", float32]`` sum of hard-valid selected rollout steps."""
+    rollout_count: Tensor
+    """``Tensor["", float32]`` number of rollout trajectories presented."""
+    valid_endpoint_count: Tensor
+    """``Tensor["", float32]`` number of trajectories with valid endpoints."""
 
     def __init__(self, *, gamma: float = 1.0, eps: float = 1e-8) -> None:
         super().__init__()
