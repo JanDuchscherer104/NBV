@@ -13,25 +13,25 @@ oracle/
   _scoring.py
   evidence.py
   scene_rri.py
+  target_rri.py
   target_selection.py
   pipelines/
 ```
 
-WP07 established target-task ownership. WP08 established scene scoring and the
-shared private prepared-RRI engine. Target scorer extraction remains WP09;
-pipeline relocation remains WP12.
+WP07 established target-task ownership. WP08-WP09 established scene/target
+scoring, typed evidence invalidity, and the shared private scoring engine.
+Pipeline relocation remains WP12.
 
 Baseline: `4daf9d4`
 
-Graphify refresh: `2026-07-11`
+Graphify refresh: `2026-07-11T18:23:00+02:00`
 
 ## Symbol Ownership Matrix
 
 ### `__init__.py`
 
-No top-level AST definitions. The package exports only `SceneRriScorer` and
-`SceneRriScorerConfig`; imported names and `__all__` are excluded from the
-matrix.
+No top-level AST definitions. The package exports only the scene/target scorer
+classes and configs; imported names and `__all__` are excluded from the matrix.
 
 ### `_scoring.py`
 
@@ -39,6 +39,7 @@ matrix.
 |---|---|---|---|---|---|---|
 | `PreparedRriScorerConfig` | config | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
 | `PreparedRriScorer` | class | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
+| `_CandidateRriScoringEngine` | class | private | duplicated scene/target scorer paths | `oracle._scoring` | `oracle._scoring` | moved |
 | `_root_error_tensor` | function | private | duplicated scorer helpers | `oracle._scoring` | `oracle._scoring` | moved |
 | `_crop_mesh_to_aabb` | function | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
 | `_canonical_fused_unions` | function | private | `rri_metrics.oracle_rri` | `oracle._scoring` | `oracle._scoring` | moved |
@@ -50,6 +51,9 @@ matrix.
 |---|---|---|---|---|---|---|
 | `Tensor` | alias | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
 | `CameraLabel` | alias | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
+| `OracleEvidenceInvalidReason` | enum | public | string-only target failures | `oracle.evidence` | `oracle.evidence` | moved |
+| `_OracleEvidenceError` | class | private | string-only target failures | `oracle.evidence` | `oracle.evidence` | moved |
+| `OracleRriState` | protocol | public | rollout trajectory coupling | `oracle.evidence` | `oracle.evidence` | moved |
 | `RriEvaluationPointCloudSource` | enum | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
 | `RriRewardMode` | enum | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
 | `RootEvalPointCloud` | DTO | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
@@ -57,6 +61,11 @@ matrix.
 | `_root_evidence_token` | function | private | duplicated scorer helpers | `oracle.evidence` | `oracle.evidence` | moved |
 | `_eval_depth_far_m` | function | private | duplicated scorer helpers | `oracle.evidence` | `oracle.evidence` | moved |
 | `target_gt_obb_world` | function | public | `data_handling._target_selection` | `oracle.evidence` | `oracle.evidence` | moved |
+| `crop_points_to_obb` | function | public | `rollouts.target_counterfactuals` | `oracle.evidence` | `oracle.evidence` | moved |
+| `crop_padded_pointclouds_to_obb` | function | public | `rollouts.target_counterfactuals` | `oracle.evidence` | `oracle.evidence` | moved |
+| `crop_mesh_to_obb` | function | public | `rollouts.target_counterfactuals` | `oracle.evidence` | `oracle.evidence` | moved |
+| `target_aabb_from_points` | function | public | `rollouts.target_counterfactuals` | `oracle.evidence` | `oracle.evidence` | moved |
+| `_points_inside_obb_mask` | function | private | `rollouts.target_counterfactuals` | `oracle.evidence` | `oracle.evidence` | moved |
 | `build_root_eval_pointcloud` | function | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
 | `observed_prefix_frame_indices` | function | public | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
 | `_root_time_ns` | function | private | `rri_metrics.eval_pointclouds` | `oracle.evidence` | `oracle.evidence` | moved |
@@ -67,10 +76,20 @@ matrix.
 
 | Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `SceneRriState` | protocol | public | rollout trajectory coupling | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 | `SceneRriEvaluation` | DTO | public | rollout evaluation coupling | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 | `SceneRriScorerConfig` | config | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 | `SceneRriScorer` | class | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
+
+### `target_rri.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1` | constant | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
+| `SCENE_CROP_POLICY_SNIPPET_EXTENT_V1` | constant | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
+| `TargetRriInvalidity` | DTO | public | exception-only invalidity | `oracle.target_rri` | `oracle.target_rri` | moved |
+| `TargetRriEvaluation` | DTO | public | rollout evaluation coupling | `oracle.target_rri` | `oracle.target_rri` | moved |
+| `TargetRriScorerConfig` | config | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
+| `TargetRriScorer` | class | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
 
 ### `target_selection.py`
 

@@ -44,6 +44,7 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator, model_validator
 
 from ..oracle.scene_rri import SceneRriEvaluation
+from ..oracle.target_rri import TargetRriEvaluation, TargetRriInvalidity
 from ..pose_generation.candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
 from ..pose_generation.candidate_mixture import (  # noqa: TC001 - Pydantic config field.
     CandidateMixtureViewGeneratorConfig,
@@ -450,6 +451,14 @@ class CounterfactualCandidateEvaluation:
         return cloud[:length]
 
 
+class CounterfactualEvaluatorInvalidityError(ValueError):
+    """Legacy replay control flow carrying a typed Oracle invalidity outcome."""
+
+    def __init__(self, invalidity: TargetRriInvalidity) -> None:
+        super().__init__(f"{invalidity.reason.value}: {invalidity.message}")
+        self.invalidity = invalidity
+
+
 @dataclass(slots=True)
 class CounterfactualStepResult:
     """One selected rollout step."""
@@ -509,11 +518,10 @@ class CounterfactualTrajectory:
     cumulative_rri: float | None = None
     terminated_early: bool = False
 
-    @property
-    def root_pm_dist(self) -> float | None:
-        """Return the first finite scene root point-mesh distance, if known."""
+    def root_metric(self, name: str) -> float | None:
+        """Return the first finite persisted metric with ``name``."""
 
-        return _root_error_for_metric(self, "root_pm_dist")
+        return _root_error_for_metric(self, name)
 
     def final_pose_world(self) -> PoseTW:
         if not self.steps:
@@ -578,7 +586,7 @@ class CounterfactualRolloutResult:
 
 CounterfactualEvaluatorFn = Callable[
     [CandidateSamplingResult, CounterfactualTrajectory, int],
-    CounterfactualCandidateEvaluation | SceneRriEvaluation | torch.Tensor,
+    CounterfactualCandidateEvaluation | SceneRriEvaluation | TargetRriEvaluation | TargetRriInvalidity | torch.Tensor,
 ]
 
 
@@ -960,6 +968,22 @@ class CounterfactualPoseGenerator:
                     metric_vectors=raw_eval.metric_vectors,
                     candidate_point_clouds_world=raw_eval.candidate_point_clouds_world,
                     candidate_point_cloud_lengths=raw_eval.candidate_point_cloud_lengths,
+                ).validate(num_valid=num_valid, device=device, dtype=dtype)
+            if isinstance(raw_eval, TargetRriInvalidity):
+                raise CounterfactualEvaluatorInvalidityError(raw_eval)
+            if isinstance(raw_eval, TargetRriEvaluation):
+                return CounterfactualCandidateEvaluation(
+                    scores=raw_eval.scores,
+                    score_label=raw_eval.score_label,
+                    metric_vectors=raw_eval.metric_vectors,
+                    candidate_point_clouds_world=raw_eval.candidate_point_clouds_world,
+                    candidate_point_cloud_lengths=raw_eval.candidate_point_cloud_lengths,
+                    target_eval_current_points_world=raw_eval.target_eval_current_points_world,
+                    target_eval_candidate_points_world=raw_eval.target_eval_candidate_points_world,
+                    target_eval_candidate_point_lengths=raw_eval.target_eval_candidate_point_lengths,
+                    target_eval_crop_policy=raw_eval.target_eval_crop_policy,
+                    target_eval_voxel_size_m=raw_eval.target_eval_voxel_size_m,
+                    target_eval_max_points=raw_eval.target_eval_max_points,
                 ).validate(num_valid=num_valid, device=device, dtype=dtype)
             return CounterfactualCandidateEvaluation(
                 scores=torch.as_tensor(raw_eval, device=device, dtype=dtype),

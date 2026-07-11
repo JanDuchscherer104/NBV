@@ -22,6 +22,7 @@ import torch
 from pydantic import Field, field_validator
 
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
     TARGET_INVALID_REASON_VERSION,
     OracleTargetTaskSampler,
@@ -37,13 +38,13 @@ from ...pose_generation import (
 )
 from ...rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
 from ...rollouts.counterfactuals import (
+    CounterfactualEvaluatorInvalidityError,
     CounterfactualPoseGeneratorConfig,
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
 )
 from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
 from ...rollouts.shard_manifest import RolloutShardEntry
-from ...rollouts.target_counterfactuals import CounterfactualTargetOracleRriScorerConfig, TargetRriInvalidError
 from ...rollouts.trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
 from ...rollouts.zarr_store import (
     RolloutZarrStoreConfig,
@@ -290,9 +291,7 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     candidate_mixture: CandidateMixtureViewGeneratorConfig = Field(default_factory=CandidateMixtureViewGeneratorConfig)
     """Fixed-count mixed finite-candidate generator regenerated at every rollout step."""
 
-    target_scorer: CounterfactualTargetOracleRriScorerConfig = Field(
-        default_factory=CounterfactualTargetOracleRriScorerConfig
-    )
+    target_scorer: TargetRriScorerConfig = Field(default_factory=TargetRriScorerConfig)
     """Target-specific oracle scorer that also emits diagnostic scene RRI."""
 
     selected_depth: SelectedDepthRetentionConfig = Field(default_factory=SelectedDepthRetentionConfig)
@@ -637,18 +636,17 @@ class RolloutDatasetWriter:
     ) -> list[RolloutZarrRecord]:
         records: list[RolloutZarrRecord] = []
         runtime_context = CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target))
-        try:
-            scorer = self.config.target_scorer.setup_target(
-                sample=sample.efm_snippet_view,
-                target_sample=sample,
-                target_row=target,
-            )
-        except TargetRriInvalidError as exc:
+        scorer = self.config.target_scorer.setup_target(
+            sample=sample.efm_snippet_view,
+            target_sample=sample,
+            target_row=target,
+        )
+        if scorer.invalidity is not None:
             self.stats.target_invalid_skips += 1
-            self.stats.skip(f"target_scorer:{exc.__class__.__name__}")
+            self.stats.skip(f"target_scorer:{scorer.invalidity.reason.value}")
             self.console.warn(
                 f"Skipping target scorer scene={sample.scene_id} snippet={sample.snippet_id} "
-                f"target={target.target_id}: {exc}",
+                f"target={target.target_id}: {scorer.invalidity.message}",
             )
             return records
         selected_depth_renderer = (
@@ -684,12 +682,12 @@ class RolloutDatasetWriter:
                     score_candidates=scorer,
                     candidate_runtime_context=runtime_context,
                 )
-            except TargetRriInvalidError as exc:
+            except CounterfactualEvaluatorInvalidityError as exc:
                 self.stats.rollout_invalid_skips += 1
-                self.stats.skip(f"{recipe.name}:{exc.__class__.__name__}")
+                self.stats.skip(f"{recipe.name}:{exc.invalidity.reason.value}")
                 self.console.warn(
                     f"Skipping rollout recipe={recipe.name} scene={sample.scene_id} snippet={sample.snippet_id} "
-                    f"target={target.target_id}: {exc}",
+                    f"target={target.target_id}: {exc.invalidity.message}",
                 )
                 continue
             low_valid_root = self._low_valid_root_reason(result)

@@ -37,9 +37,9 @@ def test_scene_scorer_prepares_evidence_and_returns_rollout_neutral_metrics(monk
         lambda self: SimpleNamespace(render=lambda sample, candidates: object()),
     )
     monkeypatch.setattr(
-        scene_rri,
-        "build_candidate_pointclouds",
-        lambda sample, depths, *, stride: CandidatePointClouds(
+        scene_rri._CandidateRriScoringEngine,
+        "backproject_candidate_points",
+        lambda self, depths: CandidatePointClouds(
             points=torch.zeros((2, 3, 3), dtype=torch.float32),
             lengths=torch.tensor([3, 2], dtype=torch.long),
             semidense_points=torch.empty((0, 3), dtype=torch.float32),
@@ -57,8 +57,8 @@ def test_scene_scorer_prepares_evidence_and_returns_rollout_neutral_metrics(monk
         root_time_ns=None,
         root_trajectory_index=None,
         root_frame_index=None,
-        root_pm_dist=8.0,
         accumulated_points_world=lambda: torch.empty((0, 3), dtype=torch.float32),
+        root_metric=lambda name: 8.0 if name == "root_pm_dist" else None,
     )
     scorer = SceneRriScorerConfig(
         eval_point_cloud_source=RriEvaluationPointCloudSource.LEGACY_SEMIDENSE_ROOT,

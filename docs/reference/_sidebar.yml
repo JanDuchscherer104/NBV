@@ -83,10 +83,6 @@ website:
         contents:
         - text: evidence
           file: reference/oracle.evidence.qmd
-        - text: scene_rri
-          file: reference/oracle.scene_rri.qmd
-        - text: target_selection
-          file: reference/oracle.target_selection.qmd
         - text: pipelines
           file: reference/oracle.pipelines.qmd
           contents:
@@ -96,6 +92,12 @@ website:
             file: reference/oracle.pipelines.rollout_dataset.qmd
           - text: shards
             file: reference/oracle.pipelines.shards.qmd
+        - text: scene_rri
+          file: reference/oracle.scene_rri.qmd
+        - text: target_rri
+          file: reference/oracle.target_rri.qmd
+        - text: target_selection
+          file: reference/oracle.target_selection.qmd
       - text: pipelines
         file: reference/pipelines.qmd
         contents:
@@ -152,8 +154,6 @@ website:
           file: reference/rollouts.manifest.qmd
         - text: shard_manifest
           file: reference/rollouts.shard_manifest.qmd
-        - text: target_counterfactuals
-          file: reference/rollouts.target_counterfactuals.qmd
         - text: trace
           file: reference/rollouts.trace.qmd
         - text: zarr_store
@@ -179,6 +179,11 @@ website:
           file: reference/rri_metrics.torchmetrics_multi.qmd
         - text: torchmetrics_single
           file: reference/rri_metrics.torchmetrics_single.qmd
+      - text: targets
+        file: reference/targets.qmd
+        contents:
+        - text: descriptor
+          file: reference/targets.descriptor.qmd
       - text: utils
         file: reference/utils.qmd
         contents:

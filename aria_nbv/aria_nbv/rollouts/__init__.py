@@ -50,13 +50,6 @@ from .shard_manifest import (
     RolloutShardEntry,
     RolloutShardRow,
 )
-from .target_counterfactuals import (
-    SCENE_CROP_POLICY_SNIPPET_EXTENT_V1,
-    TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
-    CounterfactualTargetOracleRriScorer,
-    CounterfactualTargetOracleRriScorerConfig,
-    TargetRriInvalidError,
-)
 from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
@@ -86,8 +79,6 @@ __all__ = [
     "ROLLOUT_SHARD_MANIFEST_VERSION",
     "ROLLOUT_SHARD_OWNER_FILENAME",
     "ROLLOUT_SHARD_SUCCESS_FILENAME",
-    "SCENE_CROP_POLICY_SNIPPET_EXTENT_V1",
-    "TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1",
     "CounterfactualCandidateEvaluation",
     "CounterfactualEvaluatorFn",
     "CounterfactualMetricBundle",
@@ -97,10 +88,7 @@ __all__ = [
     "CounterfactualSelectionPolicy",
     "CounterfactualSelectionRecord",
     "CounterfactualStepResult",
-    "CounterfactualTargetOracleRriScorer",
-    "CounterfactualTargetOracleRriScorerConfig",
     "CounterfactualTrajectory",
-    "TargetRriInvalidError",
     "RolloutLineage",
     "RolloutSuspiciousQueryConfig",
     "RolloutShardEntry",

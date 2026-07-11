@@ -24,7 +24,6 @@ def test_rollouts_owns_record_and_store_contracts() -> None:
         "CounterfactualPoseGeneratorConfig",
         "CounterfactualRolloutResult",
         "CounterfactualSelectionPolicy",
-        "CounterfactualTargetOracleRriScorerConfig",
         "RolloutLineage",
         "RolloutZarrRecord",
         "RolloutZarrStoreConfig",

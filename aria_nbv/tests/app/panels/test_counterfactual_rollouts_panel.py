@@ -23,6 +23,7 @@ from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.configs import PathConfig
+from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
@@ -34,7 +35,6 @@ from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
     CounterfactualStepResult,
-    CounterfactualTargetOracleRriScorerConfig,
     CounterfactualTrajectory,
     RolloutZarrStoreReader,
     write_rollout_zarr_store,
@@ -607,13 +607,13 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
         assert kwargs["target_row"] is target
         return fake_evaluator
 
-    monkeypatch.setattr(CounterfactualTargetOracleRriScorerConfig, "setup_target", _fake_setup_target)
+    monkeypatch.setattr(TargetRriScorerConfig, "setup_target", _fake_setup_target)
 
     context = rollout_panel._score_context_for_mode(
         scoring_mode=rollout_panel.LiveRolloutScoringMode.TARGET_RRI,
         sample=fake_sample,  # type: ignore[arg-type]
         target=target,
-        target_scorer_config=CounterfactualTargetOracleRriScorerConfig(),
+        target_scorer_config=TargetRriScorerConfig(),
         scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
     )
 
@@ -631,7 +631,7 @@ def test_target_rri_score_context_rejects_gt_invalid_target() -> None:
             scoring_mode=rollout_panel.LiveRolloutScoringMode.TARGET_RRI,
             sample=SimpleNamespace(efm_snippet_view=object()),  # type: ignore[arg-type]
             target=_target_row(gt_label_valid=False),
-            target_scorer_config=CounterfactualTargetOracleRriScorerConfig(),
+            target_scorer_config=TargetRriScorerConfig(),
             scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
         )
 

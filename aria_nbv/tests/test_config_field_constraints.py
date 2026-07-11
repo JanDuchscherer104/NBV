@@ -11,6 +11,7 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.data_handling import VinOfflineWriterConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
+from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
@@ -27,7 +28,6 @@ from aria_nbv.rerun_inspector._config import (
 from aria_nbv.rollouts import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
     RolloutZarrStoreConfig,
 )
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
@@ -68,7 +68,7 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         (CounterfactualPoseGeneratorConfig, {"branch_factor": 0}),
         (CounterfactualPoseGeneratorConfig, {"seed": -1}),
         (CounterfactualPoseGeneratorConfig, {"min_sibling_target_bearing_deg": -1.0}),
-        (CounterfactualTargetOracleRriScorerConfig, {"target_crop_margin_m": -0.01}),
+        (TargetRriScorerConfig, {"target_crop_margin_m": -0.01}),
         (RerunInspectorOutputConfig, {"spawn_port": 0}),
         (RerunInspectorGeometryConfig, {"mesh_alpha": 256}),
         (RerunInspectorCandidateConfig, {"subset_indices": [-1]}),

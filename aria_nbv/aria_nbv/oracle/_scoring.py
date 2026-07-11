@@ -6,13 +6,29 @@ distances and delegates the RRI formula to :mod:`aria_nbv.rri_metrics.rri`.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from pydantic import Field
 
+from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
+from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
 from ..rri_metrics.point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
 from ..rri_metrics.rri import RriResult, compute_rri
 from ..utils.base_config import TargetConfig
-from .evidence import canonical_fuse_points
+from .evidence import (
+    OracleRriState,
+    RootEvalPointCloud,
+    RriEvaluationPointCloudSource,
+    _eval_depth_far_m,
+    _root_evidence_token,
+    build_root_eval_pointcloud,
+    canonical_fuse_points,
+)
+
+if TYPE_CHECKING:
+    from ..data_handling import EfmSnippetView
+    from ..pose_generation.types import CandidateSamplingResult
 
 
 class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
@@ -95,6 +111,117 @@ class PreparedRriScorer:
         dist_after = chamfer_point_mesh_batched(points_tq, lengths_tq, gt_verts_crop, gt_faces_crop)
 
         return compute_rri(dist_before, dist_after)
+
+
+class _CandidateRriScoringEngine:
+    """Share render, backprojection, root evidence, fusion, and prepared scoring."""
+
+    def __init__(
+        self,
+        *,
+        sample: EfmSnippetView,
+        depth: CandidateDepthRendererConfig,
+        oracle: PreparedRriScorerConfig,
+        backprojection_stride: int,
+        eval_point_cloud_source: RriEvaluationPointCloudSource,
+        eval_camera_label: str,
+        eval_depth_far_m: float | None,
+        eval_fusion_voxel_size_m: float,
+    ) -> None:
+        self.sample = sample
+        self.backprojection_stride = int(backprojection_stride)
+        self.eval_point_cloud_source = eval_point_cloud_source
+        self.eval_camera_label = eval_camera_label
+        self.eval_depth_far_m = eval_depth_far_m
+        self.eval_fusion_voxel_size_m = float(eval_fusion_voxel_size_m)
+        self._depth_renderer = depth.setup_target()
+        self._prepared_rri = oracle.setup_target()
+        self._root_eval: RootEvalPointCloud | None = None
+        self._root_eval_token: tuple[float, ...] | None = None
+
+    def render_candidate_points(self, candidates: CandidateSamplingResult) -> CandidatePointClouds:
+        """Render and backproject one valid candidate table."""
+
+        return self.backproject_candidate_points(self.render_candidate_depths(candidates))
+
+    def render_candidate_depths(self, candidates: CandidateSamplingResult) -> CandidateDepths:
+        """Render candidate depths from privileged scene geometry."""
+
+        return self._depth_renderer.render(self.sample, candidates)
+
+    def backproject_candidate_points(self, depths: CandidateDepths) -> CandidatePointClouds:
+        """Backproject rendered candidate depths into world-frame points."""
+
+        return build_candidate_pointclouds(self.sample, depths, stride=self.backprojection_stride)
+
+    def current_eval_points(
+        self,
+        state: OracleRriState,
+        *,
+        device: torch.device,
+        dtype: torch.dtype,
+        max_points: int | None,
+    ) -> torch.Tensor:
+        """Fuse root evidence with selected-history points."""
+
+        points_t = self._root_eval_for(state).points_world.to(device=device, dtype=dtype)
+        history_points = state.accumulated_points_world()
+        if history_points.numel() > 0:
+            points_t = torch.cat([points_t, history_points.to(device=device, dtype=dtype)], dim=0)
+        return canonical_fuse_points(
+            points_t,
+            voxel_size_m=self.eval_fusion_voxel_size_m,
+            max_points=max_points,
+        )
+
+    def score(
+        self,
+        *,
+        points_t: torch.Tensor,
+        points_q: torch.Tensor,
+        lengths_q: torch.Tensor,
+        gt_verts: torch.Tensor,
+        gt_faces: torch.Tensor,
+        extend: torch.Tensor,
+    ) -> RriResult:
+        """Delegate already prepared evidence to the point-mesh scorer."""
+
+        return self._prepared_rri.score(
+            points_t=points_t,
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=gt_verts,
+            gt_faces=gt_faces,
+            extend=extend,
+        )
+
+    def _root_eval_for(self, state: OracleRriState) -> RootEvalPointCloud:
+        token = _root_evidence_token(
+            state.root_pose_world,
+            root_time_ns=state.root_time_ns,
+            root_trajectory_index=state.root_trajectory_index,
+            root_frame_index=state.root_frame_index,
+        )
+        if self._root_eval is None or self._root_eval_token != token:
+            self._root_eval = build_root_eval_pointcloud(
+                self.sample,
+                source=self.eval_point_cloud_source,
+                camera_label=self.eval_camera_label,  # type: ignore[arg-type]
+                reference_pose_world=state.root_pose_world,
+                reference_time_ns=state.root_time_ns,
+                reference_trajectory_index=state.root_trajectory_index,
+                reference_frame_index=state.root_frame_index,
+                stride=self.backprojection_stride,
+                far_m=_eval_depth_far_m(
+                    source=self.eval_point_cloud_source,
+                    configured=self.eval_depth_far_m,
+                    depth_renderer=self._depth_renderer,
+                ),
+                voxel_size_m=self.eval_fusion_voxel_size_m,
+                max_points=None,
+            )
+            self._root_eval_token = token
+        return self._root_eval
 
 
 def _root_error_tensor(

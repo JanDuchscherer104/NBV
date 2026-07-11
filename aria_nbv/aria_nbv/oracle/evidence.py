@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 import torch
 from efm3d.aria.obb import ObbTW
@@ -25,10 +25,47 @@ from .target_selection import (
 )
 
 if TYPE_CHECKING:
+    from efm3d.aria.pose import PoseTW
+
     from ..data_handling.offline.dataset import VinOfflineSample
 
 Tensor = torch.Tensor
 CameraLabel = Literal["rgb", "slaml", "slamr"]
+
+
+class OracleEvidenceInvalidReason(StrEnum):
+    """Stable semantic reasons for expected Oracle evidence invalidity."""
+
+    TARGET_GT_LABEL_INVALID = "target_gt_label_invalid"
+    TARGET_GT_OBB_MISSING = "target_gt_obb_missing"
+    TARGET_GT_ROW_MISSING = "target_gt_row_missing"
+    TARGET_SCENE_MESH_EMPTY = "target_scene_mesh_empty"
+    TARGET_MESH_CROP_EMPTY = "target_mesh_crop_empty"
+    TARGET_CURRENT_SUPPORT_INSUFFICIENT = "target_current_support_insufficient"
+    TARGET_EXTENT_EMPTY = "target_extent_empty"
+
+
+class _OracleEvidenceError(ValueError):
+    """Internal coded failure converted to a scorer-owned invalidity outcome."""
+
+    def __init__(self, reason: OracleEvidenceInvalidReason, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class OracleRriState(Protocol):
+    """Minimal actor/replay state consumed by Oracle RRI facades."""
+
+    root_pose_world: PoseTW
+    root_time_ns: int | None
+    root_trajectory_index: int | None
+    root_frame_index: int | None
+
+    def accumulated_points_world(self) -> Tensor:
+        """Return selected-history point clouds in world coordinates."""
+
+    def root_metric(self, name: str) -> float | None:
+        """Return the first finite persisted metric with ``name``."""
 
 
 class RriEvaluationPointCloudSource(StrEnum):
@@ -160,17 +197,112 @@ def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> 
     """Resolve an Oracle-selected target's matched GT OBB in world coordinates."""
 
     if not row.gt_label_valid or row.gt_target_row_id is None:
-        raise ValueError("Target row is not GT-label valid; refusing to build target RRI crop.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_GT_LABEL_INVALID,
+            "Target row is not GT-label valid; refusing to build target RRI crop.",
+        )
     gt_block = _compact_obb_block(sample.gt_obbs)
     if gt_block is None:
-        raise ValueError("Target RRI crop requires sample.gt_obbs.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_GT_OBB_MISSING,
+            "Target RRI crop requires sample.gt_obbs.",
+        )
     gt_world = _world_obbs_for_sample(gt_block[0], sample)
     gt_data, gt_source_indices = _valid_obb_data_with_source_indices(gt_world)
     try:
         gt_index = gt_source_indices.index(int(row.gt_target_row_id))
     except ValueError as exc:
-        raise ValueError(f"Matched GT target row {row.gt_target_row_id} is not present in sample.gt_obbs.") from exc
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_GT_ROW_MISSING,
+            f"Matched GT target row {row.gt_target_row_id} is not present in sample.gt_obbs.",
+        ) from exc
     return ObbTW(gt_data[gt_index].unsqueeze(0))
+
+
+def crop_points_to_obb(points: Tensor, obb: ObbTW, *, margin_m: float = 0.0) -> Tensor:
+    """Return finite world points inside an oriented target box."""
+
+    if points.numel() == 0:
+        return points.reshape(0, 3)
+    pts = points.reshape(-1, points.shape[-1])[:, :3]
+    return pts[_points_inside_obb_mask(pts, obb, margin_m=margin_m)]
+
+
+def crop_padded_pointclouds_to_obb(
+    points: Tensor,
+    lengths: Tensor,
+    obb: ObbTW,
+    *,
+    margin_m: float = 0.0,
+    voxel_size_m: float = 0.0,
+    max_points: int | None = None,
+) -> tuple[Tensor, Tensor]:
+    """Crop and fuse each padded candidate point cloud to an oriented box."""
+
+    cropped: list[Tensor] = []
+    lengths_out: list[int] = []
+    for row_index in range(points.shape[0]):
+        length = int(lengths[row_index].detach().cpu().item())
+        row = crop_points_to_obb(points[row_index, :length, :3], obb, margin_m=margin_m)
+        row = canonical_fuse_points(row, voxel_size_m=voxel_size_m, max_points=max_points)
+        cropped.append(row)
+        lengths_out.append(int(row.shape[0]))
+    max_len = max(max(lengths_out), 1)
+    output = torch.zeros((points.shape[0], max_len, 3), device=points.device, dtype=points.dtype)
+    for row_index, row in enumerate(cropped):
+        if row.numel() > 0:
+            output[row_index, : row.shape[0], :] = row.to(device=points.device, dtype=points.dtype)
+    return output, torch.tensor(lengths_out, device=points.device, dtype=torch.long)
+
+
+def crop_mesh_to_obb(
+    verts: Tensor,
+    faces: Tensor,
+    obb: ObbTW,
+    *,
+    margin_m: float = 0.0,
+) -> tuple[Tensor, Tensor]:
+    """Crop a scene mesh to an oriented target box."""
+
+    if verts.numel() == 0 or faces.numel() == 0:
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_SCENE_MESH_EMPTY,
+            "Target oriented OBB crop requires a non-empty scene mesh.",
+        )
+    vertex_inside = _points_inside_obb_mask(verts.reshape(-1, 3), obb, margin_m=margin_m)
+    face_indices = faces.reshape(-1, 3).to(device=verts.device, dtype=torch.long)
+    face_keep = vertex_inside[face_indices].any(dim=1)
+    if not bool(face_keep.any().item()):
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_MESH_CROP_EMPTY,
+            "Target oriented OBB crop contains no mesh faces.",
+        )
+    kept_faces = face_indices[face_keep]
+    unique_vertices, inverse = torch.unique(kept_faces.reshape(-1), sorted=True, return_inverse=True)
+    return verts[unique_vertices].reshape(-1, 3), inverse.reshape(-1, 3).to(dtype=torch.long)
+
+
+def target_aabb_from_points(points: Tensor, *, margin_m: float = 0.0) -> Tensor:
+    """Return an axis-aligned scoring extent around prepared target points."""
+
+    pts = points.reshape(-1, points.shape[-1])[:, :3]
+    if pts.numel() == 0:
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.TARGET_EXTENT_EMPTY,
+            "Cannot build target crop extent from an empty point set.",
+        )
+    lower = pts.min(dim=0).values - float(margin_m)
+    upper = pts.max(dim=0).values + float(margin_m)
+    return torch.stack([lower[0], upper[0], lower[1], upper[1], lower[2], upper[2]]).to(dtype=pts.dtype)
+
+
+def _points_inside_obb_mask(points: Tensor, obb: ObbTW, *, margin_m: float = 0.0) -> Tensor:
+    pts = points.reshape(-1, points.shape[-1])[:, :3]
+    finite = torch.isfinite(pts).all(dim=-1)
+    local = obb.T_world_object.inverse().transform(pts).reshape(-1, 3)
+    lower = obb.bb3_min_object.reshape(-1, 3)[0].to(device=pts.device, dtype=pts.dtype) - float(margin_m)
+    upper = obb.bb3_max_object.reshape(-1, 3)[0].to(device=pts.device, dtype=pts.dtype) + float(margin_m)
+    return finite & torch.all((local >= lower) & (local <= upper), dim=-1)
 
 
 def build_root_eval_pointcloud(
@@ -423,10 +555,16 @@ def _exact_trajectory_index(sample: EfmSnippetView, *, reference_pose_world: obj
 
 __all__ = [
     "RootEvalPointCloud",
+    "OracleEvidenceInvalidReason",
+    "OracleRriState",
     "RriEvaluationPointCloudSource",
     "RriRewardMode",
     "build_root_eval_pointcloud",
     "canonical_fuse_points",
+    "crop_mesh_to_obb",
+    "crop_padded_pointclouds_to_obb",
+    "crop_points_to_obb",
     "observed_prefix_frame_indices",
     "target_gt_obb_world",
+    "target_aabb_from_points",
 ]

@@ -23,6 +23,7 @@ from ...data_handling import (
 )
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.scene_rri import SceneRriScorerConfig
+from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -52,12 +53,11 @@ from ...rollouts import (
     CounterfactualPoseGeneratorConfig,
     CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
-    TargetRriInvalidError,
     candidate_result_diagnostic_counts,
     decode_position_id,
     decode_strategy_id,
 )
+from ...rollouts.counterfactuals import CounterfactualEvaluatorInvalidityError
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -591,7 +591,7 @@ def _score_context_for_mode(
     scoring_mode: LiveRolloutScoringMode,
     sample: VinOfflineSample,
     target: TargetCandidateRow | None,
-    target_scorer_config: CounterfactualTargetOracleRriScorerConfig,
+    target_scorer_config: TargetRriScorerConfig,
     scene_scorer_config: SceneRriScorerConfig,
 ) -> LiveRolloutScoreContext:
     """Create the scorer and target runtime context for a live rollout."""
@@ -637,7 +637,7 @@ def _run_live_rollout(
     target: TargetCandidateRow | None,
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig,
     rollout_config: CounterfactualPoseGeneratorConfig,
-    target_scorer_config: CounterfactualTargetOracleRriScorerConfig,
+    target_scorer_config: TargetRriScorerConfig,
     scene_scorer_config: SceneRriScorerConfig,
 ) -> tuple[CounterfactualRolloutResult, str]:
     """Generate one live rollout result and capture Console logs for display."""
@@ -1374,7 +1374,7 @@ def _render_live_rollouts_tab() -> None:
     )
     live_candidate_count = int(candidate_budget if target_counts is None else sum(target_counts.values()))
     depth_cfg = _live_depth_config(max_candidates=live_candidate_count, device=str(device))
-    target_scorer_cfg = CounterfactualTargetOracleRriScorerConfig(
+    target_scorer_cfg = TargetRriScorerConfig(
         depth=depth_cfg,
         backprojection_stride=int(backprojection_stride),
         target_crop_margin_m=float(target_crop_margin),
@@ -1412,8 +1412,8 @@ def _render_live_rollouts_tab() -> None:
                     scene_scorer_config=scene_scorer_cfg,
                 )
             rollout_cache[run_key] = {"rollouts": rollouts, "logs": log_text}
-        except TargetRriInvalidError as exc:
-            st.error(f"Target-RRI invalid: {exc}")
+        except CounterfactualEvaluatorInvalidityError as exc:
+            st.error(f"Target-RRI invalid ({exc.invalidity.reason.value}): {exc.invalidity.message}")
             rollout_cache.pop(run_key, None)
         except Exception as exc:  # pragma: no cover - UI guard
             _report_exception(exc, context="Live rollout generation failed")

@@ -8,13 +8,13 @@ import torch
 import trimesh  # type: ignore[import-untyped]
 from efm3d.aria import CameraTW, PoseTW
 
+from aria_nbv.oracle.target_rri import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
 from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
 from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
 from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy
 from aria_nbv.rollouts import (
     INVALID_REASON_VERSION,
-    TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
     RolloutLineage,
     RolloutZarrRecord,
 )

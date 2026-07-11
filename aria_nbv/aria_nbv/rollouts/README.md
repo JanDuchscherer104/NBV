@@ -10,7 +10,6 @@ audits, and read-side inspection. Rollout dataset/shard generation lives in
 rollouts/
   audits.py               # operational validity/provenance/path checks
   counterfactuals.py      # replay and Oracle-result adaptation; future replay split
-  target_counterfactuals.py  # future oracle extraction
   inspection.py
   manifest.py
   shard_manifest.py
@@ -23,7 +22,7 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:10:28.231382+00:00`
 
-Graphify refresh: `2026-07-10T18:34:29+02:00`
+Graphify refresh: `2026-07-11T18:23:00+02:00`
 
 ## Symbol Ownership Matrix
 
@@ -85,6 +84,7 @@ metrics modules. These symbols are evaluation-only.
 | `_CandidateDiversityMetadata` | `DTO` | `private` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualMetricBundle` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualCandidateEvaluation` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
+| `CounterfactualEvaluatorInvalidityError` | `class` | `public` | typed Oracle adaptation | `rollouts.counterfactuals` | `rollouts.replay` | `deferred: WP10` |
 | `CounterfactualStepResult` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualTrajectory` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
 | `CounterfactualRolloutResult` | `DTO` | `public` | `rollouts.counterfactuals` | `rollouts.counterfactuals` | `rollouts.replay` | `blocked: symbol split` |
@@ -210,21 +210,6 @@ metrics modules. These symbols are evaluation-only.
 | `write_rollout_shard_manifest` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
 | `read_rollout_shard_manifest` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
 | `load_rollout_shard_entry` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-
-### `target_counterfactuals.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1` | `constant` | `public` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `SCENE_CROP_POLICY_SNIPPET_EXTENT_V1` | `constant` | `public` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `TargetRriInvalidError` | `class` | `public` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `CounterfactualTargetOracleRriScorerConfig` | `config` | `public` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `CounterfactualTargetOracleRriScorer` | `class` | `public` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `_crop_points_to_obb` | `function` | `private` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `_crop_padded_pointclouds_to_obb` | `function` | `private` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `_crop_mesh_to_obb` | `function` | `private` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `_points_inside_obb_mask` | `function` | `private` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
-| `_aabb_from_points` | `function` | `private` | `rollouts.target_counterfactuals` | `rollouts.target_counterfactuals` | `oracle.target_rri` | `blocked: dependency direction` |
 
 ### `trace.py`
 

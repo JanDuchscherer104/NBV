@@ -22,7 +22,16 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from aria_nbv.data_handling import CompactObbBlock
 from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle._scoring import PreparedRriScorerConfig
-from aria_nbv.oracle.evidence import RriEvaluationPointCloudSource, RriRewardMode
+from aria_nbv.oracle.evidence import (
+    OracleEvidenceInvalidReason,
+    RriEvaluationPointCloudSource,
+    RriRewardMode,
+    _OracleEvidenceError,
+    crop_mesh_to_obb,
+    crop_padded_pointclouds_to_obb,
+    crop_points_to_obb,
+)
+from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -46,17 +55,11 @@ from aria_nbv.rollouts import (
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
-    CounterfactualTargetOracleRriScorerConfig,
     CounterfactualTrajectory,
     RolloutLineage,
     RolloutZarrRecord,
 )
-from aria_nbv.rollouts.target_counterfactuals import (
-    TargetRriInvalidError,
-    _crop_mesh_to_obb,
-    _crop_padded_pointclouds_to_obb,
-    _crop_points_to_obb,
-)
+from aria_nbv.rollouts.counterfactuals import CounterfactualEvaluatorInvalidityError
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 
@@ -225,7 +228,7 @@ def test_target_obb_crop_keeps_oriented_membership_not_axis_aligned_shell() -> N
         dtype=torch.float32,
     )
 
-    cropped = _crop_points_to_obb(points, obb)
+    cropped = crop_points_to_obb(points, obb)
 
     assert cropped.tolist() == [[0.25, 0.25, 0.25]]
 
@@ -243,7 +246,7 @@ def test_target_obb_mesh_crop_keeps_faces_with_any_inside_vertex() -> None:
     )
     faces = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.int64)
 
-    cropped_verts, cropped_faces = _crop_mesh_to_obb(verts, faces, obb)
+    cropped_verts, cropped_faces = crop_mesh_to_obb(verts, faces, obb)
 
     assert cropped_faces.shape == (1, 3)
     assert cropped_verts.shape == (3, 3)
@@ -253,8 +256,44 @@ def test_target_obb_mesh_crop_reports_empty_crop_as_target_invalid() -> None:
     obb = _obb((10.0, 10.0, 10.0), (1.0, 1.0, 1.0))
     mesh, verts, faces = _mesh_triplet()
 
-    with pytest.raises(TargetRriInvalidError, match="no mesh faces"):
-        _crop_mesh_to_obb(verts, faces, obb)
+    with pytest.raises(_OracleEvidenceError, match="no mesh faces"):
+        crop_mesh_to_obb(verts, faces, obb)
+
+
+def test_target_scorer_returns_typed_invalidity_for_unlabelled_target(monkeypatch) -> None:
+    monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: object())
+    monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: object())
+    target_obb = _obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+    row = replace(_target_row(gt_target_row_id=0), gt_label_valid=False, gt_target_row_id=None)
+    scorer = TargetRriScorerConfig().setup_target(
+        sample=SimpleNamespace(),
+        target_sample=_target_sample_with_gt_obb(target_obb),
+        target_row=row,
+    )
+
+    outcome = scorer(SimpleNamespace(), CounterfactualTrajectory(root_pose_world=_identity_pose()), 0)
+
+    assert isinstance(outcome, TargetRriInvalidity)
+    assert outcome.reason is OracleEvidenceInvalidReason.TARGET_GT_LABEL_INVALID
+    assert scorer.invalidity == outcome
+
+
+def test_rollout_adapter_preserves_typed_target_invalidity() -> None:
+    invalidity = TargetRriInvalidity(
+        reason=OracleEvidenceInvalidReason.TARGET_CURRENT_SUPPORT_INSUFFICIENT,
+        message="insufficient target support",
+    )
+    generator = CounterfactualPoseGeneratorConfig().setup_target()
+
+    with pytest.raises(CounterfactualEvaluatorInvalidityError) as exc_info:
+        generator._evaluate_valid_candidates(
+            result=_candidate_result_for_pose(_identity_pose()),
+            trajectory=CounterfactualTrajectory(root_pose_world=_identity_pose()),
+            step_index=0,
+            score_candidates=lambda *_: invalidity,
+        )
+
+    assert exc_info.value.invalidity is invalidity
 
 
 def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(monkeypatch) -> None:
@@ -283,7 +322,7 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
                 pm_comp_after=values + 6.0,
             )
 
-    import aria_nbv.rollouts.target_counterfactuals as target_cf
+    import aria_nbv.oracle.target_rri as target_rri
 
     renderer = _FakeDepthRenderer()
     oracle = _FakeOracle()
@@ -306,7 +345,11 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
             occupancy_bounds=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
         )
 
-    monkeypatch.setattr(target_cf, "build_candidate_pointclouds", _fake_pointclouds)
+    monkeypatch.setattr(
+        target_rri._CandidateRriScoringEngine,
+        "backproject_candidate_points",
+        lambda self, depths: _fake_pointclouds(None, depths),
+    )
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: renderer)
     monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: oracle)
     target_obb = _obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
@@ -351,7 +394,7 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
         semidense=SimpleNamespace(collapse_points=lambda: torch.tensor([[0.0, 0.0, 0.0]], dtype=torch.float32)),
     )
     candidates = _candidate_result_for_pose(_identity_pose(), count=2)
-    cfg = CounterfactualTargetOracleRriScorerConfig(
+    cfg = TargetRriScorerConfig(
         min_current_target_points=1,
         include_scene_rri=True,
         eval_point_cloud_source=RriEvaluationPointCloudSource.LEGACY_SEMIDENSE_ROOT,
@@ -397,14 +440,14 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
                 pm_comp_after=values,
             )
 
-    import aria_nbv.rollouts.target_counterfactuals as target_cf
+    import aria_nbv.oracle.target_rri as target_rri
 
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: _FakeDepthRenderer())
     monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: _FakeOracle())
     monkeypatch.setattr(
-        target_cf,
-        "build_candidate_pointclouds",
-        lambda sample, depths, *, stride=1: CandidatePointClouds(
+        target_rri._CandidateRriScoringEngine,
+        "backproject_candidate_points",
+        lambda self, depths: CandidatePointClouds(
             points=torch.tensor([[[0.0, 0.0, 0.0]]], dtype=torch.float32),
             lengths=torch.tensor([1], dtype=torch.long),
             semidense_points=torch.empty((0, 3), dtype=torch.float32),
@@ -424,7 +467,7 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
             collapse_points=lambda: torch.tensor([[3.0, 3.0, 3.0], [0.0, 0.0, 0.0]], dtype=torch.float32)
         ),
     )
-    cfg = CounterfactualTargetOracleRriScorerConfig(
+    cfg = TargetRriScorerConfig(
         include_scene_rri=False,
         eval_point_cloud_source=RriEvaluationPointCloudSource.LEGACY_SEMIDENSE_ROOT,
         eval_fusion_max_points=1,
@@ -451,7 +494,7 @@ def test_target_candidate_crop_applies_target_local_budget_after_obb_crop() -> N
         ],
         dtype=torch.float32,
     )
-    cropped, lengths = _crop_padded_pointclouds_to_obb(
+    cropped, lengths = crop_padded_pointclouds_to_obb(
         points,
         torch.tensor([4], dtype=torch.long),
         obb,

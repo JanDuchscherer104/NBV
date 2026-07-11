@@ -13,5 +13,6 @@ their public reexports, while leaf module pages document local symbols.
 - [rendering](rendering.qmd)
 - [rollouts](rollouts.qmd)
 - [rri_metrics](rri_metrics.qmd)
+- [targets](targets.qmd)
 - [utils](utils.qmd)
 - [vin](vin.qmd)
