@@ -116,13 +116,13 @@ Candidate masks are hard contracts: `actor_action` marks deployable actor choice
 """
 
 _TARGET_INFO = """
-Target audit separates actor-visible target metadata from GT/evaluation label validity. Invalid targets remain diagnostics and masks; they are not low-RRI training labels.
+Target audit separates sanitized descriptor geometry from privileged task and GT/evaluation label validity. Invalid targets remain diagnostics and masks; they are not low-RRI training labels.
 """
 
 _TARGET_SELECTION_DIAGNOSTICS_INFO = """
 Target-selection diagnostics explain whether the stored target pool is usable for rollout generation.
 
-- `target_valid` is the actor-visible target mask; `gt_label_valid` is the oracle/evaluation label mask.
+- `target_valid` is the persisted task-validity mask; `gt_label_valid` is the Oracle/evaluation label mask.
 - Rank/score plots should show selected or high-rank targets with enough support and visible area.
 - Score-component plots compare visibility, support, deficit, and projected area against the final selection score.
 - Class/source breakdowns expose accidental concentration on one semantic class, source, or invalid-target reason.

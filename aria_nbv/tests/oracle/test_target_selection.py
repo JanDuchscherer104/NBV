@@ -116,6 +116,14 @@ def _oracle_sampler(**kwargs: object) -> OracleTargetTaskSampler:
     return OracleTargetTaskSampler(OracleTargetTaskSamplerConfig(**kwargs))
 
 
+def test_oracle_target_task_sampler_config_has_only_selection_controls() -> None:
+    assert set(OracleTargetTaskSamplerConfig.model_fields) == {
+        "max_targets_per_sample",
+        "policy",
+        "seed",
+    }
+
+
 def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
     sample = _sample(
         gt_obbs=_obb_block(
@@ -138,6 +146,7 @@ def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in first.selected_rows)
     assert {row.source for row in first.rows} == {ORACLE_TARGET_TASK_SOURCE}
     assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
+    assert all(row.descriptor.target_id != row.target_id for row in first.rows)
 
 
 def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_tasks() -> None:

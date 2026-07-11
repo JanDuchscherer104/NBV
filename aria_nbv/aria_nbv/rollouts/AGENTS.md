@@ -22,10 +22,11 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   counterfactual transition replay, and the currently unsplit target-aware
   oracle rollout scorers. `aria_nbv.oracle.pipelines` owns rollout generation,
   shard execution, and the `nbv-build-rollouts` CLI.
-- `aria_nbv.data_handling` remains the owner of raw snippets, `VinOracleBatch`,
-  `VinOfflineDataset`, immutable VIN offline stores, and actor-visible target
-  selection DTOs. Rollout generation consumes `VinOfflineSample` roots only;
-  `VinOracleBatch` remains the one-step VIN training DTO.
+- `aria_nbv.data_handling` owns raw snippets, `VinOracleBatch`,
+  `VinOfflineDataset`, and immutable VIN offline stores. `aria_nbv.targets`
+  owns actor-safe target instructions; `aria_nbv.oracle` owns privileged
+  target-task selection. Rollout generation consumes `VinOfflineSample` roots
+  only; `VinOracleBatch` remains the one-step VIN training DTO.
 - `aria_nbv.pose_generation` remains the owner of finite candidate pose
   sampling, validation, orientation, and candidate-table provenance. Rollout
   transitions, target-specific oracle scoring, rollout persistence, and replay
@@ -39,8 +40,8 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 ## Verification
 - Run `ruff format` and `ruff check` on touched rollout files.
 - Run `uv run pytest tests/rollouts` for record/Zarr/writer changes.
-- Run `uv run pytest tests/data_handling/test_target_selection.py` when the
-  generator consumes target-selector fields.
+- Run `uv run pytest tests/oracle/test_target_selection.py` when the generator
+  consumes Oracle target-task fields.
 - Run Rerun/Streamlit tests when changing rollout reader arrays or launcher
   surfaces.
 - Run `uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run`

@@ -3,8 +3,9 @@ r"""Oracle target-task sampling for ARIA-NBV.
 `OracleTargetTaskSampler` builds the data-generation target-task pool from
 oracle GT OBBs. It is the source for rollout labels and target-conditioned
 supervision. First-pass task admission is intentionally limited to finite,
-positive GT OBB geometry. Projected visibility, support, confidence, distance,
-and downstream headroom are audit fields, not first-pass eligibility gates.
+positive GT OBB geometry. Confidence and downstream headroom are audit fields,
+not first-pass eligibility gates. Retired actor-selection projection and
+support columns use their frozen zero sentinel in generated lineage.
 """
 
 from __future__ import annotations
@@ -22,9 +23,9 @@ from torch import Tensor
 
 from ..data_handling.efm_views import EfmSnippetView, VinSnippetView
 from ..data_handling.offline.batch import CompactObbBlock
+from ..targets import TargetDescriptor
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
-from ..vin.types import EvlBackboneOutput
 
 if TYPE_CHECKING:
     from ..data_handling.offline.dataset import VinOfflineSample
@@ -55,20 +56,12 @@ ORACLE_TARGET_TASK_SOURCE = "gt_obbs_oracle"
 
 @dataclass(frozen=True, slots=True)
 class TargetCandidateRow:
-    """One rollout target candidate and its oracle audit fields.
+    """Compatibility row for frozen rollout target and GT-audit columns.
 
-    This is the row-level DTO for the OBS-SEL/PRED-Q/GT-EVAL boundary. The
-    actor-visible part is derived from detected or predicted OBBs: class id,
-    confidence, world-frame OBB center/extents/pose, support counts, visibility
-    score, support score, deficit score, eligibility, and the final selection
-    score. `pose_world_object` is an EFM `PoseTW` payload flattened to 12
-    values. `relative_pose_reference_object` is
-    `T_reference_world @ T_world_object`, also flattened to 12 values.
-
-    `source_index` points back into the padded source OBB table after flattening
-    valid rows; `target_row_id` is the selector-local dense row id. GT match
-    fields are oracle/evaluation audit fields only. They are filled after
-    actor-visible selection and must not be fed to actor policies in V1.
+    Oracle task generation fills this wide row before persistence. Candidate
+    generation receives only `TargetDescriptor`; source indices, instance
+    identity, GT match fields, invalidity, and retired audit sentinels must not
+    cross that actor-safe boundary.
     """
 
     scene_id: str | None
@@ -177,7 +170,6 @@ class TargetCandidateRow:
     """Geometry-only score of the best GT match, or ``None`` when unavailable."""
 
     gt_match_status: str = "not_requested"
-    """Stable audit status describing whether and how GT matching completed."""
 
 
 class TargetTaskIdentityStatus(StrEnum):
@@ -209,9 +201,10 @@ class OracleTargetTaskRow:
 
     The sampler creates these rows from GT OBBs, not from actor-visible target
     discovery. `identity_valid` is the first-pass task-pool gate: the source GT
-    OBB must have finite positive geometry. Descriptor fields such as projected
-    area, semidense/EVL support, and confidence are preserved as audit signals
-    only and must not decide first-pass eligibility.
+    OBB must have finite positive geometry. `descriptor` composes the
+    actor-safe semantic and geometric instruction. Privileged identity and
+    confidence stay on the task; retired projection/support columns remain
+    frozen persistence sentinels and never decide eligibility.
 
     Headroom fields are intentionally optional. Target tasks survive sampling
     even when later rollout evidence proves little or no recoverable target
@@ -236,29 +229,14 @@ class OracleTargetTaskRow:
     target_id: str
     """Stable target identifier derived from snippet and GT object identity."""
 
-    sem_id: int
-    """Semantic class identifier carried by the GT OBB."""
+    descriptor: TargetDescriptor
+    """Actor-safe semantic and geometric target instruction."""
 
     inst_id: int
     """Instance identifier carried by the GT OBB."""
 
-    class_name: str
-    """Human-readable semantic class name, with a deterministic fallback for unknown ids."""
-
     confidence: float
     """GT OBB confidence retained for audit; it does not gate task eligibility."""
-
-    center_world: tuple[float, float, float]
-    """GT OBB center ``(x, y, z)`` in the world frame, metres."""
-
-    extents: tuple[float, float, float]
-    """Full GT OBB side lengths ``(x, y, z)`` in object axes, metres."""
-
-    pose_world_object: tuple[float, ...]
-    """Flattened 12-value EFM `PoseTW` transform from object to world frame."""
-
-    relative_pose_reference_object: tuple[float, ...]
-    """Flattened 12-value transform from object to the snippet reference frame."""
 
     projected_area_pixels: float
     """Largest clipped OBB projection area, square pixels, retained for audit."""
@@ -307,6 +285,42 @@ class OracleTargetTaskRow:
 
     headroom_band: str | None = None
     """Downstream headroom stratum, or ``None`` before oracle scoring."""
+
+    @property
+    def sem_id(self) -> int:
+        """Semantic class identifier from the actor-safe descriptor."""
+
+        return self.descriptor.sem_id
+
+    @property
+    def class_name(self) -> str:
+        """Human-readable semantic class name from the descriptor."""
+
+        return self.descriptor.class_name
+
+    @property
+    def center_world(self) -> tuple[float, float, float]:
+        """Descriptor target center in world coordinates, metres."""
+
+        return self.descriptor.center_world
+
+    @property
+    def extents(self) -> tuple[float, float, float]:
+        """Descriptor full side lengths in object axes, metres."""
+
+        return self.descriptor.extents_m
+
+    @property
+    def pose_world_object(self) -> tuple[float, ...]:
+        """Descriptor object-to-world pose as 12 flattened values."""
+
+        return self.descriptor.pose_world_object
+
+    @property
+    def relative_pose_reference_object(self) -> tuple[float, ...]:
+        """Descriptor object pose in the snippet reference frame."""
+
+        return self.descriptor.relative_pose_reference_object
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,24 +409,6 @@ class OracleTargetTaskSamplerConfig(TargetConfig["OracleTargetTaskSampler"]):
     policy: OracleTargetTaskSelectionPolicy = OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT
     """Policy used to select admitted GT target tasks."""
 
-    projected_area_normalizer_pixels: float = Field(default=240.0 * 240.0, gt=0.0)
-    """Image-area normalizer used for projected-area audit fractions."""
-
-    projected_area_image_width_px: float = Field(default=240.0, gt=0.0)
-    """Image width used to clip projected OBB boxes for audit fields."""
-
-    projected_area_image_height_px: float = Field(default=240.0, gt=0.0)
-    """Image height used to clip projected OBB boxes for audit fields."""
-
-    evl_support_weight: float = Field(default=1.0, ge=0.0)
-    """Weight applied to EVL support points in audit support counts."""
-
-    obb_support_scale: float = Field(default=1.0, gt=0.0)
-    """OBB scale used when counting semidense/EVL support audit points."""
-
-    max_support_points: int = Field(default=20000, ge=1)
-    """Maximum support points inspected per snippet, using deterministic prefix truncation."""
-
 
 class OracleTargetTaskSampler:
     """Sample oracle GT target tasks for rollout/data-generation labeling."""
@@ -430,8 +426,8 @@ class OracleTargetTaskSampler:
         """Build and uniformly sample the oracle target-task pool.
 
         Args:
-            sample: VIN offline sample carrying ``gt_obbs`` and optional
-                actor-visible audit sources.
+            sample: VIN offline sample carrying the privileged ``gt_obbs``
+                task source.
 
         Returns:
             Full GT target-task table, geometry-valid pool, and capped seeded
@@ -486,8 +482,6 @@ class OracleTargetTaskSampler:
         if valid_data.numel() == 0:
             return ()
         gt_obbs = ObbTW(valid_data)
-        semidense_points = _semidense_points(sample, max_points=self.config.max_support_points)
-        evl_points, evl_counts = _evl_support_points(sample, max_points=self.config.max_support_points)
         reference_pose = _pose_on_device(_reference_pose_world_rig(sample), device=valid_data.device)
         scene_id = _first_scalar_string(sample.scene_id)
         snippet_id = _first_scalar_string(sample.snippet_id)
@@ -499,19 +493,8 @@ class OracleTargetTaskSampler:
             inst_id = int(obb.inst_id.reshape(-1)[0].item())
             confidence = float(obb.prob.reshape(-1)[0].item())
             extents_t = obb.bb3_diagonal.detach().cpu().reshape(-1).to(dtype=torch.float32)
-            center_t = obb.bb3_center_world.detach().cpu().reshape(-1).to(dtype=torch.float32)
             pose_world = obb.T_world_object.tensor().detach().cpu().reshape(-1).to(dtype=torch.float32)
             relative_pose = (reference_pose.inverse() @ obb.T_world_object).tensor().detach().cpu().reshape(-1)
-            projected_area = _max_projected_area(obb, config=self.config)
-            projected_fraction = projected_area / float(self.config.projected_area_normalizer_pixels)
-            semidense_count = _points_inside_count(obb, semidense_points, scale=self.config.obb_support_scale)
-            evl_count = _points_inside_count(
-                obb,
-                evl_points,
-                scale=self.config.obb_support_scale,
-                positive_counts=evl_counts,
-            )
-            effective_support = float(semidense_count) + float(self.config.evl_support_weight) * float(evl_count)
             geometry_valid = _obb_geometry_valid(obb)
             identity_status = (
                 TargetTaskIdentityStatus.MATCHED if geometry_valid else TargetTaskIdentityStatus.INVALID_GEOMETRY
@@ -525,6 +508,13 @@ class OracleTargetTaskSampler:
                 inst_id=inst_id,
                 source_index=source_index,
             )
+            descriptor = TargetDescriptor(
+                sem_id=sem_id,
+                class_name=_class_name(sem_id, sem_id_to_name),
+                pose_world_object=_float_tuple(pose_world),
+                extents_m=_float_tuple(extents_t, length=3),  # type: ignore[arg-type]
+                relative_pose_reference_object=_float_tuple(relative_pose),
+            )
             rows.append(
                 OracleTargetTaskRow(
                     scene_id=scene_id,
@@ -533,19 +523,14 @@ class OracleTargetTaskSampler:
                     source_index=source_index,
                     target_row_id=source_index,
                     target_id=target_id,
-                    sem_id=sem_id,
+                    descriptor=descriptor,
                     inst_id=inst_id,
-                    class_name=_class_name(sem_id, sem_id_to_name),
                     confidence=confidence,
-                    center_world=_float_tuple(center_t, length=3),  # type: ignore[assignment]
-                    extents=_float_tuple(extents_t, length=3),  # type: ignore[assignment]
-                    pose_world_object=_float_tuple(pose_world),
-                    relative_pose_reference_object=_float_tuple(relative_pose),
-                    projected_area_pixels=float(projected_area),
-                    projected_area_fraction=float(projected_fraction),
-                    semidense_support_count=int(semidense_count),
-                    evl_support_count=int(evl_count),
-                    effective_support_count=float(effective_support),
+                    projected_area_pixels=0.0,
+                    projected_area_fraction=0.0,
+                    semidense_support_count=0,
+                    evl_support_count=0,
+                    effective_support_count=0.0,
                     identity_iou=None,
                     identity_second_iou=None,
                     identity_ambiguity_gap=None,
@@ -577,6 +562,73 @@ class OracleTargetTaskSampler:
                 )
             )
         return tuple(selected)
+
+
+def target_candidate_row_from_task(row: OracleTargetTaskRow) -> TargetCandidateRow:
+    """Adapt a privileged task to the frozen rollout target-lineage DTO."""
+
+    reason_bitset, primary_reason = _oracle_target_invalidity(row)
+    gt_valid = row.identity_status == TargetTaskIdentityStatus.MATCHED.value
+    return TargetCandidateRow(
+        scene_id=row.scene_id,
+        snippet_id=row.snippet_id,
+        source=row.source,
+        source_index=row.source_index,
+        target_row_id=row.target_row_id,
+        target_id=row.target_id,
+        sem_id=row.sem_id,
+        inst_id=row.inst_id,
+        class_name=row.class_name,
+        confidence=row.confidence,
+        center_world=row.center_world,
+        extents=row.extents,
+        pose_world_object=row.pose_world_object,
+        relative_pose_reference_object=row.relative_pose_reference_object,
+        projected_area_pixels=row.projected_area_pixels,
+        projected_area_fraction=row.projected_area_fraction,
+        semidense_support_count=row.semidense_support_count,
+        evl_support_count=row.evl_support_count,
+        effective_support_count=row.effective_support_count,
+        visibility_score=0.0,
+        support_score=0.0,
+        deficit_score=0.0,
+        score=float("nan"),
+        eligible=gt_valid,
+        invalid_reason_bitset=reason_bitset,
+        primary_invalid_reason=primary_reason,
+        selected_rank=row.selected_rank,
+        selection_probability=row.selection_probability,
+        gt_label_valid=gt_valid,
+        gt_target_row_id=row.source_index if gt_valid else None,
+        gt_target_id=row.target_id if gt_valid else None,
+        gt_match_iou=None,
+        gt_match_score=None,
+        gt_match_status="matched" if gt_valid else row.identity_status,
+    )
+
+
+def target_descriptor_from_candidate_row(row: TargetCandidateRow) -> TargetDescriptor:
+    """Return the actor-safe descriptor portion of a privileged target row."""
+
+    return TargetDescriptor(
+        sem_id=row.sem_id,
+        class_name=row.class_name,
+        pose_world_object=row.pose_world_object,
+        extents_m=row.extents,
+        relative_pose_reference_object=row.relative_pose_reference_object,
+    )
+
+
+def _oracle_target_invalidity(row: OracleTargetTaskRow) -> tuple[int, int]:
+    if row.identity_status == TargetTaskIdentityStatus.MATCHED.value:
+        return 1 << TARGET_INVALID_REASON_CODES["VALID"], TARGET_INVALID_REASON_CODES["VALID"]
+    if row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value:
+        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"]
+    elif row.identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value:
+        reason = TARGET_INVALID_REASON_CODES["OBB_EXTENT_INVALID"]
+    else:
+        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
+    return 1 << reason, reason
 
 
 def _compact_obb_block(value: CompactObbBlock | ObbTW | Tensor | None) -> tuple[ObbTW, SemanticNameMap | None] | None:
@@ -653,76 +705,6 @@ def _pose_on_device(pose: PoseTW, *, device: torch.device) -> PoseTW:
     return PoseTW(pose.tensor().detach().to(device=device))
 
 
-def _semidense_points(sample: "VinOfflineSample", *, max_points: int) -> Tensor:
-    snippet = _sample_snippet_view(sample)
-    if isinstance(snippet, VinSnippetView):
-        return _valid_prefix_points(snippet.points_world, snippet.lengths, max_points=max_points)
-    if isinstance(snippet, EfmSnippetView):
-        semidense = snippet.semidense
-        points = semidense.points_world
-        lengths = semidense.lengths.to(device=points.device)
-        max_len = points.shape[1]
-        mask = torch.arange(max_len, device=points.device).unsqueeze(0) < lengths.clamp_max(max_len).unsqueeze(-1)
-        flat = points[..., :3][mask]
-        finite = torch.isfinite(flat).all(dim=-1)
-        return flat[finite][:max_points].detach().cpu().to(dtype=torch.float32)
-    return torch.zeros((0, 3), dtype=torch.float32)
-
-
-def _valid_prefix_points(points: Tensor, lengths: Tensor, *, max_points: int) -> Tensor:
-    pts = points.detach().cpu().to(dtype=torch.float32)
-    length = int(torch.as_tensor(lengths).reshape(-1)[0].item()) if torch.as_tensor(lengths).numel() else pts.shape[0]
-    if pts.ndim != 2 or pts.shape[-1] < 3:
-        return torch.zeros((0, 3), dtype=torch.float32)
-    pts = pts[: max(0, min(length, pts.shape[0])), :3]
-    finite = torch.isfinite(pts).all(dim=-1)
-    return pts[finite][:max_points]
-
-
-def _evl_support_points(sample: "VinOfflineSample", *, max_points: int) -> tuple[Tensor, Tensor | None]:
-    backbone = sample.backbone_out
-    if not isinstance(backbone, EvlBackboneOutput) or backbone.pts_world is None:
-        return torch.zeros((0, 3), dtype=torch.float32), None
-    points = backbone.pts_world.detach().cpu().to(dtype=torch.float32)
-    if points.ndim == 3:
-        points = points[0]
-    points = points.reshape(-1, points.shape[-1])[:, :3]
-    finite = torch.isfinite(points).all(dim=-1)
-    counts = None
-    if backbone.counts is not None:
-        count_values = backbone.counts.detach().cpu().reshape(-1)
-        if count_values.shape[0] == points.shape[0]:
-            counts = count_values[finite][:max_points]
-    return points[finite][:max_points], counts
-
-
-def _points_inside_count(obb: ObbTW, points: Tensor, *, scale: float, positive_counts: Tensor | None = None) -> int:
-    if points.numel() == 0:
-        return 0
-    inside = obb.points_inside_bb3(points.to(dtype=torch.float32), scale_obb=float(scale))
-    if positive_counts is not None:
-        inside = inside & (positive_counts.to(dtype=torch.float32) > 0)
-    return int(inside.sum().item())
-
-
-def _max_projected_area(obb: ObbTW, *, config: OracleTargetTaskSamplerConfig) -> float:
-    areas: list[float] = []
-    image_width = float(config.projected_area_image_width_px)
-    image_height = float(config.projected_area_image_height_px)
-    for camera_id in range(3):
-        bb2 = obb.bb2(camera_id).detach().cpu().reshape(-1, 4).to(dtype=torch.float32)
-        x1 = bb2[:, 0].clamp(min=0.0, max=image_width)
-        x2 = bb2[:, 1].clamp(min=0.0, max=image_width)
-        y1 = bb2[:, 2].clamp(min=0.0, max=image_height)
-        y2 = bb2[:, 3].clamp(min=0.0, max=image_height)
-        width = (x2 - x1).clamp_min(0)
-        height = (y2 - y1).clamp_min(0)
-        area = width * height
-        if area.numel():
-            areas.append(float(area.max().item()))
-    return max(areas) if areas else 0.0
-
-
 def _obb_geometry_valid(obb: ObbTW) -> bool:
     data = obb.tensor().reshape(-1)
     extents = obb.bb3_diagonal.reshape(-1)
@@ -775,4 +757,6 @@ __all__ = [
     "TARGET_INVALID_REASON_VERSION",
     "TargetCandidateRow",
     "TargetTaskIdentityStatus",
+    "target_candidate_row_from_task",
+    "target_descriptor_from_candidate_row",
 ]

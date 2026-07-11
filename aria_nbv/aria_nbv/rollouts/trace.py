@@ -82,7 +82,7 @@ class RolloutLineage:
 
     These fields bridge the immutable VIN source row to the rollout replay
     tables. Source lineage identifies the original shard-local VIN row, target
-    lineage describes the actor-visible target and GT evaluation match, and
+    lineage describes the selected Oracle target task and GT evaluation match, and
     config hashes bind candidate generation, oracle scoring, and rollout policy
     choices without embedding heavy source artifacts.
     """

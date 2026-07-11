@@ -73,10 +73,8 @@ def render_target_selection_audit(rows: Iterable[TargetCandidateRow], *, title: 
         )
         fallback_text = ", ".join(f"{value:.2f}" for value in fallback_values) if fallback_values else "0.00"
         st.warning(
-            "Some actor-visible target rows have `projected_area_px=0` because the selected OBB source does not "
-            "carry valid EFM 2D boxes (`bb2_rgb`, `bb2_slaml`, or `bb2_slamr`) for those targets. The selector keeps "
-            f"otherwise supported targets by applying the configured missing-projection visibility fallback ({fallback_text}) "
-            "unless projected visibility is required."
+            "Projected-area audit columns use zero sentinels after the unsupported actor selector was removed. "
+            f"The retained visibility compatibility value is {fallback_text}."
         )
     st.dataframe(df, width="stretch", hide_index=True)
 

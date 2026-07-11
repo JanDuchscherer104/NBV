@@ -22,14 +22,12 @@ from ...data_handling import (
     VinOfflineStoreConfig,
 )
 from ...oracle.evidence import target_gt_obb_world
-from ...oracle.pipelines.rollout_dataset import (
-    _oracle_target_task_to_candidate_row,
-    _target_descriptor_from_candidate_row,
-)
 from ...oracle.target_selection import (
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetCandidateRow,
+    target_candidate_row_from_task,
+    target_descriptor_from_candidate_row,
 )
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -86,24 +84,23 @@ Loaded sample metrics:
 
 - `Scene`: ASE scene id for the source row.
 - `Snippet`: source snippet/window id.
-- `Source`: target-record source used by the selector.
-- `Selected targets`: number of actor-visible targets retained for rollout generation.
+- `Source`: privileged target-task source used by the Oracle sampler.
+- `Selected targets`: number of geometry-valid Oracle tasks retained for rollout generation.
 
 Target table fields:
 
 - `target_row_id`: split-local target row id used by rollouts and stored targets.
 - `selected_rank`: rank among selected targets; `None` means retained for inspection but not selected.
 - `class`: human-readable class name when available.
-- `sem_id` / `inst_id`: semantic and instance ids from the actor-visible target record.
-- `confidence`: detector/source confidence.
-- `projected_area_px` / `projected_fraction`: maximum actor-visible projected OBB support.
-- `visibility_score`: smooth projected-visibility factor used by target selection.
-- `semidense_support` / `evl_support` / `effective_support`: actor-visible support counts.
-- `support_score` / `deficit_score`: support-validity and under-observedness score factors.
-- `selection_score`: target-selection score, not target-RRI.
+- `sem_id` / `inst_id`: semantic and instance ids from the privileged task source.
+- `confidence`: source confidence retained for audit.
+- `projected_area_px`, `projected_fraction`, `visibility_score`,
+  `semidense_support`, `evl_support`, `effective_support`, `support_score`,
+  `deficit_score`, and `selection_score` are frozen compatibility fields and
+  use zero/NaN sentinels after actor-selector removal.
 - `selection_probability`: stochastic target-selection probability when available.
-- `eligible`: whether actor-side gates allow the target.
-- `invalid_reason`: hard actor-visible target invalidity reason.
+- `eligible`: whether finite positive GT geometry admits the task.
+- `invalid_reason`: hard Oracle task invalidity reason.
 - `gt_label_valid`: whether GT matching produced a valid oracle/evaluation label.
 - `gt_match_status`: GT matching outcome such as `matched`, `not_requested`, or ambiguity/invalid status.
 - `gt_iou`: IoU of the accepted GT match when available.
@@ -117,11 +114,12 @@ Label format: `target 0 · window · sem=28 inst=51297 · score=... · valid`.
 
 - `target 0`: target row id.
 - `window`: class name resolved from the EFM semantic-id map.
-- `sem=... inst=...`: semantic and instance ids used to identify the actor-visible target.
-- `score=...`: target-selection score; it is not an RRI reward.
+- `sem=... inst=...`: privileged semantic and instance ids retained for audit.
+- `score=...`: frozen compatibility value; it is not an RRI reward.
 - `valid`: GT-only matching succeeded, so target-RRI labels/evaluation crops can be computed.
 
-The actor sees the target descriptor and support, not the matched GT crop. GT fields stay in GT-EVAL.
+Candidate generation receives only the sanitized target descriptor. GT identity,
+matching, invalidity, and crop fields stay in Oracle evaluation.
 """
 
 _ROLLOUT_GENERATION_INFO = """
@@ -143,7 +141,7 @@ This block defines the finite-candidate rollout tree.
 _TARGET_MIXTURE_INFO = """
 Target-RRI rollouts use a mixed finite candidate set.
 
-- `target_bearing_local`: centers biased along the actor-visible target bearing.
+- `target_bearing_local`: centers biased along the sanitized target bearing.
 - `forward_local`: local forward continuity around the reference pose.
 - `lateral_target_bypass`: target-bearing views with signed lateral bypass.
 - `local_refinement`: short local refinement views around the current pose.
@@ -628,7 +626,7 @@ def _score_context_for_mode(
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
         evaluator=scorer,
-        runtime_context=CandidateGenerationRuntimeContext(descriptor=_target_descriptor_from_candidate_row(target)),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target)),
     )
 
 
@@ -1103,7 +1101,7 @@ def _add_target_overlays(
     show_actor_target: bool,
     show_gt_target: bool,
 ) -> None:
-    """Add actor-visible and GT-only target OBB overlays to a rollout plot."""
+    """Add descriptor and GT-only target OBB overlays to a rollout plot."""
 
     if target is None:
         return
@@ -1113,7 +1111,7 @@ def _add_target_overlays(
         return
     if not target.gt_label_valid:
         st.warning(
-            "The active target has no valid matched GT crop; only the actor-visible target OBB can be shown.",
+            "The active target has no valid matched GT crop; only the descriptor target OBB can be shown.",
         )
         return
     try:
@@ -1130,7 +1128,7 @@ def _add_target_semidense_crop(
     crop_basis: str,
     max_points: int = 12000,
 ) -> None:
-    """Overlay semidense points cropped to the actor-visible or GT target OBB."""
+    """Overlay semidense points cropped to the descriptor or GT target OBB."""
 
     if target is None:
         return
@@ -1159,7 +1157,7 @@ def _add_target_semidense_crop(
     builder.add_semidense_in_oriented_box(
         pose_world_object=target.pose_world_object,
         extents=target.extents,
-        name="Target semidense crop / actor-visible",
+        name="Target semidense crop / descriptor",
         max_points=max_points,
         last_frame_only=False,
         color="gold",
@@ -1171,8 +1169,8 @@ def _add_target_semidense_crop(
 def _render_live_rollouts_tab() -> None:
     st.header("Live Target-RRI Counterfactual Rollouts")
     st.caption(
-        "Generate multi-step rollouts from VIN offline roots. Target-RRI mode uses V1 actor-visible target "
-        "selection and GT-only evaluation crops; scene and geometry modes are diagnostics."
+        "Generate multi-step rollouts from VIN offline roots. Target-RRI mode samples geometry-valid Oracle "
+        "tasks and passes sanitized descriptors to candidate generation; scene and geometry modes are diagnostics."
     )
 
     default_store = VinOfflineStoreConfig().store_dir
@@ -1205,8 +1203,8 @@ def _render_live_rollouts_tab() -> None:
             sample = _load_vin_offline_sample(store_dir=store_dir, split=str(split), sample_index=int(sample_index))
             sampled = OracleTargetTaskSampler(selector_cfg).sample(sample)
             target_result = _LiveTargetSelectionResult(
-                rows=tuple(_oracle_target_task_to_candidate_row(row) for row in sampled.rows),
-                selected_rows=tuple(_oracle_target_task_to_candidate_row(row) for row in sampled.selected_rows),
+                rows=tuple(target_candidate_row_from_task(row) for row in sampled.rows),
+                selected_rows=tuple(target_candidate_row_from_task(row) for row in sampled.selected_rows),
                 source=sampled.source,
                 warnings=sampled.warnings,
             )
@@ -1473,7 +1471,7 @@ def _render_rollout_result(
             )
             target_col1, target_col2, target_col3, frustum_col = st.columns(4)
             show_actor_target = target_col1.checkbox(
-                "Show actor-visible target OBB",
+                "Show descriptor target OBB",
                 value=target is not None,
                 key="cf_path_actor_target_obb",
             )
@@ -1494,7 +1492,7 @@ def _render_rollout_result(
             )
             crop_basis = st.selectbox(
                 "Target crop basis",
-                options=["Actor-visible OBB", "GT/evaluation OBB"],
+                options=["Descriptor OBB", "GT/evaluation OBB"],
                 index=0,
                 key="cf_path_target_crop_basis",
                 disabled=not show_target_crop,
@@ -1568,7 +1566,7 @@ def _render_rollout_result(
                     )
                     step_target_col1, step_target_col2, step_target_col3, step_frustum_col = st.columns(4)
                     show_step_actor_target = step_target_col1.checkbox(
-                        "Show actor-visible target OBB",
+                        "Show descriptor target OBB",
                         value=target is not None,
                         key="cf_step_actor_target_obb",
                     )
@@ -1595,7 +1593,7 @@ def _render_rollout_result(
                     )
                     step_crop_basis = st.selectbox(
                         "Step target crop basis",
-                        options=["Actor-visible OBB", "GT/evaluation OBB"],
+                        options=["Descriptor OBB", "GT/evaluation OBB"],
                         index=0,
                         key="cf_step_target_crop_basis",
                         disabled=not show_step_target_crop,
@@ -1691,7 +1689,7 @@ def _render_live_selected_depth_tab(
     step = trajectory.steps[int(selected["step"]) - 1]
     overlay_col1, overlay_col2 = st.columns(2)
     show_actor_projection = overlay_col1.checkbox(
-        "Project actor-visible target OBB",
+        "Project descriptor target OBB",
         value=target is not None,
         key="cf_live_depth_actor_obb",
     )
@@ -1828,7 +1826,7 @@ def _live_depth_target_overlays(
                     focal_px=(float(focal[0]), float(focal[1])),
                     principal_point_px=(float(principal[0]), float(principal[1])),
                 ),
-                name="Actor-visible target OBB",
+                name="Descriptor target OBB",
                 color="#ff2f74",
                 width=4,
             )
@@ -2011,8 +2009,8 @@ def render_counterfactual_rollouts_page() -> None:
 
     _info_popover(
         "live target-rri rollouts",
-        "Target-RRI mode loads a VIN offline sample, selects an actor-visible target, "
-        "uses GT only for matching/evaluation crops, and scores selected rollout branches "
+        "Target-RRI mode loads a VIN offline sample, samples an Oracle target task, "
+        "passes a sanitized descriptor to candidate generation, and scores rollout branches "
         "with target-specific oracle RRI. Persisted rollout-Zarr inspection now lives on "
         "the VIN Offline Dataset page.",
     )

@@ -201,7 +201,7 @@ def candidate_audit_rows(
 
 
 def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
-    """Return stored target rows with actor-visible and GT-audit fields."""
+    """Return stored target-task rows with frozen selection and GT-audit fields."""
 
     if "targets" not in reader.root:
         return []

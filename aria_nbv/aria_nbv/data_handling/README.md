@@ -2,8 +2,9 @@
 
 `aria_nbv.data_handling` owns the typed boundary between upstream ASE/ATEK/EFM
 assets and the training or evaluation objects consumed by ARIA-NBV. It owns raw
-snippet access, VIN oracle batches, immutable VIN offline stores, target
-selection DTOs, and diagnostics. Multi-step rollout generation and rollout
+snippet access, VIN oracle batches, immutable VIN offline stores, and
+diagnostics. Privileged target-task selection belongs to `aria_nbv.oracle`;
+actor-safe target instructions belong to `aria_nbv.targets`. Multi-step rollout generation and rollout
 replay stores are owned by `aria_nbv.rollouts`, but they depend on
 `VinOfflineSample` roots and are documented here because the stores are designed
 to join cleanly.
@@ -25,8 +26,6 @@ never as low RRI.
 - Immutable one-step cache: `VinOfflineWriterConfig`, `VinOfflineWriter`,
   `VinOfflineDatasetConfig`, `VinOfflineStoreConfig`, `VinOfflineManifest`, and
   `VinOfflineIndexRecord`.
-- Target selection: `ActorVisibleTargetSelector`, `TargetSelectorConfig`, and
-  target-candidate DTOs.
 - Diagnostics: `collect_vin_offline_dataset_stats`,
   `collect_vin_offline_dataset_coverage`, and
   `collect_offline_visual_inventory`.
@@ -933,7 +932,7 @@ uv run pytest tests/data_handling/test_public_api_contract.py
 For rollout-store work, include rollout and target-selection checks:
 
 ```sh
-uv run pytest tests/data_handling/test_target_selection.py
+uv run pytest tests/oracle/test_target_selection.py
 uv run pytest tests/rollouts
 uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
 ```
@@ -972,7 +971,7 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:27:20.693866+00:00`
 
-Graphify refresh: `2026-07-10T18:34:29+02:00`
+Graphify refresh: `2026-07-11`
 
 ### Symbol Ownership Matrix
 
@@ -980,7 +979,13 @@ Graphify refresh: `2026-07-10T18:34:29+02:00`
 
 No top-level AST definitions; imported names and `__all__` are excluded.
 
-#### `_target_selection.py`
+#### Historical baseline: `_target_selection.py`
+
+WP07 removed this module. Actor-only selection symbols were deleted;
+`TargetDescriptor` is inventoried in `targets/README.md`, and the retained
+privileged task-sampling symbols are inventoried in `oracle/README.md`. The
+table below is retained only as the before-state ledger for the mechanical
+layout transition.
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|

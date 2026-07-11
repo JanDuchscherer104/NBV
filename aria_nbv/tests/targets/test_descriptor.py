@@ -14,7 +14,6 @@ from aria_nbv.targets import TargetDescriptor
 
 def _descriptor() -> TargetDescriptor:
     return TargetDescriptor(
-        target_id="scene:snippet:target",
         sem_id=28,
         class_name="window",
         pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
@@ -32,8 +31,9 @@ def test_target_descriptor_exposes_sanitized_instruction_fields() -> None:
 
     assert descriptor.center_world == pytest.approx((1.0, 2.0, 3.0))
     assert descriptor.center_world_tensor().tolist() == pytest.approx([1.0, 2.0, 3.0])
+    assert descriptor.target_id == _descriptor().target_id
+    assert descriptor.target_id.startswith("target-")
     assert {field.name for field in dataclasses.fields(descriptor)} == {
-        "target_id",
         "sem_id",
         "class_name",
         "pose_world_object",
@@ -51,3 +51,7 @@ def test_target_descriptor_rejects_invalid_shapes_and_extents() -> None:
         TargetDescriptor(**{**kwargs, "extents_m": (0.5, 0.5)})
     with pytest.raises(ValueError, match="positive"):
         TargetDescriptor(**{**kwargs, "extents_m": (0.5, 0.0, 0.5)})
+    with pytest.raises(ValueError, match="finite"):
+        TargetDescriptor(**{**kwargs, "extents_m": (0.5, float("nan"), 0.5)})
+    with pytest.raises(ValueError, match="finite"):
+        TargetDescriptor(**{**kwargs, "pose_world_object": (*kwargs["pose_world_object"][:-1], float("inf"))})

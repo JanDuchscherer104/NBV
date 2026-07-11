@@ -241,7 +241,6 @@ def test_upper_bound_free_shell_ablation_is_explicit() -> None:
 
 def _descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetDescriptor:
     return TargetDescriptor(
-        target_id="target",
         sem_id=1,
         class_name="chair",
         pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),

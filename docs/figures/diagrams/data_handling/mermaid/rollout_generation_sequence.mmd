@@ -9,7 +9,7 @@ sequenceDiagram
   autonumber
   participant CLI as nbv-build-rollouts
   participant DS as VinOfflineDataset
-  participant SEL as ActorVisibleTargetSelector
+  participant SEL as OracleTargetTaskSampler
   participant GEN as CandidateMixtureViewGenerator
   participant SC as TargetRriScorer
   participant REN as CandidateDepthRenderer
@@ -21,8 +21,8 @@ sequenceDiagram
   CLI->>DS: open strict VIN store in sample mode
   loop source rows in configured split
     DS-->>CLI: VinOfflineSample with cached refs and live snippet
-    CLI->>SEL: select V1 actor-visible targets
-    SEL-->>CLI: top-K target rows with GT-EVAL metadata
+    CLI->>SEL: sample geometry-valid GT target tasks
+    SEL-->>CLI: capped task rows plus sanitized descriptors
     alt target is invalid for labels
       CLI->>AUD: record source or target skip reason
     else target is label-valid
@@ -30,7 +30,7 @@ sequenceDiagram
         loop t = 0..H-1
           CLI->>GEN: regenerate finite candidate shell for current state
           GEN-->>CLI: q_ti, m_ti, invalidity, sampler provenance
-          CLI->>SC: score actor-valid candidates for target e
+          CLI->>SC: score hard-valid candidates for target e
           SC->>REN: render candidate depths from GT mesh
           REN-->>SC: depth and valid mask batches
           SC->>RRI: compute target and optional scene RRI

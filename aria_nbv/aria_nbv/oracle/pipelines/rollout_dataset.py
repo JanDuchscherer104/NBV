@@ -23,14 +23,13 @@ from pydantic import Field, field_validator
 
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.target_selection import (
-    TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
-    OracleTargetTaskRow,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     OracleTargetTaskSelectionPolicy,
     TargetCandidateRow,
-    TargetTaskIdentityStatus,
+    target_candidate_row_from_task,
+    target_descriptor_from_candidate_row,
 )
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -52,7 +51,6 @@ from ...rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
-from ...targets import TargetDescriptor
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
@@ -450,11 +448,11 @@ class _RolloutTargetSelectionResult:
 class RolloutDatasetWriter:
     """Generate target-RRI rollout records and write a standalone Zarr store.
 
-    For each source row the writer selects V1 actor-visible targets, validates
-    GT/evaluation matches when required, regenerates candidates at each rollout
-    step from updated history/budget, scores candidates by target RRI, and
-    persists compact replay records. Heavy diagnostics should be retained only
-    for selected actions or retained chains through the downstream Zarr policy.
+    For each source row the writer samples geometry-valid Oracle target tasks,
+    passes sanitized descriptors to candidate generation, regenerates
+    candidates from updated history/budget, scores target RRI, and persists
+    compact replay records. Heavy diagnostics should be retained only for
+    selected actions or retained chains through the downstream Zarr policy.
 
     This class is the handoff point between `data_handling` and
     `pose_generation`: it reads immutable `VinOfflineSample` roots, calls the
@@ -638,7 +636,7 @@ class RolloutDatasetWriter:
         source_lineage: _RolloutSourceLineageBuilder,
     ) -> list[RolloutZarrRecord]:
         records: list[RolloutZarrRecord] = []
-        runtime_context = CandidateGenerationRuntimeContext(descriptor=_target_descriptor_from_candidate_row(target))
+        runtime_context = CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target))
         try:
             scorer = self.config.target_scorer.setup_target(
                 sample=sample.efm_snippet_view,
@@ -786,10 +784,10 @@ class RolloutDatasetWriter:
         """Return rollout-ready target rows from oracle target-task sampling."""
 
         result = oracle_sampler.sample(sample)
-        selected = tuple(_oracle_target_task_to_candidate_row(row) for row in result.selected_rows)
+        selected = tuple(target_candidate_row_from_task(row) for row in result.selected_rows)
         reason = "no_geometry_valid_oracle_target_tasks" if result.rows else "no_oracle_target_tasks"
         return _RolloutTargetSelectionResult(
-            rows=tuple(_oracle_target_task_to_candidate_row(row) for row in result.rows),
+            rows=tuple(target_candidate_row_from_task(row) for row in result.rows),
             selected_rows=selected,
             source=result.source,
             warnings=result.warnings,
@@ -863,74 +861,6 @@ def _lineage_split(*, records: list[object], fallback: str) -> str:
 
     splits = {str(record.split) for record in records}
     return next(iter(splits)) if len(splits) == 1 else str(fallback)
-
-
-def _oracle_target_task_to_candidate_row(row: OracleTargetTaskRow) -> TargetCandidateRow:
-    """Adapt an oracle GT target-task row to the rollout target lineage DTO."""
-
-    reason_bitset, primary_reason = _oracle_target_invalidity(row)
-    gt_valid = row.identity_status == TargetTaskIdentityStatus.MATCHED.value
-    return TargetCandidateRow(
-        scene_id=row.scene_id,
-        snippet_id=row.snippet_id,
-        source=row.source,
-        source_index=row.source_index,
-        target_row_id=row.target_row_id,
-        target_id=row.target_id,
-        sem_id=row.sem_id,
-        inst_id=row.inst_id,
-        class_name=row.class_name,
-        confidence=row.confidence,
-        center_world=row.center_world,
-        extents=row.extents,
-        pose_world_object=row.pose_world_object,
-        relative_pose_reference_object=row.relative_pose_reference_object,
-        projected_area_pixels=row.projected_area_pixels,
-        projected_area_fraction=row.projected_area_fraction,
-        semidense_support_count=row.semidense_support_count,
-        evl_support_count=row.evl_support_count,
-        effective_support_count=row.effective_support_count,
-        visibility_score=1.0,
-        support_score=1.0,
-        deficit_score=0.0,
-        score=float("nan"),
-        eligible=gt_valid,
-        invalid_reason_bitset=reason_bitset,
-        primary_invalid_reason=primary_reason,
-        selected_rank=row.selected_rank,
-        selection_probability=row.selection_probability,
-        gt_label_valid=gt_valid,
-        gt_target_row_id=row.source_index if gt_valid else None,
-        gt_target_id=row.target_id if gt_valid else None,
-        gt_match_iou=None,
-        gt_match_score=None,
-        gt_match_status="matched" if gt_valid else row.identity_status,
-    )
-
-
-def _target_descriptor_from_candidate_row(row: TargetCandidateRow) -> TargetDescriptor:
-    """Build the actor-safe target descriptor from a rollout target row."""
-
-    return TargetDescriptor(
-        target_id=row.target_id,
-        sem_id=row.sem_id,
-        class_name=row.class_name,
-        pose_world_object=row.pose_world_object,
-        extents_m=row.extents,
-        relative_pose_reference_object=row.relative_pose_reference_object,
-    )
-
-
-def _oracle_target_invalidity(row: OracleTargetTaskRow) -> tuple[int, int]:
-    if row.identity_status == TargetTaskIdentityStatus.MATCHED.value:
-        return 1 << TARGET_INVALID_REASON_CODES["VALID"], TARGET_INVALID_REASON_CODES["VALID"]
-    if row.identity_status == TargetTaskIdentityStatus.AMBIGUOUS.value:
-        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_AMBIGUOUS"]
-    elif row.identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value:
-        reason = TARGET_INVALID_REASON_CODES["OBB_EXTENT_INVALID"]
-    else:
-        reason = TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
-    return 1 << reason, reason
 
 
 __all__ = [

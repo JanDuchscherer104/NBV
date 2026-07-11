@@ -19,15 +19,20 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
     SelectedDepthRetentionConfig,
-    _oracle_target_task_to_candidate_row,
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
-from aria_nbv.oracle.target_selection import ORACLE_TARGET_TASK_SOURCE, OracleTargetTaskRow, TargetTaskIdentityStatus
+from aria_nbv.oracle.target_selection import (
+    ORACLE_TARGET_TASK_SOURCE,
+    OracleTargetTaskRow,
+    TargetTaskIdentityStatus,
+    target_candidate_row_from_task,
+)
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -173,14 +178,28 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
         source_index=2,
         target_row_id=2,
         target_id="scene:snippet:gt_obbs_oracle:1:7:2",
-        sem_id=1,
+        descriptor=TargetDescriptor(
+            sem_id=1,
+            class_name="chair",
+            pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
+            extents_m=(0.5, 0.5, 0.5),
+            relative_pose_reference_object=(
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                2.0,
+                3.0,
+            ),
+        ),
         inst_id=7,
-        class_name="chair",
         confidence=0.9,
-        center_world=(1.0, 2.0, 3.0),
-        extents=(0.5, 0.5, 0.5),
-        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
-        relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
         projected_area_pixels=0.0,
         projected_area_fraction=0.0,
         semidense_support_count=0,
@@ -195,10 +214,14 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
         selection_probability=1.0,
     )
 
-    target = _oracle_target_task_to_candidate_row(row)
+    target = target_candidate_row_from_task(row)
 
     assert target.gt_label_valid
     assert target.gt_match_status == "matched"
+    assert target.visibility_score == 0.0
+    assert target.support_score == 0.0
+    assert target.deficit_score == 0.0
+    assert math.isnan(target.score)
     assert target.gt_target_row_id == 2
     assert target.gt_match_iou is None
     assert target.gt_match_score is None

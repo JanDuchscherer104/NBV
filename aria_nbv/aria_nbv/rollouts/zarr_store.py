@@ -1066,7 +1066,7 @@ class _RolloutZarrValidator:
         }
         q_target_valid = np.asarray([target_valid_by_id.get(int(row_id), False) for row_id in q_state_target_row_id])
         if q_train_mask.shape[0] == q_target_valid.shape[0] and np.any(q_train_mask & (~q_target_valid[:, None])):
-            self.errors.append("Q_H q_train_mask is true for a target without valid actor-visible and GT label state.")
+            self.errors.append("Q_H q_train_mask is true for a target without valid task and GT label state.")
         for attr_name in ("source_offline_store_version", "split_manifest_hash", "target_protocol_version"):
             if _missing_lineage_token(self.root.attrs.get(attr_name)):
                 self.errors.append(f"Rollout store is missing required root attr {attr_name!r}.")

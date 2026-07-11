@@ -262,11 +262,11 @@ def test_target_rows_table_preserves_score_decomposition() -> None:
     assert row["gt_match_score"] == pytest.approx(0.5)
 
 
-def test_active_target_info_documents_actor_visible_and_gt_eval_boundary() -> None:
+def test_active_target_info_documents_descriptor_and_oracle_boundary() -> None:
     info = rollout_panel._ACTIVE_TARGET_INFO
 
-    assert "actor-visible" in info
-    assert "GT-only" in info
+    assert "sanitized target descriptor" in info
+    assert "Oracle evaluation" in info
     assert "target 0" in info
     assert "EFM semantic-id map" in info
     assert "window" in info
@@ -311,7 +311,7 @@ def test_live_selected_depth_rows_report_unretained_depth() -> None:
     assert "not retained" in str(rows[0]["warning"])
 
 
-def test_live_depth_target_overlays_project_actor_target() -> None:
+def test_live_depth_target_overlays_project_descriptor_target() -> None:
     step = SimpleNamespace(
         selected_depth_focal_px=(100.0, 100.0),
         selected_depth_principal_point_px=(50.0, 50.0),
@@ -327,7 +327,7 @@ def test_live_depth_target_overlays_project_actor_target() -> None:
     )
 
     assert len(overlays) == 1
-    assert overlays[0].name == "Actor-visible target OBB"
+    assert overlays[0].name == "Descriptor target OBB"
     assert overlays[0].corners_px.shape == (8, 2)
 
 
@@ -620,7 +620,8 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
     assert context.score_label == "target_rri"
     assert context.evaluator is fake_evaluator
     assert context.runtime_context is not None
-    assert context.runtime_context.target_id == target.target_id
+    assert context.runtime_context.target_id.startswith("target-")
+    assert context.runtime_context.target_id != target.target_id
     assert torch.equal(context.runtime_context.target_center_world, torch.tensor([1.0, 2.0, 3.0]))
 
 

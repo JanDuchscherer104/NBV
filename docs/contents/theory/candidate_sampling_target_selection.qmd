@@ -10,15 +10,15 @@ format: html
 # Candidate Sampling And Target Selection {#candidate-sampling-target-selection}
 
 This page owns the reader-facing theory contract for target-conditioned
-sampling in ARIA-NBV. It explains how actor-visible targets are selected, how a
-finite candidate table is sampled, how mixed candidate families are combined,
-and how rollout branch selection connects those candidates to target-RRI and
-$Q_H$.
+sampling in ARIA-NBV. It separates the current Oracle target-task sampler from
+the deferred actor-visible selection design, explains finite candidate-table
+sampling, and connects rollout branch selection to target-RRI and $Q_H$.
 
 The finite-horizon value-learning contract is maintained in
 [Finite-Candidate Rollout And Q_H Contract](rl_planning.qmd). The metric
 contract is maintained in [RRI Theory](rri_theory.qmd). Generated API details
-come from the `pose_generation` and `data_handling._target_selection`
+come from the `pose_generation`, `targets.descriptor`, and
+`oracle.target_selection`
 docstrings.
 
 This page distinguishes the current target-first thesis contract from
@@ -28,9 +28,16 @@ weights, or target-ranking products are statistically optimal. Before
 thesis-scale generation, the selector and sampler must report separate
 eligibility, interest, matching, validity, and provenance diagnostics.
 
-## Actor-Visible Target Selection {#actor-visible-target-selection}
+## Deferred Actor-Visible Target Selection {#actor-visible-target-selection}
 
-The V1 target source order is actor-visible by construction. The selector first
+> **Implementation status.** The actor-visible selector described in this
+> section is not active. WP07 removed the unsupported selector and its public
+> controls. Current rollout generation samples geometry-valid GT OBB tasks in
+> `oracle.target_selection`, then passes only a sanitized `TargetDescriptor` to
+> candidate generation. The equations below are retained as a future design,
+> not as documentation of current defaults or implemented behavior.
+
+The intended V1 target source order is actor-visible by construction. A future selector first
 uses detected OBB records when present, then falls back to EVL/backbone
 predicted OBB records. Ground-truth OBBs are forbidden as V1 actor input. They
 may appear only in explicit V0 sanity mode or after V1 selection as oracle-only
@@ -47,12 +54,11 @@ being misreported as a geometric GT-match failure.
 %%| file: ../../figures/diagrams/pose_generation/mermaid/target_selection_contract.mmd
 ```
 
-For every actor-visible entity candidate $e$, the selector combines semi-dense
-support and EVL support into an effective support count. The coefficient
-$w_{\mathrm{EVL}}$ is the configured `evl_support_weight`, with current default
-`1.0`. It treats each positive EVL support location as one weighted support
-vote. This is an operational ablation/config knob, not a learned value or a
-claim of optimal calibration.
+For every actor-visible entity candidate $e$, the design combines semi-dense
+support and EVL support into an effective support count. The proposed
+coefficient $w_{\mathrm{EVL}}=1$ treats each positive EVL support location as
+one weighted support vote; it is not an active configuration field or a claim
+of optimal calibration.
 $$
 n_e^{\mathrm{eff}}
 =
@@ -62,8 +68,7 @@ w_{\mathrm{EVL}} n_e^{\mathrm{EVL}}.
 $$
 
 The support score verifies that the target has enough actor-visible evidence to
-be labelable. The threshold $n_{\min}$ is the configured
-`min_support_points`, with current default `3`, and is also the hard minimum
+be labelable. The draft threshold $n_{\min}=3$ is the proposed hard minimum
 effective support required for target eligibility.
 $$
 s_e^{\mathrm{sup}}
@@ -76,9 +81,8 @@ s_e^{\mathrm{sup}}
 $$
 
 The deficit score deliberately favors targets that are supported but not already
-saturated. The threshold $n_{\mathrm{sat}}$ is the configured
-`support_saturation_points`, with current default `128`. It is the soft support
-saturation point at which this deficit term reaches zero.
+saturated. The draft threshold $n_{\mathrm{sat}}=128$ is the proposed soft
+support saturation point at which this deficit term reaches zero.
 
 $$
 s_e^{\mathrm{def}}
@@ -104,10 +108,9 @@ $$
 This single persisted projected-area field is used for target feasibility and
 scoring. Raw projected extents outside the image are not part of the main
 target contract because they can inflate visibility for boxes that are mostly
-or entirely outside the image. Let $A_{\mathrm{img}}$ be the configured
-`projected_area_normalizer_pixels`, with current default `240*240`, and define
-$a_e=A_e/A_{\mathrm{img}}$. The full-score fraction $a_{\max}$ is the
-configured `projected_area_full_score_fraction`, with current default `0.05`.
+or entirely outside the image. Let the draft image-area normalizer be
+$A_{\mathrm{img}}=240\cdot240$ and define $a_e=A_e/A_{\mathrm{img}}$. The
+draft full-score fraction is $a_{\max}=0.05$.
 
 $$
 x_e=\operatorname{clip}(a_e/a_{\max},0,1),
@@ -118,8 +121,8 @@ $$
 The visibility curve is the standard cubic smoothstep. It is used as a smooth
 operational weighting because it maps `[0,1]` to `[0,1]` with zero slope at
 both endpoints. If no projected box exists, visibility is either a hard
-invalidity when `require_projected_visibility=True`, or the configured fallback
-score `missing_projection_visibility_score`, with current default `0.35`.
+invalidity when projected visibility is required, or a proposed fallback score
+of $0.35$.
 
 Hard eligibility is:
 
@@ -180,8 +183,8 @@ target logits and greedy top-K remain comparison policies. Rollout branch
 softmax already uses robust score normalization and should not be conflated
 with this target-row policy.
 
-After selection, the GT label audit matches the selected actor-visible row to a
-GT OBB:
+In the deferred actor-visible design, a post-selection label audit would match
+the selected observed row to a GT OBB:
 
 $$
 G(e,g)
@@ -190,11 +193,11 @@ G(e,g)
 \operatorname{IoU}_{3D}(\hat B_e,B_g^{GT}).
 $$
 
-The match is accepted only if semantic class, IoU, match score, and ambiguity
-thresholds pass. The selected target row therefore contains actor-visible
-fields for the model plus oracle-only GT match fields for label validity and
-debugging. Support and visibility remain eligibility and audit fields; they do
-not rank competing GT objects.
+That future match would require semantic class, IoU, match-score, and ambiguity
+gates. It is not the current rollout-generation path. WP07 instead samples
+finite positive GT OBB tasks directly, keeps privileged identity in
+`OracleTargetTaskRow`, and passes only `TargetDescriptor` geometry and semantics
+to candidate generation.
 
 ## Candidate Center Sampling {#candidate-center-sampling}
 
@@ -459,15 +462,14 @@ selected component histograms, and target-root-gain distributions.
 
 ## Connection To Target-RRI And Q_H {#target-rri-qh-connection}
 
-Target selection and candidate sampling are actor-visible. Oracle target-RRI is
-computed only after an actor-visible target row has been selected and matched to
-GT for evaluation. The selected target conditions the finite candidate set, and
-the scorer evaluates valid candidate rows with target-specific point-mesh
-improvement. The default rollout and $Q_H$ reward is root-normalized target
-gain from the finite-horizon contract, while state-relative target RRI remains a
-diagnostic label.
+Current rollout generation samples geometry-valid Oracle target tasks. A
+sanitized `TargetDescriptor` conditions the finite candidate set, while the
+scorer receives the privileged task and evaluates valid candidates with
+target-specific point-mesh improvement. The default rollout and $Q_H$ reward is
+root-normalized target gain from the finite-horizon contract; state-relative
+target RRI remains a diagnostic label.
 
-This separation protects the thesis result: actor policies see observed and
-predicted target evidence, valid candidate tokens, history, and budget state;
-labelers see GT mesh/OBB assets only to create trusted supervision and endpoint
-metrics.
+The future actor-visible selector must preserve this separation: policies may
+receive observed target evidence, valid candidate tokens, history, and budget
+state, while labelers retain GT mesh/OBB identity only for trusted supervision
+and endpoint metrics.

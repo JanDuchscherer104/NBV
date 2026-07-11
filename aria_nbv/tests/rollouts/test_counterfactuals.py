@@ -140,7 +140,6 @@ def _target_row(*, gt_target_row_id: int) -> TargetCandidateRow:
 
 def _target_descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetDescriptor:
     return TargetDescriptor(
-        target_id="target",
         sem_id=1,
         class_name="chair",
         pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),

@@ -106,7 +106,7 @@ def build_rollouts_command(
                 ("config", config_path),
                 ("source store", cfg.source.store.store_dir),
                 ("rollout store", cfg.store.store_dir),
-                ("target top-k", cfg.target_selector.k),
+                ("target cap", cfg.oracle_target_task_sampler.max_targets_per_sample),
                 ("candidate budget", cfg.candidate_mixture.total_count),
                 ("dry run", dry_run),
             ],
