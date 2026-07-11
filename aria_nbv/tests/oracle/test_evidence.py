@@ -13,7 +13,9 @@ from efm3d.aria import CameraTW, PoseTW
 import aria_nbv.oracle.evidence as evidence
 from aria_nbv.data_handling import EfmCameraView, EfmTrajectoryView
 from aria_nbv.oracle.evidence import (
+    OracleEvidenceInvalidReason,
     RriEvaluationPointCloudSource,
+    _OracleEvidenceError,
     build_root_eval_pointcloud,
     canonical_fuse_points,
     observed_prefix_frame_indices,
@@ -161,8 +163,10 @@ def test_ase_depth_root_calls_efm3d_ray_distance_unprojector(monkeypatch: pytest
 def test_ase_depth_root_rejects_missing_depth() -> None:
     sample = _DepthSample(None)
 
-    with pytest.raises(ValueError, match="requires rgb/distance_m"):
+    with pytest.raises(_OracleEvidenceError, match="requires rgb/distance_m") as exc_info:
         build_root_eval_pointcloud(sample, source=RriEvaluationPointCloudSource.ASE_GT_DEPTH_ROOT)
+
+    assert exc_info.value.reason is OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING
 
 
 def test_legacy_semidense_root_is_diagnostic_and_canonical_fused() -> None:

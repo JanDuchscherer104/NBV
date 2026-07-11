@@ -15,20 +15,28 @@ import msgspec
 import pytest
 import torch
 
+from aria_nbv.oracle.evidence import OracleEvidenceInvalidReason
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
+    RolloutDatasetWriterStats,
     SelectedDepthRetentionConfig,
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
+from aria_nbv.oracle.target_rri import TargetRriInvalidity
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
     OracleTargetTaskRow,
     TargetTaskIdentityStatus,
     target_candidate_row_from_task,
 )
+from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.rendering import CandidateDepthRendererConfig
+from aria_nbv.rollouts.counterfactuals import (
+    CounterfactualEvaluatorInvalidityError,
+    CounterfactualPoseGeneratorConfig,
+)
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
@@ -38,6 +46,29 @@ from tests.rollout_fixtures import build_rollout_records
 
 class _FakeManifest(msgspec.Struct):
     version: int = 7
+
+
+def _target_descriptor() -> TargetDescriptor:
+    return TargetDescriptor(
+        sem_id=1,
+        class_name="chair",
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+        extents_m=(1.0, 1.0, 1.0),
+        relative_pose_reference_object=(
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+        ),
+    )
 
 
 class _FakeSelectedDepthRenderer:
@@ -236,6 +267,66 @@ def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:
     assert config.max_targets_per_sample is None
     with pytest.raises(ValueError, match="max_targets_per_sample"):
         RolloutDatasetWriterConfig.model_validate({"max_targets_per_sample": 0})
+
+
+def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.MonkeyPatch) -> None:
+    invalidity = TargetRriInvalidity(
+        reason=OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING,
+        message="root depth is unavailable",
+    )
+
+    class _Scorer:
+        invalidity = None
+
+    class _Replay:
+        def generate_from_typed_sample(self, *_args, **_kwargs):
+            raise CounterfactualEvaluatorInvalidityError(invalidity)
+
+    recipe = SimpleNamespace(
+        name="oracle_greedy",
+        horizon=1,
+        branch_factor=1,
+        beam_width=None,
+        branch_factor_schedule=None,
+        stochastic_branch_factors=None,
+        stochastic_branch_probabilities=None,
+        selection_policy="oracle_greedy",
+        selection_temperature=1.0,
+        min_history_distance_m=0.0,
+        min_sibling_distance_m=0.0,
+        min_sibling_yaw_deg=0.0,
+        min_sibling_target_bearing_deg=0.0,
+        require_sibling_strategy_diversity=False,
+        seed=0,
+    )
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = SimpleNamespace(
+        target_scorer=SimpleNamespace(setup_target=lambda **_kwargs: _Scorer()),
+        selected_depth=SimpleNamespace(enabled=False),
+        candidate_mixture=CandidateMixtureViewGeneratorConfig(),
+        recipes=[recipe],
+        log_timing=False,
+        verbosity=1,
+        is_debug=False,
+    )
+    writer.stats = RolloutDatasetWriterStats()
+    writer.console = SimpleNamespace(warn=lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.rollout_dataset.target_descriptor_from_candidate_row",
+        lambda _target: _target_descriptor(),
+    )
+    monkeypatch.setattr(CounterfactualPoseGeneratorConfig, "setup_target", lambda self: _Replay())
+
+    records = writer._rollout_target(
+        sample=SimpleNamespace(efm_snippet_view=object(), scene_id="scene", snippet_id="snippet"),
+        target=SimpleNamespace(target_id="target"),
+        target_rank=0,
+        source_lineage=object(),
+    )
+
+    assert records == []
+    assert writer.stats.rollout_invalid_skips == 1
+    assert writer.stats.skipped_reasons == {"oracle_greedy:root_depth_missing": 1}
 
 
 def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() -> None:

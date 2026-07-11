@@ -36,6 +36,10 @@ CameraLabel = Literal["rgb", "slaml", "slamr"]
 class OracleEvidenceInvalidReason(StrEnum):
     """Stable semantic reasons for expected Oracle evidence invalidity."""
 
+    ROOT_DEPTH_MISSING = "root_depth_missing"
+    ROOT_DEPTH_SHAPE_INVALID = "root_depth_shape_invalid"
+    ROOT_OBSERVED_FRAMES_EMPTY = "root_observed_frames_empty"
+    ROOT_EVAL_POINTS_EMPTY = "root_eval_points_empty"
     TARGET_GT_LABEL_INVALID = "target_gt_label_invalid"
     TARGET_GT_OBB_MISSING = "target_gt_obb_missing"
     TARGET_GT_ROW_MISSING = "target_gt_row_missing"
@@ -358,9 +362,15 @@ def build_root_eval_pointcloud(
 
     cam_view = sample.get_camera(camera_label)
     if cam_view.distance_m is None:
-        raise ValueError(f"RRI eval source ase_gt_depth_root requires {camera_label}/distance_m in the EFM sample.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING,
+            f"RRI eval source ase_gt_depth_root requires {camera_label}/distance_m in the EFM sample.",
+        )
     if cam_view.distance_m.ndim != 4 or cam_view.distance_m.shape[1] != 1:
-        raise ValueError(f"Expected {camera_label}/distance_m shape (F,1,H,W), got {tuple(cam_view.distance_m.shape)}.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.ROOT_DEPTH_SHAPE_INVALID,
+            f"Expected {camera_label}/distance_m shape (F,1,H,W), got {tuple(cam_view.distance_m.shape)}.",
+        )
 
     frame_indices, trajectory_indices = observed_prefix_frame_indices(
         sample,
@@ -371,7 +381,10 @@ def build_root_eval_pointcloud(
         reference_frame_index=reference_frame_index,
     )
     if frame_indices.numel() == 0:
-        raise ValueError("RRI eval source ase_gt_depth_root found no observed depth frames before the root pose.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.ROOT_OBSERVED_FRAMES_EMPTY,
+            "RRI eval source ase_gt_depth_root found no observed depth frames before the root pose.",
+        )
 
     frame_indices = frame_indices.to(device=cam_view.distance_m.device, dtype=torch.long)
     trajectory_indices = trajectory_indices.to(device=cam_view.distance_m.device, dtype=torch.long)
@@ -396,7 +409,10 @@ def build_root_eval_pointcloud(
     points = points_world[valid.reshape(valid.shape[0], -1)]
     points = canonical_fuse_points(points, voxel_size_m=voxel_size_m, max_points=max_points)
     if points.numel() == 0:
-        raise ValueError("RRI eval source ase_gt_depth_root produced no valid root evaluation points.")
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.ROOT_EVAL_POINTS_EMPTY,
+            "RRI eval source ase_gt_depth_root produced no valid root evaluation points.",
+        )
 
     root_time_ns = _root_time_ns(
         sample,

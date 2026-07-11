@@ -29,8 +29,12 @@ canonical_updates_needed: []
 ## Verification
 
 - Ruff and Python compilation passed on every touched Python file.
-- 298 Oracle, RRI, rollout, Streamlit-panel, integration, data-contract, and
+- 300 Oracle, RRI, rollout, Streamlit-panel, integration, data-contract, and
   configuration tests passed; one optional real-data test was skipped.
+- Independent review identified and the follow-up fixed four expected ASE
+  root-evidence failures that still used plain exceptions. Missing depth,
+  malformed depth shape, empty observed prefixes, and empty reconstructed root
+  points now carry stable typed reasons through scorer and writer skip paths.
 - The canonical smoke TOML completed the rollout CLI dry-run.
 - Quartodoc generated `oracle.target_rri` and removed the obsolete
   `rollouts.target_counterfactuals` navigation entry.

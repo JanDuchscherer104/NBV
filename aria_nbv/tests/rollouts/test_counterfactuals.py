@@ -278,6 +278,30 @@ def test_target_scorer_returns_typed_invalidity_for_unlabelled_target(monkeypatc
     assert scorer.invalidity == outcome
 
 
+def test_target_scorer_maps_root_evidence_failure_to_typed_invalidity(monkeypatch) -> None:
+    monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: object())
+    monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: object())
+    target_obb = _obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+    scorer = TargetRriScorerConfig().setup_target(
+        sample=SimpleNamespace(),
+        target_sample=_target_sample_with_gt_obb(target_obb),
+        target_row=_target_row(gt_target_row_id=0),
+    )
+
+    def _raise_root_evidence_error(*_args, **_kwargs):
+        raise _OracleEvidenceError(
+            OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING,
+            "root depth is unavailable",
+        )
+
+    monkeypatch.setattr(scorer, "_score", _raise_root_evidence_error)
+
+    outcome = scorer(SimpleNamespace(), CounterfactualTrajectory(root_pose_world=_identity_pose()), 0)
+
+    assert isinstance(outcome, TargetRriInvalidity)
+    assert outcome.reason is OracleEvidenceInvalidReason.ROOT_DEPTH_MISSING
+
+
 def test_rollout_adapter_preserves_typed_target_invalidity() -> None:
     invalidity = TargetRriInvalidity(
         reason=OracleEvidenceInvalidReason.TARGET_CURRENT_SUPPORT_INSUFFICIENT,
