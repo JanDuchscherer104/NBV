@@ -16,6 +16,15 @@ website:
       - text: data_handling
         file: reference/data_handling.qmd
         contents:
+        - text: atek_downloads
+          file: reference/data_handling.atek_downloads.qmd
+          contents:
+          - text: download_stats
+            file: reference/data_handling.atek_downloads.download_stats.qmd
+          - text: downloader
+            file: reference/data_handling.atek_downloads.downloader.qmd
+          - text: metadata
+            file: reference/data_handling.atek_downloads.metadata.qmd
         - text: efm_dataset
           file: reference/data_handling.efm_dataset.qmd
         - text: efm_dataset_utils

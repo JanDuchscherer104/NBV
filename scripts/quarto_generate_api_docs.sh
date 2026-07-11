@@ -74,6 +74,47 @@ clean_reference_pages() {
   clean_reference_render_artifacts
 }
 
+run_quartodoc_interlinks() {
+  local interlinks_args=(interlinks --fast "${TMP_CONFIG}")
+
+  if [[ "${UVX_QUARTODOC:-0}" == "1" ]]; then
+    uv run --project "${REPO_ROOT}/aria_nbv" --directory "${DOCS_DIR}" --frozen --with quartodoc quartodoc "${interlinks_args[@]}"
+  else
+    "${PYTHON_BIN}" -m quartodoc "${interlinks_args[@]}"
+  fi
+}
+
+refresh_interlinks() {
+  local mode="${QUARTODOC_INTERLINKS:-auto}"
+  local inventory_dir="${DOCS_DIR}/_inv"
+  local source
+
+  case "${mode}" in
+    0)
+      echo "Skipping Quartodoc interlinks (QUARTODOC_INTERLINKS=0)."
+      return
+      ;;
+    1)
+      ;;
+    auto)
+      for source in python torch lightning torchmetrics jaxtyping; do
+        if [[ ! -f "${inventory_dir}/${source}_objects.txt" ]]; then
+          run_quartodoc_interlinks
+          return
+        fi
+      done
+      echo "Using cached Quartodoc interlink inventories. Set QUARTODOC_INTERLINKS=1 to refresh."
+      return
+      ;;
+    *)
+      echo "QUARTODOC_INTERLINKS must be 0, 1, or auto (got ${mode})." >&2
+      exit 2
+      ;;
+  esac
+
+  run_quartodoc_interlinks
+}
+
 run_quartodoc() {
   set +e
   if [[ "${UVX_QUARTODOC:-0}" == "1" ]]; then
@@ -133,6 +174,8 @@ if [[ "${BUILD_STATUS}" -ne 0 ]]; then
 fi
 
 clean_reference_render_artifacts
+"${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_generate_dependency_diagram.py"
+refresh_interlinks
 "${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_nest_sidebar.py" "${REFERENCE_DIR}/_sidebar.yml"
 
 if grep -Eq "^WARNING:" "${TMP_LOG}"; then
