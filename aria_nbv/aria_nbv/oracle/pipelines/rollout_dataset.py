@@ -26,6 +26,7 @@ from pydantic import Field, field_validator
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
+    ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
     OracleTargetTask,
@@ -737,7 +738,7 @@ class RolloutDatasetWriter:
             target_selection_score=float("nan"),
             target_selection_probability=target.selection_probability,
             target_selection_temperature=None,
-            target_source=target.source,
+            target_source=ORACLE_TARGET_TASK_SOURCE,
             target_source_index=target.source_index,
             target_sem_id=descriptor.sem_id,
             target_inst_id=target.inst_id,

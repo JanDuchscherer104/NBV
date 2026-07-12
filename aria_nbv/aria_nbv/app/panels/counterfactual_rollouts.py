@@ -30,6 +30,7 @@ from ...oracle.pipelines.evaluated_rollout import (
 from ...oracle.scene_rri import SceneRriScorerConfig
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
+    ORACLE_TARGET_TASK_SOURCE,
     OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -1045,7 +1046,7 @@ def _target_detail_row(row: OracleTargetTask) -> dict[str, object]:
 
     return {
         "target_id": row.target_id,
-        "source": row.source,
+        "source": ORACLE_TARGET_TASK_SOURCE,
         "source_index": int(row.source_index),
         "center_world": tuple(float(v) for v in row.descriptor.center_world),
         "extents": tuple(float(v) for v in row.descriptor.extents_m),

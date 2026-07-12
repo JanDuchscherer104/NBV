@@ -89,15 +89,6 @@ class OracleTargetTask:
     added later by the rollout writer and do not belong to this contract.
     """
 
-    scene_id: str | None
-    """Dataset scene identifier, or ``None`` when the source omits scene metadata."""
-
-    snippet_id: str | None
-    """Snippet identifier within `scene_id`, or ``None`` when unavailable."""
-
-    source: str
-    """Oracle OBB source name used to construct this target task."""
-
     source_index: int
     """Row index in the oracle GT OBB table before padded rows are removed."""
 
@@ -133,9 +124,6 @@ class OracleTargetTaskSamplingResult:
     rows: tuple[OracleTargetTask, ...]
     """All non-padded GT OBB rows interpreted as candidate target tasks."""
 
-    identity_valid_rows: tuple[OracleTargetTask, ...]
-    """Rows admitted by finite positive GT geometry."""
-
     selected_rows: tuple[OracleTargetTask, ...]
     """Uniformly sampled geometry-valid rows with sampling audit fields populated."""
 
@@ -156,7 +144,9 @@ class OracleTargetTaskSamplingResult:
 
         summary: dict[str, int | float] = {
             "num_rows": len(self.rows),
-            "num_identity_valid": len(self.identity_valid_rows),
+            "num_identity_valid": sum(
+                row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in self.rows
+            ),
             "num_selected": len(self.selected_rows),
             "num_invalid_geometry": sum(
                 row.identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value for row in self.rows
@@ -240,7 +230,6 @@ class OracleTargetTaskSampler:
             warnings.append("Oracle target-task sampling requested, but sample has no GT OBB block.")
             return OracleTargetTaskSamplingResult(
                 rows=(),
-                identity_valid_rows=(),
                 selected_rows=(),
                 max_targets_per_sample=self.config.max_targets_per_sample,
                 seed=self.config.seed,
@@ -258,7 +247,6 @@ class OracleTargetTaskSampler:
 
         return OracleTargetTaskSamplingResult(
             rows=rows,
-            identity_valid_rows=identity_valid,
             selected_rows=selected,
             max_targets_per_sample=self.config.max_targets_per_sample,
             seed=self.config.seed,
@@ -312,9 +300,6 @@ class OracleTargetTaskSampler:
             )
             rows.append(
                 OracleTargetTask(
-                    scene_id=scene_id,
-                    snippet_id=snippet_id,
-                    source=ORACLE_TARGET_TASK_SOURCE,
                     source_index=source_index,
                     target_row_id=source_index,
                     target_id=target_id,

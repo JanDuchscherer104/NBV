@@ -124,9 +124,6 @@ def _obb(center: tuple[float, float, float], size: tuple[float, float, float]) -
 
 def _target_row(*, gt_target_row_id: int) -> OracleTargetTask:
     return OracleTargetTask(
-        scene_id="scene",
-        snippet_id="snippet",
-        source="gt_obbs_oracle",
         source_index=gt_target_row_id,
         target_row_id=1,
         target_id="target",

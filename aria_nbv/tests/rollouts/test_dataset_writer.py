@@ -26,7 +26,6 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
 from aria_nbv.oracle.target_selection import (
-    ORACLE_TARGET_TASK_SOURCE,
     OracleTargetTask,
     TargetTaskIdentityStatus,
 )
@@ -200,9 +199,6 @@ def test_selected_depth_renderer_config_sets_exact_size_atomically() -> None:
 
 def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None:
     task = OracleTargetTask(
-        scene_id="scene",
-        snippet_id="snippet",
-        source=ORACLE_TARGET_TASK_SOURCE,
         source_index=2,
         target_row_id=2,
         target_id="scene:snippet:gt_obbs_oracle:1:7:2",

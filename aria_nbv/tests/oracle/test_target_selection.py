@@ -141,12 +141,11 @@ def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
 
     assert first.source == ORACLE_TARGET_TASK_SOURCE
     assert len(first.rows) == 4
-    assert len(first.identity_valid_rows) == 4
+    assert first.diagnostic_summary()["num_identity_valid"] == 4
     assert len(first.selected_rows) == 3
     assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
     assert all(row.selection_probability == pytest.approx(3.0 / 4.0) for row in first.selected_rows)
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in first.selected_rows)
-    assert {row.source for row in first.rows} == {ORACLE_TARGET_TASK_SOURCE}
     assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
     assert all(row.descriptor.target_id != row.target_id for row in first.rows)
 
@@ -163,7 +162,7 @@ def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_task
     result = _oracle_sampler(max_targets_per_sample=3, seed=0).sample(sample)
 
     assert len(result.rows) == 3
-    assert len(result.identity_valid_rows) == 3
+    assert result.diagnostic_summary()["num_identity_valid"] == 3
     assert len(result.selected_rows) == 3
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in result.rows)
     assert len({row.source_index for row in result.rows}) == 3
@@ -179,9 +178,6 @@ def test_oracle_target_task_contains_only_domain_fields() -> None:
     row = _oracle_sampler(max_targets_per_sample=1).sample(sample).selected_rows[0]
 
     assert {field.name for field in fields(OracleTargetTask)} == {
-        "scene_id",
-        "snippet_id",
-        "source",
         "source_index",
         "target_row_id",
         "target_id",

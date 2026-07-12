@@ -141,9 +141,6 @@ def _candidate_result_for_pose(pose: PoseTW) -> CandidateSamplingResult:
 
 def _target_row(*, gt_label_valid: bool = True) -> OracleTargetTask:
     return OracleTargetTask(
-        scene_id="scene_a",
-        snippet_id="snippet_1",
-        source="gt_obbs_oracle",
         source_index=9,
         target_row_id=4,
         target_id="scene_a:snippet_1:gt_obbs_oracle:9",
