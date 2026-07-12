@@ -460,20 +460,7 @@ def _trajectory_metric_values(
     color_metric: str,
 ) -> tuple[np.ndarray | None, str | None]:
     if color_metric == "auto":
-        if any(trajectory.cumulative_rri is not None for trajectory in rollouts.trajectories):
-            color_metric = "cumulative_rri"
-        else:
-            return None, None
-
-    if color_metric == "cumulative_rri":
-        values = np.array(
-            [
-                np.nan if trajectory.cumulative_rri is None else float(trajectory.cumulative_rri)
-                for trajectory in rollouts.trajectories
-            ],
-            dtype=float,
-        )
-        return values, "Cumulative RRI"
+        color_metric = "cumulative_score"
 
     if color_metric == "cumulative_score":
         values = np.array([float(trajectory.cumulative_score) for trajectory in rollouts.trajectories], dtype=float)
@@ -578,14 +565,7 @@ def _trajectory_name(
     traj_idx: int,
     score_label: str,
 ) -> str:
-    parts: list[str] = []
-    if trajectory.cumulative_rri is not None:
-        parts.append(f"rri={trajectory.cumulative_rri:.3f}")
-    if not (trajectory.cumulative_rri is not None and score_label == "oracle_rri"):
-        parts.append(f"{score_label}={trajectory.cumulative_score:.3f}")
-    if not parts:
-        parts.append(f"score={trajectory.cumulative_score:.3f}")
-    return f"CF traj {traj_idx} ({', '.join(parts)})"
+    return f"CF traj {traj_idx} ({score_label}={trajectory.cumulative_score:.3f})"
 
 
 def _add_metric_colorbar(

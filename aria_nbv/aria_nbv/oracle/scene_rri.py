@@ -2,7 +2,6 @@ r"""Scene-level Oracle RRI scoring over finite candidate tables."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
@@ -17,21 +16,11 @@ from .evidence import (
     RriEvaluationPointCloudSource,
     RriRewardMode,
 )
+from .labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 
 if TYPE_CHECKING:
     from ..data_handling import EfmSnippetView
     from ..pose_generation.types import CandidateSamplingResult
-
-
-@dataclass(frozen=True, slots=True)
-class SceneRriEvaluation:
-    """Scene scorer output before rollout-specific replay adaptation."""
-
-    scores: torch.Tensor
-    score_label: str
-    metric_vectors: dict[str, torch.Tensor]
-    candidate_point_clouds_world: torch.Tensor
-    candidate_point_cloud_lengths: torch.Tensor
 
 
 class SceneRriScorerConfig(TargetConfig["SceneRriScorer"]):
@@ -80,7 +69,7 @@ class SceneRriScorer:
         candidates: CandidateSamplingResult,
         state: OracleRriState,
         step_index: int,
-    ) -> SceneRriEvaluation:
+    ) -> OracleCandidateEvaluation:
         """Score valid candidates without depending on rollout-owned DTOs."""
 
         del step_index
@@ -114,18 +103,27 @@ class SceneRriScorer:
         score_label = (
             "oracle_root_gain" if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else "oracle_rri"
         )
-        return SceneRriEvaluation(
-            scores=scores,
-            score_label=score_label,
-            metric_vectors={
-                "rri": rri.rri,
-                "root_gain": root_gain,
-                "root_pm_dist": root_error.expand_as(rri.rri),
-                "log_error_gain": log_gain,
-            },
-            candidate_point_clouds_world=point_clouds.points,
-            candidate_point_cloud_lengths=point_clouds.lengths,
+        return OracleCandidateEvaluation(
+            labels=OracleCandidateLabels(
+                scores=scores,
+                score_label=score_label,
+                metrics={
+                    "rri": rri.rri,
+                    "root_gain": root_gain,
+                    "root_pm_dist": root_error.expand_as(rri.rri),
+                    "log_error_gain": log_gain,
+                },
+                candidate_shell_indices=torch.nonzero(
+                    candidates.mask_valid.to(device=scores.device, dtype=torch.bool),
+                    as_tuple=False,
+                ).reshape(-1),
+                provenance="scene_rri",
+            ),
+            evidence=RetainedOracleEvidence(
+                candidate_point_clouds_world=point_clouds.points,
+                candidate_point_cloud_lengths=point_clouds.lengths,
+            ),
         )
 
 
-__all__ = ["SceneRriEvaluation", "SceneRriScorer", "SceneRriScorerConfig"]
+__all__ = ["SceneRriScorer", "SceneRriScorerConfig"]

@@ -31,6 +31,8 @@ from aria_nbv.oracle.evidence import (
     crop_padded_pointclouds_to_obb,
     crop_points_to_obb,
 )
+from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
+from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRolloutRecord, OracleReplayAdapter
 from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
@@ -52,15 +54,14 @@ from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
 from aria_nbv.rollouts import (
     CandidateScores,
-    CounterfactualCandidateEvaluation,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
     CounterfactualSelectionPolicy,
     CounterfactualTrajectory,
     RolloutLineage,
     RolloutPolicySpec,
-    RolloutZarrRecord,
 )
+from aria_nbv.rollouts.trace import PolicyLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 
@@ -84,6 +85,17 @@ def _dummy_camera(device: torch.device | str = "cpu") -> CameraTW:
         exposure_s=torch.zeros(1, device=device),
         valid_radius=torch.tensor([64.0], device=device),
         T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4, device=device).unsqueeze(0)),
+    )
+
+
+def _empty_oracle_state() -> SimpleNamespace:
+    return SimpleNamespace(
+        root_pose_world=_identity_pose(),
+        root_time_ns=None,
+        root_trajectory_index=None,
+        root_frame_index=None,
+        accumulated_points_world=lambda: torch.empty((0, 3), dtype=torch.float32),
+        root_metric=lambda _name: None,
     )
 
 
@@ -410,20 +422,20 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
 
     evaluation = cfg.setup_target(sample=sample, target_sample=target_sample, target_row=row)(
         candidates,
-        CounterfactualTrajectory(root_pose_world=_identity_pose()),
+        _empty_oracle_state(),
         0,
     )
 
     assert renderer.render_count == 1
     assert pointcloud_calls["count"] == 1
     assert oracle.calls == [3, 6]
-    assert evaluation.score_label == "target_rri"
-    assert evaluation.metric_vectors["target_rri"].tolist() == [3.0, 3.0]
-    assert evaluation.metric_vectors["scene_rri"].tolist() == [6.0, 6.0]
-    assert evaluation.target_eval_current_points_world is not None
-    assert evaluation.target_eval_current_points_world.shape == (1, 3)
-    assert evaluation.target_eval_candidate_points_world is not None
-    assert evaluation.target_eval_candidate_points_world.shape[0] == 2
+    assert evaluation.labels.score_label == "target_rri"
+    assert evaluation.labels.metrics["target_rri"].tolist() == [3.0, 3.0]
+    assert evaluation.labels.metrics["scene_rri"].tolist() == [6.0, 6.0]
+    assert evaluation.evidence.target_eval_current_points_world is not None
+    assert evaluation.evidence.target_eval_current_points_world.shape == (1, 3)
+    assert evaluation.evidence.target_eval_candidate_points_world is not None
+    assert evaluation.evidence.target_eval_candidate_points_world.shape[0] == 2
 
 
 def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -> None:
@@ -485,12 +497,12 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
         sample=sample, target_sample=target_sample, target_row=_target_row(gt_target_row_id=0)
     )(
         _candidate_result_for_pose(_identity_pose(), count=1),
-        CounterfactualTrajectory(root_pose_world=_identity_pose()),
+        _empty_oracle_state(),
         0,
     )
 
-    assert evaluation.target_eval_current_points_world is not None
-    assert evaluation.target_eval_current_points_world.tolist() == [[0.0, 0.0, 0.0]]
+    assert evaluation.evidence.target_eval_current_points_world is not None
+    assert evaluation.evidence.target_eval_current_points_world.tolist() == [[0.0, 0.0, 0.0]]
 
 
 def test_target_candidate_crop_applies_target_local_budget_after_obb_crop() -> None:
@@ -610,14 +622,34 @@ def _fake_rri_evaluator(result, trajectory, step_index):
     centers = valid_poses.t.reshape(-1, 3)
     scores = torch.linspace(0.1, 0.1 * centers.shape[0], centers.shape[0], device=centers.device)
     scores = scores + float(step_index)
-    candidate_points = centers.unsqueeze(1).repeat(1, 2, 1)
-    lengths = torch.full((centers.shape[0],), 2, dtype=torch.long, device=centers.device)
-    return CounterfactualCandidateEvaluation(
-        scores=scores,
-        score_label="oracle_rri",
-        metric_vectors={"rri": scores, "target_rri": scores},
-        candidate_point_clouds_world=candidate_points,
-        candidate_point_cloud_lengths=lengths,
+    return CandidateScores.from_valid_values(
+        scores,
+        name="oracle_rri",
+        candidates=result,
+        device=centers.device,
+        dtype=centers.dtype,
+    )
+
+
+def _fake_oracle_evaluator(result, state, step_index):
+    del state
+    valid_poses = result.poses_world_cam()
+    centers = valid_poses.t.reshape(-1, 3)
+    scores = torch.linspace(0.1, 0.1 * centers.shape[0], centers.shape[0], device=centers.device)
+    scores = scores + float(step_index)
+    points = centers.unsqueeze(1).repeat(1, 2, 1)
+    return OracleCandidateEvaluation(
+        labels=OracleCandidateLabels(
+            scores=scores,
+            score_label="oracle_rri",
+            metrics={"rri": scores, "target_rri": scores},
+            candidate_shell_indices=result.candidate_shell_indices(device=centers.device),
+            provenance="test",
+        ),
+        evidence=RetainedOracleEvidence(
+            candidate_point_clouds_world=points,
+            candidate_point_cloud_lengths=torch.full((centers.shape[0],), 2, dtype=torch.long, device=centers.device),
+        ),
     )
 
 
@@ -644,6 +676,42 @@ def test_candidate_scores_bind_values_to_hard_mask_and_shell_order() -> None:
     )
     with pytest.raises(ValueError, match="preserve hard-valid candidate order"):
         reordered.validate_for(candidates, device=torch.device("cpu"), dtype=torch.float32)
+
+
+def test_oracle_labels_and_evidence_validate_compact_candidate_alignment() -> None:
+    candidates = _candidate_result_for_pose(_identity_pose(), count=3)
+    candidates.mask_valid = torch.tensor([True, False, True])
+    labels = OracleCandidateLabels(
+        scores=torch.tensor([0.25, 0.75]),
+        score_label="target_root_gain",
+        metrics={"target_root_gain": torch.tensor([0.25, 0.75])},
+        candidate_shell_indices=torch.tensor([0, 2]),
+        provenance="test",
+    )
+    evidence = RetainedOracleEvidence(
+        candidate_point_clouds_world=torch.zeros((2, 4, 3)),
+        candidate_point_cloud_lengths=torch.tensor([4, 4]),
+    )
+
+    validated = OracleCandidateEvaluation(labels=labels, evidence=evidence).validate(
+        candidates,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+    assert validated.labels.candidate_shell_indices.tolist() == [0, 2]
+
+    with pytest.raises(ValueError, match="preserve hard-valid candidate order"):
+        replace(labels, candidate_shell_indices=torch.tensor([2, 0])).validate(
+            candidates,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+        )
+    with pytest.raises(ValueError, match="must align with valid candidates"):
+        replace(labels, metrics={"target_root_gain": torch.tensor([0.25])}).validate(
+            candidates,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+        )
 
 
 def test_rollout_engine_accepts_minimal_candidate_scores() -> None:
@@ -834,7 +902,7 @@ def test_counterfactual_selected_frusta_are_colored_and_use_raw_candidate_pose()
         .finalize()
     )
 
-    frustum_traces = [trace for trace in fig.data if "target_rri=" in str(trace.name)]
+    frustum_traces = [trace for trace in fig.data if "frust" in str(trace.name).lower()]
     assert frustum_traces
     assert frustum_traces[0].line.color != "crimson"
     actual = np.column_stack([frustum_traces[0].x, frustum_traces[0].y, frustum_traces[0].z]).astype(float)
@@ -856,20 +924,22 @@ def test_counterfactual_step_shell_frusta_are_colored_and_use_raw_candidate_pose
         .finalize()
     )
 
-    frustum_traces = [trace for trace in fig.data if "target_rri=" in str(trace.name)]
+    frustum_traces = [trace for trace in fig.data if "frust" in str(trace.name).lower()]
     assert frustum_traces
     actual = np.column_stack([frustum_traces[0].x, frustum_traces[0].y, frustum_traces[0].z]).astype(float)
+    actual = actual[: expected.shape[0]]
     np.testing.assert_allclose(actual, expected, equal_nan=True)
 
 
-def test_counterfactual_rollout_tracks_cumulative_rri_and_selected_point_clouds() -> None:
+def test_replay_state_omits_oracle_labels_and_heavy_evidence() -> None:
     rollouts = _run_rollouts(horizon=2, branch_factor=1, score_candidates=_fake_rri_evaluator)
     trajectory = rollouts.trajectories[0]
 
-    expected_rri = sum(step.selected_metrics["rri"] for step in trajectory.steps)
-    assert trajectory.cumulative_rri == pytest.approx(expected_rri)
-    assert trajectory.cumulative_score == pytest.approx(expected_rri)
-    assert trajectory.accumulated_points_world().shape == (4, 3)
+    assert trajectory.cumulative_score == pytest.approx(sum(step.selection_score for step in trajectory.steps))
+    assert not hasattr(trajectory, "cumulative_rri")
+    assert not hasattr(trajectory, "accumulated_points_world")
+    assert all(not hasattr(step, "metric_vectors") for step in trajectory.steps)
+    assert all(not hasattr(step, "selected_point_cloud_world") for step in trajectory.steps)
     assert rollouts.score_label == "oracle_rri"
 
 
@@ -927,10 +997,12 @@ def test_temperature_softmax_uses_robust_logits_invariant_to_affine_score_scale(
             num_valid = int(valid_poses.t.reshape(-1, 3).shape[0])
             base = torch.linspace(0.1, 1.0, num_valid, device=valid_poses.t.device)
             scores = base * scale + offset
-            return CounterfactualCandidateEvaluation(
-                scores=scores,
-                score_label="affine_score",
-                metric_vectors={"rri": scores},
+            return CandidateScores.from_valid_values(
+                scores,
+                name="affine_score",
+                candidates=result,
+                device=valid_poses.t.device,
+                dtype=valid_poses.t.dtype,
             )
 
         return _evaluate
@@ -1038,10 +1110,12 @@ def test_counterfactual_selection_ignores_nonfinite_evaluator_scores() -> None:
         scores[0] = float("nan")
         if scores.numel() > 1:
             scores[1] = float("inf")
-        return CounterfactualCandidateEvaluation(
-            scores=scores,
-            score_label="stress_score",
-            metric_vectors={"rri": torch.nan_to_num(scores, nan=0.0, posinf=0.0)},
+        return CandidateScores.from_valid_values(
+            scores,
+            name="stress_score",
+            candidates=result,
+            device=valid_poses.t.device,
+            dtype=valid_poses.t.dtype,
         )
 
     greedy = _run_rollouts(
@@ -1068,13 +1142,13 @@ def test_counterfactual_selection_ignores_nonfinite_evaluator_scores() -> None:
     assert softmax_step.selection_probabilities[:2].tolist() == [0.0, 0.0]
 
 
-def test_counterfactual_path_plot_uses_rri_colorbar_when_available() -> None:
+def test_counterfactual_path_plot_uses_replay_score_colorbar() -> None:
     rollouts = _run_rollouts(horizon=2, branch_factor=1, score_candidates=_fake_rri_evaluator)
 
     fig = plot_counterfactual_paths_simple(rollouts)
 
     assert isinstance(fig, go.Figure)
-    assert any("rri=" in str(trace.name) for trace in fig.data if getattr(trace, "name", None))
+    assert any("oracle_rri=" in str(trace.name) for trace in fig.data if getattr(trace, "name", None))
     assert any(
         getattr(getattr(trace, "marker", None), "showscale", False) for trace in fig.data if hasattr(trace, "marker")
     )
@@ -1186,27 +1260,32 @@ def test_candidate_depth_renderer_rejects_ambiguous_candidate_index_mapping() ->
         renderer._select_candidate_views(candidates)  # noqa: SLF001
 
 
-def test_rollout_zarr_record_carries_rollout_result_and_lineage() -> None:
-    rollouts = _run_rollouts(horizon=2, branch_factor=1, score_candidates=_fake_rri_evaluator)
-    record = RolloutZarrRecord(
-        result=rollouts,
+def test_evaluated_rollout_record_carries_labels_evidence_and_lineage() -> None:
+    adapter = OracleReplayAdapter(_fake_oracle_evaluator)
+    rollouts = _run_rollouts(horizon=2, branch_factor=1, score_candidates=adapter)
+    evaluated = adapter.materialize(rollouts, retain_target_crops=False)
+    record = EvaluatedRolloutRecord(
+        evaluated=evaluated,
         rollout_id_prefix="test-rollout",
         lineage=RolloutLineage(
-            scene_id="scene",
-            snippet_id="snippet",
-            candidate_config_hash="candidate-hash",
-            oracle_config_hash="oracle-hash",
-            random_seed=0,
+            source=SourceLineage(scene_id="scene", snippet_id="snippet"),
+            policy=PolicyLineage(
+                candidate_config_hash="candidate-hash",
+                oracle_config_hash="oracle-hash",
+                random_seed=0,
+            ),
         ),
     )
 
     lineage = record.lineage_for_chain(0)
     assert lineage.rollout_id == "test-rollout-000000"
-    assert lineage.candidate_config_hash == "candidate-hash"
-    assert lineage.rollout_policy == rollouts.selection_policy
+    assert lineage.policy.candidate_config_hash == "candidate-hash"
+    assert lineage.policy.rollout_policy == rollouts.selection_policy
 
     trajectory = rollouts.trajectories[0]
     first_step = trajectory.steps[0]
+    evaluated_step = record.step(0, first_step.step_index)
+    assert evaluated_step is not None
     candidate_valid = first_step.candidates.mask_valid.detach().cpu()
     valid_indices = torch.nonzero(candidate_valid, as_tuple=False).reshape(-1)
     expected_valid_scores = torch.linspace(
@@ -1220,8 +1299,8 @@ def test_rollout_zarr_record_carries_rollout_result_and_lineage() -> None:
         first_step.selection_scores[first_step.selected_valid_index],
         torch.tensor(first_step.selection_score, dtype=first_step.selection_scores.dtype),
     )
-    assert torch.allclose(first_step.metric_vectors["rri"], expected_valid_scores)
-    assert trajectory.cumulative_rri == pytest.approx(sum(step.selected_metrics["rri"] for step in trajectory.steps))
+    assert torch.allclose(evaluated_step.metric_vectors["rri"], expected_valid_scores)
+    assert evaluated_step.evidence.selected_point_cloud(first_step.selected_valid_index) is not None
 
 
 def test_counterfactual_rollout_passes_target_runtime_context_to_mixed_sampler() -> None:

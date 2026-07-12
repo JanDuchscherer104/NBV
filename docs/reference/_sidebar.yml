@@ -83,11 +83,15 @@ website:
         contents:
         - text: evidence
           file: reference/oracle.evidence.qmd
+        - text: labels
+          file: reference/oracle.labels.qmd
         - text: pipelines
           file: reference/oracle.pipelines.qmd
           contents:
           - text: cli
             file: reference/oracle.pipelines.cli.qmd
+          - text: evaluated_rollout
+            file: reference/oracle.pipelines.evaluated_rollout.qmd
           - text: rollout_dataset
             file: reference/oracle.pipelines.rollout_dataset.qmd
           - text: shards

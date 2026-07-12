@@ -17,7 +17,7 @@ replay/
 
 Baseline: `d6b809a`
 
-Graphify refresh: `2026-07-11T19:40:59+02:00`
+Graphify refresh: `2026-07-11T20:46:10+02:00`
 
 ## Symbol Ownership Matrix
 
@@ -44,9 +44,8 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 |---|---|---|---|---|---|---|
 | `_pose_row` | function | private | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
 | `_pose_at` | function | private | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
-| `_root_error_for_metric` | function | private | `rollouts.counterfactuals` | `rollouts.replay.state` | removed with legacy metric fields in WP11 | deferred: semantic WP |
 | `CounterfactualSelectionRecord` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
-| `CounterfactualStepResult` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.state` | narrowed transition in WP11 | deferred: semantic WP |
+| `CounterfactualStepResult` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
 | `CounterfactualTrajectory` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
 | `CounterfactualRolloutResult` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.state` | `rollouts.replay.state` | moved |
 
@@ -64,9 +63,7 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_circular_min_delta` | function | private | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
 | `_append_diversity_selection` | function | private | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
 | `_CandidateDiversityMetadata` | DTO | private | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
-| `CounterfactualMetricBundle` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | split labels/evidence in WP11 | deferred: semantic WP |
-| `CounterfactualCandidateEvaluation` | DTO | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | split labels/evidence in WP11 | deferred: semantic WP |
-| `CounterfactualEvaluatorFn` | alias | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | score-provider protocol after WP11 | deferred: semantic WP |
+| `CounterfactualEvaluatorFn` | type alias | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
 | `CounterfactualPoseGeneratorConfig` | config | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
 | `CounterfactualPoseGenerator` | class | public | `rollouts.counterfactuals` | `rollouts.replay.engine` | `rollouts.replay.engine` | moved |
 
@@ -77,9 +74,8 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 - `RolloutPolicySpec` is the sole owner of horizon, branch, beam, stochastic,
   temperature, diversity, and seed controls. Engine and pipeline configs
   compose it.
-- Wide metric/evidence fields remain transitional until WP11 splits
-  `OracleCandidateLabels` and `RetainedOracleEvidence`; they are not part of
-  `CandidateScores`.
+- Replay steps contain transition and selection facts only. Oracle labels and
+  retained evidence are joined by `oracle.pipelines.evaluated_rollout`.
 
 ## Migration
 

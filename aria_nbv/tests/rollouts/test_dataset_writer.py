@@ -16,13 +16,13 @@ import pytest
 import torch
 
 from aria_nbv.oracle.evidence import OracleEvidenceInvalidReason
+from aria_nbv.oracle.pipelines.evaluated_rollout import OracleReplayInvalidityError
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
     RolloutDatasetWriterStats,
     SelectedDepthRetentionConfig,
     _RolloutSourceLineageBuilder,
-    _TargetRriInvalidityError,
 )
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
@@ -139,9 +139,9 @@ class _FakeShardWriter:
         if shard_entry is None:
             raise AssertionError("Shard writer tests must pass a shard entry.")
         records = build_rollout_records(horizon=1, num_samples=6, seed=33)[:1]
-        records[0].lineage.source_offline_store_manifest_hash = shard_entry.source_manifest_hash
-        records[0].lineage.source_cache_version = shard_entry.source_cache_version
-        records[0].lineage.split_manifest_hash = shard_entry.split_manifest_hash
+        records[0].lineage.source.source_offline_store_manifest_hash = shard_entry.source_manifest_hash
+        records[0].lineage.source.source_cache_version = shard_entry.source_cache_version
+        records[0].lineage.source.split_manifest_hash = shard_entry.split_manifest_hash
         return write_rollout_zarr_store(
             self.config.store.store_dir,
             records,
@@ -279,7 +279,7 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
 
     class _Replay:
         def generate_from_typed_sample(self, *_args, **_kwargs):
-            raise _TargetRriInvalidityError(invalidity)
+            raise OracleReplayInvalidityError(invalidity)
 
     recipe = SimpleNamespace(
         name="oracle_greedy",
@@ -322,26 +322,27 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
 
 def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=35)[:1]
-    for trajectory in records[0].result.trajectories:
+    for chain_id, trajectory in enumerate(records[0].result.trajectories):
         for step in trajectory.steps:
-            step.selected_depth_m = None
-            step.selected_depth_valid_mask = None
+            evaluated_step = records[0].step(chain_id, step.step_index)
+            evaluated_step.evidence.selected_depth_m = None
+            evaluated_step.evidence.selected_depth_valid_mask = None
     fake_renderer = _FakeSelectedDepthRenderer(height=4, width=5)
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(selected_depth=SimpleNamespace(height_px=4, width_px=5))
 
     writer._attach_selected_depths(
-        result=records[0].result,
+        evaluated=records[0].evaluated,
         sample=SimpleNamespace(efm_snippet_view=object()),
         renderer=fake_renderer,
     )
 
-    materialized_steps = [step for trajectory in records[0].result.trajectories for step in trajectory.steps]
+    materialized_steps = list(records[0].evaluated.steps.values())
     assert len(fake_renderer.calls) == len(materialized_steps)
     for step in materialized_steps:
-        assert step.selected_depth_m.shape == (4, 5)
-        assert step.selected_depth_valid_mask.shape == (4, 5)
-        assert step.selected_depth_image_size_hw == (4, 5)
+        assert step.evidence.selected_depth_m.shape == (4, 5)
+        assert step.evidence.selected_depth_valid_mask.shape == (4, 5)
+        assert step.evidence.selected_depth_image_size_hw == (4, 5)
 
 
 def test_rollout_shard_manifest_planning_is_deterministic_and_order_sensitive(tmp_path: Path) -> None:

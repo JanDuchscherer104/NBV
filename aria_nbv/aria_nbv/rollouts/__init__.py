@@ -32,9 +32,6 @@ from .manifest import (
     RolloutStoreManifestContext,
 )
 from .replay.engine import (
-    CounterfactualCandidateEvaluation,
-    CounterfactualEvaluatorFn,
-    CounterfactualMetricBundle,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
 )
@@ -57,7 +54,6 @@ from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
     RolloutLineage,
-    RolloutZarrRecord,
 )
 from .zarr_store import (
     DEFAULT_RETURN_SEMANTICS,
@@ -82,9 +78,6 @@ __all__ = [
     "ROLLOUT_SHARD_MANIFEST_VERSION",
     "ROLLOUT_SHARD_OWNER_FILENAME",
     "ROLLOUT_SHARD_SUCCESS_FILENAME",
-    "CounterfactualCandidateEvaluation",
-    "CounterfactualEvaluatorFn",
-    "CounterfactualMetricBundle",
     "CounterfactualPoseGenerator",
     "CounterfactualPoseGeneratorConfig",
     "CounterfactualRolloutResult",
@@ -102,7 +95,6 @@ __all__ = [
     "RolloutStoreManifestContext",
     "RolloutZarrStoreConfig",
     "RolloutZarrStoreReader",
-    "RolloutZarrRecord",
     "RolloutZarrValidationResult",
     "RolloutZarrWriteResult",
     "candidate_audit_rows",

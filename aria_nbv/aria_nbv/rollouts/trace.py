@@ -1,14 +1,13 @@
 """Minimal rollout replay inputs shared by the Zarr writer.
 
 `rollouts.zarr` stores facts derived from existing counterfactual rollout
-results. This module intentionally does not define a second serializable trace
-hierarchy; it only carries invalidity constants, lineage facts, and the compact
-record that pairs a `CounterfactualRolloutResult` with source/target lineage.
+results. This module owns frozen invalidity codecs and composed lineage facts;
+generation-pipeline aggregates remain outside replay and storage.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import torch
@@ -74,30 +73,12 @@ _PRIMARY_INVALID_REASON_PRIORITY = (
 
 
 @dataclass(slots=True)
-class RolloutLineage:
-    """Deterministic provenance for one rollout root, target, and policy.
-
-    These fields bridge the immutable VIN source row to the rollout replay
-    tables. Source lineage identifies the original shard-local VIN row, target
-    lineage describes the selected Oracle target task and GT evaluation match, and
-    config hashes bind candidate generation, oracle scoring, and rollout policy
-    choices without embedding heavy source artifacts.
-    """
-
-    rollout_id: str = ""
-    """Stable rollout identifier; filled from `RolloutZarrRecord` per retained chain."""
-
-    chain_id: int = 0
-    """Zero-based retained trajectory index."""
+class SourceLineage:
+    """Immutable VIN source identity for one generated rollout root."""
 
     scene_id: str | None = None
     snippet_id: str | None = None
     mesh_version: str | None = None
-    candidate_config_hash: str | None = None
-    oracle_config_hash: str | None = None
-    model_checkpoint_hash: str | None = None
-    random_seed: int | None = None
-    rollout_policy: str = "unknown"
     source_cache_version: str | None = None
     split: str | None = None
     source_offline_store_manifest_hash: str | None = None
@@ -107,14 +88,16 @@ class RolloutLineage:
     split_manifest_hash: str | None = None
     source_shard_id: str | None = None
     source_shard_row: int | None = None
-    rollout_config_hash: str | None = None
-    branch_schedule_id: str | None = None
+
+
+@dataclass(slots=True)
+class TargetLineage:
+    """Actor descriptor and privileged Oracle target lineage."""
+
     target_row_id: int | None = None
     target_id: str | None = None
     target_protocol_version: str | None = None
     target_crop_policy: str | None = None
-    reason_code_version: str = INVALID_REASON_VERSION
-    selection_rng_state_hash: str | None = None
     target_selection_policy: str | None = None
     target_selection_rank: int | None = None
     target_selection_score: float | None = None
@@ -149,27 +132,38 @@ class RolloutLineage:
 
 
 @dataclass(slots=True)
-class RolloutZarrRecord:
-    """One counterfactual rollout result plus source/target lineage.
+class PolicyLineage:
+    """Candidate, Oracle, and replay-policy configuration lineage."""
 
-    `CounterfactualRolloutResult` owns the generated trajectories and candidate
-    shells. `RolloutLineage` owns where those trajectories came from. The Zarr
-    writer flattens this pair into normalized source, target, rollout, step,
-    and candidate tables.
-    """
+    candidate_config_hash: str | None = None
+    oracle_config_hash: str | None = None
+    model_checkpoint_hash: str | None = None
+    random_seed: int | None = None
+    rollout_policy: str = "unknown"
+    rollout_config_hash: str | None = None
+    branch_schedule_id: str | None = None
+    reason_code_version: str = INVALID_REASON_VERSION
+    selection_rng_state_hash: str | None = None
 
-    result: CounterfactualRolloutResult
-    lineage: RolloutLineage
-    rollout_id_prefix: str
 
-    def lineage_for_chain(self, chain_id: int) -> RolloutLineage:
-        """Return lineage with rollout id and chain id for one retained trajectory."""
+@dataclass(slots=True)
+class RolloutLineage:
+    """Composed source, target, and policy lineage flattened only by the writer."""
+
+    source: SourceLineage = field(default_factory=SourceLineage)
+    target: TargetLineage = field(default_factory=TargetLineage)
+    policy: PolicyLineage = field(default_factory=PolicyLineage)
+    rollout_id: str = ""
+    chain_id: int = 0
+
+    def for_chain(self, chain_id: int, *, rollout_id: str, rollout_policy: str) -> "RolloutLineage":
+        """Return persisted lineage identifiers for one retained chain."""
 
         return replace(
-            self.lineage,
-            rollout_id=f"{self.rollout_id_prefix}-{chain_id:06d}",
-            chain_id=chain_id,
-            rollout_policy=_policy_name(self.result.selection_policy),
+            self,
+            rollout_id=rollout_id,
+            chain_id=int(chain_id),
+            policy=replace(self.policy, rollout_policy=rollout_policy),
         )
 
 
@@ -281,6 +275,8 @@ def _policy_name(policy: str | CounterfactualSelectionPolicy) -> str:
 __all__ = [
     "INVALID_REASON_CODES",
     "INVALID_REASON_VERSION",
+    "PolicyLineage",
     "RolloutLineage",
-    "RolloutZarrRecord",
+    "SourceLineage",
+    "TargetLineage",
 ]

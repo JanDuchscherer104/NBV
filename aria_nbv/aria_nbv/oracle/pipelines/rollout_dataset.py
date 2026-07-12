@@ -16,14 +16,15 @@ encoded as low target RRI.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from pydantic import Field, field_validator
 
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
-from ...oracle.target_rri import TargetRriEvaluation, TargetRriInvalidity, TargetRriScorer, TargetRriScorerConfig
+from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
     TARGET_INVALID_REASON_VERSION,
     OracleTargetTaskSampler,
@@ -39,14 +40,11 @@ from ...pose_generation import (
 )
 from ...rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
 from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
-from ...rollouts.replay.engine import (
-    CounterfactualCandidateEvaluation,
-    CounterfactualPoseGeneratorConfig,
-)
+from ...rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
 from ...rollouts.replay.state import CounterfactualRolloutResult
 from ...rollouts.shard_manifest import RolloutShardEntry
-from ...rollouts.trace import INVALID_REASON_VERSION, RolloutLineage, RolloutZarrRecord
+from ...rollouts.trace import INVALID_REASON_VERSION, PolicyLineage, RolloutLineage, SourceLineage, TargetLineage
 from ...rollouts.zarr_store import (
     RolloutZarrStoreConfig,
     RolloutZarrWriteResult,
@@ -55,10 +53,15 @@ from ...rollouts.zarr_store import (
 )
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
+from .evaluated_rollout import (
+    EvaluatedRollout,
+    EvaluatedRolloutRecord,
+    OracleReplayAdapter,
+    OracleReplayInvalidityError,
+)
 
 if TYPE_CHECKING:
-    from ...pose_generation.types import CandidateSamplingResult
-    from ...rollouts.replay.state import CounterfactualTrajectory
+    pass
 
 
 @dataclass(slots=True)
@@ -83,46 +86,6 @@ class RolloutDatasetWriterStats:
         """Increment a named skip/failure counter."""
 
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
-
-
-class _TargetRriInvalidityError(ValueError):
-    """Pipeline control flow carrying one typed target-evidence invalidity."""
-
-    def __init__(self, invalidity: TargetRriInvalidity) -> None:
-        super().__init__(f"{invalidity.reason.value}: {invalidity.message}")
-        self.invalidity = invalidity
-
-
-class _TargetRriScoreAdapter:
-    """Adapt Oracle target labels to the current replay evaluation payload."""
-
-    def __init__(self, scorer: TargetRriScorer) -> None:
-        self.scorer = scorer
-
-    def __call__(
-        self,
-        candidates: CandidateSamplingResult,
-        trajectory: CounterfactualTrajectory,
-        step_index: int,
-    ) -> CounterfactualCandidateEvaluation:
-        outcome = self.scorer(candidates, trajectory, step_index)
-        if isinstance(outcome, TargetRriInvalidity):
-            raise _TargetRriInvalidityError(outcome)
-        if not isinstance(outcome, TargetRriEvaluation):
-            raise TypeError(f"Target scorer returned unsupported outcome {type(outcome).__name__}.")
-        return CounterfactualCandidateEvaluation(
-            scores=outcome.scores,
-            score_label=outcome.score_label,
-            metric_vectors=outcome.metric_vectors,
-            candidate_point_clouds_world=outcome.candidate_point_clouds_world,
-            candidate_point_cloud_lengths=outcome.candidate_point_cloud_lengths,
-            target_eval_current_points_world=outcome.target_eval_current_points_world,
-            target_eval_candidate_points_world=outcome.target_eval_candidate_points_world,
-            target_eval_candidate_point_lengths=outcome.target_eval_candidate_point_lengths,
-            target_eval_crop_policy=outcome.target_eval_crop_policy,
-            target_eval_voxel_size_m=outcome.target_eval_voxel_size_m,
-            target_eval_max_points=outcome.target_eval_max_points,
-        )
 
 
 class RolloutRecipeConfig(BaseConfig):
@@ -464,6 +427,11 @@ class _RolloutTargetSelectionResult:
     empty_reason: str = "no_target_tasks"
 
 
+class _SplitRecord(Protocol):
+    @property
+    def split(self) -> str: ...
+
+
 class RolloutDatasetWriter:
     """Generate target-RRI rollout records and write a standalone Zarr store.
 
@@ -475,7 +443,7 @@ class RolloutDatasetWriter:
 
     This class is the handoff point between `data_handling` and
     `pose_generation`: it reads immutable `VinOfflineSample` roots, calls the
-    finite-candidate counterfactual generator, and emits `RolloutZarrRecord`
+    finite-candidate counterfactual generator, and emits evaluated rollout records
     objects that are stored independently of the VIN offline cache.
     """
 
@@ -653,8 +621,8 @@ class RolloutDatasetWriter:
         target: TargetCandidateRow,
         target_rank: int,
         source_lineage: _RolloutSourceLineageBuilder,
-    ) -> list[RolloutZarrRecord]:
-        records: list[RolloutZarrRecord] = []
+    ) -> list[EvaluatedRolloutRecord]:
+        records: list[EvaluatedRolloutRecord] = []
         runtime_context = CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target))
         scorer = self.config.target_scorer.setup_target(
             sample=sample.efm_snippet_view,
@@ -674,8 +642,8 @@ class RolloutDatasetWriter:
             if self.config.selected_depth.enabled
             else None
         )
-        score_candidates = _TargetRriScoreAdapter(scorer)
         for recipe in self.config.recipes:
+            score_candidates = OracleReplayAdapter(scorer)
             rollout_cfg = CounterfactualPoseGeneratorConfig(
                 candidate_config=self.config.candidate_mixture,
                 policy=recipe.policy,
@@ -684,12 +652,15 @@ class RolloutDatasetWriter:
                 is_debug=self.config.is_debug,
             )
             try:
+                snippet = sample.efm_snippet_view
+                if snippet is None:
+                    raise ValueError("Rollout generation requires an attached EFM snippet view.")
                 result = rollout_cfg.setup_target().generate_from_typed_sample(
-                    sample.efm_snippet_view,
+                    snippet,
                     score_candidates=score_candidates,
                     candidate_runtime_context=runtime_context,
                 )
-            except _TargetRriInvalidityError as exc:
+            except OracleReplayInvalidityError as exc:
                 self.stats.rollout_invalid_skips += 1
                 self.stats.skip(f"{recipe.name}:{exc.invalidity.reason.value}")
                 self.console.warn(
@@ -706,75 +677,87 @@ class RolloutDatasetWriter:
                     f"target={target.target_id}: {low_valid_root}",
                 )
                 continue
+            evaluated = score_candidates.materialize(
+                result,
+                retain_target_crops=self.config.store.target_eval_crops_enabled,
+            )
             if selected_depth_renderer is not None:
                 self._attach_selected_depths(
-                    result=result,
+                    evaluated=evaluated,
                     sample=sample,
                     renderer=selected_depth_renderer,
                 )
 
             prefix = f"{sample.sample_index:08d}-target-{target_rank:02d}-{recipe.name}"
             records.append(
-                RolloutZarrRecord(
-                    result=result,
+                EvaluatedRolloutRecord(
+                    evaluated=evaluated,
                     rollout_id_prefix=prefix,
                     lineage=RolloutLineage(
-                        scene_id=sample.scene_id,
-                        snippet_id=sample.snippet_id,
-                        mesh_version=source_lineage.mesh_version(sample),
-                        candidate_config_hash=source_lineage.config_hash(self.config.candidate_mixture),
-                        oracle_config_hash=source_lineage.config_hash(self.config.target_scorer),
-                        random_seed=recipe.policy.seed,
-                        source_cache_version=source_lineage.source_cache_version,
-                        source_row_id=sample.sample_index,
-                        source_sample_index=sample.sample_index,
-                        source_sample_key=sample.sample_key,
-                        split=sample.split,
-                        source_shard_id=sample.source_shard_id,
-                        source_shard_row=sample.source_shard_row,
-                        source_offline_store_manifest_hash=source_lineage.source_manifest_hash,
-                        split_manifest_hash=source_lineage.split_manifest_hash,
-                        rollout_config_hash=source_lineage.config_hash(rollout_cfg),
-                        branch_schedule_id=recipe.name,
-                        target_row_id=target.target_row_id,
-                        target_id=target.target_id,
-                        target_protocol_version=self.config.store.target_protocol_version,
-                        target_crop_policy=self.config.target_scorer.target_crop_policy,
-                        reason_code_version=INVALID_REASON_VERSION,
-                        selection_rng_state_hash=(
-                            f"seed-once:{recipe.policy.seed}:split-manifest:{source_lineage.split_manifest_hash}"
+                        source=SourceLineage(
+                            scene_id=sample.scene_id,
+                            snippet_id=sample.snippet_id,
+                            mesh_version=source_lineage.mesh_version(sample),
+                            source_cache_version=source_lineage.source_cache_version,
+                            source_row_id=sample.sample_index,
+                            source_sample_index=sample.sample_index,
+                            source_sample_key=sample.sample_key,
+                            split=sample.split,
+                            source_shard_id=sample.source_shard_id,
+                            source_shard_row=sample.source_shard_row,
+                            source_offline_store_manifest_hash=source_lineage.source_manifest_hash,
+                            split_manifest_hash=source_lineage.split_manifest_hash,
                         ),
-                        target_selection_policy=self._target_selection_policy(),
-                        target_selection_rank=target.selected_rank if target.selected_rank is not None else target_rank,
-                        target_selection_score=target.score,
-                        target_selection_probability=target.selection_probability,
-                        target_selection_temperature=self._target_selection_temperature(),
-                        target_source=target.source,
-                        target_source_index=target.source_index,
-                        target_sem_id=target.sem_id,
-                        target_inst_id=target.inst_id,
-                        target_class_name=target.class_name,
-                        target_confidence=target.confidence,
-                        target_projected_area_pixels=target.projected_area_pixels,
-                        target_projected_area_fraction=target.projected_area_fraction,
-                        target_semidense_support_count=target.semidense_support_count,
-                        target_evl_support_count=target.evl_support_count,
-                        target_effective_support_count=target.effective_support_count,
-                        target_visibility_score=target.visibility_score,
-                        target_support_score=target.support_score,
-                        target_deficit_score=target.deficit_score,
-                        target_center_world=target.center_world,
-                        target_extents=target.extents,
-                        target_pose_world_object=target.pose_world_object,
-                        target_relative_pose_reference_object=target.relative_pose_reference_object,
-                        target_invalid_reason_bitset=target.invalid_reason_bitset,
-                        target_primary_invalid_reason=target.primary_invalid_reason,
-                        target_reason_code_version=TARGET_INVALID_REASON_VERSION,
-                        matched_gt_target_row_id=target.gt_target_row_id,
-                        matched_gt_target_id=target.gt_target_id,
-                        gt_match_iou=target.gt_match_iou,
-                        gt_match_score=target.gt_match_score,
-                        gt_match_status=target.gt_match_status,
+                        target=TargetLineage(
+                            target_row_id=target.target_row_id,
+                            target_id=target.target_id,
+                            target_protocol_version=self.config.store.target_protocol_version,
+                            target_crop_policy=self.config.target_scorer.target_crop_policy,
+                            target_selection_policy=self._target_selection_policy(),
+                            target_selection_rank=(
+                                target.selected_rank if target.selected_rank is not None else target_rank
+                            ),
+                            target_selection_score=target.score,
+                            target_selection_probability=target.selection_probability,
+                            target_selection_temperature=self._target_selection_temperature(),
+                            target_source=target.source,
+                            target_source_index=target.source_index,
+                            target_sem_id=target.sem_id,
+                            target_inst_id=target.inst_id,
+                            target_class_name=target.class_name,
+                            target_confidence=target.confidence,
+                            target_projected_area_pixels=target.projected_area_pixels,
+                            target_projected_area_fraction=target.projected_area_fraction,
+                            target_semidense_support_count=target.semidense_support_count,
+                            target_evl_support_count=target.evl_support_count,
+                            target_effective_support_count=target.effective_support_count,
+                            target_visibility_score=target.visibility_score,
+                            target_support_score=target.support_score,
+                            target_deficit_score=target.deficit_score,
+                            target_center_world=target.center_world,
+                            target_extents=target.extents,
+                            target_pose_world_object=target.pose_world_object,
+                            target_relative_pose_reference_object=target.relative_pose_reference_object,
+                            target_invalid_reason_bitset=target.invalid_reason_bitset,
+                            target_primary_invalid_reason=target.primary_invalid_reason,
+                            target_reason_code_version=TARGET_INVALID_REASON_VERSION,
+                            matched_gt_target_row_id=target.gt_target_row_id,
+                            matched_gt_target_id=target.gt_target_id,
+                            gt_match_iou=target.gt_match_iou,
+                            gt_match_score=target.gt_match_score,
+                            gt_match_status=target.gt_match_status,
+                        ),
+                        policy=PolicyLineage(
+                            candidate_config_hash=source_lineage.config_hash(self.config.candidate_mixture),
+                            oracle_config_hash=source_lineage.config_hash(self.config.target_scorer),
+                            random_seed=recipe.policy.seed,
+                            rollout_config_hash=source_lineage.config_hash(rollout_cfg),
+                            branch_schedule_id=recipe.name,
+                            reason_code_version=INVALID_REASON_VERSION,
+                            selection_rng_state_hash=(
+                                f"seed-once:{recipe.policy.seed}:split-manifest:{source_lineage.split_manifest_hash}"
+                            ),
+                        ),
                     ),
                 )
             )
@@ -820,7 +803,7 @@ class RolloutDatasetWriter:
     def _attach_selected_depths(
         self,
         *,
-        result: CounterfactualRolloutResult,
+        evaluated: EvaluatedRollout,
         sample: VinOfflineSample,
         renderer: CandidateDepthRenderer,
     ) -> None:
@@ -828,8 +811,11 @@ class RolloutDatasetWriter:
 
         if sample.efm_snippet_view is None:
             raise ValueError("Selected-depth persistence requires sample.efm_snippet_view.")
-        for trajectory in result.trajectories:
+        for chain_id, trajectory in enumerate(evaluated.result.trajectories):
             for step in trajectory.steps:
+                evaluated_step = evaluated.step(chain_id, step.step_index)
+                if evaluated_step is None:
+                    raise KeyError(f"Missing evaluated rollout step chain={chain_id} step={step.step_index}.")
                 batch = renderer.render_compact_indices(
                     sample.efm_snippet_view,
                     step.candidates,
@@ -848,11 +834,12 @@ class RolloutDatasetWriter:
                 focal = camera.f.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
                 principal = camera.c.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
                 size_wh = camera.size.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
-                step.selected_depth_m = depth
-                step.selected_depth_valid_mask = valid_mask
-                step.selected_depth_focal_px = (float(focal[0].item()), float(focal[1].item()))
-                step.selected_depth_principal_point_px = (float(principal[0].item()), float(principal[1].item()))
-                step.selected_depth_image_size_hw = (int(size_wh[1].item()), int(size_wh[0].item()))
+                evidence = evaluated_step.evidence
+                evidence.selected_depth_m = depth
+                evidence.selected_depth_valid_mask = valid_mask
+                evidence.selected_depth_focal_px = (float(focal[0].item()), float(focal[1].item()))
+                evidence.selected_depth_principal_point_px = (float(principal[0].item()), float(principal[1].item()))
+                evidence.selected_depth_image_size_hw = (int(size_wh[1].item()), int(size_wh[0].item()))
 
     def _target_selection_temperature(self) -> float | None:
         return None
@@ -861,7 +848,7 @@ class RolloutDatasetWriter:
         return OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT.value
 
 
-def _lineage_split(*, records: list[object], fallback: str) -> str:
+def _lineage_split(*, records: Sequence[_SplitRecord], fallback: str) -> str:
     """Return the concrete shard split when selected records do not mix splits."""
 
     splits = {str(record.split) for record in records}

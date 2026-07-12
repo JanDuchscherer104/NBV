@@ -8,6 +8,8 @@ import torch
 import trimesh  # type: ignore[import-untyped]
 from efm3d.aria import CameraTW, PoseTW
 
+from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
+from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutRecord, OracleReplayAdapter
 from aria_nbv.oracle.target_rri import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
 from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
 from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
@@ -16,16 +18,14 @@ from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrate
 from aria_nbv.rollouts import (
     INVALID_REASON_VERSION,
     RolloutLineage,
-    RolloutZarrRecord,
 )
 from aria_nbv.rollouts.replay.engine import (
-    CounterfactualCandidateEvaluation,
-    CounterfactualMetricBundle,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
 )
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
-from aria_nbv.rollouts.replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
+from aria_nbv.rollouts.replay.state import CounterfactualTrajectory
+from aria_nbv.rollouts.trace import PolicyLineage, SourceLineage, TargetLineage
 from aria_nbv.utils.fingerprints import stable_config_hash
 
 if TYPE_CHECKING:
@@ -39,10 +39,10 @@ def build_rollout_records(
     horizon: int = 2,
     num_samples: int = 8,
     seed: int = 0,
-) -> list[RolloutZarrRecord]:
+) -> list[EvaluatedRolloutRecord]:
     """Build real-looking fixture rollout records for store tests."""
 
-    records: list[RolloutZarrRecord] = []
+    records: list[EvaluatedRolloutRecord] = []
     for source_row_id, policy in enumerate(
         (
             CounterfactualSelectionPolicy.ORACLE_GREEDY,
@@ -76,6 +76,7 @@ def build_rollout_records(
             verbosity=0,
         )
         mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        score_adapter = OracleReplayAdapter(_fixture_scores)
         result = CounterfactualPoseGenerator(cfg).generate(
             reference_pose=_identity_pose(),
             gt_mesh=mesh,
@@ -83,87 +84,96 @@ def build_rollout_records(
             mesh_faces=torch.as_tensor(mesh.faces, dtype=torch.int64),
             camera_calib_template=_dummy_camera(),
             occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
-            score_candidates=_fixture_scores,
+            score_candidates=score_adapter,
         )
-        _attach_fixture_candidate_provenance(result)
+        evaluated = score_adapter.materialize(result, retain_target_crops=True)
+        _attach_fixture_candidate_provenance(evaluated)
         records.append(
-            RolloutZarrRecord(
-                result=result,
+            EvaluatedRolloutRecord(
+                evaluated=evaluated,
                 rollout_id_prefix=f"fixture-{policy.value}",
                 lineage=RolloutLineage(
-                    scene_id="fixture_box",
-                    snippet_id="smoke",
-                    mesh_version="fixture-mesh-v1",
-                    candidate_config_hash=_config_hash(cfg.candidate_config),
-                    oracle_config_hash="fixture-oracle",
-                    rollout_config_hash=_config_hash(cfg),
-                    branch_schedule_id=None,
-                    random_seed=seed,
-                    source_cache_version="7",
-                    source_row_id=source_row_id,
-                    source_sample_index=source_row_id,
-                    source_sample_key=f"fixture:smoke:{source_row_id}",
-                    split="train",
-                    source_shard_id="vin-shard-000000",
-                    source_shard_row=source_row_id,
-                    source_offline_store_manifest_hash="fixture-source-manifest",
-                    split_manifest_hash="fixture-split-manifest",
-                    selection_rng_state_hash="fixture-rng",
-                    target_protocol_version="v1-observed",
-                    target_crop_policy=TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
-                    reason_code_version=INVALID_REASON_VERSION,
-                    target_row_id=source_row_id,
-                    target_id=f"fixture-target-{source_row_id}",
-                    target_selection_policy="fixture_top_k",
-                    target_selection_rank=source_row_id,
-                    target_selection_score=1.0 - 0.1 * source_row_id,
-                    target_source="fixture_obbs",
-                    target_source_index=source_row_id,
-                    target_sem_id=source_row_id + 1,
-                    target_inst_id=1000 + source_row_id,
-                    target_class_name="fixture_object",
-                    target_confidence=0.9,
-                    target_projected_area_pixels=512.0,
-                    target_projected_area_fraction=512.0 / (240.0 * 240.0),
-                    target_semidense_support_count=7,
-                    target_evl_support_count=5,
-                    target_effective_support_count=12.0,
-                    target_visibility_score=0.8,
-                    target_support_score=1.0,
-                    target_deficit_score=0.9,
-                    target_center_world=(float(source_row_id), 0.0, 0.5),
-                    target_extents=(0.4, 0.5, 0.6),
-                    target_pose_world_object=(
-                        1.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0,
-                        float(source_row_id),
-                        0.0,
-                        0.5,
+                    source=SourceLineage(
+                        scene_id="fixture_box",
+                        snippet_id="smoke",
+                        mesh_version="fixture-mesh-v1",
+                        source_cache_version="7",
+                        source_row_id=source_row_id,
+                        source_sample_index=source_row_id,
+                        source_sample_key=f"fixture:smoke:{source_row_id}",
+                        split="train",
+                        source_shard_id="vin-shard-000000",
+                        source_shard_row=source_row_id,
+                        source_offline_store_manifest_hash="fixture-source-manifest",
+                        split_manifest_hash="fixture-split-manifest",
                     ),
-                    target_invalid_reason_bitset=1,
-                    target_primary_invalid_reason=0,
-                    target_reason_code_version=TARGET_INVALID_REASON_VERSION,
-                    matched_gt_target_row_id=100 + source_row_id,
-                    matched_gt_target_id=f"fixture-gt-target-{source_row_id}",
-                    gt_match_iou=0.9,
-                    gt_match_score=0.9,
-                    gt_match_status="matched",
+                    target=TargetLineage(
+                        target_protocol_version="v1-observed",
+                        target_crop_policy=TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
+                        target_row_id=source_row_id,
+                        target_id=f"fixture-target-{source_row_id}",
+                        target_selection_policy="fixture_top_k",
+                        target_selection_rank=source_row_id,
+                        target_selection_score=1.0 - 0.1 * source_row_id,
+                        target_source="fixture_obbs",
+                        target_source_index=source_row_id,
+                        target_sem_id=source_row_id + 1,
+                        target_inst_id=1000 + source_row_id,
+                        target_class_name="fixture_object",
+                        target_confidence=0.9,
+                        target_projected_area_pixels=512.0,
+                        target_projected_area_fraction=512.0 / (240.0 * 240.0),
+                        target_semidense_support_count=7,
+                        target_evl_support_count=5,
+                        target_effective_support_count=12.0,
+                        target_visibility_score=0.8,
+                        target_support_score=1.0,
+                        target_deficit_score=0.9,
+                        target_center_world=(float(source_row_id), 0.0, 0.5),
+                        target_extents=(0.4, 0.5, 0.6),
+                        target_pose_world_object=(
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            float(source_row_id),
+                            0.0,
+                            0.5,
+                        ),
+                        target_invalid_reason_bitset=1,
+                        target_primary_invalid_reason=0,
+                        target_reason_code_version=TARGET_INVALID_REASON_VERSION,
+                        matched_gt_target_row_id=100 + source_row_id,
+                        matched_gt_target_id=f"fixture-gt-target-{source_row_id}",
+                        gt_match_iou=0.9,
+                        gt_match_score=0.9,
+                        gt_match_status="matched",
+                    ),
+                    policy=PolicyLineage(
+                        candidate_config_hash=_config_hash(cfg.candidate_config),
+                        oracle_config_hash="fixture-oracle",
+                        rollout_config_hash=_config_hash(cfg),
+                        branch_schedule_id=None,
+                        random_seed=seed,
+                        selection_rng_state_hash="fixture-rng",
+                        reason_code_version=INVALID_REASON_VERSION,
+                    ),
                 ),
             )
         )
     return records
 
 
-def _attach_fixture_candidate_provenance(result: CounterfactualRolloutResult) -> None:
-    for trajectory in result.trajectories:
+def _attach_fixture_candidate_provenance(evaluated: EvaluatedRollout) -> None:
+    for chain_id, trajectory in enumerate(evaluated.result.trajectories):
         for step in trajectory.steps:
+            evaluated_step = evaluated.step(chain_id, step.step_index)
+            assert evaluated_step is not None
             mask = step.candidates.mask_valid.detach().cpu().reshape(-1)
             n = int(mask.shape[0])
             step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
@@ -188,26 +198,27 @@ def _attach_fixture_candidate_provenance(result: CounterfactualRolloutResult) ->
                     "target_bearing_yaw_rad": torch.zeros(n, dtype=torch.float32),
                 }
             )
-            step.selected_depth_m = torch.full((240, 240), 1.0 + float(step.step_index), dtype=torch.float32)
-            step.selected_depth_valid_mask = torch.ones((240, 240), dtype=torch.bool)
-            step.selected_depth_focal_px = (120.0, 120.0)
-            step.selected_depth_principal_point_px = (120.0, 120.0)
-            step.selected_depth_image_size_hw = (240, 240)
+            evidence = evaluated_step.evidence
+            evidence.selected_depth_m = torch.full((240, 240), 1.0 + float(step.step_index), dtype=torch.float32)
+            evidence.selected_depth_valid_mask = torch.ones((240, 240), dtype=torch.bool)
+            evidence.selected_depth_focal_px = (120.0, 120.0)
+            evidence.selected_depth_principal_point_px = (120.0, 120.0)
+            evidence.selected_depth_image_size_hw = (240, 240)
             valid_count = int(mask.sum().item())
-            step.target_eval_current_points_world = torch.tensor(
+            evidence.target_eval_current_points_world = torch.tensor(
                 [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0]],
                 dtype=torch.float32,
             )
-            step.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
-            step.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
+            evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
+            evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
             for valid_index in range(valid_count):
-                step.target_eval_candidate_points_world[valid_index, :, :] = torch.tensor(
+                evidence.target_eval_candidate_points_world[valid_index, :, :] = torch.tensor(
                     [[float(valid_index), 0.0, 0.0], [float(valid_index), 0.1, 0.0]],
                     dtype=torch.float32,
                 )
-            step.target_eval_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
-            step.target_eval_voxel_size_m = 0.02
-            step.target_eval_max_points = 50_000
+            evidence.target_eval_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
+            evidence.target_eval_voxel_size_m = 0.02
+            evidence.target_eval_max_points = 50_000
 
 
 def _config_hash(config: BaseConfig) -> str:
@@ -240,29 +251,39 @@ def _fixture_scores(
     result: Any,
     trajectory: CounterfactualTrajectory,
     step_index: int,
-) -> CounterfactualCandidateEvaluation:
+) -> OracleCandidateEvaluation:
     del trajectory
     valid_poses = result.poses_world_cam()
     centers = valid_poses.t.reshape(-1, 3)
     target_rri = torch.linspace(0.1, 0.1 * centers.shape[0], centers.shape[0], device=centers.device)
     target_rri = target_rri + float(step_index)
     target_root_gain = target_rri + 10.0
-    return CounterfactualCandidateEvaluation(
-        scores=target_root_gain,
-        score_label="target_root_gain",
-        metrics=CounterfactualMetricBundle(
-            rri=target_rri,
-            scene_rri=target_rri,
-            target_rri=target_rri,
-            scene_root_gain=target_root_gain / 2.0,
-            target_root_gain=target_root_gain,
-            scene_log_error_gain=target_rri / 3.0,
-            target_log_error_gain=target_rri / 2.0,
-            scene_pm_dist_before=target_rri + 1.0,
-            scene_pm_dist_after=target_rri + 0.5,
-            target_pm_dist_before=target_rri + 2.0,
-            target_pm_dist_after=target_rri + 1.0,
-            target_current_support=torch.full_like(target_rri, 3.0),
-            target_candidate_support=torch.full_like(target_rri, 2.0),
+    metrics = {
+        "rri": target_rri,
+        "scene_rri": target_rri,
+        "target_rri": target_rri,
+        "scene_root_gain": target_root_gain / 2.0,
+        "target_root_gain": target_root_gain,
+        "scene_log_error_gain": target_rri / 3.0,
+        "target_log_error_gain": target_rri / 2.0,
+        "scene_pm_dist_before": target_rri + 1.0,
+        "scene_pm_dist_after": target_rri + 0.5,
+        "target_pm_dist_before": target_rri + 2.0,
+        "target_pm_dist_after": target_rri + 1.0,
+        "target_current_support": torch.full_like(target_rri, 3.0),
+        "target_candidate_support": torch.full_like(target_rri, 2.0),
+    }
+    points = torch.zeros((centers.shape[0], 2, 3), dtype=centers.dtype, device=centers.device)
+    return OracleCandidateEvaluation(
+        labels=OracleCandidateLabels(
+            scores=target_root_gain,
+            score_label="target_root_gain",
+            metrics=metrics,
+            candidate_shell_indices=result.candidate_shell_indices(device=centers.device),
+            provenance="fixture",
+        ),
+        evidence=RetainedOracleEvidence(
+            candidate_point_clouds_world=points,
+            candidate_point_cloud_lengths=torch.full((centers.shape[0],), 2, dtype=torch.long, device=centers.device),
         ),
     )

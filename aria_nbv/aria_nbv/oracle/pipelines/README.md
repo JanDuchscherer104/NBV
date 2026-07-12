@@ -6,6 +6,7 @@
 
 ```text
 oracle/pipelines/
+  evaluated_rollout.py
   rollout_dataset.py
   shards.py
   cli.py
@@ -15,13 +16,26 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:10:28.231382+00:00`
 
-Graphify refresh: `2026-07-10T18:34:29+02:00`
+Graphify refresh: `2026-07-11T20:46:10+02:00`
 
 ## Symbol Ownership Matrix
 
 ### `__init__.py`
 
 No top-level AST definitions; imported names and `__all__` are excluded.
+
+### `evaluated_rollout.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `OracleInvalidity` | protocol | public | implicit exception contract | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `OracleCandidateScorer` | protocol | public | replay evaluator callable | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `EvaluatedRolloutStep` | DTO | public | wide replay step | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `EvaluatedRollout` | DTO | public | wide replay result | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `EvaluatedRolloutRecord` | DTO | public | `rollouts.trace.RolloutZarrRecord` | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `OracleReplayAdapter` | class | public | writer-local target adapter | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `OracleReplayInvalidityError` | exception | public | writer-local exception | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
+| `_PipelineOracleState` | DTO | private | replay trajectory Oracle state | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
 
 ### `rollout_dataset.py`
 
@@ -33,6 +47,7 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `RolloutDatasetWriterConfig` | `config` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 | `_RolloutSourceLineageBuilder` | `DTO` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 | `_RolloutTargetSelectionResult` | `DTO` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
+| `_SplitRecord` | `protocol` | `private` | untyped lineage helper input | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 | `RolloutDatasetWriter` | `class` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 | `_lineage_split` | `function` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 

@@ -29,14 +29,6 @@ def _pose_at(poses: PoseTW, index: int) -> PoseTW:
     return ensure_unbatched_pose(poses)
 
 
-def _root_error_for_metric(trajectory: "CounterfactualTrajectory", metric_name: str) -> float | None:
-    for step in trajectory.steps:
-        value = step.selected_metrics.get(metric_name)
-        if value is not None and torch.isfinite(torch.tensor(value)):
-            return float(value)
-    return None
-
-
 @dataclass(slots=True)
 class CounterfactualSelectionRecord:
     """Selected valid-candidate index plus the distribution used to draw it."""
@@ -68,20 +60,6 @@ class CounterfactualStepResult:
     selection_entropy: float | None = None
     selected_log_probability: float | None = None
     selection_rng_seed: int | None = None
-    selected_metrics: dict[str, float] = field(default_factory=dict)
-    metric_vectors: dict[str, torch.Tensor] = field(default_factory=dict)
-    selected_point_cloud_world: torch.Tensor | None = None
-    selected_depth_m: torch.Tensor | None = None
-    selected_depth_valid_mask: torch.Tensor | None = None
-    selected_depth_focal_px: tuple[float, float] | None = None
-    selected_depth_principal_point_px: tuple[float, float] | None = None
-    selected_depth_image_size_hw: tuple[int, int] | None = None
-    target_eval_current_points_world: torch.Tensor | None = None
-    target_eval_candidate_points_world: torch.Tensor | None = None
-    target_eval_candidate_point_lengths: torch.Tensor | None = None
-    target_eval_crop_policy: str | None = None
-    target_eval_voxel_size_m: float | None = None
-    target_eval_max_points: int | None = None
 
     @property
     def selected_pose_world(self) -> PoseTW:
@@ -109,13 +87,7 @@ class CounterfactualTrajectory:
     root_frame_index: int | None = None
     steps: list[CounterfactualStepResult] = field(default_factory=list)
     cumulative_score: float = 0.0
-    cumulative_rri: float | None = None
     terminated_early: bool = False
-
-    def root_metric(self, name: str) -> float | None:
-        """Return the first finite persisted metric with ``name``."""
-
-        return _root_error_for_metric(self, name)
 
     def final_pose_world(self) -> PoseTW:
         """Return the root pose or final selected pose."""
@@ -146,10 +118,6 @@ class CounterfactualTrajectory:
     def with_appended_step(self, step: CounterfactualStepResult) -> "CounterfactualTrajectory":
         """Return a new trajectory with one selected transition appended."""
 
-        step_rri = step.selected_metrics.get("rri")
-        cumulative_rri = self.cumulative_rri
-        if step_rri is not None:
-            cumulative_rri = float(step_rri) if cumulative_rri is None else float(cumulative_rri + step_rri)
         return CounterfactualTrajectory(
             root_pose_world=self.root_pose_world,
             root_time_ns=self.root_time_ns,
@@ -157,7 +125,6 @@ class CounterfactualTrajectory:
             root_frame_index=self.root_frame_index,
             steps=[*self.steps, step],
             cumulative_score=float(self.cumulative_score + step.selection_score),
-            cumulative_rri=cumulative_rri,
             terminated_early=False,
         )
 
@@ -165,15 +132,6 @@ class CounterfactualTrajectory:
         """Return an early-terminated copy."""
 
         return replace(self, terminated_early=True)
-
-    def accumulated_points_world(self) -> torch.Tensor:
-        """Return selected transition point clouds in world coordinates."""
-
-        clouds = [step.selected_point_cloud_world for step in self.steps if step.selected_point_cloud_world is not None]
-        if not clouds:
-            root = ensure_unbatched_pose(self.root_pose_world)
-            return torch.empty((0, 3), device=root.t.device, dtype=root.t.dtype)
-        return torch.cat(clouds, dim=0)
 
 
 @dataclass(slots=True)

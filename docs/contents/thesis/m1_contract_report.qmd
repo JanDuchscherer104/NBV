@@ -24,7 +24,7 @@ evidence that must be collected before scale-up.
 | Split contract | Pass for source contract | `splits/*.npy` contain global sample indices; `_assign_splits` uses stable sample-key hashing and preserves sample-index order inside each split. |
 | Candidate order | Pass for synthetic guard | `CandidateSamplingResult.candidate_shell_indices()` maps compact valid views to full-shell indices and rejects ambiguous layouts. |
 | Candidate-label alignment | Pass for synthetic guard | `prepare_vin_offline_sample()` validates candidate poses, depth rows, camera rows, RRI vectors, optional point clouds, and candidate shell indices before writing rows. |
-| Rollout replay alignment | Pass for synthetic guard | The historical trace DTO was superseded by `RolloutZarrRecord` plus factual `steps/` and `candidates/` tables; invalid rows remain masked with false action/train masks and `NaN` labels. |
+| Rollout replay alignment | Pass for synthetic guard | The historical wide trace DTO was superseded by pipeline-local `EvaluatedRolloutRecord` plus factual `steps/` and `candidates/` tables; invalid rows remain masked with false action/train masks and `NaN` labels. |
 | Frame and CW90 semantics | Pass for documented source contract | Candidate generation applies `rotate_yaw_cw90` once to the reference pose; plotting/Rerun display corrections remain display-only. `VinModelV3` requires a `cw90_corrected` camera tag if model-side CW90 undo is enabled. |
 | Current local store evidence | Blocked for M1 exit | `.configs/offline_only.toml` resolves to `.data/offline_cache/vin_offline`; the evidence snapshot below records manifest v7, 48 sample-index rows, and a partial one-scene diagnostic store. |
 | Scene-level split evidence | Blocked | The local store has one scene (`81286`) and a 38/10 train/val sample split, so it cannot prove the final scene-level split contract. |
@@ -67,7 +67,7 @@ training evidence.
 | Oracle labels | `RriResult` in `rri_metrics/rri.py` | RRI and point-to-mesh component vectors are candidate-major and must match rendered candidate count. |
 | Offline row prep | `prepare_vin_offline_sample()` | Fixed numeric blocks pad candidate-major arrays to `max_candidates`; invalid padded tails use `NaN`, `False`, `-1`, or zero depending on field type. |
 | VIN batch masking | `VinOracleBatch.candidate_valid_mask()` | Model/training paths use `candidate_count` to mask padded tails instead of treating finite tail values as labels. |
-| Rollout replay | `RolloutZarrRecord` and `rollouts.zarr` factual tables in `aria_nbv.rollouts` | Actor-visible full-shell pose/validity fields stay separate from oracle-only score and metric vectors. |
+| Rollout replay | `EvaluatedRolloutRecord` at the Oracle pipeline edge and `rollouts.zarr` factual tables in `aria_nbv.rollouts` | Actor-visible full-shell pose/validity fields stay separate from oracle-only score and metric vectors. |
 | CW90 | `utils.frames.rotate_yaw_cw90`, `CandidateViewGenerator`, `VinModelV3` | Physical/store/model inputs must not receive display-only rotations. |
 
 ## Passing Checks {#m1-passing-checks}

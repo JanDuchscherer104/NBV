@@ -36,7 +36,6 @@ def test_rollouts_owns_record_and_store_contracts() -> None:
         "CounterfactualSelectionPolicy",
         "RolloutPolicySpec",
         "RolloutLineage",
-        "RolloutZarrRecord",
         "RolloutZarrStoreConfig",
         "RolloutZarrStoreReader",
         "write_rollout_zarr_store",

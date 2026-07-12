@@ -37,13 +37,13 @@ def _json_list(reader: RolloutZarrStoreReader, path: str) -> list[str]:
 
 
 def _steps(record):
-    return record.result.trajectories[0].steps
+    return [record.step(0, step.step_index) for step in record.result.trajectories[0].steps]
 
 
 def _mask_target_eval_candidate_rows(step) -> None:
     valid_count = int(step.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
-    step.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
-    step.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
+    step.evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
+    step.evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
 
 
 def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None:
@@ -325,8 +325,8 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
 def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=9)[:1]
     for step in _steps(records[0]):
-        step.selected_depth_m = None
-        step.selected_depth_valid_mask = None
+        step.evidence.selected_depth_m = None
+        step.evidence.selected_depth_valid_mask = None
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
@@ -358,8 +358,7 @@ def test_rollout_zarr_selected_action_td_fields_align_with_step_rows(tmp_path) -
 def test_rollout_zarr_requires_explicit_target_root_gain_for_q_training(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=11)[:1]
     for step in _steps(records[0]):
-        step.metric_vectors = {}
-        step.selected_metrics = {}
+        step.labels.metrics.clear()
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -378,8 +377,8 @@ def test_rollout_zarr_never_backfills_scene_rri_from_generic_rri(tmp_path) -> No
     records = build_rollout_records(horizon=1, num_samples=6, seed=10)[:1]
     for step in _steps(records[0]):
         generic = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-        step.metric_vectors = {"rri": generic, "target_rri": generic, "target_root_gain": generic + 10.0}
-        step.selected_metrics = {"rri": 1.0, "target_rri": 1.0, "target_root_gain": 11.0}
+        step.labels.metrics.clear()
+        step.labels.metrics.update(rri=generic, target_rri=generic, target_root_gain=generic + 10.0)
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -395,11 +394,8 @@ def test_rollout_zarr_qh_reward_uses_target_root_gain_not_target_rri(tmp_path) -
     records = build_rollout_records(horizon=1, num_samples=6, seed=14)[:1]
     for step in _steps(records[0]):
         full = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-        step.metric_vectors["target_rri"] = full + 1.0
-        step.metric_vectors["target_root_gain"] = full + 101.0
-        selected = int(step.selected_shell_index)
-        step.selected_metrics["target_rri"] = float(full[selected].item() + 1.0)
-        step.selected_metrics["target_root_gain"] = float(full[selected].item() + 101.0)
+        step.labels.metrics["target_rri"] = full + 1.0
+        step.labels.metrics["target_root_gain"] = full + 101.0
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -416,13 +412,13 @@ def test_rollout_zarr_masks_invalid_candidate_oracle_labels(tmp_path) -> None:
     step = _steps(records[0])[0]
     invalid_shell_index = 0 if int(step.selected_shell_index) != 0 else 1
     step.candidates.mask_valid[invalid_shell_index] = False
-    step.metric_vectors["target_rri"] = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-    step.metric_vectors["target_root_gain"] = (
+    step.labels.metrics["target_rri"] = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
+    step.labels.metrics["target_root_gain"] = (
         torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32) + 10.0
     )
     valid_count = int(step.candidates.mask_valid.sum().item())
-    step.target_eval_candidate_points_world = step.target_eval_candidate_points_world[:valid_count]
-    step.target_eval_candidate_point_lengths = step.target_eval_candidate_point_lengths[:valid_count]
+    step.evidence.target_eval_candidate_points_world = step.evidence.target_eval_candidate_points_world[:valid_count]
+    step.evidence.target_eval_candidate_point_lengths = step.evidence.target_eval_candidate_point_lengths[:valid_count]
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -440,32 +436,32 @@ def test_rollout_zarr_masks_invalid_candidate_oracle_labels(tmp_path) -> None:
 
 def test_rollout_zarr_preserves_multi_target_identity_in_qh_view(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=13)[:2]
-    records[0].lineage.target_row_id = 7
-    records[0].lineage.target_source_index = None
-    records[0].lineage.target_id = "target-a"
-    records[0].lineage.target_selection_policy = "greedy_top_k"
-    records[0].lineage.target_selection_rank = 0
-    records[0].lineage.target_selection_score = 0.75
-    records[0].lineage.target_invalid_reason_bitset = 1
-    records[0].lineage.target_primary_invalid_reason = 0
-    records[0].lineage.target_reason_code_version = TARGET_INVALID_REASON_VERSION
-    records[0].lineage.matched_gt_target_row_id = 70
-    records[0].lineage.matched_gt_target_id = "gt-target-a"
-    records[0].lineage.gt_match_iou = 0.8
-    records[0].lineage.gt_match_score = 0.8
-    records[0].lineage.gt_match_status = "matched"
-    records[1].lineage.target_row_id = 9
-    records[1].lineage.target_source_index = None
-    records[1].lineage.target_id = "target-b"
-    records[1].lineage.target_selection_policy = "greedy_top_k"
-    records[1].lineage.target_selection_rank = 1
-    records[1].lineage.target_selection_score = 0.5
-    records[1].lineage.target_invalid_reason_bitset = 1
-    records[1].lineage.target_primary_invalid_reason = 0
-    records[1].lineage.target_reason_code_version = TARGET_INVALID_REASON_VERSION
-    records[1].lineage.matched_gt_target_row_id = None
-    records[1].lineage.matched_gt_target_id = None
-    records[1].lineage.gt_match_status = "unmatched_gt"
+    records[0].lineage.target.target_row_id = 7
+    records[0].lineage.target.target_source_index = None
+    records[0].lineage.target.target_id = "target-a"
+    records[0].lineage.target.target_selection_policy = "greedy_top_k"
+    records[0].lineage.target.target_selection_rank = 0
+    records[0].lineage.target.target_selection_score = 0.75
+    records[0].lineage.target.target_invalid_reason_bitset = 1
+    records[0].lineage.target.target_primary_invalid_reason = 0
+    records[0].lineage.target.target_reason_code_version = TARGET_INVALID_REASON_VERSION
+    records[0].lineage.target.matched_gt_target_row_id = 70
+    records[0].lineage.target.matched_gt_target_id = "gt-target-a"
+    records[0].lineage.target.gt_match_iou = 0.8
+    records[0].lineage.target.gt_match_score = 0.8
+    records[0].lineage.target.gt_match_status = "matched"
+    records[1].lineage.target.target_row_id = 9
+    records[1].lineage.target.target_source_index = None
+    records[1].lineage.target.target_id = "target-b"
+    records[1].lineage.target.target_selection_policy = "greedy_top_k"
+    records[1].lineage.target.target_selection_rank = 1
+    records[1].lineage.target.target_selection_score = 0.5
+    records[1].lineage.target.target_invalid_reason_bitset = 1
+    records[1].lineage.target.target_primary_invalid_reason = 0
+    records[1].lineage.target.target_reason_code_version = TARGET_INVALID_REASON_VERSION
+    records[1].lineage.target.matched_gt_target_row_id = None
+    records[1].lineage.target.matched_gt_target_id = None
+    records[1].lineage.target.gt_match_status = "unmatched_gt"
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -495,14 +491,14 @@ def test_rollout_zarr_preserves_multi_target_identity_in_qh_view(tmp_path) -> No
 def test_rollout_zarr_globalizes_selector_local_target_rows(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=14)[:2]
     for source_row_id, record in enumerate(records):
-        record.lineage.source_row_id = source_row_id
-        record.lineage.source_sample_index = source_row_id
-        record.lineage.snippet_id = f"snippet-{source_row_id}"
-        record.lineage.target_row_id = 0
-        record.lineage.target_source_index = 0
-        record.lineage.target_id = f"scene:snippet-{source_row_id}:target-local-0"
-        record.lineage.matched_gt_target_id = f"scene:snippet-{source_row_id}:gt-local-0"
-        record.lineage.matched_gt_target_row_id = 0
+        record.lineage.source.source_row_id = source_row_id
+        record.lineage.source.source_sample_index = source_row_id
+        record.lineage.source.snippet_id = f"snippet-{source_row_id}"
+        record.lineage.target.target_row_id = 0
+        record.lineage.target.target_source_index = 0
+        record.lineage.target.target_id = f"scene:snippet-{source_row_id}:target-local-0"
+        record.lineage.target.matched_gt_target_id = f"scene:snippet-{source_row_id}:gt-local-0"
+        record.lineage.target.matched_gt_target_row_id = 0
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -559,28 +555,28 @@ def test_rollout_zarr_relative_pose_root_is_pose_transform(tmp_path) -> None:
 def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=19)[:1]
     lineage = records[0].lineage
-    lineage.split = "train"
-    lineage.candidate_config_hash = "candidate-cfg"
-    lineage.oracle_config_hash = "oracle-cfg"
-    lineage.rollout_config_hash = "rollout-cfg"
-    lineage.model_checkpoint_hash = "model-ckpt"
-    lineage.source_cache_version = "source-cache-v2"
-    lineage.source_offline_store_manifest_hash = "source-manifest"
-    lineage.split_manifest_hash = "split-manifest"
-    lineage.branch_schedule_id = "branch-schedule"
-    lineage.target_protocol_version = "v1-observed"
-    lineage.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
-    lineage.reason_code_version = INVALID_REASON_VERSION
-    lineage.selection_rng_state_hash = "rng-state"
-    lineage.target_row_id = 5
-    lineage.target_id = "target"
-    lineage.target_selection_policy = "greedy_top_k"
-    lineage.target_invalid_reason_bitset = 1
-    lineage.target_primary_invalid_reason = 0
-    lineage.target_reason_code_version = TARGET_INVALID_REASON_VERSION
-    lineage.matched_gt_target_row_id = 50
-    lineage.matched_gt_target_id = "gt-target"
-    lineage.gt_match_status = "matched"
+    lineage.source.split = "train"
+    lineage.source.source_cache_version = "source-cache-v2"
+    lineage.source.source_offline_store_manifest_hash = "source-manifest"
+    lineage.source.split_manifest_hash = "split-manifest"
+    lineage.policy.candidate_config_hash = "candidate-cfg"
+    lineage.policy.oracle_config_hash = "oracle-cfg"
+    lineage.policy.rollout_config_hash = "rollout-cfg"
+    lineage.policy.model_checkpoint_hash = "model-ckpt"
+    lineage.policy.branch_schedule_id = "branch-schedule"
+    lineage.policy.reason_code_version = INVALID_REASON_VERSION
+    lineage.policy.selection_rng_state_hash = "rng-state"
+    lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
+    lineage.target.target_row_id = 5
+    lineage.target.target_id = "target"
+    lineage.target.target_selection_policy = "greedy_top_k"
+    lineage.target.target_invalid_reason_bitset = 1
+    lineage.target.target_primary_invalid_reason = 0
+    lineage.target.target_reason_code_version = TARGET_INVALID_REASON_VERSION
+    lineage.target.matched_gt_target_row_id = 50
+    lineage.target.matched_gt_target_id = "gt-target"
+    lineage.target.gt_match_status = "matched"
     for step in _steps(records[0]):
         n = int(step.candidates.mask_valid.shape[0])
         step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
@@ -630,8 +626,8 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
 
 def test_rollout_zarr_rejects_mixed_split_shards(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=20)[:2]
-    records[0].lineage.split = "train"
-    records[1].lineage.split = "val"
+    records[0].lineage.source.split = "train"
+    records[1].lineage.source.split = "val"
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
@@ -642,8 +638,8 @@ def test_rollout_zarr_rejects_mixed_split_shards(tmp_path) -> None:
 
 def test_rollout_zarr_validation_requires_vin_source_shard_lineage(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=23)[:1]
-    records[0].lineage.source_shard_id = None
-    records[0].lineage.source_shard_row = -1
+    records[0].lineage.source.source_shard_id = None
+    records[0].lineage.source.source_shard_row = -1
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
@@ -655,11 +651,11 @@ def test_rollout_zarr_validation_requires_vin_source_shard_lineage(tmp_path) -> 
 
 def test_rollout_zarr_rejects_conflicting_source_row_lineage(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=24)[:2]
-    records[0].lineage.source_row_id = 0
-    records[1].lineage.source_row_id = 0
-    records[1].lineage.source_sample_key = "different-source-row"
-    records[1].lineage.source_shard_id = "vin-shard-999999"
-    records[1].lineage.source_shard_row = 99
+    records[0].lineage.source.source_row_id = 0
+    records[1].lineage.source.source_row_id = 0
+    records[1].lineage.source.source_sample_key = "different-source-row"
+    records[1].lineage.source.source_shard_id = "vin-shard-999999"
+    records[1].lineage.source.source_shard_row = 99
 
     with pytest.raises(ValueError, match="Conflicting source lineage"):
         write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
@@ -668,26 +664,26 @@ def test_rollout_zarr_rejects_conflicting_source_row_lineage(tmp_path) -> None:
 def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=21)[:1]
     lineage = records[0].lineage
-    lineage.split = "train"
-    lineage.candidate_config_hash = "candidate-cfg"
-    lineage.oracle_config_hash = "oracle-cfg"
-    lineage.rollout_config_hash = "rollout-cfg"
-    lineage.source_cache_version = "source-cache-v7"
-    lineage.source_offline_store_manifest_hash = "source-manifest"
-    lineage.split_manifest_hash = "split-manifest"
-    lineage.target_protocol_version = "v1-observed"
-    lineage.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
-    lineage.reason_code_version = INVALID_REASON_VERSION
-    lineage.selection_rng_state_hash = "rng-state"
-    lineage.target_row_id = 3
-    lineage.target_id = "target"
-    lineage.target_selection_policy = "greedy_top_k"
-    lineage.target_invalid_reason_bitset = 1
-    lineage.target_primary_invalid_reason = 0
-    lineage.target_reason_code_version = TARGET_INVALID_REASON_VERSION
-    lineage.matched_gt_target_row_id = 30
-    lineage.matched_gt_target_id = "gt-target"
-    lineage.gt_match_status = "matched"
+    lineage.source.split = "train"
+    lineage.source.source_cache_version = "source-cache-v7"
+    lineage.source.source_offline_store_manifest_hash = "source-manifest"
+    lineage.source.split_manifest_hash = "split-manifest"
+    lineage.policy.candidate_config_hash = "candidate-cfg"
+    lineage.policy.oracle_config_hash = "oracle-cfg"
+    lineage.policy.rollout_config_hash = "rollout-cfg"
+    lineage.policy.reason_code_version = INVALID_REASON_VERSION
+    lineage.policy.selection_rng_state_hash = "rng-state"
+    lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
+    lineage.target.target_row_id = 3
+    lineage.target.target_id = "target"
+    lineage.target.target_selection_policy = "greedy_top_k"
+    lineage.target.target_invalid_reason_bitset = 1
+    lineage.target.target_primary_invalid_reason = 0
+    lineage.target.target_reason_code_version = TARGET_INVALID_REASON_VERSION
+    lineage.target.matched_gt_target_row_id = 30
+    lineage.target.matched_gt_target_id = "gt-target"
+    lineage.target.gt_match_status = "matched"
     for step in _steps(records[0]):
         n = int(step.candidates.mask_valid.shape[0])
         step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
@@ -715,12 +711,12 @@ def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp
 
 def test_rollout_zarr_blocks_q_training_for_target_invalid_records(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=25)[:1]
-    records[0].lineage.target_protocol_version = "v1-observed"
-    records[0].lineage.target_row_id = 11
-    records[0].lineage.target_id = "target-invalid"
-    records[0].lineage.target_invalid_reason_bitset = 1 << 10
-    records[0].lineage.target_primary_invalid_reason = 10
-    records[0].lineage.gt_match_status = "unmatched_gt"
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_row_id = 11
+    records[0].lineage.target.target_id = "target-invalid"
+    records[0].lineage.target.target_invalid_reason_bitset = 1 << 10
+    records[0].lineage.target.target_primary_invalid_reason = 10
+    records[0].lineage.target.gt_match_status = "unmatched_gt"
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v1-observed")
     reader = RolloutZarrStoreReader(result.store_dir)

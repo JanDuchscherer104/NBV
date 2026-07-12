@@ -21,9 +21,10 @@ scene scores or low-quality invalid rows.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 import torch
@@ -50,12 +51,35 @@ from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
     RolloutLineage,
-    RolloutZarrRecord,
     _candidate_invalid_reasons,
     _full_shell_or_default,
     _policy_name,
     _termination_reason,
 )
+
+
+class RolloutWriteRecord(Protocol):
+    """Structural writer input supplied by an Oracle generation pipeline."""
+
+    @property
+    def result(self) -> Any: ...
+
+    @property
+    def lineage(self) -> RolloutLineage: ...
+
+    @property
+    def rollout_id_prefix(self) -> str: ...
+
+    def lineage_for_chain(self, chain_id: int) -> RolloutLineage: ...
+
+    def step(self, chain_id: int, step_index: int) -> Any: ...
+
+    def with_lineage(self, lineage: RolloutLineage) -> "RolloutWriteRecord": ...
+
+
+class _SelectedDepthEvidence(Protocol):
+    selected_depth_image_size_hw: tuple[int, int] | None
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -427,7 +451,7 @@ class RolloutZarrStoreReader:
 
 def write_rollout_zarr_store(
     store_dir: Path | str,
-    records: list[RolloutZarrRecord],
+    records: Sequence[RolloutWriteRecord],
     *,
     return_semantics: str = DEFAULT_RETURN_SEMANTICS,
     discount_gamma: float = 1.0,
@@ -483,7 +507,7 @@ class _RolloutZarrWriteSession:
         self,
         *,
         store_dir: Path | str,
-        records: list[RolloutZarrRecord],
+        records: Sequence[RolloutWriteRecord],
         return_semantics: str,
         discount_gamma: float,
         target_protocol_version: str,
@@ -505,7 +529,7 @@ class _RolloutZarrWriteSession:
         target_eval_crops_enabled: bool,
     ) -> None:
         self.output_dir = Path(store_dir).expanduser().resolve()
-        self.records = records
+        self.records = list(records)
         self.return_semantics = return_semantics
         self.discount_gamma = float(discount_gamma)
         self.target_protocol_version = target_protocol_version
@@ -1137,7 +1161,7 @@ def _required_groups() -> tuple[str, ...]:
 
 def _root_metadata_payload(
     *,
-    records: list[RolloutZarrRecord],
+    records: list[RolloutWriteRecord],
     tables: _RolloutTables,
     q_h_arrays: dict[str, np.ndarray],
     q_h_horizon: int,
@@ -1165,7 +1189,7 @@ def _root_metadata_payload(
     """Return compact root attrs for one rollout store."""
 
     split_values = {
-        record.lineage_for_chain(chain_id).split or "unknown"
+        record.lineage_for_chain(chain_id).source.split or "unknown"
         for record in records
         for chain_id, _trajectory in enumerate(record.result.trajectories)
     }
@@ -1232,7 +1256,7 @@ def _root_metadata_payload(
 
 def _build_manifest_payload(
     *,
-    records: list[RolloutZarrRecord],
+    records: list[RolloutWriteRecord],
     tables: _RolloutTables,
     q_h_arrays: dict[str, np.ndarray],
     dictionaries: dict[str, list[str]],
@@ -1270,22 +1294,22 @@ def _build_manifest_payload(
     }
 
 
-def _source_coverage(records: list[RolloutZarrRecord]) -> dict[str, Any]:
+def _source_coverage(records: list[RolloutWriteRecord]) -> dict[str, Any]:
     """Summarize source rows without reading Zarr payload arrays."""
 
     rows: dict[int, dict[str, Any]] = {}
     for record in records:
         lineage = record.lineage
-        source_row_id = -1 if lineage.source_row_id is None else int(lineage.source_row_id)
+        source_row_id = -1 if lineage.source.source_row_id is None else int(lineage.source.source_row_id)
         rows[source_row_id] = {
             "source_row_id": source_row_id,
-            "source_sample_index": lineage.source_sample_index,
-            "source_sample_key": compact_ase_atek_sample_id(lineage.source_sample_key or "") or None,
-            "scene_id": lineage.scene_id,
-            "snippet_id": compact_ase_atek_sample_id(lineage.snippet_id or "") or None,
-            "split": lineage.split,
-            "source_shard_id": lineage.source_shard_id,
-            "source_shard_row": lineage.source_shard_row,
+            "source_sample_index": lineage.source.source_sample_index,
+            "source_sample_key": compact_ase_atek_sample_id(lineage.source.source_sample_key or "") or None,
+            "scene_id": lineage.source.scene_id,
+            "snippet_id": compact_ase_atek_sample_id(lineage.source.snippet_id or "") or None,
+            "split": lineage.source.split,
+            "source_shard_id": lineage.source.source_shard_id,
+            "source_shard_row": lineage.source.source_shard_row,
         }
     scene_counts: dict[str, int] = {}
     split_counts: dict[str, int] = {}
@@ -1306,7 +1330,7 @@ def _source_coverage(records: list[RolloutZarrRecord]) -> dict[str, Any]:
     }
 
 
-def _manifest_config_hashes(records: list[RolloutZarrRecord]) -> dict[str, list[str]]:
+def _manifest_config_hashes(records: list[RolloutWriteRecord]) -> dict[str, list[str]]:
     """Collect unique config/protocol hashes stored in rollout lineages."""
 
     values: dict[str, set[str]] = {
@@ -1321,14 +1345,14 @@ def _manifest_config_hashes(records: list[RolloutZarrRecord]) -> dict[str, list[
     }
     for record in records:
         lineage = record.lineage
-        _add_manifest_hash(values["candidate"], lineage.candidate_config_hash)
-        _add_manifest_hash(values["oracle"], lineage.oracle_config_hash)
-        _add_manifest_hash(values["rollout"], lineage.rollout_config_hash)
-        _add_manifest_hash(values["model_checkpoint"], lineage.model_checkpoint_hash)
-        _add_manifest_hash(values["source_manifest"], lineage.source_offline_store_manifest_hash)
-        _add_manifest_hash(values["split_manifest"], lineage.split_manifest_hash)
-        _add_manifest_hash(values["target_crop_policy"], lineage.target_crop_policy)
-        _add_manifest_hash(values["target_protocol"], lineage.target_protocol_version)
+        _add_manifest_hash(values["candidate"], lineage.policy.candidate_config_hash)
+        _add_manifest_hash(values["oracle"], lineage.policy.oracle_config_hash)
+        _add_manifest_hash(values["rollout"], lineage.policy.rollout_config_hash)
+        _add_manifest_hash(values["model_checkpoint"], lineage.policy.model_checkpoint_hash)
+        _add_manifest_hash(values["source_manifest"], lineage.source.source_offline_store_manifest_hash)
+        _add_manifest_hash(values["split_manifest"], lineage.source.split_manifest_hash)
+        _add_manifest_hash(values["target_crop_policy"], lineage.target.target_crop_policy)
+        _add_manifest_hash(values["target_protocol"], lineage.target.target_protocol_version)
     return {name: sorted(items) for name, items in values.items()}
 
 
@@ -1337,7 +1361,7 @@ def _add_manifest_hash(target: set[str], value: str | None) -> None:
         target.add(value)
 
 
-def _records_with_global_target_row_ids(records: list[RolloutZarrRecord]) -> list[RolloutZarrRecord]:
+def _records_with_global_target_row_ids(records: list[RolloutWriteRecord]) -> list[RolloutWriteRecord]:
     """Return records whose lineage target rows are unique within the rollout store.
 
     ``TargetCandidateRow.target_row_id`` is selector-local to one source sample.
@@ -1347,22 +1371,24 @@ def _records_with_global_target_row_ids(records: list[RolloutZarrRecord]) -> lis
     """
 
     target_row_by_key: dict[tuple[object, ...], int] = {}
-    normalized: list[RolloutZarrRecord] = []
+    normalized: list[RolloutWriteRecord] = []
     for record in records:
         lineage = record.lineage
         target_key = _global_target_key(lineage)
         global_target_row_id = target_row_by_key.setdefault(target_key, len(target_row_by_key))
-        target_source_index = lineage.target_source_index
-        if target_source_index is None and lineage.target_row_id is not None:
-            target_source_index = int(lineage.target_row_id)
+        target_source_index = lineage.target.target_source_index
+        if target_source_index is None and lineage.target.target_row_id is not None:
+            target_source_index = int(lineage.target.target_row_id)
         normalized.append(
-            replace(
-                record,
-                lineage=replace(
+            record.with_lineage(
+                replace(
                     lineage,
-                    target_row_id=global_target_row_id,
-                    target_source_index=target_source_index,
-                ),
+                    target=replace(
+                        lineage.target,
+                        target_row_id=global_target_row_id,
+                        target_source_index=target_source_index,
+                    ),
+                )
             )
         )
     return normalized
@@ -1371,22 +1397,26 @@ def _records_with_global_target_row_ids(records: list[RolloutZarrRecord]) -> lis
 def _global_target_key(lineage: RolloutLineage) -> tuple[object, ...]:
     """Return the source-scoped identity for one selected rollout target."""
 
-    selector_local_id = lineage.target_source_index
+    selector_local_id = lineage.target.target_source_index
     if selector_local_id is None:
-        selector_local_id = lineage.target_row_id
+        selector_local_id = lineage.target.target_row_id
     return (
         _lineage_source_row_id(lineage),
-        lineage.target_id or "",
-        lineage.matched_gt_target_id or "",
-        -1 if lineage.matched_gt_target_row_id is None else int(lineage.matched_gt_target_row_id),
+        lineage.target.target_id or "",
+        lineage.target.matched_gt_target_id or "",
+        -1 if lineage.target.matched_gt_target_row_id is None else int(lineage.target.matched_gt_target_row_id),
         -1 if selector_local_id is None else int(selector_local_id),
     )
 
 
-def _unique_targets(records: list[RolloutZarrRecord]) -> set[int]:
+def _unique_targets(records: list[RolloutWriteRecord]) -> set[int]:
     """Return unique target row ids represented by rollout records."""
 
-    return {int(record.lineage.target_row_id) for record in records if record.lineage.target_row_id is not None}
+    return {
+        int(record.lineage.target.target_row_id)
+        for record in records
+        if record.lineage.target.target_row_id is not None
+    }
 
 
 def _write_metadata_group(group: zarr.Group, *, field_retention_policy: str) -> None:
@@ -1397,7 +1427,7 @@ def _write_metadata_group(group: zarr.Group, *, field_retention_policy: str) -> 
     _write_string_array(group, "field_retention_policy", [field_retention_policy])
 
 
-def _build_dictionaries(records: list[RolloutZarrRecord]) -> dict[str, list[str]]:
+def _build_dictionaries(records: list[RolloutWriteRecord]) -> dict[str, list[str]]:
     items = list(_record_items(records))
     policy_values = {_policy_name(record.result.selection_policy) for record in records}
     policy_values.update(
@@ -1407,38 +1437,48 @@ def _build_dictionaries(records: list[RolloutZarrRecord]) -> dict[str, list[str]
         for step in trajectory.steps
     )
     policy_values.update(
-        lineage.target_selection_policy
+        lineage.target.target_selection_policy
         for _record, _trajectory, lineage in items
-        if lineage.target_selection_policy is not None
+        if lineage.target.target_selection_policy is not None
     )
-    target_values = {lineage.target_id or "unknown-target" for _record, _trajectory, lineage in items}
+    target_values = {lineage.target.target_id or "unknown-target" for _record, _trajectory, lineage in items}
     target_values.update(
-        lineage.matched_gt_target_id
+        lineage.target.matched_gt_target_id
         for _record, _trajectory, lineage in items
-        if lineage.matched_gt_target_id is not None
+        if lineage.target.matched_gt_target_id is not None
     )
     source_key_values = {
-        compact_ase_atek_sample_id(lineage.source_sample_key or "") for _record, _trajectory, lineage in items
+        compact_ase_atek_sample_id(lineage.source.source_sample_key or "") for _record, _trajectory, lineage in items
     }
-    source_shard_values = {lineage.source_shard_id or "" for _record, _trajectory, lineage in items}
+    source_shard_values = {lineage.source.source_shard_id or "" for _record, _trajectory, lineage in items}
     score_source_values = {
         step.selection_score_label
         for record in records
         for trajectory in record.result.trajectories
         for step in trajectory.steps
     }
-    split_values = {lineage.split or "unknown" for _record, _trajectory, lineage in items}
-    target_match_status_values = {lineage.gt_match_status or "not_requested" for _record, _trajectory, lineage in items}
+    crop_policy_values = {
+        evaluated.evidence.target_eval_crop_policy
+        for record in records
+        for chain_id, trajectory in enumerate(record.result.trajectories)
+        for step in trajectory.steps
+        if (evaluated := record.step(chain_id, step.step_index)) is not None
+        and evaluated.evidence.target_eval_crop_policy
+    }
+    split_values = {lineage.source.split or "unknown" for _record, _trajectory, lineage in items}
+    target_match_status_values = {
+        lineage.target.gt_match_status or "not_requested" for _record, _trajectory, lineage in items
+    }
     return {
-        "scene": sorted({lineage.scene_id or "" for _record, _trajectory, lineage in items}),
+        "scene": sorted({lineage.source.scene_id or "" for _record, _trajectory, lineage in items}),
         "snippet": sorted(
-            {compact_ase_atek_sample_id(lineage.snippet_id or "") for _record, _trajectory, lineage in items}
+            {compact_ase_atek_sample_id(lineage.source.snippet_id or "") for _record, _trajectory, lineage in items}
         ),
         "rollout": [lineage.rollout_id for _record, _trajectory, lineage in items],
         "target": sorted(target_values),
         "source_key": sorted(source_key_values),
         "source_shard": sorted(source_shard_values),
-        "target_source": sorted({lineage.target_source or "" for _record, _trajectory, lineage in items}),
+        "target_source": sorted({lineage.target.target_source or "" for _record, _trajectory, lineage in items}),
         "policy": sorted(policy_values),
         "score_source": sorted(score_source_values),
         "split": sorted(split_values),
@@ -1447,31 +1487,28 @@ def _build_dictionaries(records: list[RolloutZarrRecord]) -> dict[str, list[str]
                 value
                 for _record, _trajectory, lineage in items
                 for value in (
-                    lineage.candidate_config_hash,
-                    lineage.oracle_config_hash,
-                    lineage.rollout_config_hash,
-                    lineage.model_checkpoint_hash,
-                    lineage.mesh_version,
-                    lineage.source_cache_version,
-                    lineage.source_offline_store_manifest_hash,
-                    lineage.split_manifest_hash,
-                    lineage.branch_schedule_id,
-                    lineage.target_protocol_version,
-                    lineage.target_crop_policy,
-                    *(
-                        step.target_eval_crop_policy
-                        for trajectory in _record.result.trajectories
-                        for step in trajectory.steps
-                        if step.target_eval_crop_policy
-                    ),
-                    lineage.target_reason_code_version,
-                    lineage.reason_code_version,
-                    lineage.selection_rng_state_hash,
+                    lineage.policy.candidate_config_hash,
+                    lineage.policy.oracle_config_hash,
+                    lineage.policy.rollout_config_hash,
+                    lineage.policy.model_checkpoint_hash,
+                    lineage.source.mesh_version,
+                    lineage.source.source_cache_version,
+                    lineage.source.source_offline_store_manifest_hash,
+                    lineage.source.split_manifest_hash,
+                    lineage.policy.branch_schedule_id,
+                    lineage.target.target_protocol_version,
+                    lineage.target.target_crop_policy,
+                    *crop_policy_values,
+                    lineage.target.target_reason_code_version,
+                    lineage.policy.reason_code_version,
+                    lineage.policy.selection_rng_state_hash,
                 )
                 if value
             }
         ),
-        "class_name": sorted({lineage.target_class_name or "unknown" for _record, _trajectory, lineage in items}),
+        "class_name": sorted(
+            {lineage.target.target_class_name or "unknown" for _record, _trajectory, lineage in items}
+        ),
         "target_match_status": sorted(target_match_status_values),
         "termination_reason": sorted(
             {
@@ -1490,7 +1527,7 @@ def _write_dictionaries(group: zarr.Group, dictionaries: dict[str, list[str]]) -
 
 def _write_targets(
     group: zarr.Group,
-    records: list[RolloutZarrRecord],
+    records: list[RolloutWriteRecord],
     dictionaries: dict[str, list[str]],
     *,
     target_protocol_version: str,
@@ -1823,45 +1860,45 @@ def _write_targets(
     _write_string_array(group, "target_protocol_version", [target_protocol_version])
 
 
-def _target_rows_from_records(records: list[RolloutZarrRecord]) -> dict[int, dict[str, Any]]:
+def _target_rows_from_records(records: list[RolloutWriteRecord]) -> dict[int, dict[str, Any]]:
     rows: dict[int, dict[str, Any]] = {}
     for _record, _trajectory, lineage in _record_items(records):
-        row_id = lineage.target_row_id if lineage.target_row_id is not None else 0
+        row_id = lineage.target.target_row_id if lineage.target.target_row_id is not None else 0
         existing = rows.setdefault(int(row_id), {})
         values = {
-            "target_id": lineage.target_id or "unknown-target",
-            "target_selection_policy": lineage.target_selection_policy,
-            "target_selection_rank": lineage.target_selection_rank,
-            "target_selection_score": lineage.target_selection_score,
-            "target_selection_probability": lineage.target_selection_probability,
-            "target_selection_temperature": lineage.target_selection_temperature,
-            "target_source": lineage.target_source,
-            "target_source_index": lineage.target_source_index,
-            "target_sem_id": lineage.target_sem_id,
-            "target_inst_id": lineage.target_inst_id,
-            "target_class_name": lineage.target_class_name,
-            "target_confidence": lineage.target_confidence,
-            "target_projected_area_pixels": lineage.target_projected_area_pixels,
-            "target_projected_area_fraction": lineage.target_projected_area_fraction,
-            "target_semidense_support_count": lineage.target_semidense_support_count,
-            "target_evl_support_count": lineage.target_evl_support_count,
-            "target_effective_support_count": lineage.target_effective_support_count,
-            "target_visibility_score": lineage.target_visibility_score,
-            "target_support_score": lineage.target_support_score,
-            "target_deficit_score": lineage.target_deficit_score,
-            "target_center_world": lineage.target_center_world,
-            "target_extents": lineage.target_extents,
-            "target_pose_world_object": lineage.target_pose_world_object,
-            "target_relative_pose_reference_object": lineage.target_relative_pose_reference_object,
-            "target_invalid_reason_bitset": lineage.target_invalid_reason_bitset,
-            "target_primary_invalid_reason": lineage.target_primary_invalid_reason,
-            "target_reason_code_version": lineage.target_reason_code_version,
-            "matched_gt_target_row_id": lineage.matched_gt_target_row_id,
-            "matched_gt_target_id": lineage.matched_gt_target_id,
-            "gt_match_iou": lineage.gt_match_iou,
-            "gt_match_score": lineage.gt_match_score,
-            "gt_match_status": lineage.gt_match_status,
-            "target_crop_policy": lineage.target_crop_policy,
+            "target_id": lineage.target.target_id or "unknown-target",
+            "target_selection_policy": lineage.target.target_selection_policy,
+            "target_selection_rank": lineage.target.target_selection_rank,
+            "target_selection_score": lineage.target.target_selection_score,
+            "target_selection_probability": lineage.target.target_selection_probability,
+            "target_selection_temperature": lineage.target.target_selection_temperature,
+            "target_source": lineage.target.target_source,
+            "target_source_index": lineage.target.target_source_index,
+            "target_sem_id": lineage.target.target_sem_id,
+            "target_inst_id": lineage.target.target_inst_id,
+            "target_class_name": lineage.target.target_class_name,
+            "target_confidence": lineage.target.target_confidence,
+            "target_projected_area_pixels": lineage.target.target_projected_area_pixels,
+            "target_projected_area_fraction": lineage.target.target_projected_area_fraction,
+            "target_semidense_support_count": lineage.target.target_semidense_support_count,
+            "target_evl_support_count": lineage.target.target_evl_support_count,
+            "target_effective_support_count": lineage.target.target_effective_support_count,
+            "target_visibility_score": lineage.target.target_visibility_score,
+            "target_support_score": lineage.target.target_support_score,
+            "target_deficit_score": lineage.target.target_deficit_score,
+            "target_center_world": lineage.target.target_center_world,
+            "target_extents": lineage.target.target_extents,
+            "target_pose_world_object": lineage.target.target_pose_world_object,
+            "target_relative_pose_reference_object": lineage.target.target_relative_pose_reference_object,
+            "target_invalid_reason_bitset": lineage.target.target_invalid_reason_bitset,
+            "target_primary_invalid_reason": lineage.target.target_primary_invalid_reason,
+            "target_reason_code_version": lineage.target.target_reason_code_version,
+            "matched_gt_target_row_id": lineage.target.matched_gt_target_row_id,
+            "matched_gt_target_id": lineage.target.matched_gt_target_id,
+            "gt_match_iou": lineage.target.gt_match_iou,
+            "gt_match_score": lineage.target.gt_match_score,
+            "gt_match_status": lineage.target.gt_match_status,
+            "target_crop_policy": lineage.target.target_crop_policy,
         }
         for name, value in values.items():
             if value is not None or name not in existing:
@@ -1870,7 +1907,7 @@ def _target_rows_from_records(records: list[RolloutZarrRecord]) -> dict[int, dic
 
 
 def _flatten_records(
-    records: list[RolloutZarrRecord],
+    records: list[RolloutWriteRecord],
     dictionaries: dict[str, list[str]],
     *,
     selected_depth_width_px: int,
@@ -1893,12 +1930,14 @@ def _flatten_records(
     seen_source_rows: dict[int, tuple[object, ...]] = {}
     rollout_row_id = 0
     for record, trajectory, lineage in _record_items(records):
-        final_target_rri = _trajectory_cumulative_metric(trajectory, ("target_rri", "rri"))
-        if final_target_rri is None:
-            final_target_rri = trajectory.cumulative_rri
-        final_scene_rri = _trajectory_cumulative_metric(trajectory, ("scene_rri",))
-        final_target_root_gain = _trajectory_cumulative_metric(trajectory, ("target_root_gain", "root_gain"))
-        final_scene_root_gain = _trajectory_cumulative_metric(trajectory, ("scene_root_gain",))
+        final_target_rri = _trajectory_cumulative_metric(record, lineage.chain_id, trajectory, ("target_rri", "rri"))
+        final_scene_rri = _trajectory_cumulative_metric(record, lineage.chain_id, trajectory, ("scene_rri",))
+        final_target_root_gain = _trajectory_cumulative_metric(
+            record, lineage.chain_id, trajectory, ("target_root_gain", "root_gain")
+        )
+        final_scene_root_gain = _trajectory_cumulative_metric(
+            record, lineage.chain_id, trajectory, ("scene_root_gain",)
+        )
         source_row_id = _lineage_source_row_id(lineage)
         source_identity = _source_identity(lineage=lineage, source_row_id=source_row_id)
         existing_source_identity = seen_source_rows.get(source_row_id)
@@ -1920,17 +1959,19 @@ def _flatten_records(
         rollout_rows["root_time_ns"].append(_int_or_default(record.result.root_time_ns, default=-1))
         rollout_rows["root_trajectory_index"].append(_int_or_default(record.result.root_trajectory_index, default=-1))
         rollout_rows["root_frame_index"].append(_int_or_default(record.result.root_frame_index, default=-1))
-        rollout_rows["scene_id"].append(_dict_id(dictionaries["scene"], lineage.scene_id or ""))
+        rollout_rows["scene_id"].append(_dict_id(dictionaries["scene"], lineage.source.scene_id or ""))
         rollout_rows["snippet_id"].append(
-            _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.snippet_id or ""))
+            _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.source.snippet_id or ""))
         )
-        rollout_rows["target_row_id"].append(lineage.target_row_id if lineage.target_row_id is not None else 0)
+        rollout_rows["target_row_id"].append(
+            lineage.target.target_row_id if lineage.target.target_row_id is not None else 0
+        )
         rollout_rows["policy_id"].append(_dict_id(dictionaries["policy"], _policy_name(record.result.selection_policy)))
         rollout_rows["horizon"].append(record.result.horizon)
         rollout_rows["branch_factor"].append(record.result.branch_factor)
         rollout_rows["beam_width"].append(-1 if record.result.beam_width is None else record.result.beam_width)
         rollout_rows["temperature"].append(_first_temperature(trajectory))
-        rollout_rows["random_seed"].append(-1 if lineage.random_seed is None else lineage.random_seed)
+        rollout_rows["random_seed"].append(-1 if lineage.policy.random_seed is None else lineage.policy.random_seed)
         rollout_rows["termination_reason"].append(
             _dict_id(dictionaries["termination_reason"], _termination_reason(record.result, trajectory))
         )
@@ -1938,28 +1979,36 @@ def _flatten_records(
         rollout_rows["final_cumulative_scene_rri"].append(_nan_if_none(final_scene_rri))
         rollout_rows["final_cumulative_target_root_gain"].append(_nan_if_none(final_target_root_gain))
         rollout_rows["final_cumulative_scene_root_gain"].append(_nan_if_none(final_scene_root_gain))
-        rollout_rows["split_id"].append(_dict_id(dictionaries["split"], lineage.split or "unknown"))
+        rollout_rows["split_id"].append(_dict_id(dictionaries["split"], lineage.source.split or "unknown"))
 
         lineage_rows["rollout_row_id"].append(rollout_row_id)
         lineage_rows["candidate_config_id"].append(
-            _dict_id(dictionaries["config"], lineage.candidate_config_hash or "")
+            _dict_id(dictionaries["config"], lineage.policy.candidate_config_hash or "")
         )
-        lineage_rows["oracle_config_id"].append(_dict_id(dictionaries["config"], lineage.oracle_config_hash or ""))
-        lineage_rows["rollout_config_id"].append(_dict_id(dictionaries["config"], lineage.rollout_config_hash or ""))
+        lineage_rows["oracle_config_id"].append(
+            _dict_id(dictionaries["config"], lineage.policy.oracle_config_hash or "")
+        )
+        lineage_rows["rollout_config_id"].append(
+            _dict_id(dictionaries["config"], lineage.policy.rollout_config_hash or "")
+        )
         lineage_rows["model_checkpoint_id"].append(
-            _dict_id(dictionaries["config"], lineage.model_checkpoint_hash or "")
+            _dict_id(dictionaries["config"], lineage.policy.model_checkpoint_hash or "")
         )
-        lineage_rows["mesh_version_id"].append(_dict_id(dictionaries["config"], lineage.mesh_version or ""))
-        lineage_rows["branch_schedule_id"].append(_dict_id(dictionaries["config"], lineage.branch_schedule_id or ""))
+        lineage_rows["mesh_version_id"].append(_dict_id(dictionaries["config"], lineage.source.mesh_version or ""))
+        lineage_rows["branch_schedule_id"].append(
+            _dict_id(dictionaries["config"], lineage.policy.branch_schedule_id or "")
+        )
         lineage_rows["target_protocol_version_id"].append(
-            _dict_id(dictionaries["config"], lineage.target_protocol_version or "")
+            _dict_id(dictionaries["config"], lineage.target.target_protocol_version or "")
         )
-        lineage_rows["target_crop_policy_id"].append(_dict_id(dictionaries["config"], lineage.target_crop_policy or ""))
+        lineage_rows["target_crop_policy_id"].append(
+            _dict_id(dictionaries["config"], lineage.target.target_crop_policy or "")
+        )
         lineage_rows["reason_code_version_id"].append(
-            _dict_id(dictionaries["config"], lineage.reason_code_version or "")
+            _dict_id(dictionaries["config"], lineage.policy.reason_code_version or "")
         )
         lineage_rows["selection_rng_state_hash_id"].append(
-            _dict_id(dictionaries["config"], lineage.selection_rng_state_hash or "")
+            _dict_id(dictionaries["config"], lineage.policy.selection_rng_state_hash or "")
         )
 
         running_target_rri: float | None = None
@@ -1968,17 +2017,18 @@ def _flatten_records(
         running_scene_root_gain: float | None = None
         root_pose = record.result.root_pose_world.tensor().detach().cpu().reshape(-1)
         for step in trajectory.steps:
+            evaluated_step = _evaluated_step(record, lineage.chain_id, step.step_index)
             candidate_valid = _candidate_valid(step)
-            running_target_rri = _accumulate_selected_metric(running_target_rri, step, ("target_rri", "rri"))
-            running_scene_rri = _accumulate_selected_metric(running_scene_rri, step, ("scene_rri",))
+            running_target_rri = _accumulate_selected_metric(running_target_rri, evaluated_step, ("target_rri", "rri"))
+            running_scene_rri = _accumulate_selected_metric(running_scene_rri, evaluated_step, ("scene_rri",))
             running_target_root_gain = _accumulate_selected_metric(
                 running_target_root_gain,
-                step,
+                evaluated_step,
                 ("target_root_gain", "root_gain"),
             )
             running_scene_root_gain = _accumulate_selected_metric(
                 running_scene_root_gain,
-                step,
+                evaluated_step,
                 ("scene_root_gain",),
             )
             this_step_row_id = step_row_id
@@ -1998,14 +2048,14 @@ def _flatten_records(
             step_rows["cumulative_scene_root_gain"].append(_nan_if_none(running_scene_root_gain))
             _append_selected_depth_row(
                 selected_depth_rows,
-                step=step,
+                evidence=evaluated_step.evidence,
                 step_row_id=this_step_row_id,
                 selected_candidate_row_id=selected_candidate_row_id,
             )
             if target_eval_crops_enabled:
                 crop_row_id = _append_target_eval_crop_rows(
                     target_eval_crop_rows,
-                    step=step,
+                    evidence=evaluated_step.evidence,
                     candidate_valid=candidate_valid,
                     step_row_id=this_step_row_id,
                     candidate_row_id_start=candidate_row_id,
@@ -2018,6 +2068,7 @@ def _flatten_records(
                 _append_candidate_row(
                     candidate_rows,
                     step=step,
+                    labels=evaluated_step.labels,
                     candidate_valid=candidate_valid,
                     candidate_row_id=candidate_row_id,
                     step_row_id=this_step_row_id,
@@ -2065,21 +2116,25 @@ def _append_source_row(
 ) -> None:
     rows["source_row_id"].append(source_row_id)
     rows["sample_index"].append(
-        source_row_id if lineage.source_sample_index is None else int(lineage.source_sample_index)
+        source_row_id if lineage.source.source_sample_index is None else int(lineage.source.source_sample_index)
     )
     rows["sample_key_id"].append(
-        _dict_id(dictionaries["source_key"], compact_ase_atek_sample_id(lineage.source_sample_key or ""))
+        _dict_id(dictionaries["source_key"], compact_ase_atek_sample_id(lineage.source.source_sample_key or ""))
     )
-    rows["scene_id"].append(_dict_id(dictionaries["scene"], lineage.scene_id or ""))
-    rows["snippet_id"].append(_dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.snippet_id or "")))
-    rows["split_id"].append(_dict_id(dictionaries["split"], lineage.split or "unknown"))
-    rows["source_cache_version_id"].append(_dict_id(dictionaries["config"], lineage.source_cache_version or ""))
+    rows["scene_id"].append(_dict_id(dictionaries["scene"], lineage.source.scene_id or ""))
+    rows["snippet_id"].append(
+        _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.source.snippet_id or ""))
+    )
+    rows["split_id"].append(_dict_id(dictionaries["split"], lineage.source.split or "unknown"))
+    rows["source_cache_version_id"].append(_dict_id(dictionaries["config"], lineage.source.source_cache_version or ""))
     rows["source_offline_store_manifest_hash_id"].append(
-        _dict_id(dictionaries["config"], lineage.source_offline_store_manifest_hash or "")
+        _dict_id(dictionaries["config"], lineage.source.source_offline_store_manifest_hash or "")
     )
-    rows["split_manifest_hash_id"].append(_dict_id(dictionaries["config"], lineage.split_manifest_hash or ""))
-    rows["source_shard_id"].append(_dict_id(dictionaries["source_shard"], lineage.source_shard_id or ""))
-    rows["source_shard_row"].append(-1 if lineage.source_shard_row is None else int(lineage.source_shard_row))
+    rows["split_manifest_hash_id"].append(_dict_id(dictionaries["config"], lineage.source.split_manifest_hash or ""))
+    rows["source_shard_id"].append(_dict_id(dictionaries["source_shard"], lineage.source.source_shard_id or ""))
+    rows["source_shard_row"].append(
+        -1 if lineage.source.source_shard_row is None else int(lineage.source.source_shard_row)
+    )
 
 
 def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[object, ...]:
@@ -2087,24 +2142,24 @@ def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[ob
 
     return (
         source_row_id,
-        None if lineage.source_sample_index is None else int(lineage.source_sample_index),
-        compact_ase_atek_sample_id(lineage.source_sample_key or ""),
-        lineage.scene_id,
-        compact_ase_atek_sample_id(lineage.snippet_id or ""),
-        lineage.split,
-        lineage.source_cache_version,
-        lineage.source_offline_store_manifest_hash,
-        lineage.split_manifest_hash,
-        lineage.source_shard_id,
-        None if lineage.source_shard_row is None else int(lineage.source_shard_row),
+        None if lineage.source.source_sample_index is None else int(lineage.source.source_sample_index),
+        compact_ase_atek_sample_id(lineage.source.source_sample_key or ""),
+        lineage.source.scene_id,
+        compact_ase_atek_sample_id(lineage.source.snippet_id or ""),
+        lineage.source.split,
+        lineage.source.source_cache_version,
+        lineage.source.source_offline_store_manifest_hash,
+        lineage.source.split_manifest_hash,
+        lineage.source.source_shard_id,
+        None if lineage.source.source_shard_row is None else int(lineage.source.source_shard_row),
     )
 
 
 def _lineage_source_row_id(lineage: RolloutLineage) -> int:
-    if lineage.source_row_id is not None:
-        return int(lineage.source_row_id)
-    if lineage.source_sample_index is not None:
-        return int(lineage.source_sample_index)
+    if lineage.source.source_row_id is not None:
+        return int(lineage.source.source_row_id)
+    if lineage.source.source_sample_index is not None:
+        return int(lineage.source.source_sample_index)
     return 0
 
 
@@ -2137,7 +2192,7 @@ def _empty_target_eval_crop_rows() -> dict[str, list[Any]]:
 def _append_target_eval_crop_rows(
     rows: dict[str, list[Any]],
     *,
-    step: CounterfactualStepResult,
+    evidence: Any,
     candidate_valid: torch.Tensor,
     step_row_id: int,
     candidate_row_id_start: int,
@@ -2148,12 +2203,12 @@ def _append_target_eval_crop_rows(
     """Append oracle/eval-only target crop rows for current and candidate geometry."""
 
     crop_row_id = int(crop_row_id_start)
-    crop_policy_id = _dict_id(dictionaries["config"], step.target_eval_crop_policy or "")
-    voxel_size_m = _float_or_nan(step.target_eval_voxel_size_m)
-    max_points = _int_or_default(step.target_eval_max_points, default=fixed_max_points)
+    crop_policy_id = _dict_id(dictionaries["config"], evidence.target_eval_crop_policy or "")
+    voxel_size_m = _float_or_nan(evidence.target_eval_voxel_size_m)
+    max_points = _int_or_default(evidence.target_eval_max_points, default=fixed_max_points)
 
-    if step.target_eval_current_points_world is not None:
-        points, mask, length = _fixed_crop_payload(step.target_eval_current_points_world, fixed_max_points)
+    if evidence.target_eval_current_points_world is not None:
+        points, mask, length = _fixed_crop_payload(evidence.target_eval_current_points_world, fixed_max_points)
         _append_target_eval_crop_row(
             rows,
             crop_row_id=crop_row_id,
@@ -2169,12 +2224,12 @@ def _append_target_eval_crop_rows(
         )
         crop_row_id += 1
 
-    if step.target_eval_candidate_points_world is None:
+    if evidence.target_eval_candidate_points_world is None:
         return crop_row_id
-    lengths = step.target_eval_candidate_point_lengths
+    lengths = evidence.target_eval_candidate_point_lengths
     if lengths is None:
         raise ValueError("target_eval_candidate_point_lengths requires target_eval_candidate_points_world.")
-    points_q = torch.as_tensor(step.target_eval_candidate_points_world).detach().cpu()
+    points_q = torch.as_tensor(evidence.target_eval_candidate_points_world).detach().cpu()
     lengths_q = torch.as_tensor(lengths).detach().cpu().to(dtype=torch.long).reshape(-1)
     valid_indices = torch.nonzero(candidate_valid, as_tuple=False).reshape(-1)
     if points_q.ndim != 3 or points_q.shape[0] != valid_indices.numel():
@@ -2246,6 +2301,7 @@ def _append_candidate_row(
     rows: dict[str, list[Any]],
     *,
     step: CounterfactualStepResult,
+    labels: Any,
     candidate_valid: torch.Tensor,
     candidate_row_id: int,
     step_row_id: int,
@@ -2257,18 +2313,18 @@ def _append_candidate_row(
 ) -> None:
     is_valid = bool(candidate_valid[shell_index].item())
     is_selected = int(step.selected_shell_index) == int(shell_index)
-    target_rri = _metric_value(step, ("target_rri", "oracle_target_rri"), shell_index)
-    scene_rri = _metric_value(step, ("scene_rri", "oracle_scene_rri"), shell_index)
-    target_root_gain = _metric_value(step, ("target_root_gain", "root_gain"), shell_index)
-    scene_root_gain = _metric_value(step, ("scene_root_gain",), shell_index)
-    target_log_error_gain = _metric_value(step, ("target_log_error_gain", "log_error_gain"), shell_index)
-    scene_log_error_gain = _metric_value(step, ("scene_log_error_gain",), shell_index)
-    target_pm_dist_before = _metric_value(step, ("target_pm_dist_before",), shell_index)
-    target_pm_dist_after = _metric_value(step, ("target_pm_dist_after",), shell_index)
-    scene_pm_dist_before = _metric_value(step, ("scene_pm_dist_before",), shell_index)
-    scene_pm_dist_after = _metric_value(step, ("scene_pm_dist_after",), shell_index)
-    target_current_support = _metric_value(step, ("target_current_support",), shell_index)
-    target_candidate_support = _metric_value(step, ("target_candidate_support",), shell_index)
+    target_rri = _metric_value(labels, step, ("target_rri", "oracle_target_rri"), shell_index)
+    scene_rri = _metric_value(labels, step, ("scene_rri", "oracle_scene_rri"), shell_index)
+    target_root_gain = _metric_value(labels, step, ("target_root_gain", "root_gain"), shell_index)
+    scene_root_gain = _metric_value(labels, step, ("scene_root_gain",), shell_index)
+    target_log_error_gain = _metric_value(labels, step, ("target_log_error_gain", "log_error_gain"), shell_index)
+    scene_log_error_gain = _metric_value(labels, step, ("scene_log_error_gain",), shell_index)
+    target_pm_dist_before = _metric_value(labels, step, ("target_pm_dist_before",), shell_index)
+    target_pm_dist_after = _metric_value(labels, step, ("target_pm_dist_after",), shell_index)
+    scene_pm_dist_before = _metric_value(labels, step, ("scene_pm_dist_before",), shell_index)
+    scene_pm_dist_after = _metric_value(labels, step, ("scene_pm_dist_after",), shell_index)
+    target_current_support = _metric_value(labels, step, ("target_current_support",), shell_index)
+    target_candidate_support = _metric_value(labels, step, ("target_candidate_support",), shell_index)
     if not is_valid:
         target_rri = float("nan")
         scene_rri = float("nan")
@@ -2379,19 +2435,19 @@ def _append_candidate_diagnostic_row(
 def _append_selected_depth_row(
     rows: dict[str, list[Any]],
     *,
-    step: CounterfactualStepResult,
+    evidence: Any,
     step_row_id: int,
     selected_candidate_row_id: int,
 ) -> None:
     """Append one selected-action depth row when the step carries a raster."""
 
-    if step.selected_depth_m is None and step.selected_depth_valid_mask is None:
+    if evidence.selected_depth_m is None and evidence.selected_depth_valid_mask is None:
         return
-    if step.selected_depth_m is None or step.selected_depth_valid_mask is None:
+    if evidence.selected_depth_m is None or evidence.selected_depth_valid_mask is None:
         raise ValueError("selected_depth_m and selected_depth_valid_mask must be present together.")
 
-    depth = torch.as_tensor(step.selected_depth_m).detach().cpu()
-    valid_mask = torch.as_tensor(step.selected_depth_valid_mask).detach().cpu().to(dtype=torch.bool)
+    depth = torch.as_tensor(evidence.selected_depth_m).detach().cpu()
+    valid_mask = torch.as_tensor(evidence.selected_depth_valid_mask).detach().cpu().to(dtype=torch.bool)
     if depth.ndim != 2:
         raise ValueError(f"selected_depth_m must have shape (H,W), got {tuple(depth.shape)}.")
     if valid_mask.shape != depth.shape:
@@ -2410,9 +2466,9 @@ def _append_selected_depth_row(
     rows["candidate_row_id"].append(int(selected_candidate_row_id))
     rows["depth_m"].append(depth_filled)
     rows["valid_mask"].append(valid_np)
-    rows["focal_px"].append(_fixed_float_vector(step.selected_depth_focal_px, length=2))
-    rows["principal_point_px"].append(_fixed_float_vector(step.selected_depth_principal_point_px, length=2))
-    rows["image_size_hw"].append(_selected_depth_image_size(step, height=height, width=width))
+    rows["focal_px"].append(_fixed_float_vector(evidence.selected_depth_focal_px, length=2))
+    rows["principal_point_px"].append(_fixed_float_vector(evidence.selected_depth_principal_point_px, length=2))
+    rows["image_size_hw"].append(_selected_depth_image_size(evidence, height=height, width=width))
 
 
 def _write_rollout_tables(groups: dict[str, zarr.Group], tables: _RolloutTables) -> None:
@@ -2836,8 +2892,8 @@ def _dict_id(values: list[str], value: str) -> int:
 
 
 def _record_items(
-    records: list[RolloutZarrRecord],
-) -> Iterator[tuple[RolloutZarrRecord, CounterfactualTrajectory, RolloutLineage]]:
+    records: list[RolloutWriteRecord],
+) -> Iterator[tuple[RolloutWriteRecord, CounterfactualTrajectory, RolloutLineage]]:
     for record in records:
         for chain_id, trajectory in enumerate(record.result.trajectories):
             yield record, trajectory, record.lineage_for_chain(chain_id)
@@ -2854,20 +2910,29 @@ def _nan_if_none(value: float | None) -> float:
     return float("nan") if value is None else float(value)
 
 
-def _trajectory_cumulative_metric(trajectory: CounterfactualTrajectory, metric_names: tuple[str, ...]) -> float | None:
+def _trajectory_cumulative_metric(
+    record: Any,
+    chain_id: int,
+    trajectory: CounterfactualTrajectory,
+    metric_names: tuple[str, ...],
+) -> float | None:
     cumulative: float | None = None
     for step in trajectory.steps:
-        cumulative = _accumulate_selected_metric(cumulative, step, metric_names)
+        cumulative = _accumulate_selected_metric(
+            cumulative,
+            _evaluated_step(record, chain_id, step.step_index),
+            metric_names,
+        )
     return cumulative
 
 
 def _accumulate_selected_metric(
     current: float | None,
-    step: CounterfactualStepResult,
+    evaluated_step: Any,
     metric_names: tuple[str, ...],
 ) -> float | None:
     for metric_name in metric_names:
-        value = step.selected_metrics.get(metric_name)
+        value = evaluated_step.selected_metrics.get(metric_name)
         if value is not None and np.isfinite(float(value)):
             return float(value) if current is None else float(current + float(value))
     return current
@@ -2886,10 +2951,10 @@ def _fixed_float_vector(value: Any, *, length: int) -> np.ndarray:
     return array
 
 
-def _selected_depth_image_size(step: CounterfactualStepResult, *, height: int, width: int) -> np.ndarray:
-    if step.selected_depth_image_size_hw is None:
+def _selected_depth_image_size(evidence: _SelectedDepthEvidence, *, height: int, width: int) -> np.ndarray:
+    if evidence.selected_depth_image_size_hw is None:
         return np.asarray([height, width], dtype=np.int32)
-    array = np.asarray(step.selected_depth_image_size_hw, dtype=np.int32).reshape(-1)
+    array = np.asarray(evidence.selected_depth_image_size_hw, dtype=np.int32).reshape(-1)
     if array.shape[0] != 2:
         return np.asarray([height, width], dtype=np.int32)
     return array
@@ -2913,12 +2978,24 @@ def _compact_valid_index(candidate_valid: torch.Tensor, shell_index: int) -> int
     return int(matches[0])
 
 
-def _metric_value(step: CounterfactualStepResult, metric_names: tuple[str, ...], shell_index: int) -> float:
+def _metric_value(
+    labels: Any,
+    step: CounterfactualStepResult,
+    metric_names: tuple[str, ...],
+    shell_index: int,
+) -> float:
     for metric_name in metric_names:
-        values = step.metric_vectors.get(metric_name)
+        values = labels.metrics.get(metric_name)
         if values is not None:
             return float(_valid_vector_value(values, shell_index, _candidate_valid(step), default=np.nan))
     return float("nan")
+
+
+def _evaluated_step(record: Any, chain_id: int, step_index: int) -> Any:
+    evaluated = record.step(chain_id, step_index)
+    if evaluated is None:
+        raise ValueError(f"Missing Oracle labels for rollout chain={chain_id} step={step_index}.")
+    return evaluated
 
 
 def _full_shell_value(
@@ -2984,11 +3061,11 @@ def _valid_vector_value(
 
 
 def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
-    target_bitset = lineage.target_invalid_reason_bitset
+    target_bitset = lineage.target.target_invalid_reason_bitset
     target_valid = target_bitset is None or int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])
-    gt_status = lineage.gt_match_status
+    gt_status = lineage.target.gt_match_status
     gt_valid = gt_status in {"matched", "v0_gt_input"} and (
-        lineage.matched_gt_target_row_id is not None and int(lineage.matched_gt_target_row_id) >= 0
+        lineage.target.matched_gt_target_row_id is not None and int(lineage.target.matched_gt_target_row_id) >= 0
     )
     return bool(target_valid and gt_valid)
 

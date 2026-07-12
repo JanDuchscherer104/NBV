@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -22,8 +21,13 @@ from ...data_handling import (
     VinOfflineStoreConfig,
 )
 from ...oracle.evidence import target_gt_obb_world
+from ...oracle.pipelines.evaluated_rollout import (
+    EvaluatedRollout,
+    OracleReplayAdapter,
+    OracleReplayInvalidityError,
+)
 from ...oracle.scene_rri import SceneRriScorerConfig
-from ...oracle.target_rri import TargetRriEvaluation, TargetRriInvalidity, TargetRriScorer, TargetRriScorerConfig
+from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -48,10 +52,7 @@ from ...rendering.plotting import (
     project_world_points_to_image,
 )
 from ...rollouts import (
-    CounterfactualCandidateEvaluation,
-    CounterfactualMetricBundle,
     CounterfactualPoseGeneratorConfig,
-    CounterfactualRolloutResult,
     CounterfactualSelectionPolicy,
     RolloutPolicySpec,
     candidate_result_diagnostic_counts,
@@ -64,12 +65,6 @@ from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene
 from ..state_types import config_signature
 from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
-
-if TYPE_CHECKING:
-    from ...pose_generation.types import CandidateSamplingResult
-    from ...rollouts.replay.engine import CounterfactualEvaluatorFn
-    from ...rollouts.replay.state import CounterfactualTrajectory
-
 
 _SOURCE_TARGET_INFO = """
 This block chooses the immutable VIN offline root and the oracle-specified target tasks.
@@ -345,7 +340,7 @@ class LiveRolloutScoreContext:
     """Evaluator and candidate-runtime state for one live rollout run."""
 
     score_label: str
-    evaluator: "CounterfactualEvaluatorFn | None"
+    evaluator: OracleReplayAdapter | None
     runtime_context: CandidateGenerationRuntimeContext | None
 
 
@@ -413,66 +408,6 @@ def _live_depth_config(*, max_candidates: int, device: str) -> CandidateDepthRen
         device=torch.device(device),
         max_candidates_final=int(max_candidates),
     )
-
-
-class _SceneRriScoreAdapter:
-    """Rename scene-level oracle RRI so the UI does not imply target scoring."""
-
-    def __init__(self, scorer: object) -> None:
-        self.scorer = scorer
-
-    def __call__(self, candidates, trajectory, step_index) -> CounterfactualCandidateEvaluation:
-        evaluation = self.scorer(candidates, trajectory, step_index)
-        metrics = CounterfactualMetricBundle.from_vectors(evaluation.metric_vectors)
-        if metrics.scene_rri is None and metrics.rri is not None:
-            metrics.scene_rri = metrics.rri
-        return CounterfactualCandidateEvaluation(
-            scores=evaluation.scores,
-            score_label=LiveRolloutScoringMode.SCENE_RRI.value,
-            metrics=metrics,
-            candidate_point_clouds_world=evaluation.candidate_point_clouds_world,
-            candidate_point_cloud_lengths=evaluation.candidate_point_cloud_lengths,
-        )
-
-
-class _TargetRriInvalidityError(ValueError):
-    """UI control flow carrying one typed target-evidence invalidity."""
-
-    def __init__(self, invalidity: TargetRriInvalidity) -> None:
-        super().__init__(f"{invalidity.reason.value}: {invalidity.message}")
-        self.invalidity = invalidity
-
-
-class _TargetRriScoreAdapter:
-    """Adapt Oracle target labels to the current replay evaluation payload."""
-
-    def __init__(self, scorer: TargetRriScorer) -> None:
-        self.scorer = scorer
-
-    def __call__(
-        self,
-        candidates: CandidateSamplingResult,
-        trajectory: CounterfactualTrajectory,
-        step_index: int,
-    ) -> CounterfactualCandidateEvaluation:
-        outcome = self.scorer(candidates, trajectory, step_index)
-        if isinstance(outcome, TargetRriInvalidity):
-            raise _TargetRriInvalidityError(outcome)
-        if not isinstance(outcome, TargetRriEvaluation):
-            raise TypeError(f"Target scorer returned unsupported outcome {type(outcome).__name__}.")
-        return CounterfactualCandidateEvaluation(
-            scores=outcome.scores,
-            score_label=outcome.score_label,
-            metric_vectors=outcome.metric_vectors,
-            candidate_point_clouds_world=outcome.candidate_point_clouds_world,
-            candidate_point_cloud_lengths=outcome.candidate_point_cloud_lengths,
-            target_eval_current_points_world=outcome.target_eval_current_points_world,
-            target_eval_candidate_points_world=outcome.target_eval_candidate_points_world,
-            target_eval_candidate_point_lengths=outcome.target_eval_candidate_point_lengths,
-            target_eval_crop_policy=outcome.target_eval_crop_policy,
-            target_eval_voxel_size_m=outcome.target_eval_voxel_size_m,
-            target_eval_max_points=outcome.target_eval_max_points,
-        )
 
 
 def _build_live_dataset_config(*, store_dir: Path, split: str) -> VinOfflineDatasetConfig:
@@ -652,7 +587,7 @@ def _score_context_for_mode(
         scorer = scene_scorer_config.setup_target(sample=sample.efm_snippet_view)
         return LiveRolloutScoreContext(
             score_label=LiveRolloutScoringMode.SCENE_RRI.value,
-            evaluator=_SceneRriScoreAdapter(scorer),
+            evaluator=OracleReplayAdapter(scorer),
             runtime_context=None,
         )
 
@@ -667,7 +602,7 @@ def _score_context_for_mode(
     )
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
-        evaluator=_TargetRriScoreAdapter(scorer),
+        evaluator=OracleReplayAdapter(scorer),
         runtime_context=CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target)),
     )
 
@@ -681,7 +616,7 @@ def _run_live_rollout(
     rollout_config: CounterfactualPoseGeneratorConfig,
     target_scorer_config: TargetRriScorerConfig,
     scene_scorer_config: SceneRriScorerConfig,
-) -> tuple[CounterfactualRolloutResult, str]:
+) -> tuple[EvaluatedRollout, str]:
     """Generate one live rollout result and capture Console logs for display."""
 
     if sample.efm_snippet_view is None:
@@ -707,33 +642,45 @@ def _run_live_rollout(
 
     Console.set_sink(_sink)
     try:
-        rollouts = resolved_rollout_config.setup_target().generate_from_typed_sample(
+        result = resolved_rollout_config.setup_target().generate_from_typed_sample(
             sample.efm_snippet_view,
             score_candidates=context.evaluator,
             candidate_runtime_context=context.runtime_context,
         )
     finally:
         Console.set_sink(None)
-    if context.score_label == LiveRolloutScoringMode.GEOMETRY.value:
-        rollouts.score_label = LiveRolloutScoringMode.GEOMETRY.value
-    return rollouts, "\n".join(lines)
+    result.score_label = context.score_label
+    evaluated = (
+        EvaluatedRollout(result=result)
+        if context.evaluator is None
+        else context.evaluator.materialize(result, retain_target_crops=False)
+    )
+    return evaluated, "\n".join(lines)
 
 
 def _counterfactual_trajectory_rows(
-    rollouts: CounterfactualRolloutResult,
+    evaluated: EvaluatedRollout,
 ) -> list[dict[str, int | float | bool | None]]:
     """Summarize rollout trajectories for compact panel tables."""
 
     rows: list[dict[str, int | float | bool | None]] = []
-    for traj_idx, trajectory in enumerate(rollouts.trajectories):
+    for traj_idx, trajectory in enumerate(evaluated.result.trajectories):
         final_pos = trajectory.final_pose_world().t.detach().cpu().reshape(-1).tolist()
-        metric_summary = summarize_target_rollout_metrics([step.selected_metrics for step in trajectory.steps])
+        selected_metrics = [
+            evaluated_step.selected_metrics
+            for step in trajectory.steps
+            if (evaluated_step := evaluated.step(traj_idx, step.step_index)) is not None
+        ]
+        metric_summary = summarize_target_rollout_metrics(selected_metrics)
         rows.append(
             {
                 "trajectory": traj_idx,
                 "steps": len(trajectory.steps),
                 "cumulative_score": float(trajectory.cumulative_score),
-                "cumulative_rri": (None if trajectory.cumulative_rri is None else float(trajectory.cumulative_rri)),
+                "cumulative_rri": sum(
+                    float(metrics.get("rri", 0.0)) for metrics in selected_metrics if "rri" in metrics
+                )
+                or None,
                 "G_target": metric_summary.cumulative_return,
                 "J_endpoint": metric_summary.endpoint_gain,
                 "log_gain": metric_summary.log_gain,
@@ -746,25 +693,28 @@ def _counterfactual_trajectory_rows(
     return rows
 
 
-def _trajectory_metric_rows(rollouts: CounterfactualRolloutResult) -> pd.DataFrame:
+def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
     """Return selected-step and fanout metric rows for rollout dashboard plots."""
 
     rows: list[dict[str, object]] = []
-    for traj_idx, trajectory in enumerate(rollouts.trajectories):
+    for traj_idx, trajectory in enumerate(evaluated.result.trajectories):
         cumulative = 0.0
         for step in trajectory.steps:
+            evaluated_step = evaluated.step(traj_idx, step.step_index)
+            if evaluated_step is None:
+                continue
             selected_target_rri = _metric_float(
-                step.selected_metrics.get("target_rri", step.selected_metrics.get("rri"))
+                evaluated_step.selected_metrics.get("target_rri", evaluated_step.selected_metrics.get("rri"))
             )
-            selected_target_root_gain = _metric_float(step.selected_metrics.get("target_root_gain"))
+            selected_target_root_gain = _metric_float(evaluated_step.selected_metrics.get("target_root_gain"))
             selected_return = (
                 selected_target_root_gain if selected_target_root_gain is not None else selected_target_rri
             )
             if selected_return is not None:
                 cumulative += selected_return
-            valid_target_gain = _valid_step_metric_values(step, "target_root_gain")
+            valid_target_gain = _valid_step_metric_values(evaluated_step, "target_root_gain")
             if valid_target_gain.size == 0:
-                valid_target_gain = _valid_step_metric_values(step, "target_rri")
+                valid_target_gain = _valid_step_metric_values(evaluated_step, "target_rri")
             fanout_q025 = float(np.quantile(valid_target_gain, 0.025)) if valid_target_gain.size else None
             fanout_q975 = float(np.quantile(valid_target_gain, 0.975)) if valid_target_gain.size else None
             top_values = sorted(valid_target_gain.tolist(), reverse=True)[:5]
@@ -1456,7 +1406,7 @@ def _render_live_rollouts_tab() -> None:
                     scene_scorer_config=scene_scorer_cfg,
                 )
             rollout_cache[run_key] = {"rollouts": rollouts, "logs": log_text}
-        except _TargetRriInvalidityError as exc:
+        except OracleReplayInvalidityError as exc:
             st.error(f"Target-RRI invalid ({exc.invalidity.reason.value}): {exc.invalidity.message}")
             rollout_cache.pop(run_key, None)
         except Exception as exc:  # pragma: no cover - UI guard
@@ -1481,7 +1431,7 @@ def _render_live_rollouts_tab() -> None:
 
 def _render_rollout_result(
     sample: VinOfflineSample,
-    rollouts: CounterfactualRolloutResult,
+    evaluated: EvaluatedRollout,
     *,
     target: TargetCandidateRow | None,
     log_text: str,
@@ -1489,7 +1439,8 @@ def _render_rollout_result(
 ) -> None:
     """Render one live rollout result."""
 
-    rows = _counterfactual_trajectory_rows(rollouts)
+    rollouts = evaluated.result
+    rows = _counterfactual_trajectory_rows(evaluated)
     metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
     metric_col1.metric("Trajectories", len(rollouts.trajectories))
     metric_col2.metric("Horizon", rollouts.horizon)
@@ -1501,7 +1452,7 @@ def _render_rollout_result(
         st.info("Geometry mode does not compute RRI; cumulative_rri is intentionally empty.")
 
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-    _render_live_rollout_metric_dashboard(rollouts, rows=rows, scoring_mode=scoring_mode)
+    _render_live_rollout_metric_dashboard(evaluated, rows=rows, scoring_mode=scoring_mode)
 
     plot_tab, step_tab, depth_tab, log_tab = st.tabs(["Paths", "Step Shell", "Selected Depth", "Logs"])
     snippet = sample.efm_snippet_view
@@ -1667,11 +1618,14 @@ def _render_rollout_result(
                     step_fig = step_builder.finalize()
                     st.plotly_chart(step_fig, width="stretch")
                     with st.expander("Step candidate fanout diagnostics", expanded=True):
-                        _render_live_step_candidate_diagnostics(trajectory.steps[int(step_display_index - 1)])
+                        evaluated_step = evaluated.step(int(trajectory_index), int(step_display_index - 1))
+                        _render_live_step_candidate_diagnostics(
+                            trajectory.steps[int(step_display_index - 1)] if evaluated_step is None else evaluated_step
+                        )
 
     with depth_tab:
         _info_popover("selected depth", _LIVE_SELECTED_DEPTH_INFO)
-        _render_live_selected_depth_tab(rollouts, sample=sample, target=target)
+        _render_live_selected_depth_tab(evaluated, sample=sample, target=target)
 
     with log_tab:
         _info_popover("rollout logs", _LIVE_LOG_INFO)
@@ -1682,12 +1636,13 @@ def _render_rollout_result(
 
 
 def _render_live_selected_depth_tab(
-    rollouts: CounterfactualRolloutResult,
+    evaluated: EvaluatedRollout,
     *,
     sample: VinOfflineSample,
     target: TargetCandidateRow | None,
 ) -> None:
-    rows = pd.DataFrame(_live_selected_depth_rows(rollouts))
+    rollouts = evaluated.result
+    rows = pd.DataFrame(_live_selected_depth_rows(evaluated))
     if rows.empty:
         st.info("No rollout steps are available for selected-depth inspection.")
         return
@@ -1730,7 +1685,11 @@ def _render_live_selected_depth_tab(
     )
     selected = preview_rows.iloc[selected_preview_index]
     trajectory = rollouts.trajectories[int(selected["trajectory"])]
-    step = trajectory.steps[int(selected["step"]) - 1]
+    transition = trajectory.steps[int(selected["step"]) - 1]
+    step = evaluated.step(int(selected["trajectory"]), transition.step_index)
+    if step is None:
+        st.warning("Oracle evidence is unavailable for this selected step.")
+        return
     overlay_col1, overlay_col2 = st.columns(2)
     show_actor_projection = overlay_col1.checkbox(
         "Project descriptor target OBB",
@@ -1784,15 +1743,16 @@ def _render_live_selected_depth_tab(
     )
 
 
-def _live_selected_depth_rows(rollouts: CounterfactualRolloutResult) -> list[dict[str, object]]:
+def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, object]]:
     """Return selected-depth availability and summary stats for live rollout steps."""
 
     rows: list[dict[str, object]] = []
-    for trajectory_index, trajectory in enumerate(rollouts.trajectories):
-        for step in trajectory.steps:
+    for trajectory_index, trajectory in enumerate(evaluated.result.trajectories):
+        for transition in trajectory.steps:
+            step = evaluated.step(trajectory_index, transition.step_index)
             base = {
                 "trajectory": int(trajectory_index),
-                "step": int(step.step_index) + 1,
+                "step": int(transition.step_index) + 1,
                 "available": False,
                 "valid_pixels": None,
                 "finite_pixels": None,
@@ -1802,11 +1762,11 @@ def _live_selected_depth_rows(rollouts: CounterfactualRolloutResult) -> list[dic
                 "depth_min_m": None,
                 "depth_mean_m": None,
                 "depth_max_m": None,
-                "selected_score": float(step.selection_score),
-                "selected_policy": step.selection_policy,
+                "selected_score": float(transition.selection_score),
+                "selected_policy": transition.selection_policy,
                 "warning": "",
             }
-            if step.selected_depth_m is None or step.selected_depth_valid_mask is None:
+            if step is None or step.selected_depth_m is None or step.selected_depth_valid_mask is None:
                 rows.append({**base, "warning": "selected_depth_m/valid_mask not retained for this live step."})
                 continue
             depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
@@ -1923,7 +1883,7 @@ def _safe_fraction(numerator: int, denominator: int) -> float | None:
 
 
 def _render_live_rollout_metric_dashboard(
-    rollouts: CounterfactualRolloutResult,
+    evaluated: EvaluatedRollout,
     *,
     rows: list[dict[str, int | float | bool | None]],
     scoring_mode: LiveRolloutScoringMode,
@@ -1934,7 +1894,7 @@ def _render_live_rollout_metric_dashboard(
         return
 
     rows_df = pd.DataFrame(rows)
-    step_df = _trajectory_metric_rows(rollouts)
+    step_df = _trajectory_metric_rows(evaluated)
     metric_cols = st.columns(4)
     if rows_df.empty:
         metric_cols[0].metric("Best branch", "n/a")

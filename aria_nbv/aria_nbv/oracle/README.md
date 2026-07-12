@@ -12,6 +12,7 @@ oracle/
   __init__.py
   _scoring.py
   evidence.py
+  labels.py
   scene_rri.py
   target_rri.py
   target_selection.py
@@ -20,11 +21,12 @@ oracle/
 
 WP07 established target-task ownership. WP08-WP09 established scene/target
 scoring, typed evidence invalidity, and the shared private scoring engine.
-Pipeline relocation remains WP12.
+WP11 split scorer labels from optional retained evidence; pipeline relocation
+remains WP12.
 
 Baseline: `4daf9d4`
 
-Graphify refresh: `2026-07-11T18:23:00+02:00`
+Graphify refresh: `2026-07-11T20:46:10+02:00`
 
 ## Symbol Ownership Matrix
 
@@ -76,9 +78,17 @@ classes and configs; imported names and `__all__` are excluded from the matrix.
 
 | Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `SceneRriEvaluation` | DTO | public | rollout evaluation coupling | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 | `SceneRriScorerConfig` | config | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
 | `SceneRriScorer` | class | public | `rollouts.counterfactuals` | `oracle.scene_rri` | `oracle.scene_rri` | moved |
+
+### `labels.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `OracleCandidateLabels` | DTO | public | wide replay evaluator result | `oracle.labels` | `oracle.labels` | moved |
+| `RetainedOracleEvidence` | DTO | public | replay steps and scorer-specific DTOs | `oracle.labels` | `oracle.labels` | moved |
+| `OracleCandidateEvaluation` | DTO | public | scorer-specific evaluation DTOs | `oracle.labels` | `oracle.labels` | moved |
+| `_validated_point_cloud_rows` | function | private | wide replay evaluator validation | `oracle.labels` | `oracle.labels` | moved |
 
 ### `target_rri.py`
 
@@ -87,7 +97,6 @@ classes and configs; imported names and `__all__` are excluded from the matrix.
 | `TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1` | constant | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
 | `SCENE_CROP_POLICY_SNIPPET_EXTENT_V1` | constant | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
 | `TargetRriInvalidity` | DTO | public | exception-only invalidity | `oracle.target_rri` | `oracle.target_rri` | moved |
-| `TargetRriEvaluation` | DTO | public | rollout evaluation coupling | `oracle.target_rri` | `oracle.target_rri` | moved |
 | `TargetRriScorerConfig` | config | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
 | `TargetRriScorer` | class | public | `rollouts.target_counterfactuals` | `oracle.target_rri` | `oracle.target_rri` | moved |
 
@@ -128,6 +137,7 @@ classes and configs; imported names and `__all__` are excluded from the matrix.
 ```text
 oracle/
   evidence.py
+  labels.py
   target_selection.py
   scene_rri.py
   target_rri.py

@@ -22,7 +22,7 @@ Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
 Inventory generated: `2026-07-10T16:10:28.231382+00:00`
 
-Graphify refresh: `2026-07-11T19:40:59+02:00`
+Graphify refresh: `2026-07-11T20:46:10+02:00`
 
 ## Symbol Ownership Matrix
 
@@ -196,8 +196,10 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 | `_RULE_REASON_BITS` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
 | `_HARD_DIAGNOSTIC_REASON_BITS` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
 | `_PRIMARY_INVALID_REASON_PRIORITY` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
+| `SourceLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
+| `TargetLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
+| `PolicyLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
 | `RolloutLineage` | `DTO` | `public` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `RolloutZarrRecord` | `DTO` | `public` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
 | `_full_candidate_vector` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
 | `_full_shell_or_default` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
 | `_candidate_invalid_reasons` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
@@ -210,6 +212,8 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
+| `RolloutWriteRecord` | protocol | public | `rollouts.trace.RolloutZarrRecord` | `rollouts.zarr_store` | `rollouts.zarr_store` | moved |
+| `_SelectedDepthEvidence` | protocol | private | wide replay step fields | `rollouts.zarr_store` | `rollouts.zarr_store` | moved |
 | `ROLLOUT_ZARR_SCHEMA_ID` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `ROLLOUT_ZARR_SCHEMA_VERSION` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `DEFAULT_RETURN_SEMANTICS` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
@@ -230,6 +234,7 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 | `SELECTED_DEPTH_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `TARGET_EVAL_CROP_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `RolloutZarrWriteResult` | `DTO` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
+| `_evaluated_step` | `function` | `private` | direct wide-step access | `rollouts.zarr_store` | `rollouts.zarr_store` | `moved` |
 | `RolloutZarrValidationResult` | `DTO` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `_RolloutTables` | `DTO` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
 | `RolloutZarrStoreConfig` | `config` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |

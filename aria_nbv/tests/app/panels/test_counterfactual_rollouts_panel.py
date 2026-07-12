@@ -23,6 +23,8 @@ from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.configs import PathConfig
+from aria_nbv.oracle.labels import OracleCandidateLabels, RetainedOracleEvidence
+from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
@@ -57,6 +59,26 @@ _PATH_CONFIG_FIELDS = (
     "processed_meshes",
     "external_dir",
 )
+
+
+def _evaluated_single_step(result, transition, *, metrics=None, evidence=None) -> EvaluatedRollout:
+    labels = OracleCandidateLabels(
+        scores=torch.as_tensor([transition.selection_score], dtype=torch.float32),
+        score_label=transition.selection_score_label,
+        metrics={} if metrics is None else metrics,
+        candidate_shell_indices=torch.as_tensor([transition.selected_shell_index], dtype=torch.long),
+        provenance="test",
+    )
+    return EvaluatedRollout(
+        result=result,
+        steps={
+            (0, transition.step_index): EvaluatedRolloutStep(
+                transition=transition,
+                labels=labels,
+                evidence=RetainedOracleEvidence() if evidence is None else evidence,
+            )
+        },
+    )
 
 
 @pytest.fixture
@@ -277,13 +299,21 @@ def test_live_selected_depth_rows_summarize_retained_depth() -> None:
     step = SimpleNamespace(
         step_index=0,
         selection_score=0.75,
+        selection_score_label="target_rri",
         selection_policy="oracle_greedy",
-        selected_depth_m=torch.tensor([[1.0, 2.0], [3.0, float("nan")]], dtype=torch.float32),
-        selected_depth_valid_mask=torch.tensor([[True, True], [False, True]], dtype=torch.bool),
+        selected_shell_index=0,
     )
-    rollouts = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
+    result = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
+    evaluated = _evaluated_single_step(
+        result,
+        step,
+        evidence=RetainedOracleEvidence(
+            selected_depth_m=torch.tensor([[1.0, 2.0], [3.0, float("nan")]], dtype=torch.float32),
+            selected_depth_valid_mask=torch.tensor([[True, True], [False, True]], dtype=torch.bool),
+        ),
+    )
 
-    rows = rollout_panel._live_selected_depth_rows(rollouts)
+    rows = rollout_panel._live_selected_depth_rows(evaluated)
 
     assert len(rows) == 1
     row = rows[0]
@@ -299,13 +329,13 @@ def test_live_selected_depth_rows_report_unretained_depth() -> None:
     step = SimpleNamespace(
         step_index=0,
         selection_score=0.75,
+        selection_score_label="target_rri",
         selection_policy="oracle_greedy",
-        selected_depth_m=None,
-        selected_depth_valid_mask=None,
+        selected_shell_index=0,
     )
-    rollouts = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
+    result = SimpleNamespace(trajectories=[SimpleNamespace(steps=[step])])
 
-    rows = rollout_panel._live_selected_depth_rows(rollouts)
+    rows = rollout_panel._live_selected_depth_rows(_evaluated_single_step(result, step))
 
     assert rows[0]["available"] is False
     assert "not retained" in str(rows[0]["warning"])
@@ -646,13 +676,11 @@ def test_counterfactual_trajectory_rows_capture_step_count_score_and_final_pose(
         selected_shell_index=0,
         selection_score=0.75,
         selection_score_label="target_rri",
-        selected_metrics={"rri": 0.75, "target_rri": 0.75},
     )
     trajectory = CounterfactualTrajectory(
         root_pose_world=root_pose,
         steps=[step],
         cumulative_score=0.75,
-        cumulative_rri=0.75,
         terminated_early=False,
     )
     rollouts = CounterfactualRolloutResult(
@@ -665,7 +693,12 @@ def test_counterfactual_trajectory_rows_capture_step_count_score_and_final_pose(
         score_label="target_rri",
     )
 
-    rows = rollout_panel._counterfactual_trajectory_rows(rollouts)
+    evaluated = _evaluated_single_step(
+        rollouts,
+        step,
+        metrics={"rri": torch.tensor([0.75]), "target_rri": torch.tensor([0.75])},
+    )
+    rows = rollout_panel._counterfactual_trajectory_rows(evaluated)
 
     assert len(rows) == 1
     assert rows[0]["steps"] == 1
@@ -684,8 +717,6 @@ def test_trajectory_metric_rows_use_empirical_95_band_not_min_mean_max() -> None
         selected_shell_index=0,
         selection_score=0.2,
         selection_score_label="target_rri",
-        selected_metrics={"target_rri": 0.2},
-        metric_vectors={"target_rri": torch.tensor([0.0, 100.0, 0.2, 100.0])},
     )
     rollouts = CounterfactualRolloutResult(
         root_pose_world=PoseTW.from_Rt(torch.eye(3), torch.zeros(3)),
@@ -699,7 +730,12 @@ def test_trajectory_metric_rows_use_empirical_95_band_not_min_mean_max() -> None
         score_label="target_rri",
     )
 
-    rows = rollout_panel._trajectory_metric_rows(rollouts)
+    evaluated = _evaluated_single_step(
+        rollouts,
+        step,
+        metrics={"target_rri": torch.tensor([0.0, 100.0, 0.2, 100.0])},
+    )
+    rows = rollout_panel._trajectory_metric_rows(evaluated)
 
     assert set(rows.columns).isdisjoint({"fanout_min", "fanout_mean", "fanout_max"})
     assert rows.loc[0, "fanout_q025"] == pytest.approx(np.quantile([0.0, 0.2], 0.025))

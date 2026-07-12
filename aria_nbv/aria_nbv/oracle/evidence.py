@@ -60,10 +60,21 @@ class _OracleEvidenceError(ValueError):
 class OracleRriState(Protocol):
     """Minimal actor/replay state consumed by Oracle RRI facades."""
 
-    root_pose_world: PoseTW
-    root_time_ns: int | None
-    root_trajectory_index: int | None
-    root_frame_index: int | None
+    @property
+    def root_pose_world(self) -> PoseTW:
+        """Return the rollout root pose in world coordinates."""
+
+    @property
+    def root_time_ns(self) -> int | None:
+        """Return the root timestamp when available."""
+
+    @property
+    def root_trajectory_index(self) -> int | None:
+        """Return the root trajectory row when available."""
+
+    @property
+    def root_frame_index(self) -> int | None:
+        """Return the root frame row when available."""
 
     def accumulated_points_world(self) -> Tensor:
         """Return selected-history point clouds in world coordinates."""

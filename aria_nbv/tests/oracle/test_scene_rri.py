@@ -65,13 +65,14 @@ def test_scene_scorer_prepares_evidence_and_returns_rollout_neutral_metrics(monk
         reward_mode=RriRewardMode.ROOT_NORMALIZED_GAIN,
     ).setup_target(sample=sample)
 
-    evaluation = scorer(SimpleNamespace(), state, 0)
+    candidates = SimpleNamespace(mask_valid=torch.ones(2, dtype=torch.bool))
+    evaluation = scorer(candidates, state, 0)
 
-    assert evaluation.score_label == "oracle_root_gain"
-    assert torch.allclose(evaluation.scores, torch.tensor([0.125, 0.25]))
-    assert evaluation.metric_vectors["rri"].tolist() == [0.25, 0.5]
-    assert evaluation.metric_vectors["root_pm_dist"].tolist() == [8.0, 8.0]
-    assert evaluation.candidate_point_cloud_lengths.tolist() == [3, 2]
+    assert evaluation.labels.score_label == "oracle_root_gain"
+    assert torch.allclose(evaluation.labels.scores, torch.tensor([0.125, 0.25]))
+    assert evaluation.labels.metrics["rri"].tolist() == [0.25, 0.5]
+    assert evaluation.labels.metrics["root_pm_dist"].tolist() == [8.0, 8.0]
+    assert evaluation.evidence.candidate_point_cloud_lengths.tolist() == [3, 2]
 
 
 def test_scene_scorer_config_preserves_nested_oracle_field_name() -> None:

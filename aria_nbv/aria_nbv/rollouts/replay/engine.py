@@ -32,7 +32,7 @@ Theory:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from math import radians
 from time import perf_counter
@@ -191,248 +191,9 @@ class _CandidateDiversityMetadata:
     target_bearing_yaw_rad: torch.Tensor | None = None
 
 
-@dataclass(slots=True)
-class CounterfactualMetricBundle:
-    """Typed per-valid-candidate metrics emitted by rollout evaluators."""
-
-    rri: torch.Tensor | None = None
-    root_gain: torch.Tensor | None = None
-    root_pm_dist: torch.Tensor | None = None
-    log_error_gain: torch.Tensor | None = None
-    target_rri: torch.Tensor | None = None
-    target_root_gain: torch.Tensor | None = None
-    target_root_pm_dist: torch.Tensor | None = None
-    target_log_error_gain: torch.Tensor | None = None
-    scene_rri: torch.Tensor | None = None
-    scene_root_gain: torch.Tensor | None = None
-    scene_root_pm_dist: torch.Tensor | None = None
-    scene_log_error_gain: torch.Tensor | None = None
-    target_pm_dist_before: torch.Tensor | None = None
-    target_pm_dist_after: torch.Tensor | None = None
-    target_pm_acc_before: torch.Tensor | None = None
-    target_pm_comp_before: torch.Tensor | None = None
-    target_pm_acc_after: torch.Tensor | None = None
-    target_pm_comp_after: torch.Tensor | None = None
-    target_candidate_support: torch.Tensor | None = None
-    target_current_support: torch.Tensor | None = None
-    scene_pm_dist_before: torch.Tensor | None = None
-    scene_pm_dist_after: torch.Tensor | None = None
-    scene_pm_acc_before: torch.Tensor | None = None
-    scene_pm_comp_before: torch.Tensor | None = None
-    scene_pm_acc_after: torch.Tensor | None = None
-    scene_pm_comp_after: torch.Tensor | None = None
-
-    @classmethod
-    def from_vectors(cls, vectors: Mapping[str, torch.Tensor] | None) -> "CounterfactualMetricBundle":
-        """Build a typed metric bundle from legacy or test vector mappings."""
-
-        if not vectors:
-            return cls()
-        names = cls.__dataclass_fields__
-        values = {name: vectors[name] for name in names if name in vectors}
-        return cls(**values)
-
-    def validate(self, *, num_valid: int, device: torch.device, dtype: torch.dtype) -> "CounterfactualMetricBundle":
-        """Normalize all present metric vectors and verify valid-candidate length."""
-
-        values: dict[str, torch.Tensor | None] = {}
-        for name in self.__dataclass_fields__:
-            metric = getattr(self, name)
-            if metric is None:
-                values[name] = None
-                continue
-            tensor = torch.as_tensor(metric, device=device, dtype=dtype).reshape(-1)
-            if tensor.shape[0] != num_valid:
-                raise ValueError(
-                    f"Counterfactual evaluator metric '{name}' must return {num_valid} values, got {tensor.shape[0]}.",
-                )
-            values[name] = tensor
-        return CounterfactualMetricBundle(**values)
-
-    def as_vectors(self) -> dict[str, torch.Tensor]:
-        """Return present metrics as name-to-vector mapping for trace serialization."""
-
-        return {name: value for name in self.__dataclass_fields__ if (value := getattr(self, name)) is not None}
-
-
-@dataclass(init=False, slots=True)
-class CounterfactualCandidateEvaluation:
-    """Structured per-valid-candidate rollout scores and optional diagnostics."""
-
-    scores: torch.Tensor
-    score_label: str
-    metrics: CounterfactualMetricBundle
-    candidate_point_clouds_world: torch.Tensor | None
-    candidate_point_cloud_lengths: torch.Tensor | None
-    target_eval_current_points_world: torch.Tensor | None
-    target_eval_candidate_points_world: torch.Tensor | None
-    target_eval_candidate_point_lengths: torch.Tensor | None
-    target_eval_crop_policy: str | None
-    target_eval_voxel_size_m: float | None
-    target_eval_max_points: int | None
-
-    def __init__(
-        self,
-        *,
-        scores: torch.Tensor,
-        score_label: str = "score",
-        metrics: CounterfactualMetricBundle | None = None,
-        metric_vectors: Mapping[str, torch.Tensor] | None = None,
-        candidate_point_clouds_world: torch.Tensor | None = None,
-        candidate_point_cloud_lengths: torch.Tensor | None = None,
-        target_eval_current_points_world: torch.Tensor | None = None,
-        target_eval_candidate_points_world: torch.Tensor | None = None,
-        target_eval_candidate_point_lengths: torch.Tensor | None = None,
-        target_eval_crop_policy: str | None = None,
-        target_eval_voxel_size_m: float | None = None,
-        target_eval_max_points: int | None = None,
-    ) -> None:
-        self.scores = scores
-        self.score_label = score_label
-        self.metrics = metrics if metrics is not None else CounterfactualMetricBundle.from_vectors(metric_vectors)
-        self.candidate_point_clouds_world = candidate_point_clouds_world
-        self.candidate_point_cloud_lengths = candidate_point_cloud_lengths
-        self.target_eval_current_points_world = target_eval_current_points_world
-        self.target_eval_candidate_points_world = target_eval_candidate_points_world
-        self.target_eval_candidate_point_lengths = target_eval_candidate_point_lengths
-        self.target_eval_crop_policy = target_eval_crop_policy
-        self.target_eval_voxel_size_m = target_eval_voxel_size_m
-        self.target_eval_max_points = target_eval_max_points
-
-    @property
-    def metric_vectors(self) -> dict[str, torch.Tensor]:
-        """Return present metric vectors by stable metric name."""
-
-        return self.metrics.as_vectors()
-
-    def validate(
-        self,
-        *,
-        num_valid: int,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> "CounterfactualCandidateEvaluation":
-        """Normalize score vectors and ensure they align with valid candidates."""
-
-        scores = torch.as_tensor(self.scores, device=device, dtype=dtype).reshape(-1)
-        if scores.shape[0] != num_valid:
-            raise ValueError(f"Counterfactual evaluator must return {num_valid} scores, got {scores.shape[0]}.")
-
-        metrics = self.metrics.validate(num_valid=num_valid, device=device, dtype=dtype)
-
-        candidate_point_clouds_world = self.candidate_point_clouds_world
-        candidate_point_cloud_lengths = self.candidate_point_cloud_lengths
-        if candidate_point_clouds_world is not None:
-            candidate_point_clouds_world = torch.as_tensor(candidate_point_clouds_world, device=device, dtype=dtype)
-            if candidate_point_clouds_world.ndim != 3 or candidate_point_clouds_world.shape[0] != num_valid:
-                raise ValueError(
-                    "Counterfactual evaluator candidate_point_clouds_world must have shape (num_valid, P, 3).",
-                )
-            if candidate_point_cloud_lengths is None:
-                candidate_point_cloud_lengths = torch.full(
-                    (num_valid,),
-                    candidate_point_clouds_world.shape[1],
-                    dtype=torch.long,
-                    device=device,
-                )
-            else:
-                candidate_point_cloud_lengths = torch.as_tensor(
-                    candidate_point_cloud_lengths,
-                    device=device,
-                    dtype=torch.long,
-                ).reshape(-1)
-                if candidate_point_cloud_lengths.shape[0] != num_valid:
-                    raise ValueError(
-                        "Counterfactual evaluator candidate_point_cloud_lengths must align with num_valid.",
-                    )
-        elif candidate_point_cloud_lengths is not None:
-            raise ValueError("candidate_point_cloud_lengths requires candidate_point_clouds_world.")
-
-        target_eval_current_points_world = self.target_eval_current_points_world
-        if target_eval_current_points_world is not None:
-            target_eval_current_points_world = torch.as_tensor(
-                target_eval_current_points_world,
-                device=device,
-                dtype=dtype,
-            ).reshape(-1, 3)
-
-        target_eval_candidate_points_world = self.target_eval_candidate_points_world
-        target_eval_candidate_point_lengths = self.target_eval_candidate_point_lengths
-        if target_eval_candidate_points_world is not None:
-            target_eval_candidate_points_world = torch.as_tensor(
-                target_eval_candidate_points_world,
-                device=device,
-                dtype=dtype,
-            )
-            if target_eval_candidate_points_world.ndim != 3 or target_eval_candidate_points_world.shape[0] != num_valid:
-                raise ValueError(
-                    "target_eval_candidate_points_world must have shape (num_valid, P, 3).",
-                )
-            if target_eval_candidate_point_lengths is None:
-                target_eval_candidate_point_lengths = torch.full(
-                    (num_valid,),
-                    target_eval_candidate_points_world.shape[1],
-                    dtype=torch.long,
-                    device=device,
-                )
-            else:
-                target_eval_candidate_point_lengths = torch.as_tensor(
-                    target_eval_candidate_point_lengths,
-                    device=device,
-                    dtype=torch.long,
-                ).reshape(-1)
-                if target_eval_candidate_point_lengths.shape[0] != num_valid:
-                    raise ValueError("target_eval_candidate_point_lengths must align with num_valid.")
-        elif target_eval_candidate_point_lengths is not None:
-            raise ValueError("target_eval_candidate_point_lengths requires target_eval_candidate_points_world.")
-
-        return CounterfactualCandidateEvaluation(
-            scores=scores,
-            score_label=self.score_label,
-            metrics=metrics,
-            candidate_point_clouds_world=candidate_point_clouds_world,
-            candidate_point_cloud_lengths=candidate_point_cloud_lengths,
-            target_eval_current_points_world=target_eval_current_points_world,
-            target_eval_candidate_points_world=target_eval_candidate_points_world,
-            target_eval_candidate_point_lengths=target_eval_candidate_point_lengths,
-            target_eval_crop_policy=self.target_eval_crop_policy,
-            target_eval_voxel_size_m=self.target_eval_voxel_size_m,
-            target_eval_max_points=self.target_eval_max_points,
-        )
-
-    def selected_metrics(self, valid_index: int) -> dict[str, float]:
-        return {name: float(values[valid_index].item()) for name, values in self.metric_vectors.items()}
-
-    def selected_point_cloud(self, valid_index: int) -> torch.Tensor | None:
-        if self.candidate_point_clouds_world is None:
-            return None
-        cloud = self.candidate_point_clouds_world[valid_index]
-        if self.candidate_point_cloud_lengths is None:
-            return cloud
-        length = int(self.candidate_point_cloud_lengths[valid_index].item())
-        return cloud[:length]
-
-    def candidate_scores(
-        self,
-        candidates: CandidateSamplingResult,
-        *,
-        device: torch.device,
-        dtype: torch.dtype,
-    ) -> CandidateScores:
-        """Return the minimal replay policy input for this evaluation."""
-
-        return CandidateScores.from_valid_values(
-            self.scores,
-            name=self.score_label,
-            candidates=candidates,
-            device=device,
-            dtype=dtype,
-        )
-
-
 CounterfactualEvaluatorFn = Callable[
     [CandidateSamplingResult, CounterfactualTrajectory, int],
-    CandidateScores | CounterfactualCandidateEvaluation | torch.Tensor,
+    CandidateScores | torch.Tensor,
 ]
 
 
@@ -634,7 +395,7 @@ class CounterfactualPoseGenerator:
                     continue
 
                 evaluate_start_s = perf_counter()
-                evaluation = self._evaluate_valid_candidates(
+                candidate_scores = self._evaluate_valid_candidates(
                     result=candidates,
                     trajectory=trajectory,
                     step_index=step_index,
@@ -642,11 +403,6 @@ class CounterfactualPoseGenerator:
                 )
                 evaluate_s = perf_counter() - evaluate_start_s
                 evaluate_total_s += evaluate_s
-                candidate_scores = evaluation.candidate_scores(
-                    candidates,
-                    device=candidates.poses_world_cam().t.device,
-                    dtype=candidates.poses_world_cam().t.dtype,
-                )
                 score_label = candidate_scores.name
                 select_start_s = perf_counter()
                 branch_count = self._branch_factor_for_step(step_index)
@@ -674,7 +430,6 @@ class CounterfactualPoseGenerator:
                     valid_index = selection.valid_index
                     shell_valid = torch.nonzero(candidates.mask_valid, as_tuple=False).reshape(-1)
                     selected_shell_index = int(shell_valid[valid_index].item())
-                    selected_point_cloud = evaluation.selected_point_cloud(valid_index)
                     step = CounterfactualStepResult(
                         step_index=step_index,
                         candidates=candidates,
@@ -695,31 +450,6 @@ class CounterfactualPoseGenerator:
                         selection_entropy=selection.entropy,
                         selected_log_probability=selection.selected_log_probability,
                         selection_rng_seed=self.policy.seed,
-                        selected_metrics=evaluation.selected_metrics(valid_index),
-                        metric_vectors={
-                            name: values.detach().clone() for name, values in evaluation.metric_vectors.items()
-                        },
-                        selected_point_cloud_world=(
-                            None if selected_point_cloud is None else selected_point_cloud.detach().clone()
-                        ),
-                        target_eval_current_points_world=(
-                            None
-                            if evaluation.target_eval_current_points_world is None
-                            else evaluation.target_eval_current_points_world.detach().clone()
-                        ),
-                        target_eval_candidate_points_world=(
-                            None
-                            if evaluation.target_eval_candidate_points_world is None
-                            else evaluation.target_eval_candidate_points_world.detach().clone()
-                        ),
-                        target_eval_candidate_point_lengths=(
-                            None
-                            if evaluation.target_eval_candidate_point_lengths is None
-                            else evaluation.target_eval_candidate_point_lengths.detach().clone()
-                        ),
-                        target_eval_crop_policy=evaluation.target_eval_crop_policy,
-                        target_eval_voxel_size_m=evaluation.target_eval_voxel_size_m,
-                        target_eval_max_points=evaluation.target_eval_max_points,
                     )
                     next_frontier.append(trajectory.with_appended_step(step))
 
@@ -762,31 +492,30 @@ class CounterfactualPoseGenerator:
         trajectory: CounterfactualTrajectory,
         step_index: int,
         score_candidates: CounterfactualEvaluatorFn | None,
-    ) -> CounterfactualCandidateEvaluation:
+    ) -> CandidateScores:
         valid_poses = result.poses_world_cam()
-        num_valid = _pose_batch_len(valid_poses)
         device = valid_poses.t.device
         dtype = valid_poses.t.dtype
 
         if score_candidates is not None:
             raw_eval = score_candidates(result, trajectory, step_index)
-            if isinstance(raw_eval, CounterfactualCandidateEvaluation):
-                return raw_eval.validate(num_valid=num_valid, device=device, dtype=dtype)
             if isinstance(raw_eval, CandidateScores):
-                candidate_scores = raw_eval.validate_for(result, device=device, dtype=dtype)
-                return CounterfactualCandidateEvaluation(
-                    scores=candidate_scores.values,
-                    score_label=candidate_scores.name,
-                ).validate(num_valid=num_valid, device=device, dtype=dtype)
-            return CounterfactualCandidateEvaluation(
-                scores=torch.as_tensor(raw_eval, device=device, dtype=dtype),
-                score_label="score",
-            ).validate(num_valid=num_valid, device=device, dtype=dtype)
+                return raw_eval.validate_for(result, device=device, dtype=dtype)
+            return CandidateScores.from_valid_values(
+                torch.as_tensor(raw_eval, device=device, dtype=dtype),
+                name="score",
+                candidates=result,
+                device=device,
+                dtype=dtype,
+            )
 
         scores = self._builtin_scores(valid_poses=valid_poses, trajectory=trajectory)
-        return CounterfactualCandidateEvaluation(
-            scores=scores,
-            score_label=self.policy.selection_policy.value,
+        return CandidateScores.from_valid_values(
+            scores,
+            name=self.policy.selection_policy.value,
+            candidates=result,
+            device=device,
+            dtype=dtype,
         )
 
     def _builtin_scores(
@@ -1151,9 +880,6 @@ class CounterfactualPoseGenerator:
 
 
 __all__ = [
-    "CounterfactualCandidateEvaluation",
-    "CounterfactualEvaluatorFn",
-    "CounterfactualMetricBundle",
     "CounterfactualPoseGenerator",
     "CounterfactualPoseGeneratorConfig",
 ]

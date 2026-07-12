@@ -133,33 +133,26 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
     if len(records) > 1:
         base = records[0].lineage
         sibling = records[1].lineage
-        sibling.source_row_id = base.source_row_id
-        sibling.source_sample_index = base.source_sample_index
-        sibling.source_sample_key = base.source_sample_key
-        sibling.scene_id = base.scene_id
-        sibling.snippet_id = base.snippet_id
-        sibling.split = base.split
-        sibling.source_cache_version = base.source_cache_version
-        sibling.source_offline_store_manifest_hash = base.source_offline_store_manifest_hash
-        sibling.split_manifest_hash = base.split_manifest_hash
-        sibling.source_shard_id = base.source_shard_id
-        sibling.source_shard_row = base.source_shard_row
-        sibling.target_row_id = base.target_row_id
-        sibling.target_id = base.target_id
-        sibling.target_source_index = base.target_source_index
-        sibling.matched_gt_target_row_id = base.matched_gt_target_row_id
-        sibling.matched_gt_target_id = base.matched_gt_target_id
+        sibling.source = base.source
+        sibling.target.target_row_id = base.target.target_row_id
+        sibling.target.target_id = base.target.target_id
+        sibling.target.target_source_index = base.target.target_source_index
+        sibling.target.matched_gt_target_row_id = base.target.matched_gt_target_row_id
+        sibling.target.matched_gt_target_id = base.target.matched_gt_target_id
     for record in records:
-        for trajectory in record.result.trajectories:
+        for chain_id, trajectory in enumerate(record.result.trajectories):
             for step in trajectory.steps:
                 candidate_valid = step.candidates.mask_valid.clone()
                 invalid = torch.zeros_like(candidate_valid, dtype=torch.bool)
                 invalid[::4] = True
                 invalid[int(step.selected_shell_index)] = False
+                compact_invalid = invalid[candidate_valid]
                 candidate_valid[invalid] = False
                 step.candidates.mask_valid = candidate_valid
                 step.candidates.masks["FixtureInvalidRule"] = candidate_valid
-                _reset_target_eval_candidate_rows(step)
+                evaluated_step = record.step(chain_id, step.step_index)
+                assert evaluated_step is not None
+                _reset_target_eval_candidate_rows(evaluated_step)
                 _mask_vector(step.selection_scores, invalid, fill=float("nan"))
                 _mask_vector(step.selection_logits, invalid, fill=float("nan"))
                 _mask_vector(step.selection_probabilities, invalid, fill=0.0, renormalize=True, valid=candidate_valid)
@@ -169,11 +162,12 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
                     fill=float("-inf"),
                     log_from=step.selection_probabilities,
                 )
-                for values in step.metric_vectors.values():
-                    _mask_vector(values, invalid, fill=float("nan"))
-                if step.selected_depth_m is not None and step.selected_depth_valid_mask is not None:
-                    step.selected_depth_m[0, 0] = 42.0
-                    step.selected_depth_valid_mask[0, 0] = False
+                for values in evaluated_step.metric_vectors.values():
+                    _mask_vector(values, compact_invalid, fill=float("nan"))
+                evidence = evaluated_step.evidence
+                if evidence.selected_depth_m is not None and evidence.selected_depth_valid_mask is not None:
+                    evidence.selected_depth_m[0, 0] = 42.0
+                    evidence.selected_depth_valid_mask[0, 0] = False
 
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
@@ -190,10 +184,11 @@ def _reset_target_eval_candidate_rows(step: Any) -> None:
     """Realign fixture target-eval compact rows after mutating candidate validity."""
 
     valid_count = int(step.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
-    step.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
-    step.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
+    evidence = step.evidence
+    evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
+    evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
     for valid_index in range(valid_count):
-        step.target_eval_candidate_points_world[valid_index, :, :] = torch.tensor(
+        evidence.target_eval_candidate_points_world[valid_index, :, :] = torch.tensor(
             [[float(valid_index), 0.0, 0.0], [float(valid_index), 0.1, 0.0]],
             dtype=torch.float32,
         )

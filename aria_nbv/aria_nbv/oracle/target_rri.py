@@ -44,6 +44,7 @@ from .evidence import (
     target_aabb_from_points,
     target_gt_obb_world,
 )
+from .labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 
 if TYPE_CHECKING:
     from efm3d.aria.obb import ObbTW
@@ -66,23 +67,6 @@ class TargetRriInvalidity:
 
     reason: OracleEvidenceInvalidReason
     message: str
-
-
-@dataclass(frozen=True, slots=True)
-class TargetRriEvaluation:
-    """Target scorer output before rollout-specific replay adaptation."""
-
-    scores: torch.Tensor
-    score_label: str
-    metric_vectors: dict[str, torch.Tensor]
-    candidate_point_clouds_world: torch.Tensor
-    candidate_point_cloud_lengths: torch.Tensor
-    target_eval_current_points_world: torch.Tensor
-    target_eval_candidate_points_world: torch.Tensor
-    target_eval_candidate_point_lengths: torch.Tensor
-    target_eval_crop_policy: str
-    target_eval_voxel_size_m: float
-    target_eval_max_points: int
 
 
 class TargetRriScorerConfig(TargetConfig["TargetRriScorer"]):
@@ -219,7 +203,7 @@ class TargetRriScorer:
         candidates: CandidateSamplingResult,
         state: OracleRriState,
         step_index: int,
-    ) -> TargetRriEvaluation | TargetRriInvalidity:
+    ) -> OracleCandidateEvaluation | TargetRriInvalidity:
         del step_index
         if self._initial_invalidity is not None:
             return self._initial_invalidity
@@ -228,7 +212,7 @@ class TargetRriScorer:
         except _OracleEvidenceError as exc:
             return TargetRriInvalidity(reason=exc.reason, message=str(exc))
 
-    def _score(self, candidates: CandidateSamplingResult, state: OracleRriState) -> TargetRriEvaluation:
+    def _score(self, candidates: CandidateSamplingResult, state: OracleRriState) -> OracleCandidateEvaluation:
         """Return target labels for a candidate table with valid root evidence."""
 
         if self.sample.mesh_verts is None or self.sample.mesh_faces is None:
@@ -377,25 +361,33 @@ class TargetRriScorer:
             "target_root_gain" if self.config.reward_mode is RriRewardMode.ROOT_NORMALIZED_GAIN else "target_rri"
         )
 
-        return TargetRriEvaluation(
-            scores=scores,
-            score_label=score_label,
-            metric_vectors=metrics,
-            candidate_point_clouds_world=point_clouds.points,
-            candidate_point_cloud_lengths=point_clouds.lengths,
-            target_eval_current_points_world=target_points_t,
-            target_eval_candidate_points_world=target_points_q,
-            target_eval_candidate_point_lengths=target_lengths_q,
-            target_eval_crop_policy=self.config.target_crop_policy,
-            target_eval_voxel_size_m=float(self.config.eval_fusion_voxel_size_m),
-            target_eval_max_points=int(self.config.target_eval_max_points),
+        return OracleCandidateEvaluation(
+            labels=OracleCandidateLabels(
+                scores=scores,
+                score_label=score_label,
+                metrics=metrics,
+                candidate_shell_indices=torch.nonzero(
+                    candidates.mask_valid.to(device=scores.device, dtype=torch.bool),
+                    as_tuple=False,
+                ).reshape(-1),
+                provenance="target_rri",
+            ),
+            evidence=RetainedOracleEvidence(
+                candidate_point_clouds_world=point_clouds.points,
+                candidate_point_cloud_lengths=point_clouds.lengths,
+                target_eval_current_points_world=target_points_t,
+                target_eval_candidate_points_world=target_points_q,
+                target_eval_candidate_point_lengths=target_lengths_q,
+                target_eval_crop_policy=self.config.target_crop_policy,
+                target_eval_voxel_size_m=float(self.config.eval_fusion_voxel_size_m),
+                target_eval_max_points=int(self.config.target_eval_max_points),
+            ),
         )
 
 
 __all__ = [
     "SCENE_CROP_POLICY_SNIPPET_EXTENT_V1",
     "TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1",
-    "TargetRriEvaluation",
     "TargetRriInvalidity",
     "TargetRriScorer",
     "TargetRriScorerConfig",
