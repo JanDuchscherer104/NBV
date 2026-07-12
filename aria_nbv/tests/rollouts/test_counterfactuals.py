@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from types import SimpleNamespace
 
 import pytest
@@ -32,7 +32,11 @@ from aria_nbv.oracle.evidence import (
     crop_points_to_obb,
 )
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
-from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRolloutRecord, OracleReplayAdapter
+from aria_nbv.oracle.pipelines.evaluated_rollout import (
+    EvaluatedRolloutRecord,
+    EvaluatedRolloutStep,
+    OracleReplayAdapter,
+)
 from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
 from aria_nbv.pose_generation import (
@@ -1260,7 +1264,7 @@ def test_candidate_depth_renderer_rejects_ambiguous_candidate_index_mapping() ->
         renderer._select_candidate_views(candidates)  # noqa: SLF001
 
 
-def test_evaluated_rollout_record_carries_labels_evidence_and_lineage() -> None:
+def test_evaluated_rollout_record_keeps_explicit_nested_owners() -> None:
     adapter = OracleReplayAdapter(_fake_oracle_evaluator)
     rollouts = _run_rollouts(horizon=2, branch_factor=1, score_candidates=adapter)
     evaluated = adapter.materialize(rollouts, retain_target_crops=False)
@@ -1277,14 +1281,14 @@ def test_evaluated_rollout_record_carries_labels_evidence_and_lineage() -> None:
         ),
     )
 
-    lineage = record.lineage_for_chain(0)
-    assert lineage.rollout_id == "test-rollout-000000"
-    assert lineage.policy.candidate_config_hash == "candidate-hash"
-    assert lineage.policy.rollout_policy == rollouts.selection_policy
+    assert [field.name for field in fields(EvaluatedRolloutStep)] == ["transition", "evaluation"]
+    assert sum(isinstance(value, property) for value in vars(EvaluatedRolloutStep).values()) == 0
+    assert record.rollout_id_prefix == "test-rollout"
+    assert record.lineage.policy.candidate_config_hash == "candidate-hash"
 
     trajectory = rollouts.trajectories[0]
     first_step = trajectory.steps[0]
-    evaluated_step = record.step(0, first_step.step_index)
+    evaluated_step = record.evaluated.step(0, first_step.step_index)
     assert evaluated_step is not None
     candidate_valid = first_step.candidates.mask_valid.detach().cpu()
     valid_indices = torch.nonzero(candidate_valid, as_tuple=False).reshape(-1)
@@ -1299,8 +1303,8 @@ def test_evaluated_rollout_record_carries_labels_evidence_and_lineage() -> None:
         first_step.selection_scores[first_step.selected_valid_index],
         torch.tensor(first_step.selection_score, dtype=first_step.selection_scores.dtype),
     )
-    assert torch.allclose(evaluated_step.metric_vectors["rri"], expected_valid_scores)
-    assert evaluated_step.evidence.selected_point_cloud(first_step.selected_valid_index) is not None
+    assert torch.allclose(evaluated_step.evaluation.labels.metrics["rri"], expected_valid_scores)
+    assert evaluated_step.evaluation.evidence.selected_point_cloud(first_step.selected_valid_index) is not None
 
 
 def test_counterfactual_rollout_passes_target_runtime_context_to_mixed_sampler() -> None:

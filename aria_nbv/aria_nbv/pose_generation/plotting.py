@@ -19,7 +19,7 @@ from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 if TYPE_CHECKING:
     from ..data_handling import VinOfflineSample
     from ..oracle.target_selection import TargetCandidateRow
-    from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
+    from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
     from .types import CandidateSamplingResult
 
@@ -503,51 +503,23 @@ def _metric_color(value: float | None, finite_values: np.ndarray, *, default: st
     return str(sample_colorscale(colorscale, [scale_pos])[0])
 
 
-def _selected_step_target_rri(step: object) -> float | None:
-    metrics = getattr(step, "selected_metrics", {})
-    for key in ("target_rri", "rri"):
-        if key not in metrics:
-            continue
-        value = float(metrics[key])
-        if np.isfinite(value):
-            return value
-    return None
-
-
-def _valid_metric_values(step: object, metric_name: str) -> np.ndarray:
-    vectors = getattr(step, "metric_vectors", {})
-    values = vectors.get(metric_name)
-    if values is None and metric_name == "target_rri":
-        values = vectors.get("rri")
-    if values is None:
-        return np.asarray([], dtype=float)
-    values_np = values.detach().cpu().numpy().reshape(-1)
-    return values_np[np.isfinite(values_np)].astype(float, copy=False)
-
-
-def _valid_candidate_values(step: object, metric_name: str) -> np.ndarray | None:
+def _valid_candidate_values(step: "CounterfactualStepResult", metric_name: str) -> np.ndarray | None:
     """Return one value per compact valid candidate for coloring."""
 
-    candidates = getattr(step, "candidates", None)
-    if candidates is None:
-        return None
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if mask_valid is None:
-        return None
-    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    candidates = step.candidates
+    mask = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     valid_count = int(mask.sum())
     if valid_count == 0:
         return None
 
-    if metric_name == "selection_probability":
-        values = getattr(step, "selection_probabilities", None)
+    if metric_name == "selection_score":
+        values = step.selection_scores
+    elif metric_name == "selection_probability":
+        values = step.selection_probabilities
     elif metric_name == "position_family":
-        values = getattr(candidates, "position_id", None)
+        values = candidates.position_id
     else:
-        vectors = getattr(step, "metric_vectors", {})
-        values = vectors.get(metric_name)
-        if values is None and metric_name == "target_rri":
-            values = vectors.get("rri")
+        return None
     if values is None:
         return None
 
@@ -742,23 +714,12 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         include_center: bool = False,
         max_frustums_per_trajectory: int | None = None,
         display_rotate: bool = False,
-        color_by_target_rri: bool = True,
-        colorscale: str = "Viridis",
     ) -> Self:
         """Overlay frusta for the selected poses in each attached trajectory."""
 
         if self.counterfactual_rollouts is None:
             raise ValueError("Counterfactual rollouts missing; call attach_counterfactual_rollouts() first.")
 
-        finite_values = np.asarray(
-            [
-                value
-                for trajectory in self.counterfactual_rollouts.trajectories
-                for step in trajectory.steps
-                if (value := _selected_step_target_rri(step)) is not None
-            ],
-            dtype=float,
-        )
         for traj_idx, trajectory in enumerate(self.counterfactual_rollouts.trajectories):
             steps = trajectory.steps
             if max_frustums_per_trajectory is not None:
@@ -766,25 +727,17 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
             if not steps:
                 continue
             for step in steps:
-                value = _selected_step_target_rri(step) if color_by_target_rri else None
-                color = _metric_color(
-                    value,
-                    finite_values,
-                    default=_counterfactual_color(traj_idx),
-                    colorscale=colorscale,
-                )
                 pose = step.selected_pose_world
                 if display_rotate:
                     from aria_nbv.utils import rotate_yaw_cw90
 
                     pose = rotate_yaw_cw90(pose)
-                label = "n/a" if value is None else f"{value:.4f}"
                 self._add_frusta_for_poses(
                     cams=[step.selected_view],
                     poses=[pose],
                     scale=scale,
-                    color=color,
-                    name=f"CF frusta {traj_idx} step {step.step_index + 1} target_rri={label}",
+                    color=_counterfactual_color(traj_idx),
+                    name=f"CF frusta {traj_idx} step {step.step_index + 1}",
                     max_frustums=None,
                     include_axes=include_axes,
                     include_center=include_center,
@@ -802,8 +755,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         frustum_scale: float = 0.5,
         max_frustums: int | None = 16,
         include_rejected: bool = False,
-        color_frusta_by_target_rri: bool = True,
-        candidate_color_metric: str = "target_rri",
+        candidate_color_metric: str = "selection_score",
     ) -> Self:
         """Plot one rollout step's candidate shell within the snippet scene."""
 
@@ -858,9 +810,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
             self.add_rejected_cloud()
         if show_frusta:
             metric_values = _valid_candidate_values(step, candidate_color_metric)
-            if metric_values is None:
-                metric_values = _valid_metric_values(step, "target_rri")
-            if color_frusta_by_target_rri and metric_values.size:
+            if metric_values is not None and metric_values.size:
                 poses = self._pose_list_from_input(step.candidates.poses_world_cam())
                 indices = np.arange(len(poses))
                 if max_frustums is not None and len(indices) > max_frustums:

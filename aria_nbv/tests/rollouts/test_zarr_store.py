@@ -37,13 +37,13 @@ def _json_list(reader: RolloutZarrStoreReader, path: str) -> list[str]:
 
 
 def _steps(record):
-    return [record.step(0, step.step_index) for step in record.result.trajectories[0].steps]
+    return [record.evaluated.step(0, step.step_index) for step in record.evaluated.result.trajectories[0].steps]
 
 
 def _mask_target_eval_candidate_rows(step) -> None:
-    valid_count = int(step.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
-    step.evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
-    step.evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
+    valid_count = int(step.transition.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
+    step.evaluation.evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
+    step.evaluation.evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
 
 
 def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None:
@@ -260,8 +260,8 @@ def test_rollout_zarr_can_persist_target_eval_crops_for_audit_profile(tmp_path) 
 def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=31)[:1]
     for step in _steps(records[0]):
-        step.candidates.position_id = None
-        step.candidates.extras.clear()
+        step.transition.candidates.position_id = None
+        step.transition.candidates.extras.clear()
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -294,14 +294,14 @@ def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> No
 def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=32)[:1]
     step = _steps(records[0])[0]
-    collision_shell_index = 0 if int(step.selected_shell_index) != 0 else 1
-    candidate_valid = step.candidates.mask_valid.clone()
+    collision_shell_index = 0 if int(step.transition.selected_shell_index) != 0 else 1
+    candidate_valid = step.transition.candidates.mask_valid.clone()
     candidate_valid[collision_shell_index] = False
-    step.candidates.mask_valid = candidate_valid
+    step.transition.candidates.mask_valid = candidate_valid
     path_mask = torch.zeros_like(candidate_valid, dtype=torch.bool)
     path_mask[collision_shell_index] = True
-    step.candidates.masks["PathCollisionRule"] = ~path_mask
-    step.candidates.extras["path_collision_mask"] = path_mask
+    step.transition.candidates.masks["PathCollisionRule"] = ~path_mask
+    step.transition.candidates.extras["path_collision_mask"] = path_mask
     _mask_target_eval_candidate_rows(step)
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
@@ -325,8 +325,8 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
 def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=9)[:1]
     for step in _steps(records[0]):
-        step.evidence.selected_depth_m = None
-        step.evidence.selected_depth_valid_mask = None
+        step.evaluation.evidence.selected_depth_m = None
+        step.evaluation.evidence.selected_depth_valid_mask = None
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
@@ -358,7 +358,7 @@ def test_rollout_zarr_selected_action_td_fields_align_with_step_rows(tmp_path) -
 def test_rollout_zarr_requires_explicit_target_root_gain_for_q_training(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=11)[:1]
     for step in _steps(records[0]):
-        step.labels.metrics.clear()
+        step.evaluation.labels.metrics.clear()
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -376,9 +376,9 @@ def test_rollout_zarr_requires_explicit_target_root_gain_for_q_training(tmp_path
 def test_rollout_zarr_never_backfills_scene_rri_from_generic_rri(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=10)[:1]
     for step in _steps(records[0]):
-        generic = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-        step.labels.metrics.clear()
-        step.labels.metrics.update(rri=generic, target_rri=generic, target_root_gain=generic + 10.0)
+        generic = torch.arange(step.transition.candidates.mask_valid.shape[0], dtype=torch.float32)
+        step.evaluation.labels.metrics.clear()
+        step.evaluation.labels.metrics.update(rri=generic, target_rri=generic, target_root_gain=generic + 10.0)
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -393,9 +393,9 @@ def test_rollout_zarr_never_backfills_scene_rri_from_generic_rri(tmp_path) -> No
 def test_rollout_zarr_qh_reward_uses_target_root_gain_not_target_rri(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=14)[:1]
     for step in _steps(records[0]):
-        full = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-        step.labels.metrics["target_rri"] = full + 1.0
-        step.labels.metrics["target_root_gain"] = full + 101.0
+        full = torch.arange(step.transition.candidates.mask_valid.shape[0], dtype=torch.float32)
+        step.evaluation.labels.metrics["target_rri"] = full + 1.0
+        step.evaluation.labels.metrics["target_root_gain"] = full + 101.0
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -410,15 +410,21 @@ def test_rollout_zarr_qh_reward_uses_target_root_gain_not_target_rri(tmp_path) -
 def test_rollout_zarr_masks_invalid_candidate_oracle_labels(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=12)[:1]
     step = _steps(records[0])[0]
-    invalid_shell_index = 0 if int(step.selected_shell_index) != 0 else 1
-    step.candidates.mask_valid[invalid_shell_index] = False
-    step.labels.metrics["target_rri"] = torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32)
-    step.labels.metrics["target_root_gain"] = (
-        torch.arange(step.candidates.mask_valid.shape[0], dtype=torch.float32) + 10.0
+    invalid_shell_index = 0 if int(step.transition.selected_shell_index) != 0 else 1
+    step.transition.candidates.mask_valid[invalid_shell_index] = False
+    step.evaluation.labels.metrics["target_rri"] = torch.arange(
+        step.transition.candidates.mask_valid.shape[0], dtype=torch.float32
     )
-    valid_count = int(step.candidates.mask_valid.sum().item())
-    step.evidence.target_eval_candidate_points_world = step.evidence.target_eval_candidate_points_world[:valid_count]
-    step.evidence.target_eval_candidate_point_lengths = step.evidence.target_eval_candidate_point_lengths[:valid_count]
+    step.evaluation.labels.metrics["target_root_gain"] = (
+        torch.arange(step.transition.candidates.mask_valid.shape[0], dtype=torch.float32) + 10.0
+    )
+    valid_count = int(step.transition.candidates.mask_valid.sum().item())
+    step.evaluation.evidence.target_eval_candidate_points_world = (
+        step.evaluation.evidence.target_eval_candidate_points_world[:valid_count]
+    )
+    step.evaluation.evidence.target_eval_candidate_point_lengths = (
+        step.evaluation.evidence.target_eval_candidate_point_lengths[:valid_count]
+    )
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -531,7 +537,7 @@ def test_rollout_zarr_validation_rejects_target_rows_shared_across_sources(tmp_p
 
 def test_rollout_zarr_relative_pose_root_is_pose_transform(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=17)[:1]
-    records[0].result.root_pose_world = PoseTW(
+    records[0].evaluated.result.root_pose_world = PoseTW(
         torch.tensor(
             [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0],
             dtype=torch.float32,
@@ -544,8 +550,10 @@ def test_rollout_zarr_relative_pose_root_is_pose_transform(tmp_path) -> None:
     pose = reader.array("candidates/pose_world_cam")[0]
     relative = reader.array("candidates/pose_relative_root")[0]
     stored_root = reader.array("rollouts/root_pose_world")[0]
-    root_pose = records[0].result.root_pose_world.tensor().numpy()
-    expected = records[0].result.root_pose_world.inverse().compose(PoseTW(torch.as_tensor(pose))).tensor().numpy()
+    root_pose = records[0].evaluated.result.root_pose_world.tensor().numpy()
+    expected = (
+        records[0].evaluated.result.root_pose_world.inverse().compose(PoseTW(torch.as_tensor(pose))).tensor().numpy()
+    )
 
     assert np.allclose(stored_root, root_pose, atol=1e-5)
     assert np.allclose(relative, expected, atol=1e-5)
@@ -578,11 +586,11 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     lineage.target.matched_gt_target_id = "gt-target"
     lineage.target.gt_match_status = "matched"
     for step in _steps(records[0]):
-        n = int(step.candidates.mask_valid.shape[0])
-        step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
-        step.candidates.position_id = torch.arange(n, dtype=torch.int64) % 3
-        step.candidates.mixture_id = torch.arange(n, dtype=torch.int64) % 2
-        step.candidates.sampler_probability = torch.full((n,), 1.0 / float(n), dtype=torch.float32)
+        n = int(step.transition.candidates.mask_valid.shape[0])
+        step.transition.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
+        step.transition.candidates.position_id = torch.arange(n, dtype=torch.int64) % 3
+        step.transition.candidates.mixture_id = torch.arange(n, dtype=torch.int64) % 2
+        step.transition.candidates.sampler_probability = torch.full((n,), 1.0 / float(n), dtype=torch.float32)
 
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
@@ -685,10 +693,10 @@ def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp
     lineage.target.matched_gt_target_id = "gt-target"
     lineage.target.gt_match_status = "matched"
     for step in _steps(records[0]):
-        n = int(step.candidates.mask_valid.shape[0])
-        step.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
-        step.candidates.mixture_id = torch.arange(n, dtype=torch.int64) % 2
-        step.candidates.sampler_probability = torch.full((n,), 1.0 / float(n), dtype=torch.float32)
+        n = int(step.transition.candidates.mask_valid.shape[0])
+        step.transition.candidates.strategy_id = torch.arange(n, dtype=torch.int64) % 4
+        step.transition.candidates.mixture_id = torch.arange(n, dtype=torch.int64) % 2
+        step.transition.candidates.sampler_probability = torch.full((n,), 1.0 / float(n), dtype=torch.float32)
 
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",

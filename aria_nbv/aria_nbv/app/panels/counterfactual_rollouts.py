@@ -23,6 +23,7 @@ from ...data_handling import (
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.pipelines.evaluated_rollout import (
     EvaluatedRollout,
+    EvaluatedRolloutStep,
     OracleReplayAdapter,
     OracleReplayInvalidityError,
 )
@@ -59,6 +60,7 @@ from ...rollouts import (
     decode_position_id,
     decode_strategy_id,
 )
+from ...rollouts.replay.state import CounterfactualStepResult
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -667,7 +669,7 @@ def _counterfactual_trajectory_rows(
     for traj_idx, trajectory in enumerate(evaluated.result.trajectories):
         final_pos = trajectory.final_pose_world().t.detach().cpu().reshape(-1).tolist()
         selected_metrics = [
-            evaluated_step.selected_metrics
+            evaluated_step.evaluation.labels.selected(evaluated_step.transition.selected_valid_index)
             for step in trajectory.steps
             if (evaluated_step := evaluated.step(traj_idx, step.step_index)) is not None
         ]
@@ -703,10 +705,11 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
             evaluated_step = evaluated.step(traj_idx, step.step_index)
             if evaluated_step is None:
                 continue
-            selected_target_rri = _metric_float(
-                evaluated_step.selected_metrics.get("target_rri", evaluated_step.selected_metrics.get("rri"))
+            selected_metrics = evaluated_step.evaluation.labels.selected(
+                evaluated_step.transition.selected_valid_index,
             )
-            selected_target_root_gain = _metric_float(evaluated_step.selected_metrics.get("target_root_gain"))
+            selected_target_rri = _metric_float(selected_metrics.get("target_rri", selected_metrics.get("rri")))
+            selected_target_root_gain = _metric_float(selected_metrics.get("target_root_gain"))
             selected_return = (
                 selected_target_root_gain if selected_target_root_gain is not None else selected_target_rri
             )
@@ -734,25 +737,22 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _valid_step_metric_values(step: object, metric_name: str) -> np.ndarray:
-    metric_vectors = getattr(step, "metric_vectors", {})
+def _valid_step_metric_values(step: EvaluatedRolloutStep, metric_name: str) -> np.ndarray:
+    metric_vectors = step.evaluation.labels.metrics
     values = metric_vectors.get(metric_name)
     if values is None and metric_name == "target_rri":
         values = metric_vectors.get("rri")
     if values is None:
         return np.asarray([], dtype=float)
     values_np = values.detach().cpu().numpy().reshape(-1)
-    candidates = getattr(step, "candidates", None)
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if mask_valid is not None:
-        mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
-        if mask.shape == values_np.shape:
-            values_np = values_np[mask]
-        elif values_np.shape[0] != int(mask.sum()):
-            raise ValueError(
-                f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape} "
-                f"or compact valid count {int(mask.sum())}."
-            )
+    mask = step.transition.candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    if mask.shape == values_np.shape:
+        values_np = values_np[mask]
+    elif values_np.shape[0] != int(mask.sum()):
+        raise ValueError(
+            f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape} "
+            f"or compact valid count {int(mask.sum())}."
+        )
     finite = np.isfinite(values_np)
     return values_np[finite].astype(float, copy=False)
 
@@ -770,14 +770,14 @@ def _format_optional_metric(value: object) -> str:
     return "n/a" if value_float is None else f"{value_float:.4f}"
 
 
-def _render_live_step_candidate_diagnostics(step: object) -> None:
+def _render_live_step_candidate_diagnostics(
+    transition: CounterfactualStepResult,
+    evaluated_step: EvaluatedRolloutStep | None,
+) -> None:
     """Render per-step live candidate fanout by family and rejection reason."""
 
     _info_popover("step candidate diagnostics", _LIVE_STEP_CANDIDATE_INFO)
-    candidates = getattr(step, "candidates", None)
-    if candidates is None:
-        return
-    counts = candidate_result_diagnostic_counts(candidates)
+    counts = candidate_result_diagnostic_counts(transition.candidates)
     position_rows = counts.get("position", [])
     invalid_rows = counts.get("invalid_reason", [])
     if not position_rows and not invalid_rows:
@@ -816,7 +816,10 @@ def _render_live_step_candidate_diagnostics(step: object) -> None:
         else:
             st.success("No rejected candidates in this step.")
 
-    score_rows = _live_step_candidate_score_rows(step)
+    if evaluated_step is None:
+        st.info("Oracle candidate labels are unavailable for this geometry-only rollout step.")
+        return
+    score_rows = _live_step_candidate_score_rows(evaluated_step)
     if not score_rows:
         st.info("No per-valid-candidate score/provenance rows are available for this step.")
         return
@@ -884,20 +887,19 @@ def _render_live_step_candidate_diagnostics(step: object) -> None:
         )
 
 
-def _live_step_candidate_score_rows(step: object) -> list[dict[str, object]]:
-    candidates = getattr(step, "candidates", None)
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if candidates is None or mask_valid is None:
-        return []
-    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str, object]]:
+    transition = step.transition
+    evaluation = step.evaluation
+    candidates = transition.candidates
+    mask = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     shell_indices = np.flatnonzero(mask)
     if shell_indices.size == 0:
         return []
     rows: list[dict[str, object]] = []
-    selection_scores = _aligned_valid_vector(getattr(step, "selection_scores", None), shell_indices=shell_indices)
-    probabilities = _aligned_valid_vector(getattr(step, "selection_probabilities", None), shell_indices=shell_indices)
-    logits = _aligned_valid_vector(getattr(step, "selection_logits", None), shell_indices=shell_indices)
-    metric_vectors = getattr(step, "metric_vectors", {})
+    selection_scores = _aligned_valid_vector(transition.selection_scores, shell_indices=shell_indices)
+    probabilities = _aligned_valid_vector(transition.selection_probabilities, shell_indices=shell_indices)
+    logits = _aligned_valid_vector(transition.selection_logits, shell_indices=shell_indices)
+    metric_vectors = evaluation.labels.metrics
     target_root_gain = _aligned_valid_vector(metric_vectors.get("target_root_gain"), shell_indices=shell_indices)
     target_rri = _aligned_valid_vector(
         metric_vectors.get("target_rri", metric_vectors.get("rri")), shell_indices=shell_indices
@@ -909,8 +911,8 @@ def _live_step_candidate_score_rows(step: object) -> list[dict[str, object]]:
         getattr(candidates, "sampler_probability", None), expected=mask.shape[0]
     )
     component_names = getattr(candidates, "component_name", None)
-    selected_valid_index = int(getattr(step, "selected_valid_index", -1))
-    selected_shell_index = int(getattr(step, "selected_shell_index", -1))
+    selected_valid_index = int(transition.selected_valid_index)
+    selected_shell_index = int(transition.selected_shell_index)
     for valid_index, shell_index in enumerate(shell_indices.tolist()):
         position_id = None if position_ids is None else int(position_ids[shell_index])
         strategy_id = None if strategy_ids is None else int(strategy_ids[shell_index])
@@ -1582,7 +1584,7 @@ def _render_rollout_result(
                     )
                     color_metric = st.selectbox(
                         "Candidate color metric",
-                        options=["target_root_gain", "target_rri", "selection_probability", "position_family"],
+                        options=["selection_score", "selection_probability", "position_family"],
                         index=0,
                         key="cf_step_candidate_color_metric",
                     )
@@ -1620,7 +1622,8 @@ def _render_rollout_result(
                     with st.expander("Step candidate fanout diagnostics", expanded=True):
                         evaluated_step = evaluated.step(int(trajectory_index), int(step_display_index - 1))
                         _render_live_step_candidate_diagnostics(
-                            trajectory.steps[int(step_display_index - 1)] if evaluated_step is None else evaluated_step
+                            trajectory.steps[int(step_display_index - 1)],
+                            evaluated_step,
                         )
 
     with depth_tab:
@@ -1701,8 +1704,8 @@ def _render_live_selected_depth_tab(
         value=bool(target is not None and target.gt_label_valid),
         key="cf_live_depth_gt_obb",
     )
-    depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
-    valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+    depth = torch.as_tensor(step.evaluation.evidence.selected_depth_m, dtype=torch.float32)
+    valid_mask = torch.as_tensor(step.evaluation.evidence.selected_depth_valid_mask, dtype=torch.bool)
     depth_plot = depth.clone()
     depth_plot[~(valid_mask & torch.isfinite(depth_plot))] = torch.nan
     finite = depth_plot[torch.isfinite(depth_plot)]
@@ -1733,11 +1736,11 @@ def _render_live_selected_depth_tab(
     st.plotly_chart(fig, width="stretch")
     st.json(
         {
-            "focal_px": step.selected_depth_focal_px,
-            "principal_point_px": step.selected_depth_principal_point_px,
-            "image_size_hw": step.selected_depth_image_size_hw,
-            "selected_valid_index": int(step.selected_valid_index),
-            "selected_shell_index": int(step.selected_shell_index),
+            "focal_px": step.evaluation.evidence.selected_depth_focal_px,
+            "principal_point_px": step.evaluation.evidence.selected_depth_principal_point_px,
+            "image_size_hw": step.evaluation.evidence.selected_depth_image_size_hw,
+            "selected_valid_index": int(step.transition.selected_valid_index),
+            "selected_shell_index": int(step.transition.selected_shell_index),
         },
         expanded=False,
     )
@@ -1766,11 +1769,15 @@ def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, obj
                 "selected_policy": transition.selection_policy,
                 "warning": "",
             }
-            if step is None or step.selected_depth_m is None or step.selected_depth_valid_mask is None:
+            if (
+                step is None
+                or step.evaluation.evidence.selected_depth_m is None
+                or step.evaluation.evidence.selected_depth_valid_mask is None
+            ):
                 rows.append({**base, "warning": "selected_depth_m/valid_mask not retained for this live step."})
                 continue
-            depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
-            valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+            depth = torch.as_tensor(step.evaluation.evidence.selected_depth_m, dtype=torch.float32)
+            valid_mask = torch.as_tensor(step.evaluation.evidence.selected_depth_valid_mask, dtype=torch.bool)
             if depth.ndim != 2 or valid_mask.shape != depth.shape:
                 rows.append(
                     {
@@ -1802,7 +1809,7 @@ def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, obj
 
 
 def _live_depth_target_overlays(
-    step: object,
+    step: EvaluatedRolloutStep,
     *,
     sample: VinOfflineSample,
     target: TargetCandidateRow | None,
@@ -1813,13 +1820,13 @@ def _live_depth_target_overlays(
 
     if target is None:
         return []
-    focal = getattr(step, "selected_depth_focal_px", None)
-    principal = getattr(step, "selected_depth_principal_point_px", None)
+    focal = step.evaluation.evidence.selected_depth_focal_px
+    principal = step.evaluation.evidence.selected_depth_principal_point_px
     if focal is None or principal is None:
         return []
 
     overlays: list[DepthBoxOverlay] = []
-    pose_world_cam = step.selected_pose_world
+    pose_world_cam = step.transition.selected_pose_world
     if show_actor_target:
         actor_corners = _oriented_box_corners_world(target.pose_world_object, target.extents)
         overlays.append(

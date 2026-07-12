@@ -140,7 +140,7 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
         sibling.target.matched_gt_target_row_id = base.target.matched_gt_target_row_id
         sibling.target.matched_gt_target_id = base.target.matched_gt_target_id
     for record in records:
-        for chain_id, trajectory in enumerate(record.result.trajectories):
+        for chain_id, trajectory in enumerate(record.evaluated.result.trajectories):
             for step in trajectory.steps:
                 candidate_valid = step.candidates.mask_valid.clone()
                 invalid = torch.zeros_like(candidate_valid, dtype=torch.bool)
@@ -150,7 +150,7 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
                 candidate_valid[invalid] = False
                 step.candidates.mask_valid = candidate_valid
                 step.candidates.masks["FixtureInvalidRule"] = candidate_valid
-                evaluated_step = record.step(chain_id, step.step_index)
+                evaluated_step = record.evaluated.step(chain_id, step.step_index)
                 assert evaluated_step is not None
                 _reset_target_eval_candidate_rows(evaluated_step)
                 _mask_vector(step.selection_scores, invalid, fill=float("nan"))
@@ -162,9 +162,9 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
                     fill=float("-inf"),
                     log_from=step.selection_probabilities,
                 )
-                for values in evaluated_step.metric_vectors.values():
+                for values in evaluated_step.evaluation.labels.metrics.values():
                     _mask_vector(values, compact_invalid, fill=float("nan"))
-                evidence = evaluated_step.evidence
+                evidence = evaluated_step.evaluation.evidence
                 if evidence.selected_depth_m is not None and evidence.selected_depth_valid_mask is not None:
                     evidence.selected_depth_m[0, 0] = 42.0
                     evidence.selected_depth_valid_mask[0, 0] = False
@@ -183,8 +183,8 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
 def _reset_target_eval_candidate_rows(step: Any) -> None:
     """Realign fixture target-eval compact rows after mutating candidate validity."""
 
-    valid_count = int(step.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
-    evidence = step.evidence
+    valid_count = int(step.transition.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
+    evidence = step.evaluation.evidence
     evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
     evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
     for valid_index in range(valid_count):

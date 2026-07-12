@@ -23,7 +23,7 @@ from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.configs import PathConfig
-from aria_nbv.oracle.labels import OracleCandidateLabels, RetainedOracleEvidence
+from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import TargetCandidateRow
@@ -74,8 +74,10 @@ def _evaluated_single_step(result, transition, *, metrics=None, evidence=None) -
         steps={
             (0, transition.step_index): EvaluatedRolloutStep(
                 transition=transition,
-                labels=labels,
-                evidence=RetainedOracleEvidence() if evidence is None else evidence,
+                evaluation=OracleCandidateEvaluation(
+                    labels=labels,
+                    evidence=RetainedOracleEvidence() if evidence is None else evidence,
+                ),
             )
         },
     )
@@ -343,9 +345,13 @@ def test_live_selected_depth_rows_report_unretained_depth() -> None:
 
 def test_live_depth_target_overlays_project_descriptor_target() -> None:
     step = SimpleNamespace(
-        selected_depth_focal_px=(100.0, 100.0),
-        selected_depth_principal_point_px=(50.0, 50.0),
-        selected_pose_world=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0)),
+        transition=SimpleNamespace(selected_pose_world=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0))),
+        evaluation=SimpleNamespace(
+            evidence=SimpleNamespace(
+                selected_depth_focal_px=(100.0, 100.0),
+                selected_depth_principal_point_px=(50.0, 50.0),
+            )
+        ),
     )
 
     overlays = rollout_panel._live_depth_target_overlays(
@@ -745,8 +751,8 @@ def test_trajectory_metric_rows_use_empirical_95_band_not_min_mean_max() -> None
 
 def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True])),
-        metric_vectors={"target_rri": torch.tensor([0.0, 0.1, 0.2, 0.3])},
+        transition=SimpleNamespace(candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True]))),
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_rri": torch.tensor([0.0, 0.1, 0.2, 0.3])})),
     )
 
     with pytest.raises(ValueError, match="Candidate validity mask shape"):
@@ -755,8 +761,10 @@ def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
 
 def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, True])),
-        metric_vectors={"target_root_gain": torch.tensor([0.5, float("nan"), 0.9])},
+        transition=SimpleNamespace(candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, True]))),
+        evaluation=SimpleNamespace(
+            labels=SimpleNamespace(metrics={"target_root_gain": torch.tensor([0.5, float("nan"), 0.9])})
+        ),
     )
 
     values = rollout_panel._valid_step_metric_values(step, "target_root_gain")
@@ -764,22 +772,43 @@ def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
     assert values.tolist() == pytest.approx([0.5, 0.9])
 
 
+def test_live_step_diagnostics_reads_replay_transition_candidates(monkeypatch) -> None:
+    candidates = object()
+    observed = []
+    monkeypatch.setattr(rollout_panel, "_info_popover", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        rollout_panel,
+        "candidate_result_diagnostic_counts",
+        lambda value: observed.append(value) or {},
+    )
+    monkeypatch.setattr(rollout_panel.st, "info", lambda *_args, **_kwargs: None)
+
+    rollout_panel._render_live_step_candidate_diagnostics(
+        SimpleNamespace(candidates=candidates),
+        None,
+    )
+
+    assert observed == [candidates]
+
+
 def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(
-            mask_valid=torch.tensor([True, False, True]),
-            position_id=torch.tensor([1, 2, 3]),
-            strategy_id=torch.tensor([0, 1, 2]),
-            mixture_id=torch.tensor([0, 1, 2]),
-            sampler_probability=torch.tensor([0.2, 0.3, 0.5]),
-            component_name=("forward", "target", "lateral"),
+        transition=SimpleNamespace(
+            candidates=SimpleNamespace(
+                mask_valid=torch.tensor([True, False, True]),
+                position_id=torch.tensor([1, 2, 3]),
+                strategy_id=torch.tensor([0, 1, 2]),
+                mixture_id=torch.tensor([0, 1, 2]),
+                sampler_probability=torch.tensor([0.2, 0.3, 0.5]),
+                component_name=("forward", "target", "lateral"),
+            ),
+            selected_valid_index=1,
+            selected_shell_index=2,
+            selection_scores=torch.tensor([0.1, 0.9]),
+            selection_probabilities=torch.tensor([0.25, 0.75]),
+            selection_logits=torch.tensor([-1.0, 1.0]),
         ),
-        selected_valid_index=1,
-        selected_shell_index=2,
-        selection_scores=torch.tensor([0.1, 0.9]),
-        selection_probabilities=torch.tensor([0.25, 0.75]),
-        selection_logits=torch.tensor([-1.0, 1.0]),
-        metric_vectors={"target_root_gain": torch.tensor([0.2, 0.8])},
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_root_gain": torch.tensor([0.2, 0.8])})),
     )
 
     rows = rollout_panel._live_step_candidate_score_rows(step)
@@ -797,20 +826,22 @@ def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
 
 def test_live_step_candidate_score_rows_align_full_shell_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(
-            mask_valid=torch.tensor([True, False, True]),
-            position_id=None,
-            strategy_id=None,
-            mixture_id=None,
-            sampler_probability=None,
-            component_name=None,
+        transition=SimpleNamespace(
+            candidates=SimpleNamespace(
+                mask_valid=torch.tensor([True, False, True]),
+                position_id=None,
+                strategy_id=None,
+                mixture_id=None,
+                sampler_probability=None,
+                component_name=None,
+            ),
+            selected_valid_index=0,
+            selected_shell_index=0,
+            selection_scores=torch.tensor([0.1, -1.0, 0.9]),
+            selection_probabilities=None,
+            selection_logits=None,
         ),
-        selected_valid_index=0,
-        selected_shell_index=0,
-        selection_scores=torch.tensor([0.1, -1.0, 0.9]),
-        selection_probabilities=None,
-        selection_logits=None,
-        metric_vectors={"target_rri": torch.tensor([0.3, 100.0, 0.7])},
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_rri": torch.tensor([0.3, 100.0, 0.7])})),
     )
 
     rows = rollout_panel._live_step_candidate_score_rows(step)

@@ -198,7 +198,7 @@ def _attach_fixture_candidate_provenance(evaluated: EvaluatedRollout) -> None:
                     "target_bearing_yaw_rad": torch.zeros(n, dtype=torch.float32),
                 }
             )
-            evidence = evaluated_step.evidence
+            evidence = evaluated_step.evaluation.evidence
             evidence.selected_depth_m = torch.full((240, 240), 1.0 + float(step.step_index), dtype=torch.float32)
             evidence.selected_depth_valid_mask = torch.ones((240, 240), dtype=torch.bool)
             evidence.selected_depth_focal_px = (120.0, 120.0)

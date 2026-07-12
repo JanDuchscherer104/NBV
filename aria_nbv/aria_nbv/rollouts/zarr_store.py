@@ -58,23 +58,26 @@ from .trace import (
 )
 
 
-class RolloutWriteRecord(Protocol):
-    """Structural writer input supplied by an Oracle generation pipeline."""
+class _EvaluatedRollout(Protocol):
+    """Minimal evaluated-rollout view consumed by persistence."""
 
     @property
     def result(self) -> Any: ...
+
+    def step(self, chain_id: int, step_index: int) -> Any: ...
+
+
+class _RolloutWriteRecord(Protocol):
+    """Private structural writer input supplied by an Oracle pipeline."""
+
+    @property
+    def evaluated(self) -> _EvaluatedRollout: ...
 
     @property
     def lineage(self) -> RolloutLineage: ...
 
     @property
     def rollout_id_prefix(self) -> str: ...
-
-    def lineage_for_chain(self, chain_id: int) -> RolloutLineage: ...
-
-    def step(self, chain_id: int, step_index: int) -> Any: ...
-
-    def with_lineage(self, lineage: RolloutLineage) -> "RolloutWriteRecord": ...
 
 
 class _SelectedDepthEvidence(Protocol):
@@ -451,7 +454,7 @@ class RolloutZarrStoreReader:
 
 def write_rollout_zarr_store(
     store_dir: Path | str,
-    records: Sequence[RolloutWriteRecord],
+    records: Sequence[_RolloutWriteRecord],
     *,
     return_semantics: str = DEFAULT_RETURN_SEMANTICS,
     discount_gamma: float = 1.0,
@@ -507,7 +510,7 @@ class _RolloutZarrWriteSession:
         self,
         *,
         store_dir: Path | str,
-        records: Sequence[RolloutWriteRecord],
+        records: Sequence[_RolloutWriteRecord],
         return_semantics: str,
         discount_gamma: float,
         target_protocol_version: str,
@@ -1161,7 +1164,7 @@ def _required_groups() -> tuple[str, ...]:
 
 def _root_metadata_payload(
     *,
-    records: list[RolloutWriteRecord],
+    records: list[_RolloutWriteRecord],
     tables: _RolloutTables,
     q_h_arrays: dict[str, np.ndarray],
     q_h_horizon: int,
@@ -1189,9 +1192,9 @@ def _root_metadata_payload(
     """Return compact root attrs for one rollout store."""
 
     split_values = {
-        record.lineage_for_chain(chain_id).source.split or "unknown"
+        _lineage_for_chain(record, chain_id).source.split or "unknown"
         for record in records
-        for chain_id, _trajectory in enumerate(record.result.trajectories)
+        for chain_id, _trajectory in enumerate(record.evaluated.result.trajectories)
     }
     return {
         "schema_id": ROLLOUT_ZARR_SCHEMA_ID,
@@ -1256,7 +1259,7 @@ def _root_metadata_payload(
 
 def _build_manifest_payload(
     *,
-    records: list[RolloutWriteRecord],
+    records: list[_RolloutWriteRecord],
     tables: _RolloutTables,
     q_h_arrays: dict[str, np.ndarray],
     dictionaries: dict[str, list[str]],
@@ -1294,7 +1297,7 @@ def _build_manifest_payload(
     }
 
 
-def _source_coverage(records: list[RolloutWriteRecord]) -> dict[str, Any]:
+def _source_coverage(records: list[_RolloutWriteRecord]) -> dict[str, Any]:
     """Summarize source rows without reading Zarr payload arrays."""
 
     rows: dict[int, dict[str, Any]] = {}
@@ -1330,7 +1333,7 @@ def _source_coverage(records: list[RolloutWriteRecord]) -> dict[str, Any]:
     }
 
 
-def _manifest_config_hashes(records: list[RolloutWriteRecord]) -> dict[str, list[str]]:
+def _manifest_config_hashes(records: list[_RolloutWriteRecord]) -> dict[str, list[str]]:
     """Collect unique config/protocol hashes stored in rollout lineages."""
 
     values: dict[str, set[str]] = {
@@ -1361,7 +1364,7 @@ def _add_manifest_hash(target: set[str], value: str | None) -> None:
         target.add(value)
 
 
-def _records_with_global_target_row_ids(records: list[RolloutWriteRecord]) -> list[RolloutWriteRecord]:
+def _records_with_global_target_row_ids(records: list[_RolloutWriteRecord]) -> list[_RolloutWriteRecord]:
     """Return records whose lineage target rows are unique within the rollout store.
 
     ``TargetCandidateRow.target_row_id`` is selector-local to one source sample.
@@ -1371,7 +1374,7 @@ def _records_with_global_target_row_ids(records: list[RolloutWriteRecord]) -> li
     """
 
     target_row_by_key: dict[tuple[object, ...], int] = {}
-    normalized: list[RolloutWriteRecord] = []
+    normalized: list[_RolloutWriteRecord] = []
     for record in records:
         lineage = record.lineage
         target_key = _global_target_key(lineage)
@@ -1380,15 +1383,16 @@ def _records_with_global_target_row_ids(records: list[RolloutWriteRecord]) -> li
         if target_source_index is None and lineage.target.target_row_id is not None:
             target_source_index = int(lineage.target.target_row_id)
         normalized.append(
-            record.with_lineage(
-                replace(
+            replace(
+                record,
+                lineage=replace(
                     lineage,
                     target=replace(
                         lineage.target,
                         target_row_id=global_target_row_id,
                         target_source_index=target_source_index,
                     ),
-                )
+                ),
             )
         )
     return normalized
@@ -1409,7 +1413,7 @@ def _global_target_key(lineage: RolloutLineage) -> tuple[object, ...]:
     )
 
 
-def _unique_targets(records: list[RolloutWriteRecord]) -> set[int]:
+def _unique_targets(records: list[_RolloutWriteRecord]) -> set[int]:
     """Return unique target row ids represented by rollout records."""
 
     return {
@@ -1427,13 +1431,13 @@ def _write_metadata_group(group: zarr.Group, *, field_retention_policy: str) -> 
     _write_string_array(group, "field_retention_policy", [field_retention_policy])
 
 
-def _build_dictionaries(records: list[RolloutWriteRecord]) -> dict[str, list[str]]:
+def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[str]]:
     items = list(_record_items(records))
-    policy_values = {_policy_name(record.result.selection_policy) for record in records}
+    policy_values = {_policy_name(record.evaluated.result.selection_policy) for record in records}
     policy_values.update(
         step.selection_policy
         for record in records
-        for trajectory in record.result.trajectories
+        for trajectory in record.evaluated.result.trajectories
         for step in trajectory.steps
     )
     policy_values.update(
@@ -1454,16 +1458,16 @@ def _build_dictionaries(records: list[RolloutWriteRecord]) -> dict[str, list[str
     score_source_values = {
         step.selection_score_label
         for record in records
-        for trajectory in record.result.trajectories
+        for trajectory in record.evaluated.result.trajectories
         for step in trajectory.steps
     }
     crop_policy_values = {
-        evaluated.evidence.target_eval_crop_policy
+        evaluated.evaluation.evidence.target_eval_crop_policy
         for record in records
-        for chain_id, trajectory in enumerate(record.result.trajectories)
+        for chain_id, trajectory in enumerate(record.evaluated.result.trajectories)
         for step in trajectory.steps
-        if (evaluated := record.step(chain_id, step.step_index)) is not None
-        and evaluated.evidence.target_eval_crop_policy
+        if (evaluated := record.evaluated.step(chain_id, step.step_index)) is not None
+        and evaluated.evaluation.evidence.target_eval_crop_policy
     }
     split_values = {lineage.source.split or "unknown" for _record, _trajectory, lineage in items}
     target_match_status_values = {
@@ -1512,9 +1516,9 @@ def _build_dictionaries(records: list[RolloutWriteRecord]) -> dict[str, list[str
         "target_match_status": sorted(target_match_status_values),
         "termination_reason": sorted(
             {
-                _termination_reason(record.result, trajectory)
+                _termination_reason(record.evaluated.result, trajectory)
                 for record in records
-                for trajectory in record.result.trajectories
+                for trajectory in record.evaluated.result.trajectories
             }
         ),
     }
@@ -1527,7 +1531,7 @@ def _write_dictionaries(group: zarr.Group, dictionaries: dict[str, list[str]]) -
 
 def _write_targets(
     group: zarr.Group,
-    records: list[RolloutWriteRecord],
+    records: list[_RolloutWriteRecord],
     dictionaries: dict[str, list[str]],
     *,
     target_protocol_version: str,
@@ -1860,7 +1864,7 @@ def _write_targets(
     _write_string_array(group, "target_protocol_version", [target_protocol_version])
 
 
-def _target_rows_from_records(records: list[RolloutWriteRecord]) -> dict[int, dict[str, Any]]:
+def _target_rows_from_records(records: list[_RolloutWriteRecord]) -> dict[int, dict[str, Any]]:
     rows: dict[int, dict[str, Any]] = {}
     for _record, _trajectory, lineage in _record_items(records):
         row_id = lineage.target.target_row_id if lineage.target.target_row_id is not None else 0
@@ -1907,7 +1911,7 @@ def _target_rows_from_records(records: list[RolloutWriteRecord]) -> dict[int, di
 
 
 def _flatten_records(
-    records: list[RolloutWriteRecord],
+    records: list[_RolloutWriteRecord],
     dictionaries: dict[str, list[str]],
     *,
     selected_depth_width_px: int,
@@ -1954,11 +1958,13 @@ def _flatten_records(
         rollout_rows["chain_id"].append(lineage.chain_id)
         rollout_rows["source_row_id"].append(source_row_id)
         rollout_rows["root_pose_world"].append(
-            record.result.root_pose_world.tensor().detach().cpu().to(dtype=torch.float32).reshape(-1).numpy()
+            record.evaluated.result.root_pose_world.tensor().detach().cpu().to(dtype=torch.float32).reshape(-1).numpy()
         )
-        rollout_rows["root_time_ns"].append(_int_or_default(record.result.root_time_ns, default=-1))
-        rollout_rows["root_trajectory_index"].append(_int_or_default(record.result.root_trajectory_index, default=-1))
-        rollout_rows["root_frame_index"].append(_int_or_default(record.result.root_frame_index, default=-1))
+        rollout_rows["root_time_ns"].append(_int_or_default(record.evaluated.result.root_time_ns, default=-1))
+        rollout_rows["root_trajectory_index"].append(
+            _int_or_default(record.evaluated.result.root_trajectory_index, default=-1)
+        )
+        rollout_rows["root_frame_index"].append(_int_or_default(record.evaluated.result.root_frame_index, default=-1))
         rollout_rows["scene_id"].append(_dict_id(dictionaries["scene"], lineage.source.scene_id or ""))
         rollout_rows["snippet_id"].append(
             _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.source.snippet_id or ""))
@@ -1966,14 +1972,21 @@ def _flatten_records(
         rollout_rows["target_row_id"].append(
             lineage.target.target_row_id if lineage.target.target_row_id is not None else 0
         )
-        rollout_rows["policy_id"].append(_dict_id(dictionaries["policy"], _policy_name(record.result.selection_policy)))
-        rollout_rows["horizon"].append(record.result.horizon)
-        rollout_rows["branch_factor"].append(record.result.branch_factor)
-        rollout_rows["beam_width"].append(-1 if record.result.beam_width is None else record.result.beam_width)
+        rollout_rows["policy_id"].append(
+            _dict_id(dictionaries["policy"], _policy_name(record.evaluated.result.selection_policy))
+        )
+        rollout_rows["horizon"].append(record.evaluated.result.horizon)
+        rollout_rows["branch_factor"].append(record.evaluated.result.branch_factor)
+        rollout_rows["beam_width"].append(
+            -1 if record.evaluated.result.beam_width is None else record.evaluated.result.beam_width
+        )
         rollout_rows["temperature"].append(_first_temperature(trajectory))
         rollout_rows["random_seed"].append(-1 if lineage.policy.random_seed is None else lineage.policy.random_seed)
         rollout_rows["termination_reason"].append(
-            _dict_id(dictionaries["termination_reason"], _termination_reason(record.result, trajectory))
+            _dict_id(
+                dictionaries["termination_reason"],
+                _termination_reason(record.evaluated.result, trajectory),
+            )
         )
         rollout_rows["final_cumulative_target_rri"].append(_nan_if_none(final_target_rri))
         rollout_rows["final_cumulative_scene_rri"].append(_nan_if_none(final_scene_rri))
@@ -2015,7 +2028,7 @@ def _flatten_records(
         running_scene_rri: float | None = None
         running_target_root_gain: float | None = None
         running_scene_root_gain: float | None = None
-        root_pose = record.result.root_pose_world.tensor().detach().cpu().reshape(-1)
+        root_pose = record.evaluated.result.root_pose_world.tensor().detach().cpu().reshape(-1)
         for step in trajectory.steps:
             evaluated_step = _evaluated_step(record, lineage.chain_id, step.step_index)
             candidate_valid = _candidate_valid(step)
@@ -2048,14 +2061,14 @@ def _flatten_records(
             step_rows["cumulative_scene_root_gain"].append(_nan_if_none(running_scene_root_gain))
             _append_selected_depth_row(
                 selected_depth_rows,
-                evidence=evaluated_step.evidence,
+                evidence=evaluated_step.evaluation.evidence,
                 step_row_id=this_step_row_id,
                 selected_candidate_row_id=selected_candidate_row_id,
             )
             if target_eval_crops_enabled:
                 crop_row_id = _append_target_eval_crop_rows(
                     target_eval_crop_rows,
-                    evidence=evaluated_step.evidence,
+                    evidence=evaluated_step.evaluation.evidence,
                     candidate_valid=candidate_valid,
                     step_row_id=this_step_row_id,
                     candidate_row_id_start=candidate_row_id,
@@ -2068,7 +2081,7 @@ def _flatten_records(
                 _append_candidate_row(
                     candidate_rows,
                     step=step,
-                    labels=evaluated_step.labels,
+                    labels=evaluated_step.evaluation.labels,
                     candidate_valid=candidate_valid,
                     candidate_row_id=candidate_row_id,
                     step_row_id=this_step_row_id,
@@ -2892,11 +2905,19 @@ def _dict_id(values: list[str], value: str) -> int:
 
 
 def _record_items(
-    records: list[RolloutWriteRecord],
-) -> Iterator[tuple[RolloutWriteRecord, CounterfactualTrajectory, RolloutLineage]]:
+    records: list[_RolloutWriteRecord],
+) -> Iterator[tuple[_RolloutWriteRecord, CounterfactualTrajectory, RolloutLineage]]:
     for record in records:
-        for chain_id, trajectory in enumerate(record.result.trajectories):
-            yield record, trajectory, record.lineage_for_chain(chain_id)
+        for chain_id, trajectory in enumerate(record.evaluated.result.trajectories):
+            yield record, trajectory, _lineage_for_chain(record, chain_id)
+
+
+def _lineage_for_chain(record: _RolloutWriteRecord, chain_id: int) -> RolloutLineage:
+    return record.lineage.for_chain(
+        chain_id,
+        rollout_id=f"{record.rollout_id_prefix}-{chain_id:06d}",
+        rollout_policy=str(record.evaluated.result.selection_policy),
+    )
 
 
 def _first_temperature(trajectory: CounterfactualTrajectory) -> float:
@@ -2931,8 +2952,11 @@ def _accumulate_selected_metric(
     evaluated_step: Any,
     metric_names: tuple[str, ...],
 ) -> float | None:
+    selected_metrics = evaluated_step.evaluation.labels.selected(
+        evaluated_step.transition.selected_valid_index,
+    )
     for metric_name in metric_names:
-        value = evaluated_step.selected_metrics.get(metric_name)
+        value = selected_metrics.get(metric_name)
         if value is not None and np.isfinite(float(value)):
             return float(value) if current is None else float(current + float(value))
     return current
@@ -2992,7 +3016,7 @@ def _metric_value(
 
 
 def _evaluated_step(record: Any, chain_id: int, step_index: int) -> Any:
-    evaluated = record.step(chain_id, step_index)
+    evaluated = record.evaluated.step(chain_id, step_index)
     if evaluated is None:
         raise ValueError(f"Missing Oracle labels for rollout chain={chain_id} step={step_index}.")
     return evaluated

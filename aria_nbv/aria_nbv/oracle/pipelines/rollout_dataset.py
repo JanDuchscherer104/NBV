@@ -834,7 +834,7 @@ class RolloutDatasetWriter:
                 focal = camera.f.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
                 principal = camera.c.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
                 size_wh = camera.size.reshape(-1, 2)[0].detach().cpu().to(dtype=torch.float32)
-                evidence = evaluated_step.evidence
+                evidence = evaluated_step.evaluation.evidence
                 evidence.selected_depth_m = depth
                 evidence.selected_depth_valid_mask = valid_mask
                 evidence.selected_depth_focal_px = (float(focal[0].item()), float(focal[1].item()))

@@ -322,11 +322,11 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
 
 def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=35)[:1]
-    for chain_id, trajectory in enumerate(records[0].result.trajectories):
+    for chain_id, trajectory in enumerate(records[0].evaluated.result.trajectories):
         for step in trajectory.steps:
-            evaluated_step = records[0].step(chain_id, step.step_index)
-            evaluated_step.evidence.selected_depth_m = None
-            evaluated_step.evidence.selected_depth_valid_mask = None
+            evaluated_step = records[0].evaluated.step(chain_id, step.step_index)
+            evaluated_step.evaluation.evidence.selected_depth_m = None
+            evaluated_step.evaluation.evidence.selected_depth_valid_mask = None
     fake_renderer = _FakeSelectedDepthRenderer(height=4, width=5)
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(selected_depth=SimpleNamespace(height_px=4, width_px=5))
@@ -340,9 +340,9 @@ def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() ->
     materialized_steps = list(records[0].evaluated.steps.values())
     assert len(fake_renderer.calls) == len(materialized_steps)
     for step in materialized_steps:
-        assert step.evidence.selected_depth_m.shape == (4, 5)
-        assert step.evidence.selected_depth_valid_mask.shape == (4, 5)
-        assert step.evidence.selected_depth_image_size_hw == (4, 5)
+        assert step.evaluation.evidence.selected_depth_m.shape == (4, 5)
+        assert step.evaluation.evidence.selected_depth_valid_mask.shape == (4, 5)
+        assert step.evaluation.evidence.selected_depth_image_size_hw == (4, 5)
 
 
 def test_rollout_shard_manifest_planning_is_deterministic_and_order_sensitive(tmp_path: Path) -> None:

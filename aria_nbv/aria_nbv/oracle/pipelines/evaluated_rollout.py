@@ -12,10 +12,9 @@ from ...rollouts.replay.state import CounterfactualRolloutResult, Counterfactual
 from ...rollouts.replay.types import CandidateScores
 from ...rollouts.trace import RolloutLineage
 from ..evidence import OracleRriState
-from ..labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
+from ..labels import OracleCandidateEvaluation
 
 if TYPE_CHECKING:
-    from efm3d.aria.camera import CameraTW
     from efm3d.aria.pose import PoseTW
 
     from ...pose_generation.types import CandidateSamplingResult
@@ -47,103 +46,10 @@ class OracleCandidateScorer(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class EvaluatedRolloutStep:
-    """Oracle labels and retained evidence for one replay step."""
+    """A replay transition joined to its compact Oracle evaluation."""
 
     transition: CounterfactualStepResult
-    labels: OracleCandidateLabels
-    evidence: RetainedOracleEvidence
-
-    @property
-    def selected_metrics(self) -> dict[str, float]:
-        """Return scalar Oracle metrics for the selected action."""
-
-        return self.labels.selected(self.transition.selected_valid_index)
-
-    @property
-    def metric_vectors(self) -> dict[str, torch.Tensor]:
-        """Return compact candidate-wise Oracle metric vectors."""
-
-        return self.labels.metrics
-
-    @property
-    def candidates(self) -> CandidateSamplingResult:
-        """Return the replay-owned candidate table."""
-
-        return self.transition.candidates
-
-    @property
-    def selected_pose_world(self) -> PoseTW:
-        """Return the selected camera pose in world coordinates."""
-
-        return self.transition.selected_pose_world
-
-    @property
-    def selected_view(self) -> CameraTW:
-        """Return the selected candidate camera."""
-
-        return self.transition.selected_view
-
-    @property
-    def step_index(self) -> int:
-        """Return the zero-based replay step index."""
-
-        return self.transition.step_index
-
-    @property
-    def selected_valid_index(self) -> int:
-        """Return the selected row in compact valid-candidate order."""
-
-        return self.transition.selected_valid_index
-
-    @property
-    def selected_shell_index(self) -> int:
-        """Return the selected row in full candidate-shell order."""
-
-        return self.transition.selected_shell_index
-
-    @property
-    def selection_score_label(self) -> str:
-        """Return the semantic name of replay selection scores."""
-
-        return self.transition.selection_score_label
-
-    @property
-    def selection_scores(self) -> torch.Tensor | None:
-        """Return replay scores aligned with the full candidate shell."""
-
-        return self.transition.selection_scores
-
-    @property
-    def selection_probabilities(self) -> torch.Tensor | None:
-        """Return full-shell action probabilities when retained."""
-
-        return self.transition.selection_probabilities
-
-    @property
-    def selection_logits(self) -> torch.Tensor | None:
-        """Return full-shell action logits when retained."""
-
-        return self.transition.selection_logits
-
-    @property
-    def selected_depth_m(self) -> torch.Tensor | None:
-        return self.evidence.selected_depth_m
-
-    @property
-    def selected_depth_valid_mask(self) -> torch.Tensor | None:
-        return self.evidence.selected_depth_valid_mask
-
-    @property
-    def selected_depth_focal_px(self) -> tuple[float, float] | None:
-        return self.evidence.selected_depth_focal_px
-
-    @property
-    def selected_depth_principal_point_px(self) -> tuple[float, float] | None:
-        return self.evidence.selected_depth_principal_point_px
-
-    @property
-    def selected_depth_image_size_hw(self) -> tuple[int, int] | None:
-        return self.evidence.selected_depth_image_size_hw
+    evaluation: OracleCandidateEvaluation
 
 
 @dataclass(slots=True)
@@ -166,31 +72,6 @@ class EvaluatedRolloutRecord:
     evaluated: EvaluatedRollout
     lineage: RolloutLineage
     rollout_id_prefix: str
-
-    @property
-    def result(self) -> CounterfactualRolloutResult:
-        """Return the replay result for writer compatibility."""
-
-        return self.evaluated.result
-
-    def lineage_for_chain(self, chain_id: int) -> RolloutLineage:
-        """Return composed persisted lineage for one retained chain."""
-
-        return self.lineage.for_chain(
-            chain_id,
-            rollout_id=f"{self.rollout_id_prefix}-{chain_id:06d}",
-            rollout_policy=str(self.result.selection_policy),
-        )
-
-    def step(self, chain_id: int, step_index: int) -> EvaluatedRolloutStep | None:
-        """Return Oracle outputs for one retained replay step."""
-
-        return self.evaluated.step(chain_id, step_index)
-
-    def with_lineage(self, lineage: RolloutLineage) -> "EvaluatedRolloutRecord":
-        """Return a copy carrying writer-normalized lineage."""
-
-        return replace(self, lineage=lineage)
 
 
 class OracleReplayAdapter:
@@ -241,10 +122,12 @@ class OracleReplayAdapter:
                 evaluation = self._evaluation_for(step.candidates)
                 steps[(chain_id, step.step_index)] = EvaluatedRolloutStep(
                     transition=step,
-                    labels=evaluation.labels,
-                    evidence=evaluation.evidence.compact_for_selection(
-                        step.selected_valid_index,
-                        retain_target_crops=retain_target_crops,
+                    evaluation=replace(
+                        evaluation,
+                        evidence=evaluation.evidence.compact_for_selection(
+                            step.selected_valid_index,
+                            retain_target_crops=retain_target_crops,
+                        ),
                     ),
                 )
         self._evaluations.clear()
