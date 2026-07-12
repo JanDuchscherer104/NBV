@@ -68,6 +68,8 @@ def test_public_api_omits_internal_helper_exports() -> None:
         "snippets_by_scene",
         "RolloutDatasetWriter",
         "RolloutDatasetWriterConfig",
+        "VinOfflineWriter",
+        "VinOfflineWriterConfig",
         "RolloutDatasetWriterStats",
         "RolloutRecipeConfig",
         "RolloutZarrStoreConfig",
@@ -105,11 +107,44 @@ def test_data_contracts_omit_pipeline_conversion_conveniences() -> None:
 def test_offline_configs_omit_premature_counterfactual_knobs() -> None:
     """Rollout storage should stay out of the immutable VIN offline-store schema."""
 
-    module = importlib.import_module("aria_nbv.data_handling")
+    data_module = importlib.import_module("aria_nbv.data_handling")
+    pipeline_module = importlib.import_module("aria_nbv.oracle.pipelines.offline_vin")
     source_module = importlib.import_module("aria_nbv.data_handling.offline.source")
-    assert "include_counterfactuals" not in module.VinOfflineWriterConfig.model_fields  # noqa: S101
-    assert "load_counterfactuals" not in module.VinOfflineDatasetConfig.model_fields  # noqa: S101
+    assert "include_counterfactuals" not in pipeline_module.VinOfflineWriterConfig.model_fields  # noqa: S101
+    assert "load_counterfactuals" not in data_module.VinOfflineDatasetConfig.model_fields  # noqa: S101
     assert "load_counterfactuals_for_batch" not in source_module.VinOfflineSourceConfig.model_fields  # noqa: S101
+
+
+def test_offline_generation_config_fields_are_frozen() -> None:
+    """Keep canonical offline-generation TOMLs valid across the ownership move."""
+
+    pipeline_module = importlib.import_module("aria_nbv.oracle.pipelines.offline_vin")
+    assert tuple(pipeline_module.VinOfflineWriterConfig.model_fields) == (  # noqa: S101
+        "paths",
+        "store",
+        "dataset",
+        "labeler",
+        "backbone",
+        "include_backbone",
+        "include_depths",
+        "include_pointclouds",
+        "include_diagnostic_payloads",
+        "include_gt_obbs",
+        "include_detected_obbs",
+        "include_trajectory_metadata",
+        "backbone_numeric_keep_fields",
+        "backbone_payload_keep_fields",
+        "vin_pad_points",
+        "semidense_max_points",
+        "semidense_include_obs_count",
+        "max_candidates",
+        "samples_per_shard",
+        "max_samples",
+        "train_val_split",
+        "overwrite",
+        "num_failures_allowed",
+        "verbosity",
+    )
 
 
 def test_pyproject_omits_legacy_cache_entrypoints() -> None:
@@ -120,7 +155,7 @@ def test_pyproject_omits_legacy_cache_entrypoints() -> None:
     project_scripts = tomllib.loads(pyproject_text)["project"]["scripts"]
     assert "nbv-cache-samples" not in pyproject_text  # noqa: S101
     assert "nbv-cache-vin-snippets" not in pyproject_text  # noqa: S101
-    assert project_scripts["nbv-build-offline"] == "aria_nbv.data_handling.offline.cli:main"  # noqa: S101
+    assert project_scripts["nbv-build-offline"] == "aria_nbv.oracle.pipelines.cli:offline_main"  # noqa: S101
 
 
 def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
@@ -138,6 +173,12 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
             "data_handling.offline.dataset",
         },
         "oracle/pipelines/online_vin.py": {"data_handling.offline.batch"},
+        "oracle/pipelines/offline_vin.py": {
+            "data_handling.offline.adapter",
+            "data_handling.offline.format",
+            "data_handling.offline.store",
+            "data_handling.offline.writer",
+        },
         "oracle/target_selection.py": {
             "data_handling.efm_views",
             "data_handling.offline.batch",

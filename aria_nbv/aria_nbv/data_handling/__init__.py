@@ -55,8 +55,6 @@ from .offline.inventory import (
     collect_offline_visual_inventory,
 )
 from .offline.writer import (
-    VinOfflineWriter,
-    VinOfflineWriterConfig,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
@@ -96,8 +94,6 @@ __all__ = [
     "VinOfflineSample",
     "VinOfflineSampleDiagnostic",
     "VinOfflineStoreConfig",
-    "VinOfflineWriter",
-    "VinOfflineWriterConfig",
     "VinOracleBatch",
     "VinOracleDatasetBase",
     "VinSnippetView",

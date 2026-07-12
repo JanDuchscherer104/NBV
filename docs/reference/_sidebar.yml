@@ -38,8 +38,6 @@ website:
             file: reference/data_handling.offline.adapter.qmd
           - text: batch
             file: reference/data_handling.offline.batch.qmd
-          - text: cli
-            file: reference/data_handling.offline.cli.qmd
           - text: dataset
             file: reference/data_handling.offline.dataset.qmd
           - text: diagnostics
@@ -94,6 +92,8 @@ website:
             file: reference/oracle.pipelines.cli.qmd
           - text: evaluated_rollout
             file: reference/oracle.pipelines.evaluated_rollout.qmd
+          - text: offline_vin
+            file: reference/oracle.pipelines.offline_vin.qmd
           - text: online_vin
             file: reference/oracle.pipelines.online_vin.qmd
           - text: rollout_dataset

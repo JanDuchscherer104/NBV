@@ -24,9 +24,9 @@ never as low RRI.
 - Immutable training source: `data_handling.offline.source.VinOfflineSourceConfig`.
 - Online generation: `oracle.pipelines.online_vin`; Lightning composes the
   online/offline discriminated source union.
-- Immutable one-step cache: `VinOfflineWriterConfig`, `VinOfflineWriter`,
-  `VinOfflineDatasetConfig`, `VinOfflineStoreConfig`, `VinOfflineManifest`, and
-  `VinOfflineIndexRecord`.
+- Immutable one-step store: `VinOfflineDatasetConfig`, `VinOfflineStoreConfig`,
+  `VinOfflineManifest`, and `VinOfflineIndexRecord`. Generation composition is
+  owned by `oracle.pipelines.offline_vin`.
 - Diagnostics: `collect_vin_offline_dataset_stats`,
   `collect_vin_offline_dataset_coverage`, and
   `collect_offline_visual_inventory`.
@@ -100,21 +100,21 @@ vin_offline/
 ```
 
 `OFFLINE_DATASET_VERSION` is the runtime compatibility gate. When this format
-changes, bump the version and rebuild stores with `VinOfflineWriter`; strict
+changes, bump the version and rebuild stores with `nbv-build-offline`; strict
 readers should fail fast on older manifests with rebuild guidance.
 
 By default, `VinOfflineStoreConfig.store_dir` resolves to
 `PathConfig().offline_cache_dir / "vin_offline"`. Relative store names such as
 `"vin_offline"` are resolved under `offline_cache_dir`.
 
-Build immutable stores through the writer CLI:
+Build immutable stores through the Oracle pipeline CLI:
 
 ```sh
 cd aria_nbv
 uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
 ```
 
-Use `--dry-run` to validate a writer TOML and inspect the resolved store path
+Use `--dry-run` to validate a generation TOML and inspect the resolved store path
 without loading snippets, EVL, or writing shards.
 
 This README owns both the storage contracts and the human/operator data
@@ -686,7 +686,7 @@ uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
 
 The default config writes `store_dir = "vin_offline"` under
 `PathConfig().offline_cache_dir`, normally `.data/offline_cache/vin_offline`.
-The writer is immutable: if the destination exists and `overwrite = false`, the
+The generated store is immutable: if the destination exists and `overwrite = false`, the
 build fails. To generate more samples without destroying the current store, copy
 the TOML and give `[store].store_dir` a new name. Use `overwrite = true` only
 for deliberate smoke-store rebuilds.

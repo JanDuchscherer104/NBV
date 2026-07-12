@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.data_handling import VinOfflineWriterConfig
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig

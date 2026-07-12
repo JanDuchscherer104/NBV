@@ -1,12 +1,16 @@
 # Oracle Pipelines
 
-`aria_nbv.oracle.pipelines` owns operational label and rollout-dataset generation. The public package markers intentionally provide no convenience exports.
+`aria_nbv.oracle.pipelines` owns operational Oracle-label generation and the
+composition of immutable VIN and rollout datasets. The package marker provides
+no convenience exports.
 
 ## Layout
 
 ```text
 oracle/pipelines/
   evaluated_rollout.py
+  offline_vin.py
+  online_vin.py
   rollout_dataset.py
   shards.py
   cli.py
@@ -51,6 +55,13 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `RolloutDatasetWriter` | `class` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 | `_lineage_split` | `function` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
 
+### `offline_vin.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `VinOfflineWriterConfig` | `config` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
+| `VinOfflineWriter` | `class` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
+
 ### `shards.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
@@ -79,12 +90,15 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 |---|---|---|---|---|---|---|
 | `_HELP_SETTINGS` | `constant` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `build_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `offline_app` | `constant` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `offline_main` | `function` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `build_rollouts_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `build_offline_command` | `function` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `_raw_argv` | `function` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |

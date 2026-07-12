@@ -17,7 +17,12 @@ oracle/
   target_rri.py
   target_selection.py
   pipelines/
+    cli.py
+    evaluated_rollout.py
+    offline_vin.py
     online_vin.py
+    rollout_dataset.py
+    shards.py
 ```
 
 WP07 established target-task ownership. WP08-WP09 established scene/target

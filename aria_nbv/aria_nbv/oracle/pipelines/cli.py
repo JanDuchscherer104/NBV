@@ -1,4 +1,4 @@
-"""CLI entry points for building standalone target-RRI rollout stores."""
+"""CLI entry points for Oracle-labelled offline and rollout stores."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from ...rollouts.manifest import RolloutStoreInvocation
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
 from ...utils.typer_cli import run_typer_app
+from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
     load_rollout_shard_entry_for_cli,
@@ -27,6 +28,12 @@ build_app = typer.Typer(
     add_completion=False,
     context_settings=_HELP_SETTINGS,
     help="Build a standalone target-RRI rollout Zarr store from VIN offline rows.",
+    pretty_exceptions_show_locals=False,
+)
+offline_app = typer.Typer(
+    add_completion=False,
+    context_settings=_HELP_SETTINGS,
+    help="Build an immutable VIN offline store from raw snippets and Oracle RRI labels.",
     pretty_exceptions_show_locals=False,
 )
 plan_app = typer.Typer(
@@ -50,6 +57,16 @@ def main(argv: list[str] | None = None) -> None:
     run_typer_app(build_app, raw_argv, prog_name="nbv-build-rollouts", obj={"raw_argv": raw_argv})
 
 
+def offline_main(argv: list[str] | None = None) -> None:
+    """CLI entry point for building an immutable VIN offline store."""
+
+    run_typer_app(
+        offline_app,
+        list(sys.argv[1:] if argv is None else argv),
+        prog_name="nbv-build-offline",
+    )
+
+
 def plan_main(argv: list[str] | None = None) -> None:
     """CLI entry point for planning rollout source-row shards."""
 
@@ -62,6 +79,52 @@ def status_main(argv: list[str] | None = None) -> None:
 
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     run_typer_app(status_app, raw_argv, prog_name="nbv-status-rollout-shards", obj={"raw_argv": raw_argv})
+
+
+@offline_app.command()
+def build_offline_command(
+    config_path: Annotated[
+        Path,
+        typer.Option("--config-path", help="Path to a VinOfflineWriterConfig TOML file."),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Validate the TOML and print resolved paths without loading data or writing shards.",
+        ),
+    ] = False,
+) -> None:
+    """Build an immutable VIN offline store."""
+
+    console = cli_console()
+    config_path = resolve_config_toml_path(config_path)
+    cfg = VinOfflineWriterConfig.from_toml(config_path)
+    console.print(
+        key_value_panel(
+            "VIN Offline Build",
+            [
+                ("config", config_path),
+                ("store", cfg.store.store_dir),
+                ("dry run", dry_run),
+            ],
+        )
+    )
+    if dry_run:
+        console.print("Dry run complete; no dataset, backbone, or writer was instantiated.")
+        return
+    manifest = cfg.setup_target().run()
+    console.print(
+        key_value_panel(
+            "Wrote VIN Offline Store",
+            [
+                ("samples", manifest.stats.get("num_samples", 0)),
+                ("shards", manifest.stats.get("num_shards", 0)),
+                ("train", manifest.stats.get("num_train", 0)),
+                ("val", manifest.stats.get("num_val", 0)),
+            ],
+        )
+    )
 
 
 @build_app.command()
@@ -296,4 +359,13 @@ def _raw_argv(ctx: typer.Context) -> list[str]:
     return []
 
 
-__all__ = ["build_app", "main", "plan_app", "plan_main", "status_app", "status_main"]
+__all__ = [
+    "build_app",
+    "main",
+    "offline_app",
+    "offline_main",
+    "plan_app",
+    "plan_main",
+    "status_app",
+    "status_main",
+]

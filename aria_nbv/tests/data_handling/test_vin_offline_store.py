@@ -24,7 +24,6 @@ from aria_nbv.data_handling import (
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
     VinOfflineStoreConfig,
-    VinOfflineWriter,
     VinOracleBatch,
     VinSnippetView,
     collect_vin_offline_dataset_coverage,
@@ -35,8 +34,9 @@ from aria_nbv.data_handling import (
 from aria_nbv.data_handling.offline.format import VinOfflineBlockSpec
 from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
 from aria_nbv.data_handling.offline.store import VinOfflineStoreReader
-from aria_nbv.data_handling.offline.writer import _assign_splits
+from aria_nbv.data_handling.offline.writer import assign_offline_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths
 from aria_nbv.rri_metrics.rri import RriResult
@@ -770,8 +770,8 @@ def test_assign_splits_is_stable_by_sample_key() -> None:
         _make_split_record("beta", 4),
     ]
 
-    splits_a = _assign_splits(records=records_a, val_fraction=0.4)
-    splits_b = _assign_splits(records=records_b, val_fraction=0.4)
+    splits_a = assign_offline_splits(records=records_a, val_fraction=0.4)
+    splits_b = assign_offline_splits(records=records_b, val_fraction=0.4)
 
     val_keys_a = {records_a[int(idx)].sample_key for idx in splits_a["val"]}
     val_keys_b = {records_b[int(idx)].sample_key for idx in splits_b["val"]}

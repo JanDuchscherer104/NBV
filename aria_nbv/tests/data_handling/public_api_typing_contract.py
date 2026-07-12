@@ -37,8 +37,6 @@ from aria_nbv.data_handling import (
     VinOfflineSample,
     VinOfflineSampleDiagnostic,
     VinOfflineStoreConfig,
-    VinOfflineWriter,
-    VinOfflineWriterConfig,
     VinOracleBatch,
     VinOracleDatasetBase,
     VinSnippetView,
@@ -77,8 +75,6 @@ RootExportClasses: TypeAlias = tuple[
     type[VinOfflineSample],
     type[VinOfflineSampleDiagnostic],
     type[VinOfflineStoreConfig],
-    type[VinOfflineWriter],
-    type[VinOfflineWriterConfig],
     type[VinOracleBatch],
     type[VinOracleDatasetBase],
 ]
@@ -105,8 +101,6 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
     VinOfflineSample,
     VinOfflineSampleDiagnostic,
     VinOfflineStoreConfig,
-    VinOfflineWriter,
-    VinOfflineWriterConfig,
     VinOracleBatch,
     VinOracleDatasetBase,
 )

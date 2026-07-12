@@ -11,7 +11,7 @@ numeric blocks plus optional MessagePack diagnostics, then exposes either:
 The store is intentionally strict: readers accept the current
 `OFFLINE_DATASET_VERSION` only, split membership comes from file-backed arrays,
 and `sample_index.jsonl` owns scene/snippet coverage. Rebuild stale stores with
-`VinOfflineWriter`; do not patch manifests, split arrays, or shard payloads by
+`nbv-build-offline`; do not patch manifests, split arrays, or shard payloads by
 hand.
 """
 
