@@ -50,6 +50,8 @@ website:
             file: reference/data_handling.offline.info_cli.qmd
           - text: inventory
             file: reference/data_handling.offline.inventory.qmd
+          - text: source
+            file: reference/data_handling.offline.source.qmd
           - text: store
             file: reference/data_handling.offline.store.qmd
           - text: writer
@@ -92,6 +94,8 @@ website:
             file: reference/oracle.pipelines.cli.qmd
           - text: evaluated_rollout
             file: reference/oracle.pipelines.evaluated_rollout.qmd
+          - text: online_vin
+            file: reference/oracle.pipelines.online_vin.qmd
           - text: rollout_dataset
             file: reference/oracle.pipelines.rollout_dataset.qmd
           - text: shards

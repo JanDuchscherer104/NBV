@@ -14,8 +14,10 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
   remain in `efm_views.py`
 - Immutable offline store contracts: `offline/format.py`, `offline/store.py`,
   `offline/writer.py`, and `offline/dataset.py`
-- VIN datamodule source contracts: `_vin_sources.py`, `offline/adapter.py`, and
-  `offline/batch.py`
+- Immutable VIN training source config: `offline/source.py`
+- VIN batch and adapter contracts: `offline/batch.py` and `offline/adapter.py`
+- Online label generation belongs to `oracle/pipelines/online_vin.py`; the
+  online/offline discriminated union belongs to `lightning/lit_datamodule.py`
 - Narrative surfaces: `aria_nbv/aria_nbv/data_handling/README.md`, generated API docs under `docs/reference/`, `docs/contents/ase_dataset.qmd`, `docs/typst/seminar_paper/sections/12h-appendix-offline-cache.typ`
 
 ## Boundary Rules
@@ -24,6 +26,8 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
 - Writers own manifest, sample-index, split, shard, and optional-record maintenance. Readers should validate strictly and fail with rebuild guidance rather than mutate derived artifacts.
 - Do not hand-edit store manifests, `sample_index.jsonl`, split arrays, shards, or payloads to silence failing tests; fix the writer, reader, or generator instead.
 - Keep one canonical path from `EfmSnippetView` to `VinSnippetView`; do not duplicate VIN-adapter logic in unrelated modules.
+- Do not add new Oracle or pipeline imports under `data_handling`. The remaining
+  labeler import in `offline/writer.py` is temporary and owned by RWP03B.
 - When offline-store payload, metadata, or split semantics change, update the public surface, docs, and targeted tests together.
 - When the on-disk dataset format changes, bump `OFFLINE_DATASET_VERSION`, update tests, and fail fast for older stores.
 

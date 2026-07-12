@@ -1,20 +1,19 @@
-"""Canonical VIN dataset-source configs for online and immutable offline data."""
+"""Online Oracle label generation for VIN training."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Any, Literal
 
 import torch
 from pydantic import Field
 from torch.utils.data import IterableDataset
 
-from ..configs import PathConfig
-from ..pipelines.oracle_rri_labeler import OracleRriLabeler, OracleRriLabelerConfig
-from ..utils import Console, Stage, TargetConfig, Verbosity
-from .offline.batch import VinOracleBatch
-from .offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig
-from .raw import AseEfmDatasetConfig, EfmSnippetView
+from ...configs import PathConfig
+from ...data_handling.offline.batch import VinOracleBatch
+from ...data_handling.raw import AseEfmDatasetConfig, EfmSnippetView
+from ...pipelines.oracle_rri_labeler import OracleRriLabeler, OracleRriLabelerConfig, OracleRriSample
+from ...utils import Console, Stage, TargetConfig, Verbosity
 
 
 class VinOracleOnlineDataset(IterableDataset[VinOracleBatch]):
@@ -69,10 +68,45 @@ class VinOracleOnlineDataset(IterableDataset[VinOracleBatch]):
                 )
                 continue
 
-            yield VinOracleBatch.from_label(
+            yield _vin_batch_from_label(
                 label_batch,
                 efm_keep_keys=self._efm_keep_keys,
             )
+
+
+def _vin_batch_from_label(
+    label_batch: OracleRriSample,
+    *,
+    efm_keep_keys: set[str] | None,
+) -> VinOracleBatch:
+    """Adapt one online Oracle label result to the model-facing batch."""
+
+    rri = label_batch.rri
+    sample = label_batch.sample
+    if efm_keep_keys is not None:
+        sample = sample.prune_efm(efm_keep_keys)
+
+    return VinOracleBatch(
+        efm_snippet_view=sample,
+        candidate_poses_world_cam=label_batch.depths.poses,
+        reference_pose_world_rig=label_batch.depths.reference_pose,
+        rri=rri.rri,
+        pm_dist_before=rri.pm_dist_before,
+        pm_dist_after=rri.pm_dist_after,
+        pm_acc_before=rri.pm_acc_before,
+        pm_comp_before=rri.pm_comp_before,
+        pm_acc_after=rri.pm_acc_after,
+        pm_comp_after=rri.pm_comp_after,
+        p3d_cameras=label_batch.depths.p3d_cameras,
+        candidate_count=torch.tensor(
+            int(rri.rri.shape[0]),
+            device=rri.rri.device,
+            dtype=torch.int64,
+        ),
+        scene_id=sample.scene_id,
+        snippet_id=sample.snippet_id,
+        backbone_out=None,
+    )
 
 
 def _default_online_train_ds() -> AseEfmDatasetConfig:
@@ -158,81 +192,7 @@ class VinOracleOnlineDatasetConfig(TargetConfig[VinOracleOnlineDataset]):
         return False
 
 
-class VinOfflineSourceConfig(TargetConfig[VinOfflineDataset]):
-    """Configuration for the immutable VIN offline dataset source."""
-
-    kind: Literal["offline"] = "offline"
-    """Discriminator for the immutable offline dataset."""
-
-    @property
-    def target_type(self) -> type[VinOfflineDataset]:
-        """Return the factory target for `BaseConfig.setup_target`."""
-
-        return VinOfflineDataset
-
-    paths: PathConfig = Field(default_factory=PathConfig)
-    """Project path resolver."""
-
-    offline: VinOfflineDatasetConfig = Field(default_factory=VinOfflineDatasetConfig)
-    """Immutable VIN offline dataset configuration."""
-
-    train_split: Literal["train", "val", "all"] = "train"
-    """Offline split to use for training."""
-
-    val_split: Literal["train", "val", "all"] = "val"
-    """Offline split to use for validation and testing."""
-
-    load_candidates_for_batch: bool = False
-    """Whether VIN-batch reads should decode candidate diagnostics."""
-
-    load_depths_for_batch: bool = False
-    """Whether VIN-batch reads should decode candidate depth diagnostics."""
-
-    load_candidate_pcs_for_batch: bool = False
-    """Whether VIN-batch reads should decode candidate point-cloud diagnostics."""
-
-    load_gt_obbs_for_batch: bool = True
-    """Whether VIN-batch reads should decode compact GT OBB blocks."""
-
-    load_detected_obbs_for_batch: bool = True
-    """Whether VIN-batch reads should decode compact detected OBB blocks."""
-
-    load_trajectory_metadata_for_batch: bool = True
-    """Whether VIN-batch reads should decode trajectory metadata blocks."""
-
-    def setup_target(self, *, split: Stage) -> VinOfflineDataset:
-        """Instantiate the immutable offline VIN dataset for the requested split."""
-
-        dataset_split = self.train_split if split is Stage.TRAIN else self.val_split
-        offline_cfg = self.offline.model_copy(deep=True)
-        offline_cfg.paths = self.paths
-        offline_cfg.store.paths = self.paths
-        offline_cfg.split = dataset_split
-        offline_cfg.return_format = "vin_batch"
-        offline_cfg.load_candidates = bool(self.load_candidates_for_batch)
-        offline_cfg.load_depths = bool(self.load_depths_for_batch)
-        offline_cfg.load_candidate_pcs = bool(self.load_candidate_pcs_for_batch)
-        offline_cfg.load_gt_obbs = bool(self.load_gt_obbs_for_batch)
-        offline_cfg.load_detected_obbs = bool(self.load_detected_obbs_for_batch)
-        offline_cfg.load_trajectory_metadata = bool(self.load_trajectory_metadata_for_batch)
-        return offline_cfg.setup_target()
-
-    @property
-    def is_map_style(self) -> bool:
-        """Return whether this source yields a map-style dataset."""
-
-        return True
-
-
-VinDatasetSourceConfig: TypeAlias = Annotated[
-    VinOracleOnlineDatasetConfig | VinOfflineSourceConfig,
-    Field(discriminator="kind"),
-]
-"""Canonical split-aware VIN dataset-source union used by Lightning."""
-
 __all__ = [
-    "VinDatasetSourceConfig",
-    "VinOfflineSourceConfig",
     "VinOracleOnlineDataset",
     "VinOracleOnlineDatasetConfig",
 ]

@@ -7,7 +7,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from aria_nbv.app.panels.vin_utils import _build_experiment_config
-from aria_nbv.data_handling import VinOfflineSourceConfig, VinOracleOnlineDatasetConfig
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 from aria_nbv.utils import Stage
 
 

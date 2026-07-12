@@ -87,15 +87,29 @@ def test_public_api_omits_legacy_vin_oracle_dataset_alias() -> None:
     module = importlib.import_module("aria_nbv.data_handling")
     assert not hasattr(module, "VinOracleDatasetConfig")  # noqa: S101
     assert not hasattr(module, "VinOnlineDatasetConfig")  # noqa: S101
+    assert not hasattr(module, "VinDatasetSourceConfig")  # noqa: S101
+    assert not hasattr(module, "VinOfflineSourceConfig")  # noqa: S101
+    assert not hasattr(module, "VinOracleOnlineDataset")  # noqa: S101
+    assert not hasattr(module, "VinOracleOnlineDatasetConfig")  # noqa: S101
+
+
+def test_data_contracts_omit_pipeline_conversion_conveniences() -> None:
+    """Keep online adaptation in pipelines and offline conversion in the dataset."""
+
+    batch_module = importlib.import_module("aria_nbv.data_handling.offline.batch")
+    dataset_module = importlib.import_module("aria_nbv.data_handling.offline.dataset")
+    assert "from_label" not in batch_module.VinOracleBatch.__dict__  # noqa: S101
+    assert "to_vin_oracle_batch" not in dataset_module.VinOfflineSample.__dict__  # noqa: S101
 
 
 def test_offline_configs_omit_premature_counterfactual_knobs() -> None:
     """Rollout storage should stay out of the immutable VIN offline-store schema."""
 
     module = importlib.import_module("aria_nbv.data_handling")
+    source_module = importlib.import_module("aria_nbv.data_handling.offline.source")
     assert "include_counterfactuals" not in module.VinOfflineWriterConfig.model_fields  # noqa: S101
     assert "load_counterfactuals" not in module.VinOfflineDatasetConfig.model_fields  # noqa: S101
-    assert "load_counterfactuals_for_batch" not in module.VinOfflineSourceConfig.model_fields  # noqa: S101
+    assert "load_counterfactuals_for_batch" not in source_module.VinOfflineSourceConfig.model_fields  # noqa: S101
 
 
 def test_pyproject_omits_legacy_cache_entrypoints() -> None:
@@ -123,6 +137,7 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
         "oracle/pipelines/rollout_dataset.py": {
             "data_handling.offline.dataset",
         },
+        "oracle/pipelines/online_vin.py": {"data_handling.offline.batch"},
         "oracle/target_selection.py": {
             "data_handling.efm_views",
             "data_handling.offline.batch",
@@ -134,6 +149,11 @@ def test_runtime_modules_do_not_import_data_handling_submodules() -> None:
         "rerun_inspector/_metadata.py": {"data_handling.efm_dataset_utils"},
         "rerun_inspector/_rollout_zarr.py": {"data_handling.efm_dataset_utils"},
         "rerun_inspector/_sample.py": {"data_handling.efm_dataset_utils"},
+        "lightning/aria_nbv_experiment.py": {"data_handling.offline.source"},
+        "lightning/lit_datamodule.py": {"data_handling.offline.source"},
+        "app/panels/offline_dataset.py": {"data_handling.offline.source"},
+        "app/panels/vin_diagnostics.py": {"data_handling.offline.source"},
+        "app/panels/vin_diag_tabs/summary.py": {"data_handling.offline.source"},
     }
     offenders: list[str] = []
     for path in package_root.rglob("*.py"):

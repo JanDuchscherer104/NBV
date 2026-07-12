@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Annotated, TypeAlias
 
 import pytorch_lightning as pl
 from pydantic import Field, model_validator
@@ -20,12 +21,18 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset
 from ..configs import PathConfig
 from ..data_handling import (
     AseEfmDatasetConfig,
-    VinDatasetSourceConfig,
     VinOracleBatch,
     VinOracleDatasetBase,
-    VinOracleOnlineDatasetConfig,
 )
+from ..data_handling.offline.source import VinOfflineSourceConfig
+from ..oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 from ..utils import Console, Stage, TargetConfig, Verbosity
+
+VinDatasetSourceConfig: TypeAlias = Annotated[
+    VinOracleOnlineDatasetConfig | VinOfflineSourceConfig,
+    Field(discriminator="kind"),
+]
+"""Split-aware VIN dataset-source union composed by Lightning."""
 
 
 def _default_source() -> VinDatasetSourceConfig:
@@ -252,7 +259,7 @@ class VinDataModule(pl.LightningDataModule):
         return iter(plan.dataset)
 
     def _describe_dataset(self, dataset: VinOracleDatasetBase, *, stage: Stage) -> dict[str, object]:
-        from ..data_handling import VinOfflineDatasetConfig, VinOracleOnlineDataset
+        from ..data_handling.offline.dataset import VinOfflineDatasetConfig
 
         summary: dict[str, object] = {
             "stage": stage.value,
@@ -297,4 +304,4 @@ class VinDataModule(pl.LightningDataModule):
         return summary
 
 
-__all__ = ["VinDataModule", "VinDataModuleConfig", "VinOracleBatch"]
+__all__ = ["VinDataModule", "VinDataModuleConfig", "VinDatasetSourceConfig", "VinOracleBatch"]

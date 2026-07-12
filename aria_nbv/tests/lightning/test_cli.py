@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from aria_nbv.data_handling import VinOfflineSourceConfig
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
 from aria_nbv.lightning import cli
 from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.utils import BaseConfig

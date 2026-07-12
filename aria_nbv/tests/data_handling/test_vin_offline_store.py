@@ -23,7 +23,6 @@ from aria_nbv.data_handling import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
-    VinOfflineSourceConfig,
     VinOfflineStoreConfig,
     VinOfflineWriter,
     VinOracleBatch,
@@ -34,6 +33,7 @@ from aria_nbv.data_handling import (
     prepare_vin_offline_sample,
 )
 from aria_nbv.data_handling.offline.format import VinOfflineBlockSpec
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
 from aria_nbv.data_handling.offline.store import VinOfflineStoreReader
 from aria_nbv.data_handling.offline.writer import _assign_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig

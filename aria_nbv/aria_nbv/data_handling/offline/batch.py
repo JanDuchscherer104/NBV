@@ -21,8 +21,6 @@ from ..efm_views import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from ...pipelines.oracle_rri_labeler import OracleRriSample
-
 
 @dataclass(slots=True)
 class CompactObbBlock:
@@ -405,41 +403,6 @@ class VinOracleBatch:
             gt_obbs=self.gt_obbs,
             detected_obbs=self.detected_obbs,
             trajectory=self.trajectory,
-        )
-
-    @classmethod
-    def from_label(
-        cls,
-        label_batch: "OracleRriSample",
-        *,
-        efm_keep_keys: set[str] | None,
-    ) -> "VinOracleBatch":
-        """Build a VIN oracle batch from an online label batch."""
-        rri = label_batch.rri
-        sample = label_batch.sample
-        if efm_keep_keys is not None:
-            sample = sample.prune_efm(efm_keep_keys)
-
-        return cls(
-            efm_snippet_view=sample,
-            candidate_poses_world_cam=label_batch.depths.poses,
-            reference_pose_world_rig=label_batch.depths.reference_pose,
-            rri=rri.rri,
-            pm_dist_before=rri.pm_dist_before,
-            pm_dist_after=rri.pm_dist_after,
-            pm_acc_before=rri.pm_acc_before,
-            pm_comp_before=rri.pm_comp_before,
-            pm_acc_after=rri.pm_acc_after,
-            pm_comp_after=rri.pm_comp_after,
-            p3d_cameras=label_batch.depths.p3d_cameras,
-            candidate_count=torch.tensor(
-                int(rri.rri.shape[0]),
-                device=rri.rri.device,
-                dtype=torch.int64,
-            ),
-            scene_id=sample.scene_id,
-            snippet_id=sample.snippet_id,
-            backbone_out=None,
         )
 
     @classmethod

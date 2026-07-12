@@ -10,11 +10,11 @@ import torch
 from ...data_handling import (
     EfmSnippetView,
     VinOracleBatch,
-    VinOracleOnlineDatasetConfig,
     VinSnippetView,
 )
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...lightning.lit_module import VinLightningModule
+from ...oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 from ...utils import Stage
 from ...vin.types import VinPrediction
 from ...vin.types.diagnostics import VinForwardDiagnostics

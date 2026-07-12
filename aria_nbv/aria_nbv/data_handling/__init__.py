@@ -60,12 +60,6 @@ from .offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from ._vin_sources import (
-    VinDatasetSourceConfig,
-    VinOfflineSourceConfig,
-    VinOracleOnlineDataset,
-    VinOracleOnlineDatasetConfig,
-)
 from .mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
 from .offline.adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view, empty_vin_snippet
 from .offline.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinOracleDatasetBase
@@ -88,7 +82,6 @@ __all__ = [
     "OfflineVisualInventory",
     "OfflineVisualInventoryError",
     "ProcessedMesh",
-    "VinDatasetSourceConfig",
     "VinOfflineDataset",
     "VinOfflineBackboneDiagnostic",
     "VinOfflineBlockDiagnostic",
@@ -102,14 +95,11 @@ __all__ = [
     "VinOfflineMemoryDiagnostic",
     "VinOfflineSample",
     "VinOfflineSampleDiagnostic",
-    "VinOfflineSourceConfig",
     "VinOfflineStoreConfig",
     "VinOfflineWriter",
     "VinOfflineWriterConfig",
     "VinOracleBatch",
     "VinOracleDatasetBase",
-    "VinOracleOnlineDataset",
-    "VinOracleOnlineDatasetConfig",
     "VinSnippetView",
     "build_vin_snippet_view",
     "collect_vin_offline_dataset_coverage",

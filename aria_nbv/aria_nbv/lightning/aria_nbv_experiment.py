@@ -24,7 +24,7 @@ import torch
 from pydantic import Field, field_validator, model_validator
 
 from ..configs import OptunaConfig, PathConfig
-from ..data_handling import VinOfflineSourceConfig
+from ..data_handling.offline.source import VinOfflineSourceConfig
 from ..utils import Console, Stage, TargetConfig
 from ..utils.console import Verbosity
 from .lit_datamodule import VinDataModule, VinDataModuleConfig

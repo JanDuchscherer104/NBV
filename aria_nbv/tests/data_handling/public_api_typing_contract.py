@@ -23,7 +23,6 @@ from aria_nbv.data_handling import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
     ProcessedMesh,
-    VinDatasetSourceConfig,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
     VinOfflineCoverageSceneDiagnostic,
@@ -37,14 +36,11 @@ from aria_nbv.data_handling import (
     VinOfflineMemoryDiagnostic,
     VinOfflineSample,
     VinOfflineSampleDiagnostic,
-    VinOfflineSourceConfig,
     VinOfflineStoreConfig,
     VinOfflineWriter,
     VinOfflineWriterConfig,
     VinOracleBatch,
     VinOracleDatasetBase,
-    VinOracleOnlineDataset,
-    VinOracleOnlineDatasetConfig,
     VinSnippetView,
     build_vin_snippet_view,
     collect_offline_visual_inventory,
@@ -55,6 +51,9 @@ from aria_nbv.data_handling import (
     load_or_process_mesh,
     prepare_vin_offline_sample,
 )
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.lightning.lit_datamodule import VinDatasetSourceConfig
+from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 
 RootExportClasses: TypeAlias = tuple[
     type[CompactObbBlock],
@@ -77,14 +76,11 @@ RootExportClasses: TypeAlias = tuple[
     type[VinOfflineMemoryDiagnostic],
     type[VinOfflineSample],
     type[VinOfflineSampleDiagnostic],
-    type[VinOfflineSourceConfig],
     type[VinOfflineStoreConfig],
     type[VinOfflineWriter],
     type[VinOfflineWriterConfig],
     type[VinOracleBatch],
     type[VinOracleDatasetBase],
-    type[VinOracleOnlineDataset],
-    type[VinOracleOnlineDatasetConfig],
 ]
 
 ROOT_EXPORT_CLASSES: RootExportClasses = (
@@ -108,14 +104,11 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
     VinOfflineMemoryDiagnostic,
     VinOfflineSample,
     VinOfflineSampleDiagnostic,
-    VinOfflineSourceConfig,
     VinOfflineStoreConfig,
     VinOfflineWriter,
     VinOfflineWriterConfig,
     VinOracleBatch,
     VinOracleDatasetBase,
-    VinOracleOnlineDataset,
-    VinOracleOnlineDatasetConfig,
 )
 
 DEFAULT_PAD_POINTS: int = DEFAULT_VIN_SNIPPET_PAD_POINTS
@@ -132,5 +125,8 @@ PREPARE_SAMPLE: Callable[..., object] = prepare_vin_offline_sample
 
 
 def accepts_source_config(config: VinDatasetSourceConfig) -> VinDatasetSourceConfig:
-    """Require the package-root source-config alias to be valid as a type."""
+    """Require the Lightning-owned source-config alias to be valid as a type."""
     return config
+
+
+SOURCE_CONFIG_CLASSES = (VinOfflineSourceConfig, VinOracleOnlineDataset, VinOracleOnlineDatasetConfig)

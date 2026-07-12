@@ -211,3 +211,9 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_print_tree` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
 | `_print_samples` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
 | `_dict_rows` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+
+### `source.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `VinOfflineSourceConfig` | config | public | `data_handling._vin_sources` | `data_handling.offline.source` | `data_handling.offline.source` | moved: RWP03A |

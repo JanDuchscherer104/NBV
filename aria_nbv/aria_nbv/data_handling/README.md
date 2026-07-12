@@ -20,9 +20,10 @@ never as low RRI.
 
 - Raw snippets: `AseEfmDatasetConfig`, `AseEfmDataset`, `EfmSnippetView`,
   `VinSnippetView`, and snippet-loader helpers.
-- One-step VIN/oracle batches: `VinOracleBatch`,
-  `VinOracleOnlineDatasetConfig`, `VinDatasetSourceConfig`, and
-  `VinOfflineSourceConfig`.
+- One-step model batches: `VinOracleBatch`.
+- Immutable training source: `data_handling.offline.source.VinOfflineSourceConfig`.
+- Online generation: `oracle.pipelines.online_vin`; Lightning composes the
+  online/offline discriminated source union.
 - Immutable one-step cache: `VinOfflineWriterConfig`, `VinOfflineWriter`,
   `VinOfflineDatasetConfig`, `VinOfflineStoreConfig`, `VinOfflineManifest`, and
   `VinOfflineIndexRecord`.
@@ -31,8 +32,9 @@ never as low RRI.
   `collect_offline_visual_inventory`.
 
 The removed oracle-cache, VIN-snippet-cache, compatibility wrapper, and legacy
-migration modules must not be reintroduced. Runtime imports should use root
-package exports, or private modules only from inside this package.
+migration modules must not be reintroduced. Cross-package source configuration
+callers use the owning leaf module; stable data DTOs remain available from the
+package root until the RWP04 root contraction.
 
 ## Two-Store Architecture
 
@@ -1034,15 +1036,15 @@ layout transition.
 | `_first_scalar_string` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `_float_tuple` | `function` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 
-#### `_vin_sources.py`
+#### Historical `_vin_sources.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `VinOracleOnlineDataset` | `class` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
-| `_default_online_train_ds` | `function` | `private` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
-| `VinOracleOnlineDatasetConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
-| `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
-| `VinDatasetSourceConfig` | `constant` | `public` | `data_handling._vin_sources` | `data_handling._vin_sources` | `data_handling.offline` | `blocked: symbol split` |
+| `VinOracleOnlineDataset` | `class` | `public` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
+| `_default_online_train_ds` | `function` | `private` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
+| `VinOracleOnlineDatasetConfig` | `config` | `public` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
+| `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling.offline.source` | `data_handling.offline.source` | `moved: RWP03A` |
+| `VinDatasetSourceConfig` | `alias` | `public` | `data_handling._vin_sources` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | `moved: RWP03A` |
 
 #### `efm_dataset_utils.py`
 

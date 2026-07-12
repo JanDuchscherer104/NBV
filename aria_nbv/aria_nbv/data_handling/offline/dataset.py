@@ -145,38 +145,6 @@ class VinOfflineSample:
     trajectory: CompactTrajectoryBlock | None = None
     """Optional persisted trajectory timing and gravity metadata."""
 
-    def to_vin_oracle_batch(self) -> VinOracleBatch:
-        """Convert the offline sample into a model-facing VIN batch.
-
-        Returns:
-            ``VinOracleBatch`` built from the sample's VIN and oracle blocks.
-        """
-
-        return VinOracleBatch(
-            efm_snippet_view=self.vin_snippet if self.efm_snippet_view is None else self.efm_snippet_view,
-            candidate_poses_world_cam=self.oracle.candidate_poses_world_cam,
-            reference_pose_world_rig=self.oracle.reference_pose_world_rig,
-            rri=self.oracle.rri,
-            pm_dist_before=self.oracle.pm_dist_before,
-            pm_dist_after=self.oracle.pm_dist_after,
-            pm_acc_before=self.oracle.pm_acc_before,
-            pm_comp_before=self.oracle.pm_comp_before,
-            pm_acc_after=self.oracle.pm_acc_after,
-            pm_comp_after=self.oracle.pm_comp_after,
-            p3d_cameras=self.oracle.p3d_cameras,
-            candidate_count=torch.tensor(
-                int(self.oracle.candidate_count),
-                device=self.oracle.rri.device,
-                dtype=torch.int64,
-            ),
-            scene_id=self.scene_id,
-            snippet_id=self.snippet_id,
-            backbone_out=self.backbone_out,
-            gt_obbs=self.gt_obbs,
-            detected_obbs=self.detected_obbs,
-            trajectory=self.trajectory,
-        )
-
 
 VinOfflineDatasetItem = VinOfflineSample | VinOracleBatch
 """Item returned by `VinOfflineDataset` depending on `return_format`."""

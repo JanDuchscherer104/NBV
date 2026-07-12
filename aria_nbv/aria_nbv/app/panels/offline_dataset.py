@@ -13,11 +13,11 @@ from ...configs import PathConfig
 from ...data_handling import (
     VinOfflineCoverageStats,
     VinOfflineDatasetStats,
-    VinOfflineSourceConfig,
     VinOfflineStoreConfig,
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )
+from ...data_handling.offline.source import VinOfflineSourceConfig
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command

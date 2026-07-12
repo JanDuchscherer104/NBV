@@ -196,8 +196,9 @@ def test_oracle_target_task_contains_only_domain_fields() -> None:
     assert row.confidence == pytest.approx(0.05)
 
 
-def test_oracle_target_task_sampler_rejects_vin_oracle_batch_input() -> None:
+def test_oracle_target_task_sampler_rejects_non_offline_sample_input() -> None:
     sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]))
 
+    assert not hasattr(sample, "to_vin_oracle_batch")
     with pytest.raises(TypeError, match="VinOfflineSample"):
-        _oracle_sampler().sample(sample.to_vin_oracle_batch())
+        _oracle_sampler().sample(sample.vin_snippet)  # type: ignore[arg-type]

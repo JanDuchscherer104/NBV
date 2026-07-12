@@ -17,6 +17,7 @@ oracle/
   target_rri.py
   target_selection.py
   pipelines/
+    online_vin.py
 ```
 
 WP07 established target-task ownership. WP08-WP09 established scene/target
@@ -144,3 +145,12 @@ oracle/
 `scene_rri.py` and `target_rri.py` are public facades over `_scoring.py`.
 `evidence.py` prepares privileged scorer inputs. Replay consumes scorer outputs
 through later pipeline-owned contracts; Oracle never imports replay internals.
+
+### `pipelines/online_vin.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `VinOracleOnlineDataset` | class | public | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | moved: RWP03A |
+| `_vin_batch_from_label` | function | private | `VinOracleBatch.from_label` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | collapsed: RWP03A |
+| `_default_online_train_ds` | function | private | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | moved: RWP03A |
+| `VinOracleOnlineDatasetConfig` | config | public | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | moved: RWP03A |
