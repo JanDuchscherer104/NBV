@@ -18,7 +18,8 @@ from efm3d.utils.depth import dist_im_to_point_cloud_im
 
 from ..data_handling import EfmSnippetView
 from .target_selection import (
-    TargetCandidateRow,
+    OracleTargetTask,
+    TargetTaskIdentityStatus,
     _compact_obb_block,
     _valid_obb_data_with_source_indices,
     _world_obbs_for_sample,
@@ -208,10 +209,10 @@ def _eval_depth_far_m(
     return 20.0 if zfar is None else float(zfar)
 
 
-def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> ObbTW:
+def target_gt_obb_world(task: OracleTargetTask, sample: "VinOfflineSample") -> ObbTW:
     """Resolve an Oracle-selected target's matched GT OBB in world coordinates."""
 
-    if not row.gt_label_valid or row.gt_target_row_id is None:
+    if task.identity_status != TargetTaskIdentityStatus.MATCHED.value:
         raise _OracleEvidenceError(
             OracleEvidenceInvalidReason.TARGET_GT_LABEL_INVALID,
             "Target row is not GT-label valid; refusing to build target RRI crop.",
@@ -225,11 +226,11 @@ def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> 
     gt_world = _world_obbs_for_sample(gt_block[0], sample)
     gt_data, gt_source_indices = _valid_obb_data_with_source_indices(gt_world)
     try:
-        gt_index = gt_source_indices.index(int(row.gt_target_row_id))
+        gt_index = gt_source_indices.index(int(task.source_index))
     except ValueError as exc:
         raise _OracleEvidenceError(
             OracleEvidenceInvalidReason.TARGET_GT_ROW_MISSING,
-            f"Matched GT target row {row.gt_target_row_id} is not present in sample.gt_obbs.",
+            f"Oracle target row {task.source_index} is not present in sample.gt_obbs.",
         ) from exc
     return ObbTW(gt_data[gt_index].unsqueeze(0))
 

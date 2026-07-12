@@ -484,7 +484,7 @@ class EfmObbView(BaseView):
     The `34` payload columns are the EFM OBB contract: object-frame 3D bounds,
     three 2D boxes, a 12-value pose, semantic id, instance id, confidence, and
     movable flag. Downstream target selection transforms the latest valid slice
-    into world coordinates before constructing `TargetCandidateRow` records.
+    into world coordinates before constructing Oracle target tasks.
     """
 
     obbs: ObbTW

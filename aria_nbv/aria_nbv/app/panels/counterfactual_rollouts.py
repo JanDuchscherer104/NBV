@@ -30,11 +30,10 @@ from ...oracle.pipelines.evaluated_rollout import (
 from ...oracle.scene_rri import SceneRriScorerConfig
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
+    OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
-    TargetCandidateRow,
-    target_candidate_row_from_task,
-    target_descriptor_from_candidate_row,
+    TargetTaskIdentityStatus,
 )
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -93,28 +92,20 @@ Target table fields:
 - `class`: human-readable class name when available.
 - `sem_id` / `inst_id`: semantic and instance ids from the privileged task source.
 - `confidence`: source confidence retained for audit.
-- `projected_area_px`, `projected_fraction`, `visibility_score`,
-  `semidense_support`, `evl_support`, `effective_support`, `support_score`,
-  `deficit_score`, and `selection_score` are frozen compatibility fields and
-  use zero/NaN sentinels after actor-selector removal.
 - `selection_probability`: stochastic target-selection probability when available.
-- `eligible`: whether finite positive GT geometry admits the task.
-- `invalid_reason`: hard Oracle task invalidity reason.
-- `gt_label_valid`: whether GT matching produced a valid oracle/evaluation label.
-- `gt_match_status`: GT matching outcome such as `matched`, `not_requested`, or ambiguity/invalid status.
-- `gt_iou`: IoU of the accepted GT match when available.
-- `gt_match_score`: scalar GT-match audit score when available.
+- `admitted`: whether finite positive GT geometry admits the task.
+- `identity_status`: whether finite positive GT geometry admits the Oracle task.
 """
 
 _ACTIVE_TARGET_INFO = """
 The active target is the object conditioned into target-RRI rollout generation.
 
-Label format: `target 0 · window · sem=28 inst=51297 · score=... · valid`.
+Label format: `target 0 · window · sem=28 inst=51297 · matched`.
 
 - `target 0`: target row id.
 - `window`: class name resolved from the EFM semantic-id map.
 - `sem=... inst=...`: privileged semantic and instance ids retained for audit.
-- `score=...`: frozen compatibility value; it is not an RRI reward.
+- `matched`: Oracle task-admission status.
 - `valid`: GT-only matching succeeded, so target-RRI labels/evaluation crops can be computed.
 
 Candidate generation receives only the sanitized target descriptor. GT identity,
@@ -325,16 +316,6 @@ class LiveRolloutScoringMode(StrEnum):
     TARGET_RRI = "target_rri"
     SCENE_RRI = "scene_rri"
     GEOMETRY = "geometry"
-
-
-@dataclass(frozen=True, slots=True)
-class _LiveTargetSelectionResult:
-    """Oracle target-task rows adapted for the live rollout UI."""
-
-    rows: tuple[TargetCandidateRow, ...]
-    selected_rows: tuple[TargetCandidateRow, ...]
-    source: str | None
-    warnings: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -569,7 +550,7 @@ def _score_context_for_mode(
     *,
     scoring_mode: LiveRolloutScoringMode,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     target_scorer_config: TargetRriScorerConfig,
     scene_scorer_config: SceneRriScorerConfig,
 ) -> LiveRolloutScoreContext:
@@ -595,17 +576,17 @@ def _score_context_for_mode(
 
     if target is None:
         raise ValueError("target_rri scoring requires a selected target row.")
-    if not target.gt_label_valid:
-        raise ValueError(f"Selected target is not GT-label valid: status={target.gt_match_status}.")
+    if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
+        raise ValueError(f"Selected target is not GT-label valid: status={target.identity_status}.")
     scorer = target_scorer_config.setup_target(
         sample=sample.efm_snippet_view,
         target_sample=sample,
-        target_row=target,
+        target_task=target,
     )
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
         evaluator=OracleReplayAdapter(scorer),
-        runtime_context=CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target)),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=target.descriptor),
     )
 
 
@@ -613,7 +594,7 @@ def _run_live_rollout(
     *,
     sample: VinOfflineSample,
     scoring_mode: LiveRolloutScoringMode,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig,
     rollout_config: CounterfactualPoseGeneratorConfig,
     target_scorer_config: TargetRriScorerConfig,
@@ -1053,44 +1034,38 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _target_rows_table(rows: tuple[TargetCandidateRow, ...]) -> list[dict[str, object]]:
+def _target_rows_table(rows: tuple[OracleTargetTask, ...]) -> list[dict[str, object]]:
     """Return a compact dataframe payload for target rows."""
 
     return target_selection_audit_rows(rows)
 
 
-def _target_detail_row(row: TargetCandidateRow) -> dict[str, object]:
+def _target_detail_row(row: OracleTargetTask) -> dict[str, object]:
     """Return one target row with pose/crop-relevant fields."""
 
     return {
         "target_id": row.target_id,
         "source": row.source,
         "source_index": int(row.source_index),
-        "center_world": tuple(float(v) for v in row.center_world),
-        "extents": tuple(float(v) for v in row.extents),
-        "pose_world_object": tuple(float(v) for v in row.pose_world_object),
-        "relative_pose_reference_object": tuple(float(v) for v in row.relative_pose_reference_object),
-        "gt_target_id": row.gt_target_id,
-        "gt_target_row_id": row.gt_target_row_id,
-        "gt_match_status": row.gt_match_status,
-        "gt_match_iou": row.gt_match_iou,
-        "invalid_reason_bitset": int(row.invalid_reason_bitset),
-        "primary_invalid_reason": int(row.primary_invalid_reason),
+        "center_world": tuple(float(v) for v in row.descriptor.center_world),
+        "extents": tuple(float(v) for v in row.descriptor.extents_m),
+        "pose_world_object": tuple(float(v) for v in row.descriptor.pose_world_object),
+        "relative_pose_reference_object": tuple(float(v) for v in row.descriptor.relative_pose_reference_object),
+        "identity_status": row.identity_status,
     }
 
 
-def _format_target_option(row: TargetCandidateRow) -> str:
-    status = "valid" if row.gt_label_valid else row.gt_match_status
+def _format_target_option(row: OracleTargetTask) -> str:
     return (
-        f"target {row.target_row_id} · {row.class_name} · sem={row.sem_id} inst={row.inst_id} · "
-        f"score={row.score:.3f} · {status}"
+        f"target {row.target_row_id} · {row.descriptor.class_name} · "
+        f"sem={row.descriptor.sem_id} inst={row.inst_id} · {row.identity_status}"
     )
 
 
 def _add_target_overlays(
     builder: CounterfactualPlotBuilder,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     *,
     show_actor_target: bool,
     show_gt_target: bool,
@@ -1100,16 +1075,22 @@ def _add_target_overlays(
     if target is None:
         return
     if show_actor_target:
-        builder.add_actor_visible_target_obb(target)
+        builder.add_actor_visible_target_obb(target.descriptor)
     if not show_gt_target:
         return
-    if not target.gt_label_valid:
+    if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
         st.warning(
             "The active target has no valid matched GT crop; only the descriptor target OBB can be shown.",
         )
         return
     try:
-        builder.add_matched_gt_target_obb(sample, target)
+        builder.add_obb(
+            target_gt_obb_world(target, sample),
+            name="Matched GT / evaluation crop",
+            color="#00d4ff",
+            width=6,
+            opacity=0.95,
+        )
     except ValueError as exc:
         st.warning(f"Matched GT target OBB unavailable: {exc}")
 
@@ -1117,7 +1098,7 @@ def _add_target_overlays(
 def _add_target_semidense_crop(
     builder: CounterfactualPlotBuilder,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     *,
     crop_basis: str,
     max_points: int = 12000,
@@ -1127,7 +1108,7 @@ def _add_target_semidense_crop(
     if target is None:
         return
     if crop_basis == "GT/evaluation OBB":
-        if not target.gt_label_valid:
+        if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
             st.warning("GT semidense crop unavailable because the active target has no valid GT match.")
             return
         try:
@@ -1149,8 +1130,8 @@ def _add_target_semidense_crop(
         return
 
     builder.add_semidense_in_oriented_box(
-        pose_world_object=target.pose_world_object,
-        extents=target.extents,
+        pose_world_object=target.descriptor.pose_world_object,
+        extents=target.descriptor.extents_m,
         name="Target semidense crop / descriptor",
         max_points=max_points,
         last_frame_only=False,
@@ -1195,13 +1176,7 @@ def _render_live_rollouts_tab() -> None:
     if st.button("Load sample and targets", key="cf_load_sample_targets"):
         try:
             sample = _load_vin_offline_sample(store_dir=store_dir, split=str(split), sample_index=int(sample_index))
-            sampled = OracleTargetTaskSampler(selector_cfg).sample(sample)
-            target_result = _LiveTargetSelectionResult(
-                rows=tuple(target_candidate_row_from_task(row) for row in sampled.rows),
-                selected_rows=tuple(target_candidate_row_from_task(row) for row in sampled.selected_rows),
-                source=sampled.source,
-                warnings=sampled.warnings,
-            )
+            target_result = OracleTargetTaskSampler(selector_cfg).sample(sample)
             cache[load_key] = {"sample": sample, "target_result": target_result}
         except Exception as exc:  # pragma: no cover - UI guard
             _report_exception(exc, context="Failed to load VIN offline sample and targets")
@@ -1435,7 +1410,7 @@ def _render_rollout_result(
     sample: VinOfflineSample,
     evaluated: EvaluatedRollout,
     *,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     log_text: str,
     scoring_mode: LiveRolloutScoringMode,
 ) -> None:
@@ -1474,7 +1449,7 @@ def _render_rollout_result(
             )
             show_gt_target = target_col2.checkbox(
                 "Show matched GT target OBB",
-                value=bool(target is not None and target.gt_label_valid),
+                value=bool(target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value),
                 key="cf_path_gt_target_obb",
             )
             show_target_crop = target_col3.checkbox(
@@ -1569,7 +1544,9 @@ def _render_rollout_result(
                     )
                     show_step_gt_target = step_target_col2.checkbox(
                         "Show matched GT target OBB",
-                        value=bool(target is not None and target.gt_label_valid),
+                        value=bool(
+                            target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value
+                        ),
                         key="cf_step_gt_target_obb",
                     )
                     show_step_target_crop = step_target_col3.checkbox(
@@ -1642,7 +1619,7 @@ def _render_live_selected_depth_tab(
     evaluated: EvaluatedRollout,
     *,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
 ) -> None:
     rollouts = evaluated.result
     rows = pd.DataFrame(_live_selected_depth_rows(evaluated))
@@ -1701,7 +1678,7 @@ def _render_live_selected_depth_tab(
     )
     show_gt_projection = overlay_col2.checkbox(
         "Project matched GT target OBB",
-        value=bool(target is not None and target.gt_label_valid),
+        value=bool(target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value),
         key="cf_live_depth_gt_obb",
     )
     depth = torch.as_tensor(step.evaluation.evidence.selected_depth_m, dtype=torch.float32)
@@ -1812,7 +1789,7 @@ def _live_depth_target_overlays(
     step: EvaluatedRolloutStep,
     *,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     show_actor_target: bool,
     show_gt_target: bool,
 ) -> list[DepthBoxOverlay]:
@@ -1828,7 +1805,10 @@ def _live_depth_target_overlays(
     overlays: list[DepthBoxOverlay] = []
     pose_world_cam = step.transition.selected_pose_world
     if show_actor_target:
-        actor_corners = _oriented_box_corners_world(target.pose_world_object, target.extents)
+        actor_corners = _oriented_box_corners_world(
+            target.descriptor.pose_world_object,
+            target.descriptor.extents_m,
+        )
         overlays.append(
             DepthBoxOverlay(
                 corners_px=project_world_points_to_image(
@@ -1842,7 +1822,7 @@ def _live_depth_target_overlays(
                 width=4,
             )
         )
-    if show_gt_target and target.gt_label_valid:
+    if show_gt_target and target.identity_status == TargetTaskIdentityStatus.MATCHED.value:
         try:
             gt_corners = target_gt_obb_world(target, sample).bb3corners_world.reshape(8, 3)
         except ValueError:

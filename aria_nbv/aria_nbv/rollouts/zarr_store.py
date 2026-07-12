@@ -1367,7 +1367,7 @@ def _add_manifest_hash(target: set[str], value: str | None) -> None:
 def _records_with_global_target_row_ids(records: list[_RolloutWriteRecord]) -> list[_RolloutWriteRecord]:
     """Return records whose lineage target rows are unique within the rollout store.
 
-    ``TargetCandidateRow.target_row_id`` is selector-local to one source sample.
+    ``OracleTargetTask.target_row_id`` is selector-local to one source sample.
     The rollout store needs a globally unique row key because ``rollouts/`` and
     ``q_h/`` join through ``target_row_id``. Preserve the selector-local id in
     ``target_source_index`` and assign dense store-local ids by first use.

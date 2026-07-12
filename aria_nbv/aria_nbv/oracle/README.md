@@ -107,17 +107,13 @@ classes and configs; imported names and `__all__` are excluded from the matrix.
 | `TARGET_INVALID_REASON_CODES` | constant | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `TARGET_INVALID_REASON_VERSION` | constant | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `ORACLE_TARGET_TASK_SOURCE` | constant | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
-| `TargetCandidateRow` | DTO | public | `data_handling._target_selection` | `oracle.target_selection` | pipeline label compatibility | deferred: semantic WP |
 | `TargetTaskIdentityStatus` | enum | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `OracleTargetTaskSelectionPolicy` | enum | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
-| `OracleTargetTaskRow` | DTO | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
+| `OracleTargetTask` | DTO | public | `OracleTargetTaskRow` plus `TargetCandidateRow` adapters | `oracle.target_selection` | `oracle.target_selection` | collapsed |
 | `OracleTargetTaskSamplingResult` | DTO | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `_TargetSource` | DTO | private | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `OracleTargetTaskSamplerConfig` | config | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `OracleTargetTaskSampler` | class | public | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |
-| `target_candidate_row_from_task` | function | public | `oracle.pipelines.rollout_dataset` | `oracle.target_selection` | `oracle.target_selection` | moved |
-| `target_descriptor_from_candidate_row` | function | public | `oracle.pipelines.rollout_dataset` | `oracle.target_selection` | `oracle.target_selection` | moved |
-| `_oracle_target_invalidity` | function | private | `oracle.pipelines.rollout_dataset` | `oracle.target_selection` | `oracle.target_selection` | moved |
 | `_compact_obb_block` | function | private | `data_handling._target_selection` | `oracle.target_selection` | `oracle.evidence` | deferred: semantic WP |
 | `_world_obbs_for_sample` | function | private | `data_handling._target_selection` | `oracle.target_selection` | `oracle.evidence` | deferred: semantic WP |
 | `_latest_valid_obb_slice` | function | private | `data_handling._target_selection` | `oracle.target_selection` | `oracle.target_selection` | moved |

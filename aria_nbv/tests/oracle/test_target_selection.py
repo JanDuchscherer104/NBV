@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from dataclasses import fields
+
 import pytest
 import torch
 
@@ -20,6 +22,7 @@ from aria_nbv.data_handling import (
 from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
+    OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetTaskIdentityStatus,
@@ -142,7 +145,6 @@ def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
     assert len(first.selected_rows) == 3
     assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
     assert all(row.selection_probability == pytest.approx(3.0 / 4.0) for row in first.selected_rows)
-    assert {row.selection_seed for row in first.selected_rows} == {7}
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in first.selected_rows)
     assert {row.source for row in first.rows} == {ORACLE_TARGET_TASK_SOURCE}
     assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
@@ -164,11 +166,11 @@ def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_task
     assert len(result.identity_valid_rows) == 3
     assert len(result.selected_rows) == 3
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in result.rows)
-    assert all(row.identity_iou is None for row in result.rows)
+    assert len({row.source_index for row in result.rows}) == 3
     assert "num_ambiguous_identity" not in result.diagnostic_summary()
 
 
-def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_projection_gate() -> None:
+def test_oracle_target_task_contains_only_domain_fields() -> None:
     sample = _sample(
         gt_obbs=_obb_block([[0.0, 0.0, 0.0]], probs=[0.05], box_size=0.0),
         points=[],
@@ -176,14 +178,22 @@ def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_pr
 
     row = _oracle_sampler(max_targets_per_sample=1).sample(sample).selected_rows[0]
 
-    assert row.identity_valid
-    assert row.projected_area_pixels == 0.0
-    assert row.semidense_support_count == 0
-    assert row.effective_support_count == 0.0
+    assert {field.name for field in fields(OracleTargetTask)} == {
+        "scene_id",
+        "snippet_id",
+        "source",
+        "source_index",
+        "target_row_id",
+        "target_id",
+        "descriptor",
+        "inst_id",
+        "confidence",
+        "identity_status",
+        "selected_rank",
+        "selection_probability",
+    }
+    assert row.identity_status == TargetTaskIdentityStatus.MATCHED.value
     assert row.confidence == pytest.approx(0.05)
-    assert row.target_root_error is None
-    assert row.max_candidate_gain is None
-    assert row.headroom_band is None
 
 
 def test_oracle_target_task_sampler_rejects_vin_oracle_batch_input() -> None:

@@ -26,7 +26,7 @@ from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
-from aria_nbv.oracle.target_selection import TargetCandidateRow
+from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidateViewGeneratorConfig,
@@ -41,6 +41,7 @@ from aria_nbv.rollouts import (
     RolloutZarrStoreReader,
     write_rollout_zarr_store,
 )
+from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
 
 _PATH_CONFIG_FIELDS = (
@@ -138,41 +139,28 @@ def _candidate_result_for_pose(pose: PoseTW) -> CandidateSamplingResult:
     )
 
 
-def _target_row(*, gt_label_valid: bool = True) -> TargetCandidateRow:
-    return TargetCandidateRow(
+def _target_row(*, gt_label_valid: bool = True) -> OracleTargetTask:
+    return OracleTargetTask(
         scene_id="scene_a",
         snippet_id="snippet_1",
-        source="detected_obbs",
-        source_index=2,
+        source="gt_obbs_oracle",
+        source_index=9,
         target_row_id=4,
-        target_id="scene_a:snippet_1:detected_obbs:2",
-        sem_id=3,
+        target_id="scene_a:snippet_1:gt_obbs_oracle:9",
+        descriptor=TargetDescriptor(
+            sem_id=3,
+            class_name="chair",
+            pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
+            extents_m=(0.5, 0.6, 0.7),
+            relative_pose_reference_object=tuple(float(v) for v in range(12)),
+        ),
         inst_id=62,
-        class_name="chair",
         confidence=0.9,
-        center_world=(1.0, 2.0, 3.0),
-        extents=(0.5, 0.6, 0.7),
-        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
-        relative_pose_reference_object=tuple(float(v) for v in range(12)),
-        projected_area_pixels=64.0,
-        projected_area_fraction=0.01,
-        semidense_support_count=5,
-        evl_support_count=7,
-        effective_support_count=12.0,
-        visibility_score=0.8,
-        support_score=0.7,
-        deficit_score=0.1,
-        score=0.75,
-        eligible=True,
-        invalid_reason_bitset=0,
-        primary_invalid_reason=0,
         selected_rank=0,
-        gt_label_valid=gt_label_valid,
-        gt_target_row_id=9,
-        gt_target_id="gt:9",
-        gt_match_iou=0.5,
-        gt_match_score=0.5,
-        gt_match_status="accepted",
+        selection_probability=1.0,
+        identity_status=(
+            TargetTaskIdentityStatus.MATCHED.value if gt_label_valid else TargetTaskIdentityStatus.UNMATCHED.value
+        ),
     )
 
 
@@ -272,18 +260,18 @@ def test_loaded_sample_info_documents_target_table_columns() -> None:
         assert f"`{column}`" in rollout_panel._LOADED_SAMPLE_INFO
 
 
-def test_target_rows_table_preserves_score_decomposition() -> None:
+def test_target_rows_table_exposes_compact_task_audit() -> None:
     row = rollout_panel._target_rows_table((_target_row(),))[0]
 
+    assert row["target_row_id"] == 4
+    assert row["selected_rank"] == 0
+    assert row["class"] == "chair"
+    assert row["sem_id"] == 3
+    assert row["inst_id"] == 62
     assert row["confidence"] == pytest.approx(0.9)
-    assert row["projected_area_px"] == pytest.approx(64.0)
-    assert row["semidense_support"] == 5
-    assert row["evl_support"] == 7
-    assert row["effective_support"] == pytest.approx(12.0)
-    assert row["visibility_score"] == pytest.approx(0.8)
-    assert row["support_score"] == pytest.approx(0.7)
-    assert row["selection_score"] == pytest.approx(0.75)
-    assert row["gt_match_score"] == pytest.approx(0.5)
+    assert row["selection_probability"] == pytest.approx(1.0)
+    assert row["admitted"] is True
+    assert row["identity_status"] == TargetTaskIdentityStatus.MATCHED.value
 
 
 def test_active_target_info_documents_descriptor_and_oracle_boundary() -> None:
@@ -640,7 +628,7 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
 
     def _fake_setup_target(self, **kwargs):  # noqa: ANN001
         assert kwargs["target_sample"] is fake_sample
-        assert kwargs["target_row"] is target
+        assert kwargs["target_task"] is target
         return fake_evaluator
 
     monkeypatch.setattr(TargetRriScorerConfig, "setup_target", _fake_setup_target)

@@ -30,6 +30,7 @@ from aria_nbv.oracle.evidence import (
     crop_mesh_to_obb,
     crop_padded_pointclouds_to_obb,
     crop_points_to_obb,
+    target_gt_obb_world,
 )
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import (
@@ -38,7 +39,7 @@ from aria_nbv.oracle.pipelines.evaluated_rollout import (
     OracleReplayAdapter,
 )
 from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
-from aria_nbv.oracle.target_selection import TargetCandidateRow
+from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
@@ -121,40 +122,18 @@ def _obb(center: tuple[float, float, float], size: tuple[float, float, float]) -
     )
 
 
-def _target_row(*, gt_target_row_id: int) -> TargetCandidateRow:
-    return TargetCandidateRow(
+def _target_row(*, gt_target_row_id: int) -> OracleTargetTask:
+    return OracleTargetTask(
         scene_id="scene",
         snippet_id="snippet",
-        source="detected_obbs",
-        source_index=0,
+        source="gt_obbs_oracle",
+        source_index=gt_target_row_id,
         target_row_id=1,
         target_id="target",
-        sem_id=1,
+        descriptor=_target_descriptor(),
         inst_id=2,
-        class_name="chair",
         confidence=0.9,
-        center_world=(0.0, 0.0, 0.0),
-        extents=(1.0, 1.0, 1.0),
-        pose_world_object=tuple(_identity_pose().tensor().reshape(-1).tolist()),
-        relative_pose_reference_object=tuple(_identity_pose().tensor().reshape(-1).tolist()),
-        projected_area_pixels=100.0,
-        projected_area_fraction=0.1,
-        semidense_support_count=10,
-        evl_support_count=10,
-        effective_support_count=10.0,
-        visibility_score=1.0,
-        support_score=1.0,
-        deficit_score=0.0,
-        score=1.0,
-        eligible=True,
-        invalid_reason_bitset=1,
-        primary_invalid_reason=0,
-        gt_label_valid=True,
-        gt_target_row_id=gt_target_row_id,
-        gt_target_id="gt-target",
-        gt_match_iou=1.0,
-        gt_match_score=1.0,
-        gt_match_status="matched",
+        identity_status=TargetTaskIdentityStatus.MATCHED.value,
     )
 
 
@@ -281,11 +260,14 @@ def test_target_scorer_returns_typed_invalidity_for_unlabelled_target(monkeypatc
     monkeypatch.setattr(CandidateDepthRendererConfig, "setup_target", lambda self: object())
     monkeypatch.setattr(PreparedRriScorerConfig, "setup_target", lambda self: object())
     target_obb = _obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
-    row = replace(_target_row(gt_target_row_id=0), gt_label_valid=False, gt_target_row_id=None)
+    row = replace(
+        _target_row(gt_target_row_id=0),
+        identity_status=TargetTaskIdentityStatus.INVALID_GEOMETRY.value,
+    )
     scorer = TargetRriScorerConfig().setup_target(
         sample=SimpleNamespace(),
         target_sample=_target_sample_with_gt_obb(target_obb),
-        target_row=row,
+        target_task=row,
     )
 
     outcome = scorer(SimpleNamespace(), CounterfactualTrajectory(root_pose_world=_identity_pose()), 0)
@@ -302,7 +284,7 @@ def test_target_scorer_maps_root_evidence_failure_to_typed_invalidity(monkeypatc
     scorer = TargetRriScorerConfig().setup_target(
         sample=SimpleNamespace(),
         target_sample=_target_sample_with_gt_obb(target_obb),
-        target_row=_target_row(gt_target_row_id=0),
+        target_task=_target_row(gt_target_row_id=0),
     )
 
     def _raise_root_evidence_error(*_args, **_kwargs):
@@ -424,7 +406,7 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
         reward_mode=RriRewardMode.STATE_RELATIVE_RRI,
     )
 
-    evaluation = cfg.setup_target(sample=sample, target_sample=target_sample, target_row=row)(
+    evaluation = cfg.setup_target(sample=sample, target_sample=target_sample, target_task=row)(
         candidates,
         _empty_oracle_state(),
         0,
@@ -498,7 +480,7 @@ def test_target_scorer_crops_current_eval_before_global_scene_cap(monkeypatch) -
     )
 
     evaluation = cfg.setup_target(
-        sample=sample, target_sample=target_sample, target_row=_target_row(gt_target_row_id=0)
+        sample=sample, target_sample=target_sample, target_task=_target_row(gt_target_row_id=0)
     )(
         _candidate_result_for_pose(_identity_pose(), count=1),
         _empty_oracle_state(),
@@ -828,7 +810,7 @@ def test_counterfactual_plot_builder_adds_actor_visible_target_obb() -> None:
             rollouts,
             title="target",
         )
-        .add_actor_visible_target_obb(target)
+        .add_actor_visible_target_obb(target.descriptor)
         .finalize()
     )
 
@@ -843,15 +825,17 @@ def test_counterfactual_plot_builder_adds_matched_gt_target_obb() -> None:
     target = _target_row(gt_target_row_id=0)
     sample = _target_sample_with_gt_obb(_obb((2.0, 0.0, 0.0), (1.0, 1.0, 1.0)))
 
-    fig = (
-        CounterfactualPlotBuilder.from_rollouts(
-            _plot_snippet(),  # type: ignore[arg-type]
-            rollouts,
-            title="gt target",
-        )
-        .add_matched_gt_target_obb(sample, target)
-        .finalize()
+    builder = CounterfactualPlotBuilder.from_rollouts(
+        _plot_snippet(),  # type: ignore[arg-type]
+        rollouts,
+        title="gt target",
     )
+    builder.add_obb(
+        target_gt_obb_world(target, sample),
+        name="Matched GT / evaluation crop",
+        color="lime",
+    )
+    fig = builder.finalize()
 
     target_traces = [trace for trace in fig.data if trace.name == "Matched GT / evaluation crop"]
     assert len(target_traces) == 1
@@ -863,18 +847,19 @@ def test_counterfactual_plot_builder_keeps_actor_obb_when_gt_target_invalid() ->
     rollouts = _run_rollouts(horizon=1, branch_factor=1)
     target = replace(
         _target_row(gt_target_row_id=0),
-        gt_label_valid=False,
-        gt_target_row_id=None,
-        gt_match_status="unmatched_gt",
+        identity_status=TargetTaskIdentityStatus.UNMATCHED.value,
     )
     builder = CounterfactualPlotBuilder.from_rollouts(
         _plot_snippet(),  # type: ignore[arg-type]
         rollouts,
         title="invalid target",
-    ).add_actor_visible_target_obb(target)
+    ).add_actor_visible_target_obb(target.descriptor)
 
     with pytest.raises(ValueError, match="not GT-label valid"):
-        builder.add_matched_gt_target_obb(_target_sample_with_gt_obb(_obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))), target)
+        target_gt_obb_world(
+            target,
+            _target_sample_with_gt_obb(_obb((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))),
+        )
 
     fig = builder.finalize()
     assert any(trace.name == "Active target / actor-visible" for trace in fig.data)

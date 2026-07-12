@@ -12,13 +12,11 @@ from plotly.colors import sample_colorscale  # type: ignore[import]
 from plotly.subplots import make_subplots  # type: ignore[import]
 
 from ..data_handling import EfmSnippetView
-from ..oracle.evidence import target_gt_obb_world
+from ..targets import TargetDescriptor
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 
 if TYPE_CHECKING:
-    from ..data_handling import VinOfflineSample
-    from ..oracle.target_selection import TargetCandidateRow
     from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
     from .types import CandidateSamplingResult
@@ -605,7 +603,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
 
     def add_actor_visible_target_obb(
         self,
-        target: "TargetCandidateRow",
+        target: TargetDescriptor,
         *,
         color: str = "#ff2f74",
         name: str = "Active target / actor-visible",
@@ -615,26 +613,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
 
         return self.add_oriented_box(
             pose_world_object=target.pose_world_object,
-            extents=target.extents,
-            name=name,
-            color=color,
-            width=width,
-            opacity=0.95,
-        )
-
-    def add_matched_gt_target_obb(
-        self,
-        sample: "VinOfflineSample",
-        target: "TargetCandidateRow",
-        *,
-        color: str = "#00d4ff",
-        name: str = "Matched GT / evaluation crop",
-        width: int = 6,
-    ) -> Self:
-        """Overlay the matched GT OBB used only for oracle labels and evaluation crops."""
-
-        return self.add_obb(
-            target_gt_obb_world(target, sample),
+            extents=target.extents_m,
             name=name,
             color=color,
             width=width,

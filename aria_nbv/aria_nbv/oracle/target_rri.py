@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
     from ..data_handling.efm_views import EfmSnippetView
     from ..data_handling.offline.dataset import VinOfflineSample
-    from ..oracle.target_selection import TargetCandidateRow
+    from ..oracle.target_selection import OracleTargetTask
     from ..pose_generation.types import CandidateSamplingResult
 
 TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v1"
@@ -164,12 +164,12 @@ class TargetRriScorer:
         *,
         sample: EfmSnippetView,
         target_sample: "VinOfflineSample",
-        target_row: TargetCandidateRow,
+        target_task: OracleTargetTask,
     ) -> None:
         self.config = config
         self.sample = sample
         self.target_sample = target_sample
-        self.target_row = target_row
+        self.target_task = target_task
         self.console = (
             Console.with_prefix(self.__class__.__name__)
             .set_verbosity(self.config.verbosity)
@@ -188,7 +188,7 @@ class TargetRriScorer:
         self._target_obb_world: ObbTW | None = None
         self._initial_invalidity: TargetRriInvalidity | None = None
         try:
-            self._target_obb_world = target_gt_obb_world(target_row, target_sample)
+            self._target_obb_world = target_gt_obb_world(target_task, target_sample)
         except _OracleEvidenceError as exc:
             self._initial_invalidity = TargetRriInvalidity(reason=exc.reason, message=str(exc))
 

@@ -994,10 +994,10 @@ layout transition.
 | `TARGET_INVALID_REASON_CODES` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `TARGET_INVALID_REASON_VERSION` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `ORACLE_TARGET_TASK_SOURCE` | `constant` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
-| `TargetCandidateRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `TargetCandidateRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | deleted | `removed: RWP02 adapter collapse` |
 | `TargetSelectionResult` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `TargetTaskIdentityStatus` | `enum` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
-| `OracleTargetTaskRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
+| `OracleTargetTaskRow` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `oracle.target_selection.OracleTargetTask` | `collapsed: RWP02` |
 | `OracleTargetTaskSweepCell` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `OracleTargetTaskSamplingResult` | `DTO` | `public` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
 | `_TargetSource` | `DTO` | `private` | `data_handling._target_selection` | `data_handling._target_selection` | `targets.selection` | `blocked: symbol split` |
