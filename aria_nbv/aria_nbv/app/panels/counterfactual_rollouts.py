@@ -54,12 +54,14 @@ from ...rendering.plotting import (
 )
 from ...rollouts import (
     CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
     RolloutPolicySpec,
+)
+from ...rollouts.inspection import (
     candidate_result_diagnostic_counts,
     decode_position_id,
     decode_strategy_id,
 )
+from ...rollouts.replay.policy import CounterfactualSelectionPolicy
 from ...rollouts.replay.state import CounterfactualStepResult
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity

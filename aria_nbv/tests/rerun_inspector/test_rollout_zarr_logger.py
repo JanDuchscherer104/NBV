@@ -29,7 +29,7 @@ from aria_nbv.rerun_inspector._rollout_zarr import (
     _resolve_plot_rollout_rows,
     _resolve_rollout_rows,
 )
-from aria_nbv.rollouts import write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 if TYPE_CHECKING:

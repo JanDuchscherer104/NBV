@@ -10,9 +10,9 @@ import pytest
 import zarr
 from typer.testing import CliRunner
 
-from aria_nbv.rollouts import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
 from aria_nbv.rollouts.info_cli import main as rollouts_info_main
+from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 runner = CliRunner()

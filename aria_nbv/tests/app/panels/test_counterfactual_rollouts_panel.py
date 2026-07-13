@@ -35,12 +35,13 @@ from aria_nbv.pose_generation import (
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualStepResult,
     CounterfactualTrajectory,
     RolloutZarrStoreReader,
-    write_rollout_zarr_store,
 )
+from aria_nbv.rollouts.inspection import candidate_audit_rows
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.rollouts.replay.state import CounterfactualStepResult
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
 
@@ -352,24 +353,15 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
     assert overlays[0].corners_px.shape == (8, 2)
 
 
-def test_format_rollout_option_includes_context_and_nan_beam() -> None:
-    reader = _FakeRolloutReader(
-        {
-            "rollouts/rollout_row_id": np.asarray([0], dtype=np.int64),
-            "rollouts/policy_id": np.asarray([0], dtype=np.int32),
-            "rollouts/scene_id": np.asarray([0], dtype=np.int32),
-            "rollouts/target_row_id": np.asarray([0], dtype=np.int64),
-            "rollouts/chain_id": np.asarray([0], dtype=np.int32),
-            "rollouts/horizon": np.asarray([1], dtype=np.int16),
-            "rollouts/branch_factor": np.asarray([1], dtype=np.int16),
-            "rollouts/beam_width": np.asarray([-1], dtype=np.int16),
-            "dictionaries/policy": _json_dictionary_array(["random_valid"]),
-            "dictionaries/scene": _json_dictionary_array(["81286"]),
-        }
+def test_format_rollout_option_includes_context_and_nan_beam(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=51)[:1],
     )
+    reader = RolloutZarrStoreReader(result.store_dir)
 
     assert stored_rollouts_panel.format_rollout_option(reader, 0) == (
-        "0 · scene 81286 · target 0 · random_valid · chain 0 · H=1 · B=1 · beam=NaN"
+        "0 · scene fixture_box · target 0 · oracle_greedy · chain 0 · H=2 · B=1 · beam=NaN"
     )
 
 
@@ -565,7 +557,7 @@ def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> No
     )
     reader = RolloutZarrStoreReader(result.store_dir)
 
-    rows = stored_rollouts_panel.candidate_rows_for_rollout(reader, 0)
+    rows = candidate_audit_rows(reader, rollout_row_id=0)
 
     assert rows[0]["strategy"] != ""
     assert rows[0]["position"] == "forward_local"

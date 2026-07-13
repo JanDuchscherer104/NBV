@@ -33,7 +33,7 @@ from ...pose_generation.utils import (
     summarise_dirs_ref,
     summarise_offsets_ref,
 )
-from ...rollouts import decode_position_id, decode_strategy_id
+from ...rollouts.inspection import decode_position_id, decode_strategy_id
 from ...rollouts.trace import _candidate_invalid_reasons
 from ...utils.frames import world_up_tensor
 

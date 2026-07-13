@@ -10,7 +10,8 @@ audits, and read-side inspection. Rollout dataset/shard generation lives in
 rollouts/
   audits.py               # operational validity/provenance/path checks
   replay/                 # policy, state, score contracts, and replay engine
-  inspection.py
+  read_model.py           # typed, presentation-free store projections
+  inspection.py           # inventory, audits, and presentation-ready summaries
   manifest.py
   shard_manifest.py
   trace.py
@@ -18,17 +19,21 @@ rollouts/
   info_cli.py
 ```
 
-Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
+G009 baseline: `5c4c450`
 
-Inventory generated: `2026-07-10T16:10:28.231382+00:00`
+Inventory refreshed: `2026-07-13`
 
-Graphify refresh: `2026-07-11T20:46:10+02:00`
+Graphify refresh: `2026-07-13` (`5,512` nodes, `12,601` edges)
 
 ## Symbol Ownership Matrix
 
 ### `__init__.py`
 
-No top-level AST definitions; imported names and `__all__` are excluded.
+The exact stable root allowlist is `CandidateScores`,
+`CounterfactualPoseGenerator`, `CounterfactualPoseGeneratorConfig`,
+`CounterfactualRolloutResult`, `CounterfactualTrajectory`, `RolloutPolicySpec`,
+`RolloutZarrStoreConfig`, and `RolloutZarrStoreReader`. All other callers use
+the owning leaf module; no compatibility facade is provided.
 
 ### `audits.py`
 
@@ -93,18 +98,39 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 | `_print_text_summary` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
 | `_print_stats` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
 
+### `read_model.py`
+
+These records express persisted store meaning shared by Streamlit and Rerun.
+They contain no entities, colors, chart fields, commands, or output side
+effects. `StoredTarget` includes only target columns consumed by a reader;
+unconsumed redundant geometry and endpoint fields are not projected.
+
+| Symbol | Kind | Visibility | Before module | Final owner | Status |
+|---|---|---|---|---|---|
+| `_INVALID_REASON_NAMES` | constant | private | `rollouts.inspection` | `rollouts.read_model` | moved |
+| `_POSITION_NAMES` | constant | private | `rollouts.inspection` | `rollouts.read_model` | moved |
+| `StoredRollout` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `StoredStep` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `StoredTarget` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `StoredSelectedDepth` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `decode_invalid_reason` | function | public leaf | `rollouts.inspection` | `rollouts.read_model` | moved |
+| `decode_position_id` | function | public leaf | `rollouts.inspection` | `rollouts.read_model` | moved |
+| `rollout_at` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `rollout_by_id` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `rollout_steps` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `target_rows` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `target_by_id` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `selected_depth_for_step` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
+| `_string_dictionary` | function | private | duplicated decoders | `rollouts.read_model` | moved |
+
 ### `inspection.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `_INVALID_REASON_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_TARGET_INVALID_REASON_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_POSITION_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_STRATEGY_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `RolloutSuspiciousQueryConfig` | `config` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `decode_invalid_reason` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `decode_target_invalid_reason` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `decode_position_id` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `decode_strategy_id` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `discover_rollout_store_paths` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `rollout_store_inventory_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
@@ -116,11 +142,6 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 | `rollout_tree_summary_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `selected_depth_summary_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `selected_depth_preview` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_selected_depth_base_row` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_selected_depth_unavailable_row` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_selected_depth_dense_summary` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_accumulate_optional` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_mean_accumulator` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `candidate_result_diagnostic_counts` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `suspicious_rollout_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_low_fanout_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
@@ -142,15 +163,6 @@ complete current/final symbol matrix is in [`replay/README.md`](replay/README.md
 | `_mask_fraction` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_rollout_dictionary_summary` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_numeric_summary` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_candidate_diagnostics` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_rollout_context_by_id` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_rollout_rows_by_id` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_selected_candidate_context_by_id` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_step_selection_entropy` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_component_names` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_reader_dictionaries` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_dict_value` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_optional_array` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_finite_or_none` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 | `_safe_fraction` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
 

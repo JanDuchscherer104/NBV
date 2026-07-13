@@ -15,17 +15,13 @@ from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
 from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
 from aria_nbv.pose_generation.types import CandidatePositionMode, SamplingStrategy
-from aria_nbv.rollouts import (
-    INVALID_REASON_VERSION,
-    RolloutLineage,
-)
 from aria_nbv.rollouts.replay.engine import (
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
 )
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
 from aria_nbv.rollouts.replay.state import CounterfactualTrajectory
-from aria_nbv.rollouts.trace import PolicyLineage, SourceLineage, TargetLineage
+from aria_nbv.rollouts.trace import INVALID_REASON_VERSION, PolicyLineage, RolloutLineage, SourceLineage, TargetLineage
 from aria_nbv.utils.fingerprints import stable_config_hash
 
 if TYPE_CHECKING:

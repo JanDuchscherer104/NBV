@@ -26,10 +26,10 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorRolloutDepthConfig,
 )
 from aria_nbv.rollouts import (
-    CounterfactualSelectionPolicy,
     RolloutPolicySpec,
     RolloutZarrStoreConfig,
 )
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 

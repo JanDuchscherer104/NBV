@@ -61,12 +61,11 @@ from aria_nbv.rollouts import (
     CandidateScores,
     CounterfactualPoseGenerator,
     CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
     CounterfactualTrajectory,
-    RolloutLineage,
     RolloutPolicySpec,
 )
-from aria_nbv.rollouts.trace import PolicyLineage, SourceLineage
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.rollouts.trace import PolicyLineage, RolloutLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
 

@@ -14,7 +14,9 @@ from aria_nbv.data_handling.identifiers import (
     compact_ase_atek_sample_id,
     raw_ase_atek_sample_id,
 )
-from aria_nbv.rollouts import INVALID_REASON_CODES, RolloutZarrStoreReader, validate_rollout_zarr_store
+from aria_nbv.rollouts import RolloutZarrStoreReader
+from aria_nbv.rollouts.trace import INVALID_REASON_CODES
+from aria_nbv.rollouts.zarr_store import validate_rollout_zarr_store
 
 from ._blueprint import log_default_inspector_blueprint
 from ._colors import INVALID_RGBA, step_to_rgba

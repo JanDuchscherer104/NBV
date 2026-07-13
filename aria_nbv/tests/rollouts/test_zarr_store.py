@@ -17,18 +17,15 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.oracle.target_rri import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
 from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
-from aria_nbv.rollouts import (
-    INVALID_REASON_CODES,
-    INVALID_REASON_VERSION,
-    ROLLOUT_MANIFEST_FILENAME,
+from aria_nbv.rollouts import RolloutZarrStoreConfig, RolloutZarrStoreReader
+from aria_nbv.rollouts.info_cli import main as rollouts_info_main
+from aria_nbv.rollouts.manifest import ROLLOUT_MANIFEST_FILENAME, RolloutStoreManifestContext
+from aria_nbv.rollouts.trace import INVALID_REASON_CODES, INVALID_REASON_VERSION
+from aria_nbv.rollouts.zarr_store import (
     ROLLOUT_ZARR_SCHEMA_VERSION,
-    RolloutStoreManifestContext,
-    RolloutZarrStoreConfig,
-    RolloutZarrStoreReader,
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
-from aria_nbv.rollouts.info_cli import main as rollouts_info_main
 from tests.rollout_fixtures import build_rollout_records
 
 

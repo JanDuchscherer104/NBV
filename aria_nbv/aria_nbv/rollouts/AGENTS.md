@@ -14,7 +14,9 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 - Scene/target Oracle scoring: `aria_nbv.oracle.scene_rri` and `aria_nbv.oracle.target_rri`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
+- Shared typed store interpretation for read-side adapters: `read_model.py`
 - Operational replay/store checks: `audits.py`
+- Inventory and presentation-ready audit summaries: `inspection.py`
 - Rollout generation pipelines and CLI: `aria_nbv.oracle.pipelines`
 
 ## Boundary Rules
@@ -38,6 +40,11 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   with source-row lineage.
 - Invalid candidates and invalid targets are hard-mask/reason-code cases, not
   low-RRI labels. `q_train_mask` must require explicit target-RRI supervision.
+- Keep `read_model.py` presentation-free. Streamlit and Rerun own their chart,
+  entity, color, transform, command, and failure-policy DTOs locally.
+- The package root is an exact eight-symbol allowlist. Import codecs,
+  manifests, policies, diagnostics, and read-model records from their leaf
+  owners; do not add compatibility re-exports.
 
 ## Verification
 - Run `ruff format` and `ruff check` on touched rollout files.
@@ -50,8 +57,8 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   for CLI/config wiring changes.
 
 ## Completion Criteria
-- Public imports come from `aria_nbv.rollouts` for rollout record/store
-  contracts and counterfactual rollout policies.
+- Stable replay entry points use `aria_nbv.rollouts`; specialized contracts use
+  their owning leaf modules.
 - Generation callers import writer and shard symbols from
   `aria_nbv.oracle.pipelines` leaf modules.
 - The standalone rollout store validates after writes.
