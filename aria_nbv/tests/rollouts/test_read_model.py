@@ -90,6 +90,7 @@ def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:
     assert target.matched_gt_target_row_id == 100
     assert target.matched_gt_target_id == "fixture-gt-target-0"
     assert target.gt_match_status == "matched"
+    np.testing.assert_array_equal(target.center_world, reader.array("targets/target_center_world")[0])
     assert np.allclose(target.extents, [0.4, 0.5, 0.6])
     assert target_by_id(reader, 0) is not None
     assert target_by_id(reader, 999) is None

@@ -113,6 +113,7 @@ class StoredTarget:
     visibility_score: float
     support_score: float
     deficit_score: float
+    center_world: NDArray[np.float32]
     extents: NDArray[np.float32]
     pose_world_object: NDArray[np.float32]
 
@@ -349,6 +350,7 @@ def target_rows(reader: RolloutZarrStoreReader) -> tuple[StoredTarget, ...]:
                 visibility_score=optional("target_visibility_score", index),
                 support_score=optional("target_support_score", index),
                 deficit_score=optional("target_deficit_score", index),
+                center_world=np.asarray(targets["target_center_world"][index], dtype=np.float32).reshape(3),
                 extents=np.asarray(targets["target_extents"][index], dtype=np.float32).reshape(3),
                 pose_world_object=np.asarray(targets["target_pose_world_object"][index], dtype=np.float32).reshape(12),
             )

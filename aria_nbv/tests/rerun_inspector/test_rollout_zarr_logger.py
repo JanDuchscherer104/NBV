@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 import torch
+import zarr
 
 pytest.importorskip("efm3d")
 
@@ -27,8 +28,9 @@ from aria_nbv.rerun_inspector._rollout_zarr import (
     _candidate_rri_summary,
     _plot_step_payload,
     _resolve_plot_rollout_rows,
-    _resolve_rollout_rows,
 )
+from aria_nbv.rollouts.audits import candidate_policy_entropy
+from aria_nbv.rollouts.read_model import rollout_at, rollout_steps
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
@@ -237,7 +239,7 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert [call[0] for call in fake.calls[:2]] == ["init", "save"]
     assert rows.rollout_row_id == 0
     assert rows.chain_id == 0
-    assert rows.step_rows.shape[0] == 2
+    assert rows.step_row_positions.shape[0] == 2
     assert ENTITY_WORLD in fake.logged
     assert ENTITY_ROLLOUT_METADATA in fake.logged
     chain_root = f"{ENTITY_ROLLOUT_ROOT}/rollout_{rows.rollout_row_id:06d}/chain_{rows.chain_id:06d}"
@@ -284,7 +286,7 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
         and "/selected/candidate_shell_" in str(call[1])
         and str(call[1]).endswith("/camera/depth")
     ]
-    assert len(depth_calls) == rows.step_rows.shape[0]
+    assert len(depth_calls) == rows.step_row_positions.shape[0]
     assert {str(call[1]).split("/selected/", maxsplit=1)[0].rsplit("/", maxsplit=1)[-1] for call in depth_calls} == {
         "step_000",
         "step_001",
@@ -341,7 +343,7 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     assert "labels" not in camera_calls[0][2][0].kwargs
     camera_metadata = camera_calls[0][2][1].kwargs
     assert camera_metadata["candidate_row_id"] >= 0
-    assert camera_metadata["step_row_id"] == int(rows.step_rows[0])
+    assert camera_metadata["step_row_id"] == int(rows.step_row_positions[0])
     assert camera_metadata["compact_valid_index"] >= 0
     assert camera_metadata["mixture_component_name"]
     assert camera_metadata["position_mode_name"] == "forward_local"
@@ -386,7 +388,7 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     step_metadata = json.loads(fake.logged[step_metadata_paths[0]].args[0])
     assert step_metadata["rollout_row_id"] == rows.rollout_row_id
     assert step_metadata["chain_id"] == rows.chain_id
-    assert step_metadata["step_row_id"] == int(rows.step_rows[0])
+    assert step_metadata["step_row_id"] == int(rows.step_row_positions[0])
     assert step_metadata["step_index"] == 0
     assert step_metadata["q_h"]["state_row_found"]
     assert step_metadata["q_h"]["selected_transition_available"]
@@ -434,7 +436,7 @@ def test_rollout_zarr_logger_can_log_selected_depth_as_point_cloud(tmp_path: Pat
         and "/selected/candidate_shell_" in str(call[1])
         and str(call[1]).endswith("/camera/points")
     ]
-    assert len(point_calls) == rows.step_rows.shape[0]
+    assert len(point_calls) == rows.step_row_positions.shape[0]
     assert not any(str(call[1]).endswith("/camera/depth") for call in fake.calls if call[0] == "log")
 
     points_path = str(point_calls[0][1])
@@ -465,8 +467,8 @@ def test_rollout_zarr_logger_can_log_selected_depth_as_depth_and_points(tmp_path
 
     depth_paths = [str(call[1]) for call in fake.calls if call[0] == "log" and str(call[1]).endswith("/camera/depth")]
     point_paths = [str(call[1]) for call in fake.calls if call[0] == "log" and str(call[1]).endswith("/camera/points")]
-    assert len(depth_paths) == rows.step_rows.shape[0]
-    assert len(point_paths) == rows.step_rows.shape[0]
+    assert len(depth_paths) == rows.step_row_positions.shape[0]
+    assert len(point_paths) == rows.step_row_positions.shape[0]
     assert all(np.asarray(fake.logged[path].args[0]).shape == (3, 3) for path in point_paths)
 
 
@@ -497,6 +499,26 @@ def test_rollout_zarr_logger_warns_when_selected_depth_is_unavailable(tmp_path: 
         required_logger.log_store(store_dir=store_dir, rollout_index=0)
 
 
+def test_rollout_zarr_logger_uses_persisted_target_center(tmp_path: Path) -> None:
+    store_dir = _fixture_rollout_store(tmp_path)
+    root = zarr.open_group(store_dir, mode="a")
+    persisted_center = np.asarray([9.0, 8.0, 7.0], dtype=np.float32)
+    root["targets/target_center_world"][0] = persisted_center
+    root["targets/target_pose_world_object"][0, 9:12] = np.asarray([1.0, 2.0, 3.0], dtype=np.float32)
+
+    cfg = RerunOfflineInspectorConfig()
+    cfg.output.save_path = tmp_path / "rollout.rrd"
+    cfg.selection.rollout_context_mode = "off"
+    fake = _FakeRerun()
+    rows = RerunRolloutZarrLogger(cfg, rr_module=fake).log_store(store_dir=store_dir, rollout_index=0)
+
+    target_root = f"{ENTITY_ROLLOUT_ROOT}/rollout_{rows.rollout_row_id:06d}/chain_{rows.chain_id:06d}/target"
+    logged_center = np.asarray(fake.logged[f"{target_root}/center"].args[0], dtype=np.float32).reshape(3)
+    np.testing.assert_allclose(logged_center, persisted_center)
+    metadata = json.loads(fake.logged[f"{target_root}/metadata"].args[0])
+    np.testing.assert_allclose(metadata["target_center_world"], persisted_center)
+
+
 def test_rollout_plot_helpers_resolve_sibling_branches_and_topk(tmp_path: Path) -> None:
     store_dir = _fixture_rollout_store(tmp_path)
     from aria_nbv.rollouts import RolloutZarrStoreReader
@@ -504,13 +526,13 @@ def test_rollout_plot_helpers_resolve_sibling_branches_and_topk(tmp_path: Path) 
     reader = RolloutZarrStoreReader(store_dir)
     selected = _resolve_plot_rollout_rows(
         reader,
-        selected_rows=_resolve_rollout_rows(reader, rollout_index=0, rollout_row_id=None),
+        selected_rows=rollout_at(reader, 0),
         branch_scope="same_source_target",
     )
 
     assert len(selected) > 1
     assert selected[0].rollout_row_id == 0
-    first_step = _plot_step_payload(reader, step_row_position=int(selected[0].step_rows[0]), candidate_top_k=5)
+    first_step = _plot_step_payload(rollout_steps(reader, selected[0])[0], candidate_top_k=5)
     assert first_step.valid_candidate_count > 0
     assert len(first_step.top_candidate_target_rri) <= 5
     assert np.isfinite(first_step.selected_target_rri)
@@ -553,6 +575,21 @@ def test_candidate_rri_summary_all_invalid_has_no_fake_low_rri() -> None:
     assert np.isnan(summary.candidate_mean_target_rri)
     assert np.isnan(summary.candidate_max_target_rri)
     assert np.isnan(summary.selected_target_rri)
+
+
+def test_rollout_plot_entropy_uses_canonical_policy_audit(tmp_path: Path) -> None:
+    store_dir = _fixture_rollout_store(tmp_path)
+    from aria_nbv.rollouts import RolloutZarrStoreReader
+
+    reader = RolloutZarrStoreReader(store_dir)
+    step = rollout_steps(reader, rollout_at(reader, 0))[0]
+    payload = _plot_step_payload(step, candidate_top_k=5)
+    expected = candidate_policy_entropy(
+        torch.from_numpy(step.selection_probabilities),
+        torch.from_numpy(step.actor_action_mask),
+    )
+
+    assert payload.selected_entropy == pytest.approx(float(expected.item()))
 
 
 def test_rollout_zarr_logger_logs_matching_static_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
