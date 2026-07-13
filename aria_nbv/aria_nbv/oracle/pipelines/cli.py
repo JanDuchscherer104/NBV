@@ -10,17 +10,13 @@ import click
 import typer
 
 from ...rollouts.manifest import RolloutStoreInvocation
+from ...rollouts.shard_manifest import load_rollout_shard_entry
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
 from ...utils.typer_cli import run_typer_app
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
-from .shards import (
-    load_rollout_shard_entry_for_cli,
-    run_rollout_shard,
-    summarize_rollout_shard_campaign,
-    write_rollout_shard_manifest_from_config,
-)
+from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
@@ -186,7 +182,7 @@ def build_rollouts_command(
         assert shard_id is not None
         assert output_tmp is not None
         assert output_final is not None
-        shard_entry = load_rollout_shard_entry_for_cli(shard_manifest, shard_id)
+        shard_entry = load_rollout_shard_entry(shard_manifest, shard_id)
         console.print(
             key_value_panel(
                 "Rollout Shard",

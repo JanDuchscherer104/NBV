@@ -83,8 +83,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `write_rollout_shard_manifest_from_config` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
 | `summarize_rollout_shard_campaign` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
 | `run_rollout_shard` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `load_rollout_shard_entry_for_cli` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `load_rollout_shard_manifest_for_status` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
 | `_summarize_rollout_shard_entry` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
 | `_records_by_split` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
 | `_chunks` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |

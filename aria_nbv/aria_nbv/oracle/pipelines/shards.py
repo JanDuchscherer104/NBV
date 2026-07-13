@@ -21,7 +21,7 @@ from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_SUCCESS_FILENAME,
     RolloutShardEntry,
     RolloutShardRow,
-    load_rollout_shard_entry,
+    read_rollout_shard_manifest,
     write_rollout_shard_manifest,
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
@@ -174,7 +174,7 @@ def summarize_rollout_shard_campaign(
 
     resolved_manifest = Path(manifest_path).expanduser().resolve()
     resolved_final_root = Path(final_root).expanduser().resolve()
-    entries = load_rollout_shard_manifest_for_status(resolved_manifest)
+    entries = read_rollout_shard_manifest(resolved_manifest)
     statuses = tuple(_summarize_rollout_shard_entry(entry, final_root=resolved_final_root) for entry in entries)
     return RolloutShardCampaignStatus(
         manifest_path=resolved_manifest,
@@ -277,20 +277,6 @@ def run_rollout_shard(
             error=exc,
         )
         raise
-
-
-def load_rollout_shard_entry_for_cli(path: Path | str, shard_id: str | int) -> RolloutShardEntry:
-    """Load one rollout shard entry for CLI callers."""
-
-    return load_rollout_shard_entry(path, shard_id)
-
-
-def load_rollout_shard_manifest_for_status(path: Path | str) -> list[RolloutShardEntry]:
-    """Load rollout shard entries for campaign status reporting."""
-
-    from ...rollouts.shard_manifest import read_rollout_shard_manifest
-
-    return read_rollout_shard_manifest(path)
 
 
 def _summarize_rollout_shard_entry(
@@ -466,7 +452,6 @@ __all__ = [
     "RolloutShardCampaignStatus",
     "RolloutShardRunResult",
     "RolloutShardStatus",
-    "load_rollout_shard_entry_for_cli",
     "plan_rollout_shards",
     "run_rollout_shard",
     "summarize_rollout_shard_campaign",
