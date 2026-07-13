@@ -25,11 +25,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target="docs/figures/external/arXiv-Instance-NBV"
+          target="docs/figures/external/arXiv/Instance-NBV"
+          legacy="docs/figures/external/arXiv-Instance-NBV"
           mkdir -p "$target"
 
           if [[ -f "$target/fig8_ver3.pdf" ]]; then
-            echo "Source figures already present; nothing to extract."
+            echo "Source figures already present; removing only the legacy path."
+            rm -rf "$legacy"
             exit 0
           fi
 
@@ -91,26 +93,27 @@ jobs:
             cd "$target"
             sha256sum ./*.pdf ./*.png | sort > SHA256SUMS.txt
           )
+          rm -rf "$legacy"
 
       - name: Upload extracted source figures as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: arXiv-Instance-NBV-figures
-          path: docs/figures/external/arXiv-Instance-NBV
+          path: docs/figures/external/arXiv/Instance-NBV
           if-no-files-found: error
 
       - name: Commit extracted assets
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/figures/external/arXiv-Instance-NBV \
-             && [[ -z "$(git ls-files --others --exclude-standard docs/figures/external/arXiv-Instance-NBV)" ]]; then
+          if git diff --quiet -- docs/figures/external/arXiv docs/figures/external/arXiv-Instance-NBV \
+             && [[ -z "$(git ls-files --others --exclude-standard docs/figures/external/arXiv)" ]]; then
             echo "No figure changes to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f docs/figures/external/arXiv-Instance-NBV
-          git commit -m "docs(figures): add Instance-NBV source assets"
+          git add -f -A docs/figures/external/arXiv docs/figures/external/arXiv-Instance-NBV
+          git commit -m "docs(figures): place Instance-NBV assets under arXiv"
           git push origin HEAD:agent/instance-nbv-peer-review
