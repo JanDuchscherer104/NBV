@@ -308,7 +308,7 @@ $$
 \beta_o\widetilde{IG}_{o}(T,c).
 $$
 
-The reported coefficients are \(eta_d=10\) and \(eta_o=1\).
+The reported coefficients are \(\beta_d=10\) and \(\beta_o=1\).
 
 ### 3.6 Object-centric target gate
 
@@ -628,7 +628,7 @@ z-score or robust-rank each modality over the current candidate set, or learn on
 
 #### F. The method remains manually weighted
 
-Despite the adaptive normalization, the final utility uses \(eta_d=10\) and \(eta_o=1\). This is a task-dependent scalarization. The paper does not report sensitivity, transfer across scenes, or a Pareto analysis.
+Despite the adaptive normalization, the final utility uses \(\beta_d=10\) and \(\beta_o=1\). This is a task-dependent scalarization. The paper does not report sensitivity, transfer across scenes, or a Pareto analysis.
 
 #### G. Hard target assignment discards useful uncertainty and context
 
@@ -646,7 +646,7 @@ p_{g,e}^{\gamma}
 \right),
 $$
 
-where \(B_e\) is the actor-visible target OBB and \(	au\) controls a context shell. Target-only, target-plus-context, and whole-scene modes can then be evaluated as distinct utilities.
+where \(B_e\) is the actor-visible target OBB and \(\tau\) controls a context shell. Target-only, target-plus-context, and whole-scene modes can then be evaluated as distinct utilities.
 
 #### H. The planner is myopic
 
@@ -732,7 +732,7 @@ c^{motion}_{t,i}
 \right],
 $$
 
-where \(v^{target}\) is predicted target visibility/support, \(h^{obj}\) is object-posterior entropy, \(u^{opacity}\) is an opacity-deficit summary, \(m\) is validity, \(ho\) is an invalid/low-support reason, and \(\Delta T\) is target/current-pose-relative geometry.
+where \(v^{target}\) is predicted target visibility/support, \(h^{obj}\) is object-posterior entropy, \(u^{opacity}\) is an opacity-deficit summary, \(m\) is validity, \(\rho\) is an invalid/low-support reason, and \(\Delta T\) is target/current-pose-relative geometry.
 
 ### 7.3 Ranked implementation options
 
@@ -864,7 +864,7 @@ w_{g,e}I
 J_{v,g}.
 $$
 
-This supports target-only (\(	au\to0\)), target-plus-context, and near-global modes without changing the model interface.
+This supports target-only (\(\tau\to0\)), target-plus-context, and near-global modes without changing the model interface.
 
 ### 8.7 Suggested data products
 
