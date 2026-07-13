@@ -6,11 +6,13 @@ on:
       - agent/instance-nbv-peer-review
     paths:
       - .github/workflows/validate-instance-nbv-docs.yml
+      - docs/contents/literature/3dgs_instance_nbv.qmd
   pull_request:
     branches:
       - main
     paths:
       - .github/workflows/validate-instance-nbv-docs.yml
+      - docs/contents/literature/3dgs_instance_nbv.qmd
   workflow_dispatch:
 
 permissions:
