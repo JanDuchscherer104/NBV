@@ -36,10 +36,25 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
 
-          curl --fail --location --retry 5 --retry-all-errors \
-            --user-agent "ARIA-NBV literature review (https://github.com/JanDuchscherer104/ARIA-NBV)" \
+          downloaded=false
+          for url in \
+            "https://arxiv.org/e-print/2602.08266" \
             "https://export.arxiv.org/e-print/2602.08266" \
-            --output "$tmp/source.tar"
+            "https://arxiv.org/src/2602.08266"; do
+            echo "Trying $url"
+            if curl --fail --location --retry 5 --retry-all-errors \
+              --connect-timeout 30 --max-time 300 \
+              --user-agent "ARIA-NBV literature review (https://github.com/JanDuchscherer104/ARIA-NBV)" \
+              "$url" --output "$tmp/source.tar"; then
+              downloaded=true
+              break
+            fi
+          done
+
+          if [[ "$downloaded" != true ]]; then
+            echo "Unable to download the arXiv source bundle." >&2
+            exit 1
+          fi
 
           mkdir -p "$tmp/source"
           tar -xf "$tmp/source.tar" -C "$tmp/source"
@@ -65,17 +80,24 @@ jobs:
             cp "$src" "$target/$name"
           done
 
-          if ! command -v pdftoppm >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y poppler-utils
-          fi
-
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
           for pdf in "$target"/*.pdf; do
             stem="${pdf%.pdf}"
             pdftoppm -png -singlefile -r 180 "$pdf" "$stem"
           done
 
-          sha256sum "$target"/* | sort > "$target/SHA256SUMS.txt"
+          (
+            cd "$target"
+            sha256sum ./*.pdf ./*.png | sort > SHA256SUMS.txt
+          )
+
+      - name: Upload extracted source figures as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arXiv-Instance-NBV-figures
+          path: docs/figures/external/arXiv-Instance-NBV
+          if-no-files-found: error
 
       - name: Commit extracted assets
         shell: bash
@@ -89,6 +111,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/figures/external/arXiv-Instance-NBV
+          git add -f docs/figures/external/arXiv-Instance-NBV
           git commit -m "docs(figures): add Instance-NBV source assets"
           git push origin HEAD:agent/instance-nbv-peer-review
