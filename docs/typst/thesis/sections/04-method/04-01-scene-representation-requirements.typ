@@ -1,14 +1,11 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
-#import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
 == Scene-Representation Requirements <sec:thesis-scene-representation>
 
-=== Start from the decision query
+=== Representation as a task-sufficient actor state
 
-ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which the finite-horizon model can compare a target $e$ and a physical candidate pose $q_(t,i)$:
+ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which the finite-horizon model can compare a selected target $e$ and a physical candidate pose $q_(t,i)$:
 
 $
   h_(t,e,i) = op("Read")(M_t, z_e, q_(t,i), H_t),
@@ -16,91 +13,48 @@ $
   Q_(H,theta)(h_(t,e,i)).
 $
 
-Here $M_t$ is persistent scene evidence, $z_e$ is the actor-visible target record, and $H_t$ is selected-view history. The representation is sufficient only if its readout preserves the distinctions that change target-specific return and if it can be updated after a selected observation. This criterion is stricter than asking whether a feature vector predicts object class or scene layout. It is also narrower than requiring a photorealistic or globally dense reconstruction.
+Here $M_t$ denotes persistent scene evidence, $z_e$ the actor-visible target record, and $H_t$ the selected-view history. A representation is sufficient for this decision problem only if its readout preserves distinctions that can change the distribution of target-specific return and if the state admits a well-defined update after a selected observation. This criterion is stricter than requiring a feature vector to predict object class or scene layout, but narrower than demanding a globally dense or photorealistic reconstruction.
 
-The representation contract therefore has three separate interfaces:
+Three interfaces follow. First, the target-proposal interface must identify the entity whose reconstruction is optimized. At minimum it provides a detected or tracked @oriented-bounding-box:short, semantic probabilities, confidence, time, source, and observed support. Second, persistent scene evidence must distinguish observed surface, observed free space, unknown space, uncertainty, support, and observation history over regions that can affect the target or a candidate path and frustum. Third, a candidate-conditioned readout must query the same evidence in target-local, candidate-local, and ray-relative coordinates. A detector is therefore not automatically a scene representation, and a scene encoder need not itself predict boxes.
 
-- *Target proposal:* produce an actor-visible target identity and geometry, at minimum a detected or tracked @oriented-bounding-box:short with pose, extents, semantic distribution, confidence, timestamp, and source frame.
-- *Persistent scene evidence:* retain observed surface, observed free space, unknown space, uncertainty, support, and observation history over the region that can affect the target or a candidate path/frustum.
-- *Candidate-conditioned readout:* query the same state in target-local, candidate-local, and ray-relative coordinates and return one typed feature row per candidate.
+Existing NBV representations support these interfaces in complementary ways. VIN-NBV rasterizes an enriched observed point cloud into each query camera, establishing candidate-conditioned projection as a useful readout rather than scoring one scene vector for every action @VIN-NBV-frahm2025. GenNBV distinguishes occupied, free, and unknown cells in a probabilistic 3D grid and combines that geometry with semantic and action-history embeddings, demonstrating why an observed surface cloud alone does not encode reconstruction progress @GenNBV-chen2024. Hestia stores visibility per voxel face, providing a precedent for directional observation memory rather than a scalar seen/unseen state @Hestia-lu2026. ARIA-NBV adopts these representation principles under target-specific reconstruction return; it does not import their coverage objectives or action policies unchanged.
 
-A detector is therefore not automatically a scene representation, and a good scene encoder need not predict boxes. Keeping these roles separate permits a controlled detector comparison while holding the planning memory fixed.
+The state should remove gauge choices without removing physical variables. Applying one common world translation or global-yaw change to target, history, map, and candidates must leave candidate values unchanged. Point and sparse-cell order is irrelevant, while a permutation of candidate rows must induce the same permutation of output values and masked rows must not affect valid rows. These are invariance or equivariance requirements. Gravity, metric scale, target orientation and extent, camera direction, target--candidate relative pose, occlusion, free versus unknown space, support count, uncertainty, and the temporal order of selected observations are not nuisance variables and must remain observable @GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019. Full $op("SE")(3)$ invariance would therefore be inappropriate.
 
-The current literature set supplies complementary, not interchangeable, precedents. VIN-NBV projects an enriched observed point cloud into each candidate camera and shows the value of candidate-conditioned geometric readouts @VIN-NBV-frahm2025. GenNBV maintains an occupied/free/unknown probabilistic grid together with semantic and action-history embeddings, showing why unknown space and acquisition history cannot be recovered from a surface cloud alone @GenNBV-chen2024. Hestia stores visibility by voxel face, motivating directional observation memory rather than a scalar seen/unseen flag @Hestia-lu2026. EFM3D contributes the Aria-native multi-frame OBB detector and local learned field, while SceneScript demonstrates that sparse point evidence can also support global layout and OBB prediction @EFM3D-straub2024 @SceneScript-avetisyan2024. ARIA-NBV combines these requirements under a target-specific reconstruction objective; it does not adopt any one source representation unchanged.
+Actor-visible causality is equally important. Every input feature must arise from logged observations or from a successor that has already been selected and fused. Ground-truth meshes and target crops, all-candidate renders, and oracle @relative-reconstruction-improvement:short values remain supervision or evaluation products. Out-of-support evidence is represented by masks, support fractions, and reason codes; it is not encoded as an ordinary zero vector or silently converted into low utility. Deterministic replay of the same observations must reproduce the same memory state up to a declared numerical tolerance.
 
-=== Information that the state must preserve
+=== Target identity beyond box geometry
 
-#figure(
-  table(
-    columns: (0.77fr, 1.12fr, 1.30fr),
-    toprule(),
-    table.header([*Requirement*], [*Operational meaning*], [*Acceptance consequence*]),
-    midrule(),
-    [Actor-visible causality],
-    [Every feature is derived from logged observations or from an already selected successor.],
-    [Ground-truth meshes, target crops, all-candidate renders, and oracle RRI remain supervision or evaluation products.],
-    [Target identity and support],
-    [The target record contains OBB geometry, class/confidence, source time, and observed support.],
-    [Two nearby objects or an ambiguous detection cannot silently share one target token.],
-    [Metric relative geometry],
-    [Target, candidate, current camera, and history are expressed in consistent local frames.],
-    [Changing the arbitrary world origin or global yaw cannot change the score of the same physical configuration; gravity, scale, target orientation, and camera frusta remain meaningful.],
-    [Spatial queryability],
-    [Evidence can be cropped by the target OBB and queried by candidate frusta or rays.],
-    [A single pooled scene vector is insufficient unless a decoder demonstrably recovers these target--candidate relations.],
-    [Known free versus unknown],
-    [Ray traversal and support masks distinguish observed empty space from unobserved space.],
-    [Missing support cannot be encoded as ordinary zero features or as low RRI.],
-    [Updateability],
-    [The state admits a deterministic update from selected geometry and history.],
-    [Repeated updates, state replay, and rollout recomputation must agree up to stated numerical tolerance.],
-    [Set and sampling robustness],
-    [Point/cell order is irrelevant; candidate rows are permutation equivariant; density and uncertainty remain explicit.],
-    [Shuffling points or candidate rows cannot change the value assigned to the same physical candidate.],
-    [Support domain and provenance],
-    [Every local feature carries its coordinate frame, spatial support, checkpoint/configuration, and observation lineage.],
-    [Out-of-support is an explicit mask and reason code, not evidence that the target or candidate is invalid.],
-    bottomrule(),
-  ),
-  caption: [Task requirements for an actor-visible target-conditioned NBV state. The geometric symmetry requirements follow the local-frame and permutation arguments in @GeometricDeepLearning-bronstein2021 and Section @sec:thesis-geometric-learning-theory.],
-) <tab:scene-representation-requirements>
+An OBB is necessary for target proposal, canonicalization, and geometric cropping, but it is only a coarse spatial support hypothesis. In clutter, a hard inside-box predicate can mix the selected object with occluders, supporting surfaces, or nearby instances. The target representation should consequently permit a soft actor-visible membership field $mu_e(bold(p)) in [0,1]$ in addition to box geometry. Candidate- and target-conditioned pools can then weight each point, cell, or render primitive by its probability of belonging to the target rather than treating every element inside the OBB equally:
 
-These requirements rule out full $op("SE")(3)$ invariance as a blanket objective. The task should be invariant to arbitrary gauge choices, but not to gravity, metric scale, target orientation, or camera direction. Likewise, temporal order in selected history is not a permutation symmetry, although point samples, sparse cells, and candidate-table rows have set structure.
+$
+  g_(t,e,i)^"soft"
+  =
+  op("Pool")({mu_e(bold(p)_j) bold(x)_j^"pt" :
+  bold(p)_j in op("Frustum")(q_(t,i))}).
+$
 
-=== When a latent representation is sufficient
+The object-aware 3D Gaussian representation of Jeong et al. provides a direct precedent for this separation @ObjectCentricNBV-jeong2026. Their map attaches object logits to every Gaussian, alpha-composites the resulting class probabilities into image-space masks, and supervises them with instance masks. The same per-Gaussian object probability is then used to define confidence: low opacity and diffuse object probability identify poorly fitted or under-observed primitives, whose Jacobians receive greater weight during information-gain computation. For object-centric planning, the global maximum object probability is replaced by the probability assigned to the selected target, so the utility is concentrated on primitives associated with that object. The reported candidate views consequently shift toward the designated object; the paper reports an additional 25.60% reduction in target depth error relative to whole-scene targeting. This result also shows that compact instance-identity channels can be useful planning state without requiring every primitive to carry a high-dimensional semantic embedding.
 
-A latent representation is admissible; a non-spatial bottleneck is not automatically admissible. The decisive question is whether the latent state preserves reward-relevant and transition-relevant distinctions. For ARIA-NBV this requires more than a compact vector that summarizes the logged snippet: the model must still know where evidence lies relative to the target and each candidate, which cells are unsupported, and how the state changes after a selected view.
+Jeong et al. also keep RGB, depth, and mask evidence as distinct rendered outputs. Because their information-gain magnitudes are not directly comparable, each output is normalized by its mean gain over the training views before the terms are combined @ObjectCentricNBV-jeong2026. The corresponding implication for ARIA-NBV is that geometry, appearance, target membership, and uncertainty should remain typed and separately calibrated; concatenating them into one latent vector does not make their scales or reliability commensurate.
 
-The preferred latent form is therefore *spatially indexed*: point tokens with world or target-local coordinates, sparse voxel/cell tokens, object tokens with OBB poses, or a small target-canonical feature grid. A dense global extent is not required. Each latent element instead needs:
+For ARIA-NBV, the transferable result is representational rather than objective-level. Target identity should be a spatially distributed weight that can modulate candidate visibility, support, uncertainty, and reconstruction evidence. A scene-wide uncertainty scalar or an OBB alone cannot express that an uncertain primitive is irrelevant to the selected object. Conversely, target membership and observation confidence must remain separate channels: low membership may indicate another object, while low confidence may indicate insufficient observation. ARIA-NBV retains mesh-supervised @target-specific-rri as the utility and treats confidence-weighted Fisher information as a diagnostic or ablation, not as a replacement objective. Object-aware 3DGS also depends on instance masks and per-scene optimization; mask errors can propagate into both reconstruction and view selection, so it is not the default actor state for the ASE/EFM3D pipeline @ObjectCentricNBV-jeong2026.
 
-- a metric coordinate or object pose in a declared frame;
-- a support domain and valid/observed mask;
-- a source and timestamp or rollout step;
-- an update rule; and
-- a read function for target crops, candidate rays, and target--candidate intersections.
-
-A pooled global token may accompany this state, but it should not replace the indexed evidence until an ablation shows equal oracle-evaluated target-RRI ranking, equal frame-invariance behavior, and equal rollout-update fidelity. Per-candidate queries over indexed tokens are preferable to conditioning every candidate on the same unqualified scene vector.
+The membership field is not a native EVL output. A minimal actor-visible approximation is geometric: a smooth function of target-frame distance to the selected OBB, gated by the matched detection track and observed point support. A stronger branch projects predicted instance masks from logged RGB frames onto semi-dense or fused points and fuses only observations that pass visibility or depth-consistency checks. EVL's dense `clas_pr` field encodes semantic class probabilities within the local cube, not persistent instance identity; two objects of the same class still require OBB association or tracking. ASE ground-truth instance masks may supervise or evaluate this branch in a named privileged experiment, but they cannot enter the V1 actor state.
 
 === What EVL actually provides
 
-EFM3D's @egocentric-voxel-lifting:short model is the primary Aria-native target proposer and local feature source @EFM3D-straub2024. EVL projects frozen multi-frame image features into a gravity-aligned voxel grid whose frame is constructed from the final RGB pose of the snippet. The released inference configuration uses a $4 "m" times 4 "m" times 4 "m"$ grid with extent $[-2,2] times [0,4] times [-2,2]$ metres in the voxel frame. Semi-dense point and free-space masks are concatenated before a 3D encoder--decoder predicts occupancy and gravity-aligned 7-DoF OBB fields.
+EFM3D's @egocentric-voxel-lifting:short model is the primary Aria-native target proposer and local feature source @EFM3D-straub2024. EVL first computes frozen DINOv2.5 features for every logged RGB frame. In the pinned inference configuration, multi-layer 768-dimensional ViT-B patch tokens are decoded by a DPT-style head into `rgb/feat2d_upsampled` with shape $B times T times 32 times H times W$. These maps cover valid pixels in all logged snippet frames and are not clipped by the EVL voxel extent. They remain image-space features, however: they have no persistent world location until sampled at calibrated three-dimensional query points. They are contextual descriptors derived from patch receptive fields; DPT upsampling refines their spatial resolution but does not turn them into calibrated semantic probabilities, independent pixel labels, depth, or three-dimensional points @DINOv2-oquab2023 @EFM3D-straub2024.
 
-The reusable outputs are not limited to the final heads. The released implementation exposes:
+The lifter constructs a gravity-aligned $48^3$ grid with extent $[-2,2] times [0,4] times [-2,2]$ metres in the voxel frame, anchored to the final RGB pose of the snippet. EVL projects only those voxel centres into the logged images, samples and averages valid upsampled features, appends semi-dense point and free-space masks, and processes the local field with a 3D encoder--decoder. Consequently `voxel/feat`, the neck tensor, and the dense occupancy, centerness, box, and class heads have finite spatial support even though their source image maps do not. In the released implementation, `neck/occ_feat` and `neck/obb_feat` refer to the same neck tensor and should not be stored as independent evidence unless a different checkpoint or fork establishes distinct branches.
 
-- logged 2D tokens and upsampled feature maps, such as `rgb/token2d` and `rgb/feat2d_upsampled`;
-- the lifted pre-neck volume `voxel/feat`, observation counts, point/free-space inputs, voxel-centre world coordinates, voxel pose, and extent;
-- one 3D U-Net neck feature volume; and
-- occupancy, centerness, box, class, and post-processed OBB predictions.
+There is no hidden global EVL volume containing every region observed by the input video. The image encoder has processed every logged frame, but three-dimensional lifting occurs only at centres of the configured local grid. EFM3D obtains longer-lived products through explicit OBB tracking and fusion of overlapping local occupancy volumes rather than through an exposed global scene token @EFM3D-straub2024.
 
-In the released EVL code, `neck/occ_feat` and `neck/obb_feat` refer to the same neck tensor. ARIA-NBV should therefore store one copy unless a different checkpoint or fork proves that the branches diverge. Head probabilities remain useful interpretable channels, but they are task-collapsed and should not be mistaken for the only latent state inside EVL.
+The detector construction gives a useful consistency condition. A same-pass OBB centre is decoded from a centerness voxel plus a bounded local offset and should therefore lie inside, or only marginally outside, that pass's support volume. A same-pass centre far outside the cube indicates a frame, timestamp, tracker, or cache-lineage error. The predicted box may nevertheless extend beyond the cube, and a tracked box or a box produced by another snippet or detector may legitimately lie outside the current root field. Thus an OBB prediction establishes a target hypothesis, not complete feature support over the entire target volume.
 
-There is also no hidden global EVL volume containing every place seen by the input video. The 2D backbone has processed all logged images, but the lifter samples those features only at voxel centres inside the configured local grid. EFM3D obtains persistence explicitly by tracking OBB predictions and by fusing overlapping local occupancy predictions; persistence is not recovered from an unexposed global token @EFM3D-straub2024.
+=== Target-canonical EVL reads and extensions beyond the root cube
 
-A useful implementation invariant follows from the detector construction. EVL decodes an OBB centre from a centerness voxel plus a bounded local offset. An OBB produced by the *same forward pass* must therefore have its centre inside, or only marginally beyond, that pass's voxel support. A same-pass prediction whose centre lies far outside the support indicates a coordinate-frame, timestamp, tracker, or cache-lineage error. An OBB may still extend beyond the cube, and a tracked box or a box produced by another snippet or detector may legitimately lie outside the current root volume.
-
-=== Target-canonical reads from EVL
-
-For an EVL target prediction with object pose $T^w_e$ and extents $d_e$, ARIA-NBV can derive a target representation without keeping the box axis-aligned in the EVL frame. A fixed lattice $u_k in [-1,1]^3$ is defined in normalized object coordinates and mapped into the EVL voxel frame:
+For a target pose $T^w_e$ and extents $d_e$, a normalized object lattice $u_k in [-1,1]^3$ can be mapped into the EVL voxel frame:
 
 $
   x^v_(e,k)
@@ -109,88 +63,44 @@ $
   quad k = 1, dots, K.
 $
 
-Here $T^w_v$ is the stored voxel-to-world transform. Trilinear sampling at $x^v_(e,k)$ yields a small orientation-normalized crop from `voxel/feat` or the shared neck tensor. The crop is accompanied by its in-bounds mask, projection/observation counts, point and free-space evidence, and selected head probabilities. The crop can be retained as a small 3D token grid or pooled with mask-aware statistics into the target descriptor $z_e$. The crop removes arbitrary world translation and global yaw from its tensor indexing; the OBB-relative pose carried alongside it preserves target orientation relative to gravity and the candidate.
+Here $T^w_v$ is the stored voxel-to-world transform. Trilinear sampling at $x^v_(e,k)$ yields an orientation-normalized crop from `voxel/feat` or the shared neck tensor. The crop must carry its in-bounds mask, projection counts, point/free-space support, and selected head probabilities. It may remain a small spatial token grid or be pooled with mask-aware statistics into $z_e$. Missing crop support is retained as a feature rather than padded with ordinary zeros. Canonical crop indexing removes the common world translation and global yaw from the tensor layout; target orientation relative to gravity and to each candidate is retained explicitly in the accompanying relative-pose descriptors.
 
-The target read should use the following source order:
+The target read should combine learned local evidence with interpretable support. The shared neck or lifted volume provides the learned crop; point, free-space, count, occupancy, centerness, and class fields expose calibration and support; semi-dense or fused points inside an expanded target region extend the read beyond the crop boundary; and visibility-gated image descriptors add appearance only as a controlled ablation.
 
-1. the shared EVL neck or lifted volume for learned local evidence;
-2. point, free-space, count, occupancy, centerness, and class channels for interpretable support and calibration;
-3. semi-dense or fused world points inside an expanded OBB for evidence beyond the crop boundary; and
-4. visibility-gated logged image descriptors only as an appearance ablation.
+Two actor-visible constructions extend target evidence outside the root cube. The first attaches logged image descriptors to semi-dense or fused world points. A point is projected into each logged camera, `rgb/feat2d_upsampled` is sampled at valid locations, and the descriptors are pooled only after native observation lineage, depth consistency, or a conservative z-buffer has established visibility. Projection validity alone proves neither visibility nor target membership. The resulting point bank can cover observed points outside the root EVL grid, but it contains no unobserved volume and no descriptors from hypothetical candidate views.
 
-For a partially clipped crop, the missing fraction is retained as a feature. The crop is not padded with ordinary zeros and then treated as fully observed. If a tracked or externally proposed target lies outside the root EVL support, two actor-visible extensions are possible:
+The second construction performs target-centred re-lifting. A new grid is placed around an actor-visible target and the already logged 2D feature maps are projected into it with the recorded cameras. This derives a spatial field at the target even when the target is outside the root grid; it does not reveal a pre-existing global EVL tensor. Moreover, the released 3D neck and heads were trained on final-pose-rooted grids with their characteristic support distribution. Applying them unchanged to a target-centred grid is therefore an explicit adaptation ablation, not a guaranteed feature extraction operation.
 
-- *Point-carried features:* attach logged image descriptors to observed semi-dense or fused world points after native observation or depth-consistency checks, then crop and pool those points in target coordinates. This is the first extension because it preserves observation lineage and does not assume unvisited imagery @DINOv2-oquab2023 @EFM3D-straub2024.
-- *Target-centered re-lifting:* instantiate a new grid around the target and project the already logged 2D EVL feature maps into it using the recorded cameras. This can recover a spatial latent outside the root grid, but the released 3D neck and heads were trained on the final-pose grid distribution. Re-lifting is therefore an explicit ablation that may require adaptation; it is not a free extraction of a pre-existing global feature volume.
+Neither extension creates RGB, DINO, detector, or EVL evidence at an unvisited pose. Counterfactual successors may update selected geometry, occupied/free/unknown evidence, support, uncertainty, and directional history, while visual and detector descriptors remain marked as missing unless a separate validated observation generator is introduced.
 
-Neither path creates RGB, DINO, detector, or EVL evidence at an unvisited candidate pose.
+=== Layered scene memory and admissible latent encoders
 
-=== Selected representation for ARIA-NBV
-
-The thesis state is a layered representation rather than a choice between “point cloud” and “latent field”:
+The selected representation is layered rather than a forced choice between a point cloud and a latent field:
 
 $
   M_t = (P_t^"semi/fused", R_t^"ray", V_0^"EVL", A_t^"logged"),
 $
 
-where $P_t^"semi/fused"$ is broad actor-visible surface evidence, $R_t^"ray"$ is sparse occupied/free/unknown evidence with support and directional history, $V_0^"EVL"$ is the root local EVL field with its pose and finite extent, and $A_t^"logged"$ is an optional visibility-gated appearance bank. The target record is
-
 $
-  z_e = (B_e, p_e^"class", c_e, s_e, C_e^"EVL"),
+  z_e = (B_e, p_e^"class", c_e, s_e, C_e^"EVL", mu_e).
 $
 
-with actor-visible OBB $B_e$, semantic probabilities, confidence, support diagnostics, and the masked target-canonical EVL crop $C_e^"EVL"$ when available.
+$P_t^"semi/fused"$ provides broad actor-visible surface evidence with uncertainty and observation support. $R_t^"ray"$ stores sparse occupied, free, and unknown evidence together with support, recency, uncertainty, and directional history. $V_0^"EVL"$ is the root-local learned field with its pose and finite extent. $A_t^"logged"$ is an optional visibility-gated appearance bank. The target record contains actor-visible OBB geometry $B_e$, semantic probabilities, confidence, support diagnostics, an optional masked target-canonical EVL crop, and an optional soft target-membership field.
 
-This decomposition assigns each carrier a role:
+A latent representation is admissible when it preserves this query and transition structure. Suitable forms include coordinate-bearing point tokens, sparse voxel or ray-cell tokens, object tokens with OBB poses, and small target-canonical latent grids. Each latent element needs a metric coordinate or object pose in a declared frame, a support domain and observation mask, provenance and time, and an update rule. A globally pooled vector may accompany the indexed state, but it should not replace it until an ablation shows equal target-RRI ranking, invariance behavior, candidate visibility prediction, and rollout-update fidelity.
 
-- The OBB and canonical crop identify the target and preserve local learned evidence.
-- Semi-dense/fused points provide broad, directly observed metric support and a simple target crop.
-- The sparse ray map supplies information that a surface point cloud lacks: known free space, unknown space, occlusion support, recency, and observation direction.
-- Candidate rows read target-relative pose, ray evidence, target--frustum intersection, local EVL support, and history; they do not ingest a monolithic global vector.
-- Logged descriptors add appearance only after geometric and visibility contracts are stable.
+A semi-dense point bank is the minimum broad-memory baseline because its world extent follows observed points and OBB/frustum pooling is simple. It does not represent free or unknown rays by itself, and its density reflects texture and tracking support. A sparse occupancy or ray map is the default planning-memory hypothesis because it explicitly preserves observed surface, free space, unknown space, and incremental ray updates while allocating storage only where evidence or queries exist. A TSDF or neural SDF remains a valid geometry baseline when accompanied by observation weights and unknown-space masks; signed distance alone does not identify whether a value was measured or inferred. Coordinate-bearing point or sparse encoders can compress these explicit carriers after the simpler pooling controls are established.
 
-A dense global occupancy or TSDF field is a valid baseline if its observed-weight mask is retained, but its memory grows with the selected world extent. A neural implicit SDF is spatially queryable and compact, but it introduces per-scene optimization, learned completion, and a weaker distinction between measured and inferred geometry. Neither alternative removes the need for an independent target proposer, provenance, or candidate-conditioned reads. The sparse ray-aware map is the default because it preserves the planning distinctions while allocating storage only where observations or queried rays exist.
+A renderable field such as object-aware 3DGS is attractive because candidate views can be evaluated through rendering, primitive-level uncertainty, and soft instance membership. Jeong et al. further show that the same explicit primitives can support iterative reconstruction refinement and target-conditioned view utility @ObjectCentricNBV-jeong2026. The cost is a substantially different state-construction contract: per-scene optimization, instance-mask supervision, representation-specific uncertainty, and a more difficult distinction between measured and optimized or completed geometry. Such a field is therefore a valuable renderable-memory ablation, not evidence that explicit sparse geometry is unnecessary.
 
-=== Backbone alternatives and controlled comparisons
+=== Backbone alternatives and controlled evaluation
 
-#figure(
-  table(
-    columns: (0.72fr, 1.02fr, 1.38fr),
-    toprule(),
-    table.header([*Model or carrier*], [*What it contributes*], [*Role in this thesis*]),
-    midrule(),
-    [EFM3D / EVL],
-    [Multi-frame Aria-native OBBs, local lifted image features, surface/free-space evidence, and released checkpoints.],
-    [Primary target proposer and local target-evidence source; not the sole persistent scene memory.],
-    [Cube R-CNN through ATEK],
-    [Single-frame RGB 3D OBBs and ROI features. ATEK provides ASE preprocessing/training support and released ASE-trained example weights @omni3d-cubercnn-brazil2023 @ATEK-Repo.],
-    [Easiest detector-only ablation. Hold the scene memory and target-matching protocol fixed so detector quality is not conflated with memory quality.],
-    [SceneScript],
-    [Sparse semi-dense point encoder with scene-layout commands and gravity-aligned OBB predictions; an ASE-trained checkpoint is released @SceneScript-avetisyan2024.],
-    [Global structured-layout and target-proposal ablation. It is heavier and does not by itself provide free/unknown ray memory or counterfactual updates.],
-    [Point or sparse 3D encoder],
-    [Learned features over semidense/fused points or sparse map cells @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019.],
-    [Memory-encoder ablation only; it still requires EVL, Cube R-CNN, SceneScript, or another actor-visible target proposer.],
-    [Dense voxel / TSDF / implicit field],
-    [Continuous spatial queries, surface and clearance information, and potentially coherent fusion.],
-    [Geometry-memory baseline; compare storage, update cost, observed/unknown calibration, and target-RRI performance, not visual fidelity alone.],
-    bottomrule(),
-  ),
-  caption: [Backbone and carrier roles. Detector substitutions and scene-memory substitutions are evaluated on separate axes.],
-) <tab:scene-representation-alternatives>
+Within the documented ATEK path, EVL and Cube R-CNN are the directly supported static 3D detection models. EVL remains the lowest-integration default because it jointly supplies multi-frame Aria-native OBBs, local lifted features, semi-dense support, and surface predictions. Cube R-CNN supplies single-frame RGB OBBs and ROI features and is the cleanest detector-only control through ATEK @omni3d-cubercnn-brazil2023 @ATEK-Repo. Detector comparison must hold scene memory and target matching fixed so that OBB quality is not conflated with memory quality.
 
-Within the documented ATEK path, EVL and Cube R-CNN are the directly supported static 3D detection models. SceneScript is an additional ASE-trained alternative available in the repository stack, but it is not an ATEK drop-in detector. Generic point, sparse, radiance-field, or recurrent reconstruction networks are not substitutes for the OBB interface unless they are paired with and evaluated against an actor-visible target proposer.
+SceneScript is an additional ASE-trained alternative. Its released model consumes Project Aria semi-dense point clouds, applies sparse 3D convolutions, and decodes scene layout together with gravity-aligned OBBs @SceneScript-avetisyan2024. It can therefore test whether broad sparse context improves target proposal or high-level layout reasoning without EVL's final-pose cube. It is not an ATEK drop-in replacement and does not by itself supply observed-free/unknown ray memory, uncertainty calibration, or counterfactual state updates.
 
-=== Representation ablations and gates
+PointNeXt, Point Transformer variants, KPConv, and sparse-convolution backbones can encode $P_t^"semi/fused"$ or $R_t^"ray"$ @PointNeXt-qian2022 @PointTransformerV3-wu2024 @KPConv-thomas2019 @MinkowskiEngine-choy2019. They are memory encoders, not target proposers, unless paired with EVL, Cube R-CNN, SceneScript, or another validated detector. NeRF, Gaussian splats, and other renderable fields are likewise scene-memory alternatives whose construction cost, provenance, and update semantics must be compared against the sparse state rather than judged by visual fidelity alone @NeRF-mildenhall2020 @GaussianSplatting-kerbl2023.
 
-The representation study is ordered to isolate the source of any gain:
+The representation ablation proceeds cumulatively. The control state contains target OBB geometry, class/confidence, support counts, selected history, budget, and candidate-relative pose. Local learned evidence adds the masked target-canonical EVL crop and interpretable head channels. Broad observed support then adds target, candidate-frustum, and target--frustum pools over semi-dense or fused points. The next stage adds sparse ray-aware occupied/free/unknown and directional-history queries. Logged appearance is introduced only after these geometric and provenance controls through compressed, visibility-gated DINO-on-point descriptors. Learned point, sparse, target-centred re-lifting, SceneScript, and object-aware renderable fields are evaluated only after the explicit carriers establish whether the limiting variable is target support, visibility, appearance, or encoder capacity.
 
-1. *R0 -- target geometry:* OBB, class/confidence, support counts, history, budget, and candidate-relative pose.
-2. *R1 -- local learned evidence:* R0 plus the masked target-canonical EVL crop and local head channels.
-3. *R2 -- observed spatial support:* R1 plus target and candidate pools over semi-dense/fused points.
-4. *R3 -- visibility state:* R2 plus sparse ray-aware occupied/free/unknown and directional-history queries.
-5. *R4 -- logged appearance:* R3 plus compressed, visibility-gated DINO-on-point descriptors.
-
-Detector ablations replace EVL OBBs with Cube R-CNN or SceneScript predictions while holding the best available memory level fixed. Memory-encoder ablations replace only the encoder over $P_t^"semi/fused"$ or $R_t^"ray"$. This factorial separation is necessary: otherwise a better target detector can be misreported as a better scene representation, or a larger scene memory can be misreported as better target recognition.
-
-Before a representation enters the main #symb.rl.qh comparison, it must pass: same-pass OBB-support checks; world-frame translation/yaw stress tests; OBB-crop transform tests; point and candidate permutation tests; free-versus-unknown tests; out-of-extent mask tests; deterministic update/replay tests; and actor/oracle provenance audits. Representation quality is then judged by held-out one-step target-RRI ranking, calibration across acquisition stages, oracle-evaluated selected actions, finite-horizon return prediction, storage, and runtime. Feature dimensionality or reconstruction appearance alone is not evidence that the state is better for target-conditioned NBV.
+Before entering the main #symb.rl.qh comparison, a representation must pass same-pass OBB-support checks, world-frame translation and yaw stress tests, target-crop transform tests, point and candidate permutation tests, free-versus-unknown tests, out-of-extent mask tests, deterministic update/replay tests, and actor/oracle provenance audits. Representation quality is then measured by held-out one-step target-RRI ranking and calibration, oracle-evaluated selected actions, finite-horizon return prediction, storage, and candidate-query latency. Feature dimensionality, rendering quality, or reconstruction appearance alone does not establish suitability for target-conditioned NBV.
