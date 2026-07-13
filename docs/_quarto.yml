@@ -125,6 +125,7 @@ website:
                 - contents/literature/gen_nbv.qmd
                 - contents/literature/scone_fisherrf.qmd
                 - contents/literature/active_3dgs_nbv.qmd
+                - contents/literature/3dgs_instance_nbv.qmd
             - section: "ARIA Ecosystem"
               contents:
                 - contents/literature/project_aria.qmd

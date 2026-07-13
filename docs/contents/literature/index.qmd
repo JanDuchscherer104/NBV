@@ -21,7 +21,7 @@ The current project direction is deliberately narrow: keep {{< gls relative-reco
 | ARIA ecosystem and actor-visible state | [Project Aria](project_aria.qmd), [EFM3D/EVL](efm3d.qmd), [EFM3D scene embeddings](../theory/efm3d_scene_embeddings.qmd), {{< gls aria-synthetic-environments >}}, {{< gls machine-perception-services >}} | core substrate | Calibrated egocentric streams, trajectories, online calibration, semi-dense points, DINO/EVL local evidence, predicted {{< gls oriented-bounding-box >}} support, semidense+DINO representation ablations | Leaking GT meshes or GT boxes into actor-visible selection/scoring |
 | Rollout, value learning, and RL | [RL sources for rollout and Q_H](rl_planning.qmd), Trajectory Transformer, Gumbel-Top-k, Double DQN, IQL, soft Q-learning, PPO/SAC | thesis-core method for fitted Double-Q / {{< gls finite-horizon-q-function >}}; gated follow-up for IQL and actor-critic | Deterministic rollout traces first, stochastic rollout data second, masked target-conditioned fitted Double-Q over finite candidates third | Starting with continuous online RL before a trusted reward loop and support-aware offline store exist |
 | Coverage/information utility channels | [SCONE and FisherRF](scone_fisherrf.qmd), SCONE, FisherRF | proposal/diagnostic | Target-local support, visibility, directional novelty, Fisher-style diminishing returns | Replacing target RRI with coverage or uncertainty reduction |
-| {{< gls three-dimensional-gaussian-splatting >}} / radiance-field active reconstruction | [Active 3DGS and targeted NBV](active_3dgs_nbv.qmd), ActiveNeRF, FisherRF, Next Best Sense, dynamic/object-centric 3DGS, FOV-HPE | proposal/diagnostic and stretch/bridge | Uncertainty, Fisher information, target/object weighting, downstream-task view selection | Treating 3DGS uncertainty or human-pose reward as a substitute for ASE mesh-supervised target RRI |
+| {{< gls three-dimensional-gaussian-splatting >}} / radiance-field active reconstruction | [Active 3DGS and targeted NBV](active_3dgs_nbv.qmd), [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd), ActiveNeRF, FisherRF, Next Best Sense, dynamic 3DGS, FOV-HPE | proposal/diagnostic and stretch/bridge | Uncertainty, Fisher information, per-Gaussian object state, target/object weighting, downstream-task view selection | Treating 3DGS uncertainty/logdet or human-pose reward as a substitute for ASE mesh-supervised target RRI |
 | Semantic scene representations | [SceneScript](scene_script.qmd) | stretch/bridge | Structured scene language, editable entities, global layout priors, ASE-scale scene representation | Making SceneScript a thesis-core dependency before observed target contracts and target RRI are trusted |
 
 Adoption-state labels used in the pages:
@@ -55,6 +55,7 @@ Adoption-state labels used in the pages:
 
 - [SCONE and FisherRF](scone_fisherrf.qmd): coverage-as-support and information-as-diminishing-returns channels for candidate tokens and diagnostics [@SCONE-guedon2022; @FisherRF-jiang2024].
 - [Active 3DGS and targeted NBV](active_3dgs_nbv.qmd): uncertainty, Fisher information, object-centric utility, dynamic scenes, and task-specific view selection as proposal/diagnostic signals.
+- [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd): exhaustive source-backed review of per-Gaussian instance logits, confidence-weighted block information, target gating, quantitative evidence, mathematical risks, backbone choice, and a leakage-clean ATEK snippet adaptation [@ObjectCentricNBV-jeong2026].
 
 ### 5. Semantic Scene Representations
 
@@ -66,13 +67,15 @@ Adoption-state labels used in the pages:
 flowchart LR
   A["Project Aria / ASE observed state"] --> B["EVL and semi-dense reconstruction proxy"]
   B --> C["Scene + target oracle RRI labels"]
-  C --> D["One-step candidate scorer"]
+  B -. "optional analytic features" .-> H["Object-weighted Gaussian information"]
+  H --> D["One-step candidate scorer"]
+  C --> D
   D --> E["Trusted finite-candidate rollouts"]
   E --> F["Target-conditioned fitted Double-Q Q_H"]
   F -. "after evidence" .-> G["IQL / actor-critic / simulator bridge"]
 ```
 
-The thesis should first prove that deterministic bounded oracle lookahead improves cumulative {{< gls target-specific-rri >}} over one-step greedy under equal acquisition budget. It should then train a target-conditioned fitted Double-Q / {{< gls finite-horizon-q-function >}} model over finite candidate sets and require it to beat one-step greedy/model scoring on cumulative target RRI. IQL, actor-critic bridges, SB3/PPO/SAC, Habitat/Isaac, and 3DGS control remain gated follow-up or stretch work.
+The thesis should first prove that deterministic bounded oracle lookahead improves cumulative {{< gls target-specific-rri >}} over one-step greedy under equal acquisition budget. It should then train a target-conditioned fitted Double-Q / {{< gls finite-horizon-q-function >}} model over finite candidate sets and require it to beat one-step greedy/model scoring on cumulative target RRI. Object-weighted 3DGS information may be added as an auxiliary candidate feature only after one-step calibration against realized target RRI. IQL, actor-critic bridges, SB3/PPO/SAC, Habitat/Isaac, and 3DGS control remain gated follow-up or stretch work.
 
 ## Local Corpus
 
@@ -80,6 +83,7 @@ The local source mirrors and paper manifest are tracked under `docs/literature/`
 
 - [`sources.jsonl`](../../literature/sources.jsonl): canonical paper manifest.
 - [`tex-src/`](../../literature/tex-src/): local LaTeX mirrors when available.
+- [`figures/external/arXiv/Instance-NBV/`](../../figures/external/arXiv/Instance-NBV/): all eight source PDFs, rendered previews, and checksums used by the Instance-NBV review.
 
 Key local mirrors include VIN-NBV, GenNBV, Hestia, PB-NBV, EFM3D, Project Aria, SceneScript, Trajectory Transformer, Double DQN, IQL, Gumbel-Top-k, Deep Energy-Based Policies, SCONE, FisherRF, Dynamic 3DGS, Next Best Sense, and Instance/Object-centric NBV. FOV-HPE is tracked as DOI/PDF evidence in the local corpus, not as a local TeX mirror.
 
