@@ -29,15 +29,15 @@ interlinks:
     lightning:
       url: https://lightning.ai/docs/pytorch/stable/
     torchmetrics:
-      url: https://lightning.ai/docs/pytorch/stable/
+      url: https://lightning.ai/docs/torchmetrics/stable/
     jaxtyping:
       url: https://docs.kidger.site/jaxtyping/
 
 # Global execution defaults (fast iterations; deterministic rebuilds)
 execute: # see https://quarto.org/docs/computations/execution-options.html
   freeze: auto      # re-render only when source changes
-  cache: true       # cache expensive chunks across runs
-  echo: true        # hide code by default (toggle via code-tools below)
+  cache: true       # cache expensive chunks across renders
+  echo: true       # hide code by default (toggle via code-tools below)
   warning: false
   message: false
 
