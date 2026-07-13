@@ -1,85 +1,69 @@
-"""Mypy contract for typed ``aria_nbv.data_handling`` root exports.
+"""Mypy contract for stable root exports and specialized leaf contracts.
 
-This module is intentionally not named ``test_*`` because it is a static typing
-contract, not a runtime pytest case. Run it with:
-
-```
-uv run mypy tests/data_handling/public_api_typing_contract.py
-```
+Run with ``uv run mypy tests/data_handling/public_api_typing_contract.py``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TypeAlias
 
 from aria_nbv.data_handling import (
+    AseEfmDataset,
+    AseEfmDatasetConfig,
+    EfmSnippetView,
+    VinOfflineDataset,
+    VinOfflineDatasetConfig,
+    VinOfflineStoreConfig,
+    VinOracleBatch,
+    VinSnippetView,
+)
+from aria_nbv.data_handling.mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
+from aria_nbv.data_handling.offline.adapter import (
     DEFAULT_VIN_SNIPPET_PAD_POINTS,
-    OFFLINE_DATASET_VERSION,
-    CompactObbBlock,
-    CompactTrajectoryBlock,
-    MeshProcessSpec,
+    build_vin_snippet_view,
+    empty_vin_snippet,
+)
+from aria_nbv.data_handling.offline.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleDatasetBase
+from aria_nbv.data_handling.offline.diagnostics import (
     NumericSummary,
-    OfflineVisualInventory,
-    OfflineVisualInventoryError,
-    ProcessedMesh,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
     VinOfflineCoverageSceneDiagnostic,
     VinOfflineCoverageStats,
-    VinOfflineDataset,
-    VinOfflineDatasetConfig,
     VinOfflineDatasetStats,
+    VinOfflineMemoryDiagnostic,
+    VinOfflineSampleDiagnostic,
+    collect_vin_offline_dataset_coverage,
+    collect_vin_offline_dataset_stats,
+)
+from aria_nbv.data_handling.offline.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
-    VinOfflineMemoryDiagnostic,
-    VinOfflineSample,
-    VinOfflineSampleDiagnostic,
-    VinOfflineStoreConfig,
-    VinOracleBatch,
-    VinOracleDatasetBase,
-    VinSnippetView,
-    build_vin_snippet_view,
+)
+from aria_nbv.data_handling.offline.inventory import (
+    OfflineVisualInventory,
+    OfflineVisualInventoryError,
     collect_offline_visual_inventory,
-    collect_vin_offline_dataset_coverage,
-    collect_vin_offline_dataset_stats,
-    empty_vin_snippet,
-    flush_prepared_samples_to_shard,
-    load_or_process_mesh,
-    prepare_vin_offline_sample,
 )
 from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.offline.store import OFFLINE_DATASET_VERSION
+from aria_nbv.data_handling.offline.writer import flush_prepared_samples_to_shard, prepare_vin_offline_sample
 from aria_nbv.lightning.lit_datamodule import VinDatasetSourceConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 
-RootExportClasses: TypeAlias = tuple[
-    type[CompactObbBlock],
-    type[CompactTrajectoryBlock],
-    type[MeshProcessSpec],
-    type[NumericSummary],
-    type[OfflineVisualInventory],
-    type[OfflineVisualInventoryError],
-    type[ProcessedMesh],
-    type[VinOfflineBackboneDiagnostic],
-    type[VinOfflineBlockDiagnostic],
-    type[VinOfflineCoverageSceneDiagnostic],
-    type[VinOfflineCoverageStats],
-    type[VinOfflineDataset],
-    type[VinOfflineDatasetConfig],
-    type[VinOfflineDatasetStats],
-    type[VinOfflineIndexRecord],
-    type[VinOfflineManifest],
-    type[VinOfflineMaterializedBlocks],
-    type[VinOfflineMemoryDiagnostic],
-    type[VinOfflineSample],
-    type[VinOfflineSampleDiagnostic],
-    type[VinOfflineStoreConfig],
-    type[VinOracleBatch],
-    type[VinOracleDatasetBase],
-]
+ROOT_EXPORT_CLASSES = (
+    AseEfmDataset,
+    AseEfmDatasetConfig,
+    EfmSnippetView,
+    VinSnippetView,
+    VinOracleBatch,
+    VinOfflineDataset,
+    VinOfflineDatasetConfig,
+    VinOfflineStoreConfig,
+)
 
-ROOT_EXPORT_CLASSES: RootExportClasses = (
+LEAF_CONTRACT_CLASSES = (
     CompactObbBlock,
     CompactTrajectoryBlock,
     MeshProcessSpec,
@@ -91,17 +75,12 @@ ROOT_EXPORT_CLASSES: RootExportClasses = (
     VinOfflineBlockDiagnostic,
     VinOfflineCoverageSceneDiagnostic,
     VinOfflineCoverageStats,
-    VinOfflineDataset,
-    VinOfflineDatasetConfig,
     VinOfflineDatasetStats,
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
     VinOfflineMemoryDiagnostic,
-    VinOfflineSample,
     VinOfflineSampleDiagnostic,
-    VinOfflineStoreConfig,
-    VinOracleBatch,
     VinOracleDatasetBase,
 )
 
@@ -119,7 +98,7 @@ PREPARE_SAMPLE: Callable[..., object] = prepare_vin_offline_sample
 
 
 def accepts_source_config(config: VinDatasetSourceConfig) -> VinDatasetSourceConfig:
-    """Require the Lightning-owned source-config alias to be valid as a type."""
+    """Require the Lightning-owned source-config alias to remain valid."""
     return config
 
 

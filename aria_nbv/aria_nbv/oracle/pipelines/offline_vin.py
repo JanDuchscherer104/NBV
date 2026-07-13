@@ -26,7 +26,8 @@ from ...data_handling.offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from ...data_handling.raw import AseEfmDatasetConfig, EfmSnippetView
+from ...data_handling.raw.dataset import AseEfmDatasetConfig
+from ...data_handling.raw.views import EfmSnippetView
 from ...utils import Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_json_signature
 from ...vin.backbones import EvlBackboneConfig

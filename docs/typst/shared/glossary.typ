@@ -1805,7 +1805,7 @@
       definition_long: "MTD supplies the logged egocentric trajectory used to define snippet state, current reconstruction context, and candidate-view reference poses.",
       internal_links: (
         "docs/contents/ase_dataset.qmd",
-        "docs/reference/data_handling.efm_views.qmd",
+        "docs/reference/data_handling.raw.views.qmd",
       ),
       citations: (
         "ProjectAria-ASE-2025",

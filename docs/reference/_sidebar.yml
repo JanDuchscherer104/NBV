@@ -25,10 +25,8 @@ website:
             file: reference/data_handling.atek_downloads.downloader.qmd
           - text: metadata
             file: reference/data_handling.atek_downloads.metadata.qmd
-        - text: efm_dataset_utils
-          file: reference/data_handling.efm_dataset_utils.qmd
-        - text: efm_views
-          file: reference/data_handling.efm_views.qmd
+        - text: identifiers
+          file: reference/data_handling.identifiers.qmd
         - text: mesh_cache
           file: reference/data_handling.mesh_cache.qmd
         - text: offline
@@ -61,6 +59,8 @@ website:
             file: reference/data_handling.raw.dataset.qmd
           - text: loader
             file: reference/data_handling.raw.loader.qmd
+          - text: views
+            file: reference/data_handling.raw.views.qmd
       - text: lightning
         file: reference/lightning.qmd
         contents:

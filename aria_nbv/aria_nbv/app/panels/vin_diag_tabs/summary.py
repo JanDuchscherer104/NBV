@@ -9,7 +9,8 @@ import plotly.express as px
 import streamlit as st
 import torch
 
-from ....data_handling import VinSnippetView, collect_vin_offline_dataset_stats
+from ....data_handling import VinSnippetView
+from ....data_handling.offline.diagnostics import collect_vin_offline_dataset_stats
 from ....data_handling.offline.source import VinOfflineSourceConfig
 from ....utils.plotting import _histogram_overlay, _to_numpy
 from ....vin.diagnostics.plotting import _parameter_distribution

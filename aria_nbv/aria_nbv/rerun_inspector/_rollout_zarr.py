@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
-from aria_nbv.data_handling.efm_dataset_utils import (
+from aria_nbv.data_handling.identifiers import (
     compact_ase_atek_identifiers,
     compact_ase_atek_sample_id,
     raw_ase_atek_sample_id,

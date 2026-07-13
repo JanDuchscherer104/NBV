@@ -21,11 +21,13 @@ if importlib.util.find_spec("efm3d") is None:  # pragma: no cover - environment 
 from .data_handling import (
     AseEfmDataset,
     AseEfmDatasetConfig,
+    EfmSnippetView,
+)
+from .data_handling.raw.views import (
     EfmCameraView,
     EfmGTView,
     EfmObbView,
     EfmPointsView,
-    EfmSnippetView,
     EfmTrajectoryView,
 )
 

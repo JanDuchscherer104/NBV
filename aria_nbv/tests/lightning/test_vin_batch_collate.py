@@ -8,7 +8,8 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch, VinSnippetView
+from aria_nbv.data_handling import VinOracleBatch, VinSnippetView
+from aria_nbv.data_handling.offline.batch import CompactObbBlock, CompactTrajectoryBlock
 from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 from aria_nbv.rri_metrics.ordinal import RriOrdinalBinner
 from aria_nbv.utils import Stage

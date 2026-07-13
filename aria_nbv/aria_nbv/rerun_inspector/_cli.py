@@ -13,7 +13,7 @@ from typing import Annotated
 import click
 import typer
 
-from aria_nbv.data_handling.efm_dataset_utils import compact_ase_atek_sample_id
+from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id
 from aria_nbv.utils import Console
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 from aria_nbv.utils.typer_cli import run_typer_app

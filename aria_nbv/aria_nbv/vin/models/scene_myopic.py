@@ -78,7 +78,7 @@ from torch import Tensor, nn
 from aria_nbv.utils.frames import rotate_yaw_cw90
 
 from ...data_handling.offline.adapter import build_vin_snippet_view
-from ...data_handling.raw import (
+from ...data_handling.raw.views import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,

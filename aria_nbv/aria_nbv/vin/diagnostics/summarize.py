@@ -15,9 +15,8 @@ from torch.nn import functional as functional
 from ...data_handling import (
     EfmSnippetView,
     VinSnippetView,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
 )
+from ...data_handling.raw.views import is_efm_snippet_view_instance, is_vin_snippet_view_instance
 from ...utils.rich_summary import capture_tree, rich_summary, summarize
 from ..ordinal import coral_monotonicity_violation_rate
 from .summary_stats import pearson_corr, quantile_stats, spearman_corr

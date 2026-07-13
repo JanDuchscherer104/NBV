@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 import torch
 
-from aria_nbv.data_handling import (
+from aria_nbv.data_handling import VinOfflineDatasetConfig
+from aria_nbv.data_handling.offline.inventory import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
-    VinOfflineDatasetConfig,
     collect_offline_visual_inventory,
 )
 from tests.data_handling.test_vin_offline_store import _write_test_store

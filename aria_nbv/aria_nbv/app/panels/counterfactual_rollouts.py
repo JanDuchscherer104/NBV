@@ -17,9 +17,9 @@ from efm3d.aria.pose import PoseTW
 
 from ...data_handling import (
     VinOfflineDatasetConfig,
-    VinOfflineSample,
     VinOfflineStoreConfig,
 )
+from ...data_handling.offline.dataset import VinOfflineSample
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.pipelines.evaluated_rollout import (
     EvaluatedRollout,

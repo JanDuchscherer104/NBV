@@ -20,9 +20,8 @@ from ..data_handling import (
     EfmSnippetView,
     VinOracleBatch,
     VinSnippetView,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
 )
+from ..data_handling.raw.views import is_efm_snippet_view_instance, is_vin_snippet_view_instance
 from ..vin.types import EvlBackboneOutput
 
 

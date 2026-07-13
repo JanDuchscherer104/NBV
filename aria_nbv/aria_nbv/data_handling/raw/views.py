@@ -48,9 +48,9 @@ from efm3d.utils.pointcloud import collapse_pointcloud_time
 from torch import Tensor
 from trimesh import Trimesh  # type: ignore[import-untyped]
 
-from ..utils import summarize
-from .efm_dataset_utils import compact_ase_atek_sample_id
-from .mesh_cache import MeshProcessSpec
+from ...utils import summarize
+from ..identifiers import compact_ase_atek_sample_id
+from ..mesh_cache import MeshProcessSpec
 
 _FIELD_DOC_CACHE: dict[type, dict[str, str]] = {}
 

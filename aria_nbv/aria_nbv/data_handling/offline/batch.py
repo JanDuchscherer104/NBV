@@ -11,7 +11,7 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from torch import Tensor
 
 from ...vin.types import EvlBackboneOutput
-from ..efm_views import (
+from ..raw.views import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,
@@ -188,7 +188,6 @@ class VinOracleBatch:
             return arange < counts
         return arange.unsqueeze(0) < counts.unsqueeze(1)
 
-    # TODO: derive all data-classes like this one from a shared base - i.e. BaseView, curretly defined in efm_views.py - so move this shared base out of this leaf node!
     def shape_summary(self) -> dict[str, str]:
         """Summarize tensor shapes for diagnostics/logging."""
 

@@ -22,8 +22,8 @@ from ..configs import PathConfig
 from ..data_handling import (
     AseEfmDatasetConfig,
     VinOracleBatch,
-    VinOracleDatasetBase,
 )
+from ..data_handling.offline.batch import VinOracleDatasetBase
 from ..data_handling.offline.source import VinOfflineSourceConfig
 from ..oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 from ..utils import Console, Stage, TargetConfig, Verbosity

@@ -17,24 +17,29 @@ import pytest
 import torch
 
 from aria_nbv.data_handling import (
-    OFFLINE_DATASET_VERSION,
     EfmSnippetView,
     VinOfflineDatasetConfig,
-    VinOfflineIndexRecord,
-    VinOfflineManifest,
-    VinOfflineMaterializedBlocks,
     VinOfflineStoreConfig,
     VinOracleBatch,
     VinSnippetView,
+)
+from aria_nbv.data_handling.offline.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
+)
+from aria_nbv.data_handling.offline.format import (
+    VinOfflineBlockSpec,
+    VinOfflineIndexRecord,
+    VinOfflineManifest,
+    VinOfflineMaterializedBlocks,
+)
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreReader
+from aria_nbv.data_handling.offline.writer import (
+    assign_offline_splits,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from aria_nbv.data_handling.offline.format import VinOfflineBlockSpec
-from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
-from aria_nbv.data_handling.offline.store import VinOfflineStoreReader
-from aria_nbv.data_handling.offline.writer import assign_offline_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
 from aria_nbv.pose_generation.types import CandidateSamplingResult

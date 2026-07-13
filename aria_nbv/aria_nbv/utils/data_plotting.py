@@ -22,7 +22,8 @@ from matplotlib import colormaps
 from plotly import colors as plotly_colors
 from plotly.subplots import make_subplots  # type: ignore[import-untyped]
 
-from ..data_handling import EfmCameraView, EfmSnippetView
+from ..data_handling import EfmSnippetView
+from ..data_handling.raw.views import EfmCameraView
 from .console import Console
 from .frames import rotate_yaw_cw90
 

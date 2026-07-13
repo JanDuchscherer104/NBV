@@ -35,7 +35,7 @@ from zarr.codecs import BloscCname, BloscCodec, BloscShuffle
 from zarr.storage import LocalStore
 
 from ..configs import PathConfig
-from ..data_handling.efm_dataset_utils import compact_ase_atek_sample_id, raw_ase_atek_sample_id
+from ..data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
 from .manifest import (

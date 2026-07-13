@@ -18,9 +18,11 @@ never as low RRI.
 
 ## Public Surface
 
-- Raw snippets: `AseEfmDatasetConfig`, `AseEfmDataset`, `EfmSnippetView`,
-  `VinSnippetView`, and snippet-loader helpers.
-- One-step model batches: `VinOracleBatch`.
+- The package root exports exactly `AseEfmDataset`, `AseEfmDatasetConfig`,
+  `EfmSnippetView`, `VinSnippetView`, `VinOracleBatch`, `VinOfflineDataset`,
+  `VinOfflineDatasetConfig`, and `VinOfflineStoreConfig`.
+- Specialized raw views, identifier codecs, diagnostics, writers, inventory
+  reducers, and storage records use their owning leaf modules.
 - Immutable training source: `data_handling.offline.source.VinOfflineSourceConfig`.
 - Online generation: `oracle.pipelines.online_vin`; Lightning composes the
   online/offline discriminated source union.
@@ -956,24 +958,29 @@ or retained diagnostics change.
 
 ## Mechanical Layout Inventory
 
-`aria_nbv.data_handling` owns raw EFM access and immutable offline adapters. This move-only series preserves the root export contract while introducing shallow `offline` and `raw` owners.
+`aria_nbv.data_handling` owns raw EFM access and immutable offline adapters.
+The root is a compact cross-family interface; leaf modules own specialized
+contracts.
 
 ### Layout
 
 ```text
 data_handling/
+  identifiers.py
+  mesh_cache.py
   offline/
   raw/
+    dataset.py
+    loader.py
+    views.py
   atek_downloads/
-  mesh_cache.py
-  ...                  # mixed roots remain explicit below
 ```
 
 Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
 
-Inventory generated: `2026-07-10T16:27:20.693866+00:00`
+Inventory refreshed: `2026-07-13`
 
-Graphify refresh: `2026-07-11`
+Graphify refresh: `2026-07-13`
 
 ### Symbol Ownership Matrix
 
@@ -1046,51 +1053,51 @@ layout transition.
 | `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling.offline.source` | `data_handling.offline.source` | `moved: RWP03A` |
 | `VinDatasetSourceConfig` | `alias` | `public` | `data_handling._vin_sources` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | `moved: RWP03A` |
 
-#### `efm_dataset_utils.py`
+#### Historical `efm_dataset_utils.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `_RAW_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_COMPACT_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `compact_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `raw_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `compact_ase_atek_identifiers` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_ase_atek_identifier_variants` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_infer_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_unique_preserve_order` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_looks_like_sample_key` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_looks_like_shard_id` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_normalize_shard_stem` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_matches_snippet_token` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_tar_contains_snippet` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_resolve_tar_from_path` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_resolve_tar_for_shard` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_find_tar_for_sample` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
-| `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.efm_dataset_utils` | `data_handling.raw` | `blocked: symbol split` |
+| `_RAW_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `_COMPACT_ASE_ATEK_SAMPLE_RE` | `constant` | `private` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `compact_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `raw_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `compact_ase_atek_identifiers` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `_ase_atek_identifier_variants` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
+| `_infer_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_unique_preserve_order` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_looks_like_sample_key` | `function` | `private` | `data_handling.efm_dataset_utils` | deleted | deleted | `removed: no callers` |
+| `_looks_like_shard_id` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_normalize_shard_stem` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_matches_snippet_token` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_tar_contains_snippet` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_resolve_tar_from_path` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_resolve_tar_for_shard` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_find_tar_for_sample` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
 
-#### `efm_views.py`
+#### Historical `efm_views.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `_FIELD_DOC_CACHE` | `constant` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `_extract_field_docs` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `_get_field_doc` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `_repr` | `function` | `private` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `BaseView` | `class` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmGtCameraObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `CamerasDict` | `constant` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmGtTimestampView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmGTView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmCameraView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmTrajectoryView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmPointsView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `EfmSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `VinSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `is_efm_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
-| `is_vin_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.efm_views` | `data_handling.raw` | `blocked: symbol split` |
+| `_FIELD_DOC_CACHE` | `constant` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `_extract_field_docs` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `_get_field_doc` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `_repr` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `BaseView` | `class` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmGtCameraObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `CamerasDict` | `constant` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmGtTimestampView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmGTView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmCameraView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmTrajectoryView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmPointsView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `EfmSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `VinSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `is_efm_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `is_vin_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
 
 #### `mesh_cache.py`
 

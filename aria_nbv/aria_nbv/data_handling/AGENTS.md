@@ -10,8 +10,9 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
 
 ## Public Contracts
 - Public package surface: `aria_nbv/aria_nbv/data_handling/__init__.py`
-- Raw snippet access: `raw/dataset.py` and `raw/loader.py`; shared typed views
-  remain in `efm_views.py`
+- Raw snippet access: `raw/dataset.py` and `raw/loader.py`; typed zero-copy
+  payloads live in `raw/views.py`; shared ID conversion lives in
+  `identifiers.py`
 - Immutable offline store contracts: `offline/format.py`, `offline/store.py`,
   `offline/writer.py`, and `offline/dataset.py`
 - Immutable VIN training source config: `offline/source.py`

@@ -21,8 +21,8 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor
 
-from ..data_handling.efm_views import EfmSnippetView, VinSnippetView
 from ..data_handling.offline.batch import CompactObbBlock
+from ..data_handling.raw.views import EfmSnippetView, VinSnippetView
 from ..targets import TargetDescriptor
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name

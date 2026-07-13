@@ -11,7 +11,7 @@ from typing import Annotated, Any
 import numpy as np
 import typer
 
-from ..data_handling.efm_dataset_utils import compact_ase_atek_identifiers
+from ..data_handling.identifiers import compact_ase_atek_identifiers
 from ..utils.cli_format import cli_console, counts_table, distribution_table, key_value_panel
 from ..utils.typer_cli import run_typer_app
 from .trace import INVALID_REASON_CODES

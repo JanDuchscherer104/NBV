@@ -49,8 +49,8 @@ from .labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOr
 if TYPE_CHECKING:
     from efm3d.aria.obb import ObbTW
 
-    from ..data_handling.efm_views import EfmSnippetView
     from ..data_handling.offline.dataset import VinOfflineSample
+    from ..data_handling.raw.views import EfmSnippetView
     from ..oracle.target_selection import OracleTargetTask
     from ..pose_generation.types import CandidateSamplingResult
 

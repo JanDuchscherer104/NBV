@@ -26,8 +26,8 @@ import torch
 from efm3d.aria.aria_constants import ARIA_OBB_SEM_ID_TO_NAME
 
 from ...utils.semantic_names import normalize_semantic_name_map
-from ..efm_dataset_utils import compact_ase_atek_sample_id
-from ..raw import EfmSnippetView, VinSnippetView
+from ..identifiers import compact_ase_atek_sample_id
+from ..raw.views import EfmSnippetView, VinSnippetView
 from .format import (
     VinOfflineIndexRecord,
     VinOfflineShardSpec,

@@ -21,7 +21,7 @@ from efm3d.aria.pose import PoseTW
 
 from ...configs import PathConfig
 from ...configs.path_config import PROJECT_ROOT
-from ..efm_dataset_utils import compact_ase_atek_sample_id
+from ..identifiers import compact_ase_atek_sample_id
 from .format import VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 

@@ -6,8 +6,8 @@ from typing import Any
 
 from ...configs import PathConfig
 from ...utils import Verbosity
-from ..efm_views import EfmSnippetView
 from .dataset import AseEfmDataset, AseEfmDatasetConfig
+from .views import EfmSnippetView
 
 
 class EfmSnippetLoader:

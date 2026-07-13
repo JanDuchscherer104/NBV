@@ -10,10 +10,10 @@ import streamlit as st
 import torch
 
 from ...configs import PathConfig
-from ...data_handling import (
+from ...data_handling import VinOfflineStoreConfig
+from ...data_handling.offline.diagnostics import (
     VinOfflineCoverageStats,
     VinOfflineDatasetStats,
-    VinOfflineStoreConfig,
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )

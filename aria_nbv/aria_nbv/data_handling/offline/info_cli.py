@@ -24,7 +24,7 @@ from ...utils.cli_format import (
     summary_table,
 )
 from ...utils.typer_cli import run_typer_app
-from ..efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from ..identifiers import compact_ase_atek_identifiers, compact_ase_atek_sample_id
 from .diagnostics import NumericSummary, collect_vin_offline_dataset_stats
 from .format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
