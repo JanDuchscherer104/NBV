@@ -1,0 +1,94 @@
+name: Extract Instance-NBV source figures
+
+on:
+  push:
+    branches:
+      - agent/instance-nbv-peer-review
+    paths:
+      - .github/workflows/extract-instance-nbv-figures.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out review branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/instance-nbv-peer-review
+          fetch-depth: 0
+
+      - name: Download arXiv TeX bundle and preserve original figures
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="docs/figures/external/arXiv-Instance-NBV"
+          mkdir -p "$target"
+
+          if [[ -f "$target/fig8_ver3.pdf" ]]; then
+            echo "Source figures already present; nothing to extract."
+            exit 0
+          fi
+
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          curl --fail --location --retry 5 --retry-all-errors \
+            --user-agent "ARIA-NBV literature review (https://github.com/JanDuchscherer104/ARIA-NBV)" \
+            "https://export.arxiv.org/e-print/2602.08266" \
+            --output "$tmp/source.tar"
+
+          mkdir -p "$tmp/source"
+          tar -xf "$tmp/source.tar" -C "$tmp/source"
+
+          expected=(
+            fig1_ver5.pdf
+            fig2_ver4.pdf
+            fig3_ver4.pdf
+            fig4_ver6.pdf
+            fig5_ver2.pdf
+            fig6_ver2.pdf
+            fig7_ver4.pdf
+            fig8_ver3.pdf
+          )
+
+          for name in "${expected[@]}"; do
+            src="$(find "$tmp/source" -type f -path "*/figure/$name" -print -quit)"
+            if [[ -z "$src" ]]; then
+              echo "Missing expected source figure: $name" >&2
+              find "$tmp/source" -maxdepth 3 -type f | sort >&2
+              exit 1
+            fi
+            cp "$src" "$target/$name"
+          done
+
+          if ! command -v pdftoppm >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y poppler-utils
+          fi
+
+          for pdf in "$target"/*.pdf; do
+            stem="${pdf%.pdf}"
+            pdftoppm -png -singlefile -r 180 "$pdf" "$stem"
+          done
+
+          sha256sum "$target"/* | sort > "$target/SHA256SUMS.txt"
+
+      - name: Commit extracted assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/figures/external/arXiv-Instance-NBV \
+             && [[ -z "$(git ls-files --others --exclude-standard docs/figures/external/arXiv-Instance-NBV)" ]]; then
+            echo "No figure changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/figures/external/arXiv-Instance-NBV
+          git commit -m "docs(figures): add Instance-NBV source assets"
+          git push origin HEAD:agent/instance-nbv-peer-review
