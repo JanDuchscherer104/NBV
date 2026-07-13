@@ -1,0 +1,56 @@
+name: Sanitize Instance-NBV review source
+
+on:
+  push:
+    branches:
+      - agent/instance-nbv-peer-review
+    paths:
+      - .github/workflows/sanitize-instance-nbv-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/instance-nbv-peer-review
+          fetch-depth: 0
+
+      - name: Restore LaTeX escapes from C0 control bytes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/contents/literature/3dgs_instance_nbv.qmd")
+          data = path.read_bytes()
+          replacements = {
+              0x08: br"\b",
+              0x09: br"\t",
+              0x0c: br"\f",
+              0x0d: br"\r",
+          }
+          counts = {byte: data.count(bytes([byte])) for byte in replacements}
+          for byte, replacement in replacements.items():
+              data = data.replace(bytes([byte]), replacement)
+          path.write_bytes(data)
+          print({f"0x{byte:02x}": count for byte, count in counts.items() if count})
+          PY
+
+      - name: Commit sanitized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/contents/literature/3dgs_instance_nbv.qmd; then
+            echo "No source sanitization required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/contents/literature/3dgs_instance_nbv.qmd
+          git commit -m "docs(literature): restore Instance-NBV LaTeX escapes"
+          git push origin HEAD:agent/instance-nbv-peer-review
