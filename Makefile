@@ -93,7 +93,7 @@ empty :=
 space := $(empty) $(empty)
 KG_MODALITY_ARGS = $(foreach modality,$(subst $(comma),$(space),$(strip $(KG_MODALITY))),--modality $(modality))
 PACKAGE_SMOKE_RUFF_PATHS := \
-	aria_nbv/data_handling/_offline_writer.py \
+	aria_nbv/data_handling/offline/writer.py \
 	aria_nbv/pose_generation/types.py \
 	aria_nbv/rendering/candidate_depth_renderer.py \
 	tests/data_handling/test_vin_offline_store.py \
