@@ -8,7 +8,6 @@ their public reexports, while leaf module pages document local symbols.
 - [data_handling](data_handling.qmd)
 - [lightning](lightning.qmd)
 - [oracle](oracle.qmd)
-- [pipelines](pipelines.qmd)
 - [pose_generation](pose_generation.qmd)
 - [rendering](rendering.qmd)
 - [rollouts](rollouts.qmd)

@@ -108,8 +108,6 @@ website:
           file: reference/oracle.target_rri.qmd
         - text: target_selection
           file: reference/oracle.target_selection.qmd
-      - text: pipelines
-        file: reference/pipelines.qmd
       - text: pose_generation
         file: reference/pose_generation.qmd
         contents:

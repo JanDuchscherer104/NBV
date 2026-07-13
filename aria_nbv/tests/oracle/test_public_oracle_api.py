@@ -26,4 +26,4 @@ def test_scene_label_pipeline_requires_its_owning_leaf() -> None:
 
     assert OracleRriLabelerConfig().target_type is OracleRriLabeler
     assert OracleRriSample.__module__ == "aria_nbv.oracle.pipelines.scene_labels"
-    assert importlib.util.find_spec("aria_nbv.pipelines.oracle_rri_labeler") is None
+    assert importlib.util.find_spec("aria_nbv.pipelines") is None
