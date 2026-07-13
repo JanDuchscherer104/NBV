@@ -12,7 +12,7 @@ from typing import cast
 import streamlit as st
 
 from ..data_handling import AseEfmDatasetConfig
-from ..pipelines import OracleRriLabelerConfig
+from ..oracle.pipelines.scene_labels import OracleRriLabelerConfig
 from .state_types import (
     AppState,
     CandidatesCache,

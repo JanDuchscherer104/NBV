@@ -17,7 +17,7 @@ import torch
 
 from ..data_handling import AseEfmDatasetConfig, EfmSnippetView, VinOracleBatch
 from ..lightning.aria_nbv_experiment import AriaNBVExperimentConfig
-from ..pipelines import OracleRriLabelerConfig
+from ..oracle.pipelines.scene_labels import OracleRriLabelerConfig
 from ..pose_generation.types import CandidateSamplingResult
 from ..rendering.candidate_depth_renderer import CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds

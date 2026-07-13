@@ -31,7 +31,7 @@ priority = "high"
 status = "open"
 labels = ["oracle", "rri", "rendering", "data", "performance", "simplification"]
 context = ["Oracle RRI correctness depends on rendering, depth backprojection, point-cloud fusion, and distance composition agreeing on frames and sampling semantics.", "Memory-heavy per-candidate current-point duplication and stale compatibility surfaces increase both throughput cost and label-corruption risk before target-aware RRI work."]
-references = ["repo:docs/contents/theory/rri_theory.qmd", "repo:aria_nbv/aria_nbv/pipelines/oracle_rri_labeler.py", "repo:aria_nbv/aria_nbv/rendering/candidate_depth_renderer.py", "repo:aria_nbv/aria_nbv/rri_metrics/oracle_rri.py", "bib:EFM3D-straub2024"]
+references = ["repo:docs/contents/theory/rri_theory.qmd", "repo:aria_nbv/aria_nbv/oracle/pipelines/scene_labels.py", "repo:aria_nbv/aria_nbv/rendering/candidate_depth_renderer.py", "repo:aria_nbv/aria_nbv/rri_metrics/oracle_rri.py", "bib:EFM3D-straub2024"]
 
 [[issue]]
 id = "issue-011"
@@ -203,7 +203,7 @@ priority = "high"
 status = "open"
 labels = ["rri", "oracle", "rollouts", "depth", "contracts", "thesis"]
 context = ["The consolidated RRI review identified the dense-vs-semi-dense root mismatch as a metric-design bug: actor-visible MPS semi-dense geometry and oracle evaluation geometry must stay separated before target-RRI, rollout, or Q_H labels are trusted.", "Core code now uses ASE GT RGB depth for observed-prefix root evaluation points, rendered PyTorch3D depth for counterfactual candidate points, canonical fusion before point-mesh scoring, and root-normalized rollout rewards; semi-dense remains actor-visible and legacy diagnostic only.", "The remaining active debt is not a fresh scorer implementation: downstream target, rollout, storage, diagnostics, and M1 evidence surfaces must preserve eval source, depth convention, root frames, fusion policy, and reward semantics."]
-references = ["repo:.agents/work/rri-metrics/dense-semidense-rri-missmatch.md", "repo:aria_nbv/aria_nbv/pipelines/oracle_rri_labeler.py", "repo:aria_nbv/aria_nbv/rendering/candidate_pointclouds.py", "repo:aria_nbv/aria_nbv/rollouts/counterfactuals.py", "repo:aria_nbv/aria_nbv/rollouts/target_counterfactuals.py", "repo:aria_nbv/aria_nbv/data_handling/efm_views.py", "url:https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/ase_data_format", "bib:ProjectAria-ASE-2025"]
+references = ["repo:.agents/work/rri-metrics/dense-semidense-rri-missmatch.md", "repo:aria_nbv/aria_nbv/oracle/pipelines/scene_labels.py", "repo:aria_nbv/aria_nbv/rendering/candidate_pointclouds.py", "repo:aria_nbv/aria_nbv/rollouts/counterfactuals.py", "repo:aria_nbv/aria_nbv/rollouts/target_counterfactuals.py", "repo:aria_nbv/aria_nbv/data_handling/efm_views.py", "url:https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/ase_data_format", "bib:ProjectAria-ASE-2025"]
 
 [[issue]]
 id = "issue-032"

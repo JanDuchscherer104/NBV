@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field
 
 from ..data_handling import AseEfmDatasetConfig
-from ..pipelines import OracleRriLabelerConfig
+from ..oracle.pipelines.scene_labels import OracleRriLabelerConfig
 from ..utils import TargetConfig
 
 if TYPE_CHECKING:

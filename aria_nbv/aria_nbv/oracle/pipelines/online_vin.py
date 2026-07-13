@@ -12,8 +12,8 @@ from torch.utils.data import IterableDataset
 from ...configs import PathConfig
 from ...data_handling.offline.batch import VinOracleBatch
 from ...data_handling.raw import AseEfmDatasetConfig, EfmSnippetView
-from ...pipelines.oracle_rri_labeler import OracleRriLabeler, OracleRriLabelerConfig, OracleRriSample
 from ...utils import Console, Stage, TargetConfig, Verbosity
+from .scene_labels import OracleRriLabeler, OracleRriLabelerConfig, OracleRriSample
 
 
 class VinOracleOnlineDataset(IterableDataset[VinOracleBatch]):

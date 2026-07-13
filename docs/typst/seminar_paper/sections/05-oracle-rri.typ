@@ -51,7 +51,7 @@ decimation, then cache the processed mesh for reuse across collision checks and
 depth rendering (see #gh("aria_nbv/aria_nbv/data/mesh_cache.py")).
 
 The end-to-end oracle labeler is implemented in
-#gh("aria_nbv/aria_nbv/pipelines/oracle_rri_labeler.py").
+#gh("aria_nbv/aria_nbv/oracle/pipelines/scene_labels.py").
 
 == Candidate generation
 

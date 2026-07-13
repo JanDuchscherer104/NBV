@@ -22,6 +22,7 @@ oracle/
     offline_vin.py
     online_vin.py
     rollout_dataset.py
+    scene_labels.py
     shards.py
 ```
 

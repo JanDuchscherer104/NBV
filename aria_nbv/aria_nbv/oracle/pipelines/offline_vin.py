@@ -27,14 +27,15 @@ from ...data_handling.offline.writer import (
     prepare_vin_offline_sample,
 )
 from ...data_handling.raw import AseEfmDatasetConfig, EfmSnippetView
-from ...pipelines.oracle_rri_labeler import OracleRriLabelerConfig
 from ...utils import Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_json_signature
 from ...vin.backbones import EvlBackboneConfig
 
 if TYPE_CHECKING:
-    from ...pipelines.oracle_rri_labeler import OracleRriSample
     from ...vin.types import EvlBackboneOutput
+    from .scene_labels import OracleRriSample
+
+from .scene_labels import OracleRriLabelerConfig
 
 
 class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):

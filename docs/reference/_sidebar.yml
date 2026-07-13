@@ -98,6 +98,8 @@ website:
             file: reference/oracle.pipelines.online_vin.qmd
           - text: rollout_dataset
             file: reference/oracle.pipelines.rollout_dataset.qmd
+          - text: scene_labels
+            file: reference/oracle.pipelines.scene_labels.qmd
           - text: shards
             file: reference/oracle.pipelines.shards.qmd
         - text: scene_rri
@@ -108,9 +110,6 @@ website:
           file: reference/oracle.target_selection.qmd
       - text: pipelines
         file: reference/pipelines.qmd
-        contents:
-        - text: oracle_rri_labeler
-          file: reference/pipelines.oracle_rri_labeler.qmd
       - text: pose_generation
         file: reference/pose_generation.qmd
         contents:

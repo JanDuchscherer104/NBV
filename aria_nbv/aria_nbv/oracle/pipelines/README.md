@@ -12,6 +12,7 @@ oracle/pipelines/
   offline_vin.py
   online_vin.py
   rollout_dataset.py
+  scene_labels.py
   shards.py
   cli.py
 ```
@@ -61,6 +62,15 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 |---|---|---|---|---|---|---|
 | `VinOfflineWriterConfig` | `config` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
 | `VinOfflineWriter` | `class` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
+
+### `scene_labels.py`
+
+| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `OracleRriSample` | `DTO` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
+| `_target_cls` | `function` | `private` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
+| `OracleRriLabelerConfig` | `config` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
+| `OracleRriLabeler` | `class` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
 
 ### `shards.py`
 
