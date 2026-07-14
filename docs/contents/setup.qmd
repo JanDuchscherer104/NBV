@@ -77,17 +77,21 @@ print("pytorch3d_cuda_rasterization_ok")
 PY
 ```
 
-## CUDA and CPU Expectations {#cuda-and-cpu-expectations}
+## CUDA, Mojo, and CPU Expectations {#cuda-and-cpu-expectations}
 
-CPU-only machines are suitable for docs work, config validation, lightweight
-tests, immutable-store reads, and rollout-builder dry-run validation.
-They are not the expected path for full ASE oracle generation, EVL backbone
-materialization, PyTorch3D depth rendering, or VIN training.
+Apple Silicon machines use the native PyTorch3D Mojo backend for the
+point--mesh distance and mesh-rasterization forward calls required by pose
+generation, depth rendering, VIN-store generation, and multi-step rollouts. Set
+`PYTORCH3D_BACKEND=mojo` to require that path. See the
+[PyTorch3D Mojo backend guide](mojo_pytorch3d.qmd) for its supported contracts,
+setup, and verification report.
 
-Linux GPU machines are the expected path for the thesis data loop. The package
-pins PyTorch CUDA 12.1 wheels on Linux, and several configs use
-`device = "auto"` so they can fall back to CPU for debugging. Treat CPU fallback
-as a diagnostic convenience rather than the performance target.
+Apple Silicon with Mojo and Linux with CUDA are supported data-generation
+paths. The package pins PyTorch CUDA 12.1 wheels on Linux, and several configs
+use `device = "auto"`. Set `PYTORCH3D_BACKEND=cuda` to require CUDA geometry. A
+compiled CPU backend remains available for reference comparisons, docs work,
+config validation, lightweight tests, immutable-store reads, and dry runs; it
+is not the performance target for full data generation.
 
 Use the `aria-nbv` mamba environment as the CUDA build-toolchain context and
 the repo `.venv` as the `uv` runtime. If PyTorch3D reports `Not compiled with

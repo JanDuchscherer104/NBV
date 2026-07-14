@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "scope": "Controlled ARIA-NBV VIN and multi-step rollout generation on Apple-Silicon Mojo and NVIDIA CUDA",
+  "revisions": {
+    "pytorch3d": "f131395fb0b898b44f58103def189a1d4de0f250",
+    "aria_e2e": "52ef71494a2044086ffdd9fa86b773986dfafb65"
+  },
+  "controlled_mesh": {
+    "sha256": "1ab9e75aaec8f55dc96cb8f0e0e69c0552a0e52c5b3ff0c4119517e20b82b22a",
+    "vertices": 158752,
+    "faces": 658198
+  },
+  "wall_seconds": {
+    "mac_mojo_vin_cold": 707.98,
+    "mac_mojo_rollout_cold": 1683.82,
+    "mac_mojo_rollout_warm_cache_validation": 973.33,
+    "ubuntu_cuda_vin": 18.20,
+    "ubuntu_cuda_rollout": 34.69,
+    "cross_host_ratio_claimed": false
+  },
+  "stores": {
+    "vin": {
+      "samples": 1,
+      "shards": 1,
+      "candidate_poses": 4,
+      "validation": "pass"
+    },
+    "rollout": {
+      "rollouts": 12,
+      "steps": 20,
+      "candidates": 100,
+      "valid_candidates": 28,
+      "targets": 2,
+      "validation": "pass",
+      "preflight_go": true
+    }
+  },
+  "equivalence": {
+    "vin_candidate_pose_max_abs": 2.384185791015625e-7,
+    "vin_matching_pose_depth_max_abs": 1.7642974853515625e-5,
+    "vin_matching_pose_depth_mask_exact": true,
+    "rollout_pose_world_max_abs": 2.384185791015625e-7,
+    "rollout_pose_relative_max_abs": 4.76837158203125e-7,
+    "selected_candidate_rows_exact": "20/20",
+    "selected_shell_indices_exact": "20/20",
+    "selection_logits_max_abs": 1.3932585716247559e-6,
+    "selection_probabilities_max_abs": 7.450580596923828e-9,
+    "target_rri_max_abs": 1.3932585716247559e-6,
+    "cumulative_target_rri_max_abs": 1.5795230865478516e-6,
+    "selected_depth_values_within_tolerance": 1151982,
+    "selected_depth_values_total": 1152000,
+    "selected_depth_mask_mismatches": 12,
+    "selected_depth_edge_max_abs": 7.87109375
+  },
+  "limitations": [
+    "Independent mesh preprocessing is not equivalent; both hosts must consume the same hashed processed mesh.",
+    "Sub-micrometre pose-matrix differences can change visibility at raster edges; 18 of 1,152,000 selected-depth values exceeded float16 storage tolerance.",
+    "Upstream EFM3D free-space sampling and CPU/CUDA neural inference are not backend-identical, so whole-store EVL fields and strict VIN RRI identity are not claimed."
+  ]
+}

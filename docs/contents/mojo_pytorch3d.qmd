@@ -1,0 +1,169 @@
+---
+title: "PyTorch3D Mojo Backend"
+phase: thesis
+audience: public
+status: current
+owner: jan
+format: html
+---
+
+# Native Geometry on Apple Silicon {#native-geometry-on-apple-silicon}
+
+ARIA-NBV uses the public PyTorch3D API on every platform. A maintained
+[PyTorch3D fork](https://github.com/JanDuchscherer104/pytorch3d) adds native
+Mojo forward kernels beside the existing CPU and CUDA implementations. ARIA-NBV
+does not carry a second renderer or point--mesh implementation.
+
+Set one environment variable before starting a process:
+
+```sh
+export PYTORCH3D_BACKEND=mojo
+```
+
+| Value | Geometry placement and dispatch |
+| --- | --- |
+| `auto` | Uses Mojo for eligible CPU forward calls when the extension is present; otherwise uses the matching PyTorch3D CPU or CUDA implementation. |
+| `cuda` | Selects CUDA geometry and requires CUDA tensors plus a CUDA-enabled PyTorch3D build. |
+| `mojo` | Selects CPU-resident geometry and requires every accelerated call to satisfy the Mojo contract. Unsupported calls fail instead of silently changing backend. |
+| `cpu` | Selects the compiled PyTorch3D CPU reference implementation. |
+
+`mojo` is the recommended data-generation setting on Apple Silicon because it
+makes incomplete coverage visible. `auto` is useful for mixed workloads that
+intentionally allow reference fallbacks.
+
+## Architecture {#architecture}
+
+```{mermaid}
+flowchart LR
+  A["ARIA-NBV public PyTorch3D calls"] --> S["PYTORCH3D_BACKEND"]
+  S -->|"cuda"| C["existing PyTorch3D CUDA kernels"]
+  S -->|"mojo"| M["native Mojo forward kernels"]
+  S -->|"cpu"| R["existing PyTorch3D CPU kernels"]
+  S -->|"auto"| E["eligible-call dispatch"]
+  E --> M
+  E --> C
+  E --> R
+```
+
+The dispatch seam lives in `pytorch3d/_mojo_ops.py`. ARIA-NBV only uses the
+switch to choose the corresponding geometry device; rendering, pose generation,
+RRI scoring, VIN-store generation, and multi-step rollout generation continue to
+call normal PyTorch3D functions.
+
+The accelerated implementation is genuine Mojo source compiled into the
+Python-importable `pytorch3d._mojo` module:
+
+- `pytorch3d/csrc/mojo/_mojo.mojo` defines the Python extension module.
+- `pytorch3d/csrc/point_mesh/point_mesh_mojo.mojo` implements point-to-face and face-to-point distance.
+- `pytorch3d/csrc/rasterize_meshes/rasterize_meshes_mojo.mojo` implements mesh rasterization.
+
+No ARIA-NBV-specific C++ or header bridge is required.
+
+## Supported Mojo Contracts {#supported-mojo-contracts}
+
+The Mojo path currently covers the forward operations used by ARIA-NBV data
+generation:
+
+| Operation | Supported contract |
+| --- | --- |
+| Point-to-face distance | Contiguous CPU `float32` points shaped `[P, 3]`, contiguous CPU `float32` triangles shaped `[T, 3, 3]`, matching contiguous CPU `int64` batch-start arrays, and no input gradients. |
+| Face-to-point distance | The same packed, ragged-batch tensor contract as point-to-face distance. |
+| Mesh rasterization | Contiguous CPU `float32` face vertices shaped `[F, 3, 3]`; contiguous one-dimensional CPU `int64` mesh metadata; positive image dimensions; `blur_radius=0`, `faces_per_pixel=1`, `bin_size=0`, perspective correction enabled, barycentric clipping disabled, backface culling disabled, and no face-vertex gradients. |
+
+Public PyTorch3D clipping and original-face remapping remain outside the kernel
+and can feed the supported rasterizer contract. Backward/autograd kernels,
+soft or multi-face rasterization, binned rasterization, other dtypes, and GPU
+tensors are not Mojo contracts. `auto` delegates those cases to upstream
+PyTorch3D; `mojo` rejects them.
+
+## Apple Silicon Setup {#apple-silicon-setup}
+
+Use macOS 15 or newer, Xcode 16 or newer, and an arm64 Python 3.11 interpreter;
+these are the current [official Mojo system requirements](https://docs.modular.com/mojo/requirements/).
+Keep the `uv` environment outside a cloud-synchronized checkout. The lockfile
+pins the Apple Silicon Mojo compiler and runtime used to build the fork, and the
+fork targets the portable `apple-m1` CPU baseline for M1--M5 compatibility.
+
+```sh
+git clone https://github.com/JanDuchscherer104/ARIA-NBV.git
+cd ARIA-NBV
+git submodule update --init --recursive
+
+cd aria_nbv
+export UV_PROJECT_ENVIRONMENT="$HOME/.cache/aria-nbv/venv"
+uv sync --locked
+```
+
+Confirm the native module and strict dispatch before generating data:
+
+```sh
+PYTORCH3D_BACKEND=mojo uv run --locked python - <<'PY'
+from pytorch3d import _mojo_ops
+
+assert _mojo_ops.has_mojo(), "PyTorch3D was built without the Mojo module"
+print("pytorch3d_mojo_ok")
+PY
+```
+
+If the assertion fails after changing the pinned fork revision, force a clean
+PyTorch3D rebuild with `uv sync --locked --reinstall-package pytorch3d`.
+
+## VIN Store and Multi-Step Rollouts {#vin-store-and-multi-step-rollouts}
+
+The backend switch belongs on the process invocation; individual ARIA-NBV
+configs do not need backend-specific copies.
+
+```sh
+cd aria_nbv
+
+# One-sample VIN-store profile; remove --dry-run after checking paths and assets.
+PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-offline \
+  --config-path ../.configs/build_vin_offline_81286.toml --dry-run
+PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-offline \
+  --config-path ../.configs/build_vin_offline_81286.toml
+
+# Multi-step rollout profile.
+PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
+PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml
+```
+
+These commands still require the ASE source data, mesh assets, offline source
+store, and model checkpoints named by their configs. The switch changes the
+PyTorch3D geometry backend, not the data contract or output schema.
+
+For CUDA runs, use the same commands with `PYTORCH3D_BACKEND=cuda` in the Linux
+CUDA environment. Use `cpu` only as a reference or diagnostic backend.
+
+## Equivalence and Runtime Evidence {#equivalence-and-runtime-evidence}
+
+Kernel equivalence is checked against the compiled PyTorch3D CPU reference with
+fixed edge cases and randomized holdouts. The checks cover ragged and empty
+batches, ties, degenerate geometry, clipping/remapping, face-index equality, and
+numeric tolerances for distances, depth, barycentric coordinates, and pixel
+distances. End-to-end checks additionally exercise pose generation, depth
+rendering, VIN-store writing, and repeated multi-step rollout generation.
+
+Runtime comparisons must be read as hardware-specific measurements. The report
+records the host, backend, workload shape, warm-up, repetitions, and output
+equivalence status; it does not treat measurements from different machines as a
+direct hardware speedup claim.
+
+<div style="position: relative; width: 100%; height: min(78vh, 900px); min-height: 520px; overflow: hidden; border: 1px solid var(--bs-border-color); border-radius: .5rem;">
+  <iframe
+    src="../figures/benchmarks/pytorch3d-backends/report.html"
+    title="PyTorch3D CUDA, CPU, and Mojo equivalence and runtime report"
+    loading="lazy"
+    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+  ></iframe>
+</div>
+
+[Open the benchmark report as a standalone page](../figures/benchmarks/pytorch3d-backends/report.html){.btn .btn-outline-primary role="button"}
+
+## Current Limitations {#current-limitations}
+
+- Native Mojo support is pinned to arm64 macOS and the Mojo version in the ARIA-NBV lockfile.
+- The accelerated contracts are forward-only and deliberately narrow around ARIA-NBV data generation.
+- VIN training, optional xFormers, and the PointNeXt extension remain separate from these PyTorch3D geometry kernels.
+- CUDA and Apple Silicon measurements require their respective hosts; missing measurements are reported as missing, never inferred.

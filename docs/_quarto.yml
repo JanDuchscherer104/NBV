@@ -78,6 +78,8 @@ website:
           href: contents/resources.qmd
         - text: ASE Dataset
           href: contents/ase_dataset.qmd
+        - text: PyTorch3D Mojo Backend
+          href: contents/mojo_pytorch3d.qmd
         - text: Glossary
           href: contents/glossary.qmd
         - text: Archive
@@ -126,6 +128,7 @@ website:
             - contents/setup.qmd
             - contents/resources.qmd
             - contents/ase_dataset.qmd
+            - contents/mojo_pytorch3d.qmd
             - contents/glossary.qmd
             - contents/archive/index.qmd
         - section: Theory
