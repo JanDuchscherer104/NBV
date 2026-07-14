@@ -439,7 +439,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytorch-lightning", specifier = "==2.6.0" },
-    { name = "pytorch3d", git = "https://github.com/JanDuchscherer104/pytorch3d.git?rev=b1bb08d9040cc2504dfd4627d0467bb87b9eca3c" },
+    { name = "pytorch3d", git = "https://github.com/JanDuchscherer104/pytorch3d.git?rev=f131395fb0b898b44f58103def189a1d4de0f250" },
     { name = "pytransform3d", specifier = "==3.14.3" },
     { name = "pyyaml", marker = "sys_platform == 'linux'", specifier = ">=6.0" },
     { name = "rerun-sdk", specifier = "==0.26.2" },
@@ -4442,7 +4442,7 @@ wheels = [
 [[package]]
 name = "pytorch3d"
 version = "0.7.9"
-source = { git = "https://github.com/JanDuchscherer104/pytorch3d.git?rev=b1bb08d9040cc2504dfd4627d0467bb87b9eca3c#b1bb08d9040cc2504dfd4627d0467bb87b9eca3c" }
+source = { git = "https://github.com/JanDuchscherer104/pytorch3d.git?rev=f131395fb0b898b44f58103def189a1d4de0f250#f131395fb0b898b44f58103def189a1d4de0f250" }
 dependencies = [
     { name = "iopath" },
     { name = "mojo", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
