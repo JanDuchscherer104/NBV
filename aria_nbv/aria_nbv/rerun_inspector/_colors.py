@@ -3,6 +3,8 @@
 The helpers in this module return plain ``uint8`` RGBA arrays that can be
 passed directly to Rerun component constructors.  They intentionally avoid a
 Matplotlib dependency so diagnostic colors stay stable across environments.
+Validity masks retain their hard action semantics; oracle RRI and rank are
+diagnostic overlays and never determine whether a candidate is selectable.
 """
 
 from __future__ import annotations
@@ -21,16 +23,16 @@ BoolArrayLike1D = Sequence[bool] | np.ndarray | torch.Tensor
 RGBAArray = NDArray[np.uint8]
 
 VALID_RGBA = np.array([34, 197, 94, 255], dtype=np.uint8)
-"""RGBA color used for valid candidates."""
+"""``ndarray["4", uint8]`` color used for valid candidates."""
 
 INVALID_RGBA = np.array([148, 163, 184, 96], dtype=np.uint8)
-"""Muted RGBA color used for invalid candidates."""
+"""Muted ``ndarray["4", uint8]`` color used for invalid candidates."""
 
 UNKNOWN_RGBA = np.array([100, 116, 139, 160], dtype=np.uint8)
-"""Fallback RGBA color used for non-finite scalar values."""
+"""Fallback ``ndarray["4", uint8]`` color for non-finite diagnostics."""
 
 TARGET_OBB_RGBA = np.array([255, 55, 95, 255], dtype=np.uint8)
-"""Distinct RGBA color used when a target OBB can be identified."""
+"""Distinct ``ndarray["4", uint8]`` color for a resolved target OBB."""
 
 _RRI_STOPS = np.array(
     [
@@ -111,9 +113,9 @@ def oracle_rri_to_rgba(
     """Map oracle RRI values to deterministic RGBA colors.
 
     Args:
-        oracle_rri: Candidate RRI values.  Higher finite values map to brighter
-            colors.
-        validity: Optional candidate validity mask.  Invalid candidates override
+        oracle_rri: ``Tensor["N", float32]`` oracle/evaluation values. Higher
+            finite values map to brighter colors.
+        validity: Optional ``Tensor["N", bool]`` hard validity mask. Invalid candidates override
             the RRI color with `INVALID_RGBA`.
         vmin: Optional lower normalization bound.  Defaults to the minimum
             finite RRI in ``oracle_rri``.
@@ -122,7 +124,7 @@ def oracle_rri_to_rgba(
         alpha: Alpha channel for finite, valid RRI colors.
 
     Returns:
-        ``uint8`` array with shape ``(N, 4)``.
+        ``ndarray["N 4", uint8]`` aligned with the input candidate axis.
     """
 
     values = _as_1d_array(oracle_rri, name="oracle_rri", dtype=np.float32)
@@ -155,14 +157,14 @@ def rank_to_rgba(
     """Map integer candidate ranks to a stable categorical RGBA palette.
 
     Args:
-        ranks: Candidate ranks where rank ``0`` receives the first palette
+        ranks: ``Tensor["N", int64]`` candidate ranks where rank ``0`` receives the first palette
             color.
-        validity: Optional candidate validity mask.  Invalid candidates override
+        validity: Optional ``Tensor["N", bool]`` hard validity mask. Invalid candidates override
             the rank color with `INVALID_RGBA`.
         alpha: Alpha channel for valid rank colors.
 
     Returns:
-        ``uint8`` array with shape ``(N, 4)``.
+        ``ndarray["N 4", uint8]`` aligned with the rank axis.
     """
 
     values = _as_1d_array(ranks, name="ranks", dtype=np.int64)
@@ -178,10 +180,10 @@ def validity_to_rgba(validity: BoolArrayLike1D) -> RGBAArray:
     """Map candidate validity directly to valid/invalid RGBA colors.
 
     Args:
-        validity: Candidate validity mask.
+        validity: ``Tensor["N", bool]`` hard candidate-validity mask.
 
     Returns:
-        ``uint8`` array with shape ``(N, 4)``.
+        ``ndarray["N 4", uint8]`` using only valid/invalid palette entries.
     """
 
     mask = _as_bool_array(validity, count=None)
@@ -191,7 +193,7 @@ def validity_to_rgba(validity: BoolArrayLike1D) -> RGBAArray:
 
 
 def step_to_rgba(step_indices: ArrayLike1D, *, alpha: int = 255) -> RGBAArray:
-    """Map rollout step indices to a stable categorical RGBA palette."""
+    """Map ``Tensor["N", int64]`` rollout depths to ``ndarray["N 4", uint8]``."""
 
     values = _as_1d_array(step_indices, name="step_indices", dtype=np.int64)
     alpha_u8 = _validate_uint8_scalar(alpha, name="alpha")
@@ -208,7 +210,18 @@ def obb_semantic_rgba(
     target_mask: BoolArrayLike1D | None = None,
     alpha: int = 235,
 ) -> RGBAArray:
-    """Map OBB semantic ids into GT or detected/predicted color spaces."""
+    """Color OBB rows while keeping GT and detected evidence visually distinct.
+
+    Args:
+        sem_ids: ``Tensor["K", int64]`` semantic ids aligned with OBB rows.
+        family: ``"gt"`` for oracle/evaluation boxes or ``"detected"`` for
+            actor-visible predicted/tracked boxes.
+        target_mask: Optional ``Tensor["K", bool]`` rows to highlight.
+        alpha: Default alpha channel in ``[0, 255]``.
+
+    Returns:
+        ``ndarray["K 4", uint8]`` semantic colors.
+    """
 
     values = _as_1d_array(sem_ids, name="sem_ids", dtype=np.int64)
     alpha_u8 = _validate_uint8_scalar(alpha, name="alpha")
@@ -235,13 +248,14 @@ def candidate_rgba(
     Args:
         mode: Color mapping mode, one of ``"oracle_rri"``, ``"rank"``, or
             ``"validity"``.
-        oracle_rri: RRI values required for ``mode="oracle_rri"``.
-        ranks: Rank values required for ``mode="rank"``.
-        validity: Validity mask used either directly or as an override.
+        oracle_rri: ``Tensor["N", float32]`` oracle values required for
+            ``mode="oracle_rri"``.
+        ranks: ``Tensor["N", int64]`` values required for ``mode="rank"``.
+        validity: ``Tensor["N", bool]`` hard mask used directly or as override.
         alpha: Alpha channel for valid non-validity color modes.
 
     Returns:
-        ``uint8`` array with shape ``(N, 4)``.
+        ``ndarray["N 4", uint8]`` aligned with the supplied candidate axis.
     """
 
     if mode == "oracle_rri":

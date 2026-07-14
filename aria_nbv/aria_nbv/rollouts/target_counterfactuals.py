@@ -75,6 +75,8 @@ class CounterfactualTargetOracleRriScorerConfig(TargetConfig["CounterfactualTarg
 
     @property
     def target_type(self) -> type["CounterfactualTargetOracleRriScorer"]:
+        """Return the target-aware oracle scorer constructed by this config."""
+
         return CounterfactualTargetOracleRriScorer
 
     depth: CandidateDepthRendererConfig = Field(default_factory=lambda: CandidateDepthRendererConfig())

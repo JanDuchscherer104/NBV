@@ -1,4 +1,8 @@
-"""Sidebar UI helpers for the refactored Streamlit app."""
+"""Sidebar controls that construct typed NBV pipeline configurations.
+
+The helpers provide dataset, candidate, renderer, and oracle settings while
+keeping Streamlit widget state separate from compute and cache orchestration.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,17 @@ from ..utils import Verbosity
 def dataset_config_ui(
     ui: st.delta_generator.DeltaGenerator, *, verbosity: Verbosity, is_debug: bool
 ) -> AseEfmDatasetConfig:
+    """Render observed-snippet controls and return a fresh dataset config.
+
+    Args:
+        ui: Streamlit container that owns the widgets.
+        verbosity: Project logging level copied into the dataset config.
+        is_debug: Initial dataset-debug toggle.
+
+    Returns:
+        Dataset configuration for EFM evidence and attached evaluation assets.
+    """
+
     ui.subheader("Dataset")
     mesh_ratio = ui.slider("mesh decimation ratio", 0.0, 1.0, 0.1, step=0.02)
     crop_enable = ui.checkbox("crop mesh", value=False)
@@ -53,6 +68,21 @@ def candidate_config_ui(
     is_debug: bool = False,
     verbosity: Verbosity,
 ) -> CandidateViewGeneratorConfig:
+    """Render finite-candidate controls and return a validated config copy.
+
+    Distances are entered in metres, angles in degrees, and any target point is
+    interpreted in the world frame as actor-visible conditioning.
+
+    Args:
+        default: Existing generator configuration used to seed every widget.
+        ui: Streamlit container that owns the widgets.
+        is_debug: Initial candidate-debug toggle.
+        verbosity: Project logging level copied into the result.
+
+    Returns:
+        Validated candidate-generator configuration.
+    """
+
     expander = ui.expander("Candidate Generator", expanded=False)
     num_samples_default = default.num_samples
     debug_flag = expander.checkbox("Debug (candidates)", value=is_debug)
@@ -251,6 +281,18 @@ def renderer_config_ui(
     is_debug: bool = False,
     verbosity: Verbosity,
 ) -> CandidateDepthRendererConfig:
+    """Render oracle depth controls and return an updated renderer config.
+
+    Args:
+        default: Existing renderer configuration used for defaults.
+        ui: Streamlit container that owns the widgets.
+        is_debug: Initial renderer-debug toggle.
+        verbosity: Project logging level copied into the result.
+
+    Returns:
+        Renderer configuration for mesh-derived oracle/evaluation depths.
+    """
+
     ui.subheader("Depth Renderer")
 
     max_candidates_default = default.max_candidates_final if default.max_candidates_final is not None else 4
@@ -285,15 +327,13 @@ def renderer_config_ui(
 
 
 def oracle_config_ui(default: OracleRRIConfig, ui: st.delta_generator.DeltaGenerator) -> OracleRRIConfig:
+    """Render the oracle-RRI section and return its unchanged configuration.
+
+    The current panel exposes no mutable oracle settings; it preserves a typed
+    extension point without leaking mesh-derived labels into actor controls.
+    """
+
     ui.subheader("Oracle RRI")
-    # chunk = ui.number_input(
-    #     "candidate_chunk_size (0 = disabled)",
-    #     min_value=0,
-    #     max_value=512,
-    #     value=int(default.candidate_chunk_size or 0),
-    #     step=1,
-    #     help="Lower this to reduce peak GPU memory when scoring many candidates.",
-    # )
     return default
 
 

@@ -10,6 +10,12 @@ loss targets, and bootstrap maximization.
 Direction sampling happens on $\mathbb{S}^2$. Orientation encodings such as R6D
 describe candidate pose rows; accumulated target visibility is a separate
 actor-visible directional-memory feature, not an orientation representation.
+
+This module owns the sampling/position/collision enums and the runtime-context,
+candidate-context, and sampling-result DTOs shared across generators, rules,
+renderers, and stores. It defines representation and alignment invariants only;
+sampling algorithms, validity decisions, rendering, and scoring live in their
+respective modules.
 """
 
 from __future__ import annotations
@@ -83,7 +89,7 @@ class CandidatePositionMode(StrEnum):
 
 
 class CollisionBackend(StrEnum):
-    """Backend for collision tests."""
+    """Backend used for point-distance and reference-path collision tests."""
 
     P3D = "pytorch3d"
     PYEMBREE = "pyembree"
@@ -122,22 +128,46 @@ class CandidateContext:
     """
 
     cfg: "CandidateViewGeneratorConfig"
+    """Generation policy shared by all rules in this pruning pass."""
+
     reference_pose: PoseTW
+    """Physical world-from-reference rig ``PoseTW`` with logical shape ``(12,)``."""
+
     sampling_pose: PoseTW
+    """Possibly gravity-aligned world-from-sampling pose, logical shape ``(12,)``."""
 
     gt_mesh: Trimesh
+    """Oracle ASE mesh in world-frame metres, used only for candidate validity."""
+
     mesh_verts: torch.Tensor
+    """World-frame mesh vertices ``Tensor[\"V 3\", float]`` in metres."""
+
     mesh_faces: torch.Tensor
+    """Triangle vertex indices ``Tensor[\"F 3\", int64]`` into `mesh_verts`."""
+
     occupancy_extent: torch.Tensor
+    """World bounds ``Tensor[\"6\", float]`` ordered xmin/xmax/ymin/ymax/zmin/zmax."""
+
     camera_calib_template: CameraTW
+    """Physical Aria calibration copied onto compact candidate camera rows."""
 
     shell_poses: PoseTW
+    """Full-shell world-from-camera poses with logical shape ``(N, 12)``."""
+
     centers_world: torch.Tensor
+    """Full-shell camera centers ``Tensor[\"N 3\", float]`` in world metres."""
+
     shell_offsets_ref: torch.Tensor
+    """Full-shell LUF sampling offsets ``Tensor[\"N 3\", float]`` in metres."""
+
     mask_valid: torch.Tensor
+    """Cumulative action-validity mask ``Tensor[\"N\", bool]`` over the full shell."""
 
     rule_masks: dict[str, torch.Tensor] = field(default_factory=dict)
+    """Named cumulative validity masks, each ``Tensor[\"N\", bool]``."""
+
     debug: dict[str, Any] = field(default_factory=dict)
+    """Optional full-shell diagnostics aligned with ``N`` where applicable."""
 
     def record_mask(self, name: str, mask: torch.Tensor) -> None:
         """Store a copy of the cumulative validity mask for diagnostics."""
@@ -182,27 +212,42 @@ class CandidateSamplingResult:
 
     views: CameraTW
     """Compact valid candidate cameras; ``views.T_camera_rig`` is camera <- reference."""
+
     reference_pose: PoseTW
     """World <- physical reference rig pose used to express candidate extrinsics."""
+
     mask_valid: torch.Tensor
+    """Full-shell action-validity mask ``Tensor[\"N\", bool]``."""
+
     masks: dict[str, torch.Tensor]
+    """Cumulative per-rule masks ``Tensor[\"N\", bool]`` keyed by rule name."""
+
     shell_poses: PoseTW
-    """cam2world poses for all sampled candidates (pre-pruning)."""
+    """World-from-camera poses for all sampled candidates, logical shape ``(N, 12)``."""
+
     shell_offsets_ref: torch.Tensor | None = None
-    """Sampled offsets in the sampling frame for the full shell (pre-pruning)."""
+    """Optional LUF sampling offsets ``Tensor[\"N 3\", float]`` in metres."""
+
     sampling_pose: PoseTW | None = None
     """World <- sampling pose used to draw centers, gravity-aligned when enabled."""
+
     strategy_id: torch.Tensor | None = None
-    """Full-shell candidate strategy ids aligned with ``mask_valid``."""
+    """Optional full-shell strategy ids ``Tensor[\"N\", int64]``."""
+
     position_id: torch.Tensor | None = None
-    """Full-shell position-family ids aligned with ``mask_valid``."""
+    """Optional full-shell position-family ids ``Tensor[\"N\", int64]``."""
+
     mixture_id: torch.Tensor | None = None
-    """Full-shell mixture component ids aligned with ``mask_valid``."""
+    """Optional full-shell mixture-component ids ``Tensor[\"N\", int64]``."""
+
     sampler_probability: torch.Tensor | None = None
-    """Full-shell sampler probabilities aligned with ``mask_valid``."""
+    """Optional proposal probabilities ``Tensor[\"N\", float32]`` in ``[0, 1]``."""
+
     component_name: tuple[str, ...] | None = None
     """Optional per-shell component names aligned with ``mask_valid``."""
+
     extras: dict[str, Any] = field(default_factory=dict)
+    """Extensible provenance payload; tensor rows must remain aligned with ``N``."""
 
     def to_serializable(self) -> dict[str, Any]:
         """Serialize this result into a cache-friendly CPU payload."""

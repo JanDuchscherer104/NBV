@@ -22,6 +22,13 @@ class VinPrediction:
     endpoint metrics and cumulative target RRI are produced by rollout stores
     and oracle re-scoring, not by this container.
 
+    The candidate axis is row-aligned with the input poses and PyTorch3D camera
+    batch. ``VinModelV3`` uses row-wise maps, shared-token queries, and symmetric
+    normalization without candidate-index embeddings. A joint permutation of
+    aligned inputs therefore produces the same permutation of every ``N_q``
+    output in deterministic evaluation; training-time dropout preserves this
+    symmetry only in distribution.
+
     Typical usage in training (see ``aria_nbv/lightning/lit_module.py``):
         - ``logits`` / ``prob``: CORAL ordinal loss and optional auxiliary losses.
         - ``expected_normalized``: correlation/top-k metrics and candidate ranking proxy.
@@ -32,19 +39,19 @@ class VinPrediction:
     """
 
     logits: Tensor
-    """``Tensor["B N K-1", float32]`` CORAL logits (K ordinal classes)."""
+    """``Tensor["B N_q K-1", float32]`` CORAL threshold logits."""
 
     prob: Tensor
-    """``Tensor["B N K", float32]`` Class probabilities derived from CORAL logits."""
+    """``Tensor["B N_q K", float32]`` class probabilities from the logits."""
 
     expected: Tensor
-    """``Tensor["B N", float32]`` Expected class value in ``[0, K-1]``."""
+    """``Tensor["B N_q", float32]`` expected class value in ``[0, K-1]``."""
 
     expected_normalized: Tensor
-    """``Tensor["B N", float32]`` Expected value normalized to ``[0, 1]``."""
+    """``Tensor["B N_q", float32]`` expected value normalized to ``[0, 1]``."""
 
     candidate_valid: Tensor
-    """``Tensor["B N", bool]`` Candidate validity mask.
+    """``Tensor["B N_q", bool]`` candidate validity diagnostic.
 
     This is a conservative heuristic meant to detect candidates that cannot be
     scored reliably (e.g. non-finite pose, empty voxel evidence, or no visible
@@ -53,14 +60,14 @@ class VinPrediction:
     """
 
     voxel_valid_frac: Tensor | None = None
-    """``Tensor["B N", float32]`` Per-candidate voxel coverage proxy (if available).
+    """``Tensor["B N_q", float32]`` candidate voxel-coverage proxy, if available.
 
     In v3 this is derived from sampling the normalized EVL observation counts
     (``counts_norm``) at the candidate camera center in world coordinates.
     """
 
     semidense_candidate_vis_frac: Tensor | None = None
-    """``Tensor["B N", float32]`` Per-candidate semidense visibility proxy (if available).
+    """``Tensor["B N_q", float32]`` candidate semidense-visibility proxy, if available.
 
     In v3 this is derived from projecting semidense world points into each
     candidate camera and computing a weighted visible fraction among finite

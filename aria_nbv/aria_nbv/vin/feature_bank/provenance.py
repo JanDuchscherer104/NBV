@@ -3,6 +3,10 @@
 The constants and validator in this module guard the actor/oracle boundary:
 candidate scorers may consume logged actor-visible evidence, but must not see
 GT, oracle, future-candidate, or counterfactual-rendered descriptors.
+
+This module owns source-role allow/deny checks only. It does not prove that a
+descriptor was produced by a particular model config or checkpoint; persistent
+learned features still require content-addressed provenance from their owner.
 """
 
 from __future__ import annotations
@@ -67,6 +71,10 @@ def validate_actor_feature_provenance(
 
     Raises:
         ValueError: If the source is oracle/GT/counterfactual-only evidence.
+
+    Notes:
+        Validation is label-based. Passing this check does not authenticate a
+        config, checkpoint, compression projection, or cached tensor payload.
     """
     if source_role != "actor_visible":
         msg = f"Actor feature banks require source_role='actor_visible', got {source_role!r}."

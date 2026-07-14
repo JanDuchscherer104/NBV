@@ -1,4 +1,8 @@
-"""Small subprocess helpers for launching Rerun inspectors from Streamlit."""
+"""Command builders and process helpers for launching Rerun inspectors.
+
+The module provides argument-safe native and web commands, detached spawning,
+display-only shell formatting, LAN URL hints, and repository-root discovery.
+"""
 
 from __future__ import annotations
 

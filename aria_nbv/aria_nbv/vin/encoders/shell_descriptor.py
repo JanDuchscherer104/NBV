@@ -2,7 +2,7 @@
 
 The shell encoders describe a candidate view by its center direction, optical
 axis, radial distance, and view-target alignment in a reference rig frame. This
-module keeps that geometry in one place so `aria_nbv.vin.encoders.shell_pose`
+module owns that geometry in one place so `aria_nbv.vin.encoders.shell_pose`
 can expose multiple `torch.nn.Module` encoders without duplicating frame math.
 """
 
@@ -35,11 +35,22 @@ class ShellPoseDescriptor:
     """
 
     center_m: Tensor
+    """``Tensor["... 3", float32]`` center in reference-frame metres."""
+
     center_dir: Tensor
+    """``Tensor["... 3", float32]`` unit direction from reference origin."""
+
     forward_dir: Tensor
+    """``Tensor["... 3", float32]`` camera ``+Z`` axis in the reference frame."""
+
     radius_m: Tensor
+    """``Tensor["... 1", float32]`` reference-frame radial distance in metres."""
+
     view_alignment: Tensor
+    """``Tensor["... 1", float32]`` forward-to-inward alignment in ``[-1, 1]``."""
+
     pose_vec: Tensor
+    """``Tensor["... 8", float32]`` concatenated shell descriptor."""
 
 
 def encode_shell_pose_descriptor(pose_rig: PoseTW) -> ShellPoseDescriptor:

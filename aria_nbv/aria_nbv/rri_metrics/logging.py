@@ -8,6 +8,11 @@ represent with a plain ``MetricCollection``. The custom wrapper still follows
 torchmetrics best practices: ``add_state`` for distributed reduction, explicit
 ``update``/``compute``/``reset`` methods, and ``full_state_update=False`` to
 avoid unnecessary synchronization overhead.
+
+Model scores and decoded classes are actor-side outputs; `rri` and ordinal
+labels are oracle supervision. These accumulators do not infer geometric
+candidate validity, so callers must filter hard-invalid candidate rows before
+updating metrics that compare predictions with oracle targets.
 """
 
 from __future__ import annotations
@@ -36,9 +41,13 @@ class LogSpec:
     """
 
     on_step: bool
+    """Emit the value for individual Lightning steps."""
     on_epoch: bool
+    """Emit the distributed aggregate at epoch end."""
     prog_bar: bool
+    """Expose the value in Lightning's progress bar."""
     enabled: bool = True
+    """Whether the metric is active for the requested stage."""
 
 
 class Logable(ValueStrEnum):
@@ -49,17 +58,20 @@ class Logable(ValueStrEnum):
         raise NotImplementedError("Every metric/loss must specify how it should be logged.")
 
     def on_step(self, stage: Stage) -> bool:
+        """Return whether this key logs individual updates for ``stage``."""
         return self.log_spec(stage).on_step
 
     def on_epoch(self, stage: Stage) -> bool:
+        """Return whether this key logs an epoch aggregate for ``stage``."""
         return self.log_spec(stage).on_epoch
 
     def prog_bar(self, stage: Stage) -> bool:
+        """Return whether this key appears in the progress bar for ``stage``."""
         return self.log_spec(stage).prog_bar
 
 
 class Metric(Logable):
-    """Metric suffixes composed with Stage as ``{stage}/{metric}``."""
+    """Metric suffixes composed with :class:`Stage` as ``{stage}/{metric}``."""
 
     LOSS = "loss"
     """Legacy loss key (prefer `Loss` for losses)."""
@@ -93,6 +105,7 @@ class Metric(Logable):
     LABEL_HISTOGRAM_STEP = "label_histogram_step"
 
     def log_spec(self, stage: Stage) -> LogSpec:
+        """Resolve the stage-specific logging policy for this metric key."""
         match self:
             case Metric.LOSS:
                 return LogSpec(on_step=stage is Stage.TRAIN, on_epoch=True, prog_bar=False)
@@ -138,7 +151,7 @@ class Metric(Logable):
 
 
 class Loss(Logable):
-    """Loss suffixes composed with Stage as ``{stage}/{loss}``."""
+    """Loss suffixes composed with :class:`Stage` as ``{stage}/{loss}``."""
 
     LOSS = "loss"
     CORAL = "coral_loss"
@@ -148,6 +161,7 @@ class Loss(Logable):
     AUX_REGRESSION = "aux_regression_loss"
 
     def log_spec(self, stage: Stage) -> LogSpec:
+        """Resolve the stage-specific logging policy for this loss key."""
         match self:
             case Loss.LOSS:
                 return LogSpec(
@@ -167,7 +181,7 @@ class Loss(Logable):
 
 
 class LabelHistogram(TorchMetric):
-    """Accumulate label counts for ordinal classes."""
+    """Accumulate distributed counts of hard-valid oracle ordinal labels."""
 
     counts: Tensor
     """``Tensor["K", int64]`` per-class counts, reduced by distributed sum."""
@@ -187,6 +201,7 @@ class LabelHistogram(TorchMetric):
         )
 
     def update(self, target: Tensor) -> None:
+        """Add ``Tensor["...", int64]`` labels after flattening and range validation."""
         if target.numel() == 0:
             return
         labels = target.to(dtype=torch.int64).reshape(-1)
@@ -196,11 +211,17 @@ class LabelHistogram(TorchMetric):
         self.counts = self.counts + counts.to(device=self.counts.device)
 
     def compute(self) -> Tensor:
+        """Return ``Tensor["K", int64]`` distributed class counts."""
         return self.counts
 
 
 class RriErrorStats(TorchMetric):
-    """Accumulate finite-pair bias/variance statistics for RRI errors."""
+    r"""Accumulate bias-squared and variance of finite RRI prediction errors.
+
+    For actor prediction $\hat r$ and oracle label $r$, this stores sufficient
+    statistics for $\operatorname{bias}^2=(E[\hat r-r])^2$ and
+    $\operatorname{Var}(\hat r-r)$. Non-finite pairs do not contribute.
+    """
 
     full_state_update = False
     sum_error: Tensor
@@ -217,6 +238,13 @@ class RriErrorStats(TorchMetric):
         self.add_state("count", default=torch.zeros((), dtype=torch.float32), dist_reduce_fx="sum")
 
     def update(self, pred_rri: Tensor, rri: Tensor) -> None:
+        """Accumulate matching-shape actor predictions and oracle RRI labels.
+
+        Args:
+            pred_rri ``Tensor["...", float32]``: Dimensionless decoded VIN
+                RRI proxies.
+            rri ``Tensor["...", float32]``: Dimensionless oracle RRI labels.
+        """
         if pred_rri.numel() == 0 or rri.numel() == 0:
             return
         pred_flat = pred_rri.reshape(-1).to(device=self.sum_error.device, dtype=torch.float32)
@@ -235,6 +263,7 @@ class RriErrorStats(TorchMetric):
         self.count = self.count + torch.tensor(float(error.numel()), device=self.count.device, dtype=self.count.dtype)
 
     def compute(self) -> dict[str, Tensor]:
+        """Return scalar ``bias2`` and ``variance`` tensors, or an empty mapping without finite pairs."""
         if not bool(self.count.item()):
             return {}
         mean_error = self.sum_error / self.count
@@ -246,13 +275,19 @@ class RriErrorStats(TorchMetric):
         }
 
     def reset(self) -> None:  # type: ignore[override]
+        """Clear all distributed sufficient statistics in place."""
         self.sum_error.zero_()
         self.sum_error_sq.zero_()
         self.count.zero_()
 
 
 class VinMetrics(TorchMetric):
-    """Container for VIN metrics computed from candidate rankings."""
+    """Aggregate actor predictions against oracle ranks and ordinal labels.
+
+    Spearman correlation compares continuous predicted scores with RRI labels;
+    the confusion matrix and histogram compare decoded ordinal classes. Inputs
+    must already be flattened to comparable, hard-valid candidate rows.
+    """
 
     full_state_update = False
 
@@ -272,6 +307,20 @@ class VinMetrics(TorchMetric):
         pred_class: Tensor,
         labels: Tensor,
     ) -> None:
+        """Accumulate one set of aligned actor predictions and oracle targets.
+
+        Args:
+            pred_scores ``Tensor["N", float32]``: Continuous actor-side ranking
+                scores for Spearman correlation.
+            rri ``Tensor["N", float32]``: Dimensionless oracle RRI labels.
+            pred_class ``Tensor["N", int64]``: Decoded actor ordinal classes.
+            labels ``Tensor["N", int64]``: Oracle-derived ordinal classes.
+
+        Notes:
+            This method has no validity-mask argument. Callers must remove
+            hard-invalid or unsupervised candidates before passing the aligned
+            vectors.
+        """
         if pred_scores.numel() == 0:
             return
         if self.spearman is not None:
@@ -281,6 +330,7 @@ class VinMetrics(TorchMetric):
         self.has_updates.fill_(True)
 
     def compute(self) -> dict[str, Tensor]:
+        """Return Spearman scalar, ``Tensor["K K"]`` confusion, and ``Tensor["K"]`` label counts."""
         if not bool(self.has_updates.item()):
             return {}
         metrics = {
@@ -292,6 +342,7 @@ class VinMetrics(TorchMetric):
         return metrics
 
     def reset(self) -> None:  # type: ignore[override]
+        """Reset every enabled child metric and the distributed update flag."""
         if self.spearman is not None:
             self.spearman.reset()
         self.confusion.reset()
@@ -300,7 +351,7 @@ class VinMetrics(TorchMetric):
 
 
 class VinMetricsConfig(TargetConfig[VinMetrics]):
-    """Configuration for VIN torchmetrics bundles."""
+    """Configure the stateful actor-versus-oracle VIN metric bundle."""
 
     @property
     def target_type(self) -> type[VinMetrics]:
@@ -308,12 +359,13 @@ class VinMetricsConfig(TargetConfig[VinMetrics]):
         return VinMetrics
 
     num_classes: int
-    """Number of ordinal classes used for confusion/histogram metrics."""
+    """Ordinal class count ``K`` used by the confusion matrix and label histogram."""
 
     enable_spearman: bool = True
-    """Enable rank-correlation metrics that buffer all predictions/targets."""
+    """Enable Spearman rank correlation, which buffers actor predictions and oracle RRI targets."""
 
     def setup_target(self) -> VinMetrics:
+        """Construct :class:`VinMetrics` from the validated class count and buffering choice."""
         return self.target(num_classes=int(self.num_classes), enable_spearman=bool(self.enable_spearman))
 
 
@@ -329,7 +381,7 @@ def metric_key(
     *,
     namespace: Literal["main", "aux"] = "main",
 ) -> str:
-    """Compose a logging key using the stage prefix."""
+    """Compose ``{stage}/{metric}`` or ``{stage}-aux/{metric}``."""
     return f"{_namespace_prefix(stage, namespace=namespace)}{metric.value}"
 
 
@@ -339,7 +391,7 @@ def loss_key(
     *,
     namespace: Literal["main", "aux"] = "main",
 ) -> str:
-    """Compose a logging key using the stage prefix."""
+    """Compose ``{stage}/{loss}`` or ``{stage}-aux/{loss}``."""
     return f"{_namespace_prefix(stage, namespace=namespace)}{loss.value}"
 
 
@@ -347,8 +399,8 @@ def topk_accuracy_from_probs(probs: Tensor, labels: Tensor, *, top_k: int) -> Te
     """Compute top-k accuracy from class probabilities.
 
     Args:
-        probs: ``Tensor["N K"]`` class probabilities.
-        labels: ``Tensor["N"]`` integer class labels.
+        probs ``Tensor["N K", float32]``: Actor-predicted class probabilities.
+        labels ``Tensor["N", int64]``: Oracle-derived ordinal labels.
         top_k: Number of highest-probability classes to consider.
 
     Returns:

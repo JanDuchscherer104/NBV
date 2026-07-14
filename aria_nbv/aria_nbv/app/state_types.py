@@ -55,7 +55,8 @@ def _to_jsonable(value: Any) -> Any:
 
 
 def config_signature(cfg: Any) -> str:
-    """Return a stable JSON signature for a pydantic config object."""
+    """Return a deterministic JSON signature for one configuration value."""
+
     if hasattr(cfg, "model_dump"):
         payload = cfg.model_dump(mode="python", round_trip=True)  # type: ignore[call-arg]
     else:
@@ -65,74 +66,150 @@ def config_signature(cfg: Any) -> str:
 
 @dataclass(slots=True)
 class DataCache:
+    """Session-owned dataset iterator and its most recently materialized sample."""
+
     cfg_sig: str | None = None
+    """Signature of the dataset configuration that created this cache."""
+
     sample_idx: int | None = None
+    """Zero-based source index of :attr:`sample`."""
+
     dataset_iter: Iterator[EfmSnippetView] | None = None
+    """Forward-only iterator reused while selection advances under one config."""
+
     last_iter_idx: int | None = None
+    """Last source index consumed from :attr:`dataset_iter`."""
+
     sample: EfmSnippetView | None = None
+    """Selected snippet; observed evidence is actor-visible, attached mesh/GT is oracle-only."""
 
 
 @dataclass(slots=True)
 class CandidatesCache:
+    """Session cache for the actor-action candidate shell of one snippet."""
+
     cfg_sig: str | None = None
+    """Signature of the candidate-generator configuration."""
+
     sample_key: str | None = None
+    """Scene/snippet identity that produced :attr:`candidates`."""
+
     candidates: CandidateSamplingResult | None = None
+    """Candidate poses, validity masks, and provenance aligned to the finite shell ``N``."""
 
 
 @dataclass(slots=True)
 class DepthCache:
+    """Session cache for mesh-rendered candidate depths used only by oracle/evaluation."""
+
     cfg_sig: str | None = None
+    """Signature of the depth-renderer configuration."""
+
     sample_key: str | None = None
+    """Scene/snippet identity of the rendered mesh source."""
+
     candidates_key: str | None = None
+    """In-session identity of the candidate set rendered into :attr:`depths`."""
+
     depths: CandidateDepths | None = None
+    """Metric z-depth ``Tensor[\"C H W\", float]`` and masks; never actor-visible."""
 
 
 @dataclass(slots=True)
 class PointCloudCache:
+    """Session cache for oracle depth backprojections at requested pixel strides."""
+
     depth_key: str | None = None
+    """In-session identity of the depth batch backing every cached stride."""
+
     by_stride: dict[int, CandidatePointClouds] | None = None
+    """Oracle world-point clouds ``Tensor[\"C P 3\", float]`` in metres by positive stride."""
 
 
 @dataclass(slots=True)
 class RriCache:
+    """Session cache for oracle RRI labels derived from one point-cloud batch."""
+
     cfg_sig: str | None = None
+    """Signature of the complete oracle-labeler configuration."""
+
     pcs_key: str | None = None
+    """In-session identity of the point clouds scored into :attr:`result`."""
+
     result: RriResult | None = None
+    """Oracle scores ``Tensor[\"C\", float]`` and mesh-distance diagnostics."""
 
 
 @dataclass(slots=True)
 class VinDiagnosticsState:
-    """Session-scoped cache for VIN diagnostics."""
+    """Session-scoped runtime, outputs, and rendered-summary cache for VIN diagnostics."""
 
     cfg_sig: str | None = None
+    """Signature of the experiment configuration backing all runtime fields."""
+
     experiment: AriaNBVExperimentConfig | None = None
+    """Resolved experiment configuration used for the cached forward pass."""
+
     module: Any | None = None
+    """Checkpoint-backed Lightning module retained for diagnostics reruns."""
+
     datamodule: Any | None = None
+    """Prepared data module retained with :attr:`module` for batch iteration."""
+
     batch: VinOracleBatch | None = None
+    """Last VIN batch; observed evidence is actor-visible while RRI/GT fields are oracle-only."""
+
     pred: VinPrediction | None = None
+    """Last actor-facing VIN scores, including ``Tensor[\"B N\", float32]`` expectations."""
+
     debug: VinForwardDiagnostics | None = None
+    """Last model-internal actor-evidence tensors, owned for interactive plotting."""
+
     error: str | None = None
+    """Full traceback from the latest failed setup or forward pass."""
+
     summary_key: str | None = None
+    """Identity of the configuration, sample, and options behind the cached summary."""
+
     summary_text: str | None = None
+    """Captured plain-text model summary for :attr:`summary_key`."""
+
     summary_error: str | None = None
+    """Displayable error from the latest model-summary attempt."""
 
 
 @dataclass(slots=True)
 class AppState:
-    """All persistent app state (Streamlit-serialisable container)."""
+    """Mutable root of the main Streamlit session and its invalidation chain."""
 
     dataset_cfg: AseEfmDatasetConfig
+    """Current observed-snippet input configuration."""
+
     labeler_cfg: OracleRriLabelerConfig
+    """Current candidate generator plus oracle depth/RRI label configuration."""
+
     sample_idx: int = 0
+    """Zero-based sample index selected in the current dataset stream."""
 
     data: DataCache = field(default_factory=DataCache)
+    """Upstream dataset cache; replacing its sample invalidates every downstream cache."""
+
     candidates: CandidatesCache = field(default_factory=CandidatesCache)
+    """Actor-action candidate cache invalidated when input data or generator changes."""
+
     depth: DepthCache = field(default_factory=DepthCache)
+    """Oracle-only rendered-depth cache invalidated when candidates change."""
+
     pcs: PointCloudCache = field(default_factory=PointCloudCache)
+    """Oracle-only depth-backprojection cache invalidated when rendered depths change."""
+
     rri: RriCache = field(default_factory=RriCache)
+    """Terminal oracle-label cache invalidated when its point clouds change."""
 
 
 def sample_key(sample: EfmSnippetView) -> str:
+    """Return the scene/snippet identity used for session-local cache joins."""
+
     return f"{sample.scene_id}:{sample.snippet_id}"
 
 

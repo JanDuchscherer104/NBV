@@ -1,4 +1,9 @@
-"""Shared Streamlit target-selection audit helpers."""
+"""Shared target-selection tables and plots for actor/oracle boundary audits.
+
+The helpers provide actor-visible score decomposition and hard invalidity
+reasons alongside separately labeled GT-match fields used only for oracle
+labels and evaluation.
+"""
 
 from __future__ import annotations
 

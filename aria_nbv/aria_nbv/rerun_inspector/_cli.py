@@ -1,4 +1,10 @@
-"""Command-line entry point for inspecting VIN offline samples in Rerun."""
+"""Select immutable VIN or rollout rows and orchestrate Rerun inspection.
+
+This module owns CLI override precedence, output-mode validation, optional
+native/web viewer launch, and the top-level offline-inspector runtime. Geometry
+and labels are read from existing stores; the CLI writes only the configured
+Rerun recording or connects to the requested viewer sink.
+"""
 
 from __future__ import annotations
 
@@ -43,30 +49,78 @@ class RolloutContextMode(StrEnum):
 
 @dataclass(frozen=True)
 class RerunCliOptions:
-    """Typed CLI override payload used after Typer parsing."""
+    """Typed, side-effect-free CLI overrides applied to a loaded TOML config.
+
+    Selection fields identify immutable VIN or rollout source rows. Output
+    fields choose one recording sink or a post-save viewer process; resolving
+    these values does not itself initialize Rerun or read store payload arrays.
+    """
 
     config_path: Path
+    """TOML source path whose resolved values provide non-overridden defaults."""
+
     split: Split | None
+    """Optional VIN split override for index-based sample selection."""
+
     index: int | None
+    """Optional zero-based index within ``split``."""
+
     sample_id: str | None
+    """Optional stable VIN sample key, taking precedence over other selectors."""
+
     scene_id: str | None
+    """Optional ASE scene identity paired with ``snippet_id``."""
+
     snippet_id: str | None
+    """Optional ASE/ATEK snippet identity paired with ``scene_id``."""
+
     candidate_index: int | None
+    """Optional stored VIN candidate-prefix row selected for detail layers."""
+
     offline_store: Path | None
+    """Optional immutable VIN offline-store path override."""
+
     rollout_store: Path | None
+    """Optional standalone rollout Zarr store opened read-only for inspection."""
+
     rollout_index: int
+    """Zero-based rollout-table position used unless a row id is supplied."""
+
     rollout_row_id: int | None
+    """Optional stable ``rollouts/rollout_row_id`` taking index precedence."""
+
     rollout_context: RolloutContextMode | None
+    """Optional policy for joining rollout facts back to immutable VIN context."""
+
     save_path: Path | None
+    """Optional owned ``.rrd`` destination for save output."""
+
     save_requested: bool
+    """Whether CLI flags explicitly select save mode."""
+
     spawn: bool
+    """Whether CLI flags explicitly select a spawned local viewer sink."""
+
     connect_addr: str | None
+    """Optional existing Rerun gRPC endpoint."""
+
     connect_requested: bool
+    """Whether CLI flags explicitly select gRPC connect mode."""
+
     view: bool
+    """Whether to save then open the recording in the native viewer."""
+
     serve_web: bool
+    """Whether to save then serve the recording with Rerun's web viewer."""
+
     web_viewer_port: int
+    """Requested HTTP port for the web viewer; zero delegates allocation."""
+
     ws_server_port: int
+    """Requested websocket port for the web viewer; zero delegates allocation."""
+
     lan: bool
+    """Whether web serving binds beyond loopback and prints a LAN URL hint."""
 
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
@@ -158,7 +212,12 @@ def rerun_inspect_command(
         typer.Option("--lan", help="With --serve-web, bind to 0.0.0.0 and print a LAN URL hint."),
     ] = False,
 ) -> None:
-    """Inspect a configured VIN offline sample or rollout-store row in Rerun."""
+    """Inspect one configured VIN sample or rollout chain in a Rerun session.
+
+    CLI overrides are validated before loading heavy arrays or initializing a
+    recording. Exactly one save, spawn, or connect sink is selected; optional
+    native/web viewing occurs only after an ``.rrd`` recording is written.
+    """
 
     options = RerunCliOptions(
         config_path=config_path,
@@ -345,7 +404,13 @@ def _run_viewer_command(command: list[str], *, lan: bool, web_viewer_port: int) 
 
 
 class RerunOfflineInspector:
-    """Runtime object created from ``RerunOfflineInspectorConfig``."""
+    """Own one offline-sample selection and Rerun logging session.
+
+    :meth:`run` opens the immutable VIN reader, validates visual inventory
+    before recording initialization, opens one configured sink, and then logs
+    sample primitives plus provenance metadata. Runtime instances are one-shot
+    orchestrators; they do not own or mutate source-store content.
+    """
 
     def __init__(self, config: RerunOfflineInspectorConfig, *, rr_module: RerunModule | None = None) -> None:
         """Initialize the inspector runtime."""
@@ -355,7 +420,12 @@ class RerunOfflineInspector:
         self.console = Console.with_prefix("nbv-rerun-inspect").set_verbosity(config.performance.verbosity)
 
     def run(self) -> None:
-        """Collect inventory, select one sample, then log it to Rerun."""
+        """Select, validate, initialize, and log one immutable VIN sample.
+
+        Required inventory failures occur before a Rerun sink is opened. Once
+        started, geometry and metadata are logged as static entities for this
+        single selected sample.
+        """
 
         selected = select_rerun_sample(
             dataset_config=self.config.dataset.offline,
@@ -373,7 +443,11 @@ class RerunOfflineInspector:
 
 
 def run_inspector(config: RerunOfflineInspectorConfig, *, rr_module: RerunModule | None = None) -> None:
-    """Run the inspector for tests and CLI callers."""
+    """Create and run one offline inspector with an optional injected Rerun module.
+
+    The injectable protocol lets tests capture session order and entities
+    without spawning a viewer; production imports the installed Rerun SDK.
+    """
 
     RerunOfflineInspector(config, rr_module=rr_module).run()
 

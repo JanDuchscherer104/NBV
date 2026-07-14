@@ -1,4 +1,14 @@
-"""Rich-powered console tailored for training and pprinting of instances or other structured data."""
+"""Rich console with shared verbosity, debug state, and structured summaries.
+
+This module provides :class:`Verbosity` and the package-wide :class:`Console`
+adapter for gated Rich output, progress reporting, and optional Lightning-log
+forwarding. It owns presentation state and routing only; callers retain
+responsibility for metric meaning, exception policy, and training control flow.
+
+All instances share logging gates and the optional Lightning logger bridge;
+prefixes remain instance-local so concurrent components retain readable source
+context.
+"""
 
 import inspect
 import traceback
@@ -18,7 +28,7 @@ if TYPE_CHECKING:
 
 
 class Verbosity(IntEnum):
-    """Verbosity levels for Console output."""
+    """Ordered output gates shared by every :class:`Console` instance."""
 
     QUIET = 0
     NORMAL = 1
@@ -61,6 +71,7 @@ class Console(RichConsole):
     _global_debug: ClassVar[bool] = False
     _external_sink: ClassVar[Callable[[str], None] | None] = None
     prefix: str | None = None
+    """Instance-local `::`-separated source context prepended to messages."""
 
     default_settings = {
         "theme": Theme(
@@ -108,29 +119,32 @@ class Console(RichConsole):
 
     @property
     def verbosity(self) -> Verbosity:
-        """Global verbosity level shared across all Console instances."""
+        """Return the process-wide minimum level for informational output."""
         return type(self)._global_verbosity
 
     @verbosity.setter
     def verbosity(self, value: Verbosity | int | bool) -> None:
+        """Set the process-wide verbosity after coercing supported aliases."""
         type(self)._global_verbosity = Verbosity.from_any(value)
 
     @property
     def verbose(self) -> bool:
-        """Boolean view of verbosity (NORMAL or higher)."""
+        """Report whether normal informational logging is currently enabled."""
         return self.verbosity >= Verbosity.NORMAL
 
     @verbose.setter
     def verbose(self, value: bool) -> None:
+        """Enable normal output when true, otherwise silence informational logs."""
         self.verbosity = value
 
     @property
     def is_debug(self) -> bool:
-        """Global debug flag shared across all Console instances."""
+        """Return the process-wide debug gate used by :meth:`dbg`."""
         return type(self)._global_debug
 
     @is_debug.setter
     def is_debug(self, value: bool) -> None:
+        """Set the process-wide debug gate for every console instance."""
         type(self)._global_debug = value
 
     @classmethod
@@ -179,7 +193,7 @@ class Console(RichConsole):
         return self
 
     def unset_prefix(self) -> "Console":
-        """Unset the prefix for all log messages."""
+        """Remove this instance's contextual prefix and return the console."""
         self.prefix = None
         return self
 
@@ -239,7 +253,7 @@ class Console(RichConsole):
                 self._log_to_lightning("debug", message)
 
     def dbg_summary(self, label: str, value: Any, *, include_stats: bool = False) -> None:
-        """Debug-level structured summary."""
+        """Emit a compact tensor-aware summary when debug logging is enabled."""
         if self.is_debug or self.verbosity >= Verbosity.VERBOSE:
             summary = summarize(value, include_stats=include_stats)
             self.dbg(f"{label}: {summary}")

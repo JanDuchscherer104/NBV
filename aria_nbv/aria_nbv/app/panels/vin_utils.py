@@ -1,4 +1,9 @@
-"""VIN diagnostics helpers for panels."""
+"""Runtime construction and forward-pass helpers for VIN diagnostics.
+
+This module provides experiment preparation, checkpoint-backed module/data
+setup, and no-gradient debug inference while keeping Streamlit out of the
+compute path.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +30,10 @@ class _VinDiagnosticsRuntime:
     """Runtime objects needed for one VIN diagnostics pass."""
 
     module: VinLightningModule
+    """Checkpoint-backed VIN Lightning module in evaluation mode."""
+
     datamodule: object
+    """Prepared stage-aware data module that owns diagnostic batch iteration."""
 
 
 def _build_experiment_config(

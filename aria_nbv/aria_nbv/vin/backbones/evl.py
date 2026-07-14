@@ -1,9 +1,14 @@
 """EVL backbone adapter for VIN scorer architectures.
 
 VIN consumes raw EFM snippet dicts as input and queries EVL's 3D neck features
-to score candidate poses. This module is the canonical ownership point for the
-external EVL dependency; model definitions depend on `EvlBackboneConfig` rather
-than importing EVL internals directly.
+to score candidate poses. This module owns the external EVL dependency boundary;
+model definitions depend on `EvlBackboneConfig` rather than importing EVL
+internals directly.
+
+EVL outputs are checkpoint-local actor-visible predictions and features, not
+ground truth. ``model_cfg`` and ``model_ckpt`` identify the runtime assets by
+resolved path, but this adapter does not calculate content hashes or attach
+them to `EvlBackboneOutput`; durable cache writers must record that identity.
 """
 
 from __future__ import annotations
@@ -134,7 +139,12 @@ def _normalize_evl_model_config_paths(
 
 
 class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
-    """Configuration for `EvlBackbone`."""
+    """Select the EVL model assets, device, and exported feature families.
+
+    The resolved ``model_cfg`` and ``model_ckpt`` paths jointly determine the
+    learned evidence semantics for one run. Paths are not immutable provenance:
+    callers that persist outputs must also capture config and checkpoint hashes.
+    """
 
     @property
     def target_type(self) -> type["EvlBackbone"]:
@@ -145,10 +155,10 @@ class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
     """Project path resolver."""
 
     model_cfg: Path = Field(default_factory=lambda: Path(".configs") / "evl_inf_desktop.yaml")
-    """Hydra YAML used to instantiate `efm3d.model.evl.EVL`."""
+    """Resolved Hydra YAML used to instantiate `efm3d.model.evl.EVL`."""
 
     model_ckpt: Path = Field(default_factory=lambda: Path(".logs") / "ckpts" / "model_lite.pth")
-    """Checkpoint containing an ``EVL`` state dict under ``['state_dict']``."""
+    """Resolved checkpoint containing an ``EVL`` ``state_dict`` payload."""
 
     device: torch.device = Field(default_factory=lambda: torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     """Torch device to run EVL on (auto-selects CUDA if available)."""
@@ -177,7 +187,13 @@ class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
 
 
 class EvlBackbone:
-    """Frozen EVL backbone wrapper that exposes neck features and voxel grid pose."""
+    """Run EVL and expose actor-visible feature volumes in their voxel frame.
+
+    ``freeze`` controls gradients, but inference always executes under
+    ``torch.no_grad`` and puts EVL in evaluation mode. The wrapper retains the
+    resolved asset paths on ``config``; returned tensors carry no independent
+    checkpoint or config identity.
+    """
 
     def __init__(self, config: EvlBackboneConfig) -> None:
         self.config = config
@@ -227,7 +243,10 @@ class EvlBackbone:
             efm: Raw EFM snippet dict (unbatched ``T×...`` or batched ``B×T×...``).
 
         Returns:
-            `EvlBackboneOutput` with neck features and voxel grid pose.
+            Actor-visible `EvlBackboneOutput` whose voxel tensors are
+            ``Tensor["B C D H W"]``-like fields aligned to
+            ``PoseTW["B 12"]`` world-from-voxel poses. Exact feature semantics
+            remain local to this config/checkpoint pair.
         """
 
         batch = self._prepare_batch(efm)

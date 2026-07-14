@@ -1,4 +1,14 @@
-"""W&B configuration for Lightning."""
+"""Weights & Biases logger configuration for Lightning experiments.
+
+This module owns :class:`WandbConfig` and its config-as-factory translation to
+Lightning's `WandbLogger`, including local storage, run identity, grouping,
+resume, and checkpoint-artifact options. It does not define metric schemas,
+start training, or create a W&B run until :meth:`WandbConfig.setup_target` is
+called.
+
+The config keeps W&B identity, resume, grouping, and artifact settings in the
+same config-as-factory tree as the rest of an ARIA-NBV experiment.
+"""
 
 from __future__ import annotations
 
@@ -20,30 +30,56 @@ class WandbConfig(TargetConfig[WandbLogger]):
 
     @property
     def target_type(self) -> type[WandbLogger]:
+        """Return Lightning's W&B logger class for config-factory inspection."""
         return WandbLogger
 
     name: str | None = Field(default=None, description="Display name for the run.")
+    """Optional display name for the run."""
+
     project: str = Field(default="aria-nbv", description="W&B project name.")
+    """Destination W&B project name."""
+
     entity: str | None = None
+    """Optional W&B user or team entity."""
+
     run_id: str | None = Field(default=None, description="Resume or create a run with this ID.")
+    """Stable run id used for creation or resumption."""
+
     resume: Literal["allow", "must", "never"] | None = Field(
         default=None,
         description="Resume behavior for existing runs (passed to wandb.init).",
     )
+    """Policy for an already existing `run_id`."""
+
     anonymous: bool | None = Field(default=None, description="Enable anonymous mode.")
+    """Optional W&B anonymous-mode override."""
+
     offline: bool = Field(False, description="Enable offline logging.")
+    """Write events locally without contacting the W&B service."""
+
     log_model: bool | str = Field(
         default=False,
         description="Forward Lightning checkpoints to W&B artefacts.",
     )
+    """Lightning checkpoint-to-W&B artifact logging policy."""
+
     checkpoint_name: str | None = Field(default=None, description="Checkpoint artefact name.")
+    """Optional name for uploaded checkpoint artifacts."""
+
     tags: list[str] | None = Field(default=None, description="Optional list of tags.")
+    """Optional run tags used for filtering and comparison."""
+
     group: str | None = Field(default=None, description="Group multiple related runs.")
+    """Optional group shared by related runs or trials."""
+
     job_type: str | None = Field(default=None, description="Attach a W&B job_type label.")
+    """Optional role label such as training, evaluation, or sweep."""
+
     prefix: str | None = Field(default=None, description="Namespace prefix for metric keys.")
+    """Optional namespace prepended to logged metric keys."""
 
     def setup_target(self, **kwargs: Any) -> WandbLogger:
-        """Instantiate a configured `WandbLogger`."""
+        """Instantiate a logger rooted in :class:`PathConfig`'s W&B directory."""
         wandb_dir = PathConfig().wandb.as_posix()
         init_kwargs: dict[str, Any] = {}
         if self.resume is not None:

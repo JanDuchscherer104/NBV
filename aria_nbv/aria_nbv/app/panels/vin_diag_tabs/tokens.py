@@ -1,4 +1,9 @@
-"""Frustum token tab for VIN diagnostics."""
+"""VIN frustum-token and semidense-projection diagnostics.
+
+The tab provides per-candidate token validity, depth-plane features, observed
+semidense projection grids, and optional CNN activations derived from
+actor-visible evidence.
+"""
 
 from __future__ import annotations
 

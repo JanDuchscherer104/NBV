@@ -416,23 +416,28 @@ class PreparedVinOfflineSample:
         scene_id: ASE scene identifier.
         snippet_id: ASE snippet identifier.
         numeric_blocks: Fixed-size numeric blocks stored as Zarr arrays.
-        record_blocks: Lazy diagnostic payloads stored as msgspec records.
+        record_blocks: Optional diagnostic payloads stored as indexed MessagePack.
+
+    This is writer-owned staging state, not a public mutable view of an existing
+    store. Numeric keys cover ``vin.*``, ``oracle.*``, optional ``backbone.*``,
+    GT/detected OBBs, and trajectory metadata; shard flush consumes the record
+    and the reader reconstructs typed views from the manifest contract.
     """
 
     sample_key: str
-    """Stable sample key for the row."""
+    """Stable compact ASE/ATEK sample key used for deterministic split assignment."""
 
     scene_id: str
-    """ASE scene identifier."""
+    """ASE scene identifier preserved for mesh pairing and source lineage."""
 
     snippet_id: str
-    """ASE snippet identifier."""
+    """Compact ATEK sample identifier preserved from the WebDataset source key."""
 
     numeric_blocks: dict[str, NDArray[Any]] = field(default_factory=dict)
-    """Fixed-size numeric blocks stored per row."""
+    """Per-row NumPy blocks with explicit dtype and fixed non-row dimensions."""
 
     record_blocks: dict[str, Any] = field(default_factory=dict)
-    """Lazy per-row diagnostic payloads stored in msgspec-compatible form."""
+    """Optional msgspec-compatible diagnostics excluded from the core training path."""
 
 
 def prepare_vin_offline_sample(
@@ -792,7 +797,7 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
 
     @property
     def target_type(self) -> type["VinOfflineWriter"]:
-        """Return the writer factory target."""
+        """Return :class:`VinOfflineWriter` for config-as-factory construction."""
 
         return VinOfflineWriter
 
@@ -812,10 +817,10 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """Optional EVL backbone configuration."""
 
     include_backbone: bool = True
-    """Whether to materialize backbone outputs."""
+    """Whether to persist actor-visible EVL outputs with manifest provenance."""
 
     include_depths: bool = True
-    """Whether to materialize candidate depths."""
+    """Whether to persist GT-mesh-rendered candidate depths and validity masks."""
 
     include_pointclouds: bool = False
     """Whether rich diagnostic payloads may include candidate point clouds."""
@@ -824,10 +829,10 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """Whether to write rich msgpack diagnostic records alongside numeric blocks."""
 
     include_gt_obbs: bool = True
-    """Whether to persist compact GT OBB tensors from raw snippets."""
+    """Whether to persist ASE GT OBBs as label/evaluation assets."""
 
     include_detected_obbs: bool = True
-    """Whether to persist compact detected OBB tensors from backbone outputs."""
+    """Whether to persist actor-visible EVL detected boxes from backbone outputs."""
 
     include_trajectory_metadata: bool = True
     """Whether to persist trajectory timestamps and gravity."""
@@ -847,7 +852,7 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """EVL backbone fields written to the optional rich diagnostic payload."""
 
     vin_pad_points: int = Field(default=DEFAULT_VIN_SNIPPET_PAD_POINTS, ge=0)
-    """Fixed VIN point count stored per sample."""
+    """Fixed ``K_store`` row count for world-frame semidense VIN point tensors."""
 
     semidense_max_points: int | None = None
     """Optional cap on collapsed semidense points before padding."""

@@ -1,4 +1,9 @@
-"""Refactored Streamlit app entrypoint."""
+"""Streamlit entry point and page router for the NBV exploration app.
+
+The module owns exception containment, session-backed pipeline wiring, sidebar
+controls, and dispatch to data, candidate, rendering, oracle, and diagnostics
+panels.
+"""
 
 from __future__ import annotations
 
@@ -35,9 +40,18 @@ from .ui import (
 
 @dataclass(slots=True)
 class NbvStreamlitApp:
+    """Run the session-scoped NBV explorer from one typed configuration.
+
+    UI routing stays here while heavy compute and cache invalidation remain in
+    :class:`aria_nbv.app.controller.PipelineController`.
+    """
+
     config: NbvStreamlitAppConfig
+    """Dataset and oracle-pipeline configuration owned by this app instance."""
 
     def run(self) -> None:  # pragma: no cover - UI code
+        """Render one Streamlit session and surface any uncaught traceback."""
+
         console = Console.with_prefix("nbv_streamlit_app")
         try:
             self._render(console)

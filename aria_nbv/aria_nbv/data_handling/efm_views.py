@@ -2,14 +2,18 @@
 
 These classes mirror the style of `aria_nbv.data.views` but read the
 keys produced by ``efm3d.dataset.efm_model_adaptor.load_atek_wds_dataset_as_efm``.
-All properties surface rich shape/type information to make downstream use
-explicit and safe.
+The consumed EFM key families cover ``ARIA_IMG``/``ARIA_CALIB`` camera streams,
+image/depth timestamps and frame IDs, ``ARIA_POSE_T_WORLD_RIG`` trajectories,
+MPS semidense point positions/uncertainties/volumes, and padded OBB/GT payloads.
+ATEK's ``EfmModelAdaptor`` owns flattened-key remapping; these views only expose
+the resulting schema and retain the backing dictionary.
 
-The view layer defines which fields are actor-visible (`rgb`, calibrated poses,
-semidense points, EVL/OBB predictions) and which are oracle/evaluation assets
-(attached GT meshes and GT OBBs). It avoids copying large tensors so dataset
-writers can attach mesh and snippet context without changing the immutable VIN
-offline-cache rows.
+The view layer defines which fields are actor-visible (calibrated images,
+world-from-rig poses, and MPS semidense points) and which are oracle/evaluation
+assets (``ARIA_OBB_PADDED``, nested ``gt_data``, and attached ASE meshes).
+Actor-visible EVL detected boxes enter later through backbone outputs, not
+:attr:`EfmSnippetView.obbs`. Views avoid copying large tensors so writers can
+attach mesh and snippet context without changing immutable VIN offline rows.
 """
 
 from __future__ import annotations
@@ -114,18 +118,22 @@ class BaseView:
 
 @dataclass(slots=True)
 class EfmGtCameraObbView(BaseView):
-    """Per-camera oriented bounding boxes for a single timestamp (EFM schema)."""
+    """Expose per-camera ASE GT boxes for one EFM evaluation timestamp.
+
+    These tensors are label/evaluation assets used for matching and target
+    crops. They must not be passed to an actor as observed object detections.
+    """
 
     category_names: list[str]
-    """Human-readable class labels (EFM43 set; see efm3d.qmd and glossary)."""
+    """Human-readable EFM taxonomy labels aligned with the ``K`` GT box rows."""
     category_ids: Tensor
-    """Tensor['K'] semantic ids aligned with ``category_names``."""
+    """``Tensor["K", int64]`` semantic IDs aligned with ``category_names``."""
     instance_ids: Tensor
-    """Tensor['K'] instance ids consistent across cameras at this timestamp."""
+    """``Tensor["K", int64]`` GT instance IDs shared across camera views."""
     object_dimensions: Tensor
-    """Tensor['K 3'] box side lengths (x, y, z) in metres."""
+    """``Tensor["K 3", float32]`` object-frame box side lengths in metres."""
     ts_world_object: Tensor
-    """Tensor['K 3 4'] world←object pose matrices per instance."""
+    """``Tensor["K 3 4", float32]`` world←object GT transforms per instance."""
 
 
 CamerasDict = TypedDict(
@@ -136,7 +144,7 @@ CamerasDict = TypedDict(
 
 @dataclass(slots=True)
 class EfmGtTimestampView(BaseView):
-    """EFM GT slice for one timestamp across cameras."""
+    """Group oracle GT OBB views for one timestamp across Aria cameras."""
 
     time_id: str
     """Timestamp identifier for this GT slice."""
@@ -147,13 +155,13 @@ class EfmGtTimestampView(BaseView):
 
 @dataclass(slots=True)
 class EfmGTView(BaseView):
-    """Ground-truth annotations (EFM schema) for a snippet."""
+    """Parse nested ``gt_data/efm_gt`` annotations for evaluation-only access."""
 
     raw: dict[str, Any]
-    """Backing raw GT payload."""
+    """Zero-copy backing GT payload from the adapted ATEK sample."""
 
     efm_gt: dict[str, EfmGtTimestampView]
-    """Parsed timestamp-indexed GT views."""
+    """Timestamp-indexed per-camera GT views; never actor-visible observations."""
 
     def __init__(self, raw: dict[str, Any]):
         """Parse nested EFM GT dictionaries into typed timestamp views."""
@@ -179,12 +187,19 @@ class EfmGTView(BaseView):
 
     @property
     def timestamps(self) -> list[str]:
-        """Sorted list of efm_gt timestamp keys."""
+        """Return sorted string keys for available ``efm_gt`` timestamps."""
 
         return sorted(self.efm_gt.keys())
 
     def cameras_at(self, ts: str | int) -> dict[str, EfmGtCameraObbView]:
-        """Get per-camera OBB GT at a timestamp."""
+        """Return evaluation-only per-camera GT OBBs at one timestamp.
+
+        Args:
+            ts: Timestamp key accepted as text or an integer.
+
+        Returns:
+            Camera-name mapping for the requested GT slice.
+        """
 
         key = str(ts)
         if key not in self.efm_gt:
@@ -194,18 +209,24 @@ class EfmGTView(BaseView):
 
 @dataclass(slots=True)
 class EfmCameraView(BaseView):
-    """Zero-copy camera stream view in EFM schema (images, calibration, timing, optional depth)."""
+    """Expose one calibrated Aria camera stream view without copying EFM tensors.
+
+    The view consumes matching entries from ``ARIA_IMG``, ``ARIA_CALIB``,
+    ``ARIA_IMG_TIME_NS``, ``ARIA_FRAME_ID``, and optional
+    ``ARIA_DISTANCE_M``/``ARIA_DEPTH_TIME_NS`` families. VRS and online
+    calibration are upstream provenance; runtime access is through ATEK/EFM.
+    """
 
     images: Tensor
-    """``Tensor["F C H W", float32]`` normalized camera images in Aria LUF frame."""
+    """``Tensor["F C H W", float32]`` normalized RGB or monochrome frames."""
     calib: CameraTW
-    """Per-frame camera intrinsics/extrinsics (`CameraTW.tensor` shape ``(F,34)``)."""
+    """Per-frame ``CameraTW`` intrinsics/extrinsics; backing shape is ``(F, 34)``."""
     time_ns: Tensor
-    """``Tensor["F", int64]`` device timestamps aligned to `images`."""
+    """``Tensor["F", int64]`` Aria device-clock timestamps aligned to ``images``."""
     frame_ids: Tensor
     """``Tensor["F", int64|float32]`` frame ids within the snippet."""
     distance_m: Tensor | None = None
-    """Optional metric ray distances ``Tensor["F 1 H W", float32]``."""
+    """Optional ``Tensor["F 1 H W", float32]`` per-pixel ray distances in metres."""
     distance_time_ns: Tensor | None = None
     """Optional ``Tensor["F", int64]`` timestamps for ``distance_m``."""
 
@@ -225,7 +246,7 @@ class EfmCameraView(BaseView):
         )
 
     def get_fov(self) -> Tensor:
-        """Tensor["F 2", float32] FOV in degrees (fov_x, fov_y) per frame."""
+        """Return ``Tensor["F 2", float32]`` horizontal/vertical FOV in degrees."""
         size = self.calib.size  # (..., 2) = (F,2)
         focals = self.calib.f  # (..., 2)
         width = size[..., 0].to(dtype=torch.float32)
@@ -286,18 +307,18 @@ class EfmCameraView(BaseView):
 
 @dataclass(slots=True)
 class EfmTrajectoryView(BaseView):
-    """World-frame rig trajectory aligned to snippet frames."""
+    """Expose the MPS/EFM world-from-rig trajectory for one snippet."""
 
     t_world_rig: PoseTW
-    """Rig SE(3) poses per frame (world←rig)."""
+    """``PoseTW["F 12"]`` world←rig transforms; translation is metres."""
     time_ns: Tensor
     """``Tensor["F", int64]`` pose timestamps."""
     gravity_in_world: Tensor
-    """``Tensor["3", float32]`` gravity vector in world frame (aligned to [0,0,-9.81])."""
+    """``Tensor["3", float32]`` world-frame gravity in metres per second squared."""
 
     @property
     def final_pose(self) -> PoseTW:
-        """Final rig pose in snippet. world ← rig."""
+        """Return the final ``PoseTW["12"]`` world←rig pose in the snippet."""
 
         return PoseTW.from_matrix3x4(self.t_world_rig.matrix3x4[-1])
 
@@ -316,22 +337,27 @@ class EfmTrajectoryView(BaseView):
 
 @dataclass(slots=True)
 class EfmPointsView(BaseView):
-    """Padded semi-dense SLAM point cloud view with per-frame metadata."""
+    """Expose actor-visible MPS semidense reconstruction evidence.
+
+    The ``ARIA_POINTS_*`` tensors are padded per frame; ``lengths`` defines the
+    valid prefix and non-finite rows remain invalid. Positions, uncertainties,
+    and volume bounds preserve the EFM world frame and metric units.
+    """
 
     points_world: Tensor
-    """``Tensor["F N 3", float32]`` padded world-frame SLAM points (meters)."""
+    """``Tensor["F N_pad 3", float32]`` padded world-frame MPS points in metres."""
     dist_std: Tensor
-    """``Tensor["F N", float32]`` per-point distance std (depth uncertainty)."""
+    """``Tensor["F N_pad", float32]`` per-point distance standard deviation in metres."""
     inv_dist_std: Tensor
-    """``Tensor["F N", float32]`` per-point inverse distance std."""
+    """``Tensor["F N_pad", float32]`` inverse distance uncertainty in metres⁻¹."""
     time_ns: Tensor
     """``Tensor["F", int64]`` timestamps aligned to point slices."""
     volume_min: Tensor
-    """``Tensor["3", float32]`` snippet AABB minimum in world coords."""
+    """``Tensor["3", float32]`` snippet AABB minimum in world frame, metres."""
     volume_max: Tensor
-    """``Tensor["3", float32]`` snippet AABB maximum in world coords."""
+    """``Tensor["3", float32]`` snippet AABB maximum in world frame, metres."""
     lengths: Tensor
-    """``Tensor["F", int64]`` true (unpadded) point counts per frame."""
+    """``Tensor["F", int64]`` valid point-prefix length for each padded frame."""
 
     def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> "EfmPointsView":
         """Move the semidense point tensors to the requested device and dtype."""
@@ -475,43 +501,52 @@ class EfmPointsView(BaseView):
 
 @dataclass(slots=True)
 class EfmObbView(BaseView):
-    """Snippet-level oriented bounding boxes in the EFM `ObbTW` layout.
+    """Expose snippet-level GT boxes in the EFM ``ObbTW`` layout.
 
     `obbs` may be shaped `(T, K, 34)`, `(1, K, 34)`, or `(K, 34)` depending on
-    the source. `K` is padded; padded rows are all `PAD_VAL` and must be removed
-    with `ObbTW.get_padding_mask()` before ranking or matching targets.
+    the source. ``K`` is padded; padded rows are all ``PAD_VAL`` and must be
+    removed with ``ObbTW.get_padding_mask()`` before matching label targets.
 
     The `34` payload columns are the EFM OBB contract: object-frame 3D bounds,
     three 2D boxes, a 12-value pose, semantic id, instance id, confidence, and
-    movable flag. Downstream target selection transforms the latest valid slice
-    into world coordinates before constructing `TargetCandidateRow` records.
+    movable flag. In :class:`EfmSnippetView` these boxes originate from
+    ``ARIA_OBB_PADDED`` and are GT label/evaluation data. Actor-visible target
+    hypotheses must come from EVL predictions or tracking instead.
     """
 
     obbs: ObbTW
-    """Padded oriented boxes in snippet frame or world frame, shape ``(..., K, 34)``."""
+    """``Tensor["... K 34", float32]`` GT boxes in the source EFM frame."""
     hz: Tensor | None = None
     """Optional ``Tensor["1", int32]`` detection frequency."""
 
 
 @dataclass(slots=True)
 class EfmSnippetView(BaseView):
-    """Typed wrapper over an EFM-formatted sample plus optional mesh."""
+    """Own the typed boundary around one adapted ATEK/ASE snippet.
+
+    ``efm`` retains the zero-copy key/value payload produced by
+    ``EfmModelAdaptor``. Camera/calibration, world-from-rig trajectory, and MPS
+    semidense fields are actor-visible observations. Attached ASE meshes,
+    ``ARIA_OBB_PADDED``, and nested ``gt_data`` are oracle/evaluation assets.
+    Mesh tensors are optional CPU/cache products and are not moved into the EFM
+    dictionary.
+    """
 
     efm: dict[str, Any]
-    """Backing EFM sample dictionary (zero-copy)."""
+    """Zero-copy adapted ATEK payload containing the consumed ``ARIA_*`` key families."""
     scene_id: str
-    """ASE scene identifier (e.g., ``81283``)."""
+    """ASE scene identifier used for shard lineage and GT-mesh pairing."""
     snippet_id: str
-    """Snippet/shard identifier (e.g., ``shards-0000``)."""
+    """Compact ATEK sample identifier derived from the WebDataset sample key."""
     mesh: Trimesh | None = None
-    """Optional GT mesh paired with this sample."""
+    """Optional ASE GT mesh used only by oracle labeling and evaluation."""
     crop_bounds: tuple[torch.Tensor, torch.Tensor] | None = None
-    """Optional `(min, max)` world-space AABB used for mesh cropping / occupancy."""
+    """Optional pair of ``Tensor["3", float32]`` world-frame bounds in metres."""
 
     mesh_verts: torch.Tensor | None = None
-    """Optional cached mesh vertices tensor (float32, device-agnostic)."""
+    """Optional ``Tensor["V 3", float32]`` GT-mesh vertices in world frame, metres."""
     mesh_faces: torch.Tensor | None = None
-    """Optional cached mesh faces tensor (int64)."""
+    """Optional ``Tensor["F_mesh 3", int64]`` triangle vertex indices."""
     mesh_cache_key: str | None = None
     """Stable key (spec hash) for shared mesh caches across components."""
 
@@ -692,7 +727,12 @@ class EfmSnippetView(BaseView):
     # ------------------------------------------------------------------
     @property
     def obbs(self) -> EfmObbView | None:
-        """Snippet-level OBBs (if present)."""
+        """Return padded ASE GT OBBs for label/evaluation use when present.
+
+        This property reads ``ARIA_OBB_PADDED`` and
+        ``ARIA_OBB_FREQUENCY_HZ``. It does not expose actor-visible EVL
+        predictions; those are carried separately in backbone/detected blocks.
+        """
 
         if "obbs/padded_snippet" not in self.efm:
             return None
@@ -728,7 +768,13 @@ class EfmSnippetView(BaseView):
         )
 
     def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> "EfmSnippetView":
-        """Shallow device move for heavy tensors."""
+        """Return a shallow copy with EFM tensors and wrappers moved to a device.
+
+        The backing dictionary is rebuilt without mutating this view. Plain
+        tensors honor ``dtype``; EFM wrappers preserve their own dtype contract.
+        The CPU ``Trimesh`` object is shared, while cached mesh tensors and
+        world-frame crop bounds are moved.
+        """
 
         target_device = torch.device(device)
         target_type = target_device.type
@@ -815,20 +861,21 @@ class VinSnippetView(BaseView):
     """Minimal snippet payload for VIN v2 batching.
 
     Attributes:
-        points_world: ``Tensor["K (3+C)", float32]`` collapsed semidense points.
+        points_world: ``Tensor["K_pad 3+C", float32]`` collapsed semidense points.
             Base columns are XYZ; optional extras include inv_dist_std and
             observation count (number of snippet frames that saw the point).
-        lengths: ``Tensor["B"]`` or ``Tensor["1"]`` number of valid points in
-            ``points_world`` (before padding).
+            Rows after ``lengths`` are NaN padding.
+        lengths: ``Tensor["1", int64]`` or ``Tensor["B", int64]`` number of
+            valid rows in ``points_world``.
         t_world_rig: ``PoseTW["F 12"]`` historical world←rig poses.
     """
 
     points_world: Tensor
-    """Collapsed semidense point cloud with optional extra features."""
+    """``Tensor["K_pad 3+C", float32]`` world-frame MPS points in metres; tail rows are NaN padding."""
     lengths: Tensor
-    """Number of valid points in ``points_world`` (before padding)."""
+    """``Tensor["1", int64]`` valid point-prefix length before fixed-width padding."""
     t_world_rig: PoseTW
-    """Trajectory poses (world←rig)."""
+    """``PoseTW["F 12"]`` MPS/EFM world←rig trajectory; translation is metres."""
 
     def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> "VinSnippetView":
         """Move the VIN snippet tensors to the requested device and dtype."""

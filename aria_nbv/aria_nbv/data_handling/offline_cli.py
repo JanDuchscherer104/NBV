@@ -1,6 +1,6 @@
 """CLI for building immutable VIN offline stores.
 
-This module exposes the ``nbv-build-offline`` console script. It loads a
+This module owns the ``nbv-build-offline`` console-script boundary. It loads a
 ``VinOfflineWriterConfig`` TOML file, validates it through the normal
 config-as-factory path, and runs `aria_nbv.data_handling.VinOfflineWriter`.
 """

@@ -69,7 +69,7 @@ class CandidateScorer(Protocol):
         Args:
             efm: Actor-visible EFM/VIN snippet view containing semidense scene
                 evidence.
-            candidate_poses_world_cam: ``PoseTW["B C 12"]`` world←camera
+            candidate_poses_world_cam: ``PoseTW["B N_q 12"]`` world←camera
                 candidate poses.
             reference_pose_world_rig: ``PoseTW["B 12"]`` world←rig reference
                 pose used to express candidates in the local frame.
@@ -106,16 +106,21 @@ class CandidateScorerPrediction(Protocol):
     """
 
     logits: Tensor
-    """``Tensor["B C K-1"]`` CORAL logits or a flattened candidate equivalent."""
+    """``Tensor["B N_q K-1", float32]`` CORAL threshold logits."""
 
     prob: Tensor
-    """``Tensor["B C K"]`` ordinal class probabilities."""
+    """``Tensor["B N_q K", float32]`` ordinal class probabilities."""
 
     expected_normalized: Tensor
-    """``Tensor["B C"]`` expected normalized score used for ranking metrics."""
+    """``Tensor["B N_q", float32]`` expected normalized ranking score."""
 
     candidate_valid: Tensor | None
-    """Optional ``Tensor["B C"]`` hard candidate-valid mask from the scorer."""
+    """Optional ``Tensor["B N_q", bool]`` scorer diagnostic validity mask.
+
+    The current one-step scorer does not automatically use this mask as a
+    training or action-selection mask. A future ``Q_H`` objective requires the
+    authoritative hard valid-action mask stored with its rollout state.
+    """
 
 
 CandidateScorerConfig: TypeAlias = (

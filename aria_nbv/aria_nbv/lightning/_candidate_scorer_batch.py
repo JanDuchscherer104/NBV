@@ -1,11 +1,15 @@
 """Batch input normalization for VIN-compatible Lightning scorers.
 
-`aria_nbv.lightning.lit_module.VinLightningModule` trains candidate scorers
+:class:`aria_nbv.lightning.VinLightningModule` trains candidate scorers
 through a shared forward contract: actor-visible snippet evidence, candidate
 poses, reference pose, PyTorch3D cameras, and optional cached EVL backbone
 outputs. This sidecar owns the batch-to-forward-input conversion so future
 myopic and finite-horizon Lightning paths can reuse the same device and
 snippet/backbone validation without copying the full training step.
+
+Oracle RRI values, point-mesh diagnostics, GT OBBs, and target-evaluation
+geometry stay on :class:`aria_nbv.data_handling.VinOracleBatch`; this module
+deliberately does not expose them to the scorer forward pass.
 """
 
 from __future__ import annotations
@@ -32,20 +36,45 @@ class CandidateScorerBatchInputs:
 
     Attributes:
         efm: Actor-visible EFM or minimal VIN snippet evidence.
-        candidate_poses_world_cam: Candidate poses as world←camera
-            ``PoseTW["B N 12"]`` or ``PoseTW["N 12"]`` on the module device.
-        reference_pose_world_rig: Reference rig pose as world←rig on the module
+        candidate_poses_world_cam: Compact/right-padded candidate table as
+            world-from-camera poses on the module device.
+        reference_pose_world_rig: World-from-rig reference pose on the module
             device.
         p3d_cameras: PyTorch3D cameras aligned with candidate rows on the
             module device.
-        backbone_out: Optional cached EVL backbone output on the module device.
+        backbone_out: Optional cached actor-visible EVL output on the module
+            device.
     """
 
     efm: EfmSnippetView | VinSnippetView
+    """Actor-visible :class:`EfmSnippetView` or :class:`VinSnippetView`.
+
+    Semidense points are expressed in world-frame metres. A minimal VIN view
+    requires `backbone_out` because it does not carry all inputs needed to run
+    EVL inside the scorer.
+    """
+
     candidate_poses_world_cam: PoseTW
+    """World-from-camera ``PoseTW["N_q 12"]`` or ``PoseTW["B N_q 12"]``.
+
+    ``N_q`` is the compact candidate count for one sample or the right-padded
+    collation width for a batch. It is not the rollout full-shell width
+    ``N_shell``; padded rows are excluded by
+    :meth:`VinOracleBatch.candidate_valid_mask` before loss or selection.
+    """
+
     reference_pose_world_rig: PoseTW
+    """World-from-rig ``PoseTW["12"]`` or ``PoseTW["B 12"]`` reference pose."""
+
     p3d_cameras: PerspectiveCameras
+    """Candidate-aligned PyTorch3D cameras on the scorer device.
+
+    Batched camera parameters use a flattened ``B*N_q`` camera axis while
+    preserving the same row order as `candidate_poses_world_cam`.
+    """
+
     backbone_out: EvlBackboneOutput | None
+    """Optional cached actor-visible EVL fields, moved to the scorer device."""
 
 
 def prepare_candidate_scorer_batch_inputs(
@@ -53,15 +82,17 @@ def prepare_candidate_scorer_batch_inputs(
     *,
     device: torch.device,
 ) -> CandidateScorerBatchInputs:
-    """Prepare scorer-forward inputs from one `VinOracleBatch`.
+    """Prepare actor-visible scorer inputs from one oracle-labelled batch.
 
     Args:
-        batch: Oracle-labelled VIN batch from the Lightning datamodule.
+        batch: :class:`VinOracleBatch` containing compact/right-padded
+            candidates plus oracle-only training labels.
         device: Destination device used by the owning Lightning module.
 
     Returns:
-        `CandidateScorerBatchInputs` ready to pass to the structural
-        `aria_nbv.vin.candidate_scorer.CandidateScorer.forward` protocol.
+        :class:`CandidateScorerBatchInputs` ready for the structural candidate
+        scorer forward protocol. Oracle labels and GT evaluation assets are
+        intentionally absent.
 
     Raises:
         RuntimeError: If the batch lacks actor-visible snippet evidence or if a

@@ -4,6 +4,11 @@ This renderer mirrors the public API of `Pytorch3DDepthRenderer`
 but uses pure CPU ray-mesh intersection so it works without a GPU. It is
 intended as a correctness-oriented fallback and for lightweight testing.
 
+This module provides :class:`Efm3dDepthRendererConfig` and the trimesh-backed
+renderer, owning mesh preparation, optional proxy walls, ray construction, and
+chunked intersection. Candidate selection, depth-to-point-cloud conversion,
+and RRI scoring remain outside this backend.
+
 Key features:
     - Config-as-factory pattern (`BaseConfig.setup_target()`).
     - Optional proxy-wall insertion to seal incomplete meshes, using the
@@ -32,7 +37,12 @@ if TYPE_CHECKING:
 
 
 class Efm3dDepthRendererConfig(TargetConfig["Efm3dDepthRenderer"]):
-    """Configuration for `Efm3dDepthRenderer`."""
+    """Configure correctness-oriented CPU ray casting for metric depth.
+
+    Proxy-wall and chunk controls compensate for incomplete ASE room meshes
+    and cap host-memory use. The backend always traces in world geometry, then
+    returns camera z-depth in metres on the configured Torch output device.
+    """
 
     @property
     def target_type(self) -> type["Efm3dDepthRenderer"]:
@@ -88,7 +98,7 @@ class Efm3dDepthRenderer:
 
     @property
     def device(self) -> torch.device:
-        """Torch device used for outputs."""
+        """Return the Torch device receiving rendered ``Tensor[\"H W\"]`` maps."""
 
         return self._device
 

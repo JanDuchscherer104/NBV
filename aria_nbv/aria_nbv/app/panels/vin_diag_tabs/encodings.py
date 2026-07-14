@@ -1,4 +1,9 @@
-"""Pose encoding tab for VIN diagnostics."""
+"""VIN pose-vector and learnable Fourier feature diagnostics.
+
+The tab provides input distributions, learned-frequency summaries, spatial
+encoding slices, and PCA projections used to diagnose scale, anisotropy, or
+feature collapse in actor-visible pose processing.
+"""
 
 from __future__ import annotations
 

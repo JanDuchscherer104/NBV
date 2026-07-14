@@ -1,4 +1,8 @@
-"""Data panel rendering and helpers."""
+"""Observed snippet inspection with optional oracle scene overlays.
+
+The panel provides trajectory, camera, image, and semidense evidence views;
+ASE meshes and GT boxes remain explicitly labeled evaluation-only overlays.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +28,14 @@ def render_data_page(
     *,
     crop_margin: float | None = None,
 ) -> None:
+    """Render modalities, poses, projections, and 3D context for one snippet.
+
+    Args:
+        sample: Selected EFM snippet whose source poses are world-from-rig and
+            whose observed camera/semidense evidence is actor-visible.
+        crop_margin: Optional mesh crop margin in metres for display metadata.
+    """
+
     st.header("Data")
     st.write(f"Scene: **{sample.scene_id}**, snippet: **{sample.snippet_id}**")
 

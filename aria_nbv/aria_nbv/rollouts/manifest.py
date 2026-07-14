@@ -97,7 +97,12 @@ class RolloutStoreManifestContext:
 
     @classmethod
     def programmatic(cls, *, writer_config: BaseConfig | None = None) -> "RolloutStoreManifestContext":
-        """Build context for programmatic calls."""
+        """Build provenance context for a non-CLI rollout-store invocation.
+
+        The optional resolved writer configuration is serialized into the
+        sidecar together with current runtime provenance. No source payloads or
+        mutable runtime objects are retained.
+        """
 
         return cls(
             writer_config=None if writer_config is None else writer_config.model_dump_jsonable(),
@@ -124,7 +129,12 @@ class RolloutStoreManifestContext:
         )
 
     def to_jsonable(self) -> dict[str, Any]:
-        """Return JSON-friendly manifest context."""
+        """Return the resolved writer, invocation, runtime, and shard metadata.
+
+        The returned mapping is suitable for stable JSON serialization and
+        intentionally contains provenance only; heavy rollout facts remain in
+        normalized Zarr arrays.
+        """
 
         return {
             "writer_config": self.writer_config,
@@ -166,7 +176,16 @@ def write_rollout_store_manifest(store_dir: Path, payload: dict[str, Any]) -> st
 
 
 def read_rollout_store_manifest(store_dir: Path | str) -> dict[str, Any]:
-    """Read a rollout-store sidecar manifest."""
+    """Read the human-inspectable manifest beside a rollout Zarr payload.
+
+    Args:
+        store_dir: Standalone rollout-store directory containing
+            ``manifest.json``.
+
+    Returns:
+        Parsed provenance and schema metadata. The function performs no Zarr
+        reads and does not mutate the completed store.
+    """
 
     path = Path(store_dir).expanduser().resolve() / ROLLOUT_MANIFEST_FILENAME
     return json.loads(path.read_text(encoding="utf-8"))

@@ -1,4 +1,11 @@
-"""Rerun logging for standalone rollout Zarr replay stores."""
+"""Inspect validated rollout Zarr facts without mutating replay artifacts.
+
+This module owns rollout-row resolution, full-shell candidate visualization,
+selected-path timelines, branch plots, target provenance, and selected-depth
+display. ``actor_action_mask`` and compact-valid indices remain distinct from
+the full shell; target RRI, GT matches, and mesh-rendered depth are explicitly
+oracle/evaluation overlays rather than actor-visible state.
+"""
 
 from __future__ import annotations
 

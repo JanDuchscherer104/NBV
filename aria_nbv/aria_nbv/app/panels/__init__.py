@@ -1,4 +1,8 @@
-"""Streamlit panels for the NBV app."""
+"""Public Streamlit panel renderers for the NBV explorer.
+
+This package facade exports the page-level entry points used by the app router
+while keeping each diagnostic surface in a focused implementation module.
+"""
 
 from __future__ import annotations
 

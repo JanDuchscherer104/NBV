@@ -1,6 +1,7 @@
 r"""Bounded counterfactual pose rollout utilities.
 
-Rollouts regenerate finite candidate tables at each step from the updated pose,
+This module provides rollout records, policies, configs, and generators that
+regenerate finite candidate tables at each step from the updated pose,
 history, and remaining budget. The candidate generator may be single-family or
 mixed, but the selected action must satisfy the actor-valid mask. Oracle scores
 are supervision/evaluation fields; actor-visible replay rows retain poses,
@@ -266,14 +267,30 @@ class CounterfactualSelectionPolicy(StrEnum):
 
 @dataclass(slots=True)
 class CounterfactualSelectionRecord:
-    """Selected valid-candidate index plus the distribution used to draw it."""
+    """Selected compact-valid row and its action-selection distribution.
+
+    ``V`` is the number of actor-valid rows in the step-local full shell. The
+    distribution tensors are aligned to that compact axis; callers map the
+    selected row back through the candidate shell index before persistence.
+    """
 
     valid_index: int
+    """Selected zero-based index on the compact valid-candidate axis ``V``."""
+
     logits: torch.Tensor
+    """Selection logits as ``Tensor["V", float32]`` before softmax."""
+
     probabilities: torch.Tensor
+    """Normalized action probabilities as ``Tensor["V", float32]``."""
+
     log_probabilities: torch.Tensor
+    """Natural-log action probabilities as ``Tensor["V", float32]``."""
+
     entropy: float
+    """Categorical entropy of ``probabilities`` in nats."""
+
     selected_log_probability: float
+    """Log probability assigned to ``valid_index`` in nats."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,40 +298,103 @@ class _CandidateDiversityMetadata:
     """Optional valid-candidate metadata used by branch diversity guards."""
 
     yaw_rad: torch.Tensor
+    """World-frame camera yaw as ``Tensor["V", float32]`` in radians."""
+
     strategy_id: torch.Tensor | None = None
+    """Optional generator strategy ids as ``Tensor["V", int64]``."""
+
     target_bearing_yaw_rad: torch.Tensor | None = None
+    """Optional target-bearing yaw as ``Tensor["V", float32]`` in radians."""
 
 
 @dataclass(slots=True)
 class CounterfactualMetricBundle:
-    """Typed per-valid-candidate metrics emitted by rollout evaluators."""
+    """Oracle/evaluation metrics aligned to compact valid candidates.
+
+    Every present value is ``Tensor["V", float32]``, where ``V`` excludes
+    invalid rows from the full generated shell. These metrics are supervision
+    and audit labels, not actor-visible state. ``target_*`` measures the target
+    OBB crop, ``scene_*`` measures the scene evaluation extent, and unprefixed
+    fields are the scorer's primary/legacy channel.
+    """
 
     rri: torch.Tensor | None = None
+    """Primary relative reconstruction improvement for each valid action."""
+
     root_gain: torch.Tensor | None = None
+    """Primary point-mesh error reduction normalized by root error."""
+
     root_pm_dist: torch.Tensor | None = None
+    """Primary root point-mesh distance used as the gain denominator."""
+
     log_error_gain: torch.Tensor | None = None
+    """Primary log point-mesh error before minus log error after."""
+
     target_rri: torch.Tensor | None = None
+    """Relative reconstruction improvement inside the target evaluation crop."""
+
     target_root_gain: torch.Tensor | None = None
+    """Target-crop error reduction normalized by target error at rollout root."""
+
     target_root_pm_dist: torch.Tensor | None = None
+    """Target-crop root point-mesh distance used for root-normalized gain."""
+
     target_log_error_gain: torch.Tensor | None = None
+    """Target-crop log point-mesh error reduction."""
+
     scene_rri: torch.Tensor | None = None
+    """Relative reconstruction improvement over the scene evaluation extent."""
+
     scene_root_gain: torch.Tensor | None = None
+    """Scene error reduction normalized by scene error at rollout root."""
+
     scene_root_pm_dist: torch.Tensor | None = None
+    """Scene root point-mesh distance used for root-normalized gain."""
+
     scene_log_error_gain: torch.Tensor | None = None
+    """Scene log point-mesh error reduction."""
+
     target_pm_dist_before: torch.Tensor | None = None
+    """Target point-mesh distance before fusing each candidate observation."""
+
     target_pm_dist_after: torch.Tensor | None = None
+    """Target point-mesh distance after fusing each candidate observation."""
+
     target_pm_acc_before: torch.Tensor | None = None
+    """Target point-mesh accuracy component before candidate fusion."""
+
     target_pm_comp_before: torch.Tensor | None = None
+    """Target point-mesh completeness component before candidate fusion."""
+
     target_pm_acc_after: torch.Tensor | None = None
+    """Target point-mesh accuracy component after candidate fusion."""
+
     target_pm_comp_after: torch.Tensor | None = None
+    """Target point-mesh completeness component after candidate fusion."""
+
     target_candidate_support: torch.Tensor | None = None
+    """Number of retained target-crop points contributed by each candidate."""
+
     target_current_support: torch.Tensor | None = None
+    """Number of current fused points in the target crop before each action."""
+
     scene_pm_dist_before: torch.Tensor | None = None
+    """Scene point-mesh distance before fusing each candidate observation."""
+
     scene_pm_dist_after: torch.Tensor | None = None
+    """Scene point-mesh distance after fusing each candidate observation."""
+
     scene_pm_acc_before: torch.Tensor | None = None
+    """Scene point-mesh accuracy component before candidate fusion."""
+
     scene_pm_comp_before: torch.Tensor | None = None
+    """Scene point-mesh completeness component before candidate fusion."""
+
     scene_pm_acc_after: torch.Tensor | None = None
+    """Scene point-mesh accuracy component after candidate fusion."""
+
     scene_pm_comp_after: torch.Tensor | None = None
+    """Scene point-mesh completeness component after candidate fusion."""
 
     @classmethod
     def from_vectors(cls, vectors: Mapping[str, torch.Tensor] | None) -> "CounterfactualMetricBundle":
@@ -351,19 +431,46 @@ class CounterfactualMetricBundle:
 
 @dataclass(init=False, slots=True)
 class CounterfactualCandidateEvaluation:
-    """Structured per-valid-candidate rollout scores and optional diagnostics."""
+    """Oracle scores and optional geometry on the compact valid axis ``V``.
+
+    Evaluators receive only actor-valid candidates, so every leading ``V`` axis
+    must be expanded through the step's validity mask before joining the full
+    shell. Point clouds, target crops, and metric labels are oracle/evaluation
+    products and must not be exposed as actor observations.
+    """
 
     scores: torch.Tensor
+    """Policy selection scores as ``Tensor["V", float32]``."""
+
     score_label: str
+    """Stable semantic name for ``scores`` recorded in replay lineage."""
+
     metrics: CounterfactualMetricBundle
+    """Typed oracle/evaluation metric vectors aligned to ``scores``."""
+
     candidate_point_clouds_world: torch.Tensor | None
+    """Padded rendered clouds as ``Tensor["V P 3", float32]`` in world metres."""
+
     candidate_point_cloud_lengths: torch.Tensor | None
+    """Valid point counts as ``Tensor["V", int64]`` for the padded clouds."""
+
     target_eval_current_points_world: torch.Tensor | None
+    """Current target crop as ``Tensor["P_t 3", float32]`` in world metres."""
+
     target_eval_candidate_points_world: torch.Tensor | None
+    """Candidate target crops as ``Tensor["V P_q 3", float32]`` in world metres."""
+
     target_eval_candidate_point_lengths: torch.Tensor | None
+    """Valid target-crop counts as ``Tensor["V", int64]``."""
+
     target_eval_crop_policy: str | None
+    """Versioned oracle target-crop policy used for the optional point payloads."""
+
     target_eval_voxel_size_m: float | None
+    """Canonical-fusion voxel size for target crops, in metres."""
+
     target_eval_max_points: int | None
+    """Maximum retained points per target-evaluation crop."""
 
     def __init__(
         self,
@@ -495,9 +602,29 @@ class CounterfactualCandidateEvaluation:
         )
 
     def selected_metrics(self, valid_index: int) -> dict[str, float]:
+        """Extract scalar oracle metrics for one compact valid-candidate row.
+
+        Args:
+            valid_index: Zero-based index on the compact axis ``V``.
+
+        Returns:
+            Present metric names mapped to Python scalar values for the selected
+            action.
+        """
+
         return {name: float(values[valid_index].item()) for name, values in self.metric_vectors.items()}
 
     def selected_point_cloud(self, valid_index: int) -> torch.Tensor | None:
+        """Return the unpadded world-frame cloud for one valid candidate.
+
+        Args:
+            valid_index: Zero-based index on the compact axis ``V``.
+
+        Returns:
+            ``Tensor["P_i 3", float32]`` in world metres, or ``None`` when the
+            evaluator did not retain rendered candidate geometry.
+        """
+
         if self.candidate_point_clouds_world is None:
             return None
         cloud = self.candidate_point_clouds_world[valid_index]
@@ -509,44 +636,112 @@ class CounterfactualCandidateEvaluation:
 
 @dataclass(slots=True)
 class CounterfactualStepResult:
-    """One selected rollout step."""
+    """One rollout transition with its complete shell and selected valid row.
+
+    ``N`` is the step-local generated shell width and ``V`` its compact
+    actor-valid subset. Candidate generation owns the full shell and validity
+    masks; selection and oracle metric vectors use ``V``. Selected depth and
+    target-crop payloads are oracle/evaluation artifacts retained for successor
+    history and audit, never actor-visible inputs.
+    """
 
     step_index: int
+    """Zero-based rollout depth on the horizon axis ``H``."""
+
     candidates: CandidateSamplingResult
+    """Full ``N``-row shell, masks, compact valid views, and generator provenance."""
+
     selected_valid_index: int
+    """Selected zero-based row on the compact valid axis ``V``."""
+
     selected_shell_index: int
+    """Corresponding zero-based row on the full shell axis ``N``."""
+
     selection_score: float
+    """Policy score of the selected action; not a validity sentinel."""
+
     selection_score_label: str = "score"
+    """Stable semantic name for the selection-score channel."""
+
     selection_scores: torch.Tensor | None = None
+    """Scores as ``Tensor["V", float32]`` on compact valid rows."""
+
     selection_policy: str = "unknown"
+    """Policy identifier used to choose the action."""
+
     selection_temperature: float | None = None
+    """Softmax temperature when the policy samples from a score distribution."""
+
     selection_logits: torch.Tensor | None = None
+    """Selection logits as ``Tensor["V", float32]``."""
+
     selection_probabilities: torch.Tensor | None = None
+    """Action probabilities as ``Tensor["V", float32]``."""
+
     selection_log_probabilities: torch.Tensor | None = None
+    """Log action probabilities as ``Tensor["V", float32]``."""
+
     selection_entropy: float | None = None
+    """Categorical selection entropy in nats."""
+
     selected_log_probability: float | None = None
+    """Log probability of the selected compact-valid row, in nats."""
+
     selection_rng_seed: int | None = None
+    """Deterministic per-node seed used for stochastic action selection."""
+
     selected_metrics: dict[str, float] = field(default_factory=dict)
+    """Oracle/evaluation scalars for the selected action only."""
+
     metric_vectors: dict[str, torch.Tensor] = field(default_factory=dict)
+    """Oracle/evaluation vectors, each ``Tensor["V", float32]``."""
+
     selected_point_cloud_world: torch.Tensor | None = None
+    """Selected rendered cloud as ``Tensor["P 3", float32]`` in world metres."""
+
     selected_depth_m: torch.Tensor | None = None
+    """Selected mesh-rendered depth as ``Tensor["H_d W_d", float32]`` in metres."""
+
     selected_depth_valid_mask: torch.Tensor | None = None
+    """Finite-hit mask as ``Tensor["H_d W_d", bool]`` for ``selected_depth_m``."""
+
     selected_depth_focal_px: tuple[float, float] | None = None
+    """Selected-depth focal lengths ``(f_x, f_y)`` in pixels."""
+
     selected_depth_principal_point_px: tuple[float, float] | None = None
+    """Selected-depth principal point ``(c_x, c_y)`` in pixels."""
+
     selected_depth_image_size_hw: tuple[int, int] | None = None
+    """Selected-depth raster size ``(H_d, W_d)`` in pixels."""
+
     target_eval_current_points_world: torch.Tensor | None = None
+    """Current oracle target crop as ``Tensor["P_t 3", float32]`` in world metres."""
+
     target_eval_candidate_points_world: torch.Tensor | None = None
+    """Valid-action target crops as ``Tensor["V P_q 3", float32]`` in world metres."""
+
     target_eval_candidate_point_lengths: torch.Tensor | None = None
+    """Valid points per candidate crop as ``Tensor["V", int64]``."""
+
     target_eval_crop_policy: str | None = None
+    """Versioned oracle crop policy for retained target-evaluation points."""
+
     target_eval_voxel_size_m: float | None = None
+    """Voxel size used to canonical-fuse retained target crops, in metres."""
+
     target_eval_max_points: int | None = None
+    """Maximum retained points in each target-evaluation crop."""
 
     @property
     def selected_pose_world(self) -> PoseTW:
+        """Return the selected physical world-from-camera pose from compact row ``V``."""
+
         return _pose_at(self.candidates.poses_world_cam(), self.selected_valid_index)
 
     @property
     def selected_view(self) -> CameraTW:
+        """Return calibrated camera parameters paired with the selected valid pose."""
+
         views = self.candidates.views
         if getattr(views, "ndim", 1) > 1:
             return views[self.selected_valid_index]
@@ -555,36 +750,79 @@ class CounterfactualStepResult:
 
 @dataclass(slots=True)
 class CounterfactualTrajectory:
-    """One rollout trajectory rooted at one initial pose."""
+    """One retained root-to-leaf path through a counterfactual rollout tree.
+
+    A trajectory has at most ``H`` steps and ``T = len(steps) + 1`` physical
+    camera poses including its root. Update helpers return new trajectory
+    records so sibling branches do not share mutable step lists.
+    """
 
     root_pose_world: PoseTW
+    """Physical world-from-camera pose at rollout depth zero."""
+
     root_time_ns: int | None = None
+    """Source capture timestamp in nanoseconds, when available."""
+
     root_trajectory_index: int | None = None
+    """Source trajectory-sample index used to reconstruct root evidence."""
+
     root_frame_index: int | None = None
+    """Source frame index associated with the root camera pose."""
+
     steps: list[CounterfactualStepResult] = field(default_factory=list)
+    """Selected transitions in increasing zero-based horizon order."""
+
     cumulative_score: float = 0.0
+    """Sum of policy selection scores along this retained path."""
+
     cumulative_rri: float | None = None
+    """Sum of selected primary oracle RRI labels, when available."""
+
     terminated_early: bool = False
+    """Whether expansion stopped before the configured horizon."""
 
     def final_pose_world(self) -> PoseTW:
+        """Return the last selected world-from-camera pose, or the root if empty."""
+
         if not self.steps:
             return self.root_pose_world
         return self.steps[-1].selected_pose_world
 
     def pose_chain_world(self) -> PoseTW:
+        """Stack the root and selected world-from-camera poses in path order.
+
+        Returns:
+            Batched ``PoseTW`` with underlying ``Tensor["T 12", float32]``,
+            where ``T = len(steps) + 1``.
+        """
+
         rows = [_pose_row(self.root_pose_world)]
         rows.extend(_pose_row(step.selected_pose_world) for step in self.steps)
         return PoseTW(torch.cat(rows, dim=0))
 
     def history_centers_world(self) -> torch.Tensor:
+        """Return camera centers as ``Tensor["T 3", float32]`` in world metres."""
+
         return self.pose_chain_world().t.reshape(-1, 3)
 
     def reference_pose_world(self, step_index: int) -> PoseTW:
+        """Return the physical pose from which ``step_index`` is expanded.
+
+        Depth zero and empty paths reference the root; later depths reference
+        the previously selected world-from-camera pose.
+        """
+
         if step_index <= 0 or not self.steps:
             return self.root_pose_world
         return self.steps[step_index - 1].selected_pose_world
 
     def with_appended_step(self, step: CounterfactualStepResult) -> "CounterfactualTrajectory":
+        """Return a sibling-safe copy with one selected transition appended.
+
+        Cumulative score and primary RRI are advanced without modifying this
+        trajectory's step list. The returned branch is marked active.
+        """
+
         step_rri = step.selected_metrics.get("rri")
         cumulative_rri = self.cumulative_rri
         if step_rri is not None:
@@ -601,9 +839,18 @@ class CounterfactualTrajectory:
         )
 
     def mark_terminated(self) -> "CounterfactualTrajectory":
+        """Return a copy marked as early-terminated without changing path facts."""
+
         return replace(self, terminated_early=True)
 
     def accumulated_points_world(self) -> torch.Tensor:
+        """Concatenate selected oracle-rendered history clouds in world metres.
+
+        Returns:
+            ``Tensor["P_total 3", float32]``. An empty path returns a correctly
+            placed empty tensor on the root pose device and dtype.
+        """
+
         clouds = [step.selected_point_cloud_world for step in self.steps if step.selected_point_cloud_world is not None]
         if not clouds:
             root = ensure_unbatched_pose(self.root_pose_world)
@@ -613,18 +860,42 @@ class CounterfactualTrajectory:
 
 @dataclass(slots=True)
 class CounterfactualRolloutResult:
-    """All trajectories produced by one rollout call."""
+    """Retained rollout leaves and tree controls for one physical root pose.
+
+    ``H`` is maximum rollout depth, ``B`` is base sibling expansion count, and
+    ``L = len(trajectories)`` is the retained branch/beam axis after pruning.
+    Each step still owns its complete, variable-width candidate shell.
+    """
 
     root_pose_world: PoseTW
+    """Physical world-from-camera pose shared by all retained trajectories."""
+
     trajectories: list[CounterfactualTrajectory]
+    """Retained root-to-leaf paths on the branch/beam axis ``L``."""
+
     horizon: int
+    """Maximum number of selected transitions ``H`` per path."""
+
     branch_factor: int
+    """Base sibling expansion count ``B`` before diversity and beam pruning."""
+
     beam_width: int | None
+    """Maximum retained partial paths after each depth, or ``None`` for no cap."""
+
     selection_policy: str | CounterfactualSelectionPolicy
+    """Action-selection policy shared by this rollout call."""
+
     score_label: str = "score"
+    """Stable semantic name for per-action selection scores."""
+
     root_time_ns: int | None = None
+    """Source capture timestamp in nanoseconds, when available."""
+
     root_trajectory_index: int | None = None
+    """Source trajectory index used to reconstruct root evidence."""
+
     root_frame_index: int | None = None
+    """Source frame index associated with the root pose."""
 
 
 CounterfactualEvaluatorFn = Callable[
@@ -644,32 +915,71 @@ class CounterfactualPoseGeneratorConfig(TargetConfig["CounterfactualPoseGenerato
 
     @property
     def target_type(self) -> type["CounterfactualPoseGenerator"]:
+        """Return the finite-candidate rollout generator constructed by this config."""
+
         return CounterfactualPoseGenerator
 
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig = Field(
         default_factory=CandidateViewGeneratorConfig
     )
+    """Step-local generator that owns full candidate shells, masks, and provenance."""
+
     horizon: int = Field(default=3, ge=1)
+    """Maximum rollout depth ``H`` in selected transitions."""
+
     branch_factor: int = Field(default=2, ge=1)
+    """Base sibling count ``B`` expanded from each active trajectory."""
+
     beam_width: int | None = Field(default=None, ge=1)
+    """Optional cap on retained trajectories after each rollout depth."""
+
     branch_factor_schedule: list[int] | None = None
+    """Deterministic per-depth sibling counts; the final entry repeats."""
+
     stochastic_branch_factors: list[int] | None = None
+    """Seeded alternatives for per-node sibling expansion count."""
+
     stochastic_branch_probabilities: list[float] | None = None
+    """Sampling weights aligned with ``stochastic_branch_factors``."""
+
     selection_policy: CounterfactualSelectionPolicy = CounterfactualSelectionPolicy.FARTHEST_FROM_HISTORY
+    """Policy applied only after hard actor-valid candidate masking."""
+
     selection_temperature: float = Field(default=1.0, gt=0.0)
+    """Positive softmax temperature for stochastic score-based selection."""
+
     robust_temperature_logits: bool = True
     """Normalize temperature-softmax scores by median/IQR before applying temperature."""
 
     branch_schedule_id: str | None = None
+    """Stable provenance label for the configured branch schedule."""
+
     min_history_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum selected-pose distance from path history, in metres."""
+
     min_sibling_distance_m: float = Field(default=0.0, ge=0.0)
+    """Minimum camera-center distance between sibling actions, in metres."""
+
     min_sibling_yaw_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum world-yaw separation between sibling actions, in degrees."""
+
     min_sibling_target_bearing_deg: float = Field(default=0.0, ge=0.0)
+    """Minimum target-bearing separation between siblings, in degrees."""
+
     require_sibling_strategy_diversity: bool = False
+    """Prefer distinct generator strategy ids among sibling actions."""
+
     seed: int | None = Field(default=0, ge=0)
+    """Root seed from which deterministic node-selection seeds are derived."""
+
     log_timing: bool = False
+    """Emit candidate-generation and evaluator timing diagnostics."""
+
     verbosity: Verbosity = Field(default=Verbosity.NORMAL)
+    """Console verbosity propagated to the rollout generator."""
+
     is_debug: bool = False
+    """Enable debug diagnostics in rollout dependencies."""
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
 
@@ -700,17 +1010,30 @@ class CounterfactualPoseGeneratorConfig(TargetConfig["CounterfactualPoseGenerato
 
 
 class CounterfactualOracleRriScorerConfig(TargetConfig["CounterfactualOracleRriScorer"]):
-    """Config-as-factory wrapper for oracle-RRI rollout scoring."""
+    """Configure mesh-based oracle RRI labels for compact valid candidates.
+
+    The scorer renders geometry and computes evaluation labels after hard
+    action masking. Its outputs may guide oracle policies and train ``Q_H`` but
+    are never actor-visible observations.
+    """
 
     @property
     def target_type(self) -> type["CounterfactualOracleRriScorer"]:
+        """Return the mesh-based oracle rollout scorer constructed by this config."""
+
         return CounterfactualOracleRriScorer
 
     depth: CandidateDepthRendererConfig = Field(default_factory=CandidateDepthRendererConfig)
+    """Oracle mesh depth renderer applied to compact valid candidate views."""
+
     oracle: OracleRRIConfig = Field(
         default_factory=lambda: OracleRRIConfig(fusion_voxel_size_m=0.02, fusion_max_points=200_000)
     )
+    """Point-mesh RRI metric and canonical-fusion configuration."""
+
     backprojection_stride: int = Field(default=1, ge=1)
+    """Pixel stride used to backproject rendered depths into world points."""
+
     eval_point_cloud_source: RriEvaluationPointCloudSource = RriEvaluationPointCloudSource.ASE_GT_DEPTH_ROOT
     """Oracle current/root point-cloud source used for scene RRI labels."""
 
@@ -730,7 +1053,10 @@ class CounterfactualOracleRriScorerConfig(TargetConfig["CounterfactualOracleRriS
     """Candidate score used for rollout selection."""
 
     verbosity: Verbosity = Field(default=Verbosity.NORMAL)
+    """Console verbosity propagated to renderer and metric components."""
+
     is_debug: bool = False
+    """Enable debug diagnostics in scorer dependencies."""
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
 

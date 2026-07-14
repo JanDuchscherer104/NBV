@@ -1,4 +1,10 @@
-"""Rerun inspector helper exports."""
+"""Public geometry and color helpers for ARIA-NBV Rerun inspection.
+
+This package exports deterministic candidate coloring and frame-safe camera
+frustum construction. Recording startup, dataset selection, offline logging,
+and rollout-Zarr inspection remain owned by their internal runtime modules and
+are reached through the configured CLI rather than this convenience surface.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,8 @@
-"""Scene field tab for VIN diagnostics."""
+"""Raw and projected VIN scene-field diagnostics.
+
+The tab provides voxel slices and channel histograms for actor-visible EVL
+inputs ``Tensor[\"B C_in D H W\", float32]`` and their learned projected field.
+"""
 
 from __future__ import annotations
 

@@ -43,18 +43,19 @@ def sample_semidense_points(
 
     Args:
         snippet: Object with the :class:`aria_nbv.data_handling.efm_views.VinSnippetView`
-            point contract. It must expose ``points_world`` with shape
-            ``Tensor[P, C]`` or ``Tensor[B, P, C]`` and optional ``lengths``.
-            The first channels are ``(x_w, y_w, z_w, 1/sigma_d)`` in metres,
-            with optional ``n_obs`` in channel five.
+            point contract. It must expose ``points_world`` as
+            ``Tensor["P C", float32]`` or ``Tensor["B P C", float32]`` and
+            optional ``lengths``.
+            XYZ is measured in metres, ``1/sigma_d`` in inverse metres, and
+            optional ``n_obs`` in channel five is a dimensionless count.
         device: Target device for the returned tensor.
         max_points: Maximum sampled point count per batch item. Batched inputs
             are padded to this length with NaNs so candidate projection keeps a
-            rectangular ``Tensor[B, P_fr, C]`` layout.
+            rectangular ``Tensor["B P_fr C", float32]`` layout.
 
     Returns:
-        ``Tensor[P_fr, C]`` or ``Tensor[B, max_points, C]`` with ``float32``
-        dtype on ``device``.
+        ``Tensor["P_fr C", float32]`` or ``Tensor["B P_max C", float32]`` on
+        ``device``.
 
     Raises:
         RuntimeError: If the snippet has no valid points.
@@ -152,12 +153,14 @@ def project_points_to_candidate_cameras(
     ``Nq`` when ``B == 1`` or ``B * Nq`` for true batched inputs.
 
     Args:
-        points_world: ``Tensor[P, C]`` or ``Tensor[B, P, C]`` in world frame.
+        points_world: ``Tensor["P C", float32]`` or
+            ``Tensor["B P C", float32]`` in the world frame; XYZ is measured
+            in metres.
             ``C`` must include XYZ; additional channels are propagated as
             ``inv_dist_std`` and optional ``obs_count`` when present.
         p3d_cameras: PyTorch3D candidate camera batch with ``image_size``.
         batch_size: Batch size ``B``.
-        num_candidates: Candidate count ``Nq`` per batch item.
+        num_candidates: Candidate count ``N_q`` per batch item.
         device: Target device for projection tensors.
 
     Returns:
@@ -269,7 +272,7 @@ def encode_projection_summary(
     Args:
         proj_data: Output from :func:`project_points_to_candidate_cameras`.
         batch_size: Batch size ``B``.
-        num_candidates: Candidate count ``Nq`` per batch item.
+        num_candidates: Candidate count ``N_q`` per batch item.
         device: Target device for features.
         dtype: Output dtype.
         grid_size: Screen-space bin count per side for coverage.
@@ -280,8 +283,9 @@ def encode_projection_summary(
             depth-uncertainty scaling.
 
     Returns:
-        ``Tensor[B, Nq, SEMIDENSE_PROJ_DIM]`` ordered by
-        :data:`SEMIDENSE_PROJ_FEATURES`.
+        ``Tensor["B N_q F_proj", float32]`` with
+        ``F_proj == SEMIDENSE_PROJ_DIM``, ordered by
+        `SEMIDENSE_PROJ_FEATURES`.
     """
     proj_feat = torch.zeros(
         (batch_size, num_candidates, SEMIDENSE_PROJ_DIM),
@@ -388,8 +392,9 @@ def build_projection_grid(
         grid_size: Screen-space bin count per side.
 
     Returns:
-        ``Tensor[B*Nq, SEMIDENSE_GRID_CHANNELS, G, G]`` containing occupancy,
-        mean depth, and depth standard deviation grids.
+        ``Tensor["B*N_q C_grid G G", float32]`` containing occupancy, mean
+        camera-frame depth in metres, and depth standard-deviation grids, with
+        ``C_grid == SEMIDENSE_GRID_CHANNELS``.
     """
     if proj_data is None:
         raise RuntimeError("Semidense projection data is missing.")

@@ -1,4 +1,14 @@
-"""Geometry helpers for candidate generation and pruning."""
+"""Differentiable point-to-mesh geometry for candidate validity pruning.
+
+This module provides the point-to-triangle distance primitive used by pruning
+rules and owns its device-safe PyTorch3D/CPU fallback boundary. Candidate
+sampling, validity policy, and mask/reason aggregation remain with the pose
+generator and rule layer.
+
+Inputs use world-frame metres and preserve the caller's Torch device/dtype.
+The CUDA-specific PyTorch3D failure path falls back to CPU computation, then
+moves distances back without changing their geometric meaning.
+"""
 
 from __future__ import annotations
 

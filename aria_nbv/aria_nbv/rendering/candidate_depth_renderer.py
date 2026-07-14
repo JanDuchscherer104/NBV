@@ -6,6 +6,11 @@ returns `candidate_indices` into the full sampled shell so labels and heavy
 diagnostics can be joined back to candidate provenance, validity masks, and
 reason codes.
 
+This module provides :class:`CandidateDepths`, its renderer config, and the
+orchestrator that adapts snippet meshes/cameras to the configured depth backend.
+The backend owns rasterization; candidate generation owns feasibility, and
+point-cloud conversion plus RRI scoring remain downstream.
+
 Depth output is metric PyTorch3D z-depth in the physical camera frame. The
 renderer is used for oracle/evaluation labels; callers decide whether rendered
 depths or backprojected point clouds are retained in a rollout store.
@@ -34,7 +39,6 @@ if TYPE_CHECKING:
     from ..pose_generation.types import CandidateSamplingResult
 
 
-# TODO: Wouldn't it make sense to derive all of these dataclasses from a common base data class?
 @dataclass(slots=True)
 class CandidateDepths:
     """Typed result for candidate depth rendering.
@@ -45,25 +49,25 @@ class CandidateDepths:
     """
 
     depths: torch.Tensor
-    """Tensor['N', 'H', 'W'] with per-candidate depth maps in metres."""
+    """Metric camera z-depth ``Tensor[\"C H W\", float]`` in metres."""
 
     depths_valid_mask: torch.Tensor
-    """Tensor['N', 'H', 'W'] boolean mask indicating valid depth pixels."""
+    """Face-hit and near/far mask ``Tensor[\"C H W\", bool]`` for raw depths."""
 
     poses: PoseTW
-    """PoseTW (cam2world) for the rendered subset."""
+    """Rendered world-from-camera poses with logical shape ``(C, 12)``."""
 
     reference_pose: PoseTW
-    """PoseTW (ref2world) for the reference frame corresponding to candidates."""
+    """Physical world-from-reference rig pose with logical shape ``(12,)``."""
 
     candidate_indices: torch.Tensor
-    """Indices (long) into the **full** candidate array (pre-render filtering)."""
+    """Full-shell row indices ``Tensor[\"C\", int64]`` for rendered candidates."""
 
     camera: CameraTW
-    """Camera calibration (and ref2camera extrinsics) for the rendered subset, same order as ``depths``."""
+    """Physical calibration and camera-from-reference extrinsics aligned over ``C``."""
 
     p3d_cameras: PerspectiveCameras
-    """PyTorch3D PerspectiveCameras used for rendering. Same externals as ``camera``."""
+    """PyTorch3D cameras with world-to-view transforms aligned over ``C``."""
 
     def to_serializable(self) -> dict[str, object]:
         """Serialize this batch into a cache-friendly CPU payload."""
@@ -91,11 +95,20 @@ class CandidateDepths:
 
 
 class CandidateDepthRendererConfig(TargetConfig["CandidateDepthRenderer"]):
+    """Compose camera calibration, render sizing, and backend selection.
+
+    Rendering is an oracle/evaluation stage: its mesh-derived depths must not
+    be exposed as actor-visible state. ``max_candidates_final`` bounds work on
+    the already compact valid-candidate table rather than changing validity.
+    """
+
     @property
     def target_type(self) -> type["CandidateDepthRenderer"]:
+        """Return the high-level candidate renderer constructed by this config."""
         return CandidateDepthRenderer
 
     device: torch.device = Field(default="auto")
+    """Device used by the configured renderer and returned tensor payloads."""
 
     renderer: Pytorch3DDepthRendererConfig = Field(
         default_factory=Pytorch3DDepthRendererConfig,

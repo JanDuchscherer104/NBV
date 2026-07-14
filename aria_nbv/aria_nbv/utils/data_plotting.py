@@ -1,4 +1,9 @@
-"""Plotting utilities for the Streamlit data view.
+"""Build Streamlit/Plotly views of EFM snippet geometry and frame modalities.
+
+This module provides pose, semidense, frustum, mesh, OBB, image/depth-grid, and
+projection helpers plus reusable snippet/frame builders. It owns conversion to
+display arrays and Plotly traces only; dataset loading, calibration, geometry
+generation, and source tensors remain with callers.
 
 Conventions (efm3d / ATEK):
 - Camera frame is **LUF** (x left, y up, z forward) per Project Aria docs; world is Z-up (gravity = [0,0,-g]).
@@ -260,6 +265,7 @@ class SnippetPlotBuilder:
 
     @classmethod
     def from_snippet(cls, snippet: EfmSnippetView, *, title: str, height: int = 900) -> Self:
+        """Create a builder whose initial bounds cover the snippet evidence."""
         return cls(snippet, title=title, height=height)
 
     def _default_scene_ranges(self) -> dict:
@@ -316,6 +322,7 @@ class SnippetPlotBuilder:
         self.scene_ranges = self._build_scene_ranges(vmin, vmax)
 
     def add_mesh(self, *, color: str = "lightgray", opacity: float = 0.35) -> Self:
+        """Add the snippet's world-frame GT mesh when one is loaded."""
         mesh = self.snippet.mesh
         if mesh is None:
             return self
@@ -332,6 +339,12 @@ class SnippetPlotBuilder:
         last_frame_only: bool = True,
         color: str = "Viridis",
     ) -> Self:
+        """Add sampled world-frame semi-dense points colored by world height.
+
+        The point tensor has logical shape ``Tensor["N 3", float32]`` in
+        metres. Sampling affects display density only and never mutates the
+        :class:`EfmSnippetView`.
+        """
         sem = self.snippet.semidense
         if sem is None:
             return self
@@ -429,6 +442,7 @@ class SnippetPlotBuilder:
         last_color: str = "red",
         show: bool = True,
     ) -> Self:
+        """Add the world-frame rig trajectory and optional endpoint markers."""
         if not show:
             return self
         traj_positions = self.snippet.trajectory.t_world_rig.t.detach().cpu().numpy()
@@ -481,6 +495,12 @@ class SnippetPlotBuilder:
         is_rotate_yaw_cw90: bool = True,
         name: str = "Frustum",
     ) -> Self:
+        r"""Add camera frusta aligned to nearest rig trajectory timestamps.
+
+        Poses follow $T_{world\leftarrow camera}=T_{world\leftarrow rig}
+        T^{-1}_{camera\leftarrow rig}$. The clockwise display rotation is a
+        visualization convention and does not change stored camera geometry.
+        """
         cam_view = self.snippet.get_camera(camera)
         traj = self.snippet.trajectory
         cam_idx, traj_idx = cam_view.nearest_traj_indices(traj.time_ns, frame_indices, default_last=False)
@@ -575,6 +595,7 @@ class SnippetPlotBuilder:
         frame_indices: list[int] | None = None,
         title: str = "Camera axes",
     ) -> Self:
+        """Add axes for a named camera stream through :meth:`add_frame_axes`."""
         return self.add_frame_axes(frame=camera, frame_indices=frame_indices, title=title)
 
     @staticmethod
@@ -859,6 +880,7 @@ class SnippetPlotBuilder:
         width: int = 2,
         aabb: tuple[np.ndarray, np.ndarray] | None = None,
     ) -> Self:
+        """Draw an axis-aligned world-frame bounds box in metres."""
         if aabb is None:
             sem = self.snippet.semidense
             if sem is not None and hasattr(sem, "volume_min") and hasattr(sem, "volume_max"):
@@ -987,6 +1009,7 @@ class SnippetPlotBuilder:
         return self
 
     def finalize(self) -> go.Figure:
+        """Apply equal world-axis scaling and return the accumulated figure."""
         self.fig.update_layout(title=self.title, scene=dict(aspectmode="data", **self.scene_ranges), height=self.height)
         return self.fig
 
@@ -1032,10 +1055,12 @@ class FrameGridBuilder:
         self.title = title
 
     def add_image(self, img: np.ndarray, *, row: int, col: int) -> "FrameGridBuilder":
+        """Place one HWC image array into a one-indexed subplot cell."""
         self.fig.add_trace(go.Image(z=img), row=row, col=col)
         return self
 
     def finalize(self) -> go.Figure:
+        """Apply the configured canvas dimensions and return the image grid."""
         self.fig.update_layout(height=self.height, width=self.width, title_text=self.title)
         return self.fig
 
@@ -1178,7 +1203,7 @@ def project_pointcloud_on_frame(
 
 
 def plot_frames(sample: EfmSnippetView) -> go.Figure:
-    """First RGB/SLAM frames side-by-side."""
+    """Plot the first available RGB and SLAM frames side by side."""
     modalities, _ = collect_frame_modalities(sample, include_depth=False)
     if len(modalities) == 0:
         return go.Figure()

@@ -1,4 +1,12 @@
-"""PyTorch Lightning components for training VIN."""
+"""Lightning orchestration for VIN candidate-scorer training.
+
+This package provides the config-as-factory experiment, data-module, training
+module, trainer, callback, and optimizer surfaces used by the runnable
+one-step CORAL scorer. It owns Lightning lifecycle and optimization wiring;
+actor-visible feature construction belongs to :mod:`aria_nbv.vin`, oracle
+labels belong to :mod:`aria_nbv.rri_metrics`, and full-shell finite-horizon
+``Q_H`` replay remains owned by :mod:`aria_nbv.rollouts`.
+"""
 
 from .aria_nbv_experiment import AriaNBVExperimentConfig
 from .lit_datamodule import VinDataModule, VinDataModuleConfig

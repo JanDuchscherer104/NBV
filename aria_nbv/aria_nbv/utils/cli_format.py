@@ -112,7 +112,7 @@ def rows_table(title: str, columns: Sequence[str], rows: Iterable[Sequence[Any]]
 
 
 def status_text(ok: bool) -> Text:
-    """Return a styled status token."""
+    """Return a green `ok` or red `failed` Rich text token."""
 
     return Text("ok", style="green") if ok else Text("failed", style="red")
 

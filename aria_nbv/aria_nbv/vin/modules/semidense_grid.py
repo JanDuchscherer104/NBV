@@ -63,12 +63,13 @@ class SemidenseGridEncoder(nn.Sequential):
             proj_data: Projection output from
                 `aria_nbv.vin.geometry.semidense_projection.project_points_to_candidate_cameras`.
             batch_size: Batch size ``B``.
-            num_candidates: Number of candidate cameras ``Nq``.
+            num_candidates: Number of candidate cameras ``N_q``.
             device: Device for the intermediate projection grid.
             dtype: Floating point dtype for the grid and returned features.
 
         Returns:
-            ``Tensor["B Nq F"]`` where ``F`` is `SemidenseGridEncoderConfig.out_dim`.
+            ``Tensor["B N_q F", float32]`` where ``F`` is
+            `SemidenseGridEncoderConfig.out_dim`.
         """
         num_cams = int(proj_data["num_cams"].item())
         grid = build_projection_grid(

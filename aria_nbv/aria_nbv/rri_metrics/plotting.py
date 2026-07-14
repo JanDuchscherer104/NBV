@@ -1,4 +1,11 @@
-"""Plotting helpers for RRI metrics and cache statistics."""
+"""Build candidate-aligned Plotly figures for RRI and distance diagnostics.
+
+This module visualizes :class:`RriResult` labels, squared point--mesh
+components, and selected candidate geometry. It owns presentation only:
+candidate order, validity, actor-visible inputs, and oracle-label construction
+remain with their source payloads and callers. Distance chart values are in
+square metres when the underlying geometry is metric world-frame data.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +28,7 @@ def rri_color_map(
     *,
     palette: Sequence[str] | None = None,
 ) -> dict[str, str]:
-    """Create a stable color map for candidate labels."""
+    """Assign colors deterministically in input-label order, cycling the palette when needed."""
     colors = list(palette) if palette is not None else px.colors.qualitative.Plotly
     if not colors:
         colors = ["#1f77b4"]
@@ -35,7 +42,19 @@ def plot_rri_scores(
     *,
     title: str,
 ) -> go.Figure:
-    """Build the RRI bar chart figure."""
+    """Build one dimensionless oracle-RRI bar per candidate label.
+
+    Args:
+        rri: Candidate-aligned oracle result.
+        labels: Display labels in the same order as ``rri.rri``.
+        color_map: Color lookup containing every display label.
+        title: Figure title.
+
+    Returns:
+        Plotly bar figure whose x-axis is candidate identity and whose y-axis
+        is dimensionless RRI. Negative bars are valid low-utility labels, not
+        invalid-candidate markers.
+    """
     fig = go.Figure(
         data=go.Bar(
             x=list(labels),
@@ -55,7 +74,7 @@ def plot_pm_distances(
     baseline_label: str = "-1",
     title: str,
 ) -> go.Figure:
-    """Build the bidirectional point-mesh distance bar chart."""
+    """Plot broadcast pre-view and per-candidate post-view bidirectional errors in square metres."""
     baseline = float(rri.pm_dist_before[0].item())
     fig = go.Figure(
         data=[
@@ -88,7 +107,7 @@ def plot_pm_accuracy(
     baseline_label: str = "-1",
     title: str,
 ) -> go.Figure:
-    """Build the point→mesh accuracy bar chart."""
+    """Plot pre/post mean-squared point-to-mesh accuracy errors in square metres."""
     baseline = float(rri.pm_acc_before[0].item())
     fig = go.Figure(
         data=[
@@ -121,7 +140,7 @@ def plot_pm_completeness(
     baseline_label: str = "-1",
     title: str,
 ) -> go.Figure:
-    """Build the mesh→point completeness bar chart."""
+    """Plot pre/post mean-squared mesh-to-point completeness errors in square metres."""
     baseline = float(rri.pm_comp_before[0].item())
     fig = go.Figure(
         data=[
@@ -159,7 +178,14 @@ def plot_rri_scene(
     max_sem_pts: int,
     show_frusta: bool,
 ) -> go.Figure:
-    """Plot mesh/semidense/candidate point clouds for selected candidates."""
+    """Plot oracle mesh, observed points, and selected candidate clouds.
+
+    `candidate_ids` aligns local rows of `poses` and `pcs` with stable candidate
+    ids; `selected_ids` chooses which rows are rendered. Candidate point clouds,
+    pose centers, and the snippet mesh are expected in the same world frame and
+    metric units. The mesh is oracle evaluation geometry, while semi-dense
+    points may also be actor-visible evidence.
+    """
     builder = (
         RenderingPlotBuilder.from_snippet(sample, title=title)
         .add_mesh()

@@ -1,4 +1,10 @@
-"""Rerun blueprint layout helpers for the offline inspector."""
+"""Compose optional Rerun viewer layouts for offline and rollout inspection.
+
+This module owns entity-query normalization and the default world, time-series,
+and metadata panes. Blueprint submission is best-effort across Rerun SDK
+versions; recording initialization and sink ownership stay in
+:mod:`aria_nbv.rerun_inspector._session`.
+"""
 
 from __future__ import annotations
 

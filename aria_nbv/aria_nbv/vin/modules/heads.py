@@ -24,6 +24,11 @@ class VinScorerHead(nn.Module):
     represents candidate quality as ordinal Relative Reconstruction Improvement
     bins. It consumes the final feature tensor produced by an architecture and
     returns threshold logits compatible with `aria_nbv.rri_metrics.coral`.
+
+    The MLP and CORAL layer act on the last dimension only and introduce no
+    candidate-to-candidate interaction or graph structure. Row permutations
+    are exactly equivariant in evaluation mode (or with zero dropout); sampled
+    training dropout preserves that symmetry only in distribution.
     """
 
     def __init__(self, config: "VinScorerHeadConfig", *, in_dim: int | None = None) -> None:
@@ -72,11 +77,11 @@ class VinScorerHead(nn.Module):
         """Return CORAL threshold logits for candidate features.
 
         Args:
-            x: ``Tensor["... F"]`` feature vectors, where leading dimensions are
+            x: ``Tensor["... F", float32]`` feature vectors, where leading dimensions are
                 preserved as candidate or batch axes.
 
         Returns:
-            ``Tensor["... K-1"]`` CORAL logits for ``K`` ordinal RRI classes.
+            ``Tensor["... K-1", float32]`` CORAL logits for ``K`` ordinal RRI classes.
         """
         return self.coral(self.mlp(x))
 

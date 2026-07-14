@@ -1,3 +1,17 @@
+"""Typed config-as-factory foundation for ARIA-NBV runtime objects.
+
+This module provides :class:`BaseConfig`, generic :class:`TargetConfig`, and
+singleton :class:`SingletonConfig`. It owns Pydantic validation, nested config
+serialization, TOML/cache representations, and the standard runtime-construction
+hook; concrete configs own domain defaults and target classes own runtime
+behavior.
+
+Configs validate nested experiment state, serialize stable TOML/cache payloads,
+and construct runtime targets through :meth:`BaseConfig.setup_target`. Runtime
+objects stay outside the persisted config graph; late-bound dependencies are
+passed explicitly to `setup_target`.
+"""
+
 import tomllib
 from enum import Enum
 from pathlib import Path
@@ -23,6 +37,13 @@ TargetT = TypeVar("TargetT")
 
 
 class BaseConfig(BaseSettings):
+    """Validate, serialize, inspect, and instantiate one configuration tree.
+
+    Subclasses that construct runtime objects should inherit
+    :class:`TargetConfig` and expose `target_type`. Plain subclasses may use
+    `setup_target` as a no-op and still share TOML, cache, and CLI behavior.
+    """
+
     cache_exclude_fields: ClassVar[set[str]] = set()
     """Field names to exclude from cache snapshots."""
 
@@ -288,6 +309,11 @@ class BaseConfig(BaseSettings):
 
     # ------------------------------------------------------------------ Visualization
     def inspect(self, show_docs: bool = False) -> None:
+        """Render the nested configuration as a Rich tree on the project console.
+
+        Args:
+            show_docs: Include class and field documentation alongside values.
+        """
         tree = self._build_tree(show_docs=show_docs, _seen_singletons=set())
         Console.from_callsite(stack_offset=1).print(tree, soft_wrap=False, highlight=True, markup=True, emoji=False)
 

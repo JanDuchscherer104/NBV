@@ -1,4 +1,8 @@
-"""Shared UI helpers for Streamlit panels."""
+"""Shared presentation and error-reporting helpers for Streamlit panels.
+
+The module provides ANSI cleanup, explanatory popovers, traceback rendering,
+and selected reporting utilities re-exported for consistent page behavior.
+"""
 
 from __future__ import annotations
 

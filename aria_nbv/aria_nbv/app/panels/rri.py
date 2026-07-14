@@ -1,4 +1,8 @@
-"""RRI inspection panel."""
+"""Oracle relative-reconstruction-improvement inspection plots.
+
+The panel provides per-candidate RRI, point-to-mesh accuracy, mesh-to-point
+completeness, and combined distance diagnostics derived from GT mesh geometry.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,15 @@ def render_rri_page(
     pcs: CandidatePointClouds,
     rri: RriResult,
 ) -> None:
+    """Render oracle RRI and mesh-distance diagnostics for rendered candidates.
+
+    Args:
+        sample: Source snippet carrying the GT mesh used for evaluation.
+        depth_batch: Rendered candidate batch whose indices define row labels.
+        pcs: Candidate world-point clouds used by the oracle metric.
+        rri: Oracle scores ``Tensor[\"C\", float]`` and distance components.
+    """
+
     st.header("RRI Preview: Point Clouds vs Mesh")
 
     candidate_ids = depth_batch.candidate_indices.cpu().tolist()

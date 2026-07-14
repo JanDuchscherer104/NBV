@@ -1,4 +1,4 @@
-"""Finite-horizon target-RRI rollout metric helpers.
+r"""Reduce selected finite-horizon target-RRI rows into endpoint diagnostics.
 
 The helpers in this module operate on selected-step metric mappings emitted by
 counterfactual rollout scorers. They keep rollout plotting and reporting code
@@ -10,6 +10,17 @@ from redefining thesis metrics locally:
 * ``J_e^(H)`` is the endpoint target-error gain from the initial target
   point-mesh error to the final target point-mesh error.
 * log-gain is an optional endpoint companion diagnostic.
+
+For root error $d_0$, final error $d_H$, and selected root-normalized rewards
+$r_t$, the undiscounted return telescopes when all steps are present:
+
+$$
+\sum_{t=0}^{H-1}r_t=\frac{d_0-d_H}{d_0+\epsilon}.
+$$
+
+Input mappings are already-selected oracle evaluation rows. Missing or
+non-finite metrics are skipped; hard-invalid actions must remain absent or
+explicitly masked upstream rather than appearing as low numeric rewards.
 """
 
 from __future__ import annotations
@@ -25,39 +36,39 @@ class TargetRolloutMetricSummary:
     """Selected-trajectory target-RRI and endpoint metric summary."""
 
     cumulative_return: float | None
-    """Discounted ``G_t^(H)`` over selected root-normalized rewards."""
+    """Dimensionless discounted ``G_t^(H)`` over finite selected root-normalized rewards."""
     endpoint_gain: float | None
-    """Endpoint target-error gain ``J_e^(H)`` when point-mesh errors exist."""
+    """Dimensionless endpoint target-error gain ``J_e^(H)`` when errors exist."""
     log_gain: float | None
-    """Endpoint log target-error gain when point-mesh errors exist."""
+    """Dimensionless endpoint log target-error gain when point-mesh errors exist."""
     initial_error: float | None
-    """Initial target point-mesh error used for endpoint metrics."""
+    """Initial target point-mesh error in square metres, when available."""
     final_error: float | None
-    """Final target point-mesh error used for endpoint metrics."""
+    """Final target point-mesh error in square metres, when available."""
     steps: int
     """Number of selected rollout steps represented by the input metrics."""
 
 
 def selected_target_rri(metrics: Mapping[str, Any]) -> float | None:
-    """Return the selected-step target RRI from one metric mapping."""
+    """Return finite state-relative target RRI, preferring ``target_rri`` over legacy ``rri``."""
 
     return _finite_metric(metrics, "target_rri", "rri")
 
 
 def selected_target_reward(metrics: Mapping[str, Any]) -> float | None:
-    """Return the selected-step reward used for rollout/Q_H return."""
+    """Return finite selected reward, preferring root-normalized keys over state-relative fallbacks."""
 
     return _finite_metric(metrics, "target_root_gain", "root_gain", "target_rri", "rri")
 
 
 def target_point_mesh_error_before(metrics: Mapping[str, Any]) -> float | None:
-    """Return selected-step target point-mesh error before adding the view."""
+    """Return pre-view squared target error, falling back to accuracy plus completeness."""
 
     return _point_mesh_error(metrics, "before")
 
 
 def target_point_mesh_error_after(metrics: Mapping[str, Any]) -> float | None:
-    """Return selected-step target point-mesh error after adding the view."""
+    """Return post-view squared target error, falling back to accuracy plus completeness."""
 
     return _point_mesh_error(metrics, "after")
 
@@ -67,10 +78,11 @@ def finite_horizon_target_return(
     *,
     gamma: float = 1.0,
 ) -> float | None:
-    """Compute additive selected target-RRI return ``G_t^(H)``.
+    """Compute discounted additive selected target reward ``G_t^(H)``.
 
     Missing or non-finite rows are skipped. ``None`` is returned only when no
-    finite selected target reward is present.
+    finite selected target reward is present. A skipped row still advances the
+    horizon index, so later rewards retain their original discount exponent.
     """
 
     if gamma < 0.0:
@@ -93,7 +105,12 @@ def endpoint_target_gain(
     *,
     eps: float = 1e-8,
 ) -> float | None:
-    """Compute endpoint target-error gain ``J_e^(H)``."""
+    r"""Compute endpoint target-error gain $(d_0-d_H)/(d_0+\epsilon)$.
+
+    Only the first row's pre-view error and final row's post-view error are
+    used. Errors are squared point--mesh values in square metres; the returned
+    ratio is dimensionless.
+    """
 
     initial, final = _endpoint_errors(selected_metric_rows)
     if initial is None or final is None:
@@ -106,7 +123,11 @@ def endpoint_log_gain(
     *,
     eps: float = 1e-8,
 ) -> float | None:
-    """Compute endpoint log target-error gain."""
+    r"""Compute dimensionless endpoint log gain $\log(d_0+\epsilon)-\log(d_H+\epsilon)$.
+
+    The reducer uses the first row's pre-view error and final row's post-view
+    error, returning ``None`` when either endpoint is missing or non-finite.
+    """
 
     initial, final = _endpoint_errors(selected_metric_rows)
     if initial is None or final is None:
@@ -120,7 +141,7 @@ def summarize_target_rollout_metrics(
     gamma: float = 1.0,
     eps: float = 1e-8,
 ) -> TargetRolloutMetricSummary:
-    """Compute ``G_t^(H)``, endpoint gain, and log-gain for one trajectory."""
+    """Compute discounted return and first-to-last endpoint diagnostics for one selected trajectory."""
 
     rows = list(selected_metric_rows)
     initial, final = _endpoint_errors(rows)

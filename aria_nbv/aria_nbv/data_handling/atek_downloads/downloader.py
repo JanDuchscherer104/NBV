@@ -1,4 +1,10 @@
-"""Download orchestration for ASE dataset meshes + ATEK shards."""
+"""Download orchestration for ASE ground-truth meshes and ATEK shards.
+
+This module owns CLI/config dispatch, manifest filtering, mesh checksum
+verification, and calls into ATEK's WebDataset downloader. ATEK archives carry
+the tensorized ASE/VRS/MPS-derived streams consumed by the EFM adaptor; ASE
+meshes are acquired separately as oracle supervision and evaluation assets.
+"""
 
 from __future__ import annotations
 
@@ -40,10 +46,12 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
 
     @property
     def target_type(self) -> type[ASEDownloader]:
+        """Return :class:`ASEDownloader` for config-as-factory construction."""
         return ASEDownloader
 
     # CLI dispatch
     mode: Literal["download", "list"] = Field(default="download", description="Execution mode.", alias="m")
+    """CLI operation: acquire selected assets or list manifest scene coverage."""
 
     list_n: int | None = Field(
         default=None,
@@ -51,11 +59,15 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
         validation_alias=AliasChoices("n", "list-n"),
         description="Number of scenes to show in list mode",
     )
+    """Optional maximum scene rows printed by ``list`` mode."""
 
     paths: PathConfig = Field(default_factory=PathConfig)
+    """Project path resolver for URL manifests, ATEK shards, and ASE meshes."""
+
     output_dir: Path | None = Field(
         default=None, description="Root output dir for downloads. Defaults to `paths.data_root / cfg.mode` "
     )
+    """Optional requested output root; concrete destinations are resolved from ``paths``."""
 
     # Core configuration
     verbosity: Verbosity = Field(
@@ -63,6 +75,7 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
         validation_alias=AliasChoices("verbosity", "verbose"),
         description="Verbosity level for logging (0=quiet, 1=normal, 2=verbose).",
     )
+    """Structured console verbosity used by download and listing operations."""
 
     is_debug: bool = Field(default=True)
     """Enable debug logging (forces max verbosity)."""
@@ -155,6 +168,11 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
         file_secret_settings,
         cli_settings=None,
     ):
+        """Order explicit init, CLI, environment, dotenv, and secret settings sources.
+
+        Returns:
+            Pydantic-settings sources in decreasing precedence order.
+        """
         sources = [init_settings]
         if cli_settings is not None:
             sources.append(cli_settings)
@@ -163,7 +181,13 @@ class ASEDownloaderConfig(TargetConfig["ASEDownloader"]):
 
 
 class ASEDownloader:
-    """Download ASE meshes + ATEK shards."""
+    """Acquire manifest-selected ASE meshes and ATEK WebDataset shards.
+
+    The instance owns parsed :class:`ASEMetadata`, download destinations, and
+    console state for one run. Mesh ZIPs are SHA-1 verified and extracted into
+    the ASE mesh cache; ATEK shard acquisition is delegated to the upstream
+    downloader using a temporary filtered manifest that is removed afterward.
+    """
 
     def __init__(self, config: ASEDownloaderConfig):
         self.config = config
@@ -195,9 +219,10 @@ class ASEDownloader:
         """Download meshes + ATEK data for scenes.
 
         Args:
-            scenes: List of SceneInfo to download
-            download_meshes: Download GT meshes
-            download_atek: Download ATEK WDS shards
+            scenes: Explicit scene records to acquire.
+            scene_ids: Additional scene IDs resolved through the parsed manifest.
+            download_meshes: Whether to acquire ASE GT meshes.
+            download_atek: Whether to acquire ATEK WebDataset shards.
         """
         scenes = scenes or []
         if scene_ids:
@@ -210,11 +235,22 @@ class ASEDownloader:
 
     # convenience wrappers for CLI
     def download_meshes(self, scene_ids: list[str] | None = None, overwrite: bool = False) -> None:
+        """Download GT meshes for selected scenes after applying overwrite policy.
+
+        Args:
+            scene_ids: Optional ASE scene allowlist; ``None`` selects all scenes.
+            overwrite: Whether existing archive/download state may be replaced.
+        """
         scenes = [s for s in self.metadata.get_scenes() if not scene_ids or s.scene_id in scene_ids]
         self.config.overwrite = overwrite
         self._download_meshes(scenes)
 
     def download_atek(self, scene_ids: list[str] | None = None) -> None:
+        """Download ATEK shards for selected ASE scenes.
+
+        Args:
+            scene_ids: Optional ASE scene allowlist; ``None`` selects all scenes.
+        """
         scenes = [s for s in self.metadata.get_scenes() if not scene_ids or s.scene_id in scene_ids]
         self._download_atek(scenes)
 

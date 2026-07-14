@@ -1,10 +1,10 @@
-"""Typed containers and enums for oracle RRI computation.
+"""Typed distance and oracle-label payloads for RRI computation.
 
 This module centralises small, self-contained data structures that are shared
 between the RRI metrics utilities and the high-level ``OracleRRI`` facade.
-Keeping the types separate avoids circular imports between ``metrics`` and
-``aria_nbv.rri_metrics.oracle_rri`` while providing a single source of truth for shapes, units, and
-semantic meaning.
+Keeping the types separate avoids circular imports between :mod:`metrics` and
+:mod:`aria_nbv.rri_metrics.oracle_rri` while providing one source of truth for
+candidate axes, squared-distance units, and semantic meaning.
 
 `RriResult` stores both the scalar improvement label and the directional
 point-mesh diagnostics needed to audit target-vs-scene behavior. Downstream
@@ -40,44 +40,61 @@ class DistanceAggregation(StrEnum):
 
 @dataclass(slots=True)
 class DistanceBreakdown:
-    """Directional distance components used to form Chamfer-style metrics."""
+    """Directional mean-squared components of a point--mesh distance.
+
+    Leading dimensions are preserved: the unbatched primitive returns scalar
+    tensors, while the batched primitive returns one value per candidate.
+    Metric-frame inputs therefore produce values in square metres.
+    """
 
     accuracy: Tensor
-    """Point→mesh (prediction to GT) distances."""
+    """``Tensor["...", float32]`` mean squared point-to-triangle distance, in square metres."""
     completeness: Tensor
-    """Mesh→point (GT to prediction) distances."""
+    """``Tensor["...", float32]`` mean squared triangle-to-point distance, in square metres."""
     bidirectional: Tensor
-    """Sum of accuracy and completeness (Chamfer when using L2 distances with mean reduction)."""
+    """``Tensor["...", float32]`` sum of accuracy and completeness, in square metres."""
 
 
 @dataclass(slots=True)
 class RriResult:
-    """Batch of per-candidate RRI outcomes and distance diagnostics.
+    r"""Batch of oracle RRI labels and directional distance diagnostics.
 
-    Shapes follow the candidate batch dimension ``C`` produced by the caller.
-    Scalars such as the reference-only distances are broadcast to ``(C,)`` so
-    downstream code can remain shape-agnostic.
+    ``C`` is the finite-candidate axis. Reference-only distances are broadcast
+    to that axis so every diagnostic stays aligned with its candidate row. For
+    the bidirectional squared point--mesh error $D$, the label is
+
+    $$
+    \mathrm{RRI}(q)=\frac{D(P_t,M)-D(P_t\cup P_q,M)}
+                           {\max(D(P_t,M),\epsilon)}.
+    $$
+
+    RRI is dimensionless and can be negative when candidate evidence worsens
+    the reconstruction. A low or negative value is still a valid oracle label;
+    candidate invalidity is an upstream hard-mask/reason-code contract and is
+    not encoded in this payload. In the thesis pipeline, the matched target
+    mesh and rendered candidate geometry are oracle-only supervision, not
+    actor-visible VIN inputs.
     """
 
     rri: Tensor
-    """Tensor["C"] Relative reconstruction improvement ``(d_before - d_after) / d_before``."""
+    """``Tensor["C", float32]`` dimensionless relative reconstruction improvement."""
     pm_dist_before: Tensor
-    """Tensor["C"] Bidirectional Chamfer-style distance between ``P_t`` and the GT mesh."""
+    """``Tensor["C", float32]`` broadcast pre-view bidirectional error, in square metres."""
     pm_dist_after: Tensor
-    """Tensor["C"] Bidirectional distance between ``P_t ∪ P_q`` and the GT mesh."""
+    """``Tensor["C", float32]`` post-view bidirectional error per candidate, in square metres."""
     pm_acc_before: Tensor
-    """Tensor["C"] Point→mesh (accuracy) distance for ``P_t`` (broadcast)."""
+    """``Tensor["C", float32]`` broadcast pre-view point-to-mesh error, in square metres."""
     pm_comp_before: Tensor
-    """Tensor["C"] Mesh→point (completeness) distance for ``P_t`` (broadcast)."""
+    """``Tensor["C", float32]`` broadcast pre-view mesh-to-point error, in square metres."""
     pm_acc_after: Tensor
-    """Tensor["C"] Point→mesh distance for ``P_t ∪ P_q``."""
+    """``Tensor["C", float32]`` post-view point-to-mesh error, in square metres."""
     pm_comp_after: Tensor
-    """Tensor["C"] Mesh→point distance for ``P_t ∪ P_q``."""
+    """``Tensor["C", float32]`` post-view mesh-to-point error, in square metres."""
     fscore_tau: Tensor | None = None
-    """Optional F-score values at configured distance thresholds."""
+    """Optional ``Tensor["C ...", float32]`` per-candidate F-scores at configured thresholds."""
 
     def to_serializable(self) -> dict[str, Any]:
-        """Serialize this result into a cache-friendly CPU payload."""
+        """Serialize tensors into a cache-friendly CPU payload without changing candidate order."""
 
         return to_serializable(self)
 
@@ -88,10 +105,10 @@ class RriResult:
         *,
         device: torch.device,
     ) -> "RriResult":
-        """Reconstruct one result from a serialized payload.
+        """Reconstruct one candidate-aligned result on a requested device.
 
         Args:
-            payload: Serialized payload produced by `to_serializable`.
+            payload: Serialized payload produced by :meth:`to_serializable`.
             device: Destination device for tensors.
 
         Returns:
@@ -101,7 +118,7 @@ class RriResult:
         return from_serializable(cls, payload, device=device)
 
     def to(self, device: torch.device) -> RriResult:
-        """Move all tensors in this result to the specified device."""
+        """Return a copy with every present tensor moved to ``device``."""
         return RriResult(
             rri=self.rri.to(device=device),
             pm_dist_before=self.pm_dist_before.to(device=device),

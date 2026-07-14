@@ -1,4 +1,10 @@
-"""EFM-formatted ASE dataset wrapper."""
+"""Identifier, shard-resolution, and semidense-bound helpers for ASE/ATEK data.
+
+This module provides the deterministic glue used by :class:`AseEfmDataset`:
+raw-to-compact sample-key conversion, WebDataset shard lookup, scene/snippet
+inference, and world-frame AABB extraction from consumed EFM point keys. It
+does not adapt tensor schemas or load meshes itself.
+"""
 
 from __future__ import annotations
 
@@ -204,7 +210,9 @@ def infer_semidense_bounds(
     2) Axis-aligned bounds of finite semidense points (ignoring padded/NaN entries)
 
     Returns:
-        Tuple of ``(min, max)`` tensors on CPU if finite bounds are available, otherwise ``None``.
+        Pair of ``Tensor["3", float32]`` world-frame bounds in metres on CPU,
+        or ``None`` when neither EFM volume metadata nor finite MPS semidense
+        points define an extent.
     """
     vol_min = _tensor3(efm_dict.get(ARIA_POINTS_VOL_MIN))
     if vol_min is None:

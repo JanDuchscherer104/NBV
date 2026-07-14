@@ -1,4 +1,15 @@
-"""Stable root API for RRI metrics and VIN ordinal helpers."""
+"""Stable public API for oracle RRI scoring and VIN ordinal supervision.
+
+The package root exposes point--mesh distance containers, the oracle
+:class:`OracleRRI` facade, empirical :class:`RriOrdinalBinner` targets, and the
+CORAL helpers consumed by VIN. Rollout reducers, plotting, and stateful
+diagnostics remain in their owning submodules so importing
+:mod:`aria_nbv.rri_metrics` does not imply those secondary APIs are stable.
+
+Oracle geometry and RRI values are label/evaluation data. CORAL logits,
+decoded ranks, and expected bin values are learned actor-side predictions;
+candidate hard-validity masks remain separate from both surfaces.
+"""
 
 from .coral import (
     CoralLayer,

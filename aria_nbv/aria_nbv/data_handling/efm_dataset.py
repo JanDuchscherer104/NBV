@@ -4,6 +4,12 @@
 typed `EfmSnippetView` objects. It is the live data source used by candidate
 generation, VIN offline-cache construction, and rollout-data smoke builds.
 
+ATEK shards are the tensorized provenance for calibrated VRS streams,
+trajectories, online calibration, and MPS semidense points; this module does
+not open raw VRS recordings. Semidense points and calibrated poses are
+actor-visible observations, while attached ASE meshes and GT annotations are
+oracle label/evaluation assets.
+
 Scene/snippet identity, mesh attachment, taxonomy mapping, and semidense bounds
 are part of the contract. Any downstream store that depends on oracle labels
 must keep scene-level splits and manifest hashes instead of relying on sample
@@ -41,7 +47,13 @@ from .mesh_cache import MeshProcessSpec, load_or_process_mesh
 
 
 class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
-    """Configuration for `AseEfmDataset`."""
+    """Configure the canonical ATEK-shard to EFM-snippet streaming path.
+
+    The config resolves scene/shard/sample filters, the ATEK-to-EFM taxonomy,
+    and optional ASE mesh pairing before constructing :class:`AseEfmDataset`.
+    ``EfmModelAdaptor`` owns flattened-key remapping; this config does not
+    introduce a parallel schema.
+    """
 
     cache_exclude_fields: ClassVar[set[str]] = {"tar_urls", "scene_to_mesh"}
     """Fields omitted from cache snapshots because they are large or derived."""
@@ -56,7 +68,7 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
     atek_variant: Literal["efm", "efm_eval", "cubercnn", "cubercnn_eval"] = Field(
         default="efm",
     )
-    """ATEK dataset variant subdirectory under the data root."""
+    """ATEK payload variant and on-disk shard subdirectory under the data root."""
     scene_ids: list[str] = Field(default_factory=list)
     """Optional list of ASE scene IDs to include.
 
@@ -74,12 +86,12 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
     snippet_key_filter: list[str] = Field(default_factory=list)
     """Optional sample key filter applied after loading shards."""
     tar_urls: list[str] = Field(default_factory=list)
-    """Explicit list of shard paths or globs.
+    """ATEK WebDataset shard paths or globs carrying tensorized ASE snippets.
 
     Auto-populated from ``scene_ids`` when empty.
     """
     scene_to_mesh: dict[str, Path] = Field(default_factory=dict)
-    """Optional mapping of ``scene_id`` -> GT mesh path.
+    """Optional mapping of ``scene_id`` to ASE GT-mesh evaluation asset.
 
     Auto-filled when ``load_meshes=True`` and mesh paths exist.
     """
@@ -187,7 +199,7 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
 
     @property
     def taxonomy_csv(self) -> Path:
-        """Resolved taxonomy mapping CSV path."""
+        """Resolve the ATEK-to-EFM semantic taxonomy used by ``EfmModelAdaptor``."""
         taxonomy_pth = self.paths.external_dir / "efm3d" / "efm3d" / "config" / "taxonomy" / self.taxonomy_csv_filename
         if not taxonomy_pth.exists():
             raise FileNotFoundError(f"Taxonomy CSV not found at {taxonomy_pth}")
@@ -328,7 +340,14 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
 
 
 class AseEfmDataset(IterableDataset[EfmSnippetView]):
-    """Iterable dataset yielding `EfmSnippetView` with optional GT mesh."""
+    """Stream zero-copy EFM views from ATEK shards with optional ASE meshes.
+
+    Each iteration adapts one WebDataset sample into the consumed EFM key
+    families, infers stable scene/snippet lineage, and attaches processed mesh
+    tensors when configured. The iterable owns per-instance mesh memoization;
+    yielded :class:`EfmSnippetView` objects retain the backing EFM dictionary.
+    Meshes never become actor-visible observations.
+    """
 
     def __init__(self, config: AseEfmDatasetConfig):
         """Initialize the dataset wrapper and its WebDataset source."""
@@ -418,7 +437,13 @@ class AseEfmDataset(IterableDataset[EfmSnippetView]):
             raise TypeError(f"Unexpected sample type from loader: {type(raw)}")
 
     def __iter__(self) -> Iterator[EfmSnippetView]:
-        """Yield raw snippet views together with optional processed meshes."""
+        """Yield adapted snippets with actor-visible EFM tensors and optional GT meshes.
+
+        Yields:
+            :class:`EfmSnippetView` backed by one ATEK sample. Camera,
+            trajectory, and semidense tensors preserve EFM frame conventions;
+            mesh fields are oracle-only ASE assets.
+        """
         for efm_dict in self._iter_efm_samples():
             scene_id, snippet_id = _infer_ids(
                 efm_dict,

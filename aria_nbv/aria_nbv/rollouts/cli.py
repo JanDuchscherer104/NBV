@@ -1,4 +1,10 @@
-"""CLI entry points for building standalone target-RRI rollout stores."""
+"""Build, shard, and inspect standalone target-RRI rollout campaigns.
+
+This module provides commands that read immutable VIN offline rows, materialize rollout-owned Zarr
+stores, and expose deterministic shard planning and status reporting. Shard
+builds use temporary directories and validated promotion; direct unsharded
+builds own their configured destination and never modify the VIN source store.
+"""
 
 from __future__ import annotations
 
@@ -254,7 +260,12 @@ def status_rollout_shards_command(
         typer.Option("--require-complete", help="Exit with status 2 when any planned shard is not succeeded."),
     ] = False,
 ) -> None:
-    """Summarize one rollout shard campaign."""
+    """Report completion states for every shard in one manifest-driven campaign.
+
+    A shard is successful only when its final store, owner sidecar, and success
+    marker agree. ``--require-complete`` turns any failed, incomplete, or
+    missing shard into process exit status 2 for schedulers and CI.
+    """
 
     console = cli_console()
     status = summarize_rollout_shard_campaign(shard_manifest, final_root=final_root)

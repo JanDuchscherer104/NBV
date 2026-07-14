@@ -1,4 +1,8 @@
-"""Normalization helper functions shared by VIN modules and training setup."""
+"""Normalization helper functions shared by VIN modules and training setup.
+
+This module provides integer group-count resolution for GroupNorm-backed
+feature grids and candidate heads.
+"""
 
 from __future__ import annotations
 

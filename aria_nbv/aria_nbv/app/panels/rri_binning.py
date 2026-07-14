@@ -1,4 +1,8 @@
-"""RRI binning diagnostics panel."""
+"""Saved ordinal-RRI binner and fit-distribution diagnostics.
+
+The panel provides quantile-edge, bin-occupancy, representative-value, and
+offline-store coverage checks from persisted oracle-label artifacts only.
+"""
 
 from __future__ import annotations
 

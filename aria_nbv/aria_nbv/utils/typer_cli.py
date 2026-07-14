@@ -1,4 +1,8 @@
-"""Small Typer runner utilities for stable console-script wrappers."""
+"""Run Typer applications behind stable package console-script wrappers.
+
+Expected Click exits are converted to explicit process statuses while command
+callbacks can execute without Typer raising `SystemExit` on success.
+"""
 
 from __future__ import annotations
 

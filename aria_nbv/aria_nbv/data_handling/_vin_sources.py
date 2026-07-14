@@ -1,4 +1,12 @@
-"""Canonical VIN dataset-source configs for online and immutable offline data."""
+"""Canonical VIN dataset-source configs for online and immutable offline data.
+
+This module owns the split-aware source union consumed by VIN Lightning data
+modules. The online source streams ATEK/ASE snippets through the EFM adaptor and
+computes GT-mesh oracle labels at runtime; the offline source reads the strict
+immutable shard format and can skip diagnostic blocks. Both yield
+:class:`VinOracleBatch` while preserving actor-visible EFM/EVL evidence versus
+oracle RRI and GT-OBB supervision boundaries.
+"""
 
 from __future__ import annotations
 
@@ -119,7 +127,7 @@ class VinOracleOnlineDatasetConfig(TargetConfig[VinOracleOnlineDataset]):
     """Maximum oracle attempts before raising."""
 
     efm_keep_keys: list[str] | None = None
-    """Optional allowlist of EFM keys to keep in VIN batches."""
+    """Optional allowlist of consumed EFM key families retained after online labeling."""
 
     prune_efm_snippet: bool = True
     """Whether to prune EFM snippets before returning VIN batches."""

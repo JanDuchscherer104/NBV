@@ -1,4 +1,8 @@
-"""Transforms tab for VIN diagnostics."""
+"""Frame-composition and voxel-coordinate diagnostics for VIN.
+
+The tab provides world/rig/camera SE(3) closure, world-to-voxel round trips,
+grid linearity, in-bounds coverage, and prediction-alignment checks.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,9 @@
-"""Geometry tab for VIN diagnostics."""
+"""World-frame geometry and candidate/evidence alignment diagnostics for VIN.
+
+The tab provides actor-visible candidate and semidense geometry, prediction
+alignment, and explicitly marked oracle mesh or GT-box overlays when attached
+to the diagnostic batch.
+"""
 
 from __future__ import annotations
 

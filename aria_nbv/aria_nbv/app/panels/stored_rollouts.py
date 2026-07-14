@@ -1,4 +1,9 @@
-"""Streamlit helpers for inspecting persisted rollout Zarr stores."""
+"""Read-only inspection and validation of persisted rollout Zarr stores.
+
+The module provides schema gates, actor-action and oracle-label mask audits,
+objective and geometry summaries, selected-depth previews, and bounded Rerun
+launch commands for chosen rows.
+"""
 
 from __future__ import annotations
 

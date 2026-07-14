@@ -1,8 +1,27 @@
-"""LightningModule for training VIN (View Introspection Network).
+r"""Train the runnable one-step VIN candidate scorer with Lightning.
 
-This module implements the same core logic as `aria_nbv/scripts/train_vin.py`,
-but with PyTorch Lightning training loops and optional W&B logging via the
-trainer factory.
+This module owns Lightning lifecycle, fitted-binner state, CORAL ordinal loss,
+coverage reweighting, candidate-table metrics, optimizer construction, and
+checkpoint persistence for :class:`aria_nbv.vin.types.VinPrediction`. The
+scorer forward pass receives only actor-visible snippet evidence, world-frame
+candidate poses, and optional cached EVL fields. Oracle RRI labels and
+point-mesh diagnostics remain loss/evaluation targets on
+:class:`aria_nbv.data_handling.VinOracleBatch` and are never scorer inputs.
+
+For a collated candidate table of shape ``B × N_q`` and ``K`` ordinal classes,
+the scorer emits logits ``Tensor["B N_q K-1", float32]``, probabilities
+``Tensor["B N_q K", float32]``, and expected scores
+``Tensor["B N_q", float32]``. Training flattens only rows selected by the hard
+batch prefix mask, finite oracle labels, and finite logits. Scorer-produced
+``candidate_valid`` is a diagnostic/coverage signal, not the authoritative
+action mask.
+
+Full-shell ``Q_H`` replay is intentionally outside this owner. Rollout action
+and training masks are ``Tensor["S N_shell", bool]`` and reward tables are
+``Tensor["S N_shell", float32]``; invalid rows retain false masks and NaN
+labels. That objective requires masked bootstrap action selection, so the
+contract guard rejects the scorer family until a dedicated Lightning module
+exists.
 """
 
 from __future__ import annotations
@@ -47,120 +66,132 @@ from .optimizers import AdamWConfig, OneCycleSchedulerConfig, ReduceLrOnPlateauC
 
 
 class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
-    """Configuration for `VinLightningModule`."""
+    """Configure one-step ordinal candidate scoring and optimization.
+
+    The config composes the scorer, optimizer, optional scheduler, fitted RRI
+    binner, loss variants, and logging policy. It does not configure dataset
+    construction or rollout ``Q_H`` targets; those remain owned by
+    :class:`aria_nbv.lightning.VinDataModuleConfig` and
+    :mod:`aria_nbv.rollouts`, respectively.
+    """
 
     @property
     def target_type(self) -> type["VinLightningModule"]:
+        """Return the :class:`VinLightningModule` factory target."""
+
         return VinLightningModule
 
     vin: CandidateScorerConfig = Field(default_factory=VinModelV3Config)
     """Candidate scorer configuration.
 
-    The field name remains ``vin`` to preserve existing TOML, checkpoint, and
+    The scorer must emit CORAL logits ``Tensor["B N_q K-1", float32]`` and
+    :class:`aria_nbv.vin.types.VinPrediction` fields aligned to the
+    compact/right-padded candidate
+    table. The field name remains ``vin`` to preserve existing TOML, checkpoint, and
     experiment-config compatibility. New scorer architectures should enter via
     `aria_nbv.vin.candidate_scorer.CandidateScorerConfig` instead of adding
     Lightning-specific branches.
     """
 
     optimizer: AdamWConfig = Field(default_factory=AdamWConfig)
-    """Optimizer configuration."""
+    """AdamW config instantiated from scorer parameters during trainer setup."""
 
     lr_scheduler: OneCycleSchedulerConfig | ReduceLrOnPlateauConfig | None = Field(
         default_factory=ReduceLrOnPlateauConfig,
     )
-    """Learning-rate scheduler configuration (set to ``None`` to disable)."""
+    """Optional scheduler created after Lightning knows the optimizer and step budget."""
 
     num_classes: int = 8
-    """Number of ordinal classes (must match `vin.head.num_classes`)."""
+    """Ordinal class count ``K``; scorer logits have final width ``K-1``."""
 
     coral_bias_init: Literal["default", "prior_logits"] = "default"
-    """Bias initialization strategy for CORAL thresholds."""
+    """CORAL threshold-bias initialization, optionally derived from binner priors."""
 
     coral_loss_variant: Literal["coral", "balanced_bce", "focal"] = "coral"
-    """Loss variant for CORAL thresholds."""
+    """Per-valid-row ordinal loss applied to ``Tensor["M K-1", float32]`` logits."""
 
     coral_balance_source: Literal["binner", "batch"] = "binner"
-    """Source for threshold priors when balancing CORAL loss."""
+    """Source of ``K-1`` threshold priors for balanced BCE or focal loss."""
 
     coral_balance_eps: float = Field(default=1e-6, gt=0.0)
-    """Epsilon for clamping threshold priors away from 0/1."""
+    """Dimensionless clamp keeping threshold priors strictly inside ``(0, 1)``."""
 
     coral_focal_gamma: float = Field(default=2.0, ge=0.0)
-    """Focal gamma for CORAL focal loss."""
+    """Non-negative focusing exponent for the CORAL focal variant."""
 
     coral_focal_alpha: float | None = Field(default=None, ge=0.0, le=1.0)
-    """Optional focal alpha for CORAL focal loss (None → inferred from priors)."""
+    """Optional positive-class focal weight in ``[0, 1]``; ``None`` uses priors."""
 
     binner_fit_snippets: int | None = None
-    """Number of oracle-labelled snippets used to fit the ordinal binner. If `` None`` uses all available (offline) or fit until interrupted (online)."""
+    """Oracle-labelled snippets used to fit ordinal thresholds; ``None`` uses the source extent."""
 
     binner_max_attempts: int = 64
-    """Maximum number of skipped oracle batches while fitting the binner (guards against bad oracle settings)."""
+    """Maximum skipped/invalid oracle batches tolerated during binner fitting."""
 
     save_binner: bool = True
-    """Persist `rri_binner.json` into the run directory on fit start."""
+    """Persist fitted ordinal thresholds and class representatives with the run."""
 
     binner_path: Path | None = None
-    """Optional explicit path to save `rri_binner.json` (defaults to trainer root dir)."""
+    """Fitted binner JSON used for class labels and expected-RRI representatives."""
 
     aux_regression_loss: Literal["mse", "huber"] | None = "huber"
-    """Auxiliary regression loss on expected RRI (set to ``None`` to disable)."""
+    """Optional regression loss from expected ordinal RRI to finite oracle RRI."""
 
     aux_regression_weight: float = 10.0
-    """Initial weight for the auxiliary regression loss."""
+    """Initial dimensionless multiplier for the auxiliary expected-RRI loss."""
 
     aux_regression_weight_gamma: float = Field(default=0.99, gt=0.0, le=1.0)
-    """Exponential decay factor for the auxiliary regression weight."""
+    """Per-interval multiplicative decay in ``(0, 1]`` for auxiliary weight."""
 
     aux_regression_weight_min: float = Field(default=0.1, ge=0.0)
-    """Minimum auxiliary regression weight after decay."""
+    """Non-negative floor for the decayed auxiliary-loss multiplier."""
 
     aux_regression_weight_interval: Literal["epoch", "step"] = "epoch"
-    """Whether to apply aux loss decay per epoch or per global step."""
+    """Lightning counter used as the auxiliary-weight decay exponent."""
 
     log_interval_steps: int | None = Field(default=None)
-    """Step interval for logging rank/confusion/histogram metrics (train stage only). If ``None`` only log per-epoch metrics."""
+    """Optional training-step cadence for buffered rank and ordinal diagnostics."""
 
     log_spearman: bool = True
     """Enable Spearman rank-correlation metrics.
 
-    Spearman uses :class:`torchmetrics.regression.SpearmanCorrCoef`, which buffers all
+    Spearman uses `torchmetrics.regression.SpearmanCorrCoef`, which buffers all
     predictions and targets until compute time. Keep it enabled for normal
     experiments; disable it for fast smoke runs that only need loop viability.
     """
 
     grad_norms: GradNormLoggingConfig = Field(default_factory=GradNormLoggingConfig)
-    """Configuration for gradient-norm logging."""
+    """Post-backward gradient-norm targets and logging policy."""
 
     coverage_weight_mode: Literal["none", "voxel", "semidense", "min", "mean", "product"] = "none"
-    """How to compute coverage-based loss weights from VIN predictions."""
+    """Unitless coverage proxy used to weight valid candidate rows during training."""
 
     coverage_weight_floor: float = Field(default=0.2, ge=0.0, le=1.0)
-    """Minimum loss weight for low-coverage candidates."""
+    """Minimum per-row coverage weight in ``[0, 1]`` before schedule blending."""
 
     coverage_weight_power: float = Field(default=1.0, ge=0.0)
-    """Exponent applied to coverage fractions before weighting."""
+    """Non-negative exponent applied to coverage fractions in ``[0, 1]``."""
 
     coverage_weight_strength_start: float = Field(default=0.5, ge=0.0, le=1.0)
-    """Initial blend strength for coverage weighting (0 = uniform, 1 = full weighting)."""
+    """Initial blend from uniform weights (0) to coverage weights (1)."""
 
     coverage_weight_strength_end: float = Field(default=0.0, ge=0.0, le=1.0)
-    """Final blend strength after annealing."""
+    """Final uniform-to-coverage blend after the configured anneal window."""
 
     coverage_weight_schedule: Literal["linear", "cosine"] = "linear"
-    """Schedule used to anneal coverage weighting strength."""
+    """Interpolation schedule between starting and ending coverage strength."""
 
     coverage_weight_interval: Literal["epoch", "step"] = "epoch"
-    """Whether to anneal coverage weighting per epoch or per step."""
+    """Lightning counter used to advance coverage-strength annealing."""
 
     coverage_weight_anneal_epochs: int | None = Field(default=None, ge=1)
-    """Epochs over which to anneal coverage weighting (None keeps constant)."""
+    """Positive epoch horizon for annealing; ``None`` keeps the start strength."""
 
     coverage_weight_anneal_steps: int | None = Field(default=None, ge=1)
-    """Steps over which to anneal coverage weighting (None keeps constant)."""
+    """Positive global-step horizon for annealing; ``None`` keeps the start strength."""
 
     coverage_weight_apply_aux: bool = True
-    """Whether to apply coverage weights to the auxiliary regression loss."""
+    """Apply the same valid-row coverage weights to expected-RRI regression."""
 
     @field_validator("aux_regression_loss", mode="before")
     @classmethod
@@ -192,7 +223,25 @@ class VinLightningModuleConfig(TargetConfig["VinLightningModule"]):
 
 
 class VinLightningModule(pl.LightningModule):
-    """PyTorch Lightning module for VIN training with CORAL ordinal regression."""
+    r"""Own one-step CORAL training state for a VIN candidate scorer.
+
+    The module registers the scorer under `vin` to preserve historical
+    checkpoint keys, loads or restores the fitted :class:`RriOrdinalBinner`,
+    and accumulates stage metrics. For ordinal class label $y \in [0,K-1]$,
+    CORAL predicts threshold levels $l_k = 1[y > k]$ for ``K-1`` logits per
+    candidate. Only the flattened ``M`` rows satisfying the batch hard mask,
+    finite oracle label, and finite-logit checks contribute to loss.
+
+    `VinPrediction.candidate_valid` is intentionally diagnostic. The hard
+    action/training mask is derived from :attr:`VinOracleBatch.candidate_count`;
+    invalid rollout full-shell rows never enter this compact one-step batch.
+
+    Attributes:
+        config: Composed scorer, loss, optimizer, scheduler, binner, and
+            logging policy.
+        vin: Registered scorer module that owns the ``vin.*`` checkpoint
+            namespace.
+    """
 
     def __init__(self, config: VinLightningModuleConfig) -> None:
         super().__init__()
@@ -233,6 +282,14 @@ class VinLightningModule(pl.LightningModule):
 
     # --------------------------------------------------------------------- lifecycle
     def setup(self, stage: str) -> None:
+        """Initialize binner-derived scorer state for a Lightning stage.
+
+        Lightning owns invocation timing. This hook integrates logging, loads
+        the configured binner when a checkpoint did not restore one,
+        initializes ordinal class representatives and optional prior biases,
+        then records the effective scorer config once per module instance.
+        """
+
         super().setup(stage)
         self._integrate_console()
         if self._binner is None:
@@ -303,10 +360,14 @@ class VinLightningModule(pl.LightningModule):
         self._logged_effective_config = True
 
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Persist fitted ordinal-binner state inside a Lightning checkpoint."""
+
         if self._binner is not None:
             checkpoint["rri_binner"] = self._binner.to_dict()
 
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Restore embedded ordinal-binner state before stage setup runs."""
+
         data = checkpoint.get("rri_binner")
         if data is not None:
             self._binner = RriOrdinalBinner.from_dict(data)
@@ -319,7 +380,20 @@ class VinLightningModule(pl.LightningModule):
         device: torch.device | str = "cpu",
         fallback_binner_path: Path | str | None = None,
     ) -> "VinLightningModule":
-        """Load a VIN Lightning checkpoint with strict inference state validation."""
+        """Load a checkpoint and return an evaluation-ready scorer module.
+
+        Args:
+            checkpoint_path: Lightning checkpoint containing config and strict
+                ``vin.*`` state-dict entries.
+            device: Destination device for the restored module.
+            fallback_binner_path: Binner JSON used only when the checkpoint and
+                restored config do not provide fitted binner state.
+
+        Returns:
+            Evaluation-mode :class:`VinLightningModule` with ordinal
+            representatives initialized and gradients still owned by the
+            caller's surrounding context.
+        """
 
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         hparams = checkpoint.get("hyper_parameters", {})
@@ -347,7 +421,13 @@ class VinLightningModule(pl.LightningModule):
         *,
         fallback_binner_path: Path | str | None = None,
     ) -> None:
-        """Initialize binner-derived scorer state before inference or diagnostics."""
+        """Initialize mandatory binner-derived state before direct inference.
+
+        This is the non-Trainer lifecycle path used by diagnostics and
+        checkpoint loading. It never fits a binner; missing persisted state is
+        an error because ordinal probabilities cannot be mapped to stable RRI
+        representatives otherwise.
+        """
 
         if self._binner is None:
             if self.config.binner_path is not None:
@@ -366,27 +446,50 @@ class VinLightningModule(pl.LightningModule):
 
     # ------------------------------------------------------------------ training/val/test
     def training_step(self, batch: VinOracleBatch, batch_idx: int) -> Tensor | None:
+        """Compute one masked CORAL update for an oracle-labelled training batch.
+
+        Returns ``None`` when no row has a hard-valid candidate, finite oracle
+        RRI label, and finite ``K-1`` logits; Lightning then skips the update.
+        """
+
         return self._step(batch, batch_idx, stage=Stage.TRAIN)
 
     def validation_step(self, batch: VinOracleBatch, batch_idx: int) -> Tensor | None:
+        """Evaluate masked ordinal loss and candidate-table metrics without updates."""
+
         return self._step(batch, batch_idx, stage=Stage.VAL)
 
     def test_step(self, batch: VinOracleBatch, batch_idx: int) -> Tensor | None:
+        """Evaluate the test split using the validation loss/mask contract."""
+
         return self._step(batch, batch_idx, stage=Stage.TEST)
 
     # ------------------------------------------------------------------ epoch-end metrics
     def on_train_epoch_end(self) -> None:
+        """Emit and reset accumulated training metrics at the epoch boundary."""
+
         self._log_epoch_metrics(Stage.TRAIN)
         self._interval_metrics.reset()
 
     def on_validation_epoch_end(self) -> None:
+        """Emit/reset validation metrics and expected-RRI error statistics."""
+
         self._log_epoch_metrics(Stage.VAL)
         self._log_rri_error_stats()
 
     def on_test_epoch_end(self) -> None:
+        """Emit and reset accumulated test metrics at the epoch boundary."""
+
         self._log_epoch_metrics(Stage.TEST)
 
     def on_after_backward(self) -> None:
+        """Log configured scorer gradient norms after Lightning backpropagation.
+
+        Logging is disabled during sanity validation, evaluation mode, or when
+        :class:`GradNormLoggingConfig` is disabled. This hook observes gradients
+        only and does not clip or mutate them.
+        """
+
         grad_cfg = self.config.grad_norms
         if not grad_cfg.enabled:
             return
@@ -408,6 +511,17 @@ class VinLightningModule(pl.LightningModule):
 
     # ------------------------------------------------------------------ optim
     def configure_optimizers(self) -> dict[str, Any]:
+        """Construct optimizer and optional scheduler from trainable scorer state.
+
+        Returns:
+            Lightning optimizer mapping. One-cycle scheduling resolves its step
+            budget from the attached Trainer; plateau scheduling includes its
+            configured monitor, interval, and frequency.
+
+        Raises:
+            RuntimeError: If the scorer exposes no trainable parameters.
+        """
+
         params = [p for p in self.vin.parameters() if p.requires_grad]
         if not params:
             raise RuntimeError(

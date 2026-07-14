@@ -10,6 +10,11 @@ All functions preserve the hard-mask contract used by
 not treated as low-reward labels. Shapes are intentionally simple so both the
 current one-step VIN scorer and future finite-candidate ``Q_H`` models can call
 the same metric code.
+
+By convention, ``B`` indexes independent rollout or candidate tables, ``H``
+indexes selected horizon steps, and ``C`` is the reducible candidate axis.
+Oracle-value arguments are evaluation labels; predicted-score and selection
+probability arguments are actor-side policy outputs.
 """
 
 from __future__ import annotations
@@ -39,10 +44,15 @@ class TorchRolloutMetrics:
     """
 
     discounted_return: Tensor
+    """``Tensor["B", float32]`` dimensionless discounted selected return; empty rows are ``NaN``."""
     endpoint_gain: Tensor
+    """``Tensor["B", float32]`` dimensionless root-normalized endpoint gain."""
     endpoint_log_gain: Tensor
+    """``Tensor["B", float32]`` dimensionless logarithmic endpoint gain."""
     valid_steps: Tensor
+    """``Tensor["B", int64]`` count of finite, hard-valid selected rewards."""
     valid_endpoint: Tensor
+    """``Tensor["B", bool]`` comparability mask for finite non-negative endpoint errors."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +70,11 @@ class CandidateOrderConsistency:
     """
 
     score_mae: Tensor
+    """``Tensor["B", float32]`` inverse-aligned score MAE over comparable hard-valid rows."""
     top1_match: Tensor
+    """``Tensor["B", bool]`` agreement of the best comparable candidate after inverse alignment."""
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables containing at least one comparable row."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,9 +96,13 @@ class SelectedActionOracleComparison:
     """
 
     selected_oracle_regret: Tensor
+    """``Tensor["B", float32]`` oracle-best minus selected oracle value; invalid tables are ``NaN``."""
     selected_oracle_rank: Tensor
+    """``Tensor["B", float32]`` one-based selected rank among finite hard-valid oracle labels."""
     selected_oracle_percentile: Tensor
+    """``Tensor["B", float32]`` rank percentile where one is best and zero is worst."""
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables with a comparable selected oracle label."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,9 +123,13 @@ class CandidatePathIncrementStats:
     """
 
     mean_m: Tensor
+    """``Tensor["B", float32]`` mean finite hard-valid candidate path increment, metres."""
     min_m: Tensor
+    """``Tensor["B", float32]`` minimum finite hard-valid candidate path increment, metres."""
     max_m: Tensor
+    """``Tensor["B", float32]`` maximum finite hard-valid candidate path increment, metres."""
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables with at least one comparable path increment."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +149,9 @@ class CandidatePrimaryInvalidReasonStats:
     """
 
     share_of_invalid: Tensor
+    """``Tensor["B", float32]`` audited-reason share over hard-invalid rows only."""
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables with at least one hard-invalid row."""
 
 
 def discounted_selected_return(
@@ -391,7 +414,8 @@ def candidate_policy_entropy(
         dim: Candidate dimension.
 
     Returns:
-        Entropy per candidate table after reducing `dim`.
+        ``Tensor["...", float32]`` entropy in nats per candidate table after
+        reducing `dim`.
     """
 
     values = selection_probabilities.to(dtype=torch.float32)

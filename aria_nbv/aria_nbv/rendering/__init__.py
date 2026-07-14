@@ -1,5 +1,10 @@
 """Rendering utilities used by oracle RRI and rollout diagnostics.
 
+This package facade exports candidate-depth DTOs and renderer configs/backends,
+plus depth-to-world-point-cloud conversion. Backend modules own rasterization
+and ray casting; pose generation supplies cameras, while RRI modules own
+target-aware scoring and validity interpretation.
+
 Candidate renders are metric depth images generated from ASE/EFM meshes and
 candidate `PoseTW` cameras. PyTorch3D returns z-depth in the physical camera
 frame; unprojection converts valid pixels back into world-frame point clouds

@@ -1,4 +1,10 @@
-"""Inventory normalization and metadata rendering for the Rerun inspector."""
+"""Normalize visual capabilities and render provenance for Rerun inspection.
+
+This module owns the stable inventory DTO, pre-recording required-layer checks,
+and compact JSON metadata containing source sample identity, selection context,
+resolved inspector config, and non-fatal visualization warnings. Inventory
+flags describe availability, not actor/oracle semantic equivalence.
+"""
 
 from __future__ import annotations
 
