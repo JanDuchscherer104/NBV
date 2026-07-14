@@ -75,9 +75,5 @@ def test_generator_runs_on_efm_sample(efm_sample):
     assert mask.sum() > 0
 
 
-def test_occupancy_extent_has_expected_shape(efm_sample):
-    pytest.skip("Legacy occupancy extent helper removed; test obsolete.")
-
-
 def test_collision_backend_trimesh_enum():
     assert CollisionBackend.TRIMESH.value == "trimesh"

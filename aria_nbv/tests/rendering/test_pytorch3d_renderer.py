@@ -240,11 +240,3 @@ def test_backface_culling_blocks_interior_walls():
     hit_ratio_two_sided = float((depth_two_sided < cfg_two_sided.zfar).float().mean().item())
 
     assert hit_ratio_two_sided >= hit_ratio_culled
-
-
-def test_proxy_walls_expand_to_occupancy_bounds():
-    pytest.skip("Proxy wall logic removed; test obsolete.")
-
-
-def test_candidate_renderer_builds_ordered_occupancy_extent():
-    pytest.skip("Occupancy extent helper removed; test obsolete.")

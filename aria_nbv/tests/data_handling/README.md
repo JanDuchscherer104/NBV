@@ -9,10 +9,9 @@ tests/data_handling/
 ├── __init__.py              # Package marker
 ├── conftest.py              # Pytest fixtures
 ├── test_metadata.py         # Metadata parsing tests
-├── test_downloader.py       # Downloader tests
+├── test_downloader_cli_list_snippet_totals.py  # Downloader CLI output tests
 ├── test_dataset.py          # PyTorch dataset tests
-├── test_utils.py            # Utility function tests
-└── test_cli.py              # CLI tests
+└── test_utils.py            # Utility function tests
 ```
 
 ## Running Tests
@@ -34,14 +33,12 @@ pytest tests/data_handling/ --cov=aria_nbv.data_handling --cov-report=html
 # Test metadata parsing
 pytest tests/data_handling/test_metadata.py -v
 
-# Test downloader
-pytest tests/data_handling/test_downloader.py -v
+# Test downloader CLI output
+pytest tests/data_handling/test_downloader_cli_list_snippet_totals.py -v
 
 # Test dataset
 pytest tests/data_handling/test_dataset.py -v
 
-# Test CLI
-pytest tests/data_handling/test_cli.py -v
 ```
 
 ### Run Specific Test Classes or Functions
@@ -68,19 +65,9 @@ Tests for metadata parsing and management:
   - Save/load caching
   - Error handling
 
-### `test_downloader.py` (14 tests)
+### `test_downloader_cli_list_snippet_totals.py` (2 tests)
 
-Tests for download orchestration:
-
-- **ASEDownloaderConfig**:
-  - Configuration creation
-  - Path resolution
-  - Config-as-Factory pattern
-- **ASEDownloader**:
-  - Mesh download with SHA validation
-  - Scene filtering
-  - Directory creation
-  - Error handling
+Tests the downloader CLI's reported all-scene and displayed-scene shard totals.
 
 ### `test_dataset.py`
 
@@ -98,18 +85,6 @@ Tests for utility functions:
 
 - **extract_scene_id_from_sequence_name**: Various input formats
 - **validate_scene_data**: Mesh/ATEK validation, error handling
-
-### `test_cli.py` (8 tests)
-
-Tests for CLI interface:
-
-- **CLIDownloaderSettings**: Argument parsing
-- **main()**:
-  - --all-with-meshes flag
-  - --scene-ids flag
-  - --meshes-only flag
-  - Config file loading
-  - Error messages
 
 ## Test Fixtures
 
@@ -144,37 +119,16 @@ This setup allows testing:
 ### Unit Tests
 Most tests are unit tests with mocked dependencies:
 - `test_metadata.py`: Pure unit tests (no mocking needed)
-- `test_downloader.py`: Mocks HTTP requests and file I/O
 - `test_dataset.py`: Mocks ATEK loader
 - `test_utils.py`: Pure unit tests
-- `test_cli.py`: Mocks all dependencies
+- `test_downloader_cli_list_snippet_totals.py`: Uses local metadata fixtures
 
 ### Integration Tests
-Located in `*Integration` test classes:
-- `TestASEDownloaderIntegration`: Config → Downloader → Metadata flow
-- `TestASESceneDatasetIntegration`: Config → Dataset → Sample flow
+
+Data-dependent integration coverage lives in dedicated test modules and skips
+only when the required local ASE assets are unavailable.
 
 ## Common Test Patterns
-
-### Config-as-Factory Testing
-
-```python
-def test_config_to_instance():
-    config = ASEDownloaderConfig(mode="download", url_dir=Path(".data/urls"))
-    instance = config.setup_target()
-    assert isinstance(instance, ASEDownloader)
-```
-
-### Mocking External Dependencies
-
-```python
-@patch("aria_nbv.data_handling.downloader.requests.get")
-def test_download(mock_get):
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_get.return_value = mock_response
-    # Test logic...
-```
 
 ### Using Fixtures
 
@@ -194,9 +148,7 @@ tests/data_handling/test_metadata.py::TestSceneMetadata::test_creation PASSED
 tests/data_handling/test_metadata.py::TestSceneMetadata::test_no_mesh PASSED
 tests/data_handling/test_metadata.py::TestASEMetadata::test_parse_mesh_urls PASSED
 ...
-tests/data_handling/test_cli.py::TestCLIMain::test_main_with_config_path PASSED
-
-======================== 68 passed in 2.34s =========================
+======================== 116 tests collected =========================
 ```
 
 ## Adding New Tests
