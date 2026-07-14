@@ -27,7 +27,11 @@ from .vin_diag_tabs import (
     render_tokens_tab,
     render_transforms_tab,
 )
-from .vin_utils import _build_experiment_config, _run_vin_debug, _setup_vin_diagnostics_runtime
+from .vin_diagnostics_runtime import (
+    build_vin_diagnostics_config,
+    run_vin_diagnostics,
+    setup_vin_diagnostics_runtime,
+)
 
 
 def _iter_stage_batches(datamodule: VinDataModule, *, stage: Stage) -> Iterator[VinOracleBatch]:
@@ -77,11 +81,11 @@ def render_vin_diagnostics_page() -> None:
 
     if run:
         try:
-            cfg = _build_experiment_config(toml_path=toml_path, stage=stage)
+            cfg = build_vin_diagnostics_config(toml_path=toml_path, stage=stage)
             cfg_sig = config_signature(cfg)
 
             if state.cfg_sig != cfg_sig or state.module is None or state.datamodule is None:
-                runtime = _setup_vin_diagnostics_runtime(cfg, stage=stage)
+                runtime = setup_vin_diagnostics_runtime(cfg, stage=stage)
                 state.cfg_sig = cfg_sig
                 state.experiment = cfg
                 state.module = runtime.module
@@ -90,7 +94,7 @@ def render_vin_diagnostics_page() -> None:
             assert state.module is not None and state.datamodule is not None
             with st.spinner("Running datamodule + VIN forward..."):
                 batch = next(_iter_stage_batches(state.datamodule, stage=stage))
-                pred, debug = _run_vin_debug(state.module, batch)
+                pred, debug = run_vin_diagnostics(state.module, batch)
 
             state.batch = batch
             state.pred = pred
