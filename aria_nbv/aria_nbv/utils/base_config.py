@@ -1,3 +1,4 @@
+import os
 import tomllib
 from enum import Enum
 from pathlib import Path
@@ -116,6 +117,19 @@ class BaseConfig(BaseSettings):
         if value is None or str(value).lower() == "auto":
             return torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return torch.device(value)
+
+    @staticmethod
+    def _resolve_geometry_device(value: str | torch.device) -> torch.device:
+        backend = os.getenv("PYTORCH3D_BACKEND", "auto").lower()
+        if backend not in {"auto", "cpu", "cuda", "mojo"}:
+            raise ValueError("PYTORCH3D_BACKEND must be one of: auto, cpu, cuda, mojo")
+        if backend == "cuda":
+            if not torch.cuda.is_available():
+                raise ValueError("PYTORCH3D_BACKEND=cuda requires available CUDA")
+            return torch.device("cuda")
+        if backend in {"cpu", "mojo"}:
+            return torch.device("cpu")
+        return BaseConfig._resolve_device(value)
 
     @staticmethod
     def _coerce_verbosity(value: Any) -> Verbosity:

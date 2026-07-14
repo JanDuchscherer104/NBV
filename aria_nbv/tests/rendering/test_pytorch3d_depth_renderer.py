@@ -26,7 +26,7 @@ def _test_camera(size: int = 64, fx: float = 50.0) -> CameraTW:
 
 def test_depth_renderer_plane_constant_depth_cpu(monkeypatch):
     require_mojo = platform.system() == "Darwin" and platform.machine() == "arm64"
-    monkeypatch.setenv("PYTORCH3D_REQUIRE_MOJO", "1" if require_mojo else "0")
+    monkeypatch.setenv("PYTORCH3D_BACKEND", "mojo" if require_mojo else "cpu")
 
     # Simple square plane at z=2 facing the camera.
     verts = torch.tensor(

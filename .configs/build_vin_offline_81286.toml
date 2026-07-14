@@ -2,7 +2,7 @@
 #
 # Usage:
 #   cd aria_nbv
-#   PYTORCH3D_REQUIRE_MOJO=1 uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+#   PYTORCH3D_BACKEND=mojo uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
 
 include_backbone            = true
 include_depths              = true
@@ -46,7 +46,7 @@ backbone_payload_keep_fields = [
 ]
 
 [store]
-store_dir = "vin_offline_81286_mojo_smoke"
+store_dir = "vin_offline_81286_backend_smoke"
 
 [dataset]
 atek_variant = "efm"

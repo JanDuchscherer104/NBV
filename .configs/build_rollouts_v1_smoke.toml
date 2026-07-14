@@ -16,11 +16,11 @@ load_candidate_pcs       = false
 load_gt_obbs             = true
 load_detected_obbs       = true
 load_trajectory_metadata = true
-map_location             = "cuda"
+map_location             = "auto"
 verbosity                = 1
 
     [source.store]
-    store_dir = "vin_offline"
+    store_dir = "vin_offline_81286_backend_smoke"
 
 [candidate_mixture.base]
 num_samples            = 8
@@ -28,7 +28,7 @@ oversample_factor      = 1.0
 ensure_collision_free  = true
 ensure_free_space      = true
 min_distance_to_mesh   = 0.2
-device                 = "cuda"
+device                 = "auto"
 verbosity              = 1
 collect_rule_masks     = true
 view_max_azimuth_deg   = 0.0
@@ -70,7 +70,7 @@ include_scene_rri         = false
 verbosity                 = 1
 
     [target_scorer.depth]
-    device               = "cuda"
+    device               = "auto"
     max_candidates_final = 8
     resolution_scale     = 0.2
     verbosity            = 1

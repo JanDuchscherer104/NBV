@@ -2,6 +2,7 @@
 
 import tomllib
 
+import pytest
 import torch
 
 from aria_nbv.utils import BaseConfig, TargetConfig
@@ -65,6 +66,28 @@ def test_to_toml_converts_torch_device_to_str() -> None:
 
     parsed = tomllib.loads(rendered)
     assert parsed["device"] == "cpu"
+
+
+@pytest.mark.parametrize(("backend", "expected"), (("cpu", "cpu"), ("mojo", "cpu")))
+def test_global_pytorch3d_backend_resolves_device(monkeypatch, backend: str, expected: str) -> None:
+    monkeypatch.setenv("PYTORCH3D_BACKEND", backend)
+
+    assert BaseConfig._resolve_geometry_device("cuda") == torch.device(expected)
+
+
+def test_global_pytorch3d_backend_rejects_unknown_value(monkeypatch) -> None:
+    monkeypatch.setenv("PYTORCH3D_BACKEND", "metal")
+
+    with pytest.raises(ValueError, match="auto, cpu, cuda, mojo"):
+        BaseConfig._resolve_geometry_device("auto")
+
+
+def test_global_cuda_backend_requires_cuda(monkeypatch) -> None:
+    monkeypatch.setenv("PYTORCH3D_BACKEND", "cuda")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    with pytest.raises(ValueError, match="requires available CUDA"):
+        BaseConfig._resolve_geometry_device("auto")
 
 
 def test_target_config_setup_target_constructs_target() -> None:

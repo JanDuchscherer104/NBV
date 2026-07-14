@@ -73,7 +73,7 @@ class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
     )
     """Enable `Console` logging."""
 
-    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
+    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_geometry_device)
 
 
 class Pytorch3DDepthRenderer:

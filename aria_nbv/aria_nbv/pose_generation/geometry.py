@@ -43,15 +43,7 @@ def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.
             _DEFAULT_MIN_TRIANGLE_AREA,
         )
 
-    try:
-        dist_sq = _point_face_distance_on_current_device()
-    except RuntimeError as exc:
-        if device.type != "cuda" or "Not compiled with GPU support" not in str(exc):
-            raise
-        points = points.cpu()
-        verts = verts.cpu()
-        faces = faces.cpu()
-        dist_sq = _point_face_distance_on_current_device()
+    dist_sq = _point_face_distance_on_current_device()
     return torch.sqrt(dist_sq).to(device=device, dtype=dtype)
 
 

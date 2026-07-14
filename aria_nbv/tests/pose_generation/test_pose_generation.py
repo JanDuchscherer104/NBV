@@ -130,7 +130,7 @@ def test_shell_sampling_uniform_area():
 
 def test_min_distance_rule_rejects_near_mesh(monkeypatch):
     require_mojo = _mojo_ops.has_mojo()
-    monkeypatch.setenv("PYTORCH3D_REQUIRE_MOJO", "1" if require_mojo else "0")
+    monkeypatch.setenv("PYTORCH3D_BACKEND", "mojo" if require_mojo else "cpu")
     _mojo_ops.reset_stats()
     mesh = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
     cfg = CandidateViewGeneratorConfig(
