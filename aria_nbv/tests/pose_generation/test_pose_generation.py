@@ -8,6 +8,7 @@ pytest.importorskip("efm3d")
 import torch
 import trimesh
 from efm3d.aria import CameraTW, PoseTW
+from pytorch3d import _mojo_ops
 
 from aria_nbv.data_handling import AseEfmDatasetConfig
 from aria_nbv.pose_generation import (
@@ -128,6 +129,9 @@ def test_shell_sampling_uniform_area():
 
 
 def test_min_distance_rule_rejects_near_mesh(monkeypatch):
+    require_mojo = _mojo_ops.has_mojo()
+    monkeypatch.setenv("PYTORCH3D_REQUIRE_MOJO", "1" if require_mojo else "0")
+    _mojo_ops.reset_stats()
     mesh = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
     cfg = CandidateViewGeneratorConfig(
         min_distance_to_mesh=0.25,
@@ -168,6 +172,8 @@ def test_min_distance_rule_rejects_near_mesh(monkeypatch):
     rule(ctx)
     assert torch.equal(ctx.mask_valid, torch.tensor([False, True]))
     assert torch.allclose(ctx.debug["min_distance_to_mesh"], torch.tensor([0.2, 0.8]), atol=1e-6)
+    if require_mojo:
+        assert _mojo_ops.point_face_calls() == 1
 
 
 def test_path_collision_rule_records_p3d_min_clearance(monkeypatch):

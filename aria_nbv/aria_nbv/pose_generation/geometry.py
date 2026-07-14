@@ -26,9 +26,9 @@ def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.
 
     device = points.device
     dtype = points.dtype
-    points = points.to(device)
-    verts = verts.to(device)
-    faces = faces.to(device)
+    points = points.to(device).contiguous()
+    verts = verts.to(device).contiguous()
+    faces = faces.to(device).contiguous()
 
     def _point_face_distance_on_current_device() -> torch.Tensor:
         tris = verts[faces]
