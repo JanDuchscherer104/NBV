@@ -6,7 +6,7 @@
 
 == Objectives and Hypotheses
 
-The first aim defines target-specific oracle @relative-reconstruction-improvement while keeping target selection and model input actor-visible. V1 uses observed or predicted target descriptors #symb.entity.target_desc. @ground-truth:short crops, boxes, meshes, and all-candidate renders are restricted to labels, upper bounds, and evaluation. The required evidence is target eligibility, match score, unmatched/ambiguous counts, endpoint #symb.entity.endpoint_gain, separate scene @relative-reconstruction-improvement:short, and acquisition cost.
+The first aim defines target-specific oracle @relative-reconstruction-improvement while keeping ordinary policy input actor-visible. The actor uses observed or predicted target descriptors #symb.entity.target_desc. @ground-truth:short crops, boxes, meshes, and all-candidate renders are restricted to labels, bounded oracle references, and evaluation. The required evidence is target eligibility, match score, unmatched/ambiguous counts, endpoint #symb.entity.endpoint_gain, separate scene @relative-reconstruction-improvement:short, and acquisition cost.
 
 The render-path boundary in @fig:qh-teacher-student-render-path makes this restriction explicit for render-derived training signals.
 
@@ -32,13 +32,7 @@ $
   #eqs.entity.q_recovery
 $
 
-Success is measured by oracle-rescored selected actions, not predicted values. If oracle lookahead itself has little headroom, the thesis reports that the current objective and candidate distribution are effectively myopic. If lookahead has headroom but #symb.rl.qh fails to recover it, the analysis reports whether the limiting factor is target observability, candidate support, rollout coverage, reward definition, or model capacity.
-
-#conflict_todo(
-  [A null lookahead result supports only a scoped negative finding for the evaluated split, target set, horizon, branch factor, and candidate distribution. Do not call the objective or candidate distribution generally myopic.],
-  source: [thesis questions and roadmap; literature cross-check],
-  gate: [final negative-result wording],
-)
+Success is measured by oracle-rescored selected actions, not predicted values. If oracle lookahead has negligible headroom relative to the frozen metric noise floor, the thesis reports a scoped negative result for the evaluated split, target set, horizon, branch factor, candidate distribution, and validity regime. If lookahead has headroom but #symb.rl.qh fails to recover it, the analysis separates target observability, candidate support, rollout coverage, reward definition, and model-capacity explanations without selecting among them absent evidence.
 
 #figure(
   table(

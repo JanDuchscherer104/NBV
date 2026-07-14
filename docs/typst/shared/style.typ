@@ -41,7 +41,10 @@
 #let aria-github-base = "https://github.com/" + aria-github-repo
 
 #let _aria-code-ref() = sys.inputs.at("aria-code-ref", default: "main")
-#let _aria-wip-links-enabled() = sys.inputs.at("aria-wip-links", default: "true") != "false"
+#let _aria-wip-links-enabled() = (
+  sys.inputs.at("aria-thesis-mode", default: "development") != "submission"
+  and sys.inputs.at("aria-wip-links", default: "true") != "false"
+)
 
 #let _gh-label(path, body: none) = if body == none {
   code-inline(path.split("/").last())

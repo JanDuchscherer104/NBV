@@ -1,6 +1,14 @@
 #import "@preview/dashy-todo:0.1.3": todo as dashy_todo
 
-#let todo_marker(kind, body, stroke: orange, source: none, gate: none) = block(breakable: false)[
+#let thesis_mode = sys.inputs.at("aria-thesis-mode", default: "development")
+
+#if thesis_mode not in ("development", "submission") {
+  panic("aria-thesis-mode must be either development or submission")
+}
+
+#let todo_marker(kind, body, stroke: orange, source: none, gate: none) = if thesis_mode == "submission" {
+  panic("Unresolved thesis marker in submission mode: " + repr(kind))
+} else { block(breakable: false)[
   #text(size: 9pt)[
     #dashy_todo(position: "inline", stroke: stroke)[
       *#kind:* #body
@@ -14,7 +22,7 @@
       ]
     ]
   ]
-]
+] }
 
 #let impl_todo(body, source: none, gate: none) = todo_marker([Implementation TODO], body, stroke: blue, source: source, gate: gate)
 #let research_todo(body, source: none, gate: none) = todo_marker([Research TODO], body, stroke: purple, source: source, gate: gate)

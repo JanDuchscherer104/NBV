@@ -9,6 +9,9 @@
 #set document(title: titleEnglish, author: author)
 #set text(font: "New Computer Modern")
 
+#let thesis_mode = sys.inputs.at("aria-thesis-mode", default: "development")
+#let development_mode = thesis_mode == "development"
+
 #show: booktabs-default-table-style
 #show: make-glossary
 #register-aria-glossary()
@@ -71,9 +74,7 @@
     #heading(numbering: none, outlined: false)[List of Symbols]
     #print-thesis-symbols()
   ],
-  appendix_content: [
-    #include "appendix/index.typ"
-  ],
+  appendix_content: if development_mode [#include "appendix/index.typ"] else { none },
 )
 
 #include "sections/01-introduction.typ"
