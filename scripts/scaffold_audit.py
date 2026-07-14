@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import tempfile
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / ".agents" / "references" / "scaffold_routing_fixtures.json"
+VENDORED_SKILLS_MANIFEST = ROOT / ".agents/references/mattpocock_skills_manifest.toml"
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -326,6 +328,66 @@ def body_without_frontmatter(text: str) -> str:
     return parts[2]
 
 
+def audit_vendored_skills() -> tuple[frozenset[Path], list[str]]:
+    """Validate the pinned vendor boundary and return its listed skill paths."""
+    errors: list[str] = []
+    prefix = rel(VENDORED_SKILLS_MANIFEST)
+    try:
+        data = tomllib.loads(VENDORED_SKILLS_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return frozenset(), [f"{prefix}: unreadable TOML: {exc}"]
+
+    source = data.get("source")
+    if not isinstance(source, dict):
+        return frozenset(), [f"{prefix}: missing source table"]
+    for field in ("reviewed_ref", "skills_tree"):
+        if not re.fullmatch(r"[0-9a-f]{40}", str(source.get(field, ""))):
+            errors.append(f"{prefix}: source.{field} must be a full lowercase Git SHA")
+    if source.get("vendor_policy") != "exact_pinned_snapshot":
+        errors.append(f"{prefix}: vendor_policy must be exact_pinned_snapshot")
+    if source.get("vendored_path") != rel(SKILLS_DIR):
+        errors.append(f"{prefix}: vendored_path must be {rel(SKILLS_DIR)!r}")
+    license_path = ROOT / str(source.get("license_path", ""))
+    if (
+        source.get("license") != "MIT"
+        or not is_relative_to(license_path.resolve(), ROOT_RESOLVED)
+        or not license_path.is_file()
+        or "MIT License" not in license_path.read_text(encoding="utf-8")
+    ):
+        errors.append(f"{prefix}: invalid MIT license declaration or file")
+
+    records = data.get("skill")
+    if not isinstance(records, list) or not records:
+        errors.append(f"{prefix}: skill entries must be a non-empty array")
+        return frozenset(), errors
+
+    paths: set[Path] = set()
+    seen_names: set[str] = set()
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            errors.append(f"{prefix}: skill entry #{index} must be a table")
+            continue
+        name = record.get("name")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+            errors.append(f"{prefix}: skill entry #{index} has an invalid name")
+            continue
+        if name in seen_names:
+            errors.append(f"{prefix}: duplicate skill name {name!r}")
+            continue
+        seen_names.add(name)
+
+        upstream = Path(str(record.get("upstream_path", "")))
+        if upstream.is_absolute() or ".." in upstream.parts or upstream.parts[-2:] != (name, "SKILL.md"):
+            errors.append(f"{prefix}: skill {name!r} has an invalid upstream_path")
+        skill_path = SKILLS_DIR / name / "SKILL.md"
+        paths.add(skill_path)
+        link = ROOT / ".claude" / "skills" / name
+        if not skill_path.is_file() or not link.is_symlink() or link.resolve() != skill_path.parent.resolve():
+            errors.append(f"{prefix}: missing or mislinked vendored skill {name!r}")
+
+    return frozenset(paths), errors
+
+
 def first_match_line(text: str, pattern: re.Pattern[str]) -> int | None:
     match = pattern.search(text)
     if match is None:
@@ -333,7 +395,10 @@ def first_match_line(text: str, pattern: re.Pattern[str]) -> int | None:
     return text[: match.start()].count("\n") + 1
 
 
-def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
+def load_skills(
+    skills_dir: Path,
+    metadata_exempt_paths: frozenset[Path] = frozenset(),
+) -> tuple[list[Skill], list[str]]:
     errors: list[str] = []
     skills: list[Skill] = []
 
@@ -352,8 +417,14 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
         if not isinstance(name, str) or not name.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty name")
             continue
-        if not isinstance(metadata, dict):
+        if skill_md.parent.name != name.strip():
+            errors.append(
+                f"{rel(skill_md)}: directory/frontmatter mismatch "
+                f"(directory={skill_md.parent.name!r}, name={name.strip()!r})"
+            )
+        if not isinstance(metadata, dict) and skill_md not in metadata_exempt_paths:
             errors.append(f"{rel(skill_md)}: missing metadata mapping")
+        if not isinstance(metadata, dict):
             metadata = {}
         description = data.get("description")
         if not isinstance(description, str) or not description.strip():
@@ -401,11 +472,6 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
 
     for skill in skills:
         prefix = rel(skill.path)
-        if skill.dirname != skill.name:
-            errors.append(
-                f"{prefix}: directory/frontmatter mismatch (directory={skill.dirname!r}, name={skill.name!r})"
-            )
-
         missing = sorted(REQUIRED_METADATA - skill.metadata.keys())
         if missing:
             errors.append(f"{prefix}: missing metadata fields: {', '.join(missing)}")
@@ -817,9 +883,21 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "missing markdown anchor was not rejected",
         )
 
-        skills, load_errors = load_skills(SKILLS_DIR)
-        skills_by_name = {skill.name: skill for skill in skills}
-        expect("live-skills-load", not load_errors, "; ".join(load_errors))
+        vendor_paths, vendor_errors = audit_vendored_skills()
+        skills, load_errors = load_skills(SKILLS_DIR, vendor_paths)
+        skills_by_name = {
+            skill.name: skill for skill in skills if skill.path not in vendor_paths
+        }
+        expect(
+            "live-vendor-boundary",
+            bool(vendor_paths) and not vendor_errors,
+            "; ".join(vendor_errors),
+        )
+        expect(
+            "live-skills-load",
+            not load_errors,
+            "; ".join(load_errors),
+        )
 
         missing_fixture = {
             "fixtures": [
@@ -1002,15 +1080,17 @@ def main() -> int:
                 print(f"- {failure}")
         return 1 if failures else 0
 
-    skills, load_errors = load_skills(SKILLS_DIR)
-    skill_errors, skill_warnings = audit_skills(skills)
-    drift_warnings = audit_semantic_drift(skills)
+    vendor_paths, vendor_errors = audit_vendored_skills()
+    skills, load_errors = load_skills(SKILLS_DIR, vendor_paths)
+    local_skills = [skill for skill in skills if skill.path not in vendor_paths]
+    skill_errors, skill_warnings = audit_skills(local_skills)
+    drift_warnings = audit_semantic_drift(local_skills)
     fixture_errors, fixture_warnings = audit_routing_fixtures(
         ROUTING_FIXTURES,
-        {skill.name: skill for skill in skills},
+        {skill.name: skill for skill in local_skills},
     )
 
-    errors = load_errors + skill_errors + fixture_errors
+    errors = vendor_errors + load_errors + skill_errors + fixture_errors
     warnings = skill_warnings + drift_warnings + fixture_warnings
     payload = {
         "skills": len(skills),

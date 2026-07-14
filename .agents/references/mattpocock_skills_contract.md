@@ -5,9 +5,15 @@ repo layout a second source of project truth.
 
 ## Boundary
 
-- Install/update Matt skills outside this repo with
-  `npx skills@latest add mattpocock/skills`.
-- Keep ARIA-owned skills under `.agents/skills/*`.
+- Vendor only the exact Matt skills snapshot pinned by
+  `.agents/references/mattpocock_skills_manifest.toml` under
+  `.agents/skills/<name>`; do not use a floating branch, tag, or installer result
+  as committed provenance.
+- Keep the unmodified upstream MIT license at the manifest's `license_path`.
+- Keep ARIA-owned skills under `.agents/skills/*`; the manifest is the boundary
+  between those local owners and the pinned upstream payload.
+- Run `make claude-skills` after a pinned payload update so `.claude/skills/*`
+  contains the generated symlink mirrors for every repo-local skill.
 - Keep the tracked ARIA activation policy in
   `.agents/references/mattpocock_skills_manifest.toml`.
 - Treat `.codex/config.toml` as untracked operator-local runtime state. It may
@@ -38,7 +44,7 @@ decision demotes the current ARIA owner. In particular, do not let raw
   explicit-only use.
 - Keep overlapping generic skills reference-only: `code-review`,
   `diagnosing-bugs`, `research`, `domain-modeling`, `grill-me`,
-  `grill-with-docs`, `grilling`, `to-prd`, `to-issues`, `triage`,
+  `grill-with-docs`, `grilling`, `to-spec`, `to-tickets`, `triage`,
   `implement`, and `setup-matt-pocock-skills`.
 - Skip deprecated, in-progress, personal, and misc Matt skills unless a future
   task names one explicitly.
@@ -47,6 +53,9 @@ decision demotes the current ARIA owner. In particular, do not let raw
 
 - Matt skills provide generic engineering discipline; ARIA local skills provide
   source-order, domain semantics, evidence, and verification.
+- Treat vendoring as transport, not ownership: upstream payload presence never
+  promotes Matt-native `CONTEXT.md`, `docs/adr/`, `docs/agents/`, issue-tracker,
+  or research-note surfaces over the ARIA owners above.
 - Do not add Matt skill names or paths to ARIA skill
   `metadata.canonical_sources`.
 - Do not add Matt skill names to machine-facing `metadata.handoff_to`.

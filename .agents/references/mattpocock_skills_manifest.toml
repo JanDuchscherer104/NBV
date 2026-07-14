@@ -1,16 +1,21 @@
 # ARIA-NBV policy for mattpocock/skills.
 #
-# This manifest is the tracked repo policy. Runtime installation still happens
-# outside the repo with the upstream installer; do not vendor the upstream skill
-# tree under .agents/skills.
+# This manifest is the tracked repo policy. The exact reviewed upstream snapshot
+# is vendored under .agents/skills; update it only as one audited, SHA-pinned
+# payload. ARIA source owners and activation policy remain authoritative.
 
 [source]
 repo = "mattpocock/skills"
 url = "https://github.com/mattpocock/skills.git"
-reviewed_ref = "896f14d9c25659f03b24e08e4efc3ee69bbade08"
-reviewed_at = "2026-07-08"
+reviewed_ref = "66898f60e8c744e269f8ce06c2b2b99ce7660d5f"
+skills_tree = "57f1af755b8e6e73145f3a6de62d0ddffac6e415"
+reviewed_at = "2026-07-14"
+upstream_version = "1.1.0"
 license = "MIT"
-install_command = "npx skills@latest add mattpocock/skills"
+vendored_path = ".agents/skills"
+license_path = ".agents/licenses/mattpocock-skills-LICENSE"
+vendor_policy = "exact_pinned_snapshot"
+sync_command = "make claude-skills"
 default_policy = "disabled_unless_selected"
 contract = ".agents/references/mattpocock_skills_contract.md"
 runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
@@ -31,8 +36,8 @@ reference = [
   "research",
   "resolving-merge-conflicts",
   "setup-matt-pocock-skills",
-  "to-issues",
-  "to-prd",
+  "to-tickets",
+  "to-spec",
   "triage",
   "writing-beats",
   "writing-fragments",
@@ -49,6 +54,7 @@ skip = [
   "qa",
   "request-refactor-plan",
   "scaffold-exercises",
+  "setup-ts-deep-modules",
   "setup-pre-commit",
   "ubiquitous-language",
   "wayfinder",
@@ -160,20 +166,20 @@ aria_owner = "agent-behavior"
 reason = "Generic red-green-refactor loop with low routing collision; ARIA still owns package tests and seams."
 
 [[skill]]
-name = "to-issues"
+name = "to-tickets"
 bucket = "engineering"
-upstream_path = "skills/engineering/to-issues/SKILL.md"
+upstream_path = "skills/engineering/to-tickets/SKILL.md"
 posture = "reference"
 aria_owner = "agents-db"
-reason = "Issue slicing may inspire work breakdowns, but ARIA active work remains TOML-backed."
+reason = "Ticket slicing may inspire work breakdowns, but ARIA active work remains TOML-backed."
 
 [[skill]]
-name = "to-prd"
+name = "to-spec"
 bucket = "engineering"
-upstream_path = "skills/engineering/to-prd/SKILL.md"
+upstream_path = "skills/engineering/to-spec/SKILL.md"
 posture = "reference"
 aria_owner = "plan-grill"
-reason = "ARIA roadmap/questions and OMX plans own PRD-like surfaces."
+reason = "ARIA roadmap/questions and OMX plans own specification surfaces."
 
 [[skill]]
 name = "triage"
@@ -272,12 +278,20 @@ aria_owner = "agent-behavior"
 reason = "In-progress upstream; not part of ARIA default routing."
 
 [[skill]]
-name = "wayfinder"
+name = "setup-ts-deep-modules"
 bucket = "in-progress"
-upstream_path = "skills/in-progress/wayfinder/SKILL.md"
+upstream_path = "skills/in-progress/setup-ts-deep-modules/SKILL.md"
+posture = "skip"
+aria_owner = "agent-behavior"
+reason = "In-progress upstream and TypeScript-specific; ARIA package and architecture enforcement stays local."
+
+[[skill]]
+name = "wayfinder"
+bucket = "engineering"
+upstream_path = "skills/engineering/wayfinder/SKILL.md"
 posture = "skip"
 aria_owner = "aria-nbv-context"
-reason = "In-progress upstream; ARIA already has deterministic local discovery."
+reason = "Large investigation-ticket workflow; use explicitly because ARIA already has deterministic local discovery."
 
 [[skill]]
 name = "wizard"
