@@ -1,1 +1,0 @@
-Pass only if the review inventories shared symbols/equations and thesis terminology, identifies concrete notation conflicts and namespace moves, critiques candidate spatial descriptors against ARIA-NBV geometry requirements and cited external literature, and proposes an implementable Typst/QMD patch plan without promoting planned work to implemented evidence.
