@@ -1,8 +1,8 @@
-# Immutable VIN offline-store build for all local ASE scenes.
+# Native Apple-Silicon VIN offline-store smoke for one pinned ASE sample.
 #
 # Usage:
 #   cd aria_nbv
-#   uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+#   PYTORCH3D_REQUIRE_MOJO=1 uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
 
 include_backbone            = true
 include_depths              = true
@@ -11,11 +11,12 @@ include_diagnostic_payloads = true
 vin_pad_points              = 50000
 semidense_max_points        = 16384
 semidense_include_obs_count = false
-max_candidates              = 60
-samples_per_shard           = 16
-train_val_split             = 0.2
-overwrite                   = false
-num_failures_allowed        = 40
+max_candidates              = 4
+samples_per_shard           = 1
+max_samples                 = 1
+train_val_split             = 1.0
+overwrite                   = true
+num_failures_allowed        = 0
 
 backbone_numeric_keep_fields = [
     "t_world_voxel",
@@ -45,27 +46,29 @@ backbone_payload_keep_fields = [
 ]
 
 [store]
-store_dir = "vin_offline"
+store_dir = "vin_offline_81286_mojo_smoke"
 
 [dataset]
 atek_variant = "efm"
-scene_ids    = []
+scene_ids    = ["81286"]
+snippet_ids  = ["ASE_81286_Atek_000002"]
 batch_size   = 1
 wds_shuffle  = false
 wds_repeat   = false
 load_meshes  = true
-require_mesh = true
+require_mesh        = true
+mesh_simplify_ratio = 0.02
 
 [labeler]
 device                = "auto"
-backprojection_stride = 1
+backprojection_stride = 32
 
     [labeler.generator]
     device                 = "auto"
     camera_label           = "rgb"
-    num_samples            = 60
+    num_samples            = 4
     oversample_factor      = 2.0
-    max_resamples          = 2
+    max_resamples          = 0
     align_to_gravity       = true
     min_radius             = 0.5
     max_radius             = 1.8
@@ -78,7 +81,7 @@ backprojection_stride = 1
     ensure_collision_free  = true
     ensure_free_space      = true
     collision_backend      = "pytorch3d"
-    ray_subsample          = 32
+    ray_subsample          = 2
     step_clearance         = 0.1
     view_direction_mode    = "radial_away"
     view_max_azimuth_deg   = 60.0
@@ -87,14 +90,14 @@ backprojection_stride = 1
     seed                   = 0
 
     [labeler.depth]
-    max_candidates_final = 60
-    resolution_scale     = 0.5
+    max_candidates_final = 4
+    resolution_scale     = 0.1
 
         [labeler.depth.renderer]
         device         = "auto"
         znear          = 0.001
         zfar           = 20.0
-        cull_backfaces = true
+        cull_backfaces = false
         blur_radius    = 0.0
         bin_size       = 0
         dtype          = "float32"
@@ -102,6 +105,6 @@ backprojection_stride = 1
 [backbone]
 model_cfg     = ".configs/evl_inf_desktop.yaml"
 model_ckpt    = ".logs/ckpts/model_lite.pth"
-device        = "cuda"
+device        = "auto"
 freeze        = true
 features_mode = "heads"
