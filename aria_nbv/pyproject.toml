@@ -11,7 +11,7 @@ dependencies = [
     "torch==2.4.1",
     "torchvision==0.19.1",
     "torchaudio==2.4.1",
-    "pytorch3d @ git+https://github.com/JanDuchscherer104/pytorch3d.git@3d477458e81551f9b3b00fcf9355e05a325985b0",
+    "pytorch3d @ git+https://github.com/JanDuchscherer104/pytorch3d.git@153c436158e0202a0d011fe7c57c0ef42c0f6da2",
     # Scientific computing
     "numpy>=1.26.4",
     "scipy",
