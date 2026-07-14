@@ -50,7 +50,9 @@ def sample_semidense_points(
         device: Target device for the returned tensor.
         max_points: Maximum sampled point count per batch item. Batched inputs
             are padded to this length with NaNs so candidate projection keeps a
-            rectangular ``Tensor[B, P_fr, C]`` layout.
+            rectangular ``Tensor[B, P_fr, C]`` layout. Sampling consumes the
+            process CPU RNG; ``torch.manual_seed`` therefore selects the same
+            subset independently of the output backend.
 
     Returns:
         ``Tensor[P_fr, C]`` or ``Tensor[B, max_points, C]`` with ``float32``

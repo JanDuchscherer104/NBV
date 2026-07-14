@@ -196,6 +196,7 @@
         </tbody>
       </table>
     </div>
+    <p class="muted" style="margin: .8rem 0 0">Direct Mojo ↔ CUDA: zero values outside <code>rtol=2e-5, atol=2e-6</code>; maximum relative error 2.41e−7 (distance forwards) and 2.24e−7 (raster outputs).</p>
   </section>
 
   <section aria-labelledby="pipeline-title">
@@ -217,14 +218,14 @@
         <thead><tr><th>Stage</th><th>Measured maximum difference</th><th>Verdict</th></tr></thead>
         <tbody>
           <tr><td>VIN candidate poses</td><td>2.38e−7 absolute</td><td><span class="tag pass">PASS</span></td></tr>
-          <tr><td>VIN rendered depth</td><td>1.76e−5 absolute · valid mask exact</td><td><span class="tag pass">PASS</span></td></tr>
+          <tr><td>VIN rendered depth</td><td>1.76e−5 absolute · 5.21e−6 relative · 0 mismatches · valid mask exact</td><td><span class="tag pass">PASS</span></td></tr>
           <tr><td>VIN RRI / point-map metrics</td><td>2.10e−4 / 8.03e−4 absolute</td><td><span class="tag partial">WITHIN 1e−3</span></td></tr>
-          <tr><td>Rollout candidate poses</td><td>4.77e−7 absolute</td><td><span class="tag pass">PASS</span></td></tr>
+          <tr><td>Rollout candidate poses</td><td>4.77e−7 absolute · 8.13e−6 relative · 0 mismatches</td><td><span class="tag pass">PASS</span></td></tr>
           <tr><td>Rollout target RRI / root gain</td><td>1.3933e−6 absolute</td><td><span class="tag pass">PASS</span></td></tr>
           <tr><td>Final cumulative rollout score</td><td>1.5795e−6 absolute</td><td><span class="tag pass">PASS</span></td></tr>
           <tr><td>Selected row / shell index</td><td>20 / 20 steps exact</td><td><span class="tag pass">PASS</span></td></tr>
           <tr><td>Selection logits / probabilities</td><td>1.3933e−6 / 7.45e−9 absolute</td><td><span class="tag pass">PASS</span></td></tr>
-          <tr><td>Selected depth at raster edges</td><td>18 / 1,152,000 outside tolerance · 12 mask pixels differ · 7.871 max</td><td><span class="tag partial">PARTIAL</span></td></tr>
+          <tr><td>Selected depth at raster edges</td><td>18 / 1,152,000 outside tolerance · 12 mask pixels differ · 7.871 absolute / 1.0 relative max</td><td><span class="tag partial">PARTIAL</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -269,7 +270,7 @@ PYTORCH3D_BACKEND=mojo uv run --locked python -c \
       <article class="card wide">
         <h3>Generate data</h3>
         <pre>PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-offline \
-  --config-path ../.configs/build_vin_offline_81286.toml
+  --config-path ../.configs/build_vin_offline_81286_backend_smoke.toml
 PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-rollouts \
   --config-path ../.configs/build_rollouts_v1_smoke.toml</pre>
       </article>
@@ -278,7 +279,17 @@ PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-rollouts \
   </section>
 
   <footer>
-    Source artifacts: <code>fixture.npz</code>, four backend JSON summaries, four output NPZ archives, validated VIN/rollout stores, and the controlled store comparison. Results are descriptive measurements of these machines and fixture, not universal hardware claims.
+    Source artifacts:
+    <a href="fixture.npz">fixture</a>,
+    <a href="mac-cpu.json">Mac CPU</a>,
+    <a href="mac-mojo.json">Mac Mojo</a>,
+    <a href="ubuntu-cpu.json">Ubuntu CPU</a>,
+    <a href="ubuntu-cuda.json">Ubuntu CUDA</a>,
+    <a href="mac-cpu.outputs.npz">Mac CPU outputs</a>,
+    <a href="mac-mojo.outputs.npz">Mac Mojo outputs</a>,
+    <a href="ubuntu-cpu.outputs.npz">Ubuntu CPU outputs</a>,
+    <a href="ubuntu-cuda.outputs.npz">Ubuntu CUDA outputs</a>, and
+    <a href="e2e-summary.json">controlled E2E summary</a>. Results are descriptive measurements of these machines and fixture, not universal hardware claims.
   </footer>
 </main>
 </body>

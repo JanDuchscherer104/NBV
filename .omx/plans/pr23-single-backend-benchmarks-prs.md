@@ -11,7 +11,7 @@
 
 ## Architecture decision
 
-PyTorch3D is the deep module. Its existing public operations are the interface and test surface. The backend seam is the private dispatch in `pytorch3d/_mojo_ops.py`; upstream CPU, upstream CUDA, and native Mojo are adapters at that seam. ARIA's existing `BaseConfig._resolve_device` function is the only ARIA integration point for the same global backend value.
+PyTorch3D is the deep module. Its existing public operations are the interface and test surface. The backend seam is the private dispatch in `pytorch3d/_mojo_ops.py`; upstream CPU, upstream CUDA, and native Mojo are adapters at that seam. ARIA's `BaseConfig._resolve_geometry_device` function is the only geometry integration point for the same global backend value. The generic `_resolve_device` remains backend-blind because checkpoint loading and other non-geometry devices are separate concerns.
 
 ```text
 PYTORCH3D_BACKEND
@@ -38,10 +38,10 @@ The deletion test favors this design: deleting the two seam changes would force 
 ## Acceptance criteria
 
 1. `pytorch3d/_mojo_ops.py` contains the only operator dispatch policy; the old `PYTORCH3D_DISABLE_MOJO` and `PYTORCH3D_REQUIRE_MOJO` interfaces no longer exist.
-2. `aria_nbv/utils/base_config.py::_resolve_device` honors the same global backend value, while renderer, pose, RRI, VIN, and rollout product call sites gain no backend branches.
+2. `aria_nbv/utils/base_config.py::_resolve_geometry_device` honors the same global backend value, while renderer, pose, RRI, VIN, and rollout product call sites gain no backend branches. Generic checkpoint and non-geometry device resolution remains independent.
 3. `PYTORCH3D_BACKEND=mojo` proves nonzero Mojo counters for point-to-face, face-to-point, and rasterization during native VIN and horizon-2 rollout runs on Apple arm64.
 4. `PYTORCH3D_BACKEND=cuda` exercises all three upstream CUDA forwards and the same VIN/rollout schemas on the RTX 3080 Ti host.
-5. Fixed non-tied fixtures use the same fixture digest and PyTorch3D SHA on both hosts. Integer outputs, schemas, shapes, masks, lineage, and selected rows are exact; float differences are reported with mismatch count, max absolute error, and max relative error under `rtol=2e-5, atol=2e-6` unless a stricter existing field contract applies.
+5. Fixed non-tied operator fixtures use the same fixture digest and PyTorch3D SHA on both hosts. Integer outputs are exact and float outputs report mismatch count, max absolute error, and max relative error under `rtol=2e-5, atol=2e-6`. Real-data E2E comparison uses field contracts: non-float schemas, masks, lineage, and selected rows are exact; poses use `1e-5`, depth and derived scores use `1e-3`, and explicitly identified upstream stochastic EVL/backbone fields are excluded from backend-kernel equivalence.
 6. Tie cases are reported separately. A fixture or PyTorch3D SHA mismatch aborts aggregation rather than producing a comparison.
 7. Timings use warmups, raw trials, `perf_counter_ns`, explicit CUDA synchronization, fixed/recorded Torch thread count, and median/p5/p95/IQR. Same-host CPU-to-Mojo and CPU-to-CUDA speedups are allowed; cross-host CUDA/Mojo observations are absolute and hardware-labeled with no direct ratio.
 8. The Quarto site contains a Resources entry for the new page, renders without errors, and embeds the compact report with links to raw machine-readable evidence.

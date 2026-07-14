@@ -983,6 +983,34 @@ def test_selection_treats_backend_noise_as_a_stable_tie() -> None:
     assert torch.count_nonzero(step.selection_logits) == 0
 
 
+def test_selection_treats_offset_backend_noise_as_a_stable_tie() -> None:
+    def _backend_noise(result, trajectory, step_index):
+        del trajectory, step_index
+        valid_poses = result.poses_world_cam()
+        scores = torch.full(
+            (valid_poses.t.reshape(-1, 3).shape[0],),
+            0.5,
+            device=valid_poses.t.device,
+        )
+        scores[1] += 1.7548e-7
+        return CandidateScores.from_valid_values(
+            scores,
+            name="offset_backend_noise",
+            candidates=result,
+            device=valid_poses.t.device,
+            dtype=valid_poses.t.dtype,
+        )
+
+    step = _run_rollouts(
+        horizon=1,
+        selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+        score_candidates=_backend_noise,
+    ).trajectories[0].steps[0]
+
+    assert step.selection_logits is not None
+    assert torch.count_nonzero(step.selection_logits) == 0
+
+
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:
     rollouts = _run_rollouts(
         horizon=1,

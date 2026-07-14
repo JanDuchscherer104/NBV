@@ -118,9 +118,9 @@ cd aria_nbv
 
 # One-sample VIN-store profile; remove --dry-run after checking paths and assets.
 PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-offline \
-  --config-path ../.configs/build_vin_offline_81286.toml --dry-run
+  --config-path ../.configs/build_vin_offline_81286_backend_smoke.toml --dry-run
 PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-offline \
-  --config-path ../.configs/build_vin_offline_81286.toml
+  --config-path ../.configs/build_vin_offline_81286_backend_smoke.toml
 
 # Multi-step rollout profile.
 PYTORCH3D_BACKEND=mojo uv run --locked nbv-build-rollouts \

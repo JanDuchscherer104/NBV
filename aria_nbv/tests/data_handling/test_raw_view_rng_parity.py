@@ -33,12 +33,12 @@ def _points_view(device: torch.device) -> EfmPointsView:
     )
 
 
-def test_seeded_raw_view_permutation_matches_across_devices() -> None:
+def test_local_seed_zero_permutation_ignores_process_rng_and_device() -> None:
     accelerator = _accelerator()
 
-    torch.manual_seed(11)
     expected = _cpu_randperm(12, torch.device("cpu"))
     torch.manual_seed(11)
+    torch.rand(17)
     actual = _cpu_randperm(12, accelerator)
 
     assert torch.equal(actual.cpu(), expected)

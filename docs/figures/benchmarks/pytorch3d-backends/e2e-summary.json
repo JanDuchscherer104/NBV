@@ -38,9 +38,13 @@
   "equivalence": {
     "vin_candidate_pose_max_abs": 2.384185791015625e-7,
     "vin_matching_pose_depth_max_abs": 1.7642974853515625e-5,
+    "vin_matching_pose_depth_max_rel": 5.205e-6,
+    "vin_matching_pose_depth_mismatches": 0,
     "vin_matching_pose_depth_mask_exact": true,
     "rollout_pose_world_max_abs": 2.384185791015625e-7,
     "rollout_pose_relative_max_abs": 4.76837158203125e-7,
+    "rollout_pose_relative_max_rel": 8.13e-6,
+    "rollout_pose_mismatches": 0,
     "selected_candidate_rows_exact": "20/20",
     "selected_shell_indices_exact": "20/20",
     "selection_logits_max_abs": 1.3932585716247559e-6,
@@ -50,7 +54,9 @@
     "selected_depth_values_within_tolerance": 1151982,
     "selected_depth_values_total": 1152000,
     "selected_depth_mask_mismatches": 12,
-    "selected_depth_edge_max_abs": 7.87109375
+    "selected_depth_edge_max_abs": 7.87109375,
+    "selected_depth_edge_max_rel": 1.0,
+    "selected_depth_mismatches": 18
   },
   "limitations": [
     "Independent mesh preprocessing is not equivalent; both hosts must consume the same hashed processed mesh.",

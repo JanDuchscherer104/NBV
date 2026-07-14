@@ -364,7 +364,9 @@ class EfmPointsView(BaseView):
         """Collapse points across time and optionally subsample.
 
         Args:
-            max_points: Optional cap on the number of returned points.
+            max_points: Optional cap on the number of returned points. When a
+                cap is needed, a local CPU generator seeded with zero chooses
+                the same subset independently of the tensor backend.
             include_inv_dist_std: If True, append inverse depth std per point.
             include_obs_count: If True, append the number of snippet frames that
                 observed each point (observation count).
@@ -450,7 +452,7 @@ class EfmPointsView(BaseView):
         return points_collapsed
 
     def last_frame_points_np(self, max_points: int | None = None) -> np.ndarray:
-        """Return points from the latest frame with valid points, subsampled if needed."""
+        """Return the latest valid frame, using a local CPU seed-0 subset when capped."""
 
         points = self.points_world
         lengths = self.lengths.to(device=points.device)

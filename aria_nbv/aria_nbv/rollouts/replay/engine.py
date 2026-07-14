@@ -15,7 +15,9 @@ Theory:
     policies score distance from history or the current reference; random
     policies sample uniformly over eligible valid rows; oracle policies consume
     evaluator scores such as target root gain. Temperature-softmax selection
-    uses robust logits
+    uses robust logits. Scores within ``1e-5`` are canonicalized to the earliest
+    candidate's value before greedy or temperature selection, so ties preserve
+    the generator's original candidate order.
 
     $$
     \ell_i =
@@ -68,6 +70,19 @@ if TYPE_CHECKING:
 
 
 _SELECTION_SCORE_ATOL = 1e-5
+
+
+def _canonicalize_score_ties(scores: torch.Tensor) -> torch.Tensor:
+    """Map near-equal scores to the earliest candidate's value."""
+
+    if scores.numel() == 0:
+        return scores
+    finite = torch.isfinite(scores)
+    close = (scores[:, None] - scores[None, :]).abs() <= _SELECTION_SCORE_ATOL
+    earlier = torch.arange(scores.numel(), device=scores.device)
+    matches = close & finite[:, None] & finite[None, :] & (earlier[None, :] <= earlier[:, None])
+    first_match = matches.to(dtype=torch.int8).argmax(dim=1)
+    return torch.where(finite, scores[first_match], scores)
 
 
 def _pose_batch_len(poses: PoseTW) -> int:
@@ -554,8 +569,7 @@ class CounterfactualPoseGenerator:
         trajectory: CounterfactualTrajectory,
         branch_count: int,
     ) -> list[CounterfactualSelectionRecord]:
-        scores = candidate_scores.values
-        scores = torch.where(scores.abs() <= _SELECTION_SCORE_ATOL, torch.zeros_like(scores), scores)
+        scores = _canonicalize_score_ties(candidate_scores.values)
         if self.policy.selection_policy in (
             CounterfactualSelectionPolicy.RANDOM,
             CounterfactualSelectionPolicy.RANDOM_VALID,

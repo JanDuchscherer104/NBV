@@ -173,7 +173,7 @@ class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
             path = (paths.root / path).resolve()
         return path.expanduser().resolve()
 
-    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_geometry_device)
+    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
 
 
 class EvlBackbone:
