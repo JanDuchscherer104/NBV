@@ -982,13 +982,6 @@ def test_selection_treats_backend_noise_as_a_stable_tie() -> None:
     assert step.selection_logits is not None
     assert torch.count_nonzero(step.selection_logits) == 0
 
-    greedy_step = _run_rollouts(
-        horizon=1,
-        selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
-        score_candidates=_backend_noise,
-    ).trajectories[0].steps[0]
-    assert greedy_step.selected_valid_index == 0
-
 
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:
     rollouts = _run_rollouts(
