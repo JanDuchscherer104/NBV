@@ -973,11 +973,15 @@ def test_selection_treats_backend_noise_as_a_stable_tie() -> None:
             dtype=valid_poses.t.dtype,
         )
 
-    step = _run_rollouts(
-        horizon=1,
-        selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
-        score_candidates=_backend_noise,
-    ).trajectories[0].steps[0]
+    step = (
+        _run_rollouts(
+            horizon=1,
+            selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+            score_candidates=_backend_noise,
+        )
+        .trajectories[0]
+        .steps[0]
+    )
 
     assert step.selection_logits is not None
     assert torch.count_nonzero(step.selection_logits) == 0
@@ -1001,11 +1005,15 @@ def test_selection_treats_offset_backend_noise_as_a_stable_tie() -> None:
             dtype=valid_poses.t.dtype,
         )
 
-    step = _run_rollouts(
-        horizon=1,
-        selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
-        score_candidates=_backend_noise,
-    ).trajectories[0].steps[0]
+    step = (
+        _run_rollouts(
+            horizon=1,
+            selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+            score_candidates=_backend_noise,
+        )
+        .trajectories[0]
+        .steps[0]
+    )
 
     assert step.selection_logits is not None
     assert torch.count_nonzero(step.selection_logits) == 0
