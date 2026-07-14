@@ -241,28 +241,9 @@ docs/_freeze/**/*.html
 # Graphify
 graphify-out/
 
-# OMX operator state. Keep durable planning/spec/context artifacts reviewable,
-# but leave live runtime state, logs, caches, and bulky render outputs local.
-.omx/*
-!.omx/context/
-!.omx/context/**
-!.omx/plans/
-!.omx/plans/**
-!.omx/specs/
-!.omx/specs/**
-!.omx/goals/
-!.omx/goals/autoresearch/
-!.omx/goals/autoresearch/**
-.omx/goals/**/artifacts/
-.omx/cache/
-.omx/logs/
-.omx/state/
-.omx/tmp/
-.omx/metrics.json
-.omx/hud-config.json
-.omx/setup-scope.json
-.omx/tmux-hook.json
-.omx/ultragoal/
+# OMX is operator-local. Force-add only accepted records validated by
+# scripts/validate_agent_memory.py.
+.omx/
 
 # OMC local memory/replay state is operator-local unless promoted into .agents.
 .omc/
@@ -307,3 +288,10 @@ docs/literature/tex-src/**
 
 # Artifacts
 .artifacts/
+.codex/*
+!.codex/config.example.toml
+!.codex/hooks.example.json
+!.codex/skills/
+.codex/skills/*
+!.codex/skills/graphify/
+!.codex/skills/graphify/**
