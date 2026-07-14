@@ -3,7 +3,7 @@
   "scope": "Controlled ARIA-NBV VIN and multi-step rollout generation on Apple-Silicon Mojo and NVIDIA CUDA",
   "revisions": {
     "pytorch3d": "f131395fb0b898b44f58103def189a1d4de0f250",
-    "aria_e2e": "52ef71494a2044086ffdd9fa86b773986dfafb65"
+    "aria_e2e": "10177c762d0eb7b9c70effcc8791e1cfb77a9055"
   },
   "controlled_mesh": {
     "sha256": "1ab9e75aaec8f55dc96cb8f0e0e69c0552a0e52c5b3ff0c4119517e20b82b22a",
@@ -13,9 +13,9 @@
   "wall_seconds": {
     "mac_mojo_vin_cold": 707.98,
     "mac_mojo_rollout_cold": 1683.82,
-    "mac_mojo_rollout_warm_cache_validation": 973.33,
+    "mac_mojo_rollout_warm_cache_validation": 1275.39,
     "ubuntu_cuda_vin": 18.20,
-    "ubuntu_cuda_rollout": 34.69,
+    "ubuntu_cuda_rollout": 34.78,
     "cross_host_ratio_claimed": false
   },
   "stores": {
@@ -47,16 +47,25 @@
     "rollout_pose_mismatches": 0,
     "selected_candidate_rows_exact": "20/20",
     "selected_shell_indices_exact": "20/20",
-    "selection_logits_max_abs": 1.3932585716247559e-6,
+    "selection_logits_max_abs": 2.3311004042625427e-6,
     "selection_probabilities_max_abs": 7.450580596923828e-9,
-    "target_rri_max_abs": 1.3932585716247559e-6,
-    "cumulative_target_rri_max_abs": 1.5795230865478516e-6,
+    "target_rri_max_abs": 2.503860741853714e-6,
+    "target_root_gain_max_abs": 2.3311004042625427e-6,
+    "cumulative_target_rri_max_abs": 2.168118953704834e-6,
+    "final_cumulative_target_rri_max_abs": 1.6316771507263184e-6,
     "selected_depth_values_within_tolerance": 1151982,
     "selected_depth_values_total": 1152000,
     "selected_depth_mask_mismatches": 12,
     "selected_depth_edge_max_abs": 7.87109375,
     "selected_depth_edge_max_rel": 1.0,
     "selected_depth_mismatches": 18
+  },
+  "runtime_provenance": {
+    "mac_rollout_manifest_sha256": "7aac93ad42c802dbd478f7fb937c0e0098a60f400d51dc26eaa3f8abd0a401ce",
+    "mac_git_dirty_path_count": 1,
+    "mac_dirty_path_scope": ".logs/ckpts/model_lite.pth checkpoint artifact; never staged",
+    "cuda_rollout_manifest_sha256": "4f3e14eb53ebedd1ae9b256878ebda4bcb5c385ab402a8f2fbd445d6aef19e15",
+    "cuda_git_dirty_path_count": 0
   },
   "limitations": [
     "Independent mesh preprocessing is not equivalent; both hosts must consume the same hashed processed mesh.",
