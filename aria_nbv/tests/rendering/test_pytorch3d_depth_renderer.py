@@ -1,3 +1,5 @@
+import platform
+
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
@@ -5,6 +7,7 @@ from aria_nbv.rendering.pytorch3d_depth_renderer import (
     Pytorch3DDepthRenderer,
     Pytorch3DDepthRendererConfig,
 )
+from aria_nbv.rri_metrics.point_mesh import chamfer_point_mesh
 
 
 def _test_camera(size: int = 64, fx: float = 50.0) -> CameraTW:
@@ -21,7 +24,10 @@ def _test_camera(size: int = 64, fx: float = 50.0) -> CameraTW:
     )
 
 
-def test_depth_renderer_plane_constant_depth_cpu():
+def test_depth_renderer_plane_constant_depth_cpu(monkeypatch):
+    require_mojo = platform.system() == "Darwin" and platform.machine() == "arm64"
+    monkeypatch.setenv("PYTORCH3D_REQUIRE_MOJO", "1" if require_mojo else "0")
+
     # Simple square plane at z=2 facing the camera.
     verts = torch.tensor(
         [
@@ -33,6 +39,9 @@ def test_depth_renderer_plane_constant_depth_cpu():
         dtype=torch.float32,
     )
     faces = torch.tensor([[0, 1, 2], [0, 2, 3]], dtype=torch.int64)
+    distance = chamfer_point_mesh(torch.tensor([[0.0, 0.0, 3.0]]), verts, faces)
+    assert torch.isclose(distance.accuracy, torch.tensor(1.0))
+    assert torch.isclose(distance.completeness, torch.tensor(1.0))
 
     cam = _test_camera()
     pose_wc_single = PoseTW.from_Rt(torch.eye(3), torch.zeros(3))  # cam at origin, looking +Z.

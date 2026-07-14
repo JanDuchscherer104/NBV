@@ -106,6 +106,6 @@ backprojection_stride = 1
 [backbone]
 model_cfg     = ".configs/evl_inf_desktop.yaml"
 model_ckpt    = ".logs/ckpts/model_lite.pth"
-device        = "cuda"
+device        = "auto"
 freeze        = true
 features_mode = "heads"

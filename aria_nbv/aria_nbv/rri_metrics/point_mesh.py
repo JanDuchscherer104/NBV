@@ -2,11 +2,12 @@ r"""Low-level RRI metric primitives (point-mesh distances).
 
 This module wraps PyTorch3D geometric distance implementations so downstream
 code can compute accuracy, completeness, and bidirectional Chamfer distances in
-a uniform, torch-first manner. Only the GPU-accelerated PyTorch3D path is
-supported; CPU fallbacks were removed to keep the hot path simple and
-consistent. The functions remain thin: callers must supply pre-sampled point
-clouds and mesh tensors. Directional components are returned separately to
-expose the accuracy/completeness split described in ``surface_metrics.qmd``.
+a uniform, torch-first manner. PyTorch3D owns backend selection: CUDA tensors
+retain its CUDA path, while Apple-Silicon CPU tensors use the fork's Mojo
+kernels. ARIA-NBV keeps no private geometry fallback. The functions remain
+thin: callers must supply pre-sampled point clouds and mesh tensors. Directional
+components are returned separately to expose the accuracy/completeness split
+described in ``surface_metrics.qmd``.
 
 For a point set $P$ and mesh $M$, `accuracy` is point-to-mesh error and
 `completeness` is mesh-to-point error. The current scalar point-mesh error is

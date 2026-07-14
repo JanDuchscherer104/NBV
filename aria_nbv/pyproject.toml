@@ -11,7 +11,7 @@ dependencies = [
     "torch==2.4.1",
     "torchvision==0.19.1",
     "torchaudio==2.4.1",
-    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@main",
+    "pytorch3d @ git+https://github.com/JanDuchscherer104/pytorch3d.git@3d477458e81551f9b3b00fcf9355e05a325985b0",
     # Scientific computing
     "numpy>=1.26.4",
     "scipy",
@@ -131,9 +131,14 @@ packages = ["aria_nbv"]
 allow-direct-references = true
 
 [tool.uv]
-# Ensure pytorch3d is built with the runtime torch
+prerelease = "if-necessary"
+# Build PyTorch3D against runtime Torch and the pinned Apple Silicon Mojo toolchain.
 extra-build-dependencies = { pytorch3d = [
-    "torch",
+    { requirement = "torch", match-runtime = true },
+    "mojo==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mojo-compiler==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mojo-compiler-mojo-libs==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mojo-lldb-libs==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ], openpoints-shim = [
     "torch==2.4.1",
     "ninja",
@@ -143,6 +148,14 @@ extra-build-dependencies = { pytorch3d = [
     "easydict",
     "shortuuid",
 ] }
+
+[[tool.uv.dependency-metadata]]
+name = "pytorch3d"
+version = "0.7.9"
+requires-dist = [
+    "iopath",
+    "mojo==1.0.0b2; platform_system == 'Darwin' and platform_machine == 'arm64'",
+]
 
     [[tool.uv.index]]
     name     = "pytorch-cu121"
