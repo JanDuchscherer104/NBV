@@ -64,6 +64,7 @@ from aria_nbv.rollouts import (
     CounterfactualTrajectory,
     RolloutPolicySpec,
 )
+from aria_nbv.rollouts.replay.engine import _canonical_selection_scores, _robust_temperature_logits
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
 from aria_nbv.rollouts.trace import PolicyLineage, RolloutLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
@@ -957,6 +958,21 @@ def test_temperature_softmax_masks_invalid_candidates_and_reproduces_selection()
     assert step_a.selection_probabilities.shape[0] == int(step_a.candidates.mask_valid.sum().item())
     assert step_a.selection_temperature == pytest.approx(1.0)
     assert step_a.selected_log_probability is not None
+
+
+def test_selection_treats_backend_noise_as_a_stable_tie() -> None:
+    exact = torch.tensor([0.0, 0.0])
+    backend_noise = torch.tensor([1.7548e-7, 0.0])
+
+    exact_scores = _canonical_selection_scores(exact)
+    noisy_scores = _canonical_selection_scores(backend_noise)
+
+    assert torch.equal(noisy_scores, exact_scores)
+    assert torch.argsort(noisy_scores, descending=True, stable=True).tolist() == [0, 1]
+    assert torch.equal(
+        _robust_temperature_logits(scores=noisy_scores, temperature=1.0),
+        _robust_temperature_logits(scores=exact_scores, temperature=1.0),
+    )
 
 
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:

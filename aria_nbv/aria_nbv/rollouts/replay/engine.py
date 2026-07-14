@@ -67,6 +67,9 @@ if TYPE_CHECKING:
     from ...pose_generation.candidate_mixture import CandidateMixtureViewGenerator
 
 
+_SELECTION_SCORE_ATOL = 1e-5
+
+
 def _pose_batch_len(poses: PoseTW) -> int:
     tensor = poses.tensor()
     return 1 if tensor.ndim == 1 else int(tensor.shape[0])
@@ -86,6 +89,12 @@ def _time_value(time_ns: torch.Tensor, index: int) -> int:
     times = time_ns.reshape(-1)
     safe_index = max(0, min(int(index), int(times.numel()) - 1))
     return int(times[safe_index].detach().cpu().item())
+
+
+def _canonical_selection_scores(scores: torch.Tensor) -> torch.Tensor:
+    """Make numerically equivalent zero gains deterministic across backends."""
+
+    return torch.where(scores.abs() <= _SELECTION_SCORE_ATOL, torch.zeros_like(scores), scores)
 
 
 def _robust_temperature_logits(*, scores: torch.Tensor, temperature: float) -> torch.Tensor:
@@ -551,7 +560,7 @@ class CounterfactualPoseGenerator:
         trajectory: CounterfactualTrajectory,
         branch_count: int,
     ) -> list[CounterfactualSelectionRecord]:
-        scores = candidate_scores.values
+        scores = _canonical_selection_scores(candidate_scores.values)
         if self.policy.selection_policy in (
             CounterfactualSelectionPolicy.RANDOM,
             CounterfactualSelectionPolicy.RANDOM_VALID,
@@ -585,7 +594,7 @@ class CounterfactualPoseGenerator:
         if not bool(finite_scores.any().item()):
             return []
         ranked_scores = torch.where(finite_scores, scores, torch.full_like(scores, float("-inf")))
-        order = torch.argsort(ranked_scores, descending=True)
+        order = torch.argsort(ranked_scores, descending=True, stable=True)
         centers = valid_poses.t.reshape(-1, 3)
         history = trajectory.history_centers_world().to(device=centers.device, dtype=centers.dtype)
         metadata = _valid_diversity_metadata(candidates=candidates, valid_poses=valid_poses)
