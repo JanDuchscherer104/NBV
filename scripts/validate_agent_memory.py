@@ -54,18 +54,16 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
         "## Python Package",
     ),
 )
-FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (".omx/",)
+OMX_RECORD_PATHS = {
+    ".omx/plans/": "plan",
+    ".omx/specs/": "spec",
+}
+OMX_RECORD_STATUSES = {"current", "accepted"}
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
     ".codex/hooks.json",
 }
-ALLOWED_TRACKED_OMX_PREFIXES = (
-    ".omx/context/",
-    ".omx/plans/",
-    ".omx/specs/",
-    ".omx/goals/autoresearch/",
-)
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 
 REQUIRED_NATIVE_KEYS = {
@@ -77,18 +75,6 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
-
-
-def is_forbidden_tracked_runtime_path(path: str) -> bool:
-    """Return whether ``path`` is operator runtime state that must stay local."""
-
-    if path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
-        return True
-    if not any(path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_RUNTIME_PREFIXES):
-        return False
-    if path.startswith(".omx/goals/") and "/artifacts/" in path:
-        return True
-    return not any(path.startswith(prefix) for prefix in ALLOWED_TRACKED_OMX_PREFIXES)
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -152,16 +138,23 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
 
 
 def check_codex_notes() -> list[str]:
-    codex_dir = REPO_ROOT / ".codex"
-    if not codex_dir.exists():
-        return []
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", ".codex"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        suffix = f": {stderr}" if stderr else ""
+        return [f"git ls-files failed while checking visible .codex notes{suffix}"]
 
     notes = sorted(
         rel
-        for path in codex_dir.rglob("*.md")
-        if not any(
-            (rel := path.relative_to(REPO_ROOT).as_posix()).startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES
-        )
+        for line in result.stdout.splitlines()
+        if (rel := line.strip()).endswith(".md")
+        and not any(rel.startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES)
     )
     if not notes:
         return []
@@ -169,6 +162,36 @@ def check_codex_notes() -> list[str]:
     errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
         f"  - {note}" for note in notes
     ]
+    return errors
+
+
+def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
+    errors: list[str] = []
+    for tracked_path in tracked_paths:
+        if not tracked_path.startswith(".omx/"):
+            continue
+
+        expected_kind = next(
+            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
+            None,
+        )
+        if expected_kind is None or not tracked_path.endswith(".md"):
+            errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
+            continue
+
+        path = REPO_ROOT / tracked_path
+        try:
+            frontmatter = parse_frontmatter(path)
+        except ValueError as exc:
+            errors.append(f"{tracked_path}: {exc}")
+            continue
+
+        if frontmatter.get("kind") != expected_kind:
+            errors.append(f"{tracked_path}: `kind` must be `{expected_kind}`")
+        if frontmatter.get("status") not in OMX_RECORD_STATUSES:
+            errors.append(
+                f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}"
+            )
     return errors
 
 
@@ -250,8 +273,10 @@ def check_scaffold_alignment() -> list[str]:
 
     tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     for tracked_path in tracked_paths:
-        if is_forbidden_tracked_runtime_path(tracked_path):
+        if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
             errors.append(f"runtime state must not be tracked: {tracked_path}")
+
+    errors.extend(check_tracked_omx_records(tracked_paths))
 
     return errors
 
