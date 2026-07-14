@@ -4,58 +4,38 @@
 #import "../../draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
-== Policy Comparison
+== Policy Comparison and Statistical Protocol
 
-All selected actions are oracle-evaluated under the same acquisition and candidate budgets. Equal budget means equal selected-view horizon $H$, candidate count $N_q$, candidate-generation distribution, and validity constraints; path length, runtime, and oracle evaluation count are reported separately. Coverage is reported against the planned full scale bar of 100 @ground-truth:short mesh @aria-synthetic-environments:short scenes and 4,608 snippet windows from the current thesis contract, or against an explicit scene-level held-out subset if scale is blocked @ProjectAria-ASE-2025. Final splits are scene-level; sample-level splitting across snippets from the same scene is not valid for final claims.
+The experimental unit is the scene. Every policy comparison is paired on the same scene, target task, root state, candidate seed, candidate-generation distribution, hard validity constraints, and acquisition horizon. Planner depth may differ because it defines the decision rule, but every policy receives the same number of acquired views. Repeated targets, snippets, and seeds are first aggregated within scene so that dense scenes do not dominate the primary analysis.
 
-#validation_todo(
-  [Replace planned scale bars with generated manifest statistics for the current one-step store and rollout store; historical seminar subset counts are not current thesis evidence unless regenerated.],
-  source: [docs/typst/seminar_paper/sections/04-dataset.typ; docs/typst/seminar_paper/sections/09a-evaluation.typ; current dataset manifests],
-  gate: [final experiment tables],
-)
+The primary estimand is the paired per-scene difference in fixed-budget endpoint target-quality gain. Uncertainty is quantified with 10,000 paired scene-level bootstrap replicates and a 95% percentile interval. The primary report includes the mean paired difference and interval. Secondary summaries are the median paired difference, per-scene win rate, cumulative root-normalized gain, invalid-action rate, runtime, path length, and target/scene coverage. These summaries diagnose mechanism and feasibility; they do not replace the endpoint estimand.
+
+A policy that cannot select a valid action remains in the paired analysis as a failure with no further improvement for the remaining budget. It is not silently removed. Target-ineligible scenes and oracle-invalid samples are reported separately because they delimit the population for which the estimand is defined. Confirmatory comparisons are the preregistered RQ comparisons: metric repeatability, one-step learned versus matched baselines, oracle lookahead versus one-step oracle greedy, and, conditional on meaningful headroom, finite-horizon learned versus learned one-step control. Architecture and representation ablations are exploratory and support no generalized superiority claim.
 
 #figure(
   table(
-    columns: (0.72fr, 0.58fr, 0.58fr, 0.52fr, 1.3fr),
+    columns: (0.72fr, 0.72fr, 0.58fr, 1.35fr),
     toprule(),
-    table.header([*Policy*], [*Actor input*], [*@ground-truth:short decision*], [*H*], [*Role*]),
-    midrule(), [$pi_"rand"$], [yes], [no], [1],
-    [lower reference over valid candidates],
-    [$pi_"learned-1"$], [yes], [no], [1], [myopic learned target scorer],
-    [$pi_"oracle-1"$], [no], [yes], [1], [one-step oracle upper bound],
-    [$pi_"oracle-look"$], [no], [yes], [$H$], [cumulative-@relative-reconstruction-improvement:short headroom estimate],
-    [$pi_Q$], [yes], [no], [$H$], [learned recovery over myopic scoring when headroom is positive],
+    table.header([*Policy*], [*Decision information*], [*Acquisition budget*], [*Scientific role*]),
+    midrule(),
+    [$pi_"rand"$], [actor-visible], [$H$], [valid-action lower reference],
+    [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
+    [$pi_"oracle-1"$], [oracle immediate reward], [$H$], [one-step oracle-greedy comparator],
+    [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [conditional finite-support upper reference],
+    [$pi_Q$], [actor-visible], [$H$], [learned finite-horizon recovery],
     bottomrule(),
   ),
-  caption: [Leakage-aware policy comparison. Report #symb.entity.endpoint_gain, #symb.entity.return_h, scene @relative-reconstruction-improvement:short, cost, invalidity, runtime, and coverage for each row.],
+  caption: [Matched policy comparison. All rows acquire the same number of views; oracle access and planner depth define the decision rule rather than the acquisition budget.],
 ) <tab:thesis-policy-comparison>
 
-#conflict_todo(
-  [Separate acquisition horizon from planner/lookahead depth. The table currently gives random, learned-one-step, and oracle-greedy policies $H=1$ while the comparison prose requires equal selected-view horizon $H$; all policies need the same acquisition budget even when their decision rule is myopic.],
-  source: [thesis questions and roadmap; literature cross-check],
-  gate: [policy-comparison protocol freeze],
-)
+Before recovered-headroom fractions are reported, repeated oracle evaluation under controlled resampling estimates the metric noise floor. The minimum meaningful headroom threshold is frozen from that repeatability analysis rather than chosen after observing policy performance. Below the threshold, absolute paired endpoint differences may be reported, but ratios with an unstable denominator are not interpreted.
 
-#conflict_todo(
-  [Do not call the one-step oracle policy an unrestricted upper bound. It is an immediate-reward oracle-greedy comparator over the current valid candidate set; bounded oracle lookahead is a separate finite-horizon reference, and neither bounds policies outside the evaluated candidate/support regime.],
-  source: [policy table; independent peer-review critic],
-  gate: [policy-role terminology freeze],
-)
+== Outcome Logic
 
-Policy comparisons are paired by root snippet, target, candidate seed, candidate budget, and horizon. Report mean, median, bootstrap confidence intervals, and per-scene win rates for #symb.entity.endpoint_gain, #symb.entity.return_h, and invalidity; scene-level failures are reported separately from global averages.
+The normal case is positive, stable oracle-lookahead headroom together with learned recovery under matched oracle re-evaluation. It supports only the scoped claim that learnable non-myopic structure exists for the evaluated scenes, targets, candidate generator, validity regime, and horizon. The boundary case is negligible headroom relative to the metric noise floor. It supports a setup-specific negative result and does not imply that target-aware view planning is universally myopic. The failure case is an invalid or unstable oracle metric. It restricts the thesis to oracle and metric validation and prevents downstream planning claims, regardless of learned-policy scores.
 
 #validation_todo(
-  [Freeze the statistical protocol: resampling unit and bootstrap interval/level, scene and target clustering, seed policy, repeated snippets/targets within scenes, invalid or missing outcomes, confirmatory versus exploratory comparisons, multiplicity handling, and reported effect sizes.],
-  source: [scientific peer review; independent critic],
-  gate: [analysis plan before final experiment aggregation],
-)
-
-== Failure Interpretation
-
-The failure interpretation is part of the research contract. If geometry or oracle labels fail, the contribution becomes a validation and one-step-scoring study. If target matching is sparse or ambiguous, target-specific @relative-reconstruction-improvement:short is reported only on validated subsets with unmatched counts and acceptance filters. If #symb.entity.lookahead_headroom is near zero, the thesis reports no measurable non-myopic headroom for the evaluated split, target set, horizon, branch factor, and candidate distribution. The next diagnosis is target matching, candidate support, and supervision scale; added model complexity is justified only after those evidence gaps are ruled out. Scaling and online-discrete tests remain interpretable only if they preserve target-specific @relative-reconstruction-improvement:short supervision.
-
-#validation_todo(
-  [Replace planned evidence gates with actual result tables, figures, and failure cases after M1-M5 runs are complete.],
-  source: [proposal objectives/evaluation; advisor handout],
-  gate: [final experiments],
+  [Freeze the scene aggregation function, preregistered comparison list, oracle repeatability design, and minimum meaningful headroom threshold before final aggregation.],
+  source: [implementation-independent analysis protocol],
+  gate: [analysis preregistration],
 )

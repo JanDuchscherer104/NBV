@@ -125,17 +125,6 @@
   } else {
     v(2.4fr)
   }
-  pagebreak()
-
-  set page(numbering: "1")
-  counter(page).update(1)
-  set par(justify: true, first-line-indent: 2em)
-
-  show heading.where(level: 1): it => {
-    pagebreak(weak: true)
-    it
-  }
-  body
 
   pagebreak()
   heading(numbering: none)[List of Figures]
@@ -153,15 +142,27 @@
       outline(title: "", target: figure.where(kind: table))
     }
   ]
-
   pagebreak()
-  if appendix_content != none {
-    heading(numbering: none)[Appendix A: Supplementary Material]
-    appendix_content
+
+  set page(numbering: "1")
+  counter(page).update(1)
+  set par(justify: true, first-line-indent: 2em)
+
+  show heading.where(level: 1): it => {
+    pagebreak(weak: true)
+    it
   }
+  body
 
   pagebreak()
   bibliography("/references.bib", style: "ieee")
+
+  if appendix_content != none {
+    pagebreak()
+    counter(heading).update(0)
+    set heading(numbering: "A.1")
+    appendix_content
+  }
 
   pagebreak()
   disclaimer(

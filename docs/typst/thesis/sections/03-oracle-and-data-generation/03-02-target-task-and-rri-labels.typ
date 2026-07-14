@@ -6,7 +6,9 @@
 
 == Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
 
-Target selection is part of the oracle data-generation pipeline. It samples supervised target tasks for target-conditioned @next-best-view:short, rather than making a deployable claim that the learned actor discovers the target of interest on its own. The learned model receives a target descriptor and is evaluated by whether its selected views improve the matched target under oracle re-evaluation.
+This chapter fixes the implementation-invariant chain from task definition to evaluation. The logged actor-visible state $s_t^"hist"$ contains observations available at the recorded root. The counterfactual actor state $s_t^"cf0"$ augments that evidence only with acquired or simulated observations that the actor contract permits. The privileged oracle state $s_t^"oracle"$ additionally contains ground-truth geometry, matched target crops, all-candidate renders, and oracle labels. The three states are distinct objects even when they share identifiers or poses.
+
+Target selection is part of the oracle data-generation pipeline. An *oracle target task* fixes the supervised entity identity and ground-truth evaluation crop. An *actor-visible target descriptor* is the observation-derived or predicted representation supplied to a learned policy. The former defines what is evaluated; the latter defines what the actor may condition on. A target task is not a claim that the actor autonomously discovers the target of interest.
 
 The target descriptor records the task and the cheap evidence available for diagnostics or later descriptor ablations:
 
@@ -16,19 +18,19 @@ $
 
 In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise proposed OBB geometry for the target task; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(pi)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and @egocentric-voxel-lifting:short support counts; $omega_e^"EVL"$ records local @egocentric-voxel-lifting:short coverage; $ell_e^"src"$ records the actor-visible source mode; and $bold(T)_(r_t,e)$ / $bold(T)_(c_t,e)$ record reference- and current-frame target geometry. These fields are not all target-task gates in the first implementation. Class, confidence, current projection, semidense support, @egocentric-voxel-lifting:short support, distance, and target bearing are retained as descriptor and audit fields so that later subsets can ask whether the target-conditioned model depends on semantic correctness or observation quality.
 
-#conflict_todo(
-  [Separate the oracle target-task record from the actor-visible target descriptor in notation and provenance. The current wording combines GT-defined supervised tasks with observed/predicted proposals and leaves a leakage ambiguity.],
-  source: [thesis peer review; target-selection roadmap and questions],
-  gate: [V0 oracle-task and V1 actor-descriptor contract freeze],
+The finite action interface consists of a candidate table $cal(Q)_t$, hard validity mask $bold(m)_t$, and invalid-reason vector $bold(rho)_t$. The admissible set is $cal(A)_t = {i : m_(t,i)=1}$. Invalid rows remain logged for coverage and failure analysis but lie outside policy argmax, sampling, loss targets, and bootstrap maximization. Low RRI is a valid low-utility outcome; it is never an encoding for infeasibility.
+
+For target $e$, reconstruction quality is defined by target-cropped point--mesh error $Delta_t^e$. The immediate reward is the reduction $Delta_t^e-Delta_(t+1)^e$ normalized by the root error $Delta_0^e$, the finite-horizon return accumulates those root-normalized gains, and endpoint gain compares $Delta_0^e$ with $Delta_H^e$ after a fixed acquisition budget. This shared root denominator makes cumulative gain and endpoint gain comparable; endpoint gain remains the primary policy estimand.
+
+Oracle-lookahead headroom is the paired endpoint-gain difference between bounded oracle lookahead and one-step oracle-greedy selection. The recovered-headroom fraction compares a learned finite-horizon policy with the learned one-step control relative to that bounded oracle reference. The fraction is reported only when measured headroom exceeds a prespecified threshold derived from the oracle metric's repeatability or noise floor. Neither reference is a universal upper bound: both are conditional on the candidate generator, target pool, hard validity regime, horizon, branch factor, and acquisition budget.
+
+#validation_todo(
+  [Establish sampling-density and mesh-tessellation sensitivity before treating target-cropped point--mesh error as stable. Invariance is a required metric-validity property, not an established result.],
+  source: [RQ1 metric-validity contract; peer review],
+  gate: [oracle and metric validity results],
 )
 
-=== Seminar Oracle Substrate and Thesis Delta
-
-#prune_todo(
-  [This seminar-to-thesis migration ledger is valuable development history but not final scientific method prose. Retain only the implemented provenance needed to understand the final target-label pipeline; move migration placement and historical W&B/cache notes to the development appendix or remove them.],
-  source: [thesis peer review; source-order contract],
-  gate: [final method and appendix split],
-)
+=== Oracle Label Provenance
 
 The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh under a calibrated camera/rasterization convention, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
 
@@ -39,42 +41,6 @@ The seminar paper is implemented evidence for the one-step scene-level oracle su
   )),
   caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the matched target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
 ) <fig:camera-frame-ray-contract>
-
-#figure(
-  table(
-    columns: (0.86fr, 1.24fr, 1.16fr),
-    toprule(),
-    table.header([*Seminar material*], [*Thesis adaptation*], [*Placement*]),
-    midrule(),
-    [GT-mesh depth rendering and point-mesh RRI],
-    [Reused as label provenance; target crops replace whole-scene error as the primary objective.],
-
-    [Main data-generation method plus appendix camera-convention details.],
-    [Legacy shell candidate sampling],
-    [Kept as a historical/free-shell ablation; current target-conditioned mixtures own the main candidate distribution.],
-
-    [Candidate/replay method and appendix, not a default-policy claim.],
-    [CORAL ordinal scorer and bin diagnostics],
-    [Reused for myopic target-scorer calibration and expected-RRI controls before residual #symb.rl.qh.],
-
-    [Value-model method and evaluation evidence gates.],
-    [Immutable one-step VIN offline store],
-    [Kept separate from selected-transition `rollouts.zarr`; all-candidate labels train the scorer, selected transitions train bootstrapped #symb.rl.qh.],
-
-    [Data-flow appendix and replay evidence matrix.],
-    [Run-specific W&B and cache-size notes],
-    [Historical diagnostics only until regenerated from current manifests and configs.],
-
-    [Appendix/open-work TODO, not final experiment evidence.], bottomrule(),
-  ),
-  caption: [How seminar-paper implementation evidence is adapted without drifting into thesis claims.],
-) <tab:seminar-substrate-placement>
-
-#conflict_todo(
-  [Do not copy seminar scene-level RRI, legacy shell sampler, one-step VIN store, or run-specific CORAL/W&B results as current target-conditioned finite-horizon evidence. They are implementation substrate or historical diagnostics unless regenerated under the target-task and rollout-store protocol.],
-  source: [docs/typst/seminar_paper/main.typ; docs/typst/seminar_paper/sections/05-oracle-rri.typ; docs/typst/seminar_paper/sections/07-training-objective.typ; docs/typst/seminar_paper/sections/12h-appendix-offline-cache.typ],
-  gate: [final data-generation appendix and experiment-manifest refresh],
-)
 
 === Target Selection
 

@@ -9,6 +9,15 @@
   source: [archived proposal and advisor handout],
 )
 
+== Seminar-to-Thesis Adoption Ledger
+
+The seminar paper remains historical evidence for the one-step scene-level oracle substrate: calibrated ground-truth-mesh depth rendering, point--mesh RRI, ordinal scorer diagnostics, and an immutable one-step store. The thesis adaptation changes the scientific task to oracle-defined target tasks, target-cropped error, actor-visible target descriptors, selected-transition replay, and conditional finite-horizon evaluation. Legacy shell sampling, run-specific W&B records, cache sizes, and dated audit stores remain development provenance until final manifests replace them; they are not current target-conditioned planning evidence.
+
+#archive_note(
+  [This adoption ledger was removed from the Method chapter because it described document migration rather than the final scientific method.],
+  source: [seminar paper; thesis source-order contract],
+)
+
 == Schedule and Risk Control
 
 The planned thesis window from the proposal ran from 29 April 2026 to 30 September 2026. The roadmap owns the live schedule; this appendix keeps only the exit-condition logic. The work must progress from source-aligned proposal scope, through data/oracle validation, one-step target scoring, target-task rollouts, oracle-lookahead headroom, and #symb.rl.qh recovery, before bridge designs such as online discrete control or continuous policies are promoted. Final writing freezes only after manifests, coverage, failure cases, reproducible configs, and PDF artifacts are generated.

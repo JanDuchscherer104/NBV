@@ -1,15 +1,10 @@
 #import "../draft_markers.typ": *
 
-#impl_todo(
-  [Add supplementary derivations, camera-convention details, full seminar-substrate adaptation notes, generated manifest tables, and implementation-flow figures.],
-  source: [thesis peer-review pass; seminar paper oracle/CORAL/offline-cache sections],
-  gate: [final appendix pass],
-)
+= Development Diary and Open Work
 
-#validation_todo(
-  [Resolve the final document order in `template/layout/thesis_template.typ`: lists of figures and tables currently follow the body, the bibliography follows the appendix, and an unnumbered “Appendix A” heading contains a normally numbered chapter. Adopt institution-compliant front-matter, bibliography, and true appendix-numbering behavior before submission.],
-  source: [thesis template lines 138--164; independent peer-review critic],
-  gate: [submission template freeze],
+#archive_note(
+  [This appendix is rendered only in development mode. Submission mode excludes it and fails on unresolved markers elsewhere in the manuscript.],
+  source: [aria-thesis-mode contract],
 )
 
 #prune_todo(
