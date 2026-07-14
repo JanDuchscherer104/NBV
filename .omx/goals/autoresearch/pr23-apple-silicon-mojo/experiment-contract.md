@@ -10,4 +10,3 @@
 - LOC gate: prefer deletion; reject unmeasured complexity. Tests and research artifacts are excluded from implementation LOC.
 - Timing protocol: warm up before timing, use interleaved rounds, and repeat in three fresh processes for optimization candidates.
 - Inputs: deterministic synthetic tensors with fixed seeds. No synthetic input is represented as official ASE data.
-

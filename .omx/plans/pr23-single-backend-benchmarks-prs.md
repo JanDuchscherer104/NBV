@@ -85,4 +85,3 @@ The deletion test favors this design: deleting the two seam changes would force 
 - Leader: Ultragoal ledger ownership, integration, final verification, and PR publication.
 - Bounded explore/executor lanes: backend seam mapping, benchmark/report implementation, and CUDA-host execution where independent.
 - Independent review lanes: Standards, Spec, code-reviewer, architect, and final professor/critic. Reviewers do not author the code they approve.
-
