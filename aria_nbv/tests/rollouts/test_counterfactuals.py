@@ -64,7 +64,6 @@ from aria_nbv.rollouts import (
     CounterfactualTrajectory,
     RolloutPolicySpec,
 )
-from aria_nbv.rollouts.replay.engine import _canonical_selection_scores, _robust_temperature_logits
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
 from aria_nbv.rollouts.trace import PolicyLineage, RolloutLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
@@ -961,18 +960,34 @@ def test_temperature_softmax_masks_invalid_candidates_and_reproduces_selection()
 
 
 def test_selection_treats_backend_noise_as_a_stable_tie() -> None:
-    exact = torch.tensor([0.0, 0.0])
-    backend_noise = torch.tensor([1.7548e-7, 0.0])
+    def _backend_noise(result, trajectory, step_index):
+        del trajectory, step_index
+        valid_poses = result.poses_world_cam()
+        scores = torch.zeros(valid_poses.t.reshape(-1, 3).shape[0], device=valid_poses.t.device)
+        scores[1] = 1.7548e-7
+        return CandidateScores.from_valid_values(
+            scores,
+            name="backend_noise",
+            candidates=result,
+            device=valid_poses.t.device,
+            dtype=valid_poses.t.dtype,
+        )
 
-    exact_scores = _canonical_selection_scores(exact)
-    noisy_scores = _canonical_selection_scores(backend_noise)
+    step = _run_rollouts(
+        horizon=1,
+        selection_policy=CounterfactualSelectionPolicy.TEMPERATURE_SOFTMAX,
+        score_candidates=_backend_noise,
+    ).trajectories[0].steps[0]
 
-    assert torch.equal(noisy_scores, exact_scores)
-    assert torch.argsort(noisy_scores, descending=True, stable=True).tolist() == [0, 1]
-    assert torch.equal(
-        _robust_temperature_logits(scores=noisy_scores, temperature=1.0),
-        _robust_temperature_logits(scores=exact_scores, temperature=1.0),
-    )
+    assert step.selection_logits is not None
+    assert torch.count_nonzero(step.selection_logits) == 0
+
+    greedy_step = _run_rollouts(
+        horizon=1,
+        selection_policy=CounterfactualSelectionPolicy.ORACLE_GREEDY,
+        score_candidates=_backend_noise,
+    ).trajectories[0].steps[0]
+    assert greedy_step.selected_valid_index == 0
 
 
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:

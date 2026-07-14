@@ -91,12 +91,6 @@ def _time_value(time_ns: torch.Tensor, index: int) -> int:
     return int(times[safe_index].detach().cpu().item())
 
 
-def _canonical_selection_scores(scores: torch.Tensor) -> torch.Tensor:
-    """Make numerically equivalent zero gains deterministic across backends."""
-
-    return torch.where(scores.abs() <= _SELECTION_SCORE_ATOL, torch.zeros_like(scores), scores)
-
-
 def _robust_temperature_logits(*, scores: torch.Tensor, temperature: float) -> torch.Tensor:
     """Return median/IQR-normalized logits for temperature-softmax selection."""
 
@@ -560,7 +554,8 @@ class CounterfactualPoseGenerator:
         trajectory: CounterfactualTrajectory,
         branch_count: int,
     ) -> list[CounterfactualSelectionRecord]:
-        scores = _canonical_selection_scores(candidate_scores.values)
+        scores = candidate_scores.values
+        scores = torch.where(scores.abs() <= _SELECTION_SCORE_ATOL, torch.zeros_like(scores), scores)
         if self.policy.selection_policy in (
             CounterfactualSelectionPolicy.RANDOM,
             CounterfactualSelectionPolicy.RANDOM_VALID,
