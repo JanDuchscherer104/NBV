@@ -107,6 +107,7 @@ PACKAGE_SMOKE_TESTS := \
 	tests/rollouts/test_counterfactuals.py \
 	tests/rendering/test_candidate_renderer_cpu_backend.py \
 	tests/lightning/test_vin_batch_collate.py
+PYTEST_ARGS ?= -n auto
 
 # Read-only operator inspection defaults.
 OFFLINE_STORE ?= vin_offline
@@ -858,7 +859,7 @@ docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces
 package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev pytest $(PACKAGE_SMOKE_TESTS)
+	@cd $(PKG_DIR) && uv run --extra dev pytest $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
 ci: agents-db-validate qmd-frontmatter-check check-agent-memory package-smoke docs-render-core ## Run the root CI contract
 
