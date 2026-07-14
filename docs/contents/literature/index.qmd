@@ -55,7 +55,7 @@ Adoption-state labels used in the pages:
 
 - [SCONE and FisherRF](scone_fisherrf.qmd): coverage-as-support and information-as-diminishing-returns channels for candidate tokens and diagnostics [@SCONE-guedon2022; @FisherRF-jiang2024].
 - [Active 3DGS and targeted NBV](active_3dgs_nbv.qmd): uncertainty, Fisher information, object-centric utility, dynamic scenes, and task-specific view selection as proposal/diagnostic signals.
-- [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd): exhaustive source-backed review of per-Gaussian instance logits, confidence-weighted block information, target gating, quantitative evidence, mathematical risks, backbone choice, and a leakage-clean ATEK snippet adaptation [@ObjectCentricNBV-jeong2026].
+- [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd): ATEK-focused distillation of per-Gaussian instance state, confidence-weighted block information, target gating, the paper's strongest evidence, and the actor/oracle-safe adoption path [@ObjectCentricNBV-jeong2026].
 
 ### 5. Semantic Scene Representations
 
@@ -83,7 +83,7 @@ The local source mirrors and paper manifest are tracked under `docs/literature/`
 
 - [`sources.jsonl`](../../literature/sources.jsonl): canonical paper manifest.
 - [`tex-src/`](../../literature/tex-src/): local LaTeX mirrors when available.
-- [`figures/external/arXiv/Instance-NBV/`](../../figures/external/arXiv/Instance-NBV/): all eight source PDFs, rendered previews, and checksums used by the Instance-NBV review.
+- [`figures/external/arXiv/Instance-NBV/`](../../figures/external/arXiv/Instance-NBV/): three selected source PNGs used by the ATEK-focused Instance-NBV review.
 
 Key local mirrors include VIN-NBV, GenNBV, Hestia, PB-NBV, EFM3D, Project Aria, SceneScript, Trajectory Transformer, Double DQN, IQL, Gumbel-Top-k, Deep Energy-Based Policies, SCONE, FisherRF, Dynamic 3DGS, Next Best Sense, and Instance/Object-centric NBV. FOV-HPE is tracked as DOI/PDF evidence in the local corpus, not as a local TeX mirror.
 
