@@ -70,8 +70,9 @@ class OrientationBuilder:
             self.console.dbg(
                 f"Sampling view deltas with daz={cfg.view_max_azimuth_deg}°, del={cfg.view_max_elevation_deg}°"
             )
-            yaw = (torch.rand(num, device=device, dtype=dtype) * 2.0 - 1.0) * az_limit
-            pitch = (torch.rand(num, device=device, dtype=dtype) * 2.0 - 1.0) * el_limit
+            # CPU owns random draws; only deterministic geometry runs on the target device.
+            yaw = (torch.rand(num, device="cpu", dtype=dtype).to(device) * 2.0 - 1.0) * az_limit
+            pitch = (torch.rand(num, device="cpu", dtype=dtype).to(device) * 2.0 - 1.0) * el_limit
             cos_pitch = torch.cos(pitch)
             dirs = torch.stack(
                 [
@@ -86,16 +87,16 @@ class OrientationBuilder:
         # 3) Legacy distributions when no caps are provided.
         strat = cfg.view_sampling_strategy
         if strat == SamplingStrategy.UNIFORM_SPHERE:
-            dist = HypersphericalUniform(dim=3, device=device, dtype=dtype)
+            dist = HypersphericalUniform(dim=3, device="cpu", dtype=dtype)
         elif strat == SamplingStrategy.FORWARD_POWERSPHERICAL:
-            mu = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
-            scale = torch.tensor(cfg.view_kappa, device=device, dtype=dtype)
+            mu = torch.tensor(DEVICE_FWD, device="cpu", dtype=dtype)
+            scale = torch.tensor(cfg.view_kappa, device="cpu", dtype=dtype)
             dist = PowerSpherical(loc=mu, scale=scale)
         else:
             v = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
             return v.view(1, 3).expand(num, 3)
 
-        return _normalise(dist.rsample((num,)))
+        return _normalise(dist.rsample((num,)).to(device))
 
     def build(self, reference_pose: PoseTW, centers_world: torch.Tensor) -> tuple[PoseTW, PoseTW | None]:
         """Construct cam2world candidate poses for given centers.
@@ -186,7 +187,7 @@ class OrientationBuilder:
 
         if cfg.view_roll_jitter_deg > 0.0:
             # Jitter is applied as a rotation matrix about the forward axis so the basis stays orthonormal. Adding Gaussian noise to direction vectors would skew/scale them unless you re‑orthogonalise anyway (which is what this code guarantees).
-            roll = (2.0 * torch.rand(n, device=device, dtype=dtype) - 1.0) * torch.deg2rad(
+            roll = (2.0 * torch.rand(n, device="cpu", dtype=dtype).to(device) - 1.0) * torch.deg2rad(
                 torch.tensor(cfg.view_roll_jitter_deg, device=device, dtype=dtype)
             )
             r_roll = _roll_rotation(roll)

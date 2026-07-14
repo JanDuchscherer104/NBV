@@ -97,8 +97,8 @@ class PositionSampler:
         return dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
     def _sample_unit_sphere(self, n_draw: int) -> torch.Tensor:
-        """Fallback: sample unit vectors via normalized Gaussian noise."""
-        dirs = torch.randn(n_draw, 3, device=self.cfg.device, dtype=torch.float32)
+        """Fallback: sample unit vectors via backend-independent CPU noise."""
+        dirs = torch.randn(n_draw, 3, device="cpu", dtype=torch.float32).to(self.cfg.device)
         return dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
     def _target_direction_ref(self, reference_pose: PoseTW) -> torch.Tensor:
@@ -165,23 +165,24 @@ class PositionSampler:
         """
         n_draw = ceil(self.cfg.num_samples * self.cfg.oversample_factor)
 
+        # A seed must describe one pose set regardless of the compute backend.
         match self.cfg.sampling_strategy:
             case SamplingStrategy.UNIFORM_SPHERE:
                 try:
-                    dirs = HypersphericalUniform(dim=3, device=self.cfg.device).sample((n_draw,))
+                    dirs = HypersphericalUniform(dim=3, device="cpu").sample((n_draw,)).to(self.cfg.device)
                 except Exception:
                     dirs = self._sample_unit_sphere(n_draw)
             case SamplingStrategy.FORWARD_POWERSPHERICAL:
-                mu = torch.tensor(DEVICE_FWD, device=self.cfg.device)
+                mu = torch.tensor(DEVICE_FWD, device="cpu")
                 try:
                     dirs = PowerSpherical(
                         mu,
-                        torch.tensor(self.cfg.kappa, device=self.cfg.device),
-                    ).sample((n_draw,))
+                        torch.tensor(self.cfg.kappa, device="cpu"),
+                    ).sample((n_draw,)).to(self.cfg.device)
                 except Exception:
                     noise = self._sample_unit_sphere(n_draw)
                     kappa = float(self.cfg.kappa)
-                    dirs = (mu + noise / max(kappa, 1e-6)).to(dtype=noise.dtype)
+                    dirs = (mu.to(self.cfg.device) + noise / max(kappa, 1e-6)).to(dtype=noise.dtype)
         dirs_rig = dirs / dirs.norm(dim=-1, keepdim=True)
 
         # Work entirely in reference (rig) frame for angle limits.
@@ -191,9 +192,9 @@ class PositionSampler:
         dirs_world = reference_pose.rotate(dirs_rig)
         offsets_rig = dirs_rig
 
-        radii = torch.empty(dirs_world.shape[0], device=self.cfg.device, dtype=dirs_world.dtype).uniform_(
+        radii = torch.empty(dirs_world.shape[0], device="cpu", dtype=dirs_world.dtype).uniform_(
             self.cfg.min_radius, self.cfg.max_radius
-        )
+        ).to(self.cfg.device)
         offsets_rig = offsets_rig * radii[:, None]
         centers_world = reference_pose.transform(offsets_rig)
         return centers_world, offsets_rig

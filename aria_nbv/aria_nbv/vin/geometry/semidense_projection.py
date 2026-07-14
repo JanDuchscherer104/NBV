@@ -64,6 +64,7 @@ def sample_semidense_points(
     max_points = int(max_points)
     points = snippet.points_world
     lengths = getattr(snippet, "lengths", None)
+    # CPU owns random draws so a seed selects the same evidence on every backend.
     if points.numel() == 0:
         raise RuntimeError("VinSnippetView.points_world is empty.")
     if points.shape[-1] < 4:
@@ -82,7 +83,7 @@ def sample_semidense_points(
         if not torch.isfinite(points[:valid_len, :3]).all():
             raise ValueError("VinSnippetView.points_world contains non-finite XYZ values.")
         if valid_len > max_points:
-            idx = torch.randperm(valid_len, device=points.device)[:max_points]
+            idx = torch.randperm(valid_len, device="cpu")[:max_points].to(points.device)
             points = points[:valid_len][idx]
         else:
             points = points[:valid_len]
@@ -111,7 +112,7 @@ def sample_semidense_points(
             raise ValueError("VinSnippetView.points_world contains non-finite XYZ values.")
 
         k = min(max_points, int(num_points))
-        scores = torch.rand((batch_size, num_points), device=points.device)
+        scores = torch.rand((batch_size, num_points), device="cpu").to(points.device)
         scores = scores.masked_fill(~valid_mask, float("-inf"))
         topk_scores, topk_idx = scores.topk(k, dim=1)
         selected = points.gather(1, topk_idx.unsqueeze(-1).expand(-1, -1, dim))

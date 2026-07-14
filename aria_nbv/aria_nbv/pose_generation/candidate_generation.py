@@ -315,23 +315,13 @@ def _gravity_align_pose(reference_pose: PoseTW, *, eps: float = 1e-6) -> PoseTW:
 
 
 @contextmanager
-def _maybe_seed(seed: int | None, *, device: torch.device) -> Iterator[None]:
+def _maybe_seed(seed: int | None) -> Iterator[None]:
     if seed is None:
         yield
         return
 
-    # IMPORTANT: `torch.random.fork_rng(devices=None)` will attempt to snapshot
-    # CUDA RNG state and triggers CUDA initialization even when running on CPU.
-    # Use an empty list unless we explicitly want to manage CUDA RNG state.
-    cuda_devices: list[int] = []
-    if device.type == "cuda" and torch.cuda.is_available():
-        idx = device.index if device.index is not None else torch.cuda.current_device()
-        cuda_devices = [int(idx)]
-
-    with torch.random.fork_rng(devices=cuda_devices, enabled=True):
-        torch.manual_seed(int(seed))
-        if cuda_devices:
-            torch.cuda.manual_seed_all(int(seed))
+    with torch.random.fork_rng(devices=[], enabled=True):
+        torch.random.default_generator.manual_seed(int(seed))
         yield
 
 
@@ -463,7 +453,7 @@ class CandidateViewGenerator:
         )
         sampling_pose = _gravity_align_pose(reference_pose) if self.config.align_to_gravity else reference_pose
 
-        with _maybe_seed(self.config.seed, device=torch.device(device)):
+        with _maybe_seed(self.config.seed):
             centers_world, offsets_ref = PositionSampler(self.config).sample(
                 sampling_pose,
             )

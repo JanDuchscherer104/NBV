@@ -55,6 +55,12 @@ from ..mesh_cache import MeshProcessSpec
 _FIELD_DOC_CACHE: dict[type, dict[str, str]] = {}
 
 
+def _cpu_randperm(size: int, device: torch.device) -> Tensor:
+    """Return one reproducible permutation on every compute backend."""
+    generator = torch.Generator(device="cpu").manual_seed(0)
+    return torch.randperm(size, generator=generator, device="cpu").to(device)
+
+
 def _extract_field_docs(cls: type) -> dict[str, str]:
     """Extract field docstrings from the dataclass source when available."""
     try:
@@ -410,7 +416,7 @@ class EfmPointsView(BaseView):
                 points_out = torch.cat([points_out] + extras, dim=-1)
 
             if max_points is not None and points_out.shape[0] > max_points:
-                idx = torch.randperm(points_out.shape[0], device=points_out.device)[:max_points]
+                idx = _cpu_randperm(points_out.shape[0], points_out.device)[:max_points]
                 points_out = points_out[idx]
             return points_out
 
@@ -426,7 +432,7 @@ class EfmPointsView(BaseView):
             if points_flat.numel() == 0:
                 return torch.zeros((0, 4), dtype=points.dtype, device=points.device)
             if max_points is not None and points_flat.shape[0] > max_points:
-                idx = torch.randperm(points_flat.shape[0], device=points_flat.device)[:max_points]
+                idx = _cpu_randperm(points_flat.shape[0], points_flat.device)[:max_points]
                 points_flat = points_flat[idx]
                 inv_flat = inv_flat[idx]
             return torch.cat([points_flat, inv_flat], dim=-1)
@@ -438,7 +444,7 @@ class EfmPointsView(BaseView):
             return torch.zeros((0, 3), dtype=points.dtype, device=points.device)
 
         if max_points is not None and points_collapsed.shape[0] > max_points:
-            idx = torch.randperm(points_collapsed.shape[0], device=points_collapsed.device)[:max_points]
+            idx = _cpu_randperm(points_collapsed.shape[0], points_collapsed.device)[:max_points]
             points_collapsed = points_collapsed[idx]
 
         return points_collapsed
@@ -467,7 +473,7 @@ class EfmPointsView(BaseView):
             return np.zeros((0, 3), dtype=np.float32)
 
         if max_points is not None and pts.shape[0] > max_points:
-            idx = torch.randperm(pts.shape[0], device=pts.device)[:max_points]
+            idx = _cpu_randperm(pts.shape[0], pts.device)[:max_points]
             pts = pts[idx]
 
         return pts.detach().cpu().numpy()
