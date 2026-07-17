@@ -1,6 +1,6 @@
 ---
 name: typst-authoring
-description: Use for ARIA-NBV Typst proposal/thesis authoring, shared notation, scientific prose, citations, figures/tables, Mermaid inclusion, and compile/render QA.
+description: Use for ARIA-NBV Typst proposal/thesis authoring, shared notation, scientific prose, citations, scientific/geometric figures, tables, Mermaid inclusion, and compile/render QA.
 metadata:
   mode: implementation
   not_when:
@@ -15,6 +15,7 @@ metadata:
     - "nearest docs guidance and target Typst imports"
     - "shared notation/glossary check for new symbols, equations, or durable terms"
     - "claim/citation check for advisor-facing literature or thesis claims"
+    - "source artifact plus frame, units, projection/view, and provenance for scientific or geometric figures"
     - "compile and rendered-page inspection for non-trivial visual/math edits"
   applies_to:
     - "docs/typst/**"
@@ -26,6 +27,8 @@ metadata:
     - "thesis Typst"
     - "shared symbols or equations"
     - "scientific prose in thesis/proposal"
+    - "scientific illustration"
+    - "3D/geometric figure"
   must_read:
     - "AGENTS.md"
     - "docs/AGENTS.md"
@@ -38,6 +41,8 @@ metadata:
     - ".agents/references/thesis_code_links.md"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
+    - ".agents/skills/typst-authoring/references/figures-tables.md"
+    - ".agents/skills/typst-authoring/references/scientific-visualizations.md"
   context7_refs:
     - "/websites/typst_app"
     - "/websites/quarto"
@@ -86,8 +91,9 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
   modes only when useful; preserve claim strength and citations.
 - `claim-check`: classify claims and run `make kg-claim-check KG_CLAIM='...'`
   for advisor-facing literature or thesis claims.
-- `figure-table` / `visual-qa`: read figures/tables and workflow references,
-  render locally, inspect pages, and report skipped checks.
+- `figure-table` / `visual-qa`: read figures/tables and workflow references;
+  scientific, geometric, or 3D work also reads `scientific-visualizations.md`
+  and the selected renderer/package reference.
 
 ## Rules
 
@@ -118,7 +124,9 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
    slide templates, also read `references/packages/index.md` and
    `references/slides.md` as relevant.
 5. If prose changes, draft claims/evidence first, then convert to paragraphs.
-6. If figures or Mermaid assets change, render them locally before inclusion.
+6. For scientific figures, choose the renderer by scientific role and preserve
+   reproducible source plus fixed view/export metadata; render other figure or
+   Mermaid assets locally before inclusion.
 7. Compile the document or fixture, render affected pages to PNG, inspect
    visually, then fix and repeat.
 8. Report exact compile/render/check commands and any skipped checks.
@@ -128,7 +136,7 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 Read only the reference needed for the task: notation, math attachments,
 notation migration, thesis writing, section contracts, claim/citation
 discipline, figures/tables, workflow, external research, data loading, scripting,
-layout, Typst symbols, packages, or slides.
+layout, Typst symbols, scientific visualizations, packages, or slides.
 
 Primary checks are `make check-agent-memory` for skill/guidance edits,
 `make thesis-pdf` or focused `typst compile ... --root .` for document edits,

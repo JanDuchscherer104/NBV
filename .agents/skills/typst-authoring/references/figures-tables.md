@@ -5,6 +5,9 @@
 Figures and tables are part of the argument. Each one must answer: what should
 the reader learn that prose alone would not convey?
 
+For scientific, geometric, spatial, or 3D figures, also read
+`scientific-visualizations.md` before choosing a renderer.
+
 ## Figure Policy
 
 Use `#figure(...)` with explicit sizing and labels:
@@ -73,6 +76,9 @@ For thesis result tables:
 
 ## Mermaid / Diagram Policy
 
+- Use Mermaid for architecture, process, topology, and state transitions. Use
+  scientific geometry or data renderers for coordinate geometry, directional
+  fields, and real 3D evidence.
 - Keep `.mmd` as the version-controlled source.
 - Render locally with Mermaid CLI, this skill's helper, or the ARIA-NBV Mermaid
   workflow if available.
@@ -99,4 +105,6 @@ it.
 Before merging, check that labels are legible at printed thesis size, nothing
 is clipped or blurry, figure width is appropriate, captions wrap cleanly,
 cross-references resolve, symbols match shared notation, and page breaks do
-not separate figures from necessary explanatory text awkwardly.
+not separate figures from necessary explanatory text awkwardly. For scientific
+figures also check frame, units, projection, quantitative scale/colorbar,
+source provenance, grayscale readability, and final printed size.
