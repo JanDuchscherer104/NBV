@@ -11,6 +11,7 @@ import pytest
 import torch
 
 import aria_nbv.app.panels.vin_diagnostics_runtime as runtime
+from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 from aria_nbv.utils import Stage
@@ -27,8 +28,25 @@ class _FailingVin(torch.nn.Module):
         raise RuntimeError("diagnostic forward failed")
 
 
-def test_build_experiment_config_defaults_to_online_source() -> None:
-    cfg = runtime.build_vin_diagnostics_config(toml_path=None, stage=Stage.TRAIN)
+def _seed_default_ase_paths(root: Path) -> None:
+    shard = root / ".data" / "ase_efm" / "1" / "shards-0000.tar"
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    shard.write_bytes(b"test")
+    taxonomy = root / "external" / "efm3d" / "efm3d" / "config" / "taxonomy" / "atek_to_efm.csv"
+    taxonomy.parent.mkdir(parents=True, exist_ok=True)
+    taxonomy.write_text("", encoding="utf-8")
+
+
+def test_build_experiment_config_defaults_to_online_source(tmp_path: Path) -> None:
+    original_paths = PathConfig().model_dump()
+    _seed_default_ase_paths(tmp_path)
+    try:
+        PathConfig(data_root=tmp_path / ".data", external_dir=tmp_path / "external")
+        cfg = runtime.build_vin_diagnostics_config(toml_path=None, stage=Stage.TRAIN)
+    finally:
+        PathConfig(**original_paths)
+
+    assert PathConfig().model_dump() == original_paths
 
     assert cfg.run_mode == "summarize_vin"
     assert cfg.stage is Stage.TRAIN

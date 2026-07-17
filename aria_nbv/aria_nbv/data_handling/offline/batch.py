@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import torch
@@ -14,7 +14,6 @@ from ...vin.types import EvlBackboneOutput
 from ..raw.views import (
     EfmSnippetView,
     VinSnippetView,
-    is_efm_snippet_view_instance,
     is_vin_snippet_view_instance,
 )
 
@@ -187,86 +186,6 @@ class VinOracleBatch:
         if counts.ndim == 0:
             return arange < counts
         return arange.unsqueeze(0) < counts.unsqueeze(1)
-
-    def shape_summary(self) -> dict[str, str]:
-        """Summarize tensor shapes for diagnostics/logging."""
-
-        def _shape(value: object) -> str:
-            if torch.is_tensor(value):
-                return str(tuple(value.shape))  # type: ignore[attr-defined]
-            return str(type(value).__name__)
-
-        poses = self.candidate_poses_world_cam.tensor()
-        out: dict[str, str] = {
-            "candidate_poses_world_cam": str(tuple(poses.shape)),
-            "reference_pose_world_rig": str(tuple(self.reference_pose_world_rig.tensor().shape)),
-            "rri": _shape(self.rri),
-            "pm_dist_before": _shape(self.pm_dist_before),
-            "pm_dist_after": _shape(self.pm_dist_after),
-            "pm_acc_before": _shape(self.pm_acc_before),
-            "pm_comp_before": _shape(self.pm_comp_before),
-            "pm_acc_after": _shape(self.pm_acc_after),
-            "pm_comp_after": _shape(self.pm_comp_after),
-            "p3d_cameras.R": _shape(self.p3d_cameras.R),
-            "p3d_cameras.T": _shape(self.p3d_cameras.T),
-            "p3d_cameras.focal_length": _shape(self.p3d_cameras.focal_length),
-            "p3d_cameras.principal_point": _shape(self.p3d_cameras.principal_point),
-            "p3d_cameras.image_size": _shape(self.p3d_cameras.image_size),
-            "candidate_count": _shape(self.resolved_candidate_count(device=poses.device)),
-        }
-        batch_size = None
-        num_candidates = None
-        if poses.ndim == 2:
-            batch_size = 1
-            num_candidates = int(poses.shape[0])
-        elif poses.ndim == 3:
-            batch_size = int(poses.shape[0])
-            num_candidates = int(poses.shape[1])
-        if batch_size is not None and num_candidates is not None:
-            cam_count = int(self.p3d_cameras.R.shape[0])
-            if cam_count == batch_size * num_candidates:
-                out["p3d_cameras.batch_mode"] = "flat (B*N)"
-                out["p3d_cameras.R_grouped"] = str((batch_size, num_candidates, 3, 3))
-                out["p3d_cameras.T_grouped"] = str((batch_size, num_candidates, 3))
-                out["p3d_cameras.focal_length_grouped"] = str((batch_size, num_candidates, 2))
-                out["p3d_cameras.principal_point_grouped"] = str((batch_size, num_candidates, 2))
-                out["p3d_cameras.image_size_grouped"] = str((batch_size, num_candidates, 2))
-
-        if is_vin_snippet_view_instance(self.efm_snippet_view):
-            out["vin_snippet.points_world"] = _shape(self.efm_snippet_view.points_world)
-            out["vin_snippet.lengths"] = _shape(self.efm_snippet_view.lengths)
-            out["vin_snippet.t_world_rig"] = _shape(self.efm_snippet_view.t_world_rig.tensor())
-        elif is_efm_snippet_view_instance(self.efm_snippet_view):
-            out["efm_snippet_view"] = "EfmSnippetView"
-        elif self.efm_snippet_view is None:
-            out["efm_snippet_view"] = "None"
-
-        if self.backbone_out is not None:
-            if is_dataclass(self.backbone_out):
-                items = [(field.name, getattr(self.backbone_out, field.name)) for field in fields(self.backbone_out)]
-            else:
-                items = list(vars(self.backbone_out).items())
-            for name, value in items:
-                if torch.is_tensor(value):
-                    out[f"backbone.{name}"] = _shape(value)
-        else:
-            out["backbone"] = "None"
-
-        if self.gt_obbs is not None:
-            out["gt_obbs.obbs"] = _shape(self.gt_obbs.obbs)
-            if self.gt_obbs.probs is not None:
-                out["gt_obbs.probs"] = _shape(self.gt_obbs.probs)
-        if self.detected_obbs is not None:
-            out["detected_obbs.obbs"] = _shape(self.detected_obbs.obbs)
-            if self.detected_obbs.probs is not None:
-                out["detected_obbs.probs"] = _shape(self.detected_obbs.probs)
-        if self.trajectory is not None:
-            if self.trajectory.time_ns is not None:
-                out["trajectory.time_ns"] = _shape(self.trajectory.time_ns)
-            if self.trajectory.gravity_in_world is not None:
-                out["trajectory.gravity_in_world"] = _shape(self.trajectory.gravity_in_world)
-
-        return out
 
     def shuffle_candidates(self, *, generator: torch.Generator | None = None) -> "VinOracleBatch":
         """Return a copy with candidate ordering randomly permuted.

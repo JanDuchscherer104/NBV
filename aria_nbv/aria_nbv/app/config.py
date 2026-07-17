@@ -14,18 +14,14 @@ if TYPE_CHECKING:
     from .app import NbvStreamlitApp
 
 
-def _target_cls():
-    from .app import NbvStreamlitApp
-
-    return NbvStreamlitApp
-
-
 class NbvStreamlitAppConfig(TargetConfig["NbvStreamlitApp"]):
     """Top-level config for the refactored Streamlit app."""
 
     @property
     def target_type(self) -> type["NbvStreamlitApp"]:
-        return _target_cls()
+        from .app import NbvStreamlitApp
+
+        return NbvStreamlitApp
 
     dataset: AseEfmDatasetConfig = Field(default_factory=AseEfmDatasetConfig)
     """Dataset configuration used by the app."""

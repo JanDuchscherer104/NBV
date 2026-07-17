@@ -1172,18 +1172,18 @@ def test_candidate_depth_renderer_reports_full_shell_candidate_indices() -> None
     shell = PoseTW(
         torch.cat(
             [
-                torch.eye(3, dtype=torch.float32).reshape(1, 9).repeat(4, 1),
-                torch.arange(4, dtype=torch.float32).reshape(4, 1).expand(4, 3),
+                torch.eye(3, dtype=torch.float32).reshape(1, 9).repeat(6, 1),
+                torch.arange(6, dtype=torch.float32).reshape(6, 1).expand(6, 3),
             ],
             dim=1,
         )
     )
     camera = _dummy_camera()
-    camera_data = camera.tensor().repeat(2, 1)
+    camera_data = camera.tensor().repeat(4, 1)
     candidates = CandidateSamplingResult(
         views=CameraTW(camera_data),
         reference_pose=_identity_pose(),
-        mask_valid=torch.tensor([False, True, False, True]),
+        mask_valid=torch.tensor([False, True, True, False, True, True]),
         masks={},
         shell_poses=shell,
     )
@@ -1191,7 +1191,8 @@ def test_candidate_depth_renderer_reports_full_shell_candidate_indices() -> None
 
     _, _, candidate_indices = renderer._select_candidate_views(candidates)  # noqa: SLF001
 
-    assert candidate_indices.tolist() == [1, 3]
+    assert candidates.views.tensor().shape[0] > renderer.config.max_candidates_final
+    assert candidate_indices.tolist() == [1, 2]
 
 
 def test_candidate_depth_renderer_renders_selected_compact_index_at_exact_size() -> None:

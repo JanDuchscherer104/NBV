@@ -845,9 +845,6 @@ class VinModelV3(nn.Module):
                 dtype=field_bundle.field.dtype,
             )
         # semidense_grid_feat: (B, N_q, F_cnn) when enabled
-        # TOOD: why init GlobalContext twice?
-        # global_ctx = GlobalContext(pos_grid=global_ctx.pos_grid, global_feat=global_ctx.global_feat)
-
         traj_feat, traj_pose_vec, traj_pose_enc = self._encode_traj_features(
             vin_snippet,
             pose_world_rig_ref=prepared.pose_world_rig_ref,

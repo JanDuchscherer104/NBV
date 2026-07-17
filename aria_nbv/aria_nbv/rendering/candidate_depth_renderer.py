@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from ..pose_generation.types import CandidateSamplingResult
 
 
-# TODO: Wouldn't it make sense to derive all of these dataclasses from a common base data class?
 @dataclass(slots=True)
 class CandidateDepths:
     """Typed result for candidate depth rendering.
@@ -198,7 +197,7 @@ class CandidateDepthRenderer:
             compact_indices=compact_indices,
         )
         self.console.log(
-            f"Attempting renders for {pose_batch.tensor().shape[0]} candidates (GUI slice).",
+            f"Attempting renders for {pose_batch.tensor().shape[0]} candidates (configured candidate prefix).",
         )
         self.console.dbg_summary("candidate_indices", candidate_indices)
 

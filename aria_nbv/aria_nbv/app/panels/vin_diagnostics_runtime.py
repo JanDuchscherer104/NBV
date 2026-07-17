@@ -124,8 +124,7 @@ def run_vin_diagnostics(
         )
     if not isinstance(snippet_view, (EfmSnippetView, VinSnippetView)):
         raise TypeError(
-            "VIN diagnostics expect a VinSnippetView or EfmSnippetView, "
-            f"got {type(snippet_view)}.",
+            f"VIN diagnostics expect a VinSnippetView or EfmSnippetView, got {type(snippet_view)}.",
         )
 
     backbone_out = batch.backbone_out

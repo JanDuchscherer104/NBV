@@ -91,7 +91,6 @@ def _repr(obj: Any, *, include_docstrings: bool) -> str:
     return pformat(items, indent=2, width=100, compact=False)
 
 
-# TODO: create a shared BaseView / base data-class! Should probably be defined in aria_nbv/utils?
 class BaseView:
     """Base class for EFM view dataclasses with fast, optional docstring repr."""
 

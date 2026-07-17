@@ -5,7 +5,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from aria_nbv.app.app import NbvStreamlitApp
+from aria_nbv.app.config import NbvStreamlitAppConfig
+from aria_nbv.configs import PathConfig
 from aria_nbv.streamlit_app import _build_streamlit_argv, streamlit_entry
+
+
+def _seed_default_ase_paths(root: Path) -> None:
+    shard = root / ".data" / "ase_efm" / "1" / "shards-0000.tar"
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    shard.write_bytes(b"test")
+    taxonomy = root / "external" / "efm3d" / "efm3d" / "config" / "taxonomy" / "atek_to_efm.csv"
+    taxonomy.parent.mkdir(parents=True, exist_ok=True)
+    taxonomy.write_text("", encoding="utf-8")
 
 
 def test_streamlit_argv_disables_watchdog_by_default(monkeypatch) -> None:
@@ -69,3 +81,15 @@ def test_streamlit_entry_rewrites_sys_argv(monkeypatch) -> None:
         "none",
     ]
     assert captured_argv[4].endswith("streamlit_app.py")
+
+
+def test_streamlit_app_config_targets_streamlit_app(tmp_path: Path) -> None:
+    original_paths = PathConfig().model_dump()
+    _seed_default_ase_paths(tmp_path)
+    try:
+        PathConfig(data_root=tmp_path / ".data", external_dir=tmp_path / "external")
+        target_type = NbvStreamlitAppConfig().target_type
+    finally:
+        PathConfig(**original_paths)
+
+    assert target_type is NbvStreamlitApp
