@@ -223,20 +223,26 @@ GRAPHIFY_PYTHON="$(cat graphify-out/.graphify_python)"
 GRAPHIFY_RUN_ID="$("$GRAPHIFY_PYTHON" -c 'import uuid; print(uuid.uuid4().hex)')"
 GRAPHIFY_RUN_DIR="graphify-out/.graphify_runs/$GRAPHIFY_RUN_ID"
 mkdir -p "$GRAPHIFY_RUN_DIR"
-printf '%s\n' "$GRAPHIFY_RUN_DIR" > graphify-out/.graphify_run_dir
+printf '%s\n' "$GRAPHIFY_RUN_DIR" | tee graphify-out/.graphify_run_dir
 printf '[]\n' > "$GRAPHIFY_RUN_DIR/expected_chunks.json"
 ```
+
+Capture the printed path as the immutable `RUN_DIR` for this invocation and
+substitute that literal into every Step B0-B3 block below. The pointer file is
+only a human-visible marker for the newest run; never read it again during the
+invocation because another run may replace it while this one is still active.
 
 Before dispatching any subagents, check which files already have cached extraction results:
 
 ```bash
-$(cat graphify-out/.graphify_python) -c "
+GRAPHIFY_PYTHON="$(cat graphify-out/.graphify_python)"
+"$GRAPHIFY_PYTHON" -c "
 import json
 from graphify.cache import check_semantic_cache
 from pathlib import Path
 
 detect = json.loads(Path('graphify-out/.graphify_detect.json').read_text(encoding=\"utf-8\"))
-run_dir = Path(Path('graphify-out/.graphify_run_dir').read_text(encoding=\"utf-8\").strip())
+run_dir = Path('RUN_DIR')
 # Only content files go to semantic extraction. Code is already covered structurally
 # by the AST pass (Part A); flattening every category here makes subagents re-read
 # every source file (#1392). Video is transcribed to a document in Step 2.5 first.
@@ -274,7 +280,7 @@ run manifest (substitute `TOTAL_CHUNKS`):
 $(cat graphify-out/.graphify_python) -c "
 import json
 from pathlib import Path
-run_dir = Path(Path('graphify-out/.graphify_run_dir').read_text(encoding='utf-8').strip())
+run_dir = Path('RUN_DIR')
 total = TOTAL_CHUNKS
 (run_dir / 'expected_chunks.json').write_text(
     json.dumps([f'chunk_{i:02d}.json' for i in range(1, total + 1)]),
@@ -305,9 +311,10 @@ spawn_agent(
 )
 ```
 
-Resolve `RUN_DIR` from `graphify-out/.graphify_run_dir` and substitute its
-literal value before dispatch. Never ask an agent to discover the current run;
-that pointer may legitimately change after an interrupted invocation.
+Use the immutable `RUN_DIR` captured when Step B0 created this invocation and
+substitute its literal value before dispatch. Never ask an agent to discover
+the current run; the shared pointer may legitimately change while this
+invocation is still active.
 
 Wait until every dispatched agent reaches a terminal state. Treat the persisted
 chunk file—not a possibly truncated chat result—as the merge input and success
@@ -338,7 +345,7 @@ $(cat graphify-out/.graphify_python) -c "
 import json
 from pathlib import Path
 
-run_dir = Path(Path('graphify-out/.graphify_run_dir').read_text(encoding='utf-8').strip())
+run_dir = Path('RUN_DIR')
 expected = json.loads((run_dir / 'expected_chunks.json').read_text(encoding='utf-8'))
 all_nodes, all_edges, all_hyperedges = [], [], []
 total_in, total_out = 0, 0
@@ -375,7 +382,7 @@ import json
 from graphify.cache import save_semantic_cache
 from pathlib import Path
 
-run_dir = Path(Path('graphify-out/.graphify_run_dir').read_text(encoding='utf-8').strip())
+run_dir = Path('RUN_DIR')
 new_path = run_dir / 'semantic_new.json'
 new = json.loads(new_path.read_text(encoding=\"utf-8\")) if new_path.exists() else {'nodes':[],'edges':[],'hyperedges':[]}
 saved = save_semantic_cache(new.get('nodes', []), new.get('edges', []), new.get('hyperedges', []), root='INPUT_PATH')
@@ -389,7 +396,7 @@ $(cat graphify-out/.graphify_python) -c "
 import json
 from pathlib import Path
 
-run_dir = Path(Path('graphify-out/.graphify_run_dir').read_text(encoding='utf-8').strip())
+run_dir = Path('RUN_DIR')
 cached_path = run_dir / 'cached.json'
 new_path = run_dir / 'semantic_new.json'
 cached = json.loads(cached_path.read_text(encoding=\"utf-8\")) if cached_path.exists() else {'nodes':[],'edges':[],'hyperedges':[]}

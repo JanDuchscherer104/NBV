@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
@@ -206,6 +207,12 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
+
+graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
+	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
+
+api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
+	@./scripts/tests/test_quarto_generate_api_docs.sh
 
 check-agent-memory: _check_python ## 🗺️ Validate agent memory scaffolding and debrief hygiene
 	@$(PYTHON_INTERPRETER) scripts/validate_agent_memory.py
@@ -865,7 +872,7 @@ package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

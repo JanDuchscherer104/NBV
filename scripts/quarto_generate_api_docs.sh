@@ -142,7 +142,10 @@ remove_stale_reference_pages() {
       removed=1
     fi
   done
-  return "${removed}"
+  if [[ "${removed}" -eq 1 ]]; then
+    return 0
+  fi
+  return 1
 }
 
 if [[ "${QUARTODOC_INCREMENTAL:-0}" == "1" ]]; then
