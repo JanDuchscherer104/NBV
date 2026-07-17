@@ -1,4 +1,9 @@
-"""Runtime composition for the VIN diagnostics panel."""
+"""Checkpoint setup and no-gradient forward passes for VIN diagnostics.
+
+This module keeps Streamlit out of the compute path. It owns experiment
+preparation, checkpoint-backed module/data-module composition, diagnostic
+inference, and restoration of the scorer's prior training mode.
+"""
 
 from __future__ import annotations
 

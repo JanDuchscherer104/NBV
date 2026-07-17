@@ -1,4 +1,9 @@
-"""Summary tab for VIN diagnostics."""
+"""Top-level VIN batch, prediction, model, and cache summary diagnostics.
+
+The tab provides data-lineage and parameter summaries plus prediction-versus-
+oracle comparisons while keeping RRI labels separate from actor-visible model
+inputs and outputs.
+"""
 
 from __future__ import annotations
 

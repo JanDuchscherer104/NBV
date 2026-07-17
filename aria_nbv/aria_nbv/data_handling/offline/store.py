@@ -59,13 +59,13 @@ class VinOfflineStoreConfig(BaseConfig):
 
     @property
     def manifest_path(self) -> Path:
-        """Return the absolute manifest path."""
+        """Return the resolved path to the store-owned ``manifest.json``."""
 
         return self.store_dir / self.manifest_filename
 
     @property
     def sample_index_path(self) -> Path:
-        """Return the absolute sample-index path."""
+        """Return the resolved path to the global ``sample_index.jsonl``."""
 
         return self.store_dir / self.sample_index_filename
 
@@ -209,7 +209,7 @@ class IndexedMsgpackRecordBlock:
     """Shard-local concatenated payload blob path."""
 
     offsets: np.ndarray
-    """Byte offsets with shape ``(num_rows + 1,)``."""
+    """``ndarray["N_rows+1", int64]`` byte boundaries into the payload blob."""
 
     def read(self, row: int) -> Any:
         """Read and decode one record by row index."""
@@ -228,16 +228,22 @@ class IndexedMsgpackRecordBlock:
 
 @dataclass(slots=True)
 class OpenedShard:
-    """Worker-local opened shard state."""
+    """Hold lazily opened, worker-local handles for one immutable shard.
+
+    Instances belong to one :class:`VinOfflineStoreReader` process and are not
+    persisted or shared across DataLoader workers. The manifest descriptor owns
+    physical layout; this object only caches read-only Zarr and MessagePack
+    handles for repeated row access.
+    """
 
     spec: VinOfflineShardSpec
     """Shard descriptor backing the opened state."""
 
     arrays: dict[str, Any] = field(default_factory=dict)
-    """Opened Zarr arrays keyed by logical block name."""
+    """Read-only Zarr arrays keyed by manifest logical block name."""
 
     indexed_record_blocks: dict[str, IndexedMsgpackRecordBlock] = field(default_factory=dict)
-    """Indexed per-row MessagePack blocks keyed by logical block name."""
+    """Worker-local indexed MessagePack readers keyed by logical block name."""
 
 
 class VinOfflineStoreReader:

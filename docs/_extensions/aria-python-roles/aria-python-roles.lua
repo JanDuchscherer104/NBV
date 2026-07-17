@@ -2,8 +2,9 @@
 --
 -- Quartodoc preserves roles such as :mod:`aria_nbv.data_handling` in generated
 -- qmd. VS Code/Pylance displays those roles well, but Quarto treats them as
--- ordinary text unless a filter rewrites them. This filter resolves the local
--- roles against Quartodoc's generated objects.json inventory.
+-- ordinary text unless a filter rewrites them. This filter resolves local
+-- roles against Quartodoc's generated objects.json inventory and forwards
+-- external roles to Quartodoc's standard interlinks filter.
 
 local role_aliases = {
   ["mod"] = "module",
@@ -28,6 +29,22 @@ local role_aliases = {
   ["py:data"] = "attribute",
   ["const"] = "attribute",
   ["py:const"] = "attribute",
+}
+
+local external_root_inventories = {
+  ["collections"] = "python",
+  ["dataclasses"] = "python",
+  ["enum"] = "python",
+  ["jaxtyping"] = "jaxtyping",
+  ["lightning"] = "lightning",
+  ["pathlib"] = "python",
+  ["torch"] = "torch",
+  ["torchmetrics"] = "torchmetrics",
+  ["typing"] = "python",
+}
+
+local external_target_aliases = {
+  ["torchmetrics.regression.SpearmanCorrCoef"] = "torchmetrics.SpearmanCorrCoef",
 }
 
 local inventory = nil
@@ -259,11 +276,15 @@ local function parse_role_token(text)
     return nil
   end
 
-  if starts_with(role_token, "external") then
-    return nil
-  end
-
   return role_aliases[role_token]
+end
+
+local function parse_external_role_token(text)
+  local role_token = text:match("^:([A-Za-z0-9_:%+%-]+):$")
+  if role_token ~= nil and starts_with(role_token, "external+") then
+    return role_token
+  end
+  return nil
 end
 
 local function link_for(role, code)
@@ -285,6 +306,51 @@ local function link_for(role, code)
   return pandoc.Link({ pandoc.Code(display) }, relative_href(item.uri))
 end
 
+local function external_link_for(role_token, code)
+  local parsed = parse_target(code.text)
+  if parsed == nil then
+    return nil
+  end
+
+  local display = parsed.explicit_text or code.text
+  if parsed.shorten and parsed.explicit_text == nil then
+    display = short_name(parsed.target)
+  end
+
+  return pandoc.Link(
+    { pandoc.Code(display) },
+    ":" .. role_token .. ":%60" .. parsed.target .. "%60"
+  )
+end
+
+local function external_inventory_for(target)
+  local root = target:match("^([A-Za-z0-9_]+)%.")
+  return root and external_root_inventories[root]
+end
+
+local function external_root_link_for(role, code)
+  local parsed = parse_target(code.text)
+  if parsed == nil then
+    return nil
+  end
+
+  local inventory_name = external_inventory_for(parsed.target)
+  if inventory_name == nil then
+    return nil
+  end
+
+  local display = parsed.explicit_text or code.text
+  if parsed.shorten and parsed.explicit_text == nil then
+    display = short_name(parsed.target)
+  end
+
+  return pandoc.Link(
+    { pandoc.Code(display) },
+    ":external+" .. inventory_name .. ":py:" .. role .. ":%60"
+      .. (external_target_aliases[parsed.target] or parsed.target) .. "%60"
+  )
+end
+
 local function rewrite_inlines(inlines)
   load_inventory()
   local rewritten = {}
@@ -295,9 +361,9 @@ local function rewrite_inlines(inlines)
     local next_inline = inlines[index + 1]
 
     if current.t == "Str" and next_inline ~= nil and next_inline.t == "Code" then
-      local role = parse_role_token(current.text)
-      if role ~= nil then
-        local link = link_for(role, next_inline)
+      local external_role = parse_external_role_token(current.text)
+      if external_role ~= nil then
+        local link = external_link_for(external_role, next_inline)
         if link ~= nil then
           table.insert(rewritten, link)
           index = index + 2
@@ -306,8 +372,21 @@ local function rewrite_inlines(inlines)
           index = index + 1
         end
       else
-        table.insert(rewritten, current)
-        index = index + 1
+        local role = parse_role_token(current.text)
+        if role ~= nil then
+          local link = link_for(role, next_inline)
+          link = link or external_root_link_for(role, next_inline)
+          if link ~= nil then
+            table.insert(rewritten, link)
+            index = index + 2
+          else
+            table.insert(rewritten, current)
+            index = index + 1
+          end
+        else
+          table.insert(rewritten, current)
+          index = index + 1
+        end
       end
     else
       table.insert(rewritten, current)

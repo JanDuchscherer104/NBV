@@ -1,6 +1,6 @@
 """Shell-pose encoder modules for VIN candidates.
 
-Shell encoders describe a candidate by the direction from the reference pose to
+This module owns encoders that describe a candidate by the direction from the reference pose to
 the candidate center, the candidate optical axis, the radial distance, and a
 view-target alignment scalar. They are useful for shell-sampled NBV candidates
 where roll about the optical axis is not semantically important.
@@ -37,6 +37,8 @@ class ShellShPoseEncoderAdapter(PoseEncoder):
 
     @property
     def out_dim(self) -> int:
+        """Return the adapted spherical-harmonics embedding width."""
+
         return int(self.sh_encoder.out_dim)
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:
@@ -74,6 +76,8 @@ class ShellLffPoseEncoder(PoseEncoder):
 
     @property
     def out_dim(self) -> int:
+        """Return the configured shell-LFF embedding width."""
+
         return int(self.pose_encoder_lff.out_dim)
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:

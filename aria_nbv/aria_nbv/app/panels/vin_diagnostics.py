@@ -1,4 +1,9 @@
-"""VIN diagnostics panel."""
+"""Checkpoint-backed VIN forward-pass diagnostics and tab orchestration.
+
+The panel owns session reuse of the experiment runtime, obtains one staged
+batch, records predictions and intermediate tensors, and dispatches them to
+focused diagnostic tabs.
+"""
 
 from __future__ import annotations
 

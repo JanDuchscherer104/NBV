@@ -1,4 +1,8 @@
-"""Pipeline-local join between replay transitions and Oracle outputs."""
+"""Join replay transitions with pipeline-local Oracle outputs.
+
+This module provides adapters from Oracle candidate evaluations to replay policy scores while
+retaining typed evidence sidecars for later Zarr materialization.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +30,7 @@ class OracleInvalidity(Protocol):
 
     @property
     def reason(self) -> Enum:
-        """Return the stable domain reason code."""
+        """Return the stable domain reason code for hard-invalid control flow."""
 
     @property
     def message(self) -> str:

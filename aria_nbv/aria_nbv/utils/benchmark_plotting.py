@@ -1,4 +1,14 @@
-"""Utilities for Python-vs-Mojo benchmark ingestion, summarization, and plotting."""
+"""Ingest, aggregate, plot, and persist paired Python/Mojo benchmarks.
+
+This module provides typed benchmark records/summaries, CSV ingestion,
+within-stratum aggregation, Plotly latency/speedup/scaling/throughput figures,
+and report persistence. It owns comparative summarization and presentation;
+benchmark execution and raw timing collection remain with the benchmark
+harnesses.
+
+The records preserve raw trial identity while summaries compare implementations
+only within the same benchmark and problem-size stratum.
+"""
 
 from __future__ import annotations
 
@@ -28,14 +38,29 @@ IMPLEMENTATION_COLORS: dict[str, str] = {
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkRecord:
-    """One raw benchmark trial."""
+    """One measured implementation trial before statistical aggregation.
+
+    Latency is stored in milliseconds; throughput, when available, is measured
+    in processed workload items per second.
+    """
 
     benchmark: str
+    """Stable workload name used to pair implementations."""
+
     implementation: str
+    """Implementation label, conventionally `python` or `mojo`."""
+
     latency_ms: float
+    """Wall-clock latency for this trial in milliseconds."""
+
     problem_size: str = "default"
+    """Human-readable workload-size stratum for like-for-like aggregation."""
+
     throughput_items_per_s: float | None = None
+    """Optional processed-item rate in items per second."""
+
     trial: str | None = None
+    """Optional source trial or repetition identifier."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,13 +68,28 @@ class BenchmarkSummary:
     """Aggregated statistics for one benchmark / implementation / size tuple."""
 
     benchmark: str
+    """Stable workload name shared with the contributing records."""
+
     implementation: str
+    """Implementation summarized by this row."""
+
     problem_size: str
+    """Workload-size stratum; implementations are never mixed across strata."""
+
     count: int
+    """Number of raw trials included in the summary."""
+
     latency_median_ms: float
+    """Median wall-clock latency in milliseconds."""
+
     latency_mean_ms: float
+    """Arithmetic mean wall-clock latency in milliseconds."""
+
     latency_std_ms: float
+    """Population standard deviation of latency in milliseconds."""
+
     throughput_mean_items_per_s: float | None = None
+    """Mean item throughput when every contributing row reports throughput."""
 
     @property
     def key(self) -> tuple[str, str]:
@@ -435,7 +475,11 @@ def write_benchmark_report(
     title_prefix: str = "Python vs Mojo",
     write_png: bool = False,
 ) -> dict[str, Path]:
-    """Write a benchmark plot bundle to disk."""
+    """Write interactive benchmark figures and optional PNG snapshots.
+
+    Returns:
+        Mapping from figure kind to each generated artifact path.
+    """
 
     summaries = summarize_benchmarks(records)
     output_dir = Path(out_dir)

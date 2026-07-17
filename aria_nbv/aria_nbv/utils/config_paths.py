@@ -1,4 +1,8 @@
-"""Shared path resolution helpers for config-driven CLIs and stores."""
+"""Resolve config and cache paths at CLI and persistence boundaries.
+
+These helpers delegate project-root policy to :class:`PathConfig` so command
+entrypoints and Pydantic validators interpret relative paths consistently.
+"""
 
 from __future__ import annotations
 

@@ -34,7 +34,7 @@ def vin_snippet_cache_config_hash(
     semidense_max_points: int | None,
     pad_points: int | None,
 ) -> str:
-    """Compute a stable hash for VIN snippet cache compatibility checks."""
+    """Hash source and semidense-collapse settings for VIN payload compatibility."""
     payload = {
         "dataset_config": dataset_config,
         "include_inv_dist_std": include_inv_dist_std,
@@ -54,7 +54,13 @@ def collapse_vin_points(
     include_inv_dist_std: bool = True,
     include_obs_count: bool = False,
 ) -> torch.Tensor:
-    """Collapse raw EFM semidense points into VIN-style per-snippet points."""
+    """Collapse actor-visible MPS points across snippet time for VIN input.
+
+    Returns:
+        ``Tensor["K 3+C", float32]`` world-frame points in metres on ``device``.
+        Optional columns are inverse distance uncertainty followed by
+        observation count; no GT mesh, OBB label, or oracle reward is included.
+    """
     extra_dim = int(include_inv_dist_std) + int(include_obs_count)
     points_world = torch.zeros((0, 3 + extra_dim), dtype=torch.float32, device=device)
     try:
@@ -75,7 +81,13 @@ def pad_vin_points(
     *,
     pad_points: int | None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Pad or truncate VIN points once and return padded points plus lengths."""
+    """Pad or truncate VIN point rows while preserving a valid-prefix length.
+
+    Returns:
+        Tuple containing ``Tensor["K_pad D", float32]`` points with NaN tail
+        padding and ``Tensor["1", int64]`` valid length. Without ``pad_points``,
+        ``K_pad`` equals the input row count.
+    """
     valid_len = int(points_world.shape[0])
     lengths = torch.tensor([valid_len], device=points_world.device, dtype=torch.int64)
     if pad_points is None:
@@ -108,7 +120,13 @@ def build_vin_snippet_view(
     include_obs_count: bool = False,
     pad_points: int | None = None,
 ) -> VinSnippetView:
-    """Build a VIN snippet view from an EFM snippet using the canonical adapter."""
+    """Build the canonical actor-visible VIN view from an adapted EFM snippet.
+
+    The returned :class:`VinSnippetView` owns collapsed world-frame semidense
+    points, a valid-prefix length, and the MPS/EFM world←rig trajectory. Missing
+    semidense or trajectory fields yield empty typed tensors; oracle assets are
+    intentionally excluded.
+    """
     points_world = collapse_vin_points(
         efm_snippet,
         device=device,
@@ -134,7 +152,12 @@ def empty_vin_snippet(
     extra_dim: int = 1,
     pad_points: int | None = None,
 ) -> VinSnippetView:
-    """Return an empty VIN snippet view."""
+    """Return a shape-valid VIN view with no observed points or trajectory.
+
+    ``points_world`` has logical shape ``Tensor["K_pad 3+C", float32]`` where
+    ``C=extra_dim``; ``lengths`` is zero and any fixed-width rows are NaN
+    padding. This sentinel carries no GT/oracle information.
+    """
     points_world = torch.zeros((0, 3 + int(extra_dim)), dtype=torch.float32, device=device)
     points_world, lengths = pad_vin_points(points_world, pad_points=pad_points)
     return VinSnippetView(

@@ -45,20 +45,43 @@ if TYPE_CHECKING:
 
 @dataclass
 class PlottingConfig:
-    """Reusable plotting style that can be applied across figures."""
+    """Reusable Matplotlib, seaborn, and Plotly presentation settings."""
 
     style: str = "whitegrid"
+    """Seaborn axes-style name passed to `seaborn.set_theme`."""
+
     palette: str | list[str] = "tab10"
+    """Seaborn palette name or explicit color sequence."""
+
     font_family: str = "DejaVu Sans"
+    """Matplotlib font-family name."""
+
     font_scale: float = 1.0
+    """Multiplicative seaborn font scale."""
+
     title_size: int = 14
+    """Matplotlib axes-title size in points."""
+
     label_size: int = 12
+    """Matplotlib axes-label size in points."""
+
     tick_size: int = 10
+    """Matplotlib tick-label size in points."""
+
     figure_dpi: int = 100
+    """Default Matplotlib figure resolution in dots per inch."""
+
     context: str = "notebook"
+    """Seaborn plotting-context name."""
+
     plotly_template: str = "plotly_white"
+    """Plotly template name installed in `plotly.io.templates`."""
+
     plotly_colorway: list[str] | None = None
+    """Optional Plotly categorical color sequence for the selected template."""
+
     seaborn_kwargs: dict[str, Any] = field(default_factory=dict)
+    """Additional keyword arguments forwarded to `seaborn.set_theme`."""
 
     def apply_global(self) -> None:
         """Apply plotting style globally (no automatic restore)."""

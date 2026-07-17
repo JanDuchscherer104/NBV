@@ -1,4 +1,8 @@
-"""Diagnostics, summaries, and Plotly visualizations for VIN models."""
+"""Diagnostics, summaries, and Plotly visualizations for VIN models.
+
+This package owns the stable app-facing exports for encoding figures and the
+VIN-Core batch/model summary while implementation helpers remain in leaf modules.
+"""
 
 from __future__ import annotations
 

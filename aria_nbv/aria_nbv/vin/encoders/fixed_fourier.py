@@ -1,6 +1,6 @@
 """Fixed or directly learnable Fourier features for scalar VIN descriptors.
 
-`FourierFeatures` is a small `torch.nn.Module` used by
+This module provides `FourierFeatures`, a small `torch.nn.Module` used by
 `aria_nbv.vin.encoders.spherical.ShellShPoseEncoder` to encode a one-dimensional
 candidate radius before projection. For the trainable MLP-based positional
 encoder used by VIN-Core, prefer
@@ -43,7 +43,7 @@ class FourierFeatures(nn.Module):
 
     @property
     def output_dim(self) -> int:
-        """Return output feature dimension."""
+        """Return the raw-input plus sine/cosine output width."""
 
         base = 2 * self.num_frequencies
         if self.include_input:
@@ -80,6 +80,8 @@ class FourierFeaturesConfig(TargetConfig[FourierFeatures]):
 
     @property
     def target_type(self) -> type[FourierFeatures]:
+        """Return the runtime module type constructed by this config."""
+
         return FourierFeatures
 
     input_dim: int = Field(default=1, gt=0)

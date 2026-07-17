@@ -56,14 +56,14 @@ class PoseEncodingOutput:
 
 
 class PoseEncoder(nn.Module):
-    """Base interface for VIN pose encoders."""
+    """Base interface for encoders of poses already in a reference frame."""
 
     pose_encoder_lff: LearnableFourierFeatures | None
     """Optional LFF submodule for diagnostics (None for SH-only encoders)."""
 
     @property
     def out_dim(self) -> int:  # pragma: no cover - interface only
-        """Return output embedding dimension."""
+        """Return the final pose-embedding feature width."""
         raise NotImplementedError
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:  # pragma: no cover - interface only
@@ -72,7 +72,12 @@ class PoseEncoder(nn.Module):
 
 
 class R6dLffPoseEncoder(PoseEncoder):
-    """Encode poses as translation + rotation-6D passed through LFF."""
+    """Encode reference-frame translation and rotation-6D through LFF.
+
+    The representation is continuous for common rotations but is not an
+    SE(3)-equivariant map: translation coordinates and rotation-matrix columns
+    are interpreted in the caller-supplied reference rig frame.
+    """
 
     def __init__(self, config: "R6dLffPoseEncoderConfig") -> None:
         super().__init__()
@@ -88,6 +93,8 @@ class R6dLffPoseEncoder(PoseEncoder):
 
     @property
     def out_dim(self) -> int:
+        """Return the configured LFF pose-embedding width."""
+
         return int(self.pose_encoder_lff.out_dim)
 
     def _pose_scales(self) -> tuple[Tensor, Tensor]:
@@ -112,7 +119,7 @@ class R6dLffPoseEncoder(PoseEncoder):
 
 
 class R6dLffPoseEncoderConfig(TargetConfig[R6dLffPoseEncoder]):
-    """Config for `R6dLffPoseEncoder`."""
+    """Configure reference-frame R6D plus LFF pose encoding."""
 
     @property
     def target_type(self) -> type[R6dLffPoseEncoder]:

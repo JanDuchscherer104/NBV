@@ -1,4 +1,11 @@
-"""Inspect rollout-store manifests and compact rollout statistics."""
+"""Inspect standalone rollout manifests, tables, and replay readiness.
+
+This module provides a CLI that reads stores through
+:class:`RolloutZarrStoreReader`, which opens Zarr
+payloads read-only. Optional validation checks normalized row links, action and
+label masks, provenance, and the derived finite-candidate ``Q_H`` view without
+mutating either the rollout store or its immutable VIN source cache.
+"""
 
 from __future__ import annotations
 

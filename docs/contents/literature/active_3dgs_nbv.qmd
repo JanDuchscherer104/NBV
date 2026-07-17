@@ -9,11 +9,11 @@ format: html
 
 ## Active 3DGS and Targeted NBV {#active-3dgs-targeted-nbv-literature}
 
-**Primary sources.** ActiveNeRF [@ActiveNeRF-pan2022], FisherRF [@FisherRF-jiang2024], Next Best Sense [@NextBestSense-strong2024], semantic/dynamic 3DGS NBV [@li2025bestviewselectionssemantic], object-centric 3DGS NBV [@ObjectCentricNBV-jeong2026], and FOV-HPE [@FOVHPE-bae2025].
+**Primary sources.** ActiveNeRF [@ActiveNeRF-pan2022], FisherRF [@FisherRF-jiang2024], Next Best Sense [@NextBestSense-strong2024], semantic/dynamic 3DGS NBV [@li2025bestviewselectionssemantic], [instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd) [@ObjectCentricNBV-jeong2026], and FOV-HPE [@FOVHPE-bae2025].
 
-**Source status.** The corpus has local TeX mirrors for several 3DGS/NBV papers, including FisherRF, Dynamic 3DGS, Next Best Sense, and Instance/Object-centric NBV. FOV-HPE is tracked through DOI/PDF evidence, not a local TeX mirror.
+**Source status.** The corpus has local TeX mirrors for several 3DGS/NBV papers, including FisherRF, Dynamic 3DGS, Next Best Sense, and Instance/Object-centric NBV. The method-specific review preserves all eight Instance-NBV source figures under [`figures/external/arXiv/Instance-NBV/`](../../figures/external/arXiv/Instance-NBV/). FOV-HPE is tracked through DOI/PDF evidence, not a local TeX mirror.
 
-**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../thesis/questions.qmd).
+**Related ARIA-NBV pages.** [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd), [RRI theory](../theory/rri_theory.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../thesis/questions.qmd).
 
 ### Core contribution
 
@@ -25,8 +25,17 @@ Active NeRF and {{< gls three-dimensional-gaussian-splatting >}} papers are usef
 | FisherRF [@FisherRF-jiang2024] | Fisher information estimates how much a candidate view should reduce radiance-field uncertainty. | Treat Fisher-style information gain as a proposal channel for target-local evidence and uncertainty. | Do not treat Fisher information as GT reconstruction-quality improvement. |
 | Next Best Sense [@NextBestSense-strong2024] | Robotic 3DGS active sensing combines semantic depth alignment with Fisher-style depth uncertainty for view/touch selection. | Borrow the separation between representation uncertainty, semantic relevance, and downstream diagnostic value. | Do not import touch sensing or 3DGS scene state as thesis-core dependencies. |
 | Semantic/dynamic 3DGS NBV [@li2025bestviewselectionssemantic] | Active selection can score geometry, semantic Gaussian parameters, and dynamic/deformation parameters separately. | Report scene RRI, target RRI, validity, semantic relevance, and motion cost as separate channels. | Do not make dynamic 3DGS a dependency for static ASE target-conditioned reconstruction. |
-| Object-centric 3DGS NBV [@ObjectCentricNBV-jeong2026] | Instance/object features can focus view utility on underexplored target regions. | Adopt explicit target object, object-conditioned utility, and separate target metrics. | Do not use 3DGS object vectors as the first target representation; start with EVL/predicted OBB support. |
+| [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd) [@ObjectCentricNBV-jeong2026] | Per-Gaussian object logits, opacity, and rendering Jacobians produce block-diagonal RGB/depth/object information gain; a target gate specializes selection to one instance. | Retain EVL as the actor-visible backbone; use damped object-weighted logdet, object entropy, opacity deficit, and target-visible mass as auxiliary candidate channels calibrated against target RRI. | Do not call the analytic rasterizer a learned backbone, substitute logdet for target RRI, expose GT masks/boxes to the actor, or transfer the paper's greedy sphere-based policy as multi-step planning evidence. |
 | FOV-HPE [@FOVHPE-bae2025] | DOI/PDF evidence describes dynamic 3DGS novel-view rendering and RL viewpoint refinement for monocular 3D human-pose error. | Treat as evidence that 3DGS can become a downstream-task simulator bridge. | Do not use MPJPE, human-pose reward, or dynamic-human scenes as thesis-core objectives. |
+
+### Instance-NBV-specific synthesis
+
+The [method-specific review](3dgs_instance_nbv.qmd) resolves four points that matter to the thesis:
+
+1. The paper has no learned NBV-policy backbone; its scorer is analytic Gauss--Newton/D-optimal information gain over an object-aware Gaussian map.
+2. Its largest depth ablation gain comes from the object-vector reconstruction objective, so reconstruction and view-selection improvements must be separated experimentally.
+3. Its target-specific results validate a target/global quality tradeoff, but its policy is greedy and omits path cost, feasibility, stopping, and multi-step value.
+4. For ATEK snippets, the strongest adaptation is EVL plus semi-dense/ray-aware state with optional Gaussian information channels in candidate tokens, not replacement of the thesis state or reward.
 
 ### Verified paper signals
 
@@ -51,23 +60,28 @@ ARIA-NBV should not collapse these into one opaque score. The thesis-core versio
 | scene {{< gls relative-reconstruction-improvement >}} | global reconstruction-quality label/evaluation |
 | {{< gls target-specific-rri >}} | target-conditioned label/evaluation |
 | {{< gls validity-mask >}} and invalid reason | feasibility constraint |
-| uncertainty / Fisher / evidence count | proposal or diagnostic signal |
+| uncertainty / Fisher / object evidence / observation count | proposal, candidate feature, or diagnostic signal |
+| target/global tradeoff | Pareto analysis under a fixed acquisition budget |
 | motion/path cost | optional planning penalty after quality evidence is trusted |
 
 ### ARIA-NBV adoption
 
-- **Proposal/diagnostic:** uncertainty, Fisher information, object focus, semantic relevance, rank agreement, and candidate diversity.
-- **Gated follow-up:** radiance-field or 3DGS scene state only after the finite-candidate target-RRI path works.
-- **Stretch/bridge:** 3DGS-backed continuous-control or downstream-task simulators after an environment abstraction exists.
+- **Proposal/diagnostic:** uncertainty, Fisher information, object focus, semantic relevance, rank agreement, candidate diversity, target-visible mass, object entropy, and opacity deficit.
+- **Gated follow-up:** a persistent object-aware Gaussian map and damped target-weighted logdet only after one-step rank calibration against target RRI.
+- **Stretch/bridge:** 3DGS-backed successor simulation, continuous control, or downstream-task simulators after an environment abstraction exists.
 
 ### Do not adopt
 
-- Do not move the thesis objective from {{< gls target-specific-rri >}} to 3DGS uncertainty.
+- Do not move the thesis objective from {{< gls target-specific-rri >}} to 3DGS uncertainty or log-determinant information.
 - Do not make 3DGS a required reconstruction backend for ASE oracle rollout generation.
+- Do not use GT instance masks, GT OBBs, or GT mesh support in actor-visible candidate scoring.
+- Do not present greedy analytic candidate selection as evidence for finite-horizon \(Q_H\).
 - Do not claim local TeX verification for FOV-HPE; the current corpus has DOI/PDF evidence only.
 
 ### Open risks / caveats
 
 - 3DGS uncertainty and Fisher metrics can disagree with mesh-supervised reconstruction quality.
-- Target-aware 3DGS methods often assume representation state and optimization loops that ARIA-NBV does not yet have.
+- Log-determinant rankings depend on damping, parameterization, output scaling, and the block-diagonal approximation.
+- Target-aware 3DGS methods often assume segmentation, persistent identity, representation state, and optimization loops that ARIA-NBV does not yet have.
+- A pose can be scored without a candidate image, but a leakage-clean rollout successor still requires an acquired, logged, or explicitly simulated observation.
 - These papers are most useful as target/proposal inspiration, not as replacements for the finite-candidate {{< gls finite-horizon-q-function >}} thesis path.

@@ -32,11 +32,28 @@ from .._scoring import PreparedRriScorerConfig
 
 @dataclass(slots=True)
 class OracleRriSample:
+    """One fully labeled candidate set for an EFM snippet.
+
+    The payload keeps actor-visible snippet/candidate evidence beside
+    oracle-only mesh renders and RRI labels. Candidate-aligned members share a
+    compact valid-candidate axis ``C``; rows map back to the sampled shell via
+    :meth:`CandidateSamplingResult.candidate_shell_indices`.
+    """
+
     sample: EfmSnippetView
+    """Typed snippet view owning observations, calibration, and GT mesh data."""
+
     candidates: CandidateSamplingResult
+    """Full-shell provenance plus the compact valid world-from-camera poses."""
+
     depths: CandidateDepths
+    """Metric z-depth maps ``Tensor[\"C H W\", float]`` rendered from the GT mesh."""
+
     candidate_pcs: CandidatePointClouds
+    """Padded world-frame candidate points ``Tensor[\"C P 3\", float]`` in metres."""
+
     rri: RriResult
+    """Oracle reconstruction-improvement labels and distance decomposition over ``C``."""
 
 
 def _target_cls():
@@ -52,9 +69,11 @@ class OracleRriLabelerConfig(TargetConfig["OracleRriLabeler"]):
 
     @property
     def target_type(self) -> type[OracleRriLabeler]:
+        """Return the runtime pipeline type constructed by this config."""
         return _target_cls()
 
     device: Annotated[torch.device, Field(default="auto")]
+    """Compute device resolved before candidate rendering and RRI scoring."""
 
     generator: CandidateViewGeneratorConfig = Field(
         default_factory=CandidateViewGeneratorConfig,
@@ -73,6 +92,7 @@ class OracleRriLabelerConfig(TargetConfig["OracleRriLabeler"]):
     """Pixel stride used when backprojecting depth maps to point clouds."""
 
     verbosity: Verbosity = Verbosity.QUIET
+    """Pipeline progress verbosity; nested stages retain their own settings."""
 
     _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
 

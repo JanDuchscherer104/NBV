@@ -1,4 +1,8 @@
-"""Shared Streamlit controls for snippet-level 3D Plotly scene views."""
+"""Shared controls and typed options for snippet-level Plotly scene views.
+
+This module provides reusable visibility defaults, resolves widget choices,
+and applies observed-scene or explicitly oracle-only overlays to plot builders.
+"""
 
 from __future__ import annotations
 
@@ -18,16 +22,37 @@ class Scene3DPlotDefaults:
     """Default visibility and style choices for a snippet 3D scene view."""
 
     show_mesh: bool = True
+    """Whether to show the ASE mesh, an oracle/evaluation-only asset."""
+
     mesh_opacity: float = 0.35
+    """Mesh alpha in the closed interval ``[0, 1]``."""
+
     show_trajectory: bool = True
+    """Whether to show the observed device trajectory in world coordinates."""
+
     show_scene_bounds: bool = True
+    """Whether to show the snippet occupancy bounds in world coordinates."""
+
     show_crop_bounds: bool = True
+    """Whether to show the configured world-frame mesh crop bounds."""
+
     show_frustum: bool = True
+    """Whether to draw source-camera frusta for selected frames."""
+
     frustum_scale: float = 1.0
+    """Dimensionless display scale applied to source-camera frusta."""
+
     mark_first_last: bool = True
+    """Whether trajectory rendering highlights the first and last observations."""
+
     show_gt_obbs: bool = False
+    """Whether to show GT object boxes; this overlay is oracle/evaluation-only."""
+
     semidense_mode: str = "all frames"
+    """Observed semidense evidence mode: ``off``, ``all frames``, or ``last frame only``."""
+
     max_sem_points: int = 20000
+    """Maximum observed semidense world points retained for display."""
 
 
 @dataclass(slots=True)
@@ -35,18 +60,43 @@ class Scene3DPlotOptions:
     """Resolved options for a snippet 3D scene view."""
 
     show_mesh: bool
+    """Whether to show the oracle/evaluation ASE mesh."""
+
     mesh_opacity: float
+    """Mesh alpha in the closed interval ``[0, 1]``."""
+
     show_trajectory: bool
+    """Whether to show the observed world-frame device trajectory."""
+
     show_scene_bounds: bool
+    """Whether to show world-frame scene occupancy bounds."""
+
     show_crop_bounds: bool
+    """Whether to show world-frame mesh crop bounds."""
+
     show_frustum: bool
+    """Whether to draw source-camera frusta."""
+
     frustum_frame_indices: list[int]
+    """Zero-based source-frame indices whose physical camera frusta are drawn."""
+
     frustum_scale: float
+    """Dimensionless display scale applied to the selected frusta."""
+
     mark_first_last: bool
+    """Whether the observed trajectory highlights its endpoints."""
+
     show_gt_obbs: bool
+    """Whether to show GT boxes as an explicit oracle/evaluation overlay."""
+
     gt_timestamp: str | int | None
+    """Annotation timestamp used to select GT boxes when the overlay is enabled."""
+
     semidense_mode: str
+    """Resolved observed-semidense display mode."""
+
     max_sem_points: int
+    """Maximum observed semidense world points retained for display."""
 
 
 DATA_SCENE_DEFAULTS = Scene3DPlotDefaults()

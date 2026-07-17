@@ -1,6 +1,7 @@
 r"""Target-aware Oracle RRI scoring over finite candidate tables.
 
-This module scores valid candidate rows with target-specific point-mesh RRI.
+This module scores valid candidate rows with target-specific point-mesh RRI and
+owns typed target-scoring invalidity outcomes.
 The current generation path samples a privileged GT target task upstream; this
 scorer uses its OBB as an oracle/evaluation crop. Missing targets, empty mesh
 crops, sparse current support, or unusable depth are expected invalidity cases
@@ -66,7 +67,10 @@ class TargetRriInvalidity:
     """Expected target-scoring failure with a stable semantic reason."""
 
     reason: OracleEvidenceInvalidReason
+    """Stable reason code suitable for hard-invalid masks and diagnostics."""
+
     message: str
+    """Human-readable failure context for logs and inspection surfaces."""
 
 
 class TargetRriScorerConfig(TargetConfig["TargetRriScorer"]):
@@ -74,6 +78,8 @@ class TargetRriScorerConfig(TargetConfig["TargetRriScorer"]):
 
     @property
     def target_type(self) -> type["TargetRriScorer"]:
+        """Return the target-aware Oracle scorer constructed by this config."""
+
         return TargetRriScorer
 
     depth: CandidateDepthRendererConfig = Field(default_factory=lambda: CandidateDepthRendererConfig())

@@ -1,4 +1,8 @@
-"""Generate immutable VIN offline stores from Oracle-labelled snippets."""
+"""Generate immutable VIN offline stores from Oracle-labelled snippets.
+
+This module owns composition of raw snippet streaming, Oracle labels, optional EVL
+features, immutable codecs, split assignment, and shard promotion.
+"""
 
 from __future__ import annotations
 
@@ -40,7 +44,7 @@ from .scene_labels import OracleRriLabelerConfig
 
 
 class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
-    """Configuration for Oracle-labelled VIN offline generation."""
+    """Configure immutable VIN offline generation from raw snippets."""
 
     @property
     def target_type(self) -> type["VinOfflineWriter"]:
@@ -64,10 +68,10 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """Optional EVL backbone configuration."""
 
     include_backbone: bool = True
-    """Whether to materialize backbone outputs."""
+    """Whether to persist actor-visible EVL outputs with manifest provenance."""
 
     include_depths: bool = True
-    """Whether to materialize candidate depths."""
+    """Whether to persist GT-mesh-rendered candidate depths and validity masks."""
 
     include_pointclouds: bool = False
     """Whether rich diagnostic payloads may include candidate point clouds."""
@@ -76,10 +80,10 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """Whether to write rich msgpack diagnostic records alongside numeric blocks."""
 
     include_gt_obbs: bool = True
-    """Whether to persist compact GT OBB tensors from raw snippets."""
+    """Whether to persist compact GT OBBs as label/evaluation assets."""
 
     include_detected_obbs: bool = True
-    """Whether to persist compact detected OBB tensors from backbone outputs."""
+    """Whether to persist actor-visible EVL detected boxes from backbone outputs."""
 
     include_trajectory_metadata: bool = True
     """Whether to persist trajectory timestamps and gravity."""
@@ -87,7 +91,7 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     backbone_numeric_keep_fields: list[str] | None = Field(
         default_factory=lambda: list(DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS),
     )
-    """EVL backbone fields written as fixed numeric blocks."""
+    """EVL fields written as canonical fixed numeric training blocks; ``None`` keeps all supported fields."""
 
     backbone_payload_keep_fields: list[str] | None = Field(
         default_factory=lambda: list(DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS),
@@ -95,7 +99,7 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     """EVL backbone fields written to the optional rich diagnostic payload."""
 
     vin_pad_points: int = Field(default=DEFAULT_VIN_SNIPPET_PAD_POINTS, ge=0)
-    """Fixed VIN point count stored per sample."""
+    """Fixed ``K_store`` row count for world-frame semidense VIN point tensors."""
 
     semidense_max_points: int | None = None
     """Optional cap on collapsed semidense points before padding."""

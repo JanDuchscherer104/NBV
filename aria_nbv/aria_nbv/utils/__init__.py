@@ -1,4 +1,9 @@
-"""Lightning-adjacent utilities for Document Classifier."""
+"""Shared configuration, diagnostics, geometry, and visualization utilities.
+
+The package exports low-level helpers used across data handling, VIN training,
+and interactive diagnostics. Domain-specific ownership remains in the calling
+package; this namespace contains only cross-cutting contracts.
+"""
 
 from .base_config import BaseConfig, SingletonConfig, TargetConfig
 from .console import Console, Verbosity

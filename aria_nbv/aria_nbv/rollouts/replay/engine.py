@@ -1,6 +1,6 @@
 r"""Bounded counterfactual pose rollout utilities.
 
-Rollouts regenerate finite candidate tables at each step from the updated pose,
+This module owns regeneration of finite candidate tables at each step from the updated pose,
 history, and remaining budget. The candidate generator may be single-family or
 mixed, but the selected action must satisfy the actor-valid mask. Oracle scores
 are supervision/evaluation fields; actor-visible replay rows retain poses,
@@ -208,6 +208,8 @@ class CounterfactualPoseGeneratorConfig(TargetConfig["CounterfactualPoseGenerato
 
     @property
     def target_type(self) -> type["CounterfactualPoseGenerator"]:
+        """Return the finite-candidate replay generator constructed by this config."""
+
         return CounterfactualPoseGenerator
 
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig = Field(

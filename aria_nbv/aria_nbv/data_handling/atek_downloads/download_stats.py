@@ -1,4 +1,9 @@
-"""Helpers for reporting local download coverage and snippet counts for ATEK shards."""
+"""Helpers for reporting local download coverage and snippet counts for ATEK shards.
+
+The module provides read-only coverage summaries over downloaded WebDataset
+archives. It compares local shard/sample-key counts with ASE/ATEK URL manifests
+without opening EFM tensors or mutating the acquisition directories.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,11 @@
-"""CLI entry points for Oracle-labelled offline and rollout stores."""
+"""Build Oracle-labelled offline stores and target-RRI rollout campaigns.
+
+This module provides an offline command that streams raw snippets through the Oracle VIN pipeline into
+an immutable source store. Rollout commands read those rows, materialize
+rollout-owned Zarr stores, and expose deterministic shard planning and status
+reporting. Shard builds use temporary directories and validated promotion;
+direct unsharded builds own their destination and never modify the VIN source.
+"""
 
 from __future__ import annotations
 
@@ -91,7 +98,7 @@ def build_offline_command(
         ),
     ] = False,
 ) -> None:
-    """Build an immutable VIN offline store."""
+    """Build an immutable VIN offline store from a validated TOML config."""
 
     console = cli_console()
     config_path = resolve_config_toml_path(config_path)
@@ -313,7 +320,12 @@ def status_rollout_shards_command(
         typer.Option("--require-complete", help="Exit with status 2 when any planned shard is not succeeded."),
     ] = False,
 ) -> None:
-    """Summarize one rollout shard campaign."""
+    """Report completion states for every shard in one manifest-driven campaign.
+
+    A shard is successful only when its final store, owner sidecar, and success
+    marker agree. ``--require-complete`` turns any failed, incomplete, or
+    missing shard into process exit status 2 for schedulers and CI.
+    """
 
     console = cli_console()
     status = summarize_rollout_shard_campaign(shard_manifest, final_root=final_root)

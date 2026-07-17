@@ -1,4 +1,8 @@
-"""Non-differentiable candidate-ranking evaluation."""
+"""Non-differentiable candidate-ranking evaluation.
+
+This module provides comparisons of actor-selected or predicted candidates against finite
+hard-valid Oracle label tables without changing selection behavior.
+"""
 
 from __future__ import annotations
 
@@ -27,9 +31,16 @@ class SelectedActionOracleComparison:
     """
 
     selected_oracle_regret: Tensor
+    """``Tensor["B", float32]`` Oracle-best minus selected value; invalid tables are ``NaN``."""
+
     selected_oracle_rank: Tensor
+    """``Tensor["B", float32]`` one-based selected rank; invalid tables are ``NaN``."""
+
     selected_oracle_percentile: Tensor
+    """``Tensor["B", float32]`` selected rank percentile in ``[0, 1]``."""
+
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables with comparable selected and Oracle values."""
 
 
 def candidate_topk_oracle_hit(

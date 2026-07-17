@@ -17,7 +17,12 @@ from aria_nbv.utils import BaseConfig, TargetConfig, Verbosity
 
 
 class RerunInspectorDatasetConfig(BaseConfig):
-    """Dataset reader configuration for offline Rerun inspection."""
+    """Force immutable VIN inspection onto the CPU sample-reader boundary.
+
+    The nested dataset remains the provenance owner for sample, scene, snippet,
+    store-manifest, and optional EVL/checkpoint facts. Validation rewrites only
+    this config copy; the source store itself remains read-only.
+    """
 
     offline: VinOfflineDatasetConfig = Field(
         default_factory=lambda: VinOfflineDatasetConfig(
@@ -43,7 +48,12 @@ class RerunInspectorDatasetConfig(BaseConfig):
 
 
 class RerunInspectorSelectionConfig(BaseConfig):
-    """Sample selection knobs for ``nbv-rerun-inspect``."""
+    """Resolve offline and rollout context with deterministic selector precedence.
+
+    A sample key outranks scene/snippet identity, which outranks split-local
+    index. Rollout context can inherit factual source identity from the rollout
+    store or require/disable the immutable VIN overlay explicitly.
+    """
 
     sample_key: str | None = None
     """Stable offline sample key. Highest precedence when provided."""
@@ -73,22 +83,27 @@ class RerunInspectorSelectionConfig(BaseConfig):
 
 
 class RerunInspectorOutputConfig(BaseConfig):
-    """Rerun recording output configuration."""
+    """Choose the single Rerun sink opened before any inspector entity logs.
+
+    ``save`` owns an ``.rrd`` destination, ``spawn`` owns a local viewer
+    process connection, and ``connect`` targets an existing gRPC server. The
+    recording id groups all static and timeline entities from one inspector run.
+    """
 
     mode: Literal["save", "spawn", "connect"] = "save"
-    """Output sink used before logging starts."""
+    """Exactly one output sink opened immediately after Rerun initialization."""
 
     application_id: str = "aria-nbv-rerun-inspector"
     """Rerun application identifier."""
 
     recording_id: str | None = None
-    """Optional stable Rerun recording id."""
+    """Optional stable recording id; ``None`` lets Rerun allocate session identity."""
 
     save_path: Path = Path(".logs") / "rerun" / "offline_inspector.rrd"
-    """Destination recording path when ``mode='save'``."""
+    """Owned ``.rrd`` destination whose parent is created for ``mode='save'``."""
 
     connect_addr: str | None = None
-    """Rerun gRPC endpoint when ``mode='connect'``."""
+    """Existing Rerun gRPC endpoint used only when ``mode='connect'``."""
 
     spawn_port: int = Field(default=9876, ge=1, le=65535)
     """Viewer port used when ``mode='spawn'``."""
@@ -101,32 +116,32 @@ class RerunInspectorOutputConfig(BaseConfig):
 
 
 class RerunInspectorGeometryConfig(BaseConfig):
-    """Geometry rendering parameters for Rerun primitives."""
+    """Metric display sizes for world-frame Rerun geometry primitives."""
 
     frustum_scale: float = Field(default=0.35, gt=0.0)
-    """Candidate frustum size in world units."""
+    """Displayed camera image-plane distance in world metres."""
 
     reference_axis_length: float = Field(default=0.45, gt=0.0)
-    """Axis length used for the reference-pose transform."""
+    """Displayed reference-pose axis length in metres."""
 
     semidense_radius: float = Field(default=0.015, gt=0.0)
-    """Rerun point radius for semidense world points."""
+    """Rerun radius for semidense world points, in metres."""
 
     candidate_center_radius: float = Field(default=0.035, gt=0.0)
-    """Rerun point radius for candidate centers."""
+    """Rerun radius for candidate camera centers, in metres."""
 
     candidate_point_radius: float = Field(default=0.01, gt=0.0)
-    """Rerun point radius for optional candidate point clouds."""
+    """Rerun radius for optional candidate world points, in metres."""
 
     trajectory_radius: float = Field(default=0.02, gt=0.0)
-    """Line radius for trajectory paths."""
+    """Rerun line radius for world-frame trajectory paths, in metres."""
 
     mesh_alpha: int = Field(default=18, ge=0, le=255)
     """Alpha channel for the GT mesh albedo factor in ``[0, 255]``."""
 
 
 class RerunInspectorPerformanceConfig(BaseConfig):
-    """Performance and deterministic sampling knobs."""
+    """Bound visualization payload size with reproducible subsampling."""
 
     max_semidense_points: int = Field(default=50_000, ge=0)
     """Maximum semidense points to log after deterministic downsampling."""
@@ -144,7 +159,13 @@ class RerunInspectorPerformanceConfig(BaseConfig):
 
 
 class RerunInspectorCandidateConfig(BaseConfig):
-    """Candidate camera and selected-detail logging policy."""
+    """Filter the stored VIN oracle-candidate prefix for diagnostic display.
+
+    Indices address the persisted ``N``-row oracle prefix shared by candidate
+    poses, RRI, and optional validity data. They are not rollout full-shell ids
+    and must not be confused with ``rollouts.zarr`` compact-valid indices.
+    Oracle-based ranking affects visualization only.
+    """
 
     subset_mode: Literal["all", "valid_only", "invalid_only", "top_k_oracle", "indices"] = "all"
     """Candidate subset to log as native Rerun camera entities."""
@@ -153,13 +174,13 @@ class RerunInspectorCandidateConfig(BaseConfig):
     """Number of candidates used when ``subset_mode='top_k_oracle'``."""
 
     subset_indices: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
-    """Explicit candidate indices used when ``subset_mode='indices'``."""
+    """Explicit zero-based rows on the stored VIN candidate-prefix axis ``N``."""
 
     selected_strategy: Literal["top_valid_oracle", "first_valid", "explicit_index"] = "top_valid_oracle"
     """Strategy used for the single candidate that receives depth/point details."""
 
     selected_index: int | None = Field(default=None, ge=0)
-    """Explicit selected candidate index, overriding ``selected_strategy`` when set."""
+    """Explicit stored-prefix row receiving detail layers, overriding strategy."""
 
 
 class RerunInspectorRolloutPlotConfig(BaseConfig):
@@ -176,7 +197,12 @@ class RerunInspectorRolloutPlotConfig(BaseConfig):
 
 
 class RerunInspectorRolloutDepthConfig(BaseConfig):
-    """Selected-depth visualization policy for rollout-Zarr inspection."""
+    """Display selected-only mesh depth retained by a rollout Zarr store.
+
+    Depth is an oracle/evaluation artifact associated with the factual selected
+    action. It can be logged as a raster or unprojected camera-local LUF points,
+    but it must not be interpreted as actor-visible policy input.
+    """
 
     enabled: bool = True
     """Log selected-action depth rasters when ``rollouts.zarr/selected_depth`` is available."""
@@ -194,14 +220,19 @@ class RerunInspectorRolloutDepthConfig(BaseConfig):
     """Maximum unprojected selected-depth points logged for point-cloud display."""
 
     point_radius: float = Field(default=0.006, gt=0.0)
-    """Rerun point radius for unprojected selected-depth point clouds."""
+    """Rerun radius for camera-local unprojected points, in metres."""
 
     require_selected_depth: bool = False
     """Raise when selected-depth rows are missing instead of logging metadata warnings."""
 
 
 class RerunInspectorEfmVoxelConfig(BaseConfig):
-    """EFM voxel-field visualization policy."""
+    """Display actor-visible EVL/EFM fields with their source provenance intact.
+
+    Thresholded voxel centers are transformed by ``T_world_voxel`` and logged
+    in world metres. Field values depend on the VIN source config and checkpoint;
+    they are predictions/evidence, not GT occupancy or oracle labels.
+    """
 
     enabled: bool = True
     """Whether to log curated EFM voxel fields when a backbone output is loaded."""
@@ -228,7 +259,7 @@ class RerunInspectorEfmVoxelConfig(BaseConfig):
     """Maximum logged voxel centers per EFM field after thresholding."""
 
     point_radius: float = Field(default=0.025, gt=0.0)
-    """Rerun point radius for logged voxel centers."""
+    """Rerun radius for thresholded world-frame voxel centers, in metres."""
 
 
 class RerunInspectorAseKeyframeConfig(BaseConfig):
@@ -239,7 +270,12 @@ class RerunInspectorAseKeyframeConfig(BaseConfig):
 
 
 class RerunInspectorPrimitivesConfig(BaseConfig):
-    """Primitive toggles for the Rerun recording."""
+    """Choose actor-evidence and oracle-overlay layers for one recording.
+
+    Semidense points, detected OBBs, and EVL voxels are actor-visible evidence.
+    GT mesh/OBBs, oracle-ranked candidates, and mesh-derived depth are labeled
+    diagnostic or evaluation overlays; toggling them never changes policy state.
+    """
 
     log_semidense: bool = True
     """Log VIN semidense world points."""
@@ -297,7 +333,12 @@ class RerunInspectorPrimitivesConfig(BaseConfig):
 
 
 class RerunOfflineInspectorConfig(TargetConfig[Any]):
-    """Top-level config-as-factory model for the offline Rerun inspector."""
+    """Compose source selection, recording lifecycle, and visualization policy.
+
+    The factory creates a one-run inspector: select immutable input, validate
+    visual inventory, initialize one Rerun sink, log configured entities, and
+    emit provenance metadata. It owns no dataset or rollout-store mutation.
+    """
 
     @property
     def target_type(self) -> type[Any]:

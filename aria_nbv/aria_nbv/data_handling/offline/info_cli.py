@@ -1,4 +1,10 @@
-"""Command-line diagnostics for immutable VIN offline stores."""
+"""Command-line diagnostics for immutable VIN offline stores.
+
+This module provides read-only summary, tree, sample-table, and deterministic
+random-index commands over :class:`VinOfflineStoreReader`. It validates through
+the strict manifest/version path and never rewrites manifests, split arrays,
+sample indices, shards, or optional diagnostic payloads.
+"""
 
 from __future__ import annotations
 

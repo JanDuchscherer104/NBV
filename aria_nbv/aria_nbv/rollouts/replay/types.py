@@ -1,4 +1,8 @@
-"""Minimal score contract consumed by finite-candidate replay."""
+"""Minimal score contract consumed by finite-candidate replay.
+
+This module provides the binding from compact evaluator scores to the full-shell hard mask and
+stable shell indices required for action selection.
+"""
 
 from __future__ import annotations
 

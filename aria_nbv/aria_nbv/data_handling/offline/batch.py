@@ -1,4 +1,11 @@
-"""Shared VIN oracle batch types and collation utilities."""
+"""Shared VIN oracle batch records, masking, and collation utilities.
+
+This module owns the training-facing boundary between actor-visible EFM/EVL
+state and GT-mesh-derived candidate supervision. It provides compact OBB and
+trajectory records plus :class:`VinOracleBatch`, whose candidate axis is
+prefix-masked and whose collation keeps poses, cameras, RRI, and metric fields
+aligned.
+"""
 
 from __future__ import annotations
 
@@ -25,8 +32,8 @@ if TYPE_CHECKING:
 class CompactObbBlock:
     """Collatable numeric OBB payload used by training and diagnostics.
 
-    `obbs` keeps the raw EFM `ObbTW` backing layout, not a simplified center
-    size representation. The shape is `(..., K, 34)`, where `K` is a padded box
+    ``obbs`` keeps the raw EFM ``ObbTW`` backing layout, not a simplified center
+    size representation. The shape is ``(..., K, 34)``, where ``K`` is a padded box
     slot count. Valid boxes must be determined through
     `ObbTW(obbs).get_padding_mask()`.
 
@@ -37,30 +44,33 @@ class CompactObbBlock:
     * `18:30`: `PoseTW` object-to-world/object-to-snippet transform payload;
     * `30`, `31`, `32`, `33`: semantic id, instance id, confidence, movable.
 
-    The tensor is stored as `float32` even for id-like columns; use `ObbTW`
-    properties such as `sem_id`, `inst_id`, `prob`, `bb3_center_world`, and
-    `bb3_diagonal` when interpreting rows.
+    The tensor is stored as ``float32`` even for id-like columns; use ``ObbTW``
+    properties such as ``sem_id``, ``inst_id``, ``prob``,
+    ``bb3_center_world``, and ``bb3_diagonal`` when interpreting rows. The
+    container is boundary-neutral: :attr:`VinOracleBatch.gt_obbs` is
+    oracle/evaluation data, while :attr:`VinOracleBatch.detected_obbs` is
+    actor-visible EVL evidence.
     """
 
     obbs: Tensor
-    """OBB tensor with shape ``(..., K, 34)`` using EFM ``ObbTW`` layout."""
+    """``Tensor["... K 34", float32]`` padded boxes in the EFM ``ObbTW`` layout."""
 
     sem_id_to_name: dict[int, str] | None = None
     """Optional sparse semantic id to class-name map."""
 
     probs: Tensor | None = None
-    """Optional class probabilities aligned with ``obbs``."""
+    """Optional ``Tensor["... K C", float32]`` class probabilities aligned to box rows."""
 
 
 @dataclass(slots=True)
 class CompactTrajectoryBlock:
-    """Trajectory metadata persisted alongside VIN snippet poses."""
+    """Preserve MPS/EFM timing and gravity metadata beside VIN trajectory poses."""
 
     time_ns: Tensor | None = None
-    """Pose timestamps with shape ``(F,)`` when available."""
+    """Optional ``Tensor["F", int64]`` Aria device-clock pose timestamps."""
 
     gravity_in_world: Tensor | None = None
-    """Gravity vector in world frame with shape ``(3,)`` when available."""
+    """Optional ``Tensor["3", float32]`` world-frame gravity in metres per second squared."""
 
 
 @dataclass(slots=True)
@@ -72,48 +82,55 @@ class VinOracleBatch:
         candidate_poses_world_cam: ``PoseTW["N 12"]`` or ``PoseTW["B N 12"]`` candidate poses as world←camera.
         reference_pose_world_rig: ``PoseTW["12"]`` or ``PoseTW["B 12"]`` reference pose as world←rig_reference.
         rri: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` oracle RRI per candidate.
-        pm_dist_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` Chamfer distance before (broadcasted).
-        pm_dist_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` Chamfer distance after (per-candidate).
-        pm_acc_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` accuracy distance before.
-        pm_comp_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` completeness distance before.
-        pm_acc_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` accuracy distance after.
-        pm_comp_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` completeness distance after.
-        p3d_cameras: PyTorch3D cameras used for depth rendering/unprojection (same ordering as candidates).
+        pm_dist_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view bidirectional error in square metres (broadcasted).
+        pm_dist_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view bidirectional error in square metres (per candidate).
+        pm_acc_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view point-to-mesh error in square metres.
+        pm_comp_before: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view mesh-to-point error in square metres.
+        pm_acc_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view point-to-mesh error in square metres.
+        pm_comp_after: ``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view mesh-to-point error in square metres.
+        p3d_cameras: Actor-visible candidate calibration and world-to-view transforms, aligned with candidates.
         candidate_count: Number of valid candidates (scalar or batched vector). When
             absent, runtime code falls back to the full candidate width.
         scene_id: ASE scene id for diagnostics (string or list when batched).
         snippet_id: Snippet id (tar key/url stem) for diagnostics (string or list when batched).
         backbone_out: Optional cached EVL backbone outputs.
+
+    Actor-visible inputs are the snippet view, candidate poses and PyTorch3D
+    calibration/transforms, EVL backbone output, detected OBBs, and trajectory
+    metadata. Candidate RRI/distance fields, mesh-derived renders, and GT OBBs
+    are supervision/evaluation assets. ``candidate_count`` defines the valid
+    prefix; padded candidates must be masked rather than interpreted as
+    low-quality actions.
     """
 
     efm_snippet_view: EfmSnippetView | VinSnippetView | None
-    """Optional snippet view (None when loading from cache)."""
+    """Optional actor-visible raw EFM view or compact MPS-derived VIN view."""
     candidate_poses_world_cam: PoseTW
-    """Candidate camera poses in world frame."""
+    """``PoseTW["N 12"]`` or ``PoseTW["B N 12"]`` world←camera candidates."""
 
     reference_pose_world_rig: PoseTW
-    """Reference rig pose in world frame."""
+    """``PoseTW["12"]`` or ``PoseTW["B 12"]`` world←rig reference poses."""
 
     rri: Tensor
-    """Oracle RRI target per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` dimensionless oracle RRI."""
 
     pm_dist_before: Tensor
-    """Pre-observation point-map distance per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view bidirectional error in square metres."""
 
     pm_dist_after: Tensor
-    """Post-observation point-map distance per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view bidirectional error in square metres."""
 
     pm_acc_before: Tensor
-    """Pre-observation point-map accuracy metric per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view point-to-mesh error in square metres."""
 
     pm_comp_before: Tensor
-    """Pre-observation point-map completeness metric per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` pre-view mesh-to-point error in square metres."""
 
     pm_acc_after: Tensor
-    """Post-observation point-map accuracy metric per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view point-to-mesh error in square metres."""
 
     pm_comp_after: Tensor
-    """Post-observation point-map completeness metric per candidate."""
+    """``Tensor["N", float32]`` or ``Tensor["B N", float32]`` post-view mesh-to-point error in square metres."""
 
     scene_id: str | list[str]
     """Scene identifier or batched list of identifiers."""
@@ -122,25 +139,29 @@ class VinOracleBatch:
     """Snippet identifier or batched list of identifiers."""
 
     p3d_cameras: PerspectiveCameras
-    """PyTorch3D cameras aligned with the candidate set."""
+    """Actor-visible calibration and world-to-view transforms aligned with candidates."""
 
     candidate_count: Tensor | None = None
-    """Number of valid candidates (scalar or batched vector)."""
+    """``Tensor["", int64]`` or ``Tensor["B", int64]`` valid candidate-prefix lengths."""
 
     backbone_out: EvlBackboneOutput | None = None
-    """Optional cached EVL backbone outputs (used to skip backbone inference)."""
+    """Optional actor-visible EVL evidence tied to serialized source config.
+
+    Offline manifests record resolved asset paths but no checkpoint-content
+    hash, so callers must not treat this field as cryptographic provenance.
+    """
 
     gt_obbs: CompactObbBlock | None = None
-    """Optional compact GT OBB payload."""
+    """Optional ASE GT OBBs for label matching/evaluation, never actor-visible input."""
 
     detected_obbs: CompactObbBlock | None = None
-    """Optional compact detected OBB payload."""
+    """Optional actor-visible EVL predicted/tracked OBB evidence."""
 
     trajectory: CompactTrajectoryBlock | None = None
-    """Optional trajectory timing and gravity metadata."""
+    """Optional actor-visible MPS/EFM timing and world-frame gravity metadata."""
 
     def resolved_candidate_count(self, *, device: torch.device | None = None) -> Tensor:
-        """Return the valid candidate count as a scalar or batched vector."""
+        """Return clamped valid-prefix lengths as ``Tensor["", int64]`` or ``Tensor["B", int64]``."""
 
         poses = self.candidate_poses_world_cam.tensor()
         target_device = device or poses.device
@@ -177,7 +198,7 @@ class VinOracleBatch:
         return counts.clamp(min=0, max=max_candidates)
 
     def candidate_valid_mask(self, *, device: torch.device | None = None) -> Tensor:
-        """Return a prefix mask that marks valid candidates."""
+        """Return ``Tensor["N", bool]`` or ``Tensor["B N", bool]`` valid-prefix masks."""
 
         poses = self.candidate_poses_world_cam.tensor()
         counts = self.resolved_candidate_count(device=device)

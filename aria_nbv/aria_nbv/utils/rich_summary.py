@@ -1,15 +1,30 @@
+"""Compact tensor summaries and Rich trees for diagnostics.
+
+This module owns both the structured summary dictionaries used by model and
+dataset diagnostics and their optional Rich rendering. It inspects
+EFM3D tensor wrappers without mutating or moving their underlying tensors;
+callers retain device and lifetime ownership.
+"""
+
 from typing import Any
 
 import torch
+from efm3d.aria.camera import CameraTW
+from efm3d.aria.obb import ObbTW
+from efm3d.aria.pose import PoseTW
+from efm3d.aria.tensor_wrapper import TensorWrapper
 from rich.text import Text
 from rich.tree import Tree
 from torch import Tensor
 
-from .summary import _extract_tensor, _tensor_summary
 
+def summarize(val: Any, *, include_stats: bool = False) -> Any:
+    """Describe tensor-like values without copying their payloads.
 
-def summarize(val: Tensor | Any, *, include_stats: bool = False) -> Any:
-    """Small helper for succinct repr output."""
+    Tensor wrappers are reduced to shape, dtype, and device metadata. Floating
+    statistics are computed over finite elements only when `include_stats` is
+    true; lists are represented by length and all other values pass through.
+    """
     if val is None:
         return None
     if isinstance(val, list):
@@ -21,8 +36,36 @@ def summarize(val: Tensor | Any, *, include_stats: bool = False) -> Any:
     return val
 
 
+def _extract_tensor(val: Any) -> Tensor | None:
+    """Return the storage tensor exposed by a supported EFM3D wrapper."""
+    if isinstance(val, Tensor):
+        return val
+    if isinstance(val, PoseTW):
+        return val.matrix
+    if isinstance(val, (TensorWrapper, CameraTW, ObbTW)):
+        data = val.tensor() if callable(getattr(val, "tensor", None)) else val.tensor  # type: ignore[operator]
+        return data
+    return None
+
+
+def _tensor_summary(tensor: Tensor, *, include_stats: bool = False) -> dict[str, Any]:
+    """Build JSON-compatible metadata for one tensor."""
+    summary: dict[str, Any] = {
+        "shape": tuple(tensor.shape),
+        "dtype": str(tensor.dtype),
+        "device": str(tensor.device),
+    }
+    if tensor.numel() and torch.is_floating_point(tensor) and include_stats:
+        finite = tensor[torch.isfinite(tensor)]
+        if finite.numel():
+            summary["min"] = float(finite.min())
+            summary["max"] = float(finite.max())
+            summary["mean"] = float(finite.mean())
+    return summary
+
+
 def summarize_shape(value: Any) -> str:
-    """Return a compact shape/dtype/device string using `summarize`."""
+    """Render tensor shape, dtype, and device as one compact status string."""
     summary = summarize(value)
     if summary is None:
         return "None"
@@ -198,6 +241,12 @@ def capture_tree(tree: Tree) -> str:
 def build_nested(
     flat_sample: dict[str, Any], show_semidense: bool = True, show_gt: bool = True
 ) -> tuple[dict[str, Any], dict[tuple[str, ...], str]]:
+    """Expand EFM `#`/`+` flat keys into a diagnostic-only nested mapping.
+
+    Returns both the nested values and a reverse path map to the original flat
+    keys. Optional filters hide semi-dense or oracle GT branches from display;
+    they do not alter the source sample.
+    """
     nested: dict[str, Any] = {}
     path_to_flat: dict[tuple[str, ...], str] = {}
     for k, v in flat_sample.items():

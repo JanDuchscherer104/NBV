@@ -1,4 +1,13 @@
-"""Semantic-id class-name helpers shared by data and visualization code."""
+"""Normalize EFM semantic-id metadata for data and visualization consumers.
+
+This module provides tolerant normalization of sparse mappings or legacy dense
+name sequences and a single class-name lookup with a numeric fallback. It owns
+presentation-facing canonicalization only; it does not remap stored semantic
+ids, infer categories, or define the dataset ontology.
+
+Sparse mappings and legacy dense sequences are converted to one integer-keyed
+representation without treating unknown numeric ids as meaningful labels.
+"""
 
 from __future__ import annotations
 

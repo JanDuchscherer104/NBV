@@ -1,4 +1,8 @@
-"""Optuna sweep exploration panel."""
+"""Read-only Optuna study exploration for local sweep databases.
+
+The panel provides objective traces, parameter effects and interactions,
+bootstrap evidence, importance estimates, and duplicate-configuration audits.
+"""
 
 from __future__ import annotations
 
@@ -559,7 +563,8 @@ def _duplicate_configs(df: pd.DataFrame, *, params: list[str]) -> pd.DataFrame:
 
 
 def render_optuna_sweep_page() -> None:
-    """Render Optuna sweep exploration panel."""
+    """Render read-only objective and parameter diagnostics for one study."""
+
     st.header("Optuna Sweep Explorer")
     _info_popover(
         "optuna sweep",

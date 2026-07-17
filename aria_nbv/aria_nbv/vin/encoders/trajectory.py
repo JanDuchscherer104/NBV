@@ -1,6 +1,6 @@
 """Trajectory encoders for EFM snippet rig poses.
 
-The active trajectory encoder reuses the VIN candidate pose encoder per frame
+This module owns a trajectory encoder that reuses the VIN candidate pose encoder per frame
 and then pools the encoded sequence into optional global context features.
 """
 
@@ -35,7 +35,7 @@ class TrajectoryEncodingOutput:
 
 
 class TrajectoryEncoderConfig(TargetConfig["TrajectoryEncoder"]):
-    """Configuration for `TrajectoryEncoder`."""
+    """Configure per-frame pose encoding and sequence reduction."""
 
     @property
     def target_type(self) -> type["TrajectoryEncoder"]:
@@ -59,7 +59,7 @@ class TrajectoryEncoder(nn.Module):
 
     @property
     def out_dim(self) -> int:
-        """Return the output embedding dimension."""
+        """Return the per-frame and pooled trajectory embedding width."""
         return int(self.pose_encoder.out_dim)
 
     def _ensure_batch(self, pose: PoseTW) -> PoseTW:

@@ -24,23 +24,24 @@ ScalarSequence = Sequence[float] | Sequence[int] | Sequence[bool] | np.ndarray |
 
 @dataclass(frozen=True)
 class CandidateFrustumLineStrips:
-    """Rerun-ready candidate frustum geometry in the world frame.
+    """Rerun-ready geometry aligned to one candidate axis ``N``.
 
-    Attributes:
-        line_strips: One ``(P, 3)`` NumPy array per candidate.  Each array is a
-            continuous strip with repeated vertices so the frustum ring and
-            camera rays render as one candidate-level strip in Rerun.
-        labels: One stable label per candidate.
-        centers_world: Camera centers with shape ``(N, 3)`` in metres.
-        corners_world: Image-plane corners with shape ``(N, 4, 3)`` in metres.
-            Corner order is top-left, top-right, bottom-right, bottom-left in
-            the source camera image.
+    Every point is expressed in the physical world frame in metres. Labels may
+    expose validity and oracle RRI for diagnostics, but those values do not
+    alter geometry or convert invalid actions into low-scoring valid actions.
     """
 
     line_strips: list[FloatArray]
+    """One ``ndarray["12 3", float64]`` continuous frustum strip per candidate."""
+
     labels: list[str]
+    """Stable human-readable metadata labels aligned one-to-one with ``N``."""
+
     centers_world: FloatArray
+    """Camera centers as ``ndarray["N 3", float64]`` in world metres."""
+
     corners_world: FloatArray
+    """Image-plane corners as ``ndarray["N 4 3", float64]`` in world metres."""
 
 
 def frusta_from_camera_tw(
@@ -57,23 +58,24 @@ def frusta_from_camera_tw(
     """Build world-frame frustum line strips from typed ``PoseTW`` and ``CameraTW``.
 
     Args:
-        poses_world_cam: ``PoseTW`` storing ``T_world_cam`` for one or more
-            candidate cameras.
+        poses_world_cam: ``PoseTW`` with underlying
+            ``Tensor["N 12", float32]`` storing physical world-from-camera
+            transforms.
         camera: Matching ``CameraTW`` intrinsics.  A single camera is broadcast
             across all poses; a batched camera must match the flattened pose
             count.
         depth_m: Metric depth of the displayed image-plane corners along the
             camera +Z ray direction.
-        candidate_ids: Optional stable candidate ids for labels.
-        ranks: Optional candidate ranks for labels.
-        oracle_rri: Optional oracle RRI values for labels.
-        validity: Optional validity mask for labels.
+        candidate_ids: Optional ``Tensor["N", int64]`` stable ids for labels.
+        ranks: Optional ``Tensor["N", int64]`` diagnostic ranks.
+        oracle_rri: Optional ``Tensor["N", float32]`` oracle-only labels.
+        validity: Optional ``Tensor["N", bool]`` hard action-validity mask.
         display_cw90: If true, apply the historical CW90 display-only local
             roll to copied output arrays.  The input poses and cameras are never
             mutated.
 
     Returns:
-        `CandidateFrustumLineStrips` with all points in the world frame.
+        :class:`CandidateFrustumLineStrips` with all points in world metres.
     """
 
     _validate_depth(depth_m)
@@ -128,21 +130,21 @@ def frusta_from_p3d_cameras(
     labels and display transforms remain tied to explicit ``T_world_cam`` poses.
 
     Args:
-        poses_world_cam: ``PoseTW`` storing ``T_world_cam`` for the candidate
-            cameras.  Single, ``(N, 12)``, and flattened ``(..., 12)`` batches are
-            accepted.
+        poses_world_cam: ``PoseTW`` storing world-from-camera transforms.
+            Single, ``Tensor["N 12", float32]``, and flattened
+            ``Tensor["... 12", float32]`` batches are accepted.
         cameras: Matching PyTorch3D cameras from the renderer or offline store.
             A single PyTorch3D camera is broadcast across all poses; otherwise
             its batch length must match the flattened pose count.
         depth_m: Metric +Z camera depth for the displayed corner plane.
-        candidate_ids: Optional stable candidate ids for labels.
-        ranks: Optional candidate ranks for labels.
-        oracle_rri: Optional oracle RRI values for labels.
-        validity: Optional validity mask for labels.
+        candidate_ids: Optional ``Tensor["N", int64]`` stable ids for labels.
+        ranks: Optional ``Tensor["N", int64]`` diagnostic ranks.
+        oracle_rri: Optional ``Tensor["N", float32]`` oracle-only labels.
+        validity: Optional ``Tensor["N", bool]`` hard action-validity mask.
         display_cw90: If true, apply CW90 only to copied output arrays.
 
     Returns:
-        `CandidateFrustumLineStrips` with all points in the world frame.
+        :class:`CandidateFrustumLineStrips` with all points in world metres.
     """
 
     _validate_depth(depth_m)
@@ -181,14 +183,14 @@ def apply_display_cw90(
     """Return a copy with the display-only CW90 local roll applied.
 
     Args:
-        frusta: Existing frustum output to rotate.  The arrays inside this
+        frusta: Existing world-frame frustum output to rotate. The arrays inside this
             object are never mutated.
         poses_world_cam: ``PoseTW`` used to define each candidate's local camera
             frame for the display roll.
         undo: If true, apply the inverse 90 degree roll.
 
     Returns:
-        A new `CandidateFrustumLineStrips` instance with copied arrays.
+        A new :class:`CandidateFrustumLineStrips` with copied world-frame arrays.
     """
 
     poses_flat = _flatten_poses(poses_world_cam)
@@ -223,11 +225,11 @@ def candidate_labels(
 
     Args:
         count: Number of candidate labels to produce.
-        candidate_ids: Optional candidate identifiers.  Defaults to
+        candidate_ids: Optional ``Tensor["N", int64]`` identifiers. Defaults to
             ``range(count)``.
-        ranks: Optional candidate ranks.
-        oracle_rri: Optional oracle RRI values.
-        validity: Optional candidate validity mask.
+        ranks: Optional ``Tensor["N", int64]`` diagnostic ranks.
+        oracle_rri: Optional ``Tensor["N", float32]`` oracle/evaluation values.
+        validity: Optional ``Tensor["N", bool]`` hard candidate-validity mask.
 
     Returns:
         One stable, human-readable label per candidate.
@@ -277,7 +279,7 @@ def _camera_tw_frustum_vertices(
 
 
 def _camera_tw_image_corners(camera: CameraTW) -> torch.Tensor:
-    """Return image-boundary corners as ``Tensor[1, 4, 2]`` in pixel space."""
+    """Return image-boundary corners as ``Tensor["1 4 2", float32]`` in pixels."""
 
     size = camera.size.reshape(-1, 2)[0].to(device=camera.device, dtype=camera.dtype)
     width = size[0]
@@ -295,7 +297,7 @@ def _camera_tw_image_corners(camera: CameraTW) -> torch.Tensor:
 
 
 def _p3d_corner_points_world(cameras: PerspectiveCameras, *, depth_m: float) -> torch.Tensor:
-    """Unproject full image corners through PyTorch3D using project conventions."""
+    """Unproject corners as ``Tensor["N 4 3", float32]`` in world metres."""
 
     num_cams = int(cameras.R.shape[0])
     device = cameras.R.device
@@ -350,7 +352,7 @@ def _line_strip_from_vertices(center_world: np.ndarray, corners_world: np.ndarra
 
 
 def _flatten_poses(poses_world_cam: PoseTW) -> PoseTW:
-    """Flatten a ``PoseTW`` candidate batch to ``PoseTW[N, 12]``."""
+    """Flatten a candidate batch to ``PoseTW`` backed by ``Tensor["N 12", float32]``."""
 
     tensor = poses_world_cam.tensor()
     if tensor.shape[-1] != 12:

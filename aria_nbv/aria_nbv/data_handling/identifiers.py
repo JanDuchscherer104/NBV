@@ -1,4 +1,8 @@
-"""Canonical conversions between raw and compact ASE-ATEK identifiers."""
+"""Canonical conversions between raw and compact ASE-ATEK identifiers.
+
+These pure helpers own identifier normalization only. Shard resolution and raw
+snippet loading remain in :mod:`aria_nbv.data_handling.raw`.
+"""
 
 from __future__ import annotations
 

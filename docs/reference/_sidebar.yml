@@ -155,6 +155,8 @@ website:
           file: reference/rollouts.inspection.qmd
         - text: manifest
           file: reference/rollouts.manifest.qmd
+        - text: read_model
+          file: reference/rollouts.read_model.qmd
         - text: replay
           file: reference/rollouts.replay.qmd
           contents:

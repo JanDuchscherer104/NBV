@@ -19,4 +19,16 @@ the nested module pages for ASE/EFM snippets, strict VIN offline stores, target
 selection, rollouts, rendering, RRI metrics, training entrypoints, and VIN
 one-step scoring internals.
 
+## Package Dependencies
+
+The generated diagram below aggregates static Python imports between public
+top-level packages. Edge labels count importing modules. It is a navigation aid,
+not a runtime call graph or an actor/oracle data-flow model.
+
+```{mermaid}
+%%| label: fig-api-package-dependencies
+%%| fig-cap: "Static cross-package imports in the public ARIA-NBV package surface."
+%%| file: _package_dependencies.mmd
+```
+
 {{< include _api_index.md >}}

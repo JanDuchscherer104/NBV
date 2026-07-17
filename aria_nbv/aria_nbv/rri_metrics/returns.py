@@ -1,4 +1,18 @@
-"""Differentiable gains and returns for finite-horizon NBV evaluation."""
+r"""Differentiable gains and returns for finite-horizon NBV evaluation.
+
+This module provides reducers that share the hard-mask contract used by rollout replay: invalid or
+unsupervised actions are ignored, never converted into low rewards. For root
+error $d_0$, final error $d_H$, and selected root-normalized rewards $r_t$,
+
+$$
+G_0^{(H)}=\sum_{t=0}^{H-1}\gamma^t r_t,
+\qquad
+J_e^{(H)}=\frac{d_0-d_H}{d_0+\epsilon}.
+$$
+
+Python mapping reducers serve inspection/UI paths; tensor reducers remain
+differentiable for batched evaluation and future finite-candidate ``Q_H`` use.
+"""
 
 from __future__ import annotations
 
@@ -47,10 +61,19 @@ class TorchRolloutMetrics:
     """
 
     discounted_return: Tensor
+    """``Tensor["B", float32]`` dimensionless discounted return; empty rows are ``NaN``."""
+
     endpoint_gain: Tensor
+    """``Tensor["B", float32]`` dimensionless root-normalized endpoint gain."""
+
     endpoint_log_gain: Tensor
+    """``Tensor["B", float32]`` dimensionless logarithmic endpoint gain."""
+
     valid_steps: Tensor
+    """``Tensor["B", int64]`` count of finite hard-valid selected rewards."""
+
     valid_endpoint: Tensor
+    """``Tensor["B", bool]`` comparability mask for finite non-negative endpoint errors."""
 
 
 def selected_target_rri(metrics: Mapping[str, Any]) -> float | None:

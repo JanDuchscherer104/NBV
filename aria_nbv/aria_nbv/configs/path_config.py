@@ -1,3 +1,14 @@
+"""Canonical filesystem locations and path-resolution policy.
+
+This module owns :class:`PathConfig`, singleton root discovery, and validation
+that rebases configured directories beneath the selected project/data roots.
+All project-relative paths are resolved against one singleton project root.
+Directory fields are created eagerly when permitted; file paths are resolved
+without fabricating missing artifacts so callers receive actionable errors.
+Dataset download, artifact contents, and domain-specific existence checks
+remain the responsibility of their consuming subsystems.
+"""
+
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -13,7 +24,12 @@ def _default_root() -> Path:
 
 
 class PathConfig(SingletonConfig):
-    """Centralise all filesystem locations for the aria_nbv project."""
+    """Centralize filesystem ownership for package, data, and run artifacts.
+
+    Reinitializing the singleton with a different `root` rebases fields that
+    still equal their old root-derived defaults while preserving explicit
+    overrides. Paths exposed by this config are absolute after validation.
+    """
 
     _ROOT_RELATIVE_DEFAULTS: ClassVar[dict[str, Path]] = {
         "data_root": Path(".data"),
@@ -32,7 +48,7 @@ class PathConfig(SingletonConfig):
     root: Path = Field(
         default_factory=_default_root,
     )
-    "Project root."
+    """Absolute repository root used to resolve relative configuration paths."""
     data_root: Path = Field(default_factory=lambda: Path(".data"))
     """Root directory for all data (downloaded datasets, meshes, etc.)."""
 
@@ -45,6 +61,7 @@ class PathConfig(SingletonConfig):
     """Directory used by Lightning checkpoints."""
 
     external_checkpoints: Path | None = Field(default_factory=lambda: Path(".logs") / "ckpts")
+    """Optional directory containing checkpoints produced outside this project."""
 
     wandb: Path = Field(default_factory=lambda: Path(".logs") / "wandb")
     """Directory used by Weights & Biases for local run artifacts."""
@@ -65,6 +82,7 @@ class PathConfig(SingletonConfig):
     """Path to cached ASE metadata JSON."""
 
     offline_cache_dir: Path = Field(default_factory=lambda: Path("offline_cache"))
+    """VIN offline-store directory, resolved below `data_root_massive` when set."""
 
     ase_meshes: Path = Field(default_factory=lambda: Path(".data") / "ase_meshes")
     """Directory for downloaded ASE ground truth meshes."""
@@ -75,6 +93,7 @@ class PathConfig(SingletonConfig):
     """Directory for cropped/simplified meshes persisted for reuse."""
 
     external_dir: Path = Field(default=Path("external"))
+    """Directory containing pinned external source checkouts such as EFM3D."""
 
     @classmethod
     def _rebase_root_relative_kwargs(
@@ -229,6 +248,11 @@ class PathConfig(SingletonConfig):
         return checkpoint_path
 
     def resolve_external_checkpoint_path(self, path: str) -> Path | None:
+        """Resolve and validate a checkpoint under `external_checkpoints`.
+
+        Absolute paths are accepted unchanged. Relative paths are interpreted
+        below the configured external-checkpoint root and must already exist.
+        """
         ckpt_pth = Path(path)
         if not ckpt_pth.is_absolute():
             ckpt_pth = self.external_checkpoints / ckpt_pth

@@ -1,4 +1,10 @@
-"""Metadata management for ASE dataset download manifests."""
+"""Parse ASE mesh and ATEK shard download manifests into scene records.
+
+This module owns the acquisition-time metadata boundary: CDN mesh URLs and
+hashes identify oracle assets, while ATEK config/shard entries identify the
+tensorized ASE snippets later adapted into EFM views. It does not read VRS/MPS
+payload tensors or decide training splits.
+"""
 
 from __future__ import annotations
 
@@ -9,16 +15,31 @@ from pathlib import Path
 
 @dataclass
 class SceneMetadata:
-    """Aggregated metadata for one ASE scene across ATEK configs."""
+    """Describe one ASE scene for a specific ATEK acquisition variant."""
 
     scene_id: str
+    """Stable ASE scene identifier used by shard directories and mesh pairing."""
+
     has_gt_mesh: bool
+    """Whether the URL manifest exposes an ASE ground-truth mesh for evaluation."""
+
     mesh_url: str | None
+    """Optional CDN URL for the zipped GT mesh; not actor-visible sample data."""
+
     mesh_sha: str | None
+    """Optional expected SHA-1 digest used to verify the downloaded mesh archive."""
+
     shard_count: int
+    """Number of ATEK WebDataset shards selected for ``atek_config``."""
+
     shard_ids: list[str]
+    """Normalized shard identifiers with the manifest's ``_tar`` suffix removed."""
+
     atek_config: str
+    """ATEK payload variant, such as ``efm`` or ``efm_eval``."""
+
     total_frames: int
+    """Manifest frame count when available; zero for shard-only entries."""
 
 
 class ASEMetadata:
@@ -112,6 +133,16 @@ class ASEMetadata:
     def filter_scenes(
         self, min_shards: int = 0, require_mesh: bool = False, config: str | None = None
     ) -> list[SceneMetadata]:
+        """Filter scene records by ATEK variant, shard count, and GT-mesh availability.
+
+        Args:
+            min_shards: Minimum number of manifest shards required.
+            require_mesh: Whether to keep only scenes with a GT mesh URL.
+            config: Optional ATEK variant; ``None`` uses the aggregate scene view.
+
+        Returns:
+            Matching scene records without mutating the parsed manifests.
+        """
         scenes = list(self.scenes_by_config.get(config, {}).values()) if config else list(self.scenes.values())
         if require_mesh:
             scenes = [s for s in scenes if s.has_gt_mesh]
@@ -119,6 +150,15 @@ class ASEMetadata:
         return scenes
 
     def get_scenes(self, n: int | None = None, max_shards: int | None = None) -> list[SceneMetadata]:
+        """Return scene records in stable ID order with an optional shard cap.
+
+        Args:
+            n: Optional maximum number of scenes.
+            max_shards: Optional per-scene shard limit applied to returned copies.
+
+        Returns:
+            Sorted scene records; the parser-owned records remain unchanged.
+        """
         scenes = sorted(self.scenes.values(), key=lambda s: s.scene_id)
         if max_shards is not None:
             scenes = [
@@ -137,6 +177,12 @@ class ASEMetadata:
         return scenes[:n] if n else scenes
 
     def save(self, path: Path) -> None:
+        """Persist the aggregate scene inventory as compact JSON.
+
+        The snapshot records mesh-scene membership and aggregate
+        :class:`SceneMetadata` values; URL-manifest files remain the authority
+        for per-config reconstruction.
+        """
         data = {
             "mesh_scene_ids": list(self.mesh_scene_ids),
             "scenes": [scene.__dict__ for scene in self.scenes.values()],
@@ -145,6 +191,14 @@ class ASEMetadata:
 
     @staticmethod
     def load(path: Path) -> "ASEMetadata":
+        """Load an aggregate scene snapshot while retaining its manifest directory.
+
+        Args:
+            path: JSON snapshot produced by :meth:`ASEMetadata.save`.
+
+        Returns:
+            Parsed metadata with aggregate scene records replaced by the snapshot.
+        """
         data = json.loads(path.read_text())
         url_dir = path.parent
         meta = ASEMetadata(url_dir)

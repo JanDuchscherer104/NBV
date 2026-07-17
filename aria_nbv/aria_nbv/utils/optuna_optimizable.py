@@ -68,6 +68,7 @@ class Optimizable(BaseModel, Generic[T]):
         description: str | None = None,
         relies_on: dict[str, tuple[Any, ...]] | None = None,
     ) -> "Optimizable[float]":
+        """Describe a bounded floating-point search space."""
         return cls(
             target=float,
             low=low,
@@ -92,6 +93,7 @@ class Optimizable(BaseModel, Generic[T]):
         description: str | None = None,
         relies_on: dict[str, tuple[Any, ...]] | None = None,
     ) -> "Optimizable[int]":
+        """Describe a bounded integer search space with a fixed step."""
         return cls(
             target=int,
             low=low,
@@ -114,6 +116,7 @@ class Optimizable(BaseModel, Generic[T]):
         description: str | None = None,
         relies_on: dict[str, tuple[Any, ...]] | None = None,
     ) -> "Optimizable[Any]":
+        """Describe a search space over an explicit finite choice set."""
         return cls(
             categories=tuple(choices),
             name=name,

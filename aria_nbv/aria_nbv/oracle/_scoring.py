@@ -1,7 +1,27 @@
 r"""Private prepared point-mesh scoring shared by Oracle facades.
 
-Callers prepare scene or target evidence; this module computes point-mesh
-distances and delegates the RRI formula to :mod:`aria_nbv.rri_metrics.rri`.
+This module receives caller-prepared scene or target evidence, computes point-mesh
+distances, renders/backprojects candidate evidence when requested, and delegates
+the RRI formula to :mod:`aria_nbv.rri_metrics.rri`. Sampling, scene/target crop
+selection, and hard-validity policy remain with callers; this module owns only
+the shared prepared-scoring boundary.
+
+The implemented scalar score is
+
+$$
+\mathrm{RRI}(q) =
+\frac{\Delta(P_t, M) - \Delta(P_t \cup P_q, M)}
+     {\max(\Delta(P_t, M), \epsilon)}
+$$
+
+where $\Delta$ is the configured point-mesh error. Target-specific callers pass
+target-cropped points and meshes; invalid crops raise upstream and must not be
+silently converted to scene-level labels.
+
+In the thesis target-first pipeline, ASE evaluation depth, rendered candidate
+depth, and matched GT mesh crops are oracle-only supervision. Actor-visible VIN
+features remain outside this module. Candidate invalidity is likewise owned by
+the upstream hard mask: a finite negative RRI is low utility, not invalidity.
 """
 
 from __future__ import annotations
@@ -36,17 +56,19 @@ class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
 
     @property
     def target_type(self) -> type["PreparedRriScorer"]:
+        """Return the prepared scorer constructed by ``setup_target()``."""
+
         return PreparedRriScorer
 
     fusion_voxel_size_m: float = Field(default=0.0, ge=0.0)
-    """Optional deterministic voxel-fusion size for ``P_t`` and ``P_t ∪ P_q``."""
+    """Voxel edge length in metres for deterministic fusion; ``0`` disables voxel aggregation."""
 
     fusion_max_points: int | None = Field(default=None, ge=1)
-    """Optional deterministic point cap applied after voxel fusion."""
+    """Optional point cap applied after fusion, with candidate evidence reserved in capped unions."""
 
 
 class PreparedRriScorer:
-    """Compute RRI from already prepared current, candidate, and mesh evidence.
+    r"""Compute geometry-grounded oracle labels for candidate views.
 
     Conceptual steps:
         1. Merge ``P_t`` (current eval points) with candidate view point cloud
@@ -55,7 +77,13 @@ class PreparedRriScorer:
            comparable density when evaluating point-mesh distances.
         3. Compute accuracy/completeness distances to the GT mesh using the
            PyTorch3D backend.
-        4. Form RRI = (d_before - d_after) / d_before and return diagnostics.
+        4. Form $\mathrm{RRI}=(d_\mathrm{before}-d_\mathrm{after}) /
+           \max(d_\mathrm{before},10^{-12})$ and return diagnostics.
+
+    The facade scores geometry only; it does not decide whether a candidate is
+    a legal action. In particular, a zero-length candidate point cloud produces
+    zero improvement, while upstream masks and reason codes decide whether that
+    row is valid supervision.
     """
 
     config: PreparedRriScorerConfig
@@ -73,16 +101,38 @@ class PreparedRriScorer:
         gt_faces: torch.Tensor,
         extend: torch.Tensor,
     ) -> RriResult:
-        """Compute :class:`RriResult` for one or more candidates in a single forward pass.
+        r"""Compute candidate-aligned oracle RRI labels in one forward pass.
 
         Args:
-            points_t: ``Tensor['N_t', 3]`` current eval point cloud up to time *t*.
-            points_q: ``Tensor['N_q', 3]`` candidate-view point cloud rendered from GT.
-            gt_verts: ``Tensor['V', 3]`` ground-truth mesh vertices.
-            gt_faces: ``Tensor['F', 3]`` ground-truth mesh face indices (int64).
-            extend: ``Tensor[6]`` [xmin, xmax, ymin, ymax, zmin, zmax] AABB in world frame used to crop the GT mesh.
+            points_t ``Tensor["P_t 3", float32]``: Current evaluation points
+                in world frame, metres. Thesis labels use the observed-prefix
+                ASE GT-depth root rather than actor-visible MPS geometry.
+            points_q ``Tensor["C P_q 3", float32]``: Padded oracle-rendered
+                candidate point clouds in world frame, metres.
+            lengths_q ``Tensor["C", int64]``: Valid point count for each
+                candidate row in `points_q`.
+            gt_verts ``Tensor["V 3", float32]``: Oracle-only GT mesh vertices
+                in world frame, metres.
+            gt_faces ``Tensor["F 3", int64]``: Triangle indices into
+                `gt_verts`.
+            extend ``Tensor["6", float32]``: World-frame target AABB
+                ``[xmin, xmax, ymin, ymax, zmin, zmax]`` in metres. Faces with
+                any vertex inside the box are retained.
+
         Returns:
-            :class:`RriResult` containing scalar RRI and distance breakdowns.
+            :class:`RriResult` with ``Tensor["C", float32]`` dimensionless RRI
+            labels and squared-distance diagnostics in square metres.
+
+        Theory:
+            For candidate $q$, this computes
+
+            $$
+            \mathrm{RRI}(q)=\frac{D(P_t,M)-D(P_t\cup P_q,M)}
+                                  {\max(D(P_t,M),10^{-12})}.
+            $$
+
+            Values may be negative. Invalid actions must be excluded through
+            the caller's hard-validity contract, not assigned a low RRI.
         """
 
         gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)

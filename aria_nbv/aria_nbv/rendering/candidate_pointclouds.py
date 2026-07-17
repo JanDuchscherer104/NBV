@@ -4,6 +4,11 @@ Consumes a single `EfmSnippetView` and matching `CandidateDepths`
 to produce padded per-candidate point clouds, fused clouds with the collapsed
 semi-dense SLAM reconstruction, and a combined occupancy extent for cropping.
 
+This module owns vectorized unprojection, padding, semidense fusion, and bounds
+assembly in :class:`CandidatePointClouds`. Depth rasterization, candidate
+feasibility, target matching/cropping policy, and RRI scoring remain with their
+respective renderer, generator, and metric layers.
+
 The output is world-frame oracle evidence. Scene-level RRI uses the combined
 snippet/candidate extent; target-level RRI may further crop both candidate
 points and mesh geometry with the matched GT target OBB. Empty target crops or
@@ -29,15 +34,19 @@ class CandidatePointClouds:
     """Batched candidate point clouds plus fused semi-dense reconstruction."""
 
     points: Tensor
-    """Tensor['B', 'P', 3] padded candidate point clouds (world frame)."""
+    """Padded candidate points ``Tensor[\"C P 3\", float]`` in world metres."""
+
     lengths: Tensor
-    """Tensor['B'] actual point counts per candidate."""
+    """Valid point counts ``Tensor[\"C\", int64]`` for each padded row."""
+
     semidense_points: Tensor
-    """Tensor['K', 3] collapsed semi-dense SLAM point cloud."""
+    """Collapsed observed SLAM points ``Tensor[\"K 3\", float]`` in world metres."""
+
     semidense_length: Tensor
-    """Tensor[1] number of valid semi-dense points."""
+    """Observed point count ``Tensor[\"1\", int64]`` for serialization symmetry."""
+
     occupancy_bounds: Tensor
-    """Tensor[6] = [xmin, xmax, ymin, ymax, zmin, zmax] covering snippet + candidates."""
+    """World bounds ``Tensor[\"6\", float]`` ordered xmin/xmax/ymin/ymax/zmin/zmax."""
 
     def to_serializable(self) -> dict[str, object]:
         """Serialize this point-cloud batch into a cache-friendly CPU payload."""

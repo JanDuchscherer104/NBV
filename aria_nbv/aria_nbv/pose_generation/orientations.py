@@ -4,6 +4,11 @@ This module assigns camera frames after candidate centers have been sampled.
 It does not decide whether a candidate is valid; it only constructs base
 orientations and optional local jitter.
 
+It provides :class:`OrientationBuilder` plus local yaw, pitch, roll, and
+normalization helpers. Candidate positions and actor-visible target context are
+supplied by the generator, while pruning rules own feasibility decisions and
+renderers own camera projection.
+
 Theory:
     `forward_rig` copies the reference rig rotation, while `radial_away` and
     `radial_towards` align the camera with the reference-candidate ray. In

@@ -1,4 +1,9 @@
-"""VIN diagnostics tab renderers."""
+"""Typed facade for the VIN diagnostics tab renderers.
+
+The package exports the shared context plus focused views of summaries,
+geometry, transforms, evidence, encodings, tokens, ordinal outputs, and bin
+values.
+"""
 
 from __future__ import annotations
 

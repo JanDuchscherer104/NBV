@@ -1,4 +1,11 @@
-"""Shard planning and strict atomic rollout shard execution."""
+"""Plan deterministic shards and promote validated rollout stores atomically.
+
+Each manifest entry owns an ordered subset of immutable VIN source rows. A
+build writes a fresh temporary rollout Zarr store, validates it, records its
+owner sidecar, then renames the directory into place and writes ``_SUCCESS``
+last. Existing partial or mismatched paths are preserved for operator review
+rather than overwritten.
+"""
 
 from __future__ import annotations
 
@@ -34,10 +41,19 @@ class RolloutShardRunResult:
     """Result of one strict rollout shard build or resume check."""
 
     final_dir: Path
+    """Final promoted standalone rollout-store directory."""
+
     skipped: bool
+    """Whether an already validated, provenance-matching shard was reused."""
+
     success_path: Path
+    """Completion marker path written only after final promotion."""
+
     owner_path: Path
+    """Owner/provenance sidecar path carried through the promoted directory."""
+
     store_result: RolloutZarrWriteResult | None = None
+    """Fresh write summary, or ``None`` when a completed shard was skipped."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,14 +61,31 @@ class RolloutShardStatus:
     """Status for one planned rollout shard in a generation campaign."""
 
     shard_id: str
+    """Canonical generation-shard identifier from the campaign manifest."""
+
     split: str
+    """VIN dataset split owned by the shard."""
+
     final_dir: Path
+    """Deterministic final rollout-store directory for the shard."""
+
     status: Literal["succeeded", "failed", "incomplete", "missing"]
+    """Observed lifecycle state derived from final and failure markers."""
+
     num_source_rows: int
+    """Number of immutable VIN source rows assigned by the manifest."""
+
     success_path: Path
+    """Expected path of the write-last completion marker."""
+
     owner_path: Path
+    """Expected path of the promoted owner/provenance sidecar."""
+
     failed_markers: tuple[Path, ...] = ()
+    """Failure sidecars from attempts for this shard, ordered by path."""
+
     errors: tuple[str, ...] = ()
+    """Validation or lifecycle problems explaining an incomplete state."""
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return a stable JSON-compatible status payload."""
@@ -75,12 +108,22 @@ class RolloutShardCampaignStatus:
     """Status summary for all shards planned by one rollout manifest."""
 
     manifest_path: Path
+    """Resolved JSONL manifest that defines the campaign."""
+
     final_root: Path
+    """Directory under which manifest shard ids map to final stores."""
+
     shards: tuple[RolloutShardStatus, ...]
+    """Per-manifest-entry statuses in deterministic manifest order."""
 
     @property
     def counts(self) -> dict[str, int]:
-        """Return shard counts by status."""
+        """Count succeeded, failed, incomplete, and missing planned shards.
+
+        Returns:
+            Mapping containing every lifecycle status, including zero-count
+            states, so automation can consume a stable schema.
+        """
 
         counts = {"succeeded": 0, "failed": 0, "incomplete": 0, "missing": 0}
         for shard in self.shards:

@@ -1,4 +1,9 @@
-"""Backbone evidence tab for VIN diagnostics."""
+"""Actor-visible EVL backbone and scene-field evidence diagnostics.
+
+The tab provides thresholded occupancy, centerness, and configured scene-field
+channels in world coordinates, without using mesh renders or GT annotations as
+model evidence.
+"""
 
 from __future__ import annotations
 

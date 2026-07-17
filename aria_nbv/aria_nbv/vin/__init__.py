@@ -6,6 +6,9 @@ semidense projection features, and a CORAL ordinal head. It is the implemented
 seminar substrate and the myopic control for the thesis target-conditioned
 rollout work; it is not a full multi-step NBV policy.
 
+This package owns the stable imports for scorer protocols, actor-visible EVL
+adapters and feature banks, candidate encoders, predictions, and diagnostics.
+
 Inputs must preserve actor/oracle separation. EVL fields, candidate poses, and
 semidense observations are actor-visible features. Oracle RRI labels, GT meshes,
 and target crops are supervision/evaluation assets.

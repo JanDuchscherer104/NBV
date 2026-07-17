@@ -1,4 +1,14 @@
-"""Pruning rules for candidate pose generation."""
+"""Mask-preserving pruning rules for finite candidate pose generation.
+
+Rules inspect the full sampled shell and update its aligned boolean validity
+mask in place. They never compact candidate rows, which preserves provenance
+and makes invalid actions distinguishable from merely low-value actions.
+
+This module provides the :class:`Rule` protocol, shared rule base, and concrete
+mesh-clearance, path-collision, motion-realism, and free-space checks. Candidate
+generation owns rule ordering and mask aggregation; renderers and RRI scorers
+consume the resulting valid set but do not reinterpret rejected rows as scores.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class Rule(Protocol):
-    """Callable pruning rule."""
+    """Protocol for one full-shell, mask-preserving candidate validity rule."""
 
     def __call__(self, ctx: CandidateContext) -> None: ...
 
@@ -34,6 +44,7 @@ class RuleBase:
         self._warned_backend = False
 
     def warn_once(self, message: str) -> None:
+        """Emit at most one backend-fallback warning per rule instance."""
         if not self._warned_backend:
             self.console.warn(message)
             self._warned_backend = True

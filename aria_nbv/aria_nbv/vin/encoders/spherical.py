@@ -39,6 +39,11 @@ class ShellShPoseEncoder(nn.Module):
     them into a learnable embedding space. The radius is encoded via **1D Fourier features** (on
     $r$ by default) and projected to a learnable embedding.
 
+    Spherical harmonics supply a directional basis, but the independent dense
+    projections, GELU layers, and concatenation do not preserve irreducible
+    representations. The emitted embedding is therefore a reference-frame
+    directional inductive bias, not an SO(3)-equivariant representation.
+
     Args:
         lmax: Maximum spherical harmonics degree.
         sh_out_dim: Output dimensionality after projecting each SH vector.
@@ -102,7 +107,7 @@ class ShellShPoseEncoder(nn.Module):
 
     @property
     def out_dim(self) -> int:
-        """Output embedding dimensionality."""
+        """Return the concatenated direction, radius, and scalar width."""
 
         base = 2 * self._sh_out_dim
         if self.include_radius:
@@ -169,6 +174,8 @@ class ShellShPoseEncoderConfig(TargetConfig[ShellShPoseEncoder]):
 
     @property
     def target_type(self) -> type[ShellShPoseEncoder]:
+        """Return the runtime shell encoder type constructed by this config."""
+
         return ShellShPoseEncoder
 
     kind: Literal["shell_sh"] = "shell_sh"

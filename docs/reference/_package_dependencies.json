@@ -1,0 +1,93 @@
+{
+  "description": "Static cross-package imports, collapsed to public top-level packages.",
+  "edges": [
+    {
+      "importing_modules": 21,
+      "source": "vin",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 10,
+      "source": "data_handling",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 10,
+      "source": "oracle",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 9,
+      "source": "oracle",
+      "target": "data_handling"
+    },
+    {
+      "importing_modules": 8,
+      "source": "data_handling",
+      "target": "configs"
+    },
+    {
+      "importing_modules": 8,
+      "source": "vin",
+      "target": "data_handling"
+    },
+    {
+      "importing_modules": 7,
+      "source": "lightning",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 7,
+      "source": "oracle",
+      "target": "pose_generation"
+    },
+    {
+      "importing_modules": 6,
+      "source": "lightning",
+      "target": "configs"
+    },
+    {
+      "importing_modules": 6,
+      "source": "pose_generation",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 5,
+      "source": "oracle",
+      "target": "rendering"
+    },
+    {
+      "importing_modules": 5,
+      "source": "rendering",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 5,
+      "source": "rollouts",
+      "target": "pose_generation"
+    },
+    {
+      "importing_modules": 5,
+      "source": "rollouts",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 4,
+      "source": "lightning",
+      "target": "data_handling"
+    }
+  ],
+  "packages": [
+    "configs",
+    "data_handling",
+    "lightning",
+    "oracle",
+    "pose_generation",
+    "rendering",
+    "rollouts",
+    "rri_metrics",
+    "targets",
+    "utils",
+    "vin"
+  ]
+}

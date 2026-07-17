@@ -1,4 +1,7 @@
-"""Pose-conditioned pooling modules for VIN scene fields."""
+"""Pose-conditioned pooling modules for VIN scene fields.
+
+This module owns candidate-query attention over shared voxel-grid tokens.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +22,12 @@ class PoseConditionedGlobalPool(nn.Module):
     Positional embeddings are added only to keys. Values stay pure field-content
     projections, so attention weights depend on position while the returned
     descriptors remain content summaries conditioned by pose.
+
+    Each candidate query attends to the same voxel-token set independently;
+    queries never attend to one another. Permuting the ``N_q`` pose rows thus
+    permutes the ``N_q`` outputs. The normalized position encoder makes the
+    block reference-frame-aware, but does not enforce SE(3) equivariance or a
+    graph-isomorphism invariant.
     """
 
     def __init__(
@@ -71,11 +80,11 @@ class PoseConditionedGlobalPool(nn.Module):
 
         Args:
             field: ``Tensor["B C D H W"]`` projected voxel field.
-            pose_enc: ``Tensor["B N E"]`` candidate pose embeddings.
+            pose_enc: ``Tensor["B N_q E", float32]`` candidate pose embeddings.
             pos_grid: ``Tensor["B 3 D H W"]`` normalized voxel positions.
 
         Returns:
-            ``Tensor["B N C"]`` global features for each candidate.
+            ``Tensor["B N_q C", float32]`` global features for each candidate.
         """
         if field.ndim != 5:
             raise ValueError(

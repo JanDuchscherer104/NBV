@@ -1,6 +1,6 @@
 """Build standalone target-RRI rollout replay stores from VIN offline rows.
 
-This writer is the first rollout-data generation path, not a migration of the
+This module owns the first rollout-data generation path, not a migration of the
 immutable VIN offline cache. It reads `VinOfflineDataset` samples with live
 `EfmSnippetView` snippets and GT meshes attached, samples oracle target tasks,
 generates fixed-count mixed candidate tables, scores valid candidates with the
@@ -75,16 +75,36 @@ class RolloutDatasetWriterStats:
     """
 
     samples_seen: int = 0
+    """Number of VIN source rows visited by the writer."""
+
     samples_without_snippet_or_mesh: int = 0
+    """Rows skipped because live snippet evidence or oracle mesh was absent."""
+
     targets_selected: int = 0
+    """Target tasks admitted for rollout generation before label-validity gates."""
+
     targets_label_invalid: int = 0
+    """Selected targets lacking an admissible oracle evaluation label."""
+
     target_invalid_skips: int = 0
+    """Targets skipped by target-level validity requirements."""
+
     rollout_invalid_skips: int = 0
+    """Generated roots skipped because rollout-level action checks failed."""
+
     rollouts_written: int = 0
+    """Root-target-recipe records handed to standalone Zarr persistence."""
+
     skipped_reasons: dict[str, int] = field(default_factory=dict)
+    """Operational skip counts keyed by stable diagnostic reason."""
 
     def skip(self, reason: str) -> None:
-        """Increment a named skip/failure counter."""
+        """Increment one operational skip reason without creating a label.
+
+        Training-relevant invalidity must still be represented by explicit
+        trace masks and versioned reason codes; this counter is build telemetry
+        only.
+        """
 
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
 
@@ -106,7 +126,13 @@ class RolloutRecipeConfig(BaseConfig):
 
     @staticmethod
     def default_suite() -> list["RolloutRecipeConfig"]:
-        """Return the default smoke recipe suite."""
+        """Return deterministic two-step recipes for local evidence builds.
+
+        The suite covers one factual path for random-valid and greedy policies
+        plus two retained branches for oracle-lookahead and temperature-softmax
+        policies. These recipe axes are rollout controls, not candidate-shell
+        widths; every step still persists its complete generated shell.
+        """
 
         return [
             RolloutRecipeConfig(
@@ -212,7 +238,12 @@ class RolloutRecipeConfig(BaseConfig):
 
 
 class SelectedDepthRetentionConfig(BaseConfig):
-    """High-resolution selected-action depth retention for rollout stores."""
+    """High-resolution oracle depth retained only for selected rollout actions.
+
+    Mesh-rendered depth supports successor-history reconstruction and audits.
+    It is not actor-visible evidence and is stored in the rollout destination,
+    never backfilled into the immutable VIN source cache.
+    """
 
     enabled: bool = True
     """Persist one selected-action depth map for every materialized rollout step."""
@@ -251,6 +282,8 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     @property
     def target_type(self) -> type["RolloutDatasetWriter"]:
+        """Return the concrete standalone rollout writer constructed by this config."""
+
         return RolloutDatasetWriter
 
     source: VinOfflineDatasetConfig = Field(

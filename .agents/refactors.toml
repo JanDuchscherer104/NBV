@@ -220,3 +220,20 @@ verification = [
   "du -sh <fresh_schema_1_store>.zarr <fresh_schema_1_store>.zarr/candidates/* | sort -h",
   "find <fresh_schema_1_store>.zarr/candidates/pose_world_cam -type f | wc -l",
 ]
+
+[[refactor]]
+id = "refactor-022"
+title = "Enrich public package landing docstrings"
+description = "Make generated package pages orient readers before their large symbol inventories."
+priority = "medium"
+status = "todo"
+labels = ["docs", "api-reference", "docstrings", "public-api"]
+issue_ids = ["issue-003"]
+loc_min = 120
+loc_expected = 360
+loc_max = 900
+context = ["The generated API topology is now native and nested, but large landing pages such as data_handling and vin still lead directly from a module summary into long flat member tables.", "Ongoing package refactors make this a documentation-enrichment follow-up rather than a safe broad edit now."]
+references = ["repo:docs/reference/index.qmd#api-reference", "repo:docs/_quarto.yml#quartodoc", "repo:.agents/skills/python-docstrings/SKILL.md", "url:https://machow.github.io/quartodoc/get-started/basic-content.html"]
+implementation_notes = ["Improve package __init__.py docstrings only after the public exports and ownership boundaries stabilize.", "Lead each package page with purpose, boundary, primary public entry points, child-module roles, and concise links to adjacent packages.", "Keep actor/oracle, frame, shape, and theoretical contracts in code docstrings when relevant; do not introduce a second manually maintained API navigation taxonomy."]
+acceptance = ["The package landing page lets a newcomer select a relevant child module or public entry point before reading the member table.", "Package prose matches current exports and does not preserve stale refactor-era names.", "Links resolve both in VS Code and rendered Quarto output."]
+verification = ["make api-docs", "cd docs && quarto render reference/index.qmd reference/data_handling.qmd reference/vin.qmd --no-clean --no-execute", "make qmd-frontmatter-check"]

@@ -1,4 +1,8 @@
-"""Feature-bank containers and pooling helpers for VIN readers."""
+"""Feature-bank containers and pooling helpers for VIN readers.
+
+This package owns actor-visible point-descriptor payloads, multiview sampling,
+permutation-invariant reductions, compression labels, and source-role checks.
+"""
 
 from __future__ import annotations
 

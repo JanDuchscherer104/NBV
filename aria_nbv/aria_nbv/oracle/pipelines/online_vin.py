@@ -1,4 +1,11 @@
-"""Online Oracle label generation for VIN training."""
+"""Online Oracle-label dataset source for VIN training.
+
+This module provides an iterable source that streams ATEK/ASE snippets through the EFM adaptor and computes
+GT-mesh Oracle labels at runtime. It yields :class:`VinOracleBatch` while
+preserving actor-visible EFM/EVL evidence versus Oracle RRI and GT-OBB
+supervision boundaries. Immutable source reading remains in
+:mod:`aria_nbv.data_handling.offline`.
+"""
 
 from __future__ import annotations
 
@@ -154,7 +161,7 @@ class VinOracleOnlineDatasetConfig(TargetConfig[VinOracleOnlineDataset]):
     """Maximum oracle attempts before raising."""
 
     efm_keep_keys: list[str] | None = None
-    """Optional allowlist of EFM keys to keep in VIN batches."""
+    """Optional allowlist of consumed EFM key families retained after online labeling."""
 
     prune_efm_snippet: bool = True
     """Whether to prune EFM snippets before returning VIN batches."""

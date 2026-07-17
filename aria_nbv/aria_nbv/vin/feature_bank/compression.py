@@ -1,4 +1,8 @@
-"""Descriptor compression helpers for point-feature banks."""
+"""Descriptor compression helpers for point-feature banks.
+
+This module provides explicit channel slicing or linear projection and derives
+human-readable compression labels for actor-visible descriptor payloads.
+"""
 
 from __future__ import annotations
 
@@ -44,7 +48,12 @@ def resolve_compression_id(
     output_dim: int | None,
     output_channels: int,
 ) -> str:
-    """Resolve provenance for raw, sliced, or projected descriptors."""
+    """Return a human-readable label for raw, sliced, or projected descriptors.
+
+    The generated label records only the transform family and output width; it
+    is not a content hash of a projection matrix and cannot uniquely identify
+    learned compression weights.
+    """
     if compression_id != "raw":
         return compression_id
     if projection is not None:

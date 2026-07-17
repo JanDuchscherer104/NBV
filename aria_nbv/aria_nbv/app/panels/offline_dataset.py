@@ -1,4 +1,9 @@
-"""Standalone Streamlit diagnostics for immutable VIN offline datasets."""
+"""Standalone diagnostics for immutable VIN offline datasets.
+
+The module provides store discovery, schema and coverage summaries, tensor
+block statistics, distribution plots, and bounded Rerun launch controls without
+mutating persisted training data.
+"""
 
 from __future__ import annotations
 

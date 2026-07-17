@@ -1,4 +1,9 @@
-"""Streamlit panel for live counterfactual rollout generation and evaluation."""
+"""Live counterfactual rollout generation, scoring, and audit panels.
+
+This module owns actor-visible target and finite-candidate controls, optional
+oracle RRI scoring, rollout-path diagnostics, and explicit separation between
+hard invalidity and unavailable labels.
+"""
 
 from __future__ import annotations
 
@@ -326,8 +331,13 @@ class LiveRolloutScoreContext:
     """Evaluator and candidate-runtime state for one live rollout run."""
 
     score_label: str
+    """Human-readable objective label shown beside rollout results."""
+
     evaluator: OracleReplayAdapter | None
+    """Optional Oracle replay adapter; ``None`` selects geometry-only scoring."""
+
     runtime_context: CandidateGenerationRuntimeContext | None
+    """Actor-visible target/history context passed to finite candidate generation."""
 
 
 def _live_rollout_device_options() -> list[str]:
