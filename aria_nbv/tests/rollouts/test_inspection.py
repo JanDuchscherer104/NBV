@@ -10,10 +10,9 @@ import zarr
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.panels.stored_rollouts import candidate_rows_for_rollout
-from aria_nbv.rollouts import (
+from aria_nbv.rollouts import RolloutZarrStoreReader
+from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
-    RolloutZarrStoreReader,
     candidate_audit_rows,
     candidate_group_summary_rows,
     discover_rollout_store_paths,
@@ -25,8 +24,8 @@ from aria_nbv.rollouts import (
     suspicious_rollout_rows,
     target_audit_rows,
     validity_waterfall_rows,
-    write_rollout_zarr_store,
 )
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -96,6 +95,7 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
 
     candidates = candidate_audit_rows(reader)
     assert len(candidates) == result.num_candidates
+    assert candidate_audit_rows(reader, limit=0) == []
     first = candidates[0]
     assert first["candidate_row_id"] == 0
     assert first["scene"] == "fixture_box"
@@ -103,7 +103,6 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert first["mixture"] != ""
     assert first["target_root_gain"] != first["target_rri"]
     assert "motion_step_length_m" in first
-    assert candidate_rows_for_rollout(reader, 0) == candidates
 
     target_rows = target_audit_rows(reader)
     assert len(target_rows) == 1
@@ -217,6 +216,7 @@ def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path)
     reader = RolloutZarrStoreReader(result.store_dir)
 
     rows = selected_depth_summary_rows(reader, rollout_row_id=0, limit=1)
+    assert selected_depth_summary_rows(reader, rollout_row_id=0, limit=0) == []
 
     assert len(rows) == 1
     row = rows[0]

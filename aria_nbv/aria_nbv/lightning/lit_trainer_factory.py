@@ -1,11 +1,9 @@
-"""Trainer factory with optional W&B integration.
+"""Construct the external Lightning trainer and attach run-owned services.
 
-This is adapted from `external/doc_classifier/lightning/lit_trainer_factory.py` and keeps the
-configuration surface small while supporting:
-
-- reproducible debug runs (`fast_dev_run`, CPU forcing, anomaly detection),
-- TF32 matmul control, and
-- W&B logging via `WandbConfig`.
+This module provides one config-as-factory surface for loop limits, devices,
+precision, validation cadence, deterministic/debug behavior, callbacks, and
+optional W&B logging. It owns trainer construction only; the experiment owns
+run paths and seeding, while the module owns scorer/loss/optimizer state.
 """
 
 from __future__ import annotations
@@ -30,40 +28,66 @@ if TYPE_CHECKING:
 
 
 class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
-    """Configuration for constructing a PyTorch Lightning trainer."""
+    """Configure one external Lightning trainer and its attached services."""
 
     @property
     def target_type(self) -> type[pl.Trainer]:
+        """Return the external Lightning trainer factory target."""
+
         return pl.Trainer
 
     is_debug: bool = False
-    """Set fast_dev_run to True, use CPU, set num_workers to 0, disable checkpointing when True."""
+    """Force CPU fast-dev execution, anomaly detection, and no checkpoint callback."""
 
     fast_dev_run: bool = False
-    """Run 1 batch per split to sanity-check the full loop."""
+    """Ask Lightning to run one batch per loop as an integration smoke test."""
 
     accelerator: str = "auto"
+    """Lightning accelerator selector such as ``"auto"``, ``"cpu"``, or ``"gpu"``."""
+
     devices: int | str | Sequence[int] = "auto"
+    """Device count, selector, or explicit device-index sequence passed to Lightning."""
+
     strategy: str | None = "auto"
+    """Optional distributed-execution strategy; ``"auto"`` delegates selection."""
 
     max_epochs: int | None = 50
+    """Maximum training epochs; ``None`` delegates the unbounded policy to Lightning."""
+
     precision: str | int = "32"
+    """Lightning numeric-precision policy, including mixed-precision strings."""
+
     default_root_dir: Path | None = None
     """Root directory used by Lightning for logger-free run artifacts."""
 
     tf32_matmul_precision: str | None = "medium"
+    """Optional process-wide float32 matmul precision set before trainer construction."""
+
     gradient_clip_val: float | None = 1.0
+    """Optional gradient clipping threshold applied by Lightning."""
+
     accumulate_grad_batches: int = 1
+    """Positive number of batches accumulated per optimizer step."""
+
     log_every_n_steps: int = 1
+    """Trainer logging cadence in optimizer/training steps."""
+
     deterministic: bool | str | None = None
+    """Lightning deterministic-algorithm policy; ``None`` preserves framework defaults."""
 
     limit_train_batches: int | float | None = None
+    """Optional absolute count or fraction limiting each training epoch."""
+
     limit_val_batches: int | float | None = None
+    """Optional absolute count or fraction limiting each validation epoch."""
+
     check_val_every_n_epoch: int = 1
+    """Epoch cadence for validation when validation is enabled."""
+
     num_sanity_val_steps: int = 2
-    """Sanity check runs n validation batches before starting the training routine. Set it to -1 to run all batches in all validation dataloaders. Default: 2."""
+    """Validation batches run before training; ``-1`` checks the entire loader."""
     enable_validation: bool = False
-    """Whether to run validation loops at all."""
+    """Enable validation; false zeroes validation limits/cadence during validation."""
 
     enable_model_summary: bool = True
     """Enable Lightning's default model summary callback.
@@ -73,13 +97,13 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
     """
 
     callbacks: TrainerCallbacksConfig = Field(default_factory=TrainerCallbacksConfig)
-    """Trainer callbacks configuration."""
+    """Callback collection factory attached to the constructed trainer."""
 
     use_wandb: bool = True
-    """Whether to enable W&B logging."""
+    """Use the configured W&B logger outside debug mode."""
 
     wandb_config: WandbConfig = Field(default_factory=WandbConfig)
-    """W&B logger configuration (used when use_wandb=True)."""
+    """W&B logger config instantiated only when `use_wandb` is true."""
 
     @model_validator(mode="after")
     def _debug_defaults(self) -> Self:
@@ -113,7 +137,23 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
         trial: "Trial | None" = None,
         optuna_config: "OptunaConfig | None" = None,
     ) -> pl.Trainer:
-        """Instantiate the configured trainer."""
+        """Instantiate a Trainer after logger and callback ownership is resolved.
+
+        Args:
+            experiment: Optional experiment providing an `optuna_config` fallback.
+            trial: Optional Optuna trial forwarded to callback construction.
+            optuna_config: Explicit pruning configuration, preferred over the
+                experiment fallback.
+
+        Returns:
+            External Lightning trainer owning the fresh logger and callbacks.
+
+        Notes:
+            TF32 precision is process-wide. Debug mode uses Lightning's default
+            logger; normal mode uses W&B only when configured. Checkpointing is
+            enabled precisely when callback construction produced a checkpoint
+            callback.
+        """
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
 
         resolved_optuna = optuna_config

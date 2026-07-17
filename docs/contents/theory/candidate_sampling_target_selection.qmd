@@ -196,8 +196,8 @@ $$
 That future match would require semantic class, IoU, match-score, and ambiguity
 gates. It is not the current rollout-generation path. WP07 instead samples
 finite positive GT OBB tasks directly, keeps privileged identity in
-`OracleTargetTaskRow`, and passes only `TargetDescriptor` geometry and semantics
-to candidate generation.
+the Oracle target-task DTO, and passes only `TargetDescriptor` geometry and
+semantics to candidate generation.
 
 ## Candidate Center Sampling {#candidate-center-sampling}
 

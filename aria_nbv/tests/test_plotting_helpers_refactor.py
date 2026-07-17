@@ -21,7 +21,7 @@ from efm3d.aria.aria_constants import (
 from matplotlib import pyplot as plt
 
 import aria_nbv.rri_metrics.plotting as rri_plotting
-from aria_nbv.data_handling.efm_views import EfmCameraView, EfmSnippetView
+from aria_nbv.data_handling.raw.views import EfmCameraView, EfmSnippetView
 from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
 from aria_nbv.rendering.plotting import plot_candidate_pointcloud_scene
 from aria_nbv.rri_metrics.rri import RriResult

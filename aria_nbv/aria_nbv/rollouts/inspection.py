@@ -14,17 +14,25 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 import zarr
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
-from ..pose_generation import CandidatePositionMode, ViewDirectionMode, candidate_position_id, candidate_strategy_id
+from ..pose_generation import ViewDirectionMode, candidate_strategy_id
+from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
-from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
+from .read_model import (
+    decode_invalid_reason,
+    decode_position_id,
+    rollout_at,
+    rollout_steps,
+    selected_depth_for_step,
+    target_rows,
+)
+from .trace import _candidate_invalid_reasons
 from .zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader, _required_groups
 
-_INVALID_REASON_NAMES = {int(code): name for name, code in INVALID_REASON_CODES.items()}
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
-_POSITION_NAMES = {candidate_position_id(mode): mode.value for mode in CandidatePositionMode}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
 
 
@@ -54,22 +62,10 @@ class RolloutSuspiciousQueryConfig:
     """Motion-realism threshold for selected candidate yaw delta."""
 
 
-def decode_invalid_reason(reason: int | np.integer[Any]) -> str:
-    """Return the stable invalid-reason name for one numeric code."""
-
-    return _INVALID_REASON_NAMES.get(int(reason), f"reason_{int(reason)}")
-
-
 def decode_target_invalid_reason(reason: int | np.integer[Any]) -> str:
     """Return the stable target-invalidity reason name for one numeric code."""
 
     return _TARGET_INVALID_REASON_NAMES.get(int(reason), f"target_reason_{int(reason)}")
-
-
-def decode_position_id(position_id: int | np.integer[Any]) -> str:
-    """Return the stable position-family name for one numeric id."""
-
-    return _POSITION_NAMES.get(int(position_id), "unknown" if int(position_id) < 0 else f"position_{int(position_id)}")
 
 
 def decode_strategy_id(strategy_id: int | np.integer[Any]) -> str:
@@ -120,143 +116,113 @@ def candidate_audit_rows(
     limit: int | None = None,
 ) -> list[dict[str, object]]:
     """Return candidate rows joined with candidate-generation diagnostics."""
-
-    candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
-    if candidate_ids.size == 0:
-        return []
-    mask = np.ones(candidate_ids.shape, dtype=np.bool_)
-    rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
-    step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
-    if rollout_row_id is not None:
-        mask &= rollout_ids == int(rollout_row_id)
-    if step_row_id is not None:
-        mask &= step_ids == int(step_row_id)
-    row_positions = np.flatnonzero(mask)
-    if limit is not None:
-        row_positions = row_positions[: max(0, int(limit))]
-
-    dictionaries = _reader_dictionaries(reader)
-    component_names = _component_names(reader)
-    rollout_context = _rollout_context_by_id(reader, dictionaries=dictionaries)
-    diagnostics = _candidate_diagnostics(reader, row_positions=row_positions)
-
     rows: list[dict[str, object]] = []
-    for local, row in enumerate(row_positions.tolist()):
-        candidate_row_id = int(candidate_ids[row])
-        rollout_id = int(rollout_ids[row])
-        primary_reason = int(reader.array("candidates/primary_invalid_reason")[row])
-        position_id = int(diagnostics["position_id"][local])
-        strategy_id = int(reader.array("candidates/strategy_id")[row])
-        mixture_id = int(reader.array("candidates/mixture_id")[row])
-        pose = np.asarray(reader.array("candidates/pose_world_cam")[row], dtype=np.float32).reshape(12)
-        context = rollout_context.get(rollout_id, {})
-        rows.append(
-            {
-                "candidate_row_id": candidate_row_id,
-                "rollout_row_id": rollout_id,
-                "step_row_id": int(step_ids[row]),
-                "step_index": int(reader.array("candidates/step_index")[row]),
-                "shell_index": int(reader.array("candidates/shell_index")[row]),
-                "compact_valid_index": int(reader.array("candidates/compact_valid_index")[row]),
-                "scene": context.get("scene", ""),
-                "split": context.get("split", ""),
-                "policy": context.get("policy", ""),
-                "target_row_id": context.get("target_row_id", -1),
-                "selected": bool(reader.array("candidates/selected_mask")[row]),
-                "actor_action": bool(reader.array("candidates/actor_action_mask")[row]),
-                "oracle_label": bool(reader.array("candidates/oracle_label_mask")[row]),
-                "q_train": bool(reader.array("candidates/q_train_mask")[row]),
-                "strategy_id": strategy_id,
-                "strategy": decode_strategy_id(strategy_id),
-                "position_id": position_id,
-                "position": decode_position_id(position_id),
-                "mixture_id": mixture_id,
-                "mixture": component_names.get(mixture_id, "unknown" if mixture_id < 0 else f"component_{mixture_id}"),
-                "sampler_probability": _finite_or_none(reader.array("candidates/sampler_probability")[row]),
-                "invalid_reason": decode_invalid_reason(primary_reason),
-                "invalid_reason_bitset": int(reader.array("candidates/invalid_reason_bitset")[row]),
-                "target_rri": _finite_or_none(reader.array("candidates/target_rri")[row]),
-                "target_root_gain": _finite_or_none(reader.array("candidates/target_root_gain")[row]),
-                "target_log_error_gain": _finite_or_none(reader.array("candidates/target_log_error_gain")[row]),
-                "target_pm_dist_before": _finite_or_none(reader.array("candidates/target_pm_dist_before")[row]),
-                "target_pm_dist_after": _finite_or_none(reader.array("candidates/target_pm_dist_after")[row]),
-                "scene_rri": _finite_or_none(reader.array("candidates/scene_rri")[row]),
-                "selection_probability": _finite_or_none(reader.array("candidates/selection_probabilities")[row]),
-                "center_x": float(pose[9]),
-                "center_y": float(pose[10]),
-                "center_z": float(pose[11]),
-                "mesh_distance_m": _finite_or_none(diagnostics["mesh_distance_m"][local]),
-                "path_min_clearance_m": _finite_or_none(diagnostics["path_min_clearance_m"][local]),
-                "path_collision": bool(diagnostics["path_collision_mask"][local]),
-                "free_space_margin_m": _finite_or_none(diagnostics["free_space_margin_m"][local]),
-                "motion_step_length_m": _finite_or_none(diagnostics["motion_step_length_m"][local]),
-                "motion_height_delta_m": _finite_or_none(diagnostics["motion_height_delta_m"][local]),
-                "motion_backward_step_m": _finite_or_none(diagnostics["motion_backward_step_m"][local]),
-                "motion_yaw_delta_deg": _finite_or_none(diagnostics["motion_yaw_delta_deg"][local]),
-                "target_distance_m": _finite_or_none(diagnostics["target_distance_m"][local]),
-                "target_bearing_yaw_deg": _finite_or_none(diagnostics["target_bearing_yaw_deg"][local]),
-            }
-        )
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
+            continue
+        for step in rollout_steps(reader, rollout):
+            if step_row_id is not None and step.step_row_id != int(step_row_id):
+                continue
+            for local, row in enumerate(step.candidate_row_positions.tolist()):
+                if limit is not None and len(rows) >= max(0, int(limit)):
+                    return rows
+                strategy_id = int(reader.array("candidates/strategy_id")[row])
+                pose = step.pose_world_cam[local]
+                rows.append(
+                    {
+                        "candidate_row_id": int(step.candidate_row_ids[local]),
+                        "rollout_row_id": rollout.rollout_row_id,
+                        "step_row_id": step.step_row_id,
+                        "step_index": step.step_index,
+                        "shell_index": int(step.shell_indices[local]),
+                        "compact_valid_index": int(step.compact_valid_indices[local]),
+                        "scene": rollout.scene,
+                        "split": rollout.split,
+                        "policy": rollout.policy,
+                        "target_row_id": rollout.target_row_id,
+                        "selected": bool(step.selected_mask[local]),
+                        "actor_action": bool(step.actor_action_mask[local]),
+                        "oracle_label": bool(reader.array("candidates/oracle_label_mask")[row]),
+                        "q_train": bool(reader.array("candidates/q_train_mask")[row]),
+                        "strategy_id": strategy_id,
+                        "strategy": decode_strategy_id(strategy_id),
+                        "position_id": int(step.position_ids[local]),
+                        "position": str(step.position_names[local]),
+                        "mixture_id": int(step.mixture_ids[local]),
+                        "mixture": str(step.mixture_names[local]),
+                        "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
+                        "invalid_reason": str(step.primary_invalid_reason_names[local]),
+                        "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
+                        "target_rri": _finite_or_none(step.target_rri[local]),
+                        "target_root_gain": _finite_or_none(step.target_root_gain[local]),
+                        "target_log_error_gain": _finite_or_none(reader.array("candidates/target_log_error_gain")[row]),
+                        "target_pm_dist_before": _finite_or_none(reader.array("candidates/target_pm_dist_before")[row]),
+                        "target_pm_dist_after": _finite_or_none(reader.array("candidates/target_pm_dist_after")[row]),
+                        "scene_rri": _finite_or_none(step.scene_rri[local]),
+                        "selection_probability": _finite_or_none(step.selection_probabilities[local]),
+                        "center_x": float(pose[9]),
+                        "center_y": float(pose[10]),
+                        "center_z": float(pose[11]),
+                        "mesh_distance_m": _finite_or_none(step.mesh_distance_m[local]),
+                        "path_min_clearance_m": _finite_or_none(step.path_min_clearance_m[local]),
+                        "path_collision": bool(reader.array("candidate_diagnostics/path_collision_mask")[row]),
+                        "free_space_margin_m": _finite_or_none(
+                            reader.array("candidate_diagnostics/free_space_margin_m")[row]
+                        ),
+                        "motion_step_length_m": _finite_or_none(step.motion_step_length_m[local]),
+                        "motion_height_delta_m": _finite_or_none(
+                            reader.array("candidate_diagnostics/motion_height_delta_m")[row]
+                        ),
+                        "motion_backward_step_m": _finite_or_none(
+                            reader.array("candidate_diagnostics/motion_backward_step_m")[row]
+                        ),
+                        "motion_yaw_delta_deg": _finite_or_none(
+                            reader.array("candidate_diagnostics/motion_yaw_delta_deg")[row]
+                        ),
+                        "target_distance_m": _finite_or_none(step.target_distance_m[local]),
+                        "target_bearing_yaw_deg": _finite_or_none(
+                            reader.array("candidate_diagnostics/target_bearing_yaw_deg")[row]
+                        ),
+                    }
+                )
     return rows
 
 
 def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
     """Return stored target-task rows with frozen selection and GT-audit fields."""
 
-    if "targets" not in reader.root:
-        return []
-    target_rows = np.asarray(reader.array("targets/target_row_id"), dtype=np.int64).reshape(-1)
-    dictionaries = _reader_dictionaries(reader)
-    rows: list[dict[str, object]] = []
-    for index, target_row_id in enumerate(target_rows.tolist()):
-        primary_reason = int(_optional_array(reader, "targets/target_primary_invalid_reason", index, default=0))
-        rows.append(
-            {
-                "target_row_id": int(target_row_id),
-                "target_id": _dict_value(dictionaries.get("target", []), reader.array("targets/target_id")[index]),
-                "source": _dict_value(
-                    dictionaries.get("target_source", []),
-                    reader.array("targets/target_source_id")[index],
-                ),
-                "source_index": int(reader.array("targets/target_source_index")[index]),
-                "class": _dict_value(
-                    dictionaries.get("class_name", []),
-                    reader.array("targets/target_class_name_id")[index],
-                ),
-                "sem_id": int(reader.array("targets/target_sem_id")[index]),
-                "inst_id": int(reader.array("targets/target_inst_id")[index]),
-                "confidence": _finite_or_none(reader.array("targets/target_confidence")[index]),
-                "selection_rank": int(reader.array("targets/target_selection_rank")[index]),
-                "selection_score": _finite_or_none(reader.array("targets/target_selection_score")[index]),
-                "selection_probability": _finite_or_none(reader.array("targets/target_selection_probability")[index]),
-                "target_valid": bool(reader.array("targets/target_valid_mask")[index]),
-                "target_invalid_reason": decode_target_invalid_reason(primary_reason),
-                "gt_label_valid": bool(reader.array("targets/gt_label_valid_mask")[index]),
-                "gt_match_status": _dict_value(
-                    dictionaries.get("target_match_status", []),
-                    reader.array("targets/gt_match_status_id")[index],
-                ),
-                "gt_match_iou": _finite_or_none(reader.array("targets/gt_match_iou")[index]),
-                "gt_match_score": _finite_or_none(reader.array("targets/gt_match_score")[index]),
-                "projected_area_pixels": _finite_or_none(
-                    _optional_array(reader, "targets/target_projected_area_pixels", index)
-                ),
-                "projected_area_fraction": _finite_or_none(
-                    _optional_array(reader, "targets/target_projected_area_fraction", index)
-                ),
-                "semidense_support": _finite_or_none(
-                    _optional_array(reader, "targets/target_semidense_support_count", index)
-                ),
-                "evl_support": _finite_or_none(_optional_array(reader, "targets/target_evl_support_count", index)),
-                "effective_support": _finite_or_none(
-                    _optional_array(reader, "targets/target_effective_support_count", index)
-                ),
-                "visibility_score": _finite_or_none(_optional_array(reader, "targets/target_visibility_score", index)),
-                "support_score": _finite_or_none(_optional_array(reader, "targets/target_support_score", index)),
-                "deficit_score": _finite_or_none(_optional_array(reader, "targets/target_deficit_score", index)),
-            }
-        )
-    return rows
+    return [
+        {
+            "target_row_id": row.target_row_id,
+            "target_id": row.target_id,
+            "source": row.source,
+            "source_index": row.source_index,
+            "class": row.class_name,
+            "sem_id": row.sem_id,
+            "inst_id": row.inst_id,
+            "confidence": _finite_or_none(row.confidence),
+            "selection_rank": row.selection_rank,
+            "selection_score": _finite_or_none(row.selection_score),
+            "selection_probability": _finite_or_none(row.selection_probability),
+            "target_valid": row.target_valid,
+            "target_invalid_reason": decode_target_invalid_reason(row.primary_invalid_reason_id),
+            "gt_label_valid": row.gt_label_valid,
+            "gt_match_status": row.gt_match_status,
+            "gt_match_iou": _finite_or_none(row.gt_match_iou),
+            "gt_match_score": _finite_or_none(row.gt_match_score),
+            "projected_area_pixels": _finite_or_none(row.projected_area_pixels),
+            "projected_area_fraction": _finite_or_none(row.projected_area_fraction),
+            "semidense_support": _finite_or_none(row.semidense_support_count),
+            "evl_support": _finite_or_none(row.evl_support_count),
+            "effective_support": _finite_or_none(row.effective_support_count),
+            "visibility_score": _finite_or_none(row.visibility_score),
+            "support_score": _finite_or_none(row.support_score),
+            "deficit_score": _finite_or_none(row.deficit_score),
+        }
+        for row in target_rows(reader)
+    ]
 
 
 def validity_waterfall_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
@@ -322,92 +288,75 @@ def rollout_step_objective_rows(
     rollout_row_id: int | None = None,
 ) -> list[dict[str, object]]:
     """Return per-step objective, branching, and selected-action audit rows."""
-
-    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
-    if step_ids.size == 0:
-        return []
-
-    rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
-    step_indices = np.asarray(reader.array("steps/step_index"), dtype=np.int64).reshape(-1)
-    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
-    num_candidates = np.asarray(reader.array("steps/num_candidates"), dtype=np.int64).reshape(-1)
-    num_valid = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.int64).reshape(-1)
-    cumulative_target_rri = np.asarray(reader.array("steps/cumulative_target_rri"), dtype=np.float64).reshape(-1)
-    cumulative_scene_rri = np.asarray(reader.array("steps/cumulative_scene_rri"), dtype=np.float64).reshape(-1)
-    cumulative_target_root_gain = np.asarray(
-        reader.array("steps/cumulative_target_root_gain"),
-        dtype=np.float64,
-    ).reshape(-1)
-    cumulative_scene_root_gain = np.asarray(reader.array("steps/cumulative_scene_root_gain"), dtype=np.float64).reshape(
-        -1
-    )
-
-    dictionaries = _reader_dictionaries(reader)
-    rollout_context = _rollout_context_by_id(reader, dictionaries=dictionaries)
-    rollout_rows_by_id = _rollout_rows_by_id(reader)
-    selected_candidates = _selected_candidate_context_by_id(reader)
-    previous_target_by_rollout: dict[int, float | None] = {}
-
-    ordered = sorted(
-        range(step_ids.size),
-        key=lambda index: (int(rollout_ids[index]), int(step_indices[index]), int(step_ids[index])),
-    )
     rows: list[dict[str, object]] = []
-    for index in ordered:
-        current_rollout_id = int(rollout_ids[index])
-        if rollout_row_id is not None and current_rollout_id != int(rollout_row_id):
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
-        cumulative_target = _finite_or_none(cumulative_target_rri[index])
-        previous_target = previous_target_by_rollout.get(current_rollout_id)
-        marginal_target = (
-            None
-            if cumulative_target is None
-            else cumulative_target
-            if previous_target is None
-            else cumulative_target - previous_target
-        )
-        previous_target_by_rollout[current_rollout_id] = cumulative_target
-        candidate_context = selected_candidates.get(int(selected_candidate_ids[index]), {})
-        rollout_context_row = rollout_context.get(current_rollout_id, {})
-        rollout_row = rollout_rows_by_id.get(current_rollout_id, {})
-        invalid_fraction = None
-        if int(num_candidates[index]) > 0:
-            invalid_fraction = 1.0 - float(num_valid[index]) / float(num_candidates[index])
-        rows.append(
-            {
-                "rollout_row_id": current_rollout_id,
-                "step_row_id": int(step_ids[index]),
-                "step_index": int(step_indices[index]),
-                "chain_id": rollout_row.get("chain_id"),
-                "scene": rollout_context_row.get("scene", ""),
-                "split": rollout_context_row.get("split", ""),
-                "policy": rollout_context_row.get("policy", ""),
-                "target_row_id": rollout_context_row.get("target_row_id", -1),
-                "horizon": rollout_row.get("horizon"),
-                "branch_factor": rollout_row.get("branch_factor"),
-                "beam_width": rollout_row.get("beam_width"),
-                "temperature": rollout_row.get("temperature"),
-                "cumulative_target_rri": cumulative_target,
-                "marginal_target_rri": marginal_target,
-                "cumulative_scene_rri": _finite_or_none(cumulative_scene_rri[index]),
-                "cumulative_target_root_gain": _finite_or_none(cumulative_target_root_gain[index]),
-                "cumulative_scene_root_gain": _finite_or_none(cumulative_scene_root_gain[index]),
-                "num_candidates": int(num_candidates[index]),
-                "num_valid_candidates": int(num_valid[index]),
-                "invalid_fraction": invalid_fraction,
-                "selected_candidate_row_id": int(selected_candidate_ids[index]),
-                "selected_target_rri": candidate_context.get("target_rri"),
-                "selected_target_root_gain": candidate_context.get("target_root_gain"),
-                "selected_scene_rri": candidate_context.get("scene_rri"),
-                "selected_probability": candidate_context.get("selection_probability"),
-                "selected_entropy": _step_selection_entropy(reader, step_row_id=int(step_ids[index])),
-                "selected_sampler_probability": candidate_context.get("sampler_probability"),
-                "selected_strategy": candidate_context.get("strategy", ""),
-                "selected_position": candidate_context.get("position", ""),
-                "selected_mixture": candidate_context.get("mixture", ""),
-                "selected_invalid_reason": candidate_context.get("invalid_reason", ""),
-            }
-        )
+        previous_target: float | None = None
+        for step in rollout_steps(reader, rollout):
+            selected = step.selected_local_index
+            cumulative_target = _finite_or_none(step.cumulative_target_rri)
+            marginal_target = (
+                None
+                if cumulative_target is None
+                else cumulative_target
+                if previous_target is None
+                else cumulative_target - previous_target
+            )
+            previous_target = cumulative_target
+            entropy = float(
+                candidate_policy_entropy(
+                    torch.from_numpy(step.selection_probabilities),
+                    torch.from_numpy(step.actor_action_mask),
+                ).item()
+            )
+            selected_row = int(step.candidate_row_positions[selected]) if selected >= 0 else -1
+            strategy_id = int(reader.array("candidates/strategy_id")[selected_row]) if selected >= 0 else -1
+            rows.append(
+                {
+                    "rollout_row_id": rollout.rollout_row_id,
+                    "step_row_id": step.step_row_id,
+                    "step_index": step.step_index,
+                    "chain_id": rollout.chain_id,
+                    "scene": rollout.scene,
+                    "split": rollout.split,
+                    "policy": rollout.policy,
+                    "target_row_id": rollout.target_row_id,
+                    "horizon": rollout.horizon,
+                    "branch_factor": rollout.branch_factor,
+                    "beam_width": rollout.beam_width,
+                    "temperature": _finite_or_none(rollout.temperature),
+                    "cumulative_target_rri": cumulative_target,
+                    "marginal_target_rri": marginal_target,
+                    "cumulative_scene_rri": _finite_or_none(step.cumulative_scene_rri),
+                    "cumulative_target_root_gain": _finite_or_none(step.cumulative_target_root_gain),
+                    "cumulative_scene_root_gain": _finite_or_none(step.cumulative_scene_root_gain),
+                    "num_candidates": step.num_candidates,
+                    "num_valid_candidates": step.num_valid_candidates,
+                    "invalid_fraction": None
+                    if step.num_candidates <= 0
+                    else 1.0 - float(step.num_valid_candidates) / float(step.num_candidates),
+                    "selected_candidate_row_id": step.selected_candidate_row_id,
+                    "selected_target_rri": None if selected < 0 else _finite_or_none(step.target_rri[selected]),
+                    "selected_target_root_gain": None
+                    if selected < 0
+                    else _finite_or_none(step.target_root_gain[selected]),
+                    "selected_scene_rri": None if selected < 0 else _finite_or_none(step.scene_rri[selected]),
+                    "selected_probability": None
+                    if selected < 0
+                    else _finite_or_none(step.selection_probabilities[selected]),
+                    "selected_entropy": _finite_or_none(entropy),
+                    "selected_sampler_probability": None
+                    if selected < 0
+                    else _finite_or_none(step.sampler_probabilities[selected]),
+                    "selected_strategy": decode_strategy_id(strategy_id),
+                    "selected_position": "" if selected < 0 else str(step.position_names[selected]),
+                    "selected_mixture": "" if selected < 0 else str(step.mixture_names[selected]),
+                    "selected_invalid_reason": "" if selected < 0 else str(step.primary_invalid_reason_names[selected]),
+                }
+            )
     return rows
 
 
@@ -420,9 +369,16 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
     invalidity, and selected objective values.
     """
 
-    step_rows = rollout_step_objective_rows(reader)
+    metric_sources = {
+        "valid_fanout": "num_valid_candidates",
+        "invalid_fraction": "invalid_fraction",
+        "marginal_target_rri": "marginal_target_rri",
+        "selected_target_root_gain": "selected_target_root_gain",
+        "selected_probability": "selected_probability",
+        "selected_entropy": "selected_entropy",
+    }
     groups: dict[tuple[object, ...], dict[str, float]] = {}
-    for row in step_rows:
+    for row in rollout_step_objective_rows(reader):
         key = (
             row.get("policy", ""),
             row.get("horizon"),
@@ -438,27 +394,15 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
             key,
             {
                 "selected_steps": 0.0,
-                "valid_fanout_sum": 0.0,
-                "valid_fanout_count": 0.0,
-                "invalid_fraction_sum": 0.0,
-                "invalid_fraction_count": 0.0,
-                "marginal_target_rri_sum": 0.0,
-                "marginal_target_rri_count": 0.0,
-                "selected_target_root_gain_sum": 0.0,
-                "selected_target_root_gain_count": 0.0,
-                "selected_probability_sum": 0.0,
-                "selected_probability_count": 0.0,
-                "selected_entropy_sum": 0.0,
-                "selected_entropy_count": 0.0,
+                **{f"{metric}_{part}": 0.0 for metric in metric_sources for part in ("sum", "count")},
             },
         )
         summary["selected_steps"] += 1.0
-        _accumulate_optional(summary, "valid_fanout", row.get("num_valid_candidates"))
-        _accumulate_optional(summary, "invalid_fraction", row.get("invalid_fraction"))
-        _accumulate_optional(summary, "marginal_target_rri", row.get("marginal_target_rri"))
-        _accumulate_optional(summary, "selected_target_root_gain", row.get("selected_target_root_gain"))
-        _accumulate_optional(summary, "selected_probability", row.get("selected_probability"))
-        _accumulate_optional(summary, "selected_entropy", row.get("selected_entropy"))
+        for metric, source in metric_sources.items():
+            value = _finite_or_none(row.get(source))
+            if value is not None:
+                summary[f"{metric}_sum"] += value
+                summary[f"{metric}_count"] += 1.0
 
     output: list[dict[str, object]] = []
     for key, summary in sorted(groups.items(), key=lambda item: (str(item[0][0]), int(item[0][5] or 0), str(item[0]))):
@@ -474,27 +418,28 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
             selected_mixture,
         ) = key
         step_int = int(step_index) if step_index is not None else -1
-        output.append(
+        row = {
+            "policy": policy,
+            "horizon": horizon,
+            "branch_factor": branch_factor,
+            "beam_width": beam_width,
+            "temperature": temperature,
+            "step_index": step_int,
+            "step_label": f"step {step_int}",
+            "selected_position": selected_position,
+            "selected_strategy": selected_strategy,
+            "selected_mixture": selected_mixture,
+            "selected_steps": int(summary["selected_steps"]),
+        }
+        row.update(
             {
-                "policy": policy,
-                "horizon": horizon,
-                "branch_factor": branch_factor,
-                "beam_width": beam_width,
-                "temperature": temperature,
-                "step_index": step_int,
-                "step_label": f"step {step_int}",
-                "selected_position": selected_position,
-                "selected_strategy": selected_strategy,
-                "selected_mixture": selected_mixture,
-                "selected_steps": int(summary["selected_steps"]),
-                "mean_valid_fanout": _mean_accumulator(summary, "valid_fanout"),
-                "mean_invalid_fraction": _mean_accumulator(summary, "invalid_fraction"),
-                "mean_marginal_target_rri": _mean_accumulator(summary, "marginal_target_rri"),
-                "mean_selected_target_root_gain": _mean_accumulator(summary, "selected_target_root_gain"),
-                "mean_selected_probability": _mean_accumulator(summary, "selected_probability"),
-                "mean_selected_entropy": _mean_accumulator(summary, "selected_entropy"),
+                f"mean_{metric}": None
+                if summary[f"{metric}_count"] <= 0
+                else summary[f"{metric}_sum"] / summary[f"{metric}_count"]
+                for metric in metric_sources
             }
         )
+        output.append(row)
     return output
 
 
@@ -512,104 +457,75 @@ def selected_depth_summary_rows(
     production store by accident.
     """
 
-    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
-    if step_ids.size == 0:
-        return []
-    rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
-    step_indices = np.asarray(reader.array("steps/step_index"), dtype=np.int64).reshape(-1)
-    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
-    selected_context = _selected_candidate_context_by_id(reader)
-
-    mask = np.ones(step_ids.shape, dtype=np.bool_)
-    if rollout_row_id is not None:
-        mask &= rollout_ids == int(rollout_row_id)
-    if step_row_id is not None:
-        mask &= step_ids == int(step_row_id)
-    row_positions = np.flatnonzero(mask)
-    if limit is not None:
-        row_positions = row_positions[: max(0, int(limit))]
-
-    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
-        return [
-            _selected_depth_unavailable_row(
-                rollout_row_id=int(rollout_ids[index]),
-                step_row_id=int(step_ids[index]),
-                step_index=int(step_indices[index]),
-                selected_candidate_row_id=int(selected_candidate_ids[index]),
-                warning="selected_depth unavailable: store metadata has selected_depth_enabled=false.",
-            )
-            for index in row_positions.tolist()
-        ]
-
-    try:
-        group = reader.root["selected_depth"]
-        depth_step_ids = np.asarray(group["step_row_id"], dtype=np.int64).reshape(-1)
-        depth_candidate_ids = np.asarray(group["candidate_row_id"], dtype=np.int64).reshape(-1)
-    except KeyError as exc:
-        return [
-            _selected_depth_unavailable_row(
-                rollout_row_id=int(rollout_ids[index]),
-                step_row_id=int(step_ids[index]),
-                step_index=int(step_indices[index]),
-                selected_candidate_row_id=int(selected_candidate_ids[index]),
-                warning=f"selected_depth unavailable: missing array {exc}.",
-            )
-            for index in row_positions.tolist()
-        ]
-
     rows: list[dict[str, object]] = []
-    for index in row_positions.tolist():
-        selected_candidate_row_id = int(selected_candidate_ids[index])
-        base = _selected_depth_base_row(
-            rollout_row_id=int(rollout_ids[index]),
-            step_row_id=int(step_ids[index]),
-            step_index=int(step_indices[index]),
-            selected_candidate_row_id=selected_candidate_row_id,
-        )
-        matches = np.flatnonzero(depth_step_ids == int(step_ids[index]))
-        if matches.size != 1:
-            rows.append(
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
+            continue
+        for step in rollout_steps(reader, rollout):
+            if step_row_id is not None and step.step_row_id != int(step_row_id):
+                continue
+            if limit is not None and len(rows) >= max(0, int(limit)):
+                return rows
+            depth = selected_depth_for_step(reader, step)
+            selected = step.selected_local_index
+            row: dict[str, object] = dict.fromkeys(
+                "candidate_row_id valid_pixels finite_pixels pixel_count valid_fraction finite_fraction "
+                "depth_min_m depth_mean_m depth_max_m image_height image_width focal_x_px focal_y_px "
+                "principal_x_px principal_y_px".split()
+            )
+            row.update(
                 {
-                    **base,
-                    "available": False,
-                    "warning": (
-                        f"selected_depth unavailable: expected one row for step_row_id={int(step_ids[index])}, "
-                        f"found {matches.size}."
-                    ),
+                    "rollout_row_id": rollout.rollout_row_id,
+                    "step_row_id": step.step_row_id,
+                    "step_index": step.step_index,
+                    "selected_candidate_row_id": step.selected_candidate_row_id,
+                    "candidate_row_id": depth.candidate_row_id,
+                    "available": depth.available,
+                    "warning": depth.warning or "",
                 }
             )
-            continue
-        depth_row = int(matches[0])
-        candidate_row_id = int(depth_candidate_ids[depth_row])
-        if candidate_row_id != selected_candidate_row_id:
-            rows.append(
-                {
-                    **base,
-                    "candidate_row_id": candidate_row_id,
-                    "available": False,
-                    "warning": (
-                        "selected_depth candidate mismatch: "
-                        f"depth candidate_row_id={candidate_row_id}, "
-                        f"step selected_candidate_row_id={selected_candidate_row_id}."
-                    ),
-                }
-            )
-            continue
-        summary = _selected_depth_dense_summary(group, row_position=depth_row)
-        candidate_context = selected_context.get(candidate_row_id, {})
-        rows.append(
-            {
-                **base,
-                **summary,
-                "candidate_row_id": candidate_row_id,
-                "available": summary.get("warning") in (None, ""),
-                "selected_position": candidate_context.get("position", ""),
-                "selected_strategy": candidate_context.get("strategy", ""),
-                "selected_mixture": candidate_context.get("mixture", ""),
-                "selected_target_root_gain": candidate_context.get("target_root_gain"),
-                "selected_target_rri": candidate_context.get("target_rri"),
-            }
-        )
+            if depth.available and depth.depth_m is not None and depth.valid_mask is not None:
+                values = depth.depth_m[np.isfinite(depth.depth_m)]
+                pixel_count = int(depth.depth_m.size)
+                valid_pixels = int(depth.valid_mask.sum())
+                finite_pixels = int(values.size)
+                row.update(
+                    {
+                        "candidate_row_id": depth.candidate_row_id,
+                        "valid_pixels": valid_pixels,
+                        "finite_pixels": finite_pixels,
+                        "pixel_count": pixel_count,
+                        "valid_fraction": _safe_fraction(valid_pixels, pixel_count),
+                        "finite_fraction": _safe_fraction(finite_pixels, pixel_count),
+                        "depth_min_m": None if values.size == 0 else float(np.min(values)),
+                        "depth_mean_m": None if values.size == 0 else float(np.mean(values)),
+                        "depth_max_m": None if values.size == 0 else float(np.max(values)),
+                        "image_height": depth.image_size_hw[0] if depth.image_size_hw else None,
+                        "image_width": depth.image_size_hw[1] if depth.image_size_hw else None,
+                        "focal_x_px": float(depth.focal_px[0]) if depth.focal_px is not None else None,
+                        "focal_y_px": float(depth.focal_px[1]) if depth.focal_px is not None else None,
+                        "principal_x_px": float(depth.principal_point_px[0])
+                        if depth.principal_point_px is not None
+                        else None,
+                        "principal_y_px": float(depth.principal_point_px[1])
+                        if depth.principal_point_px is not None
+                        else None,
+                        "selected_position": "" if selected < 0 else str(step.position_names[selected]),
+                        "selected_strategy": ""
+                        if selected < 0
+                        else decode_strategy_id(
+                            int(reader.array("candidates/strategy_id")[step.candidate_row_positions[selected]])
+                        ),
+                        "selected_mixture": "" if selected < 0 else str(step.mixture_names[selected]),
+                        "selected_target_root_gain": None
+                        if selected < 0
+                        else _finite_or_none(step.target_root_gain[selected]),
+                        "selected_target_rri": None if selected < 0 else _finite_or_none(step.target_rri[selected]),
+                    }
+                )
+            rows.append(row)
     return rows
 
 
@@ -621,205 +537,41 @@ def selected_depth_preview(
 ) -> dict[str, object]:
     """Return one downsampled selected-depth payload for Plotly app previews."""
 
-    max_side = max(1, int(max_size))
-    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
-    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
-    step_matches = np.flatnonzero(step_ids == int(step_row_id))
-    if step_matches.size != 1:
+    matches = []
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        matches.extend(step for step in rollout_steps(reader, rollout) if step.step_row_id == int(step_row_id))
+    if len(matches) != 1:
         return {
             "available": False,
             "step_row_id": int(step_row_id),
             "candidate_row_id": None,
-            "warning": f"selected_depth preview unavailable: expected one step row, found {step_matches.size}.",
+            "warning": f"selected_depth preview unavailable: expected one step row, found {len(matches)}.",
         }
-    selected_candidate_row_id = int(selected_candidate_ids[int(step_matches[0])])
-    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
+    depth = selected_depth_for_step(reader, matches[0])
+    if not depth.available or depth.depth_m is None or depth.valid_mask is None:
         return {
             "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": selected_candidate_row_id,
-            "warning": "selected_depth unavailable: store metadata has selected_depth_enabled=false.",
+            "step_row_id": depth.step_row_id,
+            "candidate_row_id": depth.candidate_row_id,
+            "warning": depth.warning or "",
         }
-    try:
-        group = reader.root["selected_depth"]
-        depth_step_ids = np.asarray(group["step_row_id"], dtype=np.int64).reshape(-1)
-        candidate_ids = np.asarray(group["candidate_row_id"], dtype=np.int64).reshape(-1)
-    except KeyError as exc:
-        return {
-            "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": selected_candidate_row_id,
-            "warning": f"selected_depth unavailable: missing array {exc}.",
-        }
-    matches = np.flatnonzero(depth_step_ids == int(step_row_id))
-    if matches.size != 1:
-        return {
-            "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": selected_candidate_row_id,
-            "warning": f"selected_depth unavailable: expected one row for step_row_id={step_row_id}, found {matches.size}.",
-        }
-    row = int(matches[0])
-    candidate_row_id = int(candidate_ids[row])
-    if candidate_row_id != selected_candidate_row_id:
-        return {
-            "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": candidate_row_id,
-            "warning": (
-                "selected_depth candidate mismatch: "
-                f"depth candidate_row_id={candidate_row_id}, "
-                f"step selected_candidate_row_id={selected_candidate_row_id}."
-            ),
-        }
-    try:
-        depth = np.asarray(group["depth_m"][row], dtype=np.float32)
-        valid_mask = np.asarray(group["valid_mask"][row], dtype=np.bool_)
-        image_size = np.asarray(group["image_size_hw"][row], dtype=np.int32).reshape(-1)
-        focal = np.asarray(group["focal_px"][row], dtype=np.float32).reshape(-1)
-        principal = np.asarray(group["principal_point_px"][row], dtype=np.float32).reshape(-1)
-    except KeyError as exc:
-        return {
-            "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": candidate_row_id,
-            "warning": f"selected_depth unavailable: missing dense array {exc}.",
-        }
-    if depth.ndim != 2 or valid_mask.shape != depth.shape:
-        return {
-            "available": False,
-            "step_row_id": int(step_row_id),
-            "candidate_row_id": candidate_row_id,
-            "warning": f"selected_depth shape mismatch: depth_m={tuple(depth.shape)} valid_mask={tuple(valid_mask.shape)}.",
-        }
-    stride = max(1, int(np.ceil(max(depth.shape) / float(max_side))))
-    depth_preview = depth[::stride, ::stride].astype(np.float32, copy=True)
-    valid_preview = valid_mask[::stride, ::stride].astype(np.bool_, copy=True)
-    depth_preview[~(valid_preview & np.isfinite(depth_preview))] = np.nan
+    stride = max(1, int(np.ceil(max(depth.depth_m.shape) / float(max(1, int(max_size))))))
     return {
         "available": True,
-        "step_row_id": int(step_row_id),
-        "candidate_row_id": candidate_row_id,
-        "depth_m": depth_preview,
-        "valid_mask": valid_preview,
-        "image_size_hw": (int(image_size[0]), int(image_size[1])) if image_size.shape[0] == 2 else tuple(depth.shape),
-        "focal_px": tuple(float(value) for value in focal.tolist()) if focal.shape[0] == 2 else (),
-        "principal_point_px": tuple(float(value) for value in principal.tolist()) if principal.shape[0] == 2 else (),
+        "step_row_id": depth.step_row_id,
+        "candidate_row_id": depth.candidate_row_id,
+        "depth_m": depth.depth_m[::stride, ::stride].copy(),
+        "valid_mask": depth.valid_mask[::stride, ::stride].copy(),
+        "image_size_hw": depth.image_size_hw,
+        "focal_px": () if depth.focal_px is None else tuple(float(value) for value in depth.focal_px),
+        "principal_point_px": ()
+        if depth.principal_point_px is None
+        else tuple(float(value) for value in depth.principal_point_px),
         "stride": stride,
         "warning": "",
     }
-
-
-def _selected_depth_base_row(
-    *,
-    rollout_row_id: int,
-    step_row_id: int,
-    step_index: int,
-    selected_candidate_row_id: int,
-) -> dict[str, object]:
-    return {
-        "rollout_row_id": int(rollout_row_id),
-        "step_row_id": int(step_row_id),
-        "step_index": int(step_index),
-        "selected_candidate_row_id": int(selected_candidate_row_id),
-        "candidate_row_id": None,
-        "available": False,
-        "valid_pixels": None,
-        "finite_pixels": None,
-        "pixel_count": None,
-        "valid_fraction": None,
-        "finite_fraction": None,
-        "depth_min_m": None,
-        "depth_mean_m": None,
-        "depth_max_m": None,
-        "image_height": None,
-        "image_width": None,
-        "focal_x_px": None,
-        "focal_y_px": None,
-        "principal_x_px": None,
-        "principal_y_px": None,
-        "warning": "",
-    }
-
-
-def _selected_depth_unavailable_row(
-    *,
-    rollout_row_id: int,
-    step_row_id: int,
-    step_index: int,
-    selected_candidate_row_id: int,
-    warning: str,
-) -> dict[str, object]:
-    return {
-        **_selected_depth_base_row(
-            rollout_row_id=rollout_row_id,
-            step_row_id=step_row_id,
-            step_index=step_index,
-            selected_candidate_row_id=selected_candidate_row_id,
-        ),
-        "warning": warning,
-    }
-
-
-def _selected_depth_dense_summary(group: zarr.Group, *, row_position: int) -> dict[str, object]:
-    try:
-        depth = np.asarray(group["depth_m"][row_position], dtype=np.float32)
-        valid_mask = np.asarray(group["valid_mask"][row_position], dtype=np.bool_)
-        focal = np.asarray(group["focal_px"][row_position], dtype=np.float32).reshape(-1)
-        principal = np.asarray(group["principal_point_px"][row_position], dtype=np.float32).reshape(-1)
-        image_size = np.asarray(group["image_size_hw"][row_position], dtype=np.int32).reshape(-1)
-    except KeyError as exc:
-        return {"warning": f"selected_depth unavailable: missing dense array {exc}."}
-    if depth.ndim != 2 or valid_mask.shape != depth.shape:
-        return {
-            "warning": f"selected_depth shape mismatch: depth_m={tuple(depth.shape)} "
-            f"valid_mask={tuple(valid_mask.shape)}."
-        }
-    if focal.shape[0] != 2 or principal.shape[0] != 2 or image_size.shape[0] != 2:
-        return {"warning": "selected_depth camera metadata must have two values per row."}
-    height, width = int(image_size[0]), int(image_size[1])
-    if (height, width) != tuple(depth.shape):
-        return {
-            "warning": f"selected_depth image_size_hw={(height, width)} does not match depth shape {tuple(depth.shape)}."
-        }
-
-    finite_valid = valid_mask & np.isfinite(depth)
-    valid_depth = depth[finite_valid]
-    pixel_count = int(depth.size)
-    valid_pixels = int(valid_mask.sum())
-    finite_pixels = int(finite_valid.sum())
-    return {
-        "valid_pixels": valid_pixels,
-        "finite_pixels": finite_pixels,
-        "pixel_count": pixel_count,
-        "valid_fraction": _safe_fraction(valid_pixels, pixel_count),
-        "finite_fraction": _safe_fraction(finite_pixels, pixel_count),
-        "depth_min_m": None if valid_depth.size == 0 else float(np.min(valid_depth)),
-        "depth_mean_m": None if valid_depth.size == 0 else float(np.mean(valid_depth)),
-        "depth_max_m": None if valid_depth.size == 0 else float(np.max(valid_depth)),
-        "image_height": height,
-        "image_width": width,
-        "focal_x_px": float(focal[0]),
-        "focal_y_px": float(focal[1]),
-        "principal_x_px": float(principal[0]),
-        "principal_y_px": float(principal[1]),
-        "warning": "",
-    }
-
-
-def _accumulate_optional(summary: dict[str, float], key: str, value: object) -> None:
-    value_float = _finite_or_none(value)
-    if value_float is None:
-        return
-    summary[f"{key}_sum"] += float(value_float)
-    summary[f"{key}_count"] += 1.0
-
-
-def _mean_accumulator(summary: dict[str, float], key: str) -> float | None:
-    count = summary[f"{key}_count"]
-    if count <= 0:
-        return None
-    return float(summary[f"{key}_sum"] / count)
 
 
 def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, object]]]:
@@ -966,13 +718,6 @@ def _selected_motion_outlier_rows(
     reader: RolloutZarrStoreReader,
     cfg: RolloutSuspiciousQueryConfig,
 ) -> list[dict[str, object]]:
-    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
-    if not selected.any():
-        return []
-    candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
-    rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
-    step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
-    diag = _candidate_diagnostics(reader, row_positions=np.arange(candidate_ids.shape[0], dtype=np.int64))
     checks = (
         ("motion_step_length_m", cfg.max_step_distance_m, ">"),
         ("motion_height_delta_m", cfg.max_height_delta_m, "abs>"),
@@ -980,23 +725,26 @@ def _selected_motion_outlier_rows(
         ("motion_yaw_delta_deg", cfg.max_yaw_delta_deg, "abs>"),
     )
     output: list[dict[str, object]] = []
-    for index in np.flatnonzero(selected).tolist():
+    for row in candidate_audit_rows(reader):
+        if not bool(row.get("selected")):
+            continue
         messages: list[str] = []
         for name, threshold, op in checks:
-            value = float(diag[name][index])
-            if not np.isfinite(value):
+            value = row.get(name)
+            if value is None:
                 continue
-            compare = abs(value) if op == "abs>" else value
+            value_float = float(value)
+            compare = abs(value_float) if op == "abs>" else value_float
             if compare > float(threshold):
-                messages.append(f"{name}={value:.3f} exceeds {threshold:.3f}")
+                messages.append(f"{name}={value_float:.3f} exceeds {threshold:.3f}")
         if messages:
             output.append(
                 {
                     "kind": "selected_motion_outlier",
                     "severity": "warning",
-                    "rollout_row_id": int(rollout_ids[index]),
-                    "step_row_id": int(step_ids[index]),
-                    "candidate_row_id": int(candidate_ids[index]),
+                    "rollout_row_id": row["rollout_row_id"],
+                    "step_row_id": row["step_row_id"],
+                    "candidate_row_id": row["candidate_row_id"],
                     "message": "; ".join(messages),
                 }
             )
@@ -1204,7 +952,9 @@ def _rollout_dictionary_summary(root: Any, *, group: str, id_array: str, diction
         values = json.loads(np.asarray(root[f"dictionaries/{dictionary}"], dtype=np.uint8).tobytes().decode("utf-8"))
     except Exception:
         return ""
-    names = [_dict_value(values, int(value)) or str(int(value)) for value in np.unique(ids).tolist()]
+    names = [
+        values[int(value)] if 0 <= int(value) < len(values) else str(int(value)) for value in np.unique(ids).tolist()
+    ]
     return ", ".join(names)
 
 
@@ -1219,163 +969,6 @@ def _numeric_summary(root: Any, path: str) -> str:
     if len(unique) <= 4:
         return ", ".join(str(value) for value in unique)
     return f"{unique[0]}..{unique[-1]} ({len(unique)} values)"
-
-
-def _candidate_diagnostics(reader: RolloutZarrStoreReader, *, row_positions: np.ndarray) -> dict[str, np.ndarray]:
-    length = int(row_positions.shape[0])
-    defaults: dict[str, tuple[Any, Any]] = {
-        "position_id": (np.int32, -1),
-        "mesh_distance_m": (np.float32, np.nan),
-        "path_min_clearance_m": (np.float32, np.nan),
-        "path_collision_mask": (np.bool_, False),
-        "free_space_margin_m": (np.float32, np.nan),
-        "motion_step_length_m": (np.float32, np.nan),
-        "motion_height_delta_m": (np.float32, np.nan),
-        "motion_backward_step_m": (np.float32, np.nan),
-        "motion_yaw_delta_deg": (np.float32, np.nan),
-        "target_distance_m": (np.float32, np.nan),
-        "target_bearing_yaw_deg": (np.float32, np.nan),
-    }
-    output: dict[str, np.ndarray] = {}
-    for name, (dtype, default) in defaults.items():
-        path = f"candidate_diagnostics/{name}"
-        try:
-            values = np.asarray(reader.array(path), dtype=dtype).reshape(-1)
-            output[name] = values[row_positions]
-        except Exception:
-            output[name] = np.full((length,), default, dtype=dtype)
-    return output
-
-
-def _rollout_context_by_id(
-    reader: RolloutZarrStoreReader,
-    *,
-    dictionaries: dict[str, list[str]],
-) -> dict[int, dict[str, object]]:
-    rollout_rows = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
-    output: dict[int, dict[str, object]] = {}
-    source_rows = np.asarray(reader.array("sources/source_row_id"), dtype=np.int64).reshape(-1)
-    source_split = np.asarray(reader.array("sources/split_id"), dtype=np.int64).reshape(-1)
-    split_by_source = {
-        int(source): _dict_value(dictionaries.get("split", []), split_id)
-        for source, split_id in zip(source_rows.tolist(), source_split.tolist(), strict=False)
-    }
-    for index, rollout_row_id in enumerate(rollout_rows.tolist()):
-        scene = _dict_value(dictionaries.get("scene", []), reader.array("rollouts/scene_id")[index])
-        policy = _dict_value(dictionaries.get("policy", []), reader.array("rollouts/policy_id")[index])
-        source_row = int(reader.array("rollouts/source_row_id")[index])
-        output[int(rollout_row_id)] = {
-            "scene": scene,
-            "policy": policy,
-            "split": split_by_source.get(source_row, ""),
-            "target_row_id": int(reader.array("rollouts/target_row_id")[index]),
-        }
-    return output
-
-
-def _rollout_rows_by_id(reader: RolloutZarrStoreReader) -> dict[int, dict[str, object]]:
-    rollout_rows = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
-    output: dict[int, dict[str, object]] = {}
-    for index, rollout_row_id in enumerate(rollout_rows.tolist()):
-        output[int(rollout_row_id)] = {
-            "chain_id": int(reader.array("rollouts/chain_id")[index]),
-            "horizon": int(reader.array("rollouts/horizon")[index]),
-            "branch_factor": int(reader.array("rollouts/branch_factor")[index]),
-            "beam_width": int(reader.array("rollouts/beam_width")[index]),
-            "temperature": _finite_or_none(reader.array("rollouts/temperature")[index]),
-        }
-    return output
-
-
-def _selected_candidate_context_by_id(reader: RolloutZarrStoreReader) -> dict[int, dict[str, object]]:
-    rows = candidate_audit_rows(reader)
-    return {
-        int(row["candidate_row_id"]): {
-            "target_rri": row.get("target_rri"),
-            "target_root_gain": row.get("target_root_gain"),
-            "scene_rri": row.get("scene_rri"),
-            "selection_probability": row.get("selection_probability"),
-            "sampler_probability": row.get("sampler_probability"),
-            "strategy": row.get("strategy", ""),
-            "position": row.get("position", ""),
-            "mixture": row.get("mixture", ""),
-            "invalid_reason": row.get("invalid_reason", ""),
-        }
-        for row in rows
-        if bool(row.get("selected"))
-    }
-
-
-def _step_selection_entropy(reader: RolloutZarrStoreReader, *, step_row_id: int) -> float | None:
-    step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
-    actor_valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
-    probabilities = np.asarray(reader.array("candidates/selection_probabilities"), dtype=np.float64).reshape(-1)
-    mask = (step_ids == int(step_row_id)) & actor_valid & np.isfinite(probabilities) & (probabilities > 0.0)
-    values = probabilities[mask]
-    if values.size == 0:
-        return None
-    total = float(values.sum())
-    if not np.isfinite(total) or total <= 0.0:
-        return None
-    normalized = values / total
-    return float(-(normalized * np.log(normalized)).sum())
-
-
-def _component_names(reader: RolloutZarrStoreReader) -> dict[int, str]:
-    try:
-        writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
-    except Exception:
-        writer_config = None
-    components = []
-    if isinstance(writer_config, dict):
-        candidate_mixture = writer_config.get("candidate_mixture")
-        if isinstance(candidate_mixture, dict):
-            components = candidate_mixture.get("components") or []
-    names: dict[int, str] = {}
-    if isinstance(components, list):
-        for index, component in enumerate(components):
-            if isinstance(component, dict):
-                value = component.get("name") or component.get("family") or component.get("position_mode")
-                if value is not None:
-                    names[int(index)] = str(value)
-    return names
-
-
-def _reader_dictionaries(reader: RolloutZarrStoreReader) -> dict[str, list[str]]:
-    dictionaries: dict[str, list[str]] = {}
-    try:
-        group = reader.root["dictionaries"]
-    except Exception:
-        return dictionaries
-    for name in group.array_keys():
-        try:
-            dictionaries[str(name)] = json.loads(np.asarray(group[name], dtype=np.uint8).tobytes().decode("utf-8"))
-        except Exception:
-            dictionaries[str(name)] = []
-    return dictionaries
-
-
-def _dict_value(values: list[str], index: object) -> str:
-    idx = int(index)
-    if idx < 0 or idx >= len(values):
-        return ""
-    return values[idx]
-
-
-def _optional_array(
-    reader: RolloutZarrStoreReader,
-    path: str,
-    index: int,
-    *,
-    default: float | int = np.nan,
-) -> float | int:
-    try:
-        values = np.asarray(reader.array(path)).reshape(-1)
-    except Exception:
-        return default
-    if index < 0 or index >= values.shape[0]:
-        return default
-    return values[index].item()
 
 
 def _finite_or_none(value: object) -> float | None:

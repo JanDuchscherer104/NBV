@@ -1,6 +1,7 @@
 r"""Target-aware Oracle RRI scoring over finite candidate tables.
 
-This module scores valid candidate rows with target-specific point-mesh RRI.
+This module scores valid candidate rows with target-specific point-mesh RRI and
+owns typed target-scoring invalidity outcomes.
 The current generation path samples a privileged GT target task upstream; this
 scorer uses its OBB as an oracle/evaluation crop. Missing targets, empty mesh
 crops, sparse current support, or unusable depth are expected invalidity cases
@@ -49,9 +50,9 @@ from .labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOr
 if TYPE_CHECKING:
     from efm3d.aria.obb import ObbTW
 
-    from ..data_handling.efm_views import EfmSnippetView
     from ..data_handling.offline.dataset import VinOfflineSample
-    from ..oracle.target_selection import TargetCandidateRow
+    from ..data_handling.raw.views import EfmSnippetView
+    from ..oracle.target_selection import OracleTargetTask
     from ..pose_generation.types import CandidateSamplingResult
 
 TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v1"
@@ -66,7 +67,10 @@ class TargetRriInvalidity:
     """Expected target-scoring failure with a stable semantic reason."""
 
     reason: OracleEvidenceInvalidReason
+    """Stable reason code suitable for hard-invalid masks and diagnostics."""
+
     message: str
+    """Human-readable failure context for logs and inspection surfaces."""
 
 
 class TargetRriScorerConfig(TargetConfig["TargetRriScorer"]):
@@ -74,6 +78,8 @@ class TargetRriScorerConfig(TargetConfig["TargetRriScorer"]):
 
     @property
     def target_type(self) -> type["TargetRriScorer"]:
+        """Return the target-aware Oracle scorer constructed by this config."""
+
         return TargetRriScorer
 
     depth: CandidateDepthRendererConfig = Field(default_factory=lambda: CandidateDepthRendererConfig())
@@ -164,12 +170,12 @@ class TargetRriScorer:
         *,
         sample: EfmSnippetView,
         target_sample: "VinOfflineSample",
-        target_row: TargetCandidateRow,
+        target_task: OracleTargetTask,
     ) -> None:
         self.config = config
         self.sample = sample
         self.target_sample = target_sample
-        self.target_row = target_row
+        self.target_task = target_task
         self.console = (
             Console.with_prefix(self.__class__.__name__)
             .set_verbosity(self.config.verbosity)
@@ -188,7 +194,7 @@ class TargetRriScorer:
         self._target_obb_world: ObbTW | None = None
         self._initial_invalidity: TargetRriInvalidity | None = None
         try:
-            self._target_obb_world = target_gt_obb_world(target_row, target_sample)
+            self._target_obb_world = target_gt_obb_world(target_task, target_sample)
         except _OracleEvidenceError as exc:
             self._initial_invalidity = TargetRriInvalidity(reason=exc.reason, message=str(exc))
 

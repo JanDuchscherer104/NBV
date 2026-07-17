@@ -1,4 +1,9 @@
-"""Context container for VIN diagnostics tabs."""
+"""Typed shared context for VIN diagnostics tab renderers.
+
+The container provides one coherent session state, model output, oracle batch,
+experiment configuration, and capability flags so every tab renders the same
+forward pass.
+"""
 
 from __future__ import annotations
 
@@ -15,33 +20,40 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class VinDiagContext:
-    """Shared context for VIN diagnostic tab renderers.
-
-    Attributes:
-        state: Session-scoped diagnostics state.
-        debug: VIN forward debug outputs.
-        pred: VIN predictions.
-        batch: Oracle batch used for diagnostics.
-        cfg: Experiment configuration used for the run.
-        use_offline_cache: Whether the batch originates from the VIN offline store.
-        attach_snippet: Whether snippets are expected to be present for geometry plots.
-        include_gt_mesh: Whether GT meshes are present when loading full snippets.
-        has_tokens: Whether frustum tokens are available (VIN v1).
-        has_semidense_frustum: Whether semidense frustum diagnostics are available (VIN v2).
-        num_candidates: Number of candidate views in the batch.
-    """
+    """Bind all tab renderers to one cached VIN forward pass."""
 
     state: "VinDiagnosticsState"
+    """Session owner of runtime objects, outputs, tracebacks, and summaries."""
+
     debug: "VinForwardDiagnostics"
+    """Model-internal actor-evidence tensors from the selected forward pass."""
+
     pred: "VinPrediction"
+    """Actor-facing VIN scores, including ``Tensor[\"B N\", float32]`` expectations."""
+
     batch: "VinOracleBatch"
+    """Input batch; RRI targets, GT OBBs, and attached meshes remain oracle-only."""
+
     cfg: "AriaNBVExperimentConfig"
+    """Resolved experiment configuration used to create the runtime and batch."""
+
     use_offline_cache: bool
+    """Whether input tensors came from the immutable VIN offline store."""
+
     attach_snippet: bool
+    """Whether the configured source should retain snippet geometry for plots."""
+
     include_gt_mesh: bool
+    """Whether full snippets may carry a GT mesh for explicit evaluation overlays."""
+
     has_tokens: bool
+    """Whether VIN v1 frustum-token tensors are present in :attr:`debug`."""
+
     has_semidense_frustum: bool
+    """Whether semidense projection diagnostics are present for this VIN variant."""
+
     num_candidates: int
+    """Candidate width ``N`` shared by batch, prediction, and debug tensors."""
 
 
 __all__ = ["VinDiagContext"]

@@ -1,3 +1,11 @@
+"""Config-as-factory optimizer and learning-rate scheduler wiring.
+
+This module provides AdamW, plateau, and one-cycle construction for
+:class:`aria_nbv.lightning.VinLightningModule`. It owns translation into Lightning's optimizer
+mapping, while Lightning owns stepping order and the trainer owns the final
+one-cycle step budget.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -12,7 +20,7 @@ from ..utils import Optimizable, TargetConfig, optimizable_field
 
 
 class AdamWConfig(TargetConfig[Optimizer]):
-    """AdamW optimizer configuration for VIN."""
+    """Configure AdamW for trainable VIN scorer parameters."""
 
     @property
     def target_type(self) -> type[Optimizer]:
@@ -43,6 +51,16 @@ class AdamWConfig(TargetConfig[Optimizer]):
     """Weight decay for AdamW."""
 
     def setup_target(self, params: list[Tensor]) -> Optimizer:
+        """Create AdamW over the exact trainable parameter list.
+
+        Args:
+            params: Materialized scorer parameters selected by
+                :meth:`aria_nbv.lightning.VinLightningModule.configure_optimizers`.
+
+        Returns:
+            Optimizer owned and stepped by Lightning.
+        """
+
         return AdamW(
             params=params,
             lr=self.learning_rate,
@@ -51,7 +69,7 @@ class AdamWConfig(TargetConfig[Optimizer]):
 
 
 class ReduceLrOnPlateauConfig(TargetConfig[ReduceLROnPlateau]):
-    """ReduceLROnPlateau scheduler configuration."""
+    """Configure metric-driven learning-rate decay for Lightning."""
 
     @property
     def target_type(self) -> type[ReduceLROnPlateau]:
@@ -97,6 +115,17 @@ class ReduceLrOnPlateauConfig(TargetConfig[ReduceLROnPlateau]):
         *,
         trainer: pl.Trainer | None = None,
     ) -> ReduceLROnPlateau:
+        """Create a plateau scheduler over one optimizer.
+
+        Args:
+            optimizer: Optimizer whose parameter-group rates are mutated.
+            trainer: Accepted for the shared scheduler factory interface; not
+                used because plateau scheduling is metric driven.
+
+        Returns:
+            Scheduler instance later stepped by Lightning.
+        """
+
         return ReduceLROnPlateau(
             optimizer,
             mode=self.mode,
@@ -134,10 +163,12 @@ class ReduceLrOnPlateauConfig(TargetConfig[ReduceLROnPlateau]):
 
 
 class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
-    """OneCycle learning-rate scheduler configuration."""
+    """Configure a step-wise one-cycle learning-rate and momentum schedule."""
 
     @property
     def target_type(self) -> type[OneCycleLR]:
+        """Return the external one-cycle scheduler factory target."""
+
         return OneCycleLR
 
     max_lr: float | None = optimizable_field(
@@ -198,6 +229,19 @@ class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
         total_steps: int | None = None,
         trainer: pl.Trainer | None = None,
     ) -> OneCycleLR:
+        """Create a one-cycle scheduler after resolving the total step budget.
+
+        Args:
+            optimizer: Optimizer whose learning rate and momentum are scheduled.
+            total_steps: Explicit positive optimizer-step count. When omitted,
+                `trainer.estimated_stepping_batches` or its datamodule/epoch
+                fallback is used.
+            trainer: Optional configured trainer used for step-budget inference.
+
+        Returns:
+            Step-wise scheduler owned by Lightning.
+        """
+
         if total_steps is None:
             total_steps = self._resolve_total_steps(trainer)
         if total_steps <= 0:

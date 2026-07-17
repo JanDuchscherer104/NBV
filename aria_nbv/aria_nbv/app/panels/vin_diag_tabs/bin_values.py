@@ -1,4 +1,9 @@
-"""Bin-value diagnostics tab for VIN (binner vs learned CORAL values)."""
+"""Ordinal-bin value diagnostics for fitted and learned VIN quantities.
+
+The tab provides fitted edges, midpoints or empirical oracle-bin means, learned
+CORAL representatives, and monotonic spacing comparisons without changing the
+binner or model.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +22,16 @@ from .context import VinDiagContext
 
 @dataclass(slots=True)
 class _BinValuePayload:
+    """Tabular fitted-bin data and scalar comparisons prepared for rendering."""
+
     edges_df: pd.DataFrame
+    """Threshold rows indexed over the ``K - 1`` fitted ordinal edges."""
+
     centers_df: pd.DataFrame
+    """Per-class rows over ``K`` midpoints, fit targets, and learned values."""
+
     stats: dict[str, float]
+    """Scalar learned-versus-fitted delta and spacing diagnostics."""
 
 
 def _build_bin_value_payload(

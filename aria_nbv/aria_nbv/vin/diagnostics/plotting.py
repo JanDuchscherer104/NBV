@@ -1,4 +1,8 @@
-"""VIN plotting helpers for diagnostics and analysis."""
+"""VIN plotting helpers for geometry, feature, and prediction diagnostics.
+
+This module provides Plotly figures for candidate poses, voxel evidence,
+semidense projections, learned encodings, and frame-consistency checks.
+"""
 
 from __future__ import annotations
 
@@ -337,7 +341,7 @@ def build_pose_enc_pca_figure(
     color_label: str = "value",
     max_points: int = 8000,
 ) -> go.Figure:
-    """Project pose encodings to 2D via PCA."""
+    """Project flattened pose encodings to a two-dimensional PCA figure."""
     enc = pose_enc.reshape(-1, pose_enc.shape[-1]).detach().cpu().numpy()
     if enc.shape[0] > max_points:
         stride = max(1, enc.shape[0] // max_points)
@@ -1366,7 +1370,7 @@ def build_voxel_roundtrip_figure(
     num_points: int = 2000,
     log1p_counts: bool = False,
 ) -> go.Figure:
-    """Check world↔voxel roundtrip residuals."""
+    """Visualize metric residuals from a voxel-to-world-to-voxel round trip."""
     pose = _pose_first_batch(debug.backbone_out.t_world_voxel)
     extent = debug.backbone_out.voxel_extent
     extent = extent.detach().cpu().numpy()

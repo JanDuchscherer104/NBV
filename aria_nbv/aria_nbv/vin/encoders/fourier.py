@@ -1,6 +1,6 @@
 """Learnable Fourier feature encoders for VIN continuous inputs.
 
-`LearnableFourierFeatures` maps continuous vectors such as candidate pose
+This module provides `LearnableFourierFeatures`, which maps candidate pose
 features or normalized voxel XYZ coordinates into a trainable positional
 embedding. The implementation follows:
 
@@ -34,7 +34,9 @@ class LearnableFourierFeatures(nn.Module):
     3) mapping them through a small MLP.
 
     Compared to fixed random Fourier features, the learned projection and the
-    MLP allow the encoding to adapt to the downstream task.
+    MLP allow the encoding to adapt to the downstream task. This is a learned
+    coordinate-feature inductive bias; the arbitrary projection and MLP do not
+    enforce translation, rotation, or SE(3) equivariance.
     """
 
     def __init__(self, config: "LearnableFourierFeaturesConfig") -> None:

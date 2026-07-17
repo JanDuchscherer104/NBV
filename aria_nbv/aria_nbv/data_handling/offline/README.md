@@ -1,6 +1,9 @@
 # Offline Data
 
-`aria_nbv.data_handling.offline` owns immutable VIN offline formats, stores, datasets, writers, diagnostics, CLIs, batches, and view adapters. Package-root convenience exports remain minimal; stable compatibility is provided only by `aria_nbv.data_handling`.
+`aria_nbv.data_handling.offline` owns immutable VIN offline formats, stores,
+datasets, prepared-row and shard codecs, diagnostics, inspection CLIs, batches,
+and view adapters. Raw iteration and Oracle-labelled store generation belong to
+`aria_nbv.oracle.pipelines.offline_vin`.
 
 ## Layout
 
@@ -14,7 +17,6 @@ data_handling/offline/
   adapter.py
   diagnostics.py
   inventory.py
-  cli.py
   info_cli.py
 ```
 
@@ -67,8 +69,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 |---|---|---|---|---|---|---|
 | `DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS` | `constant` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS` | `constant` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
-| `_utc_now_iso` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
-| `_json_signature` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `_split_membership_rank` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `_default_sample_key` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `_to_numpy` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
@@ -86,9 +86,7 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `PreparedVinOfflineSample` | `DTO` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `prepare_vin_offline_sample` | `function` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 | `flush_prepared_samples_to_shard` | `function` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
-| `_assign_splits` | `function` | `private` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
-| `VinOfflineWriterConfig` | `config` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
-| `VinOfflineWriter` | `class` | `public` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
+| `assign_offline_splits` | `function` | `public leaf` | `data_handling._offline_writer` | `data_handling.offline.writer` | `data_handling.offline.writer` | `moved` |
 
 ### `batch.py`
 
@@ -171,15 +169,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_sample_metadata` | `function` | `private` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
 | `collect_offline_visual_inventory` | `function` | `public` | `data_handling._offline_visual_inventory` | `data_handling.offline.inventory` | `data_handling.offline.inventory` | `moved` |
 
-### `cli.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `_HELP_SETTINGS` | `constant` | `private` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
-| `app` | `constant` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
-| `main` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
-| `build_offline_command` | `function` | `public` | `data_handling.offline_cli` | `data_handling.offline.cli` | `data_handling.offline.cli` | `moved` |
-
 ### `info_cli.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
@@ -211,3 +200,9 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_print_tree` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
 | `_print_samples` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
 | `_dict_rows` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.offline.info_cli` | `data_handling.offline.info_cli` | `moved` |
+
+### `source.py`
+
+| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
+|---|---|---|---|---|---|---|
+| `VinOfflineSourceConfig` | config | public | `data_handling._vin_sources` | `data_handling.offline.source` | `data_handling.offline.source` | moved: RWP03A |

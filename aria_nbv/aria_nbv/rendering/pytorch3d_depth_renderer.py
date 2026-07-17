@@ -29,23 +29,23 @@ class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
 
     @property
     def target_type(self) -> type["Pytorch3DDepthRenderer"]:
+        """Return the batched PyTorch3D rasterizer constructed by this config."""
         return Pytorch3DDepthRenderer
 
     device: Annotated[torch.device, Field(default="auto")]
     """Torch device to run rasterisation on (falls back to CPU if unavailable)."""
 
     zfar: float = 20.0
-    """Far clipping plane (metres); also used to fill miss pixels."""
+    """Far clipping plane in metres used by downstream validity checks."""
 
     znear: float = 1e-3
     """Near clipping plane (metres); triangles closer than this are clipped."""
 
     cull_backfaces: bool = True
-    """If ``True`` drop triangles with normals pointing away from the camera.
+    """Requested back-face culling policy retained for config compatibility.
 
-    NBV cameras are typically *inside* closed meshes (rooms); backface culling
-    would therefore remove the interior walls. Default is ``False`` so both
-    sides are rendered.
+    The current rasterizer renders both sides because NBV cameras are typically
+    inside closed room meshes. This field is not forwarded to PyTorch3D.
     """
 
     blur_radius: float = 0.0
@@ -100,7 +100,23 @@ class Pytorch3DDepthRenderer:
         *,
         frame_index: int | None = None,
     ) -> tuple[Tensor, Tensor, PerspectiveCameras]:
-        """Render depth for a batch of poses."""
+        """Rasterize metric z-depth for world-from-camera candidate poses.
+
+        Args:
+            poses: Batched ``PoseTW`` world-from-camera transforms with logical
+                shape ``(C, 12)``.
+            mesh: World-frame vertices ``Tensor[\"V 3\", float]`` in metres and
+                triangle indices ``Tensor[\"F 3\", int64]``.
+            camera: EFM camera calibration supplying physical-image intrinsics.
+            frame_index: Optional calibration row. When omitted, ``camera``
+                must already be singleton or aligned one-to-one with ``poses``.
+
+        Returns:
+            A tuple of raw z-buffer ``Tensor[\"C H W\", float]`` in metres,
+            closest-face indices ``Tensor[\"C H W\", int64]`` with negative
+            values for raster misses, and aligned PyTorch3D cameras. The
+            caller combines face hits with near/far checks to form a mask.
+        """
 
         dtype = {
             "float32": torch.float32,

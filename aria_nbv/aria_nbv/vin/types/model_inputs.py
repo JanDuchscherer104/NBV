@@ -1,6 +1,6 @@
 """Model-input containers shared by VIN scorer implementations.
 
-These dataclasses describe intermediate tensors assembled during VIN forward
+This module owns dataclasses for intermediate tensors assembled during VIN forward
 passes. They are separate from helper functions so models, diagnostics, and
 tests can depend on explicit contracts without importing utility buckets.
 """
@@ -23,7 +23,7 @@ class PreparedInputs:
     """Prepared inputs for VIN v3-style forward passes.
 
     Attributes:
-        pose_world_cam: ``PoseTW["B N 12"]`` candidate camera poses in world frame.
+        pose_world_cam: ``PoseTW["B N_q 12"]`` world-from-camera candidate poses.
         pose_world_rig_ref: ``PoseTW["B 12"]`` reference rig pose in world frame.
         t_world_voxel: ``PoseTW["B 12"]`` world←voxel pose for the EVL voxel grid.
         batch_size: Batch size inferred from candidate poses.
@@ -33,10 +33,10 @@ class PreparedInputs:
     """
 
     pose_world_cam: PoseTW
-    """``PoseTW["B N 12"]`` candidate camera poses in world frame."""
+    """``PoseTW["B N_q 12"]`` world-from-camera candidate poses."""
 
     pose_world_rig_ref: PoseTW
-    """``PoseTW["B 12"]`` reference rig pose in world frame."""
+    """``PoseTW["B 12"]`` world-from-rig reference pose."""
 
     t_world_voxel: PoseTW
     """``PoseTW["B 12"]`` world←voxel pose for the EVL voxel grid."""
@@ -56,21 +56,21 @@ class PreparedInputs:
 
 @dataclass(slots=True)
 class PoseFeatures:
-    """Pose-related feature tensors for VIN candidate views."""
+    """Reference-rig-frame features for VIN candidate views."""
 
     pose_enc: Tensor
-    """``Tensor["B N E", float32]`` pose encoder output."""
+    """``Tensor["B N_q E", float32]`` pose encoder output."""
 
     pose_vec: Tensor
-    """``Tensor["B N D", float32]`` pose vector fed into the pose encoder."""
+    """``Tensor["B N_q D", float32]`` pose vector fed into the encoder."""
 
     candidate_center_rig_m: Tensor
-    """``Tensor["B N 3", float32]`` candidate centers in the reference rig frame."""
+    """``Tensor["B N_q 3", float32]`` candidate centers in reference-rig metres."""
 
 
 @dataclass(slots=True)
 class FieldBundle:
-    """Scene-field tensors built from EVL backbone outputs."""
+    """Voxel-aligned scene-field tensors built from actor-visible EVL outputs."""
 
     field_in: Tensor
     """``Tensor["B C_in D H W", float32]`` raw scene field."""
@@ -90,7 +90,7 @@ class GlobalContext:
     """``Tensor["B 3 D H W", float32]`` normalized voxel position grid."""
 
     global_feat: Tensor
-    """``Tensor["B N C", float32]`` pose-conditioned global features."""
+    """``Tensor["B N_q C", float32]`` pose-conditioned global features."""
 
 
 __all__ = ["FieldBundle", "GlobalContext", "PoseFeatures", "PreparedInputs"]

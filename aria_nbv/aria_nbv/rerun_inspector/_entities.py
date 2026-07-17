@@ -1,4 +1,9 @@
-"""Stable Rerun entity roots used by the offline and rollout inspectors."""
+"""Stable Rerun entity-path vocabulary shared by inspector loggers.
+
+This module owns only string roots for the world, actor-visible EFM evidence,
+oracle GT overlays, candidate diagnostics, and metadata panels. Logger modules
+own entity contents, static/dynamic timelines, and recording lifecycle.
+"""
 
 from __future__ import annotations
 

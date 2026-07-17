@@ -1,8 +1,12 @@
-"""Streamlit helpers for inspecting persisted rollout Zarr stores."""
+"""Read-only inspection and validation of persisted rollout Zarr stores.
+
+The module provides schema gates, actor-action and oracle-label mask audits,
+objective and geometry summaries, selected-depth previews, and bounded Rerun
+launch commands for chosen rows.
+"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -13,9 +17,9 @@ import torch
 
 from ...configs import PathConfig
 from ...rendering.plotting import depth_grid
-from ...rollouts import (
+from ...rollouts import RolloutZarrStoreReader
+from ...rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
-    RolloutZarrStoreReader,
     candidate_audit_rows,
     candidate_group_summary_rows,
     discover_rollout_store_paths,
@@ -28,6 +32,7 @@ from ...rollouts import (
     target_audit_rows,
     validity_waterfall_rows,
 )
+from ...rollouts.read_model import rollout_at, rollout_by_id
 from ..rerun_launch import (
     build_rerun_rollout_spawn_command,
     build_rerun_rollout_web_command,
@@ -565,7 +570,7 @@ def _render_rollout_row_table_and_rerun(
         )
     )
     _info_popover("rollout candidate rows", _CANDIDATE_TABLE_INFO)
-    st.dataframe(candidate_rows_for_rollout(reader, selected_rollout), width="stretch", hide_index=True)
+    st.dataframe(candidate_audit_rows(reader, rollout_row_id=selected_rollout), width="stretch", hide_index=True)
 
     native_command = build_rerun_rollout_spawn_command(
         config_path=config_path,
@@ -647,7 +652,15 @@ def _render_rollout_store_summaries(reader: RolloutZarrStoreReader, *, manifest:
 
 
 def _render_stored_metric_dashboard(reader: RolloutZarrStoreReader) -> None:
-    rows = _stored_rollout_metric_rows(reader)
+    fields = (
+        "rollout_row_id scene target_row_id policy horizon branch_factor "
+        "final_cumulative_target_rri final_cumulative_scene_rri"
+    ).split()
+    records = (
+        rollout_at(reader, position)
+        for position in range(int(np.asarray(reader.array("rollouts/rollout_row_id")).size))
+    )
+    rows = pd.DataFrame([{field: getattr(record, field) for field in fields} for record in records])
     if rows.empty:
         st.info("No rollout-level metrics are available in this store.")
         return
@@ -1545,70 +1558,17 @@ def _render_suspicious_tab(
     st.code(format_command(command), language="bash")
 
 
-def _stored_rollout_metric_rows(reader: RolloutZarrStoreReader) -> pd.DataFrame:
-    policies = _string_list(reader, "dictionaries/policy")
-    scenes = _string_list(reader, "dictionaries/scene")
-    rollout_ids = reader.array("rollouts/rollout_row_id")
-    policy_ids = reader.array("rollouts/policy_id")
-    scene_ids = reader.array("rollouts/scene_id")
-    target_rows = reader.array("rollouts/target_row_id")
-    horizon = reader.array("rollouts/horizon")
-    branch_factor = reader.array("rollouts/branch_factor")
-    target_rri = reader.array("rollouts/final_cumulative_target_rri")
-    scene_rri = reader.array("rollouts/final_cumulative_scene_rri")
-    return pd.DataFrame(
-        [
-            {
-                "rollout_row_id": int(row_id),
-                "scene": _dict_value(scenes, int(scene_id)),
-                "target_row_id": int(target_row),
-                "policy": _dict_value(policies, int(policy_id)),
-                "horizon": int(h),
-                "branch_factor": int(b),
-                "final_cumulative_target_rri": _finite_or_none(target),
-                "final_cumulative_scene_rri": _finite_or_none(scene),
-            }
-            for row_id, scene_id, target_row, policy_id, h, b, target, scene in zip(
-                rollout_ids,
-                scene_ids,
-                target_rows,
-                policy_ids,
-                horizon,
-                branch_factor,
-                target_rri,
-                scene_rri,
-                strict=True,
-            )
-        ]
-    )
-
-
-def candidate_rows_for_rollout(reader: RolloutZarrStoreReader, rollout_row_id: int) -> list[dict[str, object]]:
-    """Return display rows for one rollout's full candidate table."""
-
-    return candidate_audit_rows(reader, rollout_row_id=int(rollout_row_id))
-
-
 def format_rollout_option(reader: RolloutZarrStoreReader, rollout_row_id: int) -> str:
     """Format a rollout-row selector label with source and rollout context."""
 
-    rollout_rows = reader.array("rollouts/rollout_row_id")
-    matches = np.nonzero(rollout_rows == int(rollout_row_id))[0]
-    if matches.size != 1:
+    try:
+        rollout = rollout_by_id(reader, rollout_row_id)
+    except KeyError:
         return f"rollout {rollout_row_id}"
-    index = int(matches[0])
-    policies = _string_list(reader, "dictionaries/policy")
-    scenes = _string_list(reader, "dictionaries/scene")
-    policy = _dict_value(policies, int(reader.array("rollouts/policy_id")[index]))
-    scene = _dict_value(scenes, int(reader.array("rollouts/scene_id")[index]))
-    target_row = int(reader.array("rollouts/target_row_id")[index])
-    chain = int(reader.array("rollouts/chain_id")[index])
-    horizon = int(reader.array("rollouts/horizon")[index])
-    branch_factor = int(reader.array("rollouts/branch_factor")[index])
-    beam = _format_stored_beam_width(int(reader.array("rollouts/beam_width")[index]))
+    beam = _format_stored_beam_width(rollout.beam_width)
     return (
-        f"{rollout_row_id} · scene {scene} · target {target_row} · {policy} · "
-        f"chain {chain} · H={horizon} · B={branch_factor} · beam={beam}"
+        f"{rollout_row_id} · scene {rollout.scene} · target {rollout.target_row_id} · {rollout.policy} · "
+        f"chain {rollout.chain_id} · H={rollout.horizon} · B={rollout.branch_factor} · beam={beam}"
     )
 
 
@@ -1629,24 +1589,6 @@ def format_rollout_store_option(row: dict[str, object], *, root: Path) -> str:
 
 def _format_stored_beam_width(value: int) -> str:
     return "NaN" if int(value) < 0 else str(int(value))
-
-
-def _string_list(reader: RolloutZarrStoreReader, path: str) -> list[str]:
-    try:
-        return json.loads(bytes(reader.array(path).tolist()).decode("utf-8"))
-    except Exception:
-        return []
-
-
-def _dict_value(values: list[str], index: int) -> str:
-    if index < 0 or index >= len(values):
-        return ""
-    return values[index]
-
-
-def _finite_or_none(value: object) -> float | None:
-    value_float = float(value)
-    return value_float if np.isfinite(value_float) else None
 
 
 def _format_metric(value: object) -> str:
@@ -1722,7 +1664,6 @@ def _count_metric(validation: object, inventory: dict[str, object], name: str) -
 
 
 __all__ = [
-    "candidate_rows_for_rollout",
     "format_rollout_option",
     "format_rollout_store_option",
     "render_stored_rollouts_panel",

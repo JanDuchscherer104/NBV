@@ -11,7 +11,7 @@ import math
 import re
 import tarfile
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,11 +21,12 @@ from efm3d.aria.pose import PoseTW
 
 from ...configs import PathConfig
 from ...configs.path_config import PROJECT_ROOT
-from ..efm_dataset_utils import compact_ase_atek_sample_id
+from ..identifiers import compact_ase_atek_sample_id
+from ..raw.views import is_efm_snippet_view_instance, is_vin_snippet_view_instance
+from .batch import VinOracleBatch
 from .format import VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
-# TODO: what is this shit. Can't we just iterate over the fields of the respective data class?
 RRI_COMPONENT_BLOCKS: tuple[str, ...] = (
     "oracle.pm_dist_before",
     "oracle.pm_dist_after",
@@ -451,7 +452,6 @@ def _broadcast_ref_pose(
         raise ValueError(f"reference pose dims {ref_shape} are incompatible with target {target_shape}.")
 
     expanded_shape = []
-    # TODO: why the fuck would we need to loop here?
     for ref_dim, target_dim in zip(ref_shape, target_shape, strict=True):
         if ref_dim not in (1, target_dim):
             raise ValueError(f"reference pose dims {ref_shape} are incompatible with target {target_shape}.")
@@ -460,7 +460,6 @@ def _broadcast_ref_pose(
     return ref_rot.expand(*expanded_shape, 3, 3), ref_t.expand(*expanded_shape, 3)
 
 
-# TODO: This is a geometry helper / util!
 def _roll_about_forward(
     *,
     forward: torch.Tensor,
@@ -733,6 +732,95 @@ def _collect_backbone_diagnostics(
     return sorted((acc.finish() for acc in accumulators.values()), key=lambda item: item.field)
 
 
+def summarize_vin_batch_shapes(batch: VinOracleBatch) -> dict[str, str]:
+    """Summarize model-facing VIN batch shapes for diagnostics and logging.
+
+    Args:
+        batch: Unbatched or collated immutable-store VIN batch.
+
+    Returns:
+        Exact string mapping for tensor, camera, snippet, backbone, OBB, and
+        trajectory shapes exposed by the diagnostic surface.
+    """
+
+    def _shape(value: object) -> str:
+        if torch.is_tensor(value):
+            return str(tuple(value.shape))  # type: ignore[attr-defined]
+        return str(type(value).__name__)
+
+    poses = batch.candidate_poses_world_cam.tensor()
+    out: dict[str, str] = {
+        "candidate_poses_world_cam": str(tuple(poses.shape)),
+        "reference_pose_world_rig": str(tuple(batch.reference_pose_world_rig.tensor().shape)),
+        "rri": _shape(batch.rri),
+        "pm_dist_before": _shape(batch.pm_dist_before),
+        "pm_dist_after": _shape(batch.pm_dist_after),
+        "pm_acc_before": _shape(batch.pm_acc_before),
+        "pm_comp_before": _shape(batch.pm_comp_before),
+        "pm_acc_after": _shape(batch.pm_acc_after),
+        "pm_comp_after": _shape(batch.pm_comp_after),
+        "p3d_cameras.R": _shape(batch.p3d_cameras.R),
+        "p3d_cameras.T": _shape(batch.p3d_cameras.T),
+        "p3d_cameras.focal_length": _shape(batch.p3d_cameras.focal_length),
+        "p3d_cameras.principal_point": _shape(batch.p3d_cameras.principal_point),
+        "p3d_cameras.image_size": _shape(batch.p3d_cameras.image_size),
+        "candidate_count": _shape(batch.resolved_candidate_count(device=poses.device)),
+    }
+    batch_size = None
+    num_candidates = None
+    if poses.ndim == 2:
+        batch_size = 1
+        num_candidates = int(poses.shape[0])
+    elif poses.ndim == 3:
+        batch_size = int(poses.shape[0])
+        num_candidates = int(poses.shape[1])
+    if batch_size is not None and num_candidates is not None:
+        cam_count = int(batch.p3d_cameras.R.shape[0])
+        if cam_count == batch_size * num_candidates:
+            out["p3d_cameras.batch_mode"] = "flat (B*N)"
+            out["p3d_cameras.R_grouped"] = str((batch_size, num_candidates, 3, 3))
+            out["p3d_cameras.T_grouped"] = str((batch_size, num_candidates, 3))
+            out["p3d_cameras.focal_length_grouped"] = str((batch_size, num_candidates, 2))
+            out["p3d_cameras.principal_point_grouped"] = str((batch_size, num_candidates, 2))
+            out["p3d_cameras.image_size_grouped"] = str((batch_size, num_candidates, 2))
+
+    if is_vin_snippet_view_instance(batch.efm_snippet_view):
+        out["vin_snippet.points_world"] = _shape(batch.efm_snippet_view.points_world)
+        out["vin_snippet.lengths"] = _shape(batch.efm_snippet_view.lengths)
+        out["vin_snippet.t_world_rig"] = _shape(batch.efm_snippet_view.t_world_rig.tensor())
+    elif is_efm_snippet_view_instance(batch.efm_snippet_view):
+        out["efm_snippet_view"] = "EfmSnippetView"
+    elif batch.efm_snippet_view is None:
+        out["efm_snippet_view"] = "None"
+
+    if batch.backbone_out is not None:
+        if is_dataclass(batch.backbone_out):
+            items = [(item.name, getattr(batch.backbone_out, item.name)) for item in fields(batch.backbone_out)]
+        else:
+            items = list(vars(batch.backbone_out).items())
+        for name, value in items:
+            if torch.is_tensor(value):
+                out[f"backbone.{name}"] = _shape(value)
+    else:
+        out["backbone"] = "None"
+
+    if batch.gt_obbs is not None:
+        out["gt_obbs.obbs"] = _shape(batch.gt_obbs.obbs)
+        if batch.gt_obbs.probs is not None:
+            out["gt_obbs.probs"] = _shape(batch.gt_obbs.probs)
+    if batch.detected_obbs is not None:
+        out["detected_obbs.obbs"] = _shape(batch.detected_obbs.obbs)
+        if batch.detected_obbs.probs is not None:
+            out["detected_obbs.probs"] = _shape(batch.detected_obbs.probs)
+    if batch.trajectory is not None:
+        if batch.trajectory.time_ns is not None:
+            out["trajectory.time_ns"] = _shape(batch.trajectory.time_ns)
+        if batch.trajectory.gravity_in_world is not None:
+            out["trajectory.gravity_in_world"] = _shape(batch.trajectory.gravity_in_world)
+
+    return out
+
+
 def _batch_shape_preview(store: VinOfflineStoreConfig) -> dict[str, str]:
     """Return one lean VIN-batch shape preview for the store."""
 
@@ -750,11 +838,7 @@ def _batch_shape_preview(store: VinOfflineStoreConfig) -> dict[str, str]:
     ).setup_target()
     if len(dataset) == 0:
         return {}
-    batch = dataset[0]
-    shape_summary = getattr(batch, "shape_summary", None)
-    if not callable(shape_summary):
-        return {}
-    return dict(shape_summary())
+    return summarize_vin_batch_shapes(dataset[0])
 
 
 def collect_vin_offline_dataset_stats(

@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import math
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -27,10 +26,8 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
 from aria_nbv.oracle.target_selection import (
-    ORACLE_TARGET_TASK_SOURCE,
-    OracleTargetTaskRow,
+    OracleTargetTask,
     TargetTaskIdentityStatus,
-    target_candidate_row_from_task,
 )
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.rendering import CandidateDepthRendererConfig
@@ -200,11 +197,8 @@ def test_selected_depth_renderer_config_sets_exact_size_atomically() -> None:
     assert cfg.output_height_px == 240
 
 
-def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label() -> None:
-    row = OracleTargetTaskRow(
-        scene_id="scene",
-        snippet_id="snippet",
-        source=ORACLE_TARGET_TASK_SOURCE,
+def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None:
+    task = OracleTargetTask(
         source_index=2,
         target_row_id=2,
         target_id="scene:snippet:gt_obbs_oracle:1:7:2",
@@ -230,34 +224,27 @@ def test_rollout_writer_oracle_target_task_adapter_marks_identity_valid_gt_label
         ),
         inst_id=7,
         confidence=0.9,
-        projected_area_pixels=0.0,
-        projected_area_fraction=0.0,
-        semidense_support_count=0,
-        evl_support_count=0,
-        effective_support_count=0.0,
-        identity_iou=None,
-        identity_second_iou=None,
-        identity_ambiguity_gap=None,
         identity_status=TargetTaskIdentityStatus.MATCHED.value,
-        identity_valid=True,
         selected_rank=0,
         selection_probability=1.0,
     )
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = SimpleNamespace(
+        store=SimpleNamespace(target_protocol_version="v1-observed"),
+        target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
+    )
 
-    target = target_candidate_row_from_task(row)
+    lineage = writer._target_lineage(task, target_rank=0)
 
-    assert target.gt_label_valid
-    assert target.gt_match_status == "matched"
-    assert target.visibility_score == 0.0
-    assert target.support_score == 0.0
-    assert target.deficit_score == 0.0
-    assert math.isnan(target.score)
-    assert target.gt_target_row_id == 2
-    assert target.gt_match_iou is None
-    assert target.gt_match_score is None
-    assert math.isnan(target.score)
-    assert target.source == ORACLE_TARGET_TASK_SOURCE
-    assert target.invalid_reason_bitset == 1
+    assert lineage.target_row_id == 2
+    assert lineage.target_source_index == 2
+    assert lineage.matched_gt_target_row_id == 2
+    assert lineage.matched_gt_target_id == task.target_id
+    assert lineage.gt_match_status == "matched"
+    assert lineage.target_projected_area_pixels == 0.0
+    assert lineage.target_semidense_support_count == 0
+    assert lineage.target_visibility_score == 0.0
+    assert lineage.target_invalid_reason_bitset == 1
 
 
 def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:
@@ -302,15 +289,11 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
     )
     writer.stats = RolloutDatasetWriterStats()
     writer.console = SimpleNamespace(warn=lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "aria_nbv.oracle.pipelines.rollout_dataset.target_descriptor_from_candidate_row",
-        lambda _target: _target_descriptor(),
-    )
     monkeypatch.setattr(CounterfactualPoseGeneratorConfig, "setup_target", lambda self: _Replay())
 
     records = writer._rollout_target(
         sample=SimpleNamespace(efm_snippet_view=object(), scene_id="scene", snippet_id="snippet"),
-        target=SimpleNamespace(target_id="target"),
+        target=SimpleNamespace(target_id="target", descriptor=_target_descriptor()),
         target_rank=0,
         source_lineage=object(),
     )
@@ -322,11 +305,11 @@ def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.Mon
 
 def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=35)[:1]
-    for chain_id, trajectory in enumerate(records[0].result.trajectories):
+    for chain_id, trajectory in enumerate(records[0].evaluated.result.trajectories):
         for step in trajectory.steps:
-            evaluated_step = records[0].step(chain_id, step.step_index)
-            evaluated_step.evidence.selected_depth_m = None
-            evaluated_step.evidence.selected_depth_valid_mask = None
+            evaluated_step = records[0].evaluated.step(chain_id, step.step_index)
+            evaluated_step.evaluation.evidence.selected_depth_m = None
+            evaluated_step.evaluation.evidence.selected_depth_valid_mask = None
     fake_renderer = _FakeSelectedDepthRenderer(height=4, width=5)
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(selected_depth=SimpleNamespace(height_px=4, width_px=5))
@@ -340,9 +323,9 @@ def test_rollout_writer_selected_depth_render_is_once_per_materialized_step() ->
     materialized_steps = list(records[0].evaluated.steps.values())
     assert len(fake_renderer.calls) == len(materialized_steps)
     for step in materialized_steps:
-        assert step.evidence.selected_depth_m.shape == (4, 5)
-        assert step.evidence.selected_depth_valid_mask.shape == (4, 5)
-        assert step.evidence.selected_depth_image_size_hw == (4, 5)
+        assert step.evaluation.evidence.selected_depth_m.shape == (4, 5)
+        assert step.evaluation.evidence.selected_depth_valid_mask.shape == (4, 5)
+        assert step.evaluation.evidence.selected_depth_image_size_hw == (4, 5)
 
 
 def test_rollout_shard_manifest_planning_is_deterministic_and_order_sensitive(tmp_path: Path) -> None:

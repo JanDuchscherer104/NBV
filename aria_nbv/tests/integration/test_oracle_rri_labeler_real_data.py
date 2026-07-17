@@ -19,7 +19,7 @@ import pytest  # isort: split
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling import AseEfmDatasetConfig
 from aria_nbv.oracle._scoring import PreparedRriScorerConfig
-from aria_nbv.pipelines import OracleRriLabelerConfig
+from aria_nbv.oracle.pipelines.scene_labels import OracleRriLabelerConfig
 from aria_nbv.pose_generation import CandidateViewGeneratorConfig
 from aria_nbv.pose_generation.types import ViewDirectionMode
 from aria_nbv.rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig

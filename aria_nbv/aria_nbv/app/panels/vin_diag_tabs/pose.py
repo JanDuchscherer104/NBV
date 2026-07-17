@@ -1,4 +1,8 @@
-"""Pose descriptor tab for VIN diagnostics."""
+"""Reference-rig candidate pose descriptor diagnostics for VIN.
+
+The tab provides centre radii and directions, camera-forward alignment, and
+6D-rotation validity checks for actor-visible world-from-camera candidate poses.
+"""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """In-memory replay transitions and trajectories.
 
-These DTOs describe selected finite-candidate transitions. Persisted Zarr rows
+This module contains DTOs for selected finite-candidate transitions. Persisted Zarr rows
 remain separate contracts in :mod:`aria_nbv.rollouts.zarr_store`.
 """
 
@@ -43,7 +43,7 @@ class CounterfactualSelectionRecord:
 
 @dataclass(slots=True)
 class CounterfactualStepResult:
-    """One selected rollout transition."""
+    """One selected transition and its full finite-candidate decision context."""
 
     step_index: int
     candidates: CandidateSamplingResult
@@ -69,7 +69,7 @@ class CounterfactualStepResult:
 
     @property
     def selected_view(self) -> CameraTW:
-        """Return the selected candidate camera."""
+        """Return the selected candidate camera from the compact valid table."""
 
         views = self.candidates.views
         if getattr(views, "ndim", 1) > 1:
@@ -129,7 +129,7 @@ class CounterfactualTrajectory:
         )
 
     def mark_terminated(self) -> "CounterfactualTrajectory":
-        """Return an early-terminated copy."""
+        """Return an immutable-style copy marked as terminated before the horizon."""
 
         return replace(self, terminated_early=True)
 

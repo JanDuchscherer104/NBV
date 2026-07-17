@@ -1,4 +1,10 @@
-"""Configurable Lightning Trainer callbacks (checkpointing, progress bars, LR monitor)."""
+"""Construct the callback set owned by each Lightning trainer.
+
+This module provides config-as-factory wiring for checkpointing, early
+stopping, learning-rate logging, progress display, model summaries, backbone
+finetuning, timers, and Optuna pruning. It owns callback compatibility and
+schedule validation; the trainer factory owns attachment and lifecycle calls.
+"""
 
 from __future__ import annotations
 
@@ -32,6 +38,8 @@ class CustomTQDMProgressBar(TQDMProgressBar):
     """Custom TQDM progress bar that hides the version number (v_num)."""
 
     def get_metrics(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        """Return Lightning progress metrics without the logger version field."""
+
         items = super().get_metrics(*args, **kwargs)
         items.pop("v_num", None)
         return items
@@ -41,13 +49,20 @@ class CustomRichProgressBar(RichProgressBar):
     """Custom Rich progress bar that hides the version number (v_num)."""
 
     def get_metrics(self, trainer, pl_module):  # type: ignore[no-untyped-def]
+        """Return Rich progress metrics without the logger version field."""
+
         items = super().get_metrics(trainer, pl_module)
         items.pop("v_num", None)
         return items
 
 
 class TrainerCallbacksConfig(TargetConfig[list[Callback]]):
-    """Configuration for standard trainer callbacks."""
+    """Configure one mutually compatible Lightning callback collection.
+
+    :meth:`setup_target` may adapt checkpoint, early-stopping, and pruning
+    flags for an Optuna trial. The returned callback objects are then owned and
+    invoked by the external Lightning trainer.
+    """
 
     @property
     def target_type(self) -> type[list]:
@@ -55,57 +70,85 @@ class TrainerCallbacksConfig(TargetConfig[list[Callback]]):
         return list
 
     use_model_checkpoint: bool = True
+    """Attach a model-checkpoint callback using the fields below."""
+
     checkpoint_monitor: str = "train/loss"
-    """Metric to monitor for model checkpointing."""
+    """Logged metric key used to rank checkpoints."""
     checkpoint_mode: str = "min"
-    """Mode for checkpoint monitor ("min" or "max")."""
+    """Checkpoint ranking direction, conventionally ``"min"`` or ``"max"``."""
     checkpoint_dir: Path | None = None
-    """Directory to save checkpoints. If None, uses `PathConfig().checkpoints`."""
+    """Checkpoint directory; ``None`` resolves through :class:`PathConfig`."""
     checkpoint_filename: str = "epoch={epoch}-step={step}-train-loss={train/loss:.4f}"
-    """Filename template for checkpoints."""
+    """Lightning format template evaluated from epoch, step, and logged metrics."""
     checkpoint_save_top_k: int = 1
-    """Number of best models to save."""
+    """Number of monitor-ranked checkpoints retained by Lightning."""
     checkpoint_auto_insert_metric_name: bool = False
-    """Whether Lightning should auto-prefix metric names in the filename."""
+    """Let Lightning inject monitor names into the checkpoint filename."""
     checkpoint_save_last: bool | None = None
-    """Whether to always save a `last.ckpt` checkpoint."""
+    """Lightning tri-state policy for maintaining a ``last.ckpt`` alias/copy."""
     checkpoint_every_n_train_steps: int | None = None
-    """Optionally checkpoint every N training steps (useful for very long epochs)."""
+    """Optional positive optimizer-step checkpoint cadence."""
     checkpoint_train_time_interval: dict[str, int] | None = None
-    """Optional wall-clock checkpoint cadence passed to `timedelta(**...)`."""
+    """Optional positive wall-clock cadence accepted by `datetime.timedelta`."""
     checkpoint_every_n_epochs: int | None = None
-    """Optionally checkpoint every N epochs."""
+    """Optional positive epoch checkpoint cadence."""
     checkpoint_save_on_train_epoch_end: bool | None = None
-    """Override Lightning's save-on-train-epoch-end behavior."""
+    """Optional override for Lightning's train-epoch-end checkpoint timing."""
 
     use_early_stopping: bool = False
+    """Attach an early-stopping callback for the configured monitor."""
+
     early_stopping_monitor: str = "val_loss"
+    """Logged metric key observed by early stopping."""
+
     early_stopping_mode: str = "min"
+    """Early-stopping improvement direction, ``"min"`` or ``"max"``."""
+
     early_stopping_patience: int = 5
+    """Validation checks without improvement allowed before stopping."""
 
     use_lr_monitor: bool = True
+    """Attach learning-rate logging when the trainer has a logger."""
+
     lr_logging_interval: str = "step"
+    """Learning-rate logging cadence passed to Lightning."""
 
     use_optuna_pruning: bool = False
     """Enable Optuna pruning callback for hyperparameter optimisation runs."""
 
     use_rich_progress_bar: bool = False
-    """Enable Rich progress bar for enhanced terminal output (mutually exclusive with TQDM)."""
+    """Enable the Rich progress bar; mutually exclusive with TQDM."""
     use_tqdm_progress_bar: bool = True
-    """Enable TQDM progress bar (mutually exclusive with Rich)."""
+    """Enable the TQDM progress bar; mutually exclusive with Rich."""
     tqdm_refresh_rate: int = 1
+    """TQDM refresh cadence in training batches."""
 
     use_rich_model_summary: bool = True
+    """Attach a Rich model-tree summary callback."""
+
     rich_summary_max_depth: int = 4
+    """Maximum module-tree depth rendered by the Rich summary."""
 
     use_backbone_finetuning: bool = False
+    """Attach Lightning's staged backbone-unfreezing callback."""
+
     backbone_unfreeze_at_epoch: int = 10
+    """Zero-based epoch at which the callback unfreezes the backbone."""
+
     backbone_lambda_func: str | None = None
+    """Optional serialized learning-rate lambda consumed by backbone finetuning."""
+
     backbone_train_bn: bool = True
+    """Keep backbone batch-normalization layers trainable after unfreezing."""
 
     use_timer: bool = False
+    """Attach a Lightning wall-clock timer callback."""
+
     timer_duration: dict[str, int] | None = None
+    """Optional duration mapping accepted by `datetime.timedelta`."""
+
     timer_interval: str = "step"
+    """Timer check cadence passed to Lightning."""
 
     @model_validator(mode="after")
     def _validate_progress_bars_mutually_exclusive(self) -> Self:
@@ -150,6 +193,25 @@ class TrainerCallbacksConfig(TargetConfig[list[Callback]]):
         trial: "Trial | None" = None,
         optuna_config: "OptunaConfig | None" = None,
     ) -> list[Callback]:
+        """Build callbacks and adapt trial-specific ownership flags.
+
+        Args:
+            model_name: Optional prefix added to checkpoint filenames.
+            has_logger: Whether a trainer logger exists; LR monitoring is
+                omitted when false.
+            trial: Optional Optuna trial that owns pruning decisions.
+            optuna_config: Required pruning config when `trial` enables the
+                pruning callback.
+
+        Returns:
+            Fresh callback list owned by one external Lightning trainer.
+
+        Notes:
+            Trial runs disable checkpointing and early stopping to avoid
+            competing persistence/termination owners. Outside a trial, stale
+            pruning flags are disabled explicitly.
+        """
+
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         callbacks: list[Callback] = []
 

@@ -16,27 +16,34 @@ import numpy as np
 import pytest
 import torch
 
+import aria_nbv.data_handling.offline.diagnostics as offline_diagnostics
 from aria_nbv.data_handling import (
-    OFFLINE_DATASET_VERSION,
     EfmSnippetView,
     VinOfflineDatasetConfig,
+    VinOfflineStoreConfig,
+    VinOracleBatch,
+    VinSnippetView,
+)
+from aria_nbv.data_handling.offline.diagnostics import (
+    collect_vin_offline_dataset_coverage,
+    collect_vin_offline_dataset_stats,
+    summarize_vin_batch_shapes,
+)
+from aria_nbv.data_handling.offline.format import (
+    VinOfflineBlockSpec,
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
-    VinOfflineSourceConfig,
-    VinOfflineStoreConfig,
-    VinOfflineWriter,
-    VinOracleBatch,
-    VinSnippetView,
-    collect_vin_offline_dataset_coverage,
-    collect_vin_offline_dataset_stats,
+)
+from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreReader
+from aria_nbv.data_handling.offline.writer import (
+    assign_offline_splits,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from aria_nbv.data_handling.offline.format import VinOfflineBlockSpec
-from aria_nbv.data_handling.offline.store import VinOfflineStoreReader
-from aria_nbv.data_handling.offline.writer import _assign_splits
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths
 from aria_nbv.rri_metrics.rri import RriResult
@@ -770,8 +777,8 @@ def test_assign_splits_is_stable_by_sample_key() -> None:
         _make_split_record("beta", 4),
     ]
 
-    splits_a = _assign_splits(records=records_a, val_fraction=0.4)
-    splits_b = _assign_splits(records=records_b, val_fraction=0.4)
+    splits_a = assign_offline_splits(records=records_a, val_fraction=0.4)
+    splits_b = assign_offline_splits(records=records_b, val_fraction=0.4)
 
     val_keys_a = {records_a[int(idx)].sample_key for idx in splits_a["val"]}
     val_keys_b = {records_b[int(idx)].sample_key for idx in splits_b["val"]}
@@ -874,6 +881,139 @@ def test_collect_vin_offline_dataset_stats_reports_batch_shape_preview(tmp_path:
     assert stats.batch_shapes["rri"] == "(4,)"  # noqa: S101
     assert stats.batch_shapes["vin_snippet.points_world"] == "(4, 4)"  # noqa: S101
     assert stats.batch_shapes["backbone.occ_pr"] == "(1, 1, 2, 2, 2)"  # noqa: S101
+
+
+def test_summarize_vin_batch_shapes_preserves_exact_unbatched_mapping(tmp_path: Path) -> None:
+    """The diagnostics owner should preserve the exact unbatched shape mapping."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    dataset = VinOfflineDatasetConfig(
+        store=store_cfg,
+        split="all",
+        limit=1,
+        load_candidates=False,
+        load_depths=False,
+        load_candidate_pcs=False,
+        return_format="vin_batch",
+        map_location=torch.device("cpu"),
+    ).setup_target()
+
+    assert summarize_vin_batch_shapes(dataset[0]) == {  # noqa: S101
+        "candidate_poses_world_cam": "(4, 12)",
+        "reference_pose_world_rig": "(12,)",
+        "rri": "(4,)",
+        "pm_dist_before": "(4,)",
+        "pm_dist_after": "(4,)",
+        "pm_acc_before": "(4,)",
+        "pm_comp_before": "(4,)",
+        "pm_acc_after": "(4,)",
+        "pm_comp_after": "(4,)",
+        "p3d_cameras.R": "(4, 3, 3)",
+        "p3d_cameras.T": "(4, 3)",
+        "p3d_cameras.focal_length": "(4, 2)",
+        "p3d_cameras.principal_point": "(4, 2)",
+        "p3d_cameras.image_size": "(4, 2)",
+        "candidate_count": "()",
+        "p3d_cameras.batch_mode": "flat (B*N)",
+        "p3d_cameras.R_grouped": "(1, 4, 3, 3)",
+        "p3d_cameras.T_grouped": "(1, 4, 3)",
+        "p3d_cameras.focal_length_grouped": "(1, 4, 2)",
+        "p3d_cameras.principal_point_grouped": "(1, 4, 2)",
+        "p3d_cameras.image_size_grouped": "(1, 4, 2)",
+        "vin_snippet.points_world": "(4, 4)",
+        "vin_snippet.lengths": "(1,)",
+        "vin_snippet.t_world_rig": "(2, 12)",
+        "backbone.voxel_extent": "(6,)",
+        "backbone.occ_pr": "(1, 1, 2, 2, 2)",
+        "backbone.occ_input": "(1, 1, 2, 2, 2)",
+        "backbone.free_input": "(1, 1, 2, 2, 2)",
+        "backbone.counts": "(1, 2, 2, 2)",
+        "backbone.cent_pr": "(1, 1, 2, 2, 2)",
+        "backbone.pts_world": "(1, 8, 3)",
+        "gt_obbs.obbs": "(2, 2, 34)",
+        "detected_obbs.obbs": "(1, 2, 34)",
+        "detected_obbs.probs": "(2, 3)",
+        "trajectory.time_ns": "(2,)",
+        "trajectory.gravity_in_world": "(3,)",
+    }
+
+
+def test_summarize_vin_batch_shapes_preserves_exact_batched_mapping(tmp_path: Path) -> None:
+    """The diagnostics owner should preserve the exact collated shape mapping."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    dataset = VinOfflineDatasetConfig(
+        store=store_cfg,
+        split="all",
+        limit=1,
+        load_candidates=False,
+        load_depths=False,
+        load_candidate_pcs=False,
+        return_format="vin_batch",
+        map_location=torch.device("cpu"),
+    ).setup_target()
+    batch = VinOracleBatch.collate([dataset[0], dataset[0]])
+
+    assert summarize_vin_batch_shapes(batch) == {  # noqa: S101
+        "candidate_poses_world_cam": "(2, 4, 12)",
+        "reference_pose_world_rig": "(2, 12)",
+        "rri": "(2, 4)",
+        "pm_dist_before": "(2, 4)",
+        "pm_dist_after": "(2, 4)",
+        "pm_acc_before": "(2, 4)",
+        "pm_comp_before": "(2, 4)",
+        "pm_acc_after": "(2, 4)",
+        "pm_comp_after": "(2, 4)",
+        "p3d_cameras.R": "(8, 3, 3)",
+        "p3d_cameras.T": "(8, 3)",
+        "p3d_cameras.focal_length": "(8, 2)",
+        "p3d_cameras.principal_point": "(8, 2)",
+        "p3d_cameras.image_size": "(8, 2)",
+        "candidate_count": "(2,)",
+        "p3d_cameras.batch_mode": "flat (B*N)",
+        "p3d_cameras.R_grouped": "(2, 4, 3, 3)",
+        "p3d_cameras.T_grouped": "(2, 4, 3)",
+        "p3d_cameras.focal_length_grouped": "(2, 4, 2)",
+        "p3d_cameras.principal_point_grouped": "(2, 4, 2)",
+        "p3d_cameras.image_size_grouped": "(2, 4, 2)",
+        "vin_snippet.points_world": "(2, 4, 4)",
+        "vin_snippet.lengths": "(2,)",
+        "vin_snippet.t_world_rig": "(2, 2, 12)",
+        "backbone.voxel_extent": "(2, 6)",
+        "backbone.occ_pr": "(2, 1, 2, 2, 2)",
+        "backbone.occ_input": "(2, 1, 2, 2, 2)",
+        "backbone.free_input": "(2, 1, 2, 2, 2)",
+        "backbone.counts": "(2, 2, 2, 2)",
+        "backbone.cent_pr": "(2, 1, 2, 2, 2)",
+        "backbone.pts_world": "(2, 8, 3)",
+        "gt_obbs.obbs": "(2, 2, 2, 34)",
+        "detected_obbs.obbs": "(2, 2, 34)",
+        "detected_obbs.probs": "(2, 2, 3)",
+        "trajectory.time_ns": "(2, 2)",
+        "trajectory.gravity_in_world": "(2, 3)",
+    }
+
+
+def test_batch_shape_preview_delegates_to_diagnostics_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Store previews should call the module-level diagnostic summarizer."""
+
+    store_cfg = _write_test_store(tmp_path)
+    observed: list[VinOracleBatch] = []
+
+    def _summarize(batch: VinOracleBatch) -> dict[str, str]:
+        observed.append(batch)
+        return {"owner": "offline.diagnostics"}
+
+    monkeypatch.setattr(offline_diagnostics, "summarize_vin_batch_shapes", _summarize)
+
+    assert offline_diagnostics._batch_shape_preview(store_cfg) == {  # noqa: SLF001, S101
+        "owner": "offline.diagnostics"
+    }
+    assert len(observed) == 1  # noqa: S101
+    assert not hasattr(VinOracleBatch, "shape_summary")  # noqa: S101
 
 
 def _write_member(archive: tarfile.TarFile, name: str) -> None:

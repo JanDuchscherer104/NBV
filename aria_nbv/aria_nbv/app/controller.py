@@ -193,7 +193,7 @@ class PipelineController:
     def run_labeler(self, *, force: bool) -> tuple[CandidateDepths, CandidatePointClouds, RriResult]:
         """Run the full oracle label pipeline and cache the outputs.
 
-        Uses `aria_nbv.pipelines.OracleRriLabeler` under the hood so the
+        Uses `aria_nbv.oracle.pipelines.scene_labels.OracleRriLabeler` under the hood so the
         dashboard and training-time labeling share the exact same execution path.
         """
 

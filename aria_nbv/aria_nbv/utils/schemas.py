@@ -1,4 +1,13 @@
-"""Small shared enums used by training and reporting utilities."""
+"""Shared string enums for training-stage and schema-facing dispatch.
+
+This module exports :class:`ValueStrEnum` and the canonical :class:`Stage`
+values used by configs, loggers, and persisted records. It owns stable string
+serialization and typed comparison only; experiment loops own stage transitions
+and storage schemas own compatibility/versioning policy.
+
+String values remain stable across configuration, logging, and persisted
+metadata boundaries while enum members provide typed comparisons in Python.
+"""
 
 from __future__ import annotations
 

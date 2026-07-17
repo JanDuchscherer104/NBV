@@ -1,6 +1,6 @@
 """VIN v3 one-step RRI scorer with evidence-backed components.
 
-This module implements the active VIN one-step baseline. It predicts per-row
+This module owns the active VIN one-step baseline. It predicts per-row
 RRI scores for a finite candidate set and is used as a myopic scorer/control,
 not as the thesis finite-horizon value model. The most reliable signal in the
 current implementation comes from pose encoding, EVL voxel evidence, and
@@ -78,7 +78,7 @@ from torch import Tensor, nn
 from aria_nbv.utils.frames import rotate_yaw_cw90
 
 from ...data_handling.offline.adapter import build_vin_snippet_view
-from ...data_handling.raw import (
+from ...data_handling.raw.views import (
     EfmSnippetView,
     VinSnippetView,
     is_efm_snippet_view_instance,
@@ -289,6 +289,17 @@ class VinModelV3(nn.Module):
     projection stats, while enforcing fail-fast contracts to avoid silent
     collapse. It ranks candidates for immediate RRI; bounded rollout values
     such as $Q_H$ are separate thesis models trained on rollout replay.
+
+    Candidate-set symmetry is structural: learned blocks use row-wise maps,
+    candidate queries over shared scene/trajectory tokens, and symmetric
+    GroupNorm statistics across rows. There are no candidate-index embeddings
+    or order-sensitive candidate operations. In deterministic evaluation,
+    jointly permuting candidate poses and aligned camera rows therefore
+    permutes every ``N_q`` output the same way; stochastic training dropout
+    preserves only distributional equivariance. This is not graph-isomorphism
+    invariance because the model constructs no candidate graph. Its
+    reference-frame pose and positional encodings are coordinate-conditioned
+    inductive biases and do not enforce SE(3) equivariance.
     """
 
     def __init__(self, config: VinModelV3Config) -> None:
@@ -400,7 +411,8 @@ class VinModelV3(nn.Module):
             device (torch.device): Target device.
 
         Returns:
-            VinSnippetView: Padded snippet with points_world (Tensor["B, P, C_sem"]).
+            Padded `VinSnippetView` with
+            ``Tensor["B P C_sem", float32]`` world-point rows.
         """
         if is_vin_snippet_view_instance(efm):
             return efm.to(device=device)
@@ -431,25 +443,21 @@ class VinModelV3(nn.Module):
         the silent mode-collapse observed when projection stats are missing.
 
         Args:
-            snippet (VinSnippetView): VIN snippet with padded semidense points.
-                - points_world (Tensor["B, P, C_sem"]): XYZ + extras.
-                - lengths (Tensor["B"]): valid point counts per batch item.
-                - t_world_rig (PoseTW["B, T, 12"]): rig trajectory poses.
-            candidate_poses_world_cam (PoseTW["B, Nq, 12"]): Candidate camera poses T_w^c.
-                Unbatched inputs (Nq, 12) are expanded to B=1.
-            reference_pose_world_rig (PoseTW["B, 12"]): Reference rig pose T_w^r.
-            backbone_out (EvlBackboneOutput): Backbone outputs (device + voxel frame).
-                - t_world_voxel (PoseTW["B, 12"]): voxel grid pose in world frame.
+            snippet: VIN snippet with padded semidense
+                ``Tensor["B P C_sem", float32]`` world-point rows, valid
+                ``Tensor["B", int64]`` lengths, and optional
+                ``PoseTW["B T 12"]`` world-from-rig trajectory poses.
+            candidate_poses_world_cam: ``PoseTW["B N_q 12"]`` world-from-camera
+                candidate poses. ``PoseTW["N_q 12"]`` inputs gain ``B = 1``.
+            reference_pose_world_rig: ``PoseTW["B 12"]`` world-from-rig
+                reference poses.
+            backbone_out: Actor-visible EVL fields and
+                ``PoseTW["B 12"]`` world-from-voxel grid poses.
 
         Returns:
-            PreparedInputs:
-                pose_world_cam (PoseTW["B, Nq, 12"]): Candidate poses in world frame.
-                pose_world_rig_ref (PoseTW["B, 12"]): Reference rig pose in world frame.
-                t_world_voxel (PoseTW["B, 12"]): Voxel frame pose in world frame.
-                batch_size (int): B (batch size).
-                num_candidates (int): Nq (number of candidates).
-                device (torch.device): Device for downstream tensors.
-                snippet (VinSnippetView): Original snippet (padded semidense).
+            `PreparedInputs` with explicit ``B`` and ``N_q`` axes, aligned
+            world-from-camera, world-from-rig, and world-from-voxel poses, and
+            the padded semidense snippet.
         """
         device = backbone_out.voxel_extent.device
         pose_world_cam = ensure_candidate_batch(candidate_poses_world_cam).to(
@@ -499,16 +507,16 @@ class VinModelV3(nn.Module):
 
         Args:
             snippet (EfmSnippetView | VinSnippetView): Snippet with rig trajectory.
-            pose_world_rig_ref (PoseTW["B, 12"]): Reference rig pose ``T_w_r`` (world <- rig_ref).
+            pose_world_rig_ref: ``PoseTW["B 12"]`` world-from-reference-rig pose.
             batch_size (int): B (batch size).
             device (torch.device): Target device for outputs.
             dtype (torch.dtype): Output dtype.
 
         Returns:
-            Tuple of:
-                traj_feat (Tensor["B, F_traj"] or None): Pooled trajectory embedding.
-                traj_pose_vec (Tensor["B, T, D_v"] or None): Per-frame pose vectors.
-                traj_pose_enc (Tensor["B, T, F_traj"] or None): Per-frame pose encodings.
+            Tuple ``(traj_feat, traj_pose_vec, traj_pose_enc)`` shaped as
+            ``Tensor["B F_traj", float32]``,
+            ``Tensor["B T D_v", float32]``, and
+            ``Tensor["B T F_traj", float32]`` when available.
 
         Notes:
             The trajectory is provided as ``t_world_rig`` (world <- rig_t). We convert
@@ -536,20 +544,15 @@ class VinModelV3(nn.Module):
         the field low-dimensional for stability.
 
         Args:
-            backbone_out (EvlBackboneOutput): Backbone voxel outputs.
-                - occ_pr (Tensor["B, 1, D, H, W"]): occupancy probability.
-                - occ_input (Tensor["B, 1, D, H, W"]): observed occupancy evidence.
-                - counts (Tensor["B, D, H, W"]): observation counts per voxel.
-                - cent_pr (Tensor["B, 1, D, H, W"]): centerness prior.
-                - free_input (Tensor["B, 1, D, H, W"], optional): free-space evidence.
+            backbone_out: Actor-visible EVL voxel outputs: occupancy,
+                occupied-input, centerness, and optional free-space fields as
+                ``Tensor["B 1 D H W", float32]``, plus counts as
+                ``Tensor["B D H W", int64]``.
 
         Returns:
-            FieldBundle:
-                field_in (Tensor["B, F_in, D, H, W"]): concatenated scene channels.
-                field (Tensor["B, F_g, D, H, W"]): projected field (Conv3d + GN + GELU).
-                aux (dict[str, Tensor]): named channels used for diagnostics:
-                    occ_pr, cent_pr, occ_input, counts_norm, observed, unknown,
-                    free_input, new_surface_prior (each shaped like a single-channel field).
+            `FieldBundle` containing ``Tensor["B F_in D H W", float32]`` raw
+            channels, ``Tensor["B F_g D H W", float32]`` projected features,
+            and named single-channel auxiliary fields.
         """
 
         if not isinstance(backbone_out.occ_pr, torch.Tensor):
@@ -586,17 +589,18 @@ class VinModelV3(nn.Module):
 
         Args:
             proj_data (dict[str, Tensor] | None): Projection outputs.
-                - x, y, z (Tensor["B*Nq, P_proj"]): screen coords + depth.
-                - valid (Tensor["B*Nq, P_proj"]): projection mask.
-                - image_size (Tensor["B*Nq, 2"]): (H, W) per camera.
-                - num_cams (Tensor[""]): scalar camera count.
+                - ``x``, ``y``, ``z``: ``Tensor["B*N_q P_proj", float32]``
+                  pixel coordinates and camera-frame depth in metres.
+                - ``valid``: ``Tensor["B*N_q P_proj", bool]`` projection mask.
+                - ``image_size``: ``Tensor["B*N_q 2", float32]`` ``(H, W)`` rows.
+                - ``num_cams``: scalar integer tensor.
             batch_size (int): B (batch size).
-            num_candidates (int): Nq (candidates per batch).
+            num_candidates (int): ``N_q`` candidates per batch item.
             device (torch.device): Target device for features.
             dtype (torch.dtype): Output dtype.
 
         Returns:
-            Tensor["B, Nq, F_cnn"]: Semidense grid CNN features.
+            ``Tensor["B N_q F_cnn", float32]`` semidense-grid features.
 
         Notes:
             Each grid cell aggregates projected points (valid-only) into:
@@ -678,15 +682,16 @@ class VinModelV3(nn.Module):
 
         Args:
             efm (EfmSnippetView | VinSnippetView): EFM or VIN snippet view.
-            candidate_poses_world_cam (PoseTW["B, Nq, 12"]): Candidate camera poses ``T_w_cq``.
-            reference_pose_world_rig (PoseTW["B, 12"]): Reference rig pose ``T_w_r``.
-            p3d_cameras (PerspectiveCameras): PyTorch3D camera batch (size ``B*Nq``) aligned with candidates.
-            return_debug (bool): If True, return `VinV3ForwardDiagnostics`.
-            backbone_out (EvlBackboneOutput | None): Materialized EVL outputs for the snippet.
+            candidate_poses_world_cam: ``PoseTW["B N_q 12"]`` world-from-camera poses.
+            reference_pose_world_rig: ``PoseTW["B 12"]`` world-from-rig pose.
+            p3d_cameras: PyTorch3D camera batch of size ``B * N_q`` aligned
+                row-for-row with the candidates.
+            return_debug: If ``True``, return `VinV3ForwardDiagnostics`.
+            backbone_out: Materialized actor-visible EVL outputs for the snippet.
                 Scorer forward requires this cached evidence and does not instantiate or run a backbone.
 
         Returns:
-            Tuple[VinPrediction, VinV3ForwardDiagnostics | None]: Prediction plus optional diagnostics.
+            Prediction with ``B``/``N_q``-aligned CORAL outputs plus optional diagnostics.
         """
         # Shape notation (see docs/typst/shared/macros.typ):
         # B=batch size, N_q=num_candidates, D/H/W=voxel grid, V=voxel points,
@@ -845,9 +850,6 @@ class VinModelV3(nn.Module):
                 dtype=field_bundle.field.dtype,
             )
         # semidense_grid_feat: (B, N_q, F_cnn) when enabled
-        # TOOD: why init GlobalContext twice?
-        # global_ctx = GlobalContext(pos_grid=global_ctx.pos_grid, global_feat=global_ctx.global_feat)
-
         traj_feat, traj_pose_vec, traj_pose_enc = self._encode_traj_features(
             vin_snippet,
             pose_world_rig_ref=prepared.pose_world_rig_ref,
@@ -955,18 +957,21 @@ class VinModelV3(nn.Module):
         p3d_cameras: PerspectiveCameras,
         backbone_out: EvlBackboneOutput | None = None,
     ) -> VinPrediction:
-        """Score candidate poses for one snippet (no diagnostics).
+        """Score an aligned candidate set with cached actor-visible evidence.
 
         Args:
             efm: EFM snippet view or VIN snippet view for the current snippet.
-            candidate_poses_world_cam: Candidate camera poses in world frame.
-            reference_pose_world_rig: Reference rig pose in world frame.
-            p3d_cameras: Pytorch3D cameras aligned with candidates.
-            backbone_out: Optional precomputed backbone output.
+            candidate_poses_world_cam: ``PoseTW["B N_q 12"]`` world-from-camera poses.
+            reference_pose_world_rig: ``PoseTW["B 12"]`` world-from-rig pose.
+            p3d_cameras: PyTorch3D cameras aligned with the flattened
+                ``B * N_q`` candidate rows.
+            backbone_out: Required cached actor-visible EVL evidence. ``None``
+                is accepted by the signature only to produce a fail-fast error.
 
         Returns:
-            VinPrediction containing ordinal logits, expected scores, and
-            validity masks for each candidate.
+            `VinPrediction` with ``Tensor["B N_q K-1", float32]`` CORAL logits,
+            ``Tensor["B N_q K", float32]`` probabilities, and aligned expected
+            scores and diagnostic validity fields.
         """
         pred, _ = self._forward_impl(
             efm,
@@ -990,13 +995,13 @@ class VinModelV3(nn.Module):
 
         Args:
             efm: EFM snippet view or VIN snippet view for the current snippet.
-            candidate_poses_world_cam: Candidate camera poses in world frame.
-            reference_pose_world_rig: Reference rig pose in world frame.
-            p3d_cameras: Pytorch3D cameras aligned with candidates.
-            backbone_out: Optional precomputed backbone output.
+            candidate_poses_world_cam: ``PoseTW["B N_q 12"]`` world-from-camera poses.
+            reference_pose_world_rig: ``PoseTW["B 12"]`` world-from-rig pose.
+            p3d_cameras: PyTorch3D cameras aligned with ``B * N_q`` rows.
+            backbone_out: Required cached actor-visible EVL evidence.
 
         Returns:
-            Tuple of (VinPrediction, VinV3ForwardDiagnostics).
+            Prediction and ``B``/``N_q``-aligned intermediate tensors.
         """
         pred, debug = self._forward_impl(
             efm,

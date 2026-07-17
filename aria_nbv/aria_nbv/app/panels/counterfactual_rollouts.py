@@ -1,4 +1,9 @@
-"""Streamlit panel for live counterfactual rollout generation and evaluation."""
+"""Live counterfactual rollout generation, scoring, and audit panels.
+
+This module owns actor-visible target and finite-candidate controls, optional
+oracle RRI scoring, rollout-path diagnostics, and explicit separation between
+hard invalidity and unavailable labels.
+"""
 
 from __future__ import annotations
 
@@ -17,23 +22,24 @@ from efm3d.aria.pose import PoseTW
 
 from ...data_handling import (
     VinOfflineDatasetConfig,
-    VinOfflineSample,
     VinOfflineStoreConfig,
 )
+from ...data_handling.offline.dataset import VinOfflineSample
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.pipelines.evaluated_rollout import (
     EvaluatedRollout,
+    EvaluatedRolloutStep,
     OracleReplayAdapter,
     OracleReplayInvalidityError,
 )
 from ...oracle.scene_rri import SceneRriScorerConfig
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
+    ORACLE_TARGET_TASK_SOURCE,
+    OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
-    TargetCandidateRow,
-    target_candidate_row_from_task,
-    target_descriptor_from_candidate_row,
+    TargetTaskIdentityStatus,
 )
 from ...pose_generation import (
     CandidateGenerationRuntimeContext,
@@ -53,12 +59,15 @@ from ...rendering.plotting import (
 )
 from ...rollouts import (
     CounterfactualPoseGeneratorConfig,
-    CounterfactualSelectionPolicy,
     RolloutPolicySpec,
+)
+from ...rollouts.inspection import (
     candidate_result_diagnostic_counts,
     decode_position_id,
     decode_strategy_id,
 )
+from ...rollouts.replay.policy import CounterfactualSelectionPolicy
+from ...rollouts.replay.state import CounterfactualStepResult
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
@@ -91,28 +100,20 @@ Target table fields:
 - `class`: human-readable class name when available.
 - `sem_id` / `inst_id`: semantic and instance ids from the privileged task source.
 - `confidence`: source confidence retained for audit.
-- `projected_area_px`, `projected_fraction`, `visibility_score`,
-  `semidense_support`, `evl_support`, `effective_support`, `support_score`,
-  `deficit_score`, and `selection_score` are frozen compatibility fields and
-  use zero/NaN sentinels after actor-selector removal.
 - `selection_probability`: stochastic target-selection probability when available.
-- `eligible`: whether finite positive GT geometry admits the task.
-- `invalid_reason`: hard Oracle task invalidity reason.
-- `gt_label_valid`: whether GT matching produced a valid oracle/evaluation label.
-- `gt_match_status`: GT matching outcome such as `matched`, `not_requested`, or ambiguity/invalid status.
-- `gt_iou`: IoU of the accepted GT match when available.
-- `gt_match_score`: scalar GT-match audit score when available.
+- `admitted`: whether finite positive GT geometry admits the task.
+- `identity_status`: whether finite positive GT geometry admits the Oracle task.
 """
 
 _ACTIVE_TARGET_INFO = """
 The active target is the object conditioned into target-RRI rollout generation.
 
-Label format: `target 0 · window · sem=28 inst=51297 · score=... · valid`.
+Label format: `target 0 · window · sem=28 inst=51297 · matched`.
 
 - `target 0`: target row id.
 - `window`: class name resolved from the EFM semantic-id map.
 - `sem=... inst=...`: privileged semantic and instance ids retained for audit.
-- `score=...`: frozen compatibility value; it is not an RRI reward.
+- `matched`: Oracle task-admission status.
 - `valid`: GT-only matching succeeded, so target-RRI labels/evaluation crops can be computed.
 
 Candidate generation receives only the sanitized target descriptor. GT identity,
@@ -325,23 +326,18 @@ class LiveRolloutScoringMode(StrEnum):
     GEOMETRY = "geometry"
 
 
-@dataclass(frozen=True, slots=True)
-class _LiveTargetSelectionResult:
-    """Oracle target-task rows adapted for the live rollout UI."""
-
-    rows: tuple[TargetCandidateRow, ...]
-    selected_rows: tuple[TargetCandidateRow, ...]
-    source: str | None
-    warnings: tuple[str, ...]
-
-
 @dataclass(slots=True)
 class LiveRolloutScoreContext:
     """Evaluator and candidate-runtime state for one live rollout run."""
 
     score_label: str
+    """Human-readable objective label shown beside rollout results."""
+
     evaluator: OracleReplayAdapter | None
+    """Optional Oracle replay adapter; ``None`` selects geometry-only scoring."""
+
     runtime_context: CandidateGenerationRuntimeContext | None
+    """Actor-visible target/history context passed to finite candidate generation."""
 
 
 def _live_rollout_device_options() -> list[str]:
@@ -567,7 +563,7 @@ def _score_context_for_mode(
     *,
     scoring_mode: LiveRolloutScoringMode,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     target_scorer_config: TargetRriScorerConfig,
     scene_scorer_config: SceneRriScorerConfig,
 ) -> LiveRolloutScoreContext:
@@ -593,17 +589,17 @@ def _score_context_for_mode(
 
     if target is None:
         raise ValueError("target_rri scoring requires a selected target row.")
-    if not target.gt_label_valid:
-        raise ValueError(f"Selected target is not GT-label valid: status={target.gt_match_status}.")
+    if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
+        raise ValueError(f"Selected target is not GT-label valid: status={target.identity_status}.")
     scorer = target_scorer_config.setup_target(
         sample=sample.efm_snippet_view,
         target_sample=sample,
-        target_row=target,
+        target_task=target,
     )
     return LiveRolloutScoreContext(
         score_label=LiveRolloutScoringMode.TARGET_RRI.value,
         evaluator=OracleReplayAdapter(scorer),
-        runtime_context=CandidateGenerationRuntimeContext(descriptor=target_descriptor_from_candidate_row(target)),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=target.descriptor),
     )
 
 
@@ -611,7 +607,7 @@ def _run_live_rollout(
     *,
     sample: VinOfflineSample,
     scoring_mode: LiveRolloutScoringMode,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     candidate_config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig,
     rollout_config: CounterfactualPoseGeneratorConfig,
     target_scorer_config: TargetRriScorerConfig,
@@ -667,7 +663,7 @@ def _counterfactual_trajectory_rows(
     for traj_idx, trajectory in enumerate(evaluated.result.trajectories):
         final_pos = trajectory.final_pose_world().t.detach().cpu().reshape(-1).tolist()
         selected_metrics = [
-            evaluated_step.selected_metrics
+            evaluated_step.evaluation.labels.selected(evaluated_step.transition.selected_valid_index)
             for step in trajectory.steps
             if (evaluated_step := evaluated.step(traj_idx, step.step_index)) is not None
         ]
@@ -703,10 +699,11 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
             evaluated_step = evaluated.step(traj_idx, step.step_index)
             if evaluated_step is None:
                 continue
-            selected_target_rri = _metric_float(
-                evaluated_step.selected_metrics.get("target_rri", evaluated_step.selected_metrics.get("rri"))
+            selected_metrics = evaluated_step.evaluation.labels.selected(
+                evaluated_step.transition.selected_valid_index,
             )
-            selected_target_root_gain = _metric_float(evaluated_step.selected_metrics.get("target_root_gain"))
+            selected_target_rri = _metric_float(selected_metrics.get("target_rri", selected_metrics.get("rri")))
+            selected_target_root_gain = _metric_float(selected_metrics.get("target_root_gain"))
             selected_return = (
                 selected_target_root_gain if selected_target_root_gain is not None else selected_target_rri
             )
@@ -734,25 +731,22 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _valid_step_metric_values(step: object, metric_name: str) -> np.ndarray:
-    metric_vectors = getattr(step, "metric_vectors", {})
+def _valid_step_metric_values(step: EvaluatedRolloutStep, metric_name: str) -> np.ndarray:
+    metric_vectors = step.evaluation.labels.metrics
     values = metric_vectors.get(metric_name)
     if values is None and metric_name == "target_rri":
         values = metric_vectors.get("rri")
     if values is None:
         return np.asarray([], dtype=float)
     values_np = values.detach().cpu().numpy().reshape(-1)
-    candidates = getattr(step, "candidates", None)
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if mask_valid is not None:
-        mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
-        if mask.shape == values_np.shape:
-            values_np = values_np[mask]
-        elif values_np.shape[0] != int(mask.sum()):
-            raise ValueError(
-                f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape} "
-                f"or compact valid count {int(mask.sum())}."
-            )
+    mask = step.transition.candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    if mask.shape == values_np.shape:
+        values_np = values_np[mask]
+    elif values_np.shape[0] != int(mask.sum()):
+        raise ValueError(
+            f"Candidate validity mask shape {mask.shape} must match metric vector shape {values_np.shape} "
+            f"or compact valid count {int(mask.sum())}."
+        )
     finite = np.isfinite(values_np)
     return values_np[finite].astype(float, copy=False)
 
@@ -770,14 +764,14 @@ def _format_optional_metric(value: object) -> str:
     return "n/a" if value_float is None else f"{value_float:.4f}"
 
 
-def _render_live_step_candidate_diagnostics(step: object) -> None:
+def _render_live_step_candidate_diagnostics(
+    transition: CounterfactualStepResult,
+    evaluated_step: EvaluatedRolloutStep | None,
+) -> None:
     """Render per-step live candidate fanout by family and rejection reason."""
 
     _info_popover("step candidate diagnostics", _LIVE_STEP_CANDIDATE_INFO)
-    candidates = getattr(step, "candidates", None)
-    if candidates is None:
-        return
-    counts = candidate_result_diagnostic_counts(candidates)
+    counts = candidate_result_diagnostic_counts(transition.candidates)
     position_rows = counts.get("position", [])
     invalid_rows = counts.get("invalid_reason", [])
     if not position_rows and not invalid_rows:
@@ -816,7 +810,10 @@ def _render_live_step_candidate_diagnostics(step: object) -> None:
         else:
             st.success("No rejected candidates in this step.")
 
-    score_rows = _live_step_candidate_score_rows(step)
+    if evaluated_step is None:
+        st.info("Oracle candidate labels are unavailable for this geometry-only rollout step.")
+        return
+    score_rows = _live_step_candidate_score_rows(evaluated_step)
     if not score_rows:
         st.info("No per-valid-candidate score/provenance rows are available for this step.")
         return
@@ -884,20 +881,19 @@ def _render_live_step_candidate_diagnostics(step: object) -> None:
         )
 
 
-def _live_step_candidate_score_rows(step: object) -> list[dict[str, object]]:
-    candidates = getattr(step, "candidates", None)
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if candidates is None or mask_valid is None:
-        return []
-    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str, object]]:
+    transition = step.transition
+    evaluation = step.evaluation
+    candidates = transition.candidates
+    mask = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     shell_indices = np.flatnonzero(mask)
     if shell_indices.size == 0:
         return []
     rows: list[dict[str, object]] = []
-    selection_scores = _aligned_valid_vector(getattr(step, "selection_scores", None), shell_indices=shell_indices)
-    probabilities = _aligned_valid_vector(getattr(step, "selection_probabilities", None), shell_indices=shell_indices)
-    logits = _aligned_valid_vector(getattr(step, "selection_logits", None), shell_indices=shell_indices)
-    metric_vectors = getattr(step, "metric_vectors", {})
+    selection_scores = _aligned_valid_vector(transition.selection_scores, shell_indices=shell_indices)
+    probabilities = _aligned_valid_vector(transition.selection_probabilities, shell_indices=shell_indices)
+    logits = _aligned_valid_vector(transition.selection_logits, shell_indices=shell_indices)
+    metric_vectors = evaluation.labels.metrics
     target_root_gain = _aligned_valid_vector(metric_vectors.get("target_root_gain"), shell_indices=shell_indices)
     target_rri = _aligned_valid_vector(
         metric_vectors.get("target_rri", metric_vectors.get("rri")), shell_indices=shell_indices
@@ -909,8 +905,8 @@ def _live_step_candidate_score_rows(step: object) -> list[dict[str, object]]:
         getattr(candidates, "sampler_probability", None), expected=mask.shape[0]
     )
     component_names = getattr(candidates, "component_name", None)
-    selected_valid_index = int(getattr(step, "selected_valid_index", -1))
-    selected_shell_index = int(getattr(step, "selected_shell_index", -1))
+    selected_valid_index = int(transition.selected_valid_index)
+    selected_shell_index = int(transition.selected_shell_index)
     for valid_index, shell_index in enumerate(shell_indices.tolist()):
         position_id = None if position_ids is None else int(position_ids[shell_index])
         strategy_id = None if strategy_ids is None else int(strategy_ids[shell_index])
@@ -1051,44 +1047,38 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _target_rows_table(rows: tuple[TargetCandidateRow, ...]) -> list[dict[str, object]]:
+def _target_rows_table(rows: tuple[OracleTargetTask, ...]) -> list[dict[str, object]]:
     """Return a compact dataframe payload for target rows."""
 
     return target_selection_audit_rows(rows)
 
 
-def _target_detail_row(row: TargetCandidateRow) -> dict[str, object]:
+def _target_detail_row(row: OracleTargetTask) -> dict[str, object]:
     """Return one target row with pose/crop-relevant fields."""
 
     return {
         "target_id": row.target_id,
-        "source": row.source,
+        "source": ORACLE_TARGET_TASK_SOURCE,
         "source_index": int(row.source_index),
-        "center_world": tuple(float(v) for v in row.center_world),
-        "extents": tuple(float(v) for v in row.extents),
-        "pose_world_object": tuple(float(v) for v in row.pose_world_object),
-        "relative_pose_reference_object": tuple(float(v) for v in row.relative_pose_reference_object),
-        "gt_target_id": row.gt_target_id,
-        "gt_target_row_id": row.gt_target_row_id,
-        "gt_match_status": row.gt_match_status,
-        "gt_match_iou": row.gt_match_iou,
-        "invalid_reason_bitset": int(row.invalid_reason_bitset),
-        "primary_invalid_reason": int(row.primary_invalid_reason),
+        "center_world": tuple(float(v) for v in row.descriptor.center_world),
+        "extents": tuple(float(v) for v in row.descriptor.extents_m),
+        "pose_world_object": tuple(float(v) for v in row.descriptor.pose_world_object),
+        "relative_pose_reference_object": tuple(float(v) for v in row.descriptor.relative_pose_reference_object),
+        "identity_status": row.identity_status,
     }
 
 
-def _format_target_option(row: TargetCandidateRow) -> str:
-    status = "valid" if row.gt_label_valid else row.gt_match_status
+def _format_target_option(row: OracleTargetTask) -> str:
     return (
-        f"target {row.target_row_id} · {row.class_name} · sem={row.sem_id} inst={row.inst_id} · "
-        f"score={row.score:.3f} · {status}"
+        f"target {row.target_row_id} · {row.descriptor.class_name} · "
+        f"sem={row.descriptor.sem_id} inst={row.inst_id} · {row.identity_status}"
     )
 
 
 def _add_target_overlays(
     builder: CounterfactualPlotBuilder,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     *,
     show_actor_target: bool,
     show_gt_target: bool,
@@ -1098,16 +1088,22 @@ def _add_target_overlays(
     if target is None:
         return
     if show_actor_target:
-        builder.add_actor_visible_target_obb(target)
+        builder.add_actor_visible_target_obb(target.descriptor)
     if not show_gt_target:
         return
-    if not target.gt_label_valid:
+    if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
         st.warning(
             "The active target has no valid matched GT crop; only the descriptor target OBB can be shown.",
         )
         return
     try:
-        builder.add_matched_gt_target_obb(sample, target)
+        builder.add_obb(
+            target_gt_obb_world(target, sample),
+            name="Matched GT / evaluation crop",
+            color="#00d4ff",
+            width=6,
+            opacity=0.95,
+        )
     except ValueError as exc:
         st.warning(f"Matched GT target OBB unavailable: {exc}")
 
@@ -1115,7 +1111,7 @@ def _add_target_overlays(
 def _add_target_semidense_crop(
     builder: CounterfactualPlotBuilder,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     *,
     crop_basis: str,
     max_points: int = 12000,
@@ -1125,7 +1121,7 @@ def _add_target_semidense_crop(
     if target is None:
         return
     if crop_basis == "GT/evaluation OBB":
-        if not target.gt_label_valid:
+        if target.identity_status != TargetTaskIdentityStatus.MATCHED.value:
             st.warning("GT semidense crop unavailable because the active target has no valid GT match.")
             return
         try:
@@ -1147,8 +1143,8 @@ def _add_target_semidense_crop(
         return
 
     builder.add_semidense_in_oriented_box(
-        pose_world_object=target.pose_world_object,
-        extents=target.extents,
+        pose_world_object=target.descriptor.pose_world_object,
+        extents=target.descriptor.extents_m,
         name="Target semidense crop / descriptor",
         max_points=max_points,
         last_frame_only=False,
@@ -1193,13 +1189,7 @@ def _render_live_rollouts_tab() -> None:
     if st.button("Load sample and targets", key="cf_load_sample_targets"):
         try:
             sample = _load_vin_offline_sample(store_dir=store_dir, split=str(split), sample_index=int(sample_index))
-            sampled = OracleTargetTaskSampler(selector_cfg).sample(sample)
-            target_result = _LiveTargetSelectionResult(
-                rows=tuple(target_candidate_row_from_task(row) for row in sampled.rows),
-                selected_rows=tuple(target_candidate_row_from_task(row) for row in sampled.selected_rows),
-                source=sampled.source,
-                warnings=sampled.warnings,
-            )
+            target_result = OracleTargetTaskSampler(selector_cfg).sample(sample)
             cache[load_key] = {"sample": sample, "target_result": target_result}
         except Exception as exc:  # pragma: no cover - UI guard
             _report_exception(exc, context="Failed to load VIN offline sample and targets")
@@ -1433,7 +1423,7 @@ def _render_rollout_result(
     sample: VinOfflineSample,
     evaluated: EvaluatedRollout,
     *,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     log_text: str,
     scoring_mode: LiveRolloutScoringMode,
 ) -> None:
@@ -1472,7 +1462,7 @@ def _render_rollout_result(
             )
             show_gt_target = target_col2.checkbox(
                 "Show matched GT target OBB",
-                value=bool(target is not None and target.gt_label_valid),
+                value=bool(target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value),
                 key="cf_path_gt_target_obb",
             )
             show_target_crop = target_col3.checkbox(
@@ -1567,7 +1557,9 @@ def _render_rollout_result(
                     )
                     show_step_gt_target = step_target_col2.checkbox(
                         "Show matched GT target OBB",
-                        value=bool(target is not None and target.gt_label_valid),
+                        value=bool(
+                            target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value
+                        ),
                         key="cf_step_gt_target_obb",
                     )
                     show_step_target_crop = step_target_col3.checkbox(
@@ -1582,7 +1574,7 @@ def _render_rollout_result(
                     )
                     color_metric = st.selectbox(
                         "Candidate color metric",
-                        options=["target_root_gain", "target_rri", "selection_probability", "position_family"],
+                        options=["selection_score", "selection_probability", "position_family"],
                         index=0,
                         key="cf_step_candidate_color_metric",
                     )
@@ -1620,7 +1612,8 @@ def _render_rollout_result(
                     with st.expander("Step candidate fanout diagnostics", expanded=True):
                         evaluated_step = evaluated.step(int(trajectory_index), int(step_display_index - 1))
                         _render_live_step_candidate_diagnostics(
-                            trajectory.steps[int(step_display_index - 1)] if evaluated_step is None else evaluated_step
+                            trajectory.steps[int(step_display_index - 1)],
+                            evaluated_step,
                         )
 
     with depth_tab:
@@ -1639,7 +1632,7 @@ def _render_live_selected_depth_tab(
     evaluated: EvaluatedRollout,
     *,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
 ) -> None:
     rollouts = evaluated.result
     rows = pd.DataFrame(_live_selected_depth_rows(evaluated))
@@ -1698,11 +1691,11 @@ def _render_live_selected_depth_tab(
     )
     show_gt_projection = overlay_col2.checkbox(
         "Project matched GT target OBB",
-        value=bool(target is not None and target.gt_label_valid),
+        value=bool(target is not None and target.identity_status == TargetTaskIdentityStatus.MATCHED.value),
         key="cf_live_depth_gt_obb",
     )
-    depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
-    valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+    depth = torch.as_tensor(step.evaluation.evidence.selected_depth_m, dtype=torch.float32)
+    valid_mask = torch.as_tensor(step.evaluation.evidence.selected_depth_valid_mask, dtype=torch.bool)
     depth_plot = depth.clone()
     depth_plot[~(valid_mask & torch.isfinite(depth_plot))] = torch.nan
     finite = depth_plot[torch.isfinite(depth_plot)]
@@ -1733,11 +1726,11 @@ def _render_live_selected_depth_tab(
     st.plotly_chart(fig, width="stretch")
     st.json(
         {
-            "focal_px": step.selected_depth_focal_px,
-            "principal_point_px": step.selected_depth_principal_point_px,
-            "image_size_hw": step.selected_depth_image_size_hw,
-            "selected_valid_index": int(step.selected_valid_index),
-            "selected_shell_index": int(step.selected_shell_index),
+            "focal_px": step.evaluation.evidence.selected_depth_focal_px,
+            "principal_point_px": step.evaluation.evidence.selected_depth_principal_point_px,
+            "image_size_hw": step.evaluation.evidence.selected_depth_image_size_hw,
+            "selected_valid_index": int(step.transition.selected_valid_index),
+            "selected_shell_index": int(step.transition.selected_shell_index),
         },
         expanded=False,
     )
@@ -1766,11 +1759,15 @@ def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, obj
                 "selected_policy": transition.selection_policy,
                 "warning": "",
             }
-            if step is None or step.selected_depth_m is None or step.selected_depth_valid_mask is None:
+            if (
+                step is None
+                or step.evaluation.evidence.selected_depth_m is None
+                or step.evaluation.evidence.selected_depth_valid_mask is None
+            ):
                 rows.append({**base, "warning": "selected_depth_m/valid_mask not retained for this live step."})
                 continue
-            depth = torch.as_tensor(step.selected_depth_m, dtype=torch.float32)
-            valid_mask = torch.as_tensor(step.selected_depth_valid_mask, dtype=torch.bool)
+            depth = torch.as_tensor(step.evaluation.evidence.selected_depth_m, dtype=torch.float32)
+            valid_mask = torch.as_tensor(step.evaluation.evidence.selected_depth_valid_mask, dtype=torch.bool)
             if depth.ndim != 2 or valid_mask.shape != depth.shape:
                 rows.append(
                     {
@@ -1802,10 +1799,10 @@ def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, obj
 
 
 def _live_depth_target_overlays(
-    step: object,
+    step: EvaluatedRolloutStep,
     *,
     sample: VinOfflineSample,
-    target: TargetCandidateRow | None,
+    target: OracleTargetTask | None,
     show_actor_target: bool,
     show_gt_target: bool,
 ) -> list[DepthBoxOverlay]:
@@ -1813,15 +1810,18 @@ def _live_depth_target_overlays(
 
     if target is None:
         return []
-    focal = getattr(step, "selected_depth_focal_px", None)
-    principal = getattr(step, "selected_depth_principal_point_px", None)
+    focal = step.evaluation.evidence.selected_depth_focal_px
+    principal = step.evaluation.evidence.selected_depth_principal_point_px
     if focal is None or principal is None:
         return []
 
     overlays: list[DepthBoxOverlay] = []
-    pose_world_cam = step.selected_pose_world
+    pose_world_cam = step.transition.selected_pose_world
     if show_actor_target:
-        actor_corners = _oriented_box_corners_world(target.pose_world_object, target.extents)
+        actor_corners = _oriented_box_corners_world(
+            target.descriptor.pose_world_object,
+            target.descriptor.extents_m,
+        )
         overlays.append(
             DepthBoxOverlay(
                 corners_px=project_world_points_to_image(
@@ -1835,7 +1835,7 @@ def _live_depth_target_overlays(
                 width=4,
             )
         )
-    if show_gt_target and target.gt_label_valid:
+    if show_gt_target and target.identity_status == TargetTaskIdentityStatus.MATCHED.value:
         try:
             gt_corners = target_gt_obb_world(target, sample).bb3corners_world.reshape(8, 3)
         except ValueError:

@@ -1,4 +1,9 @@
-"""Standalone Streamlit diagnostics for immutable VIN offline datasets."""
+"""Standalone diagnostics for immutable VIN offline datasets.
+
+The module provides store discovery, schema and coverage summaries, tensor
+block statistics, distribution plots, and bounded Rerun launch controls without
+mutating persisted training data.
+"""
 
 from __future__ import annotations
 
@@ -10,14 +15,14 @@ import streamlit as st
 import torch
 
 from ...configs import PathConfig
-from ...data_handling import (
+from ...data_handling import VinOfflineStoreConfig
+from ...data_handling.offline.diagnostics import (
     VinOfflineCoverageStats,
     VinOfflineDatasetStats,
-    VinOfflineSourceConfig,
-    VinOfflineStoreConfig,
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )
+from ...data_handling.offline.source import VinOfflineSourceConfig
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command

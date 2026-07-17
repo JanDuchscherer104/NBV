@@ -4,6 +4,12 @@
 typed `EfmSnippetView` objects. It is the live data source used by candidate
 generation, VIN offline-cache construction, and rollout-data smoke builds.
 
+ATEK shards are the tensorized provenance for calibrated VRS streams,
+trajectories, online calibration, and MPS semidense points; this module does
+not open raw VRS recordings. Semidense points and calibrated poses are
+actor-visible observations, while attached ASE meshes and GT annotations are
+oracle label/evaluation assets.
+
 Scene/snippet identity, mesh attachment, taxonomy mapping, and semidense bounds
 are part of the contract. Any downstream store that depends on oracle labels
 must keep scene-level splits and manifest hashes instead of relying on sample
@@ -12,36 +18,228 @@ order alone.
 
 from __future__ import annotations
 
+import tarfile
 import warnings
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
 import torch
 import trimesh
 from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
+from efm3d.aria.aria_constants import (
+    ARIA_POINTS_VOL_MAX,
+    ARIA_POINTS_VOL_MIN,
+    ARIA_POINTS_WORLD,
+)
 from efm3d.dataset.efm_model_adaptor import EfmModelAdaptor, pipelinefilter
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from torch.utils.data import IterableDataset
 
 from ...configs import PathConfig
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
-from ..efm_dataset_utils import (
-    _find_tar_for_sample,
-    _infer_ids,
-    _matches_snippet_token,
-    _resolve_tar_for_shard,
-    _resolve_tar_from_path,
-    _split_snippet_ids,
-    _unique_preserve_order,
-    infer_semidense_bounds,
-)
-from ..efm_views import EfmSnippetView
+from ..identifiers import _ase_atek_identifier_variants, compact_ase_atek_sample_id
 from ..mesh_cache import MeshProcessSpec, load_or_process_mesh
+from .views import EfmSnippetView
+
+
+def _infer_ids(
+    efm_dict: Mapping[str, Any],
+    sequence_name: str | None = None,
+) -> tuple[str, str]:
+    """Infer scene and snippet ids from keys/url."""
+    scene_id = str(sequence_name or efm_dict.get("sequence_name", "unknown"))
+    snippet_id = efm_dict.get("__key__") or efm_dict.get("__url__")
+    if isinstance(snippet_id, str):
+        snippet_id = compact_ase_atek_sample_id(Path(snippet_id).stem)
+    else:
+        snippet_id = "unknown"
+    if scene_id == "unknown" and "__url__" in efm_dict:
+        parent = Path(str(efm_dict["__url__"])).parent.name
+        if parent.isdigit():
+            scene_id = parent
+    return scene_id, str(snippet_id)
+
+
+def _unique_preserve_order(values: Iterable[str]) -> list[str]:
+    """Return unique values while preserving their first-seen order."""
+    return list(dict.fromkeys(values))
+
+
+def _looks_like_shard_id(snippet_id: str) -> bool:
+    """Return whether a snippet identifier refers to a shard tar."""
+    stem = Path(snippet_id).name
+    return stem.startswith("shards-") or stem.endswith("_tar") or stem.endswith(".tar")
+
+
+def _normalize_shard_stem(snippet_id: str) -> str:
+    """Normalize shard identifiers into a tar-file stem."""
+    stem = Path(snippet_id).stem
+    if stem.endswith("_tar"):
+        stem = stem[: -len("_tar")]
+    return stem
+
+
+def _matches_snippet_token(prefix: str, token: str) -> bool:
+    """Return whether a shard member prefix matches the requested token."""
+    prefixes = _ase_atek_identifier_variants(prefix)
+    tokens = _ase_atek_identifier_variants(token)
+    return any(
+        candidate == requested or candidate.endswith(requested) for candidate in prefixes for requested in tokens
+    )
+
+
+def _tar_contains_snippet(tar_path: Path, snippet_token: str) -> bool:
+    """Return whether a shard tar contains the requested snippet token."""
+    with tarfile.open(tar_path, "r") as tar:
+        for member in tar:
+            prefix = member.name.split(".", 1)[0]
+            if _matches_snippet_token(prefix, snippet_token):
+                return True
+    return False
+
+
+def _resolve_tar_from_path(
+    *,
+    snippet_id: str,
+    paths: PathConfig,
+) -> Path | None:
+    """Resolve an explicit shard path or relative shard reference."""
+    candidate = Path(snippet_id)
+    if candidate.is_absolute():
+        if candidate.suffix != ".tar":
+            candidate = candidate.with_suffix(".tar")
+        return candidate if candidate.exists() else None
+    if candidate.parent != Path():
+        resolved = paths.resolve_under_root(candidate)
+        if resolved.suffix != ".tar":
+            resolved = resolved.with_suffix(".tar")
+        return resolved if resolved.exists() else None
+    return None
+
+
+def _resolve_tar_for_shard(
+    *,
+    shard_id: str,
+    scene_dirs: list[Path],
+) -> list[Path]:
+    """Resolve a shard identifier against the configured scene directories."""
+    stem = _normalize_shard_stem(shard_id)
+    matches: list[Path] = []
+    for scene_dir in scene_dirs:
+        candidate = scene_dir / f"{stem}.tar"
+        if candidate.exists():
+            matches.append(candidate)
+    return matches
+
+
+def _find_tar_for_sample(
+    *,
+    sample_key: str,
+    scene_dirs: list[Path],
+) -> Path | None:
+    """Find the shard tar that contains the requested sample key."""
+    for scene_dir in scene_dirs:
+        for tar_path in sorted(scene_dir.glob("*.tar")):
+            if _tar_contains_snippet(tar_path, sample_key):
+                return tar_path
+    return None
+
+
+def _split_snippet_ids(snippet_ids: Iterable[str]) -> tuple[list[str], list[str]]:
+    """Split mixed snippet identifiers into shard ids and sample keys."""
+    shard_ids: list[str] = []
+    sample_keys: list[str] = []
+    for snippet_id in snippet_ids:
+        if _looks_like_shard_id(snippet_id):
+            shard_ids.append(snippet_id)
+        else:
+            sample_keys.append(snippet_id)
+    return shard_ids, sample_keys
+
+
+def _tensor3(value: Any) -> torch.Tensor | None:
+    """Return ``value`` when it is a tensor with exactly three elements."""
+    if isinstance(value, torch.Tensor) and value.numel() == 3:
+        return value
+    return None
+
+
+def infer_semidense_bounds(
+    efm_dict: Mapping[str, Any],
+) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """Infer snippet world-space AABB from semidense metadata or points.
+
+    Metadata bounds and finite-point bounds are compared when both exist; the
+    smaller finite volume is retained to avoid an unnecessarily loose crop.
+    Padded and non-finite semidense rows never contribute.
+
+    Args:
+        efm_dict: Adapted EFM payload containing world-frame semidense points
+            and/or explicit volume bounds.
+
+    Returns:
+        Pair of ``Tensor["3", float32]`` world-frame AABB minima and maxima in
+        metres on CPU, or ``None`` when no finite bounds are available.
+    """
+    vol_min = _tensor3(efm_dict.get(ARIA_POINTS_VOL_MIN))
+    if vol_min is None:
+        vol_min = _tensor3(efm_dict.get("points/vol_min"))
+
+    vol_max = _tensor3(efm_dict.get(ARIA_POINTS_VOL_MAX))
+    if vol_max is None:
+        vol_max = _tensor3(efm_dict.get("points/vol_max"))
+    vol_bounds: tuple[torch.Tensor, torch.Tensor] | None = None
+    if vol_min is not None and vol_max is not None and torch.isfinite(vol_min).all() and torch.isfinite(vol_max).all():
+        vol_bounds = (vol_min.detach().cpu(), vol_max.detach().cpu())
+
+    points = efm_dict.get(ARIA_POINTS_WORLD)
+    point_bounds: tuple[torch.Tensor, torch.Tensor] | None = None
+    if isinstance(points, torch.Tensor) and points.shape[-1] == 3:
+        lengths = efm_dict.get("msdpd#points_world_lengths") or efm_dict.get(
+            "points/lengths",
+        )
+        if isinstance(lengths, torch.Tensor):
+            lengths = lengths.to(dtype=torch.long)
+
+        mask_valid = torch.isfinite(points).all(dim=-1)
+        if isinstance(lengths, torch.Tensor) and lengths.shape[0] == points.shape[0]:
+            idx = torch.arange(points.shape[1], device=points.device).unsqueeze(
+                0,
+            ) < lengths.unsqueeze(-1)
+            mask_valid &= idx
+
+        if mask_valid.any():
+            valid_points = points[mask_valid]
+            min_vec = valid_points.min(dim=0).values.detach().cpu()
+            max_vec = valid_points.max(dim=0).values.detach().cpu()
+            if torch.isfinite(min_vec).all() and torch.isfinite(max_vec).all():
+                point_bounds = (min_vec, max_vec)
+
+    if vol_bounds is None and point_bounds is None:
+        base_bounds = None
+    elif vol_bounds is None:
+        base_bounds = point_bounds
+    elif point_bounds is None:
+        base_bounds = vol_bounds
+    else:
+        vol_extent = (vol_bounds[1] - vol_bounds[0]).clamp_min(1e-6)
+        point_extent = (point_bounds[1] - point_bounds[0]).clamp_min(1e-6)
+        vol_volume = torch.prod(vol_extent)
+        point_volume = torch.prod(point_extent)
+        base_bounds = point_bounds if point_volume < vol_volume else vol_bounds
+
+    return base_bounds
 
 
 class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
-    """Configuration for `AseEfmDataset`."""
+    """Configure the canonical ATEK-shard to EFM-snippet streaming path.
+
+    The config resolves scene/shard/sample filters, the ATEK-to-EFM taxonomy,
+    and optional ASE mesh pairing before constructing :class:`AseEfmDataset`.
+    ``EfmModelAdaptor`` owns flattened-key remapping; this config does not
+    introduce a parallel schema.
+    """
 
     cache_exclude_fields: ClassVar[set[str]] = {"tar_urls", "scene_to_mesh"}
     """Fields omitted from cache snapshots because they are large or derived."""
@@ -56,7 +254,7 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
     atek_variant: Literal["efm", "efm_eval", "cubercnn", "cubercnn_eval"] = Field(
         default="efm",
     )
-    """ATEK dataset variant subdirectory under the data root."""
+    """ATEK payload variant and on-disk shard subdirectory under the data root."""
     scene_ids: list[str] = Field(default_factory=list)
     """Optional list of ASE scene IDs to include.
 
@@ -74,12 +272,12 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
     snippet_key_filter: list[str] = Field(default_factory=list)
     """Optional sample key filter applied after loading shards."""
     tar_urls: list[str] = Field(default_factory=list)
-    """Explicit list of shard paths or globs.
+    """ATEK WebDataset shard paths or globs carrying tensorized ASE snippets.
 
     Auto-populated from ``scene_ids`` when empty.
     """
     scene_to_mesh: dict[str, Path] = Field(default_factory=dict)
-    """Optional mapping of ``scene_id`` -> GT mesh path.
+    """Optional mapping of ``scene_id`` to ASE GT-mesh evaluation asset.
 
     Auto-filled when ``load_meshes=True`` and mesh paths exist.
     """
@@ -187,7 +385,7 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
 
     @property
     def taxonomy_csv(self) -> Path:
-        """Resolved taxonomy mapping CSV path."""
+        """Resolve the ATEK-to-EFM semantic taxonomy used by ``EfmModelAdaptor``."""
         taxonomy_pth = self.paths.external_dir / "efm3d" / "efm3d" / "config" / "taxonomy" / self.taxonomy_csv_filename
         if not taxonomy_pth.exists():
             raise FileNotFoundError(f"Taxonomy CSV not found at {taxonomy_pth}")
@@ -328,7 +526,14 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
 
 
 class AseEfmDataset(IterableDataset[EfmSnippetView]):
-    """Iterable dataset yielding `EfmSnippetView` with optional GT mesh."""
+    """Stream zero-copy EFM views from ATEK shards with optional ASE meshes.
+
+    Each iteration adapts one WebDataset sample into the consumed EFM key
+    families, infers stable scene/snippet lineage, and attaches processed mesh
+    tensors when configured. The iterable owns per-instance mesh memoization;
+    yielded :class:`EfmSnippetView` objects retain the backing EFM dictionary.
+    Meshes never become actor-visible observations.
+    """
 
     def __init__(self, config: AseEfmDatasetConfig):
         """Initialize the dataset wrapper and its WebDataset source."""
@@ -418,7 +623,13 @@ class AseEfmDataset(IterableDataset[EfmSnippetView]):
             raise TypeError(f"Unexpected sample type from loader: {type(raw)}")
 
     def __iter__(self) -> Iterator[EfmSnippetView]:
-        """Yield raw snippet views together with optional processed meshes."""
+        """Yield adapted snippets with actor-visible EFM tensors and optional GT meshes.
+
+        Yields:
+            :class:`EfmSnippetView` backed by one ATEK sample. Camera,
+            trajectory, and semidense tensors preserve EFM frame conventions;
+            mesh fields are oracle-only ASE assets.
+        """
         for efm_dict in self._iter_efm_samples():
             scene_id, snippet_id = _infer_ids(
                 efm_dict,

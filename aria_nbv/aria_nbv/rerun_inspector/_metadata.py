@@ -1,4 +1,10 @@
-"""Inventory normalization and metadata rendering for the Rerun inspector."""
+"""Normalize visual capabilities and render provenance for Rerun inspection.
+
+This module owns the stable inventory DTO, pre-recording required-layer checks,
+and compact JSON metadata containing source sample identity, selection context,
+resolved inspector config, and non-fatal visualization warnings. Inventory
+flags describe availability, not actor/oracle semantic equivalence.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from aria_nbv.data_handling import VinOfflineSample, collect_offline_visual_inventory
-from aria_nbv.data_handling.efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from aria_nbv.data_handling.identifiers import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from aria_nbv.data_handling.offline.dataset import VinOfflineSample
+from aria_nbv.data_handling.offline.inventory import collect_offline_visual_inventory
 
 from ._config import RerunOfflineInspectorConfig
 

@@ -1,8 +1,11 @@
-"""Coordinate frame utilities for Aria/EFM3D.
+"""Construct frame-safe Aria/EFM camera axes and coordinate transforms.
 
-Add a PoseTW-aware look-at helper that guarantees zero roll by aligning the
-camera up-axis with the world-up vector. This preserves the LUF convention
-(X-left, Y-up, Z-forward) while avoiding arbitrary yaw/roll about world Z.
+This module provides world-up broadcasting, pose-aware look-at axes,
+rig-to-camera composition, and the CW90 display-yaw transform for `PoseTW` and
+`CameraTW`. It owns LUF/Z-up frame conversion only; sampling policy, camera
+calibration, and image data remain with callers. Look-at construction aligns
+camera up with world up to avoid arbitrary roll while preserving the LUF
+convention (X-left, Y-up, Z-forward).
 """
 
 from __future__ import annotations

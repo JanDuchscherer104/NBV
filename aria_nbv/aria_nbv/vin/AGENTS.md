@@ -10,14 +10,14 @@ Apply this file when working under `aria_nbv/aria_nbv/vin/`.
 
 ## Public Contracts
 - Core scorer surface: `aria_nbv/aria_nbv/vin/models/scene_myopic.py`, `scorer_context.py`, `ordinal.py`, `diagnostics/summarize.py`
-- Shared batch and snippet containers: `aria_nbv/aria_nbv/data_handling/efm_views.py`, `aria_nbv/aria_nbv/data_handling/offline/batch.py`
+- Shared batch and snippet containers: `aria_nbv/aria_nbv/data_handling/raw/views.py`, `aria_nbv/aria_nbv/data_handling/offline/batch.py`
 - Training integration: `aria_nbv/aria_nbv/lightning/lit_module.py`, `lit_datamodule.py`
 - Narrative surfaces: `docs/typst/seminar_paper/sections/06-architecture.typ`, `docs/typst/seminar_paper/sections/07-training-objective.typ`, `docs/typst/seminar_paper/sections/12g-appendix-vin-v3-streamline.typ`
 
 ## Boundary Rules
 - Treat scorer inputs, prediction semantics, and shared batch/container shapes as cross-surface contracts across VIN, Lightning, diagnostics, and docs.
 - Preserve candidate-vs-rig frame semantics. Display-only rotations, plotting helpers, or UI conveniences must not leak into training, cache, or model inputs.
-- If VIN needs new cached or raw data fields, extend the `aria_nbv.data_handling` public surface instead of reaching into ad hoc dict payloads.
+- If VIN needs new cached or raw data fields, extend the owning `data_handling.raw` or `data_handling.offline` leaf contract instead of reaching into ad hoc dict payloads or broadening the package root.
 - Keep `VinSnippetView` and `VinOracleBatch` semantics aligned with the active scorer path; update docs and targeted tests together when those contracts change.
 - Prefer the active VIN v3 path unless the task explicitly targets experimental or legacy modules.
 

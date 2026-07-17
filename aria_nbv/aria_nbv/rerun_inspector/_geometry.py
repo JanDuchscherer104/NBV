@@ -1,4 +1,10 @@
-"""Typed tensor, pose, camera, and image conversion helpers for Rerun logging."""
+"""Convert typed ARIA geometry and image payloads into Rerun-ready arrays.
+
+This module owns CPU NumPy conversion, deterministic point subsampling,
+world-from-camera pose extraction, pinhole parameter ordering, and display-only
+image rotation. It does not change physical coordinate frames or mutate source
+tensors, ``PoseTW`` objects, cameras, or immutable dataset records.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +24,12 @@ if TYPE_CHECKING:
 
 
 def to_numpy(value: object, *, dtype: DTypeLike = np.float32) -> NDArray[Any]:
-    """Convert tensors and tensor-wrapper payloads to NumPy arrays."""
+    """Expose a tensor-like payload as a CPU NumPy array of the requested dtype.
+
+    Torch inputs are detached before transfer, so Rerun logging never retains a
+    gradient graph. Shape and coordinate frame are preserved; existing NumPy
+    inputs may share storage when no dtype conversion is required.
+    """
 
     if isinstance(value, TensorWrapper):
         value = value._data
@@ -28,7 +39,19 @@ def to_numpy(value: object, *, dtype: DTypeLike = np.float32) -> NDArray[Any]:
 
 
 def deterministic_downsample(points: object, *, max_points: int, seed: int | None) -> NDArray[Any]:
-    """Return a deterministic subset of ``points`` with shape ``(N, 3)``."""
+    """Return an order-preserving random subset of 3D points.
+
+    Args:
+        points: Tensor-like coordinates reshaped to
+            ``ndarray["N 3", float32]``. The caller owns their frame and units.
+        max_points: Maximum returned rows; non-positive values return an empty
+            ``ndarray["0 3", float32]``.
+        seed: NumPy generator seed, or ``None`` for non-reproducible sampling.
+
+    Returns:
+        ``ndarray["M 3", float32]`` with ``M <= max_points``. Sorted sampled
+        indices preserve source order and the input is not mutated.
+    """
 
     arr = to_numpy(points).reshape(-1, 3)
     if max_points <= 0:
@@ -41,7 +64,17 @@ def deterministic_downsample(points: object, *, max_points: int, seed: int | Non
 
 
 def pose_rt(poses: PoseTW, indices: Sequence[int] | None = None) -> tuple[NDArray[Any], NDArray[Any]]:
-    """Extract ``R`` and ``t`` from a PoseTW-like batch."""
+    """Extract rotation and translation from typed parent-from-child poses.
+
+    Args:
+        poses: ``PoseTW`` with underlying ``Tensor["... 12", float32]``.
+        indices: Optional flattened pose rows to retain.
+
+    Returns:
+        Rotation ``ndarray["M 3 3", float32]`` and translation
+        ``ndarray["M 3", float32]``. Translation keeps the pose's parent frame
+        and is in metres for ARIA world transforms.
+    """
 
     r = to_numpy(poses.R).reshape(-1, 3, 3)
     t = to_numpy(poses.t).reshape(-1, 3)
@@ -53,7 +86,12 @@ def pose_rt(poses: PoseTW, indices: Sequence[int] | None = None) -> tuple[NDArra
 
 
 def p3d_param_at(values: Tensor, index: int) -> NDArray[Any]:
-    """Return one PyTorch3D camera parameter row as ``float32``."""
+    """Return one broadcast-aware PyTorch3D parameter row.
+
+    A singleton first axis is reused for every candidate; otherwise ``index``
+    is clamped to the available camera batch. The result is
+    ``ndarray["D", float32]`` on CPU.
+    """
 
     arr = to_numpy(values).reshape(-1, values.shape[-1])
     if arr.shape[0] == 0:
@@ -66,7 +104,8 @@ def p3d_pinhole_kwargs(cameras: PerspectiveCameras, index: int) -> dict[str, lis
     """Return Rerun ``Pinhole`` kwargs from a PyTorch3D camera entry.
 
     PyTorch3D stores ``image_size`` as ``(height, width)``; Rerun expects
-    ``resolution`` as ``[width, height]``.
+    ``resolution`` as ``[width, height]``. Focal lengths and principal point
+    remain ``[x, y]`` in the camera's pixel calibration convention.
     """
 
     image_size = p3d_param_at(cameras.image_size, index)
@@ -81,7 +120,12 @@ def p3d_pinhole_kwargs(cameras: PerspectiveCameras, index: int) -> dict[str, lis
 
 
 def camera_tw_pinhole_kwargs(camera: CameraTW) -> dict[str, list[float]]:
-    """Return Rerun ``Pinhole`` kwargs from one EFM ``CameraTW`` entry."""
+    """Return pixel-calibrated Rerun pinhole values from one ``CameraTW`` row.
+
+    Resolution is ``[width, height]``; focal length ``[f_x, f_y]`` and
+    principal point ``[c_x, c_y]`` are in pixels. Extrinsics are intentionally
+    excluded and must be logged from the matching world-from-camera ``PoseTW``.
+    """
 
     size = to_numpy(camera.size).reshape(-1, 2)[0]
     focal = to_numpy(camera.f).reshape(-1, 2)[0]
@@ -94,14 +138,19 @@ def camera_tw_pinhole_kwargs(camera: CameraTW) -> dict[str, list[float]]:
 
 
 def candidate_centers_world(poses_world_cam: PoseTW, indices: Sequence[int]) -> NDArray[Any]:
-    """Return candidate camera centers from PoseTW translations."""
+    """Return selected camera centers as ``ndarray["M 3", float32]`` in world metres."""
 
     _, centers = pose_rt(poses_world_cam, indices)
     return centers
 
 
 def subset_poses(poses_world_cam: PoseTW, indices: Sequence[int]) -> PoseTW:
-    """Return a PoseTW-like subset without importing data-handling internals."""
+    """Select flattened world-from-camera pose rows without mutating the source.
+
+    Returns:
+        ``PoseTW`` with underlying ``Tensor["M 12", float32]`` in the requested
+        index order.
+    """
 
     data = poses_world_cam._data
     if data is None:
@@ -112,7 +161,12 @@ def subset_poses(poses_world_cam: PoseTW, indices: Sequence[int]) -> PoseTW:
 
 
 def image_hwc(tensor: object, index: int) -> NDArray[Any]:
-    """Convert a CHW image tensor in [0,1] or [0,255] to HWC uint8."""
+    """Convert one channel-first image to ``ndarray["H W C", uint8]``.
+
+    Batched ``Tensor["F C H W", ...]`` inputs select frame ``index``. Floating
+    values in ``[0, 1]`` are scaled to ``[0, 255]``; other values are clipped.
+    Physical camera orientation is unchanged until an explicit display rotation.
+    """
 
     arr = to_numpy(tensor)
     if arr.ndim == 4:
@@ -129,7 +183,12 @@ def image_hwc(tensor: object, index: int) -> NDArray[Any]:
 
 
 def depth_hw(tensor: object, index: int) -> NDArray[Any]:
-    """Return one depth frame as ``float32`` with shape ``(H, W)``."""
+    """Return one depth frame as ``ndarray["H W", float32]``.
+
+    Accepted layouts include ``Tensor["F 1 H W", ...]`` and
+    ``Tensor["F H W", ...]``. Values preserve source units; inspector depth
+    sources are metric distances in metres.
+    """
 
     arr = to_numpy(tensor)
     if arr.ndim == 4:
@@ -142,7 +201,11 @@ def depth_hw(tensor: object, index: int) -> NDArray[Any]:
 
 
 def display_rot90_cw(array: NDArray[Any]) -> NDArray[Any]:
-    """Apply ARIA's display-only 90 degree clockwise image convention."""
+    """Return a contiguous CW90 display copy without changing camera geometry.
+
+    The physical ``PoseTW``/``CameraTW`` contract remains untouched; this helper
+    exists only to orient image and depth rasters for human viewing.
+    """
 
     return np.ascontiguousarray(np.rot90(array, k=-1))
 

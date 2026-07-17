@@ -1,9 +1,15 @@
-"""Oracle evaluation point-cloud streams for RRI scoring.
+"""Build lineage-preserving oracle evaluation point clouds for RRI scoring.
 
-This module separates actor-visible geometry from oracle-only label geometry.
+This module provides deterministic fusion, observed-prefix selection, and root
+point-cloud construction. It separates actor-visible geometry from oracle-only
+label geometry.
 The thesis-core default builds the root evaluation point cloud from ASE RGB
 ground-truth ray-distance depth frames, while semi-dense MPS points remain
 available as actor input and as a legacy diagnostic stream.
+
+Candidate rendering and matched GT mesh cropping live in adjacent rendering
+and oracle surfaces. This module owns only the root evaluation stream and its
+frame/time provenance; it does not decide candidate hard validity.
 """
 
 from __future__ import annotations
@@ -18,7 +24,8 @@ from efm3d.utils.depth import dist_im_to_point_cloud_im
 
 from ..data_handling import EfmSnippetView
 from .target_selection import (
-    TargetCandidateRow,
+    OracleTargetTask,
+    TargetTaskIdentityStatus,
     _compact_obb_block,
     _valid_obb_data_with_source_indices,
     _world_obbs_for_sample,
@@ -84,34 +91,44 @@ class OracleRriState(Protocol):
 
 
 class RriEvaluationPointCloudSource(StrEnum):
-    """Source used for the current/root point cloud in oracle RRI labels."""
+    """Select the geometry source used for the root oracle evaluation cloud."""
 
     ASE_GT_DEPTH_ROOT = "ase_gt_depth_root"
+    """Observed-prefix ASE GT ray-distance depth, used by thesis target labels."""
     LEGACY_SEMIDENSE_ROOT = "legacy_semidense_root"
+    """MPS semi-dense world points, retained for actor/legacy diagnostics only."""
     RENDERED_LOGGED_DEPTH_ROOT = "rendered_logged_depth_root"
+    """Reserved rendered-root parity ablation; current construction raises."""
 
 
 class RriRewardMode(StrEnum):
-    """Reward used to rank rollout candidates from oracle distance diagnostics."""
+    """Choose the normalization used for a valid rollout candidate's oracle gain."""
 
     ROOT_NORMALIZED_GAIN = "root_normalized_gain"
+    """Normalize every step by the fixed rollout-root error for telescoping returns."""
     STATE_RELATIVE_RRI = "state_relative_rri"
+    """Normalize one-step improvement by the current-state error for diagnostics."""
 
 
 @dataclass(frozen=True, slots=True)
 class RootEvalPointCloud:
-    """Root oracle evaluation point cloud plus lineage metadata."""
+    """Root oracle evaluation points with reproducible source lineage.
+
+    The points are label/evaluation geometry, even when the selected source is
+    also available to the actor. Frame and trajectory indices preserve exactly
+    which observed prefix was unprojected into the world frame.
+    """
 
     points_world: Tensor
-    """Tensor['P', 3] fused world-frame evaluation points."""
+    """``Tensor["P 3", float32]`` fused evaluation points in world frame, metres."""
     source: RriEvaluationPointCloudSource
     """Root evaluation point-cloud source."""
     frame_indices: Tensor
-    """Tensor['F_eval'] RGB/depth frame indices used for root ASE depth."""
+    """``Tensor["F_eval", int64]`` camera/depth frame indices used by the ASE root."""
     trajectory_indices: Tensor
-    """Tensor['F_eval'] nearest trajectory rows used for world transforms."""
+    """``Tensor["F_eval", int64]`` nearest trajectory rows used for world transforms."""
     root_time_ns: int | None
-    """Root timestamp used for observed-prefix filtering, if available."""
+    """Root timestamp in nanoseconds used for observed-prefix filtering, if available."""
     root_trajectory_index: int | None
     """Root trajectory row used for observed-prefix filtering, if available."""
     root_frame_index: int | None
@@ -121,7 +138,7 @@ class RootEvalPointCloud:
     camera_label: str
     """Camera stream used to build ``points_world``."""
     stride: int
-    """Pixel stride applied after ray-distance unprojection."""
+    """Positive pixel stride applied after ray-distance unprojection."""
     far_m: float | None
     """Maximum retained ray distance in metres, if configured."""
     voxel_size_m: float
@@ -136,16 +153,19 @@ def canonical_fuse_points(
     voxel_size_m: float = 0.0,
     max_points: int | None = None,
 ) -> Tensor:
-    """Return finite points after deterministic voxel fusion and point capping.
+    """Filter, deterministically voxel-fuse, and cap metric-frame points.
 
     Args:
-        points: ``Tensor['N', 3]`` points in a common metric frame.
+        points ``Tensor["N D", float32]``: Points in one metric coordinate
+            frame. Only the first three coordinates are retained.
         voxel_size_m: Edge length for mean voxel fusion. Values ``<=0`` disable
             voxel aggregation.
         max_points: Optional deterministic cap after voxel fusion.
 
     Returns:
-        ``Tensor['K', 3]`` finite, fused points.
+        ``Tensor["K 3", float32]`` finite points in the input frame and units.
+        Voxel representatives are arithmetic means, and deterministic capping
+        retains evenly spaced row indices.
     """
 
     pts = points.reshape(-1, points.shape[-1])[..., :3]
@@ -208,10 +228,10 @@ def _eval_depth_far_m(
     return 20.0 if zfar is None else float(zfar)
 
 
-def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> ObbTW:
+def target_gt_obb_world(task: OracleTargetTask, sample: "VinOfflineSample") -> ObbTW:
     """Resolve an Oracle-selected target's matched GT OBB in world coordinates."""
 
-    if not row.gt_label_valid or row.gt_target_row_id is None:
+    if task.identity_status != TargetTaskIdentityStatus.MATCHED.value:
         raise _OracleEvidenceError(
             OracleEvidenceInvalidReason.TARGET_GT_LABEL_INVALID,
             "Target row is not GT-label valid; refusing to build target RRI crop.",
@@ -225,11 +245,11 @@ def target_gt_obb_world(row: TargetCandidateRow, sample: "VinOfflineSample") -> 
     gt_world = _world_obbs_for_sample(gt_block[0], sample)
     gt_data, gt_source_indices = _valid_obb_data_with_source_indices(gt_world)
     try:
-        gt_index = gt_source_indices.index(int(row.gt_target_row_id))
+        gt_index = gt_source_indices.index(int(task.source_index))
     except ValueError as exc:
         raise _OracleEvidenceError(
             OracleEvidenceInvalidReason.TARGET_GT_ROW_MISSING,
-            f"Matched GT target row {row.gt_target_row_id} is not present in sample.gt_obbs.",
+            f"Oracle target row {task.source_index} is not present in sample.gt_obbs.",
         ) from exc
     return ObbTW(gt_data[gt_index].unsqueeze(0))
 
@@ -334,13 +354,41 @@ def build_root_eval_pointcloud(
     voxel_size_m: float = 0.02,
     max_points: int | None = 200_000,
 ) -> RootEvalPointCloud:
-    """Build the root oracle evaluation point cloud for a rollout snippet.
+    """Build the observed-prefix root cloud used by oracle rollout labels.
 
     ``ASE_GT_DEPTH_ROOT`` uses all observed camera/depth frames up to the
     rollout reference pose. ``LEGACY_SEMIDENSE_ROOT`` returns the collapsed MPS
     semi-dense point cloud for diagnostics only. ``RENDERED_LOGGED_DEPTH_ROOT``
     is intentionally reserved for the rendered-root ablation and should be
     implemented separately from ASE ray-distance preprocessing.
+
+    Args:
+        sample: EFM snippet containing camera calibration, ray-distance depth,
+            trajectory poses, and optional MPS semi-dense points.
+        source: Evaluation-geometry source. The thesis default is oracle-only
+            ASE GT depth; the semi-dense option is a legacy diagnostic.
+        camera_label: Calibrated EFM camera stream used for ASE depth.
+        reference_pose_world: Optional world-from-rig root pose. It is used
+            only when it exactly matches a trajectory row.
+        reference_time_ns: Explicit root timestamp in nanoseconds; this has
+            precedence over frame, trajectory, and pose-derived timestamps.
+        reference_trajectory_index: Optional root trajectory row.
+        reference_frame_index: Optional root camera frame row.
+        stride: Positive spatial sampling stride after unprojection.
+        far_m: Optional maximum retained ray distance in metres.
+        voxel_size_m: Voxel edge length in metres for canonical fusion; ``0``
+            disables aggregation.
+        max_points: Optional deterministic point cap after fusion.
+
+    Returns:
+        :class:`RootEvalPointCloud` with ``Tensor["P 3", float32]`` world-frame
+        points in metres and observed-prefix lineage.
+
+    Notes:
+        The returned geometry is consumed by the oracle label path. Selecting
+        the legacy MPS source does not make GT mesh or candidate-rendered
+        geometry actor-visible, and this function never converts missing data
+        into a low RRI label.
     """
 
     if stride < 1:
@@ -465,12 +513,26 @@ def observed_prefix_frame_indices(
     reference_trajectory_index: int | None = None,
     reference_frame_index: int | None = None,
 ) -> tuple[Tensor, Tensor]:
-    """Return camera/depth frames observed at or before the rollout root time.
+    """Select camera frames and matched trajectory rows in the observed prefix.
 
     Prefix membership is defined by camera timestamp and optional trajectory
     row, never by spatial nearest-neighbour pose matching. This prevents looped
     or revisited trajectories from admitting future ASE GT depth frames into a
     non-final rollout root.
+
+    Args:
+        sample: EFM snippet whose camera and trajectory timestamps share the
+            snippet time domain.
+        camera_label: Camera stream whose frame rows are selected.
+        reference_pose_world: Optional exact world-from-rig trajectory pose.
+        reference_time_ns: Optional explicit root timestamp in nanoseconds.
+        reference_trajectory_index: Optional maximum trajectory row.
+        reference_frame_index: Optional camera row used to derive root time.
+
+    Returns:
+        Tuple containing frame indices ``Tensor["F_eval", int64]`` and their
+        nearest trajectory rows ``Tensor["F_eval", int64]``. Both are ordered
+        prefixes on the camera timestamp device.
     """
 
     cam_view = sample.get_camera(camera_label)

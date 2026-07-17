@@ -1,4 +1,9 @@
-"""Canonical names and key policy for logged VIN metrics and losses."""
+"""Canonical names and key policy for logged VIN metrics and losses.
+
+This module owns stable Lightning key composition and stage-specific emission
+policy. Stateful metric implementations live in their
+:mod:`aria_nbv.rri_metrics` owner modules.
+"""
 
 from __future__ import annotations
 
@@ -20,9 +25,16 @@ class LogSpec:
     """
 
     on_step: bool
+    """Emit the value for individual Lightning steps."""
+
     on_epoch: bool
+    """Emit the distributed aggregate at epoch end."""
+
     prog_bar: bool
+    """Expose the value in Lightning's progress bar."""
+
     enabled: bool = True
+    """Whether the metric is active for the requested stage."""
 
 
 class Logable(ValueStrEnum):
@@ -33,12 +45,18 @@ class Logable(ValueStrEnum):
         raise NotImplementedError("Every metric/loss must specify how it should be logged.")
 
     def on_step(self, stage: Stage) -> bool:
+        """Return whether this key logs individual updates for ``stage``."""
+
         return self.log_spec(stage).on_step
 
     def on_epoch(self, stage: Stage) -> bool:
+        """Return whether this key logs an epoch aggregate for ``stage``."""
+
         return self.log_spec(stage).on_epoch
 
     def prog_bar(self, stage: Stage) -> bool:
+        """Return whether this key appears in the progress bar for ``stage``."""
+
         return self.log_spec(stage).prog_bar
 
 
@@ -77,6 +95,8 @@ class Metric(Logable):
     LABEL_HISTOGRAM_STEP = "label_histogram_step"
 
     def log_spec(self, stage: Stage) -> LogSpec:
+        """Resolve the stage-specific logging policy for this metric key."""
+
         match self:
             case Metric.LOSS:
                 return LogSpec(on_step=stage is Stage.TRAIN, on_epoch=True, prog_bar=False)
@@ -132,6 +152,8 @@ class Loss(Logable):
     AUX_REGRESSION = "aux_regression_loss"
 
     def log_spec(self, stage: Stage) -> LogSpec:
+        """Resolve the stage-specific logging policy for this loss key."""
+
         match self:
             case Loss.LOSS:
                 return LogSpec(

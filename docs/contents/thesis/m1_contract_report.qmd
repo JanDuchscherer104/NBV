@@ -21,7 +21,7 @@ evidence that must be collected before scale-up.
 | Area | Status | Evidence |
 |---|---|---|
 | Offline store layout | Pass for source contract | Immutable format is owned by `aria_nbv/aria_nbv/data_handling/offline/store.py`, `offline/format.py`, `offline/writer.py`, and `offline/dataset.py`. |
-| Split contract | Pass for source contract | `splits/*.npy` contain global sample indices; `_assign_splits` uses stable sample-key hashing and preserves sample-index order inside each split. |
+| Split contract | Pass for source contract | `splits/*.npy` contain global sample indices; `assign_offline_splits` uses stable sample-key hashing and preserves sample-index order inside each split. |
 | Candidate order | Pass for synthetic guard | `CandidateSamplingResult.candidate_shell_indices()` maps compact valid views to full-shell indices and rejects ambiguous layouts. |
 | Candidate-label alignment | Pass for synthetic guard | `prepare_vin_offline_sample()` validates candidate poses, depth rows, camera rows, RRI vectors, optional point clouds, and candidate shell indices before writing rows. |
 | Rollout replay alignment | Pass for synthetic guard | The historical wide trace DTO was superseded by pipeline-local `EvaluatedRolloutRecord` plus factual `steps/` and `candidates/` tables; invalid rows remain masked with false action/train masks and `NaN` labels. |
@@ -59,9 +59,9 @@ training evidence.
 | Contract | Current path | Guard or invariant |
 |---|---|---|
 | Store root | `VinOfflineStoreConfig.store_dir` | Store contains `manifest.json`, `sample_index.jsonl`, `splits/{all,train,val}.npy`, and immutable `shards/`. |
-| Manifest version | `OFFLINE_DATASET_VERSION` in `_offline_store.py` | `VinOfflineStoreReader` rejects unsupported versions and asks for a rebuild. |
-| Sample index | `VinOfflineIndexRecord` in `_offline_format.py` | Rows carry global `sample_index`, `sample_key`, `scene_id`, `snippet_id`, split, shard id, and shard-local row. |
-| Splits | `_assign_splits()` and `VinOfflineStoreReader.get_split_records()` | Split arrays reference global sample indices; selected records are returned in split-array order. |
+| Manifest version | `OFFLINE_DATASET_VERSION` in `data_handling/offline/store.py` | `VinOfflineStoreReader` rejects unsupported versions and asks for a rebuild. |
+| Sample index | `VinOfflineIndexRecord` in `data_handling/offline/format.py` | Rows carry global `sample_index`, `sample_key`, `scene_id`, `snippet_id`, split, shard id, and shard-local row. |
+| Splits | `assign_offline_splits()` and `VinOfflineStoreReader.get_split_records()` | Split arrays reference global sample indices; selected records are returned in split-array order. |
 | Candidate shell | `CandidateSamplingResult` in `pose_generation/types.py` | `views` is normally the compact valid-candidate table; `mask_valid` and `shell_poses` describe the full sampled shell. |
 | Rendered candidates | `CandidateDepths` in `rendering/candidate_depth_renderer.py` | `candidate_indices` maps rendered rows back to full-shell indices. |
 | Oracle labels | `RriResult` in `rri_metrics/rri.py` | RRI and point-to-mesh component vectors are candidate-major and must match rendered candidate count. |

@@ -1,4 +1,13 @@
-"""Stable short fingerprints for configs and lineage payloads."""
+"""Stable short fingerprints for configs and persisted lineage payloads.
+
+This module provides dedicated hashes for :class:`BaseConfig`, msgspec
+payloads, and JSON-compatible dictionaries, preserving each surface's canonical
+serialization convention. It owns deterministic digest/truncation mechanics,
+not schema migration, semantic equivalence, authentication, or signatures.
+
+Each helper preserves its existing serialization convention; these hashes are
+identity aids, not cryptographic authenticity or content-signing guarantees.
+"""
 
 from __future__ import annotations
 

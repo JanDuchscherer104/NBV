@@ -1,6 +1,6 @@
 """Target-conditioned myopic VIN scorer family.
 
-This module names the one-step architecture family that should score each
+This module owns the one-step architecture-family name that should score each
 candidate from actor-visible scene evidence plus an actor-visible target
 descriptor. The zero-descriptor configuration is runnable today as a named
 myopic baseline backed by `aria_nbv.vin.models.scene_myopic.VinModelV3`; nonzero target
@@ -49,7 +49,7 @@ class TargetConditionedMyopicScorerConfig(TargetConfig["TargetConditionedMyopicS
     """Number of ordinal classes for candidate-row scoring."""
 
     target_descriptor_dim: int = Field(default=0, ge=0)
-    """Actor-visible target descriptor width; ``0`` means not implemented."""
+    """Actor-visible target-token width; only ``0`` is currently runnable."""
 
     candidate_token_dim: int = Field(default=128, gt=0)
     """Reserved hidden width for target-conditioned candidate tokens."""
@@ -104,7 +104,12 @@ class TargetConditionedMyopicScorer(nn.Module):
         p3d_cameras: PerspectiveCameras,
         backbone_out: EvlBackboneOutput | None = None,
     ) -> VinPrediction:
-        """Score candidates through the v3 one-step CORAL baseline."""
+        """Score ``PoseTW["B N_q 12"]`` candidates through VIN v3.
+
+        With the only runnable zero-descriptor configuration, this returns the
+        same ``B``/``N_q``-aligned CORAL `VinPrediction` as `VinModelV3`; it
+        does not consume a target token.
+        """
 
         return self.base_scorer.forward(
             efm,

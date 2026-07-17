@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from dataclasses import fields
+
 import pytest
 import torch
 
@@ -13,13 +15,12 @@ from efm3d.aria.obb import ObbTW
 from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
-from aria_nbv.data_handling import (
-    CompactObbBlock,
-    VinSnippetView,
-)
+from aria_nbv.data_handling import VinSnippetView
+from aria_nbv.data_handling.offline.batch import CompactObbBlock
 from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
+    OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetTaskIdentityStatus,
@@ -138,13 +139,11 @@ def test_oracle_target_task_sampler_selects_seeded_uniform_cap() -> None:
 
     assert first.source == ORACLE_TARGET_TASK_SOURCE
     assert len(first.rows) == 4
-    assert len(first.identity_valid_rows) == 4
+    assert first.diagnostic_summary()["num_identity_valid"] == 4
     assert len(first.selected_rows) == 3
     assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
     assert all(row.selection_probability == pytest.approx(3.0 / 4.0) for row in first.selected_rows)
-    assert {row.selection_seed for row in first.selected_rows} == {7}
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in first.selected_rows)
-    assert {row.source for row in first.rows} == {ORACLE_TARGET_TASK_SOURCE}
     assert all(row.target_id.startswith(f"scene:snippet:{ORACLE_TARGET_TASK_SOURCE}:") for row in first.rows)
     assert all(row.descriptor.target_id != row.target_id for row in first.rows)
 
@@ -161,14 +160,14 @@ def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_task
     result = _oracle_sampler(max_targets_per_sample=3, seed=0).sample(sample)
 
     assert len(result.rows) == 3
-    assert len(result.identity_valid_rows) == 3
+    assert result.diagnostic_summary()["num_identity_valid"] == 3
     assert len(result.selected_rows) == 3
     assert all(row.identity_status == TargetTaskIdentityStatus.MATCHED.value for row in result.rows)
-    assert all(row.identity_iou is None for row in result.rows)
+    assert len({row.source_index for row in result.rows}) == 3
     assert "num_ambiguous_identity" not in result.diagnostic_summary()
 
 
-def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_projection_gate() -> None:
+def test_oracle_target_task_contains_only_domain_fields() -> None:
     sample = _sample(
         gt_obbs=_obb_block([[0.0, 0.0, 0.0]], probs=[0.05], box_size=0.0),
         points=[],
@@ -176,18 +175,24 @@ def test_oracle_target_task_sampler_preserves_audit_fields_without_support_or_pr
 
     row = _oracle_sampler(max_targets_per_sample=1).sample(sample).selected_rows[0]
 
-    assert row.identity_valid
-    assert row.projected_area_pixels == 0.0
-    assert row.semidense_support_count == 0
-    assert row.effective_support_count == 0.0
+    assert {field.name for field in fields(OracleTargetTask)} == {
+        "source_index",
+        "target_row_id",
+        "target_id",
+        "descriptor",
+        "inst_id",
+        "confidence",
+        "identity_status",
+        "selected_rank",
+        "selection_probability",
+    }
+    assert row.identity_status == TargetTaskIdentityStatus.MATCHED.value
     assert row.confidence == pytest.approx(0.05)
-    assert row.target_root_error is None
-    assert row.max_candidate_gain is None
-    assert row.headroom_band is None
 
 
-def test_oracle_target_task_sampler_rejects_vin_oracle_batch_input() -> None:
+def test_oracle_target_task_sampler_rejects_non_offline_sample_input() -> None:
     sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]]))
 
+    assert not hasattr(sample, "to_vin_oracle_batch")
     with pytest.raises(TypeError, match="VinOfflineSample"):
-        _oracle_sampler().sample(sample.to_vin_oracle_batch())
+        _oracle_sampler().sample(sample.vin_snippet)  # type: ignore[arg-type]

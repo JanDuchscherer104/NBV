@@ -1,7 +1,10 @@
-"""Streamlit entrypoint (refactored app).
+"""Launch the configured ARIA-NBV Streamlit application.
 
-This is the default entrypoint used by the `nbv-st` console script.
-The legacy dashboard remains available via `aria_nbv.streamlit_app_old`.
+This module owns the `nbv-st`/direct-script dispatch, forwards user CLI
+arguments to Streamlit, and installs a conservative file-watcher default. The
+application layout and data workflows belong to :mod:`aria_nbv.app`; this
+entrypoint does not load experiments or mutate project data itself. The legacy
+dashboard remains available via `aria_nbv.streamlit_app_old`.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ _DEFAULT_FILE_WATCHER_TYPE = "none"
 
 
 def main() -> None:  # pragma: no cover - Streamlit runner
+    """Construct and run the configured ARIA-NBV Streamlit application."""
     NbvStreamlitAppConfig().setup_target().run()
 
 

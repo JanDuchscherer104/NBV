@@ -1,7 +1,7 @@
 """Operational validity, provenance, path, and policy audits for rollouts.
 
-These reducers are evaluation-only. They inspect replay/store behavior and are
-not reconstruction metrics or training objectives.
+This module contains evaluation-only reducers for replay/store behavior. They
+are not reconstruction metrics or training objectives.
 """
 
 from __future__ import annotations
@@ -29,8 +29,13 @@ class CandidateOrderConsistency:
     """
 
     score_mae: Tensor
+    """``Tensor["B", float32]`` inverse-aligned score MAE over comparable rows."""
+
     top1_match: Tensor
+    """``Tensor["B", bool]`` agreement of the best comparable candidate."""
+
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables containing comparable rows."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,9 +56,16 @@ class CandidatePathIncrementStats:
     """
 
     mean_m: Tensor
+    """``Tensor["B", float32]`` mean finite hard-valid path increment in metres."""
+
     min_m: Tensor
+    """``Tensor["B", float32]`` minimum finite hard-valid path increment in metres."""
+
     max_m: Tensor
+    """``Tensor["B", float32]`` maximum finite hard-valid path increment in metres."""
+
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables containing a comparable path increment."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +85,10 @@ class CandidatePrimaryInvalidReasonStats:
     """
 
     share_of_invalid: Tensor
+    """``Tensor["B", float32]`` requested primary-reason share among invalid rows."""
+
     valid_table: Tensor
+    """``Tensor["B", bool]`` mask for tables with at least one invalid row."""
 
 
 def selected_path_length_tensor(camera_centers_world: Tensor, segment_valid_mask: Tensor | None = None) -> Tensor:

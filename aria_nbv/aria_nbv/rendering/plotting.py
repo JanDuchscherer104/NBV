@@ -1,4 +1,14 @@
-"""Plotting helpers for candidate depth renders and debugging."""
+"""Plot candidate depth, world-frame geometry, and projected OBB diagnostics.
+
+This module provides depth-grid/histogram helpers, projected-box overlays, and
+the :class:`RenderingPlotBuilder` composition surface. It owns display
+conversion only; renderers produce metric depth, geometry modules own
+projection transforms, and stored camera/OBB data remain immutable.
+
+Display-only CW90/image rotations reconcile physical Aria camera orientation
+with Plotly conventions; they never alter stored `PoseTW` or `CameraTW`
+geometry.
+"""
 
 from __future__ import annotations
 

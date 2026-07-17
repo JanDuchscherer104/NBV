@@ -1,13 +1,22 @@
-"""CORAL ordinal regression utilities for RRI-derived labels.
+r"""CORAL ordinal regression and continuous decoding for RRI-derived labels.
 
 This module uses the MIT-licensed reference implementation from
 [`coral-pytorch`](https://raschka-research-group.github.io/coral-pytorch/).
 
-VIN-NBV trains the RRI predictor via ordinal classification and uses a ranking-aware
-loss (CORAL) to penalize distant misclassifications more strongly than nearby ones.
-The expected value decoded from CORAL logits is a one-step ranking proxy; oracle
-RRI and endpoint target-quality metrics remain the geometry-grounded evaluation
-signals.
+This module owns the VIN-side conversion between $K$ ordinal RRI bins and the
+$K-1$ cumulative thresholds $P(y>k)$. It provides cumulative-target loss,
+threshold-to-class decoding, monotonicity diagnostics, and the shared-weight
+CORAL output layer. For monotone cumulative probabilities $p_k$,
+
+$$
+P(y=0)=1-p_0,\quad P(y=k)=p_{k-1}-p_k,\quad
+P(y=K-1)=p_{K-2}.
+$$
+
+Decoded ranks and learnable bin expectations are actor-side prediction proxies.
+Oracle RRI and endpoint target-quality metrics remain geometry-grounded
+evaluation signals. Hard-invalid candidates must be masked before loss or
+decoding; they are not encoded as the lowest ordinal class.
 """
 
 from __future__ import annotations
@@ -31,17 +40,28 @@ def coral_loss(
     importance_weights: Tensor | None = None,
     reduction: Literal["mean", "sum", "none"] = "mean",
 ) -> Tensor:
-    """Compute CORAL loss (sum of binary cross-entropies over thresholds).
+    r"""Compute cumulative-link BCE across all CORAL thresholds.
 
     Args:
-        logits: ``Tensor["... K-1", float32]`` threshold logits.
-        labels: ``Tensor["...", int64]`` ordinal labels in ``[0, K-1]``.
+        logits ``Tensor["... K-1", float32]``: Actor-predicted logits for
+            $P(y>k)$, ordered from the lowest to highest threshold.
+        labels ``Tensor["...", int64]``: Oracle-derived ordinal labels in
+            ``[0, K-1]``. The leading shape must match `logits`.
         num_classes: Number of ordinal classes ``K``.
-        importance_weights: Optional per-threshold weights ``Tensor["K-1"]``.
-        reduction: Reduction mode.
+        importance_weights ``Tensor["K-1", float32]``: Optional threshold
+            weights passed to ``coral_pytorch``.
+        reduction: ``"mean"`` or ``"sum"`` for a scalar, or ``"none"`` to
+            retain the leading label shape.
 
     Returns:
-        Loss tensor. If reduction="none": ``Tensor["..."]``.
+        ``Tensor["", float32]`` for reduced loss or
+        ``Tensor["...", float32]`` when `reduction="none"`.
+
+    Theory:
+        Each label produces levels $l_k=\mathbb{1}[y>k]$. The per-example loss
+        is the sum of binary cross-entropies between `logits[..., k]` and
+        $l_k$. Candidate validity is not inferred here; callers must exclude
+        hard-invalid rows before constructing `labels`.
     """
 
     levels = ordinal_labels_to_levels(labels, num_classes=num_classes)
@@ -59,13 +79,23 @@ def coral_loss(
 
 
 def coral_logits_to_prob(logits: Tensor) -> Tensor:
-    """Convert CORAL logits to a proper class distribution.
+    """Convert cumulative CORAL logits to repaired class marginals.
 
     Args:
-        logits: ``Tensor["... K-1"]``
+        logits ``Tensor["... K-1", float32]``: Threshold logits for
+            ``P(y > k)``.
 
     Returns:
-        ``Tensor["... K"]`` probabilities that sum to 1 along the last dim.
+        ``Tensor["... K", float32]`` non-negative class probabilities that
+        sum to one along the last axis.
+
+    Notes:
+        Independent threshold logits can violate the required monotone order,
+        making adjacent marginal differences negative. This decoder clamps
+        those differences and renormalizes; use
+        :func:`coral_monotonicity_violation_rate` to report the discarded
+        inconsistency rather than treating the repaired distribution as proof
+        of monotonic logits.
     """
 
     if logits.shape[-1] < 1:
@@ -90,16 +120,16 @@ def coral_logits_to_prob(logits: Tensor) -> Tensor:
 
 
 def coral_random_loss(num_classes: int) -> float:
-    """Expected CORAL loss for a random classifier.
+    """Return the loss baseline for uninformative zero threshold logits.
 
-    For random logits, each threshold probability is 0.5, yielding a
-    binary cross-entropy of log(2) per threshold.
+    A zero logit assigns probability ``0.5`` to every cumulative threshold,
+    yielding binary cross-entropy ``log(2)`` for each of ``K-1`` thresholds.
 
     Args:
         num_classes: Number of ordinal classes ``K``.
 
     Returns:
-        Expected CORAL loss for uniform random predictions.
+        Scalar baseline ``(K-1) * log(2)`` under the summed-threshold loss.
     """
     num_thresholds = max(1, int(num_classes) - 1)
     return float(num_thresholds * math.log(2.0))
@@ -112,14 +142,18 @@ def _softplus_inverse(x: Tensor) -> Tensor:
 
 
 class MonotoneBinValues(nn.Module):
-    """Learnable, monotone bin representatives ``u_k``.
+    r"""Parameterize learnable continuous bin representatives monotonically.
 
     We parameterize ``u_k`` via a base value and positive deltas:
 
-        u_0 in R
-        u_k = u_0 + sum_{j=1..k} softplus(delta_j)
+    $$
+    u_k=u_0+\sum_{j=1}^{k}\operatorname{softplus}(\delta_j),
+    \qquad k=1,\ldots,K-1.
+    $$
 
-    This guarantees ``u_0 <= u_1 <= ... <= u_{K-1}`` while keeping gradients stable.
+    This guarantees $u_0\leq\cdots\leq u_{K-1}$. These values decode actor
+    class probabilities into a continuous RRI proxy; they do not replace
+    geometry-grounded oracle RRI.
     """
 
     def __init__(self, num_classes: int, init_values: Tensor, *, min_delta: float = 1e-6) -> None:
@@ -138,16 +172,17 @@ class MonotoneBinValues(nn.Module):
 
     @property
     def num_classes(self) -> int:
+        """Return the fixed number ``K`` of monotone representatives."""
         return int(self._num_classes.item())
 
     def values(self) -> Tensor:
-        """Return monotone bin representatives ``u_k``."""
+        """Return ``Tensor["K", float32]`` monotone representatives ``u_k``."""
         deltas = torch.nn.functional.softplus(self.delta_unconstrained)
         u_tail = self.u0 + torch.cumsum(deltas, dim=0)
         return torch.cat([self.u0, u_tail], dim=0)
 
     def reset_from_values(self, values: Tensor, *, min_delta: float = 1e-6) -> None:
-        """Re-initialize from target values (keeps monotonicity)."""
+        """Reset from ``Tensor["K", float32]`` targets while preserving strict positive deltas."""
         if values.numel() != self.num_classes:
             raise ValueError(
                 f"Expected {self.num_classes} values, got {tuple(values.shape)}.",
@@ -160,15 +195,22 @@ class MonotoneBinValues(nn.Module):
 
 
 def coral_expected_from_logits(logits: Tensor) -> tuple[Tensor, Tensor]:
-    """Compute expected ordinal value from CORAL logits.
+    r"""Decode CORAL logits into expected ordinal rank and normalized rank.
 
     Args:
-        logits: ``Tensor["... K-1"]``.
+        logits ``Tensor["... K-1", float32]``: Cumulative threshold logits.
 
     Returns:
-        Tuple of ``(expected, expected_normalized)`` where:
-        - expected is in ``[0, K-1]``
-        - expected_normalized is in ``[0, 1]``
+        Tuple of actor-side ranking proxies:
+
+        - expected ``Tensor["...", float32]``: $E[y]=\sum_k P(y>k)$ in
+          ``[0, K-1]``.
+        - expected_normalized ``Tensor["...", float32]``: Expected rank divided
+          by ``K-1``, in ``[0, 1]``.
+
+    Notes:
+        This function does not use fitted RRI bin representatives and therefore
+        does not return a continuous RRI estimate.
     """
 
     # In CORAL, the logits parameterize the probabilities P(y > k).
@@ -187,11 +229,12 @@ def coral_logits_to_label(logits: Tensor, *, threshold: float = 0.5) -> Tensor:
     probability exceeds ``threshold`` (default 0.5).
 
     Args:
-        logits: ``Tensor["... K-1"]`` threshold logits.
+        logits ``Tensor["... K-1", float32]``: Threshold logits.
         threshold: Probability threshold for counting ``P(y > k)``.
 
     Returns:
-        ``Tensor["...", int64]`` predicted ordinal labels in ``[0, K-1]``.
+        ``Tensor["...", int64]`` actor-predicted ordinal labels in
+        ``[0, K-1]``.
     """
     if logits.shape[-1] < 1:
         raise ValueError("Expected logits with last dim K-1 >= 1.")
@@ -207,10 +250,11 @@ def coral_monotonicity_violation_rate(logits: Tensor) -> Tensor:
     the per-sample fraction of threshold pairs that violate this ordering.
 
     Args:
-        logits: ``Tensor["... K-1"]`` threshold logits.
+        logits ``Tensor["... K-1", float32]``: Threshold logits.
 
     Returns:
-        ``Tensor["..."]`` fraction of violations in ``[0, 1]``.
+        ``Tensor["...", float32]`` fraction of adjacent violations in
+        ``[0, 1]``. ``K=2`` has no adjacent pair and returns zero.
     """
     if logits.shape[-1] < 2:
         return torch.zeros(logits.shape[:-1], device=logits.device, dtype=torch.float32)
@@ -221,10 +265,17 @@ def coral_monotonicity_violation_rate(logits: Tensor) -> Tensor:
 
 
 class CoralLayer(nn.Module):
-    """CORAL output layer with shared weights and per-threshold biases.
+    r"""Map actor features to shared-weight cumulative threshold logits.
 
-    This implements logits:
-        logit_k = w^T x + b_k,  k = 0..K-2
+    The layer implements
+
+    $$
+    \operatorname{logit}_k=w^\top x+b_k,\qquad k=0,\ldots,K-2,
+    $$
+
+    using the upstream ``coral_pytorch`` layer. Optional
+    :class:`MonotoneBinValues` decode the resulting class probabilities into a
+    continuous actor-side RRI proxy.
     """
 
     def __init__(self, in_dim: int, num_classes: int, *, preinit_bias: bool = True) -> None:
@@ -247,14 +298,16 @@ class CoralLayer(nn.Module):
 
     @property
     def num_classes(self) -> int:
+        """Return the configured ordinal class count ``K``."""
         return self._num_classes
 
     @property
     def has_bin_values(self) -> bool:
+        """Report whether continuous monotone bin representatives are initialized."""
         return self.bin_values is not None
 
     def init_bin_values(self, values: Tensor, *, overwrite: bool = False) -> None:
-        """Initialize (or re-initialize) monotone bin representatives ``u_k``."""
+        """Initialize ``Tensor["K", float32]`` monotone bin representatives ``u_k``."""
         if self.bin_values is None:
             self.bin_values = MonotoneBinValues(self._num_classes, values)
             return
@@ -265,7 +318,8 @@ class CoralLayer(nn.Module):
         """Initialize CORAL biases from class priors.
 
         Args:
-            priors: ``Tensor["K"]`` class priors that sum to 1.
+            priors ``Tensor["K", float32]``: Non-negative class priors; values
+                are normalized internally before cumulative conversion.
             overwrite: If True, overwrite the current bias values.
         """
         if priors.numel() != int(self._num_classes):
@@ -284,19 +338,19 @@ class CoralLayer(nn.Module):
             self.layer.coral_bias.copy_(bias)
 
     def expected_from_probs(self, probs: Tensor) -> Tensor:
-        """Compute expected continuous value using learnable bin values."""
+        """Decode ``Tensor["... K", float32]`` class probabilities to a continuous RRI proxy."""
         if self.bin_values is None:
             raise RuntimeError("Bin values not initialized. Call init_bin_values(...).")
         values = self.bin_values.values().to(device=probs.device, dtype=probs.dtype)
         return (probs * values.view(*([1] * (probs.ndim - 1)), -1)).sum(dim=-1)
 
     def expected_from_logits(self, logits: Tensor) -> Tensor:
-        """Convert logits to marginals and compute expected continuous value."""
+        """Repair ``Tensor["... K-1", float32]`` logits to marginals and decode their RRI proxy."""
         probs = coral_logits_to_prob(logits)
         return self.expected_from_probs(probs)
 
     def bin_value_regularizer(self, target_values: Tensor) -> Tensor:
-        """L2 penalty to keep learnable bin values close to target values."""
+        """Return scalar mean-squared deviation from ``Tensor["K", float32]`` target bin values."""
         if self.bin_values is None:
             return torch.tensor(0.0, device=target_values.device)
         values = self.bin_values.values().to(device=target_values.device, dtype=target_values.dtype)

@@ -3,6 +3,8 @@
 /site_libs/
 /index_files/
 /objects.json
+/objects.txt
+/_inv/
 /search.json
 /**/*.html
 /**/*_files/

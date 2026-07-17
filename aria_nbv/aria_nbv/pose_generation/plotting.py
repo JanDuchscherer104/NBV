@@ -1,4 +1,14 @@
-"""Plotting helpers for candidate sampling and counterfactual rollouts."""
+"""Plot candidate shells, validity diagnostics, and counterfactual rollouts.
+
+This module provides compact plotting functions and Plotly builders for pose
+axes, validity/rejection masks, directional marginals, and counterfactual path
+metrics. It owns presentation and color mapping only; candidate generation,
+rollout state, and score computation remain with their producing modules.
+
+All 3D payloads are interpreted in world or explicitly named reference frames.
+Plotly conversions detach to CPU and remain presentation-only; candidate masks,
+poses, and rollout state are never modified by a builder.
+"""
 
 from __future__ import annotations
 
@@ -12,14 +22,12 @@ from plotly.colors import sample_colorscale  # type: ignore[import]
 from plotly.subplots import make_subplots  # type: ignore[import]
 
 from ..data_handling import EfmSnippetView
-from ..oracle.evidence import target_gt_obb_world
+from ..targets import TargetDescriptor
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
 
 if TYPE_CHECKING:
-    from ..data_handling import VinOfflineSample
-    from ..oracle.target_selection import TargetCandidateRow
-    from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualTrajectory
+    from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
     from .candidate_generation import CandidateViewGeneratorConfig
     from .types import CandidateSamplingResult
 
@@ -150,8 +158,18 @@ def plot_candidate_frusta_simple(
 
 
 class CandidatePlotBuilder(SnippetPlotBuilder):
+    """Fluent, snippet-aware builder for full-shell candidate diagnostics.
+
+    The builder retains both the compact valid table and full sampled shell so
+    plots can distinguish accepted actions, rejected positions, and rule masks.
+    All cached center arrays have shape ``Array[\"N 3\", float]`` in world metres.
+    """
+
     candidate_results: CandidateSamplingResult | None = None
+    """Attached candidate sampling result, including full-shell provenance."""
+
     candidate_cfg: CandidateViewGeneratorConfig | None = None
+    """Optional generation config used to annotate plots and thresholds."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -165,6 +183,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
     def from_candidates(
         cls, snippet: EfmSnippetView, candidates: CandidateSamplingResult, *, title: str, height: int = 900
     ) -> Self:
+        """Create a snippet plot with candidate results already attached."""
         return cls.from_snippet(snippet, title=title, height=height).attach_candidate_results(candidates)
 
     def attach_candidate_results(self, results: CandidateSamplingResult) -> Self:
@@ -219,8 +238,6 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
             about the local +Z/forward axis) to the **reference pose** before sampling.
             Applying the same correction again in plotting would double-rotate the
             reference axes. Therefore, ``display_rotate`` defaults to ``False`` for
-            candidate plots.
-
             When gravity alignment is enabled, candidates are sampled around a
             gravity-aligned copy of the reference pose. In that case, plotting the
             sampling pose axes (``use_sampling_pose=True``) keeps the axes symmetric
@@ -255,6 +272,11 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         mark_reference: bool = False,
         reference_symbol: str = "diamond",
     ) -> Self:
+        """Add candidate centers from the compact table or full sampled shell.
+
+        ``color`` may be a scalar color or an ``Array[\"N\", numeric]`` aligned
+        with the selected rows. Coordinates are world-frame metres.
+        """
         pts = self._world_positions(use_valid=use_valid)
         marker = {"size": size, "opacity": opacity}
         if color is not None:
@@ -300,6 +322,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         opacity: float = 0.7,
         mark_reference: bool = True,
     ) -> Self:
+        """Add the default candidate-center cloud and optional reference marker."""
         return self.add_candidate_points(
             use_valid=use_valid,
             color=color,
@@ -317,6 +340,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         size: int = 4,
         opacity: float = 0.8,
     ) -> Self:
+        """Add world-frame centers rejected by any cumulative validity rule."""
         if self.candidate_results is None:
             return self
         mask = self._mask_valid_np()
@@ -326,6 +350,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         return self.add_points(pts, name=name, color=color, size=size, opacity=opacity)
 
     def add_min_distance_overlay(self, distances: torch.Tensor, *, use_valid: bool = False) -> Self:
+        """Color candidate centers by aligned point-to-mesh distance in metres."""
         dist_np = distances.detach().cpu().numpy().reshape(-1)
         mask = self._mask_valid_np()
         hover = [f"dist={d:.3f} m<br>valid={bool(v)}" for d, v in zip(dist_np.tolist(), mask.tolist(), strict=False)]
@@ -341,6 +366,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         )
 
     def add_path_collision_segments(self, collision_mask: torch.Tensor) -> Self:
+        """Draw reference-to-candidate segments for full-shell collision rows."""
         ref = self._ref_center_np()
         centers = self._world_positions(use_valid=False)
         mask_np = collision_mask.detach().cpu().numpy().astype(bool)
@@ -376,6 +402,7 @@ class CandidatePlotBuilder(SnippetPlotBuilder):
         return self
 
     def rule_rejection_bar(self) -> go.Figure:
+        """Plot newly rejected row counts for each cumulative pruning mask."""
         masks = self.candidate_results.masks if self.candidate_results is not None else {}
         if not isinstance(masks, dict) or len(masks) == 0:
             fig = go.Figure()
@@ -503,51 +530,23 @@ def _metric_color(value: float | None, finite_values: np.ndarray, *, default: st
     return str(sample_colorscale(colorscale, [scale_pos])[0])
 
 
-def _selected_step_target_rri(step: object) -> float | None:
-    metrics = getattr(step, "selected_metrics", {})
-    for key in ("target_rri", "rri"):
-        if key not in metrics:
-            continue
-        value = float(metrics[key])
-        if np.isfinite(value):
-            return value
-    return None
-
-
-def _valid_metric_values(step: object, metric_name: str) -> np.ndarray:
-    vectors = getattr(step, "metric_vectors", {})
-    values = vectors.get(metric_name)
-    if values is None and metric_name == "target_rri":
-        values = vectors.get("rri")
-    if values is None:
-        return np.asarray([], dtype=float)
-    values_np = values.detach().cpu().numpy().reshape(-1)
-    return values_np[np.isfinite(values_np)].astype(float, copy=False)
-
-
-def _valid_candidate_values(step: object, metric_name: str) -> np.ndarray | None:
+def _valid_candidate_values(step: "CounterfactualStepResult", metric_name: str) -> np.ndarray | None:
     """Return one value per compact valid candidate for coloring."""
 
-    candidates = getattr(step, "candidates", None)
-    if candidates is None:
-        return None
-    mask_valid = getattr(candidates, "mask_valid", None)
-    if mask_valid is None:
-        return None
-    mask = mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    candidates = step.candidates
+    mask = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     valid_count = int(mask.sum())
     if valid_count == 0:
         return None
 
-    if metric_name == "selection_probability":
-        values = getattr(step, "selection_probabilities", None)
+    if metric_name == "selection_score":
+        values = step.selection_scores
+    elif metric_name == "selection_probability":
+        values = step.selection_probabilities
     elif metric_name == "position_family":
-        values = getattr(candidates, "position_id", None)
+        values = candidates.position_id
     else:
-        vectors = getattr(step, "metric_vectors", {})
-        values = vectors.get(metric_name)
-        if values is None and metric_name == "target_rri":
-            values = vectors.get("rri")
+        return None
     if values is None:
         return None
 
@@ -623,6 +622,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         title: str,
         height: int = 900,
     ) -> "CounterfactualPlotBuilder":
+        """Create a snippet plot with multi-step rollout trajectories attached."""
         return cls.from_snippet(snippet, title=title, height=height).attach_counterfactual_rollouts(rollouts)
 
     def attach_counterfactual_rollouts(self, rollouts: "CounterfactualRolloutResult") -> Self:
@@ -633,7 +633,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
 
     def add_actor_visible_target_obb(
         self,
-        target: "TargetCandidateRow",
+        target: TargetDescriptor,
         *,
         color: str = "#ff2f74",
         name: str = "Active target / actor-visible",
@@ -643,26 +643,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
 
         return self.add_oriented_box(
             pose_world_object=target.pose_world_object,
-            extents=target.extents,
-            name=name,
-            color=color,
-            width=width,
-            opacity=0.95,
-        )
-
-    def add_matched_gt_target_obb(
-        self,
-        sample: "VinOfflineSample",
-        target: "TargetCandidateRow",
-        *,
-        color: str = "#00d4ff",
-        name: str = "Matched GT / evaluation crop",
-        width: int = 6,
-    ) -> Self:
-        """Overlay the matched GT OBB used only for oracle labels and evaluation crops."""
-
-        return self.add_obb(
-            target_gt_obb_world(target, sample),
+            extents=target.extents_m,
             name=name,
             color=color,
             width=width,
@@ -742,23 +723,12 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         include_center: bool = False,
         max_frustums_per_trajectory: int | None = None,
         display_rotate: bool = False,
-        color_by_target_rri: bool = True,
-        colorscale: str = "Viridis",
     ) -> Self:
         """Overlay frusta for the selected poses in each attached trajectory."""
 
         if self.counterfactual_rollouts is None:
             raise ValueError("Counterfactual rollouts missing; call attach_counterfactual_rollouts() first.")
 
-        finite_values = np.asarray(
-            [
-                value
-                for trajectory in self.counterfactual_rollouts.trajectories
-                for step in trajectory.steps
-                if (value := _selected_step_target_rri(step)) is not None
-            ],
-            dtype=float,
-        )
         for traj_idx, trajectory in enumerate(self.counterfactual_rollouts.trajectories):
             steps = trajectory.steps
             if max_frustums_per_trajectory is not None:
@@ -766,25 +736,17 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
             if not steps:
                 continue
             for step in steps:
-                value = _selected_step_target_rri(step) if color_by_target_rri else None
-                color = _metric_color(
-                    value,
-                    finite_values,
-                    default=_counterfactual_color(traj_idx),
-                    colorscale=colorscale,
-                )
                 pose = step.selected_pose_world
                 if display_rotate:
                     from aria_nbv.utils import rotate_yaw_cw90
 
                     pose = rotate_yaw_cw90(pose)
-                label = "n/a" if value is None else f"{value:.4f}"
                 self._add_frusta_for_poses(
                     cams=[step.selected_view],
                     poses=[pose],
                     scale=scale,
-                    color=color,
-                    name=f"CF frusta {traj_idx} step {step.step_index + 1} target_rri={label}",
+                    color=_counterfactual_color(traj_idx),
+                    name=f"CF frusta {traj_idx} step {step.step_index + 1}",
                     max_frustums=None,
                     include_axes=include_axes,
                     include_center=include_center,
@@ -802,8 +764,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
         frustum_scale: float = 0.5,
         max_frustums: int | None = 16,
         include_rejected: bool = False,
-        color_frusta_by_target_rri: bool = True,
-        candidate_color_metric: str = "target_rri",
+        candidate_color_metric: str = "selection_score",
     ) -> Self:
         """Plot one rollout step's candidate shell within the snippet scene."""
 
@@ -858,9 +819,7 @@ class CounterfactualPlotBuilder(CandidatePlotBuilder):
             self.add_rejected_cloud()
         if show_frusta:
             metric_values = _valid_candidate_values(step, candidate_color_metric)
-            if metric_values is None:
-                metric_values = _valid_metric_values(step, "target_rri")
-            if color_frusta_by_target_rri and metric_values.size:
+            if metric_values is not None and metric_values.size:
                 poses = self._pose_list_from_input(step.candidates.poses_world_cam())
                 indices = np.arange(len(poses))
                 if max_frustums is not None and len(indices) > max_frustums:
@@ -1097,6 +1056,14 @@ def plot_position_polar(
     bins: int = 72,
     fixed_ranges: bool = True,
 ) -> go.Figure:
+    """Plot reference-frame candidate offsets by azimuth and elevation.
+
+    Args:
+        offsets: LUF reference-frame offsets ``Array[\"N 3\", float]`` in metres.
+        title: Figure title.
+        bins: Bin count used independently along both angular axes.
+        fixed_ranges: Clamp azimuth/elevation displays to their physical ranges.
+    """
     # LUF: x=left, y=up, z=forward
     az = np.degrees(np.arctan2(offsets[:, 0], offsets[:, 2]))  # atan2(x, z)
     el = np.degrees(np.arctan2(offsets[:, 1], np.linalg.norm(offsets[:, [0, 2]], axis=1) + 1e-8))
@@ -1117,7 +1084,11 @@ def plot_position_sphere(
     dirs: np.ndarray | None = None,
     dir_scale: float | None = None,
 ) -> go.Figure:
-    """3D scatter of position offsets."""
+    """Plot LUF reference-frame position offsets and optional view directions.
+
+    ``offsets`` and ``dirs`` have shape ``Array[\"N 3\", float]``. Offsets are
+    measured in metres; directions are normalized before drawing.
+    """
     offsets = np.asarray(offsets)
     fig = go.Figure(
         data=go.Scatter3d(
@@ -1175,6 +1146,7 @@ def plot_position_sphere(
 
 
 def plot_direction_marginals(dirs: torch.Tensor, bins: int = 60, *, fixed_ranges: bool = False) -> go.Figure:
+    """Plot azimuth/elevation marginals for LUF unit directions ``Tensor[\"N 3\"]``."""
     elev = np.arcsin(dirs[:, 1])
     az = np.arctan2(dirs[:, 0], dirs[:, 2])
 
@@ -1195,6 +1167,7 @@ def plot_radius_hist(
     title: str = "Radius distribution",
     bins: int = 40,
 ) -> go.Figure:
+    """Plot Euclidean radii of reference-frame offsets in metres."""
     r = np.linalg.norm(offsets, axis=1)
     fig = go.Figure(go.Histogram(x=r, nbinsx=bins))
     fig.update_layout(

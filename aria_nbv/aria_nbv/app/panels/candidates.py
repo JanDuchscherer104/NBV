@@ -1,4 +1,9 @@
-"""Candidate pose panel rendering."""
+"""Candidate-shell inspection and provenance plots for the NBV app.
+
+The panel provides world-frame pose, validity, motion-rule, and sampling-family
+diagnostics for actor-visible finite candidates without treating invalid rows
+as low-value oracle labels.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +38,7 @@ from ...pose_generation.utils import (
     summarise_dirs_ref,
     summarise_offsets_ref,
 )
-from ...rollouts import decode_position_id, decode_strategy_id
+from ...rollouts.inspection import decode_position_id, decode_strategy_id
 from ...rollouts.trace import _candidate_invalid_reasons
 from ...utils.frames import world_up_tensor
 
@@ -753,6 +758,17 @@ def render_candidates_page(
     source_caption: str | None = None,
     source_note: str | None = None,
 ) -> None:
+    """Render the candidate shell and its actor-action diagnostics.
+
+    Args:
+        sample: Optional EFM snippet used for observed-scene context and explicit
+            oracle mesh overlays.
+        candidates: Finite candidate shell, validity masks, and provenance.
+        cand_cfg: Optional generator config used to display rule thresholds.
+        source_caption: Optional short source label shown above the panel.
+        source_note: Optional longer provenance note shown with the source.
+    """
+
     _render_live_candidates_page(
         sample,
         candidates,

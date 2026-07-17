@@ -24,8 +24,8 @@ def test_removed_counterfactuals_module_has_no_compatibility_facade() -> None:
         importlib.import_module("aria_nbv.rollouts.counterfactuals")
 
 
-def test_rollouts_owns_record_and_store_contracts() -> None:
-    """The rollout root is the canonical import surface for replay contracts."""
+def test_rollouts_root_is_the_exact_stable_allowlist() -> None:
+    """The rollout root exposes only the stable replay and store entry points."""
 
     module = importlib.import_module("aria_nbv.rollouts")
     expected = {
@@ -33,16 +33,29 @@ def test_rollouts_owns_record_and_store_contracts() -> None:
         "CounterfactualPoseGenerator",
         "CounterfactualPoseGeneratorConfig",
         "CounterfactualRolloutResult",
-        "CounterfactualSelectionPolicy",
+        "CounterfactualTrajectory",
         "RolloutPolicySpec",
-        "RolloutLineage",
         "RolloutZarrStoreConfig",
         "RolloutZarrStoreReader",
-        "write_rollout_zarr_store",
-        "validate_rollout_zarr_store",
     }
-    assert expected <= set(module.__all__)
-    assert "build_synthetic_rollout_traces" not in module.__all__
-    assert "RolloutDatasetWriterConfig" not in module.__all__
-    assert "read_rollout_traces" not in module.__all__
-    assert "write_rollout_traces" not in module.__all__
+    assert set(module.__all__) == expected
+
+
+def test_read_model_symbols_are_leaf_only() -> None:
+    """Typed store projections must not widen the package root."""
+
+    module = importlib.import_module("aria_nbv.rollouts")
+    forbidden = {
+        "StoredRollout",
+        "StoredSelectedDepth",
+        "StoredStep",
+        "StoredTarget",
+        "rollout_at",
+        "rollout_by_id",
+        "rollout_steps",
+        "selected_depth_for_step",
+        "target_by_id",
+        "target_rows",
+    }
+    assert forbidden.isdisjoint(module.__all__)
+    assert all(not hasattr(module, name) for name in forbidden)

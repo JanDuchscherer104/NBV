@@ -11,7 +11,7 @@ import torch
 from efm3d.aria import CameraTW, PoseTW
 
 import aria_nbv.oracle.evidence as evidence
-from aria_nbv.data_handling import EfmCameraView, EfmTrajectoryView
+from aria_nbv.data_handling.raw.views import EfmCameraView, EfmTrajectoryView
 from aria_nbv.oracle.evidence import (
     OracleEvidenceInvalidReason,
     RriEvaluationPointCloudSource,

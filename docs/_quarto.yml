@@ -17,6 +17,21 @@ shortcodes:
 
 filters:
   - _extensions/aria-python-roles/aria-python-roles.lua
+  - interlinks
+
+interlinks:
+  fast: true
+  sources:
+    python:
+      url: https://docs.python.org/3/
+    torch:
+      url: https://docs.pytorch.org/docs/stable/
+    lightning:
+      url: https://lightning.ai/docs/pytorch/stable/
+    torchmetrics:
+      url: https://lightning.ai/docs/torchmetrics/stable/
+    jaxtyping:
+      url: https://docs.kidger.site/jaxtyping/
 
 # Global execution defaults (fast iterations; deterministic rebuilds)
 execute: # see https://quarto.org/docs/computations/execution-options.html
@@ -54,6 +69,8 @@ link-citations: true                      # clickable in-text cites
 
 website:
   title: "ARIA-NBV"
+  reader-mode: true
+  back-to-top-navigation: true
   search:
     location: navbar
     type: overlay
@@ -108,6 +125,7 @@ website:
                 - contents/literature/gen_nbv.qmd
                 - contents/literature/scone_fisherrf.qmd
                 - contents/literature/active_3dgs_nbv.qmd
+                - contents/literature/3dgs_instance_nbv.qmd
             - section: "ARIA Ecosystem"
               contents:
                 - contents/literature/project_aria.qmd
@@ -166,6 +184,7 @@ quartodoc:
     collapse-level: 2
   css: reference/_styles-quartodoc.css
   parser: google
+  render_interlinks: true
   options:
     signature_name: relative
     include_private: false

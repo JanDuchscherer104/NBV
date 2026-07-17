@@ -12,7 +12,7 @@ from typing import cast
 import streamlit as st
 
 from ..data_handling import AseEfmDatasetConfig
-from ..pipelines import OracleRriLabelerConfig
+from ..oracle.pipelines.scene_labels import OracleRriLabelerConfig
 from .state_types import (
     AppState,
     CandidatesCache,
@@ -29,11 +29,18 @@ from .state_types import (
 )
 
 STATE_KEY = "nbv_app_state_v2"
+"""Streamlit session key for the main :class:`AppState` graph."""
+
 VIN_DIAG_STATE_KEY = "vin_diag_state_v1"
+"""Streamlit session key for the independent VIN diagnostics cache."""
 
 
 def get_state(default_dataset: AseEfmDatasetConfig, default_labeler: OracleRriLabelerConfig) -> AppState:
-    """Get or initialise the typed app state."""
+    """Return the main session state, creating it from the supplied defaults.
+
+    Existing state owns its mutable caches until :func:`clear_state` removes
+    the session entry; later default arguments do not replace it.
+    """
 
     raw = st.session_state.get(STATE_KEY)
     if isinstance(raw, AppState):
@@ -44,6 +51,12 @@ def get_state(default_dataset: AseEfmDatasetConfig, default_labeler: OracleRriLa
 
 
 def get_vin_state() -> VinDiagnosticsState:
+    """Return the session VIN cache, migrating compatible legacy containers.
+
+    Legacy mappings or objects are copied field-by-field into the current
+    dataclass before the typed value replaces the old session entry.
+    """
+
     raw = st.session_state.get(VIN_DIAG_STATE_KEY)
     if isinstance(raw, VinDiagnosticsState):
         return raw
@@ -63,10 +76,14 @@ def get_vin_state() -> VinDiagnosticsState:
 
 
 def store_state(state: AppState) -> None:
+    """Store the mutable main-state graph under the canonical session key."""
+
     st.session_state[STATE_KEY] = state
 
 
 def safe_rerun() -> None:
+    """Request a Streamlit rerun through the current or legacy public API."""
+
     if hasattr(st, "rerun"):
         st.rerun()
         return
@@ -77,10 +94,14 @@ def safe_rerun() -> None:
 
 
 def clear_state() -> None:
+    """Drop only the main NBV state; VIN diagnostics remain independently cached."""
+
     st.session_state.pop(STATE_KEY, None)
 
 
 def get_cached_state() -> AppState:
+    """Return the already-initialized main state or raise ``KeyError``."""
+
     return cast(AppState, st.session_state[STATE_KEY])
 
 

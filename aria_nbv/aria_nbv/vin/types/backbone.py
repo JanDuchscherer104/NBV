@@ -26,7 +26,13 @@ Tensor = torch.Tensor
 
 @dataclass(slots=True)
 class EvlBackboneOutput:
-    """EVL backbone features used by VIN.
+    """Actor-visible EVL evidence exchanged with VIN scorers and caches.
+
+    The tensors are local to the EVL model configuration and checkpoint that
+    produced them; they are learned evidence, not ground truth. This container
+    does not embed source, config, or checkpoint hashes. Any durable offline
+    payload must therefore pair it with provenance metadata that identifies the
+    EVL source, resolved configuration, and checkpoint content.
 
     Attributes:
         t_world_voxel: ``PoseTW["B 12"]`` world←voxel pose for the voxel grid.
@@ -123,10 +129,16 @@ class EvlBackboneOutput:
     """``Tensor["B (D·H·W) 3", float32]`` world-space voxel centers."""
 
     feat2d_upsampled: dict[str, Tensor] = field(default_factory=dict)
-    """Per-stream 2D feature maps keyed by stream name (e.g. "rgb")."""
+    """Per-stream ``Tensor["B T C H W", float32]`` feature maps."""
 
     token2d: dict[str, Tensor] = field(default_factory=dict)
-    """Per-stream 2D token maps keyed by stream name (e.g. "rgb")."""
+    """Per-stream 2D token tensors keyed by stream name.
+
+    EVL variants may expose either ``Tensor["B T C H W", float32]`` maps or
+    model-specific token layouts. Consumers must preserve the producing
+    config/checkpoint identity rather than treating channel semantics as
+    globally interchangeable.
+    """
 
     def to_serializable(self, *, include_fields: set[str] | None = None) -> dict[str, object]:
         """Serialize this backbone output into a cache-friendly CPU payload.

@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.data_handling import VinOfflineWriterConfig
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig
@@ -26,10 +26,10 @@ from aria_nbv.rerun_inspector._config import (
     RerunInspectorRolloutDepthConfig,
 )
 from aria_nbv.rollouts import (
-    CounterfactualSelectionPolicy,
     RolloutPolicySpec,
     RolloutZarrStoreConfig,
 )
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 

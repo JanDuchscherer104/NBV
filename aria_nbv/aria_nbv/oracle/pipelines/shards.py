@@ -1,4 +1,11 @@
-"""Shard planning and strict atomic rollout shard execution."""
+"""Plan deterministic shards and promote validated rollout stores atomically.
+
+Each manifest entry owns an ordered subset of immutable VIN source rows. A
+build writes a fresh temporary rollout Zarr store, validates it, records its
+owner sidecar, then renames the directory into place and writes ``_SUCCESS``
+last. Existing partial or mismatched paths are preserved for operator review
+rather than overwritten.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +28,7 @@ from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_SUCCESS_FILENAME,
     RolloutShardEntry,
     RolloutShardRow,
-    load_rollout_shard_entry,
+    read_rollout_shard_manifest,
     write_rollout_shard_manifest,
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
@@ -34,10 +41,19 @@ class RolloutShardRunResult:
     """Result of one strict rollout shard build or resume check."""
 
     final_dir: Path
+    """Final promoted standalone rollout-store directory."""
+
     skipped: bool
+    """Whether an already validated, provenance-matching shard was reused."""
+
     success_path: Path
+    """Completion marker path written only after final promotion."""
+
     owner_path: Path
+    """Owner/provenance sidecar path carried through the promoted directory."""
+
     store_result: RolloutZarrWriteResult | None = None
+    """Fresh write summary, or ``None`` when a completed shard was skipped."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,14 +61,31 @@ class RolloutShardStatus:
     """Status for one planned rollout shard in a generation campaign."""
 
     shard_id: str
+    """Canonical generation-shard identifier from the campaign manifest."""
+
     split: str
+    """VIN dataset split owned by the shard."""
+
     final_dir: Path
+    """Deterministic final rollout-store directory for the shard."""
+
     status: Literal["succeeded", "failed", "incomplete", "missing"]
+    """Observed lifecycle state derived from final and failure markers."""
+
     num_source_rows: int
+    """Number of immutable VIN source rows assigned by the manifest."""
+
     success_path: Path
+    """Expected path of the write-last completion marker."""
+
     owner_path: Path
+    """Expected path of the promoted owner/provenance sidecar."""
+
     failed_markers: tuple[Path, ...] = ()
+    """Failure sidecars from attempts for this shard, ordered by path."""
+
     errors: tuple[str, ...] = ()
+    """Validation or lifecycle problems explaining an incomplete state."""
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return a stable JSON-compatible status payload."""
@@ -75,12 +108,22 @@ class RolloutShardCampaignStatus:
     """Status summary for all shards planned by one rollout manifest."""
 
     manifest_path: Path
+    """Resolved JSONL manifest that defines the campaign."""
+
     final_root: Path
+    """Directory under which manifest shard ids map to final stores."""
+
     shards: tuple[RolloutShardStatus, ...]
+    """Per-manifest-entry statuses in deterministic manifest order."""
 
     @property
     def counts(self) -> dict[str, int]:
-        """Return shard counts by status."""
+        """Count succeeded, failed, incomplete, and missing planned shards.
+
+        Returns:
+            Mapping containing every lifecycle status, including zero-count
+            states, so automation can consume a stable schema.
+        """
 
         counts = {"succeeded": 0, "failed": 0, "incomplete": 0, "missing": 0}
         for shard in self.shards:
@@ -174,7 +217,7 @@ def summarize_rollout_shard_campaign(
 
     resolved_manifest = Path(manifest_path).expanduser().resolve()
     resolved_final_root = Path(final_root).expanduser().resolve()
-    entries = load_rollout_shard_manifest_for_status(resolved_manifest)
+    entries = read_rollout_shard_manifest(resolved_manifest)
     statuses = tuple(_summarize_rollout_shard_entry(entry, final_root=resolved_final_root) for entry in entries)
     return RolloutShardCampaignStatus(
         manifest_path=resolved_manifest,
@@ -277,20 +320,6 @@ def run_rollout_shard(
             error=exc,
         )
         raise
-
-
-def load_rollout_shard_entry_for_cli(path: Path | str, shard_id: str | int) -> RolloutShardEntry:
-    """Load one rollout shard entry for CLI callers."""
-
-    return load_rollout_shard_entry(path, shard_id)
-
-
-def load_rollout_shard_manifest_for_status(path: Path | str) -> list[RolloutShardEntry]:
-    """Load rollout shard entries for campaign status reporting."""
-
-    from ...rollouts.shard_manifest import read_rollout_shard_manifest
-
-    return read_rollout_shard_manifest(path)
 
 
 def _summarize_rollout_shard_entry(
@@ -466,7 +495,6 @@ __all__ = [
     "RolloutShardCampaignStatus",
     "RolloutShardRunResult",
     "RolloutShardStatus",
-    "load_rollout_shard_entry_for_cli",
     "plan_rollout_shards",
     "run_rollout_shard",
     "summarize_rollout_shard_campaign",

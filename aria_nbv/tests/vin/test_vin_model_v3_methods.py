@@ -72,9 +72,8 @@ from efm3d.aria.aria_constants import (
 )
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling import is_vin_snippet_view_instance
-from aria_nbv.data_handling.efm_views import EfmSnippetView, VinSnippetView
 from aria_nbv.data_handling.offline.batch import VinOracleBatch
+from aria_nbv.data_handling.raw.views import EfmSnippetView, VinSnippetView, is_vin_snippet_view_instance
 from aria_nbv.vin.encoders import TrajectoryEncoderConfig
 from aria_nbv.vin.geometry import pool_voxel_points
 from aria_nbv.vin.geometry.semidense_projection import (

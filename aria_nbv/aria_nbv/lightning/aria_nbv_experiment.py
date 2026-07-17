@@ -1,14 +1,16 @@
-"""Experiment-style orchestration for VIN training (Lightning).
+"""Compose and execute reproducible Lightning VIN experiments.
 
-This follows the pattern used in `external/doc_classifier/configs/experiment_config.py`:
+This module provides the top-level config-as-factory boundary that owns run
+mode dispatch, deterministic seeding, artifact paths, trainer/module/datamodule
+construction, checkpoint resume, ordinal-binner fitting, summaries, and Optuna
+studies. :class:`AriaNBVExperimentConfig` preserves nested config ownership so
+one TOML snapshot identifies the dataset source, scorer/loss, optimizer,
+callbacks, and logger without flattening their contracts.
 
-- A single top-level config (`AriaNBVExperimentConfig`) composes:
-  - `VinDataModuleConfig` (which composes `AseEfmDatasetConfig` + `OracleRriLabelerConfig`)
-  - `VinLightningModuleConfig` (which composes `VinModelConfig`)
-  - `TrainerFactoryConfig` (which composes `TrainerCallbacksConfig` + optional W&B config)
-
-The goal is to keep configuration nesting intact so runs are reproducible via a
-single TOML file.
+The orchestrator does not move oracle labels into actor-visible model inputs.
+The datamodule yields :class:`aria_nbv.data_handling.VinOracleBatch`, while
+:class:`VinLightningModule` performs the explicit post-forward CORAL loss and
+metric use of those labels.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import torch
 from pydantic import Field, field_validator, model_validator
 
 from ..configs import OptunaConfig, PathConfig
-from ..data_handling import VinOfflineSourceConfig
+from ..data_handling.offline.source import VinOfflineSourceConfig
 from ..utils import Console, Stage, TargetConfig
 from ..utils.console import Verbosity
 from .lit_datamodule import VinDataModule, VinDataModuleConfig
@@ -46,7 +48,13 @@ def _default_run_name() -> str:
 
 
 class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
-    """Top-level experiment config for VIN training/evaluation."""
+    """Own one reproducible VIN Lightning run and its nested factories.
+
+    Calling :meth:`setup_target` constructs but does not execute the three
+    runtime owners. :meth:`setup_target_and_run` then delegates loop ownership
+    to Lightning. Run artifacts, checkpoint paths, and fitted binner state are
+    resolved through :class:`PathConfig` before construction.
+    """
 
     run_mode: Literal[
         "train",
@@ -58,41 +66,42 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     ] = Field(
         default="train",
     )
+    """Requested experiment action, normalized from kebab or snake case."""
 
     run_name: str = Field(default_factory=_default_run_name)
-    """Human-readable run name (used for loggers and config snapshots)."""
+    """Human-readable identifier used by loggers, checkpoints, and snapshots."""
 
     stage: Stage = Field(default=Stage.TRAIN)
-    """Stage to execute when calling `setup_target_and_run`."""
+    """Lightning stage constructed and executed by :meth:`setup_target_and_run`."""
 
     summary_stage: Stage = Field(default=Stage.TRAIN)
-    """Stage used when running the VIN summary helper."""
+    """Dataset stage sampled by the non-training VIN summary action."""
 
     summary_num_batches: int = Field(default=1, gt=0)
-    """Number of oracle batches to summarize when run_mode="summarize_vin"."""
+    """Positive number of real oracle-labelled batches included in a summary."""
 
     summary_include_torchsummary: bool = True
-    """Whether to include torchsummary outputs in the VIN summary."""
+    """Append external torchsummary module traversal to scorer diagnostics."""
 
     summary_torchsummary_depth: int = Field(default=3, gt=0)
-    """Max depth for torchsummary module traversal."""
+    """Positive maximum module-tree depth for optional torchsummary output."""
 
     plot_out_dir: Path = Field(
         default_factory=lambda: Path("docs") / "figures" / "impl" / "vin",
     )
-    """Output directory for VIN encoding plots."""
+    """Path for non-training VIN encoding figures, resolved by the plot action."""
 
     ckpt_path: Path | None = None
-    """Optional checkpoint path for val/test (or resume training)."""
+    """Optional checkpoint for strict validation/test loading or training resume."""
 
     seed: int = 0
-    """Random seed applied via torch (and CUDA if available)."""
+    """Torch CPU/CUDA seed set before dataset, scorer, and trainer construction."""
 
     out_dir: Path = Field(default_factory=lambda: Path(".logs") / "vin")
-    """Output directory for run artifacts (config snapshots, checkpoints, binner)."""
+    """Run-artifact root for config snapshots, logs, checkpoints, and binner state."""
 
     fit_binner_only: bool = False
-    """Fit the ordinal binner on oracle labels, save it, and exit (no training)."""
+    """Compatibility flag that rewrites `run_mode` to ``"fit_binner"``."""
 
     fit_binner_overwrite: bool = False
     """Overwrite ``module_config.binner_path`` when ``run_mode="fit_binner"``.
@@ -113,24 +122,27 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
     """
 
     paths: PathConfig = Field(default_factory=PathConfig)
-    """Filesystem layout config (singleton)."""
+    """Repository-aware resolver for configs, run roots, checkpoints, and artifacts."""
 
     trainer_config: TrainerFactoryConfig = Field(default_factory=TrainerFactoryConfig)
-    """Lightning trainer factory config (callbacks + logger)."""
+    """Trainer factory including callback ownership, logger, devices, and loop limits."""
 
     datamodule_config: VinDataModuleConfig = Field(default_factory=VinDataModuleConfig)
-    """VIN datamodule config (datasets + oracle labeler)."""
+    """VIN source, stage-reuse, worker, and candidate-collation configuration."""
 
     module_config: VinLightningModuleConfig = Field(
         default_factory=VinLightningModuleConfig,
     )
-    """VIN LightningModule config (VIN model + optimizer + binner settings)."""
+    """One-step scorer, CORAL loss, binner, optimizer, scheduler, and metric config."""
 
     optuna_config: OptunaConfig | None = Field(default=None)
-    """Optional Optuna configuration enabling hyperparameter sweeps."""
+    """Optional study and search-space config used only by the Optuna action."""
 
     verbosity: Verbosity = Verbosity.QUIET
+    """Experiment-orchestration logging verbosity."""
+
     verbose: Verbosity = Verbosity.QUIET
+    """Legacy Optuna-facing verbosity value retained for config compatibility."""
 
     @field_validator("stage", mode="before")
     @classmethod
@@ -164,6 +176,8 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
 
     @property
     def resolved_out_dir(self) -> Path:
+        """Return `out_dir` resolved under the configured repository run root."""
+
         return self.paths.resolve_run_dir(self.out_dir)
 
     @property
@@ -332,7 +346,21 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
         *,
         trial: "optuna.Trial | None" = None,
     ) -> tuple[pl.Trainer, VinLightningModule, VinDataModule]:
-        """Instantiate trainer + module + datamodule (no execution)."""
+        """Construct the trainer, scorer module, and stage-aware datamodule.
+
+        Args:
+            setup_stage: Dataset stage to initialize; defaults to `stage`.
+            trial: Optional Optuna trial forwarded to trainer callback setup.
+
+        Returns:
+            Tuple of external Lightning trainer, :class:`VinLightningModule`,
+            and :class:`VinDataModule`. No fit/validation/test loop has run.
+
+        Notes:
+            Torch seeds and artifact directories are established before any
+            runtime owner is constructed. Checkpoint weights remain Lightning's
+            responsibility when the returned trainer starts its loop.
+        """
         resolved_stage = Stage.from_str(setup_stage) if setup_stage is not None else self.stage
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         console.log(
@@ -359,7 +387,15 @@ class AriaNBVExperimentConfig(TargetConfig[ExperimentTarget]):
         self,
         stage: Stage | str | None = None,
     ) -> pl.Trainer:
-        """Instantiate components and execute the configured stage."""
+        """Construct runtime owners and delegate one stage loop to Lightning.
+
+        Training verifies the fitted binner class count before `fit`; validation
+        and test pass the resolved checkpoint directly to Lightning. A globally
+        ranked interrupted trainer writes one explicit recovery checkpoint.
+
+        Returns:
+            Trainer after the requested loop finishes.
+        """
         resolved_stage = Stage.from_str(stage) if stage is not None else self.stage
         trainer, module, datamodule = self.setup_target(setup_stage=resolved_stage)
 

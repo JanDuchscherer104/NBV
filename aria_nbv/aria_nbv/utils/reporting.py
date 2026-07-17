@@ -1,4 +1,8 @@
-"""Lightweight reporting helpers shared by app, plotting, and exports."""
+"""Small deterministic statistics helpers for app, plots, and exports.
+
+The functions return plain labels, slopes, and index slices so presentation
+layers can share calculations without importing one another.
+"""
 
 from __future__ import annotations
 

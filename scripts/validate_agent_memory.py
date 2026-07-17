@@ -60,6 +60,12 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/config.toml",
     ".codex/hooks.json",
 }
+ALLOWED_TRACKED_OMX_PREFIXES = (
+    ".omx/context/",
+    ".omx/plans/",
+    ".omx/specs/",
+    ".omx/goals/autoresearch/",
+)
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 
 REQUIRED_NATIVE_KEYS = {
@@ -71,6 +77,18 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
+
+
+def is_forbidden_tracked_runtime_path(path: str) -> bool:
+    """Return whether ``path`` is operator runtime state that must stay local."""
+
+    if path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
+        return True
+    if not any(path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_RUNTIME_PREFIXES):
+        return False
+    if path.startswith(".omx/goals/") and "/artifacts/" in path:
+        return True
+    return not any(path.startswith(prefix) for prefix in ALLOWED_TRACKED_OMX_PREFIXES)
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -142,8 +160,7 @@ def check_codex_notes() -> list[str]:
         rel
         for path in codex_dir.rglob("*.md")
         if not any(
-            (rel := path.relative_to(REPO_ROOT).as_posix()).startswith(prefix)
-            for prefix in ALLOWED_CODEX_MD_PREFIXES
+            (rel := path.relative_to(REPO_ROOT).as_posix()).startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES
         )
     )
     if not notes:
@@ -198,10 +215,7 @@ def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
 
     if not ALIGNMENT_CONTRACT.exists():
-        errors.append(
-            "missing alignment tools contract: "
-            f"{ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}"
-        )
+        errors.append(f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}")
 
     for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -236,9 +250,7 @@ def check_scaffold_alignment() -> list[str]:
 
     tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     for tracked_path in tracked_paths:
-        if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS or any(
-            tracked_path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_RUNTIME_PREFIXES
-        ):
+        if is_forbidden_tracked_runtime_path(tracked_path):
             errors.append(f"runtime state must not be tracked: {tracked_path}")
 
     return errors

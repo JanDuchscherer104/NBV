@@ -1,10 +1,16 @@
 """Scaffold for finite-horizon candidate-value VIN scorers.
 
-The planned multi-step architecture predicts masked finite-candidate values
-over rollout state, target context, history, and candidate tokens. It is not the
+This module owns the planned multi-step architecture contract for masked
+finite-candidate values over rollout state, target context, history, and
+candidate tokens. It is not the
 same training contract as `aria_nbv.vin.models.scene_myopic.VinModelV3`: selected-transition
 returns, endpoint gains, and hard valid-action masks come from
 `aria_nbv.rollouts` stores and should not be folded into one-step RRI labels.
+
+The intended scorer output is a full-shell ``Tensor["B N_q", float32]``
+``Q_H(s, a_q)`` aligned with an authoritative ``Tensor["B N_q", bool]`` valid
+action mask from rollout state. No such tensor is emitted here: construction is
+deliberately blocked until the target and replay contracts are implemented.
 """
 
 from __future__ import annotations
@@ -49,6 +55,11 @@ class MultiStepCandidateScorer(nn.Module):
     arrays such as target-root gain, selected-transition return, and hard valid
     masks. Construction fails explicitly so users cannot accidentally train a
     model that has no finite-horizon semantics.
+
+    Candidate rows must remain aligned to the full finite shell so a joint
+    candidate relabeling can permute values and masks together. This scaffold
+    does not yet enforce that permutation-equivariant surface and defines no
+    candidate graph or graph-isomorphism contract.
     """
 
     def __init__(self, config: MultiStepCandidateScorerConfig) -> None:

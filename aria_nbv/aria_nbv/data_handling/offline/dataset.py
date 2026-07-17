@@ -11,7 +11,7 @@ numeric blocks plus optional MessagePack diagnostics, then exposes either:
 The store is intentionally strict: readers accept the current
 `OFFLINE_DATASET_VERSION` only, split membership comes from file-backed arrays,
 and `sample_index.jsonl` owns scene/snippet coverage. Rebuild stale stores with
-`VinOfflineWriter`; do not patch manifests, split arrays, or shard payloads by
+`nbv-build-offline`; do not patch manifests, split arrays, or shard payloads by
 hand.
 """
 
@@ -36,8 +36,9 @@ from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.types import EvlBackboneOutput
-from ..efm_dataset_utils import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from ..raw import EfmSnippetLoader, EfmSnippetView, VinSnippetView
+from ..identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
+from ..raw.loader import EfmSnippetLoader
+from ..raw.views import EfmSnippetView, VinSnippetView
 from .batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
@@ -47,40 +48,46 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class VinOfflineOracleBlock:
-    """Oracle-label block stored for one offline VIN sample. :py:module:`aria_nbv.data_handling` owns the typed boundary between upstream ASE/ATEK/EFM"""
+    """Expose fixed-width oracle labels for one immutable VIN source row.
+
+    The leading candidate width ``N_store`` is the writer's persisted budget;
+    only ``[:candidate_count]`` is valid. RRI and point-mesh fields are
+    GT-mesh-derived supervision, never actor-visible policy inputs. Candidate
+    and reference poses preserve EFM's world-from-sensor convention.
+    """
 
     candidate_poses_world_cam: PoseTW
-    """Candidate world←camera poses."""
+    """``PoseTW["N_store 12"]`` candidate world←camera transforms; translation is metres."""
 
     reference_pose_world_rig: PoseTW
-    """Reference world←rig pose."""
+    """``PoseTW["12"]`` world←rig transform at the rollout/source reference time."""
 
     candidate_count: int
-    """Number of valid candidates inside the fixed-width tensors."""
+    """Valid prefix length inside every ``N_store`` candidate-aligned field."""
 
     rri: Tensor
-    """Oracle RRI values per candidate."""
+    """``Tensor["N_store", float32]`` dimensionless oracle RRI; padded tail is invalid."""
 
     pm_dist_before: Tensor
-    """Pre-observation Chamfer distance per candidate."""
+    """``Tensor["N_store", float32]`` pre-view bidirectional error in square metres."""
 
     pm_dist_after: Tensor
-    """Post-observation Chamfer distance per candidate."""
+    """``Tensor["N_store", float32]`` post-view bidirectional error in square metres."""
 
     pm_acc_before: Tensor
-    """Pre-observation accuracy distance per candidate."""
+    """``Tensor["N_store", float32]`` pre-view point-to-mesh error in square metres."""
 
     pm_comp_before: Tensor
-    """Pre-observation completeness distance per candidate."""
+    """``Tensor["N_store", float32]`` pre-view mesh-to-point error in square metres."""
 
     pm_acc_after: Tensor
-    """Post-observation accuracy distance per candidate."""
+    """``Tensor["N_store", float32]`` post-view point-to-mesh error in square metres."""
 
     pm_comp_after: Tensor
-    """Post-observation completeness distance per candidate."""
+    """``Tensor["N_store", float32]`` post-view mesh-to-point error in square metres."""
 
     p3d_cameras: PerspectiveCameras
-    """PyTorch3D cameras aligned with the candidate set."""
+    """PyTorch3D camera batch aligned one-to-one with the ``N_store`` candidate rows."""
 
 
 @dataclass(slots=True)
@@ -92,22 +99,26 @@ class VinOfflineSample:
     blocks needed to regenerate counterfactual candidates. Model training still
     goes through `VinOracleBatch`, while rollout writers consume this sample
     shape and carry its source shard fields into standalone rollout stores.
+
+    Numeric VIN/oracle blocks and lineage are reader-owned immutable data.
+    ``efm_snippet_view`` is a worker-local live ATEK/EFM attachment; rich EVL,
+    depth, point-cloud, and OBB payloads are decoded only when requested.
     """
 
     sample_key: str
-    """Stable dataset sample key."""
+    """Stable compact ASE/ATEK sample key, independent of split iteration order."""
 
     scene_id: str
-    """ASE scene identifier."""
+    """ASE scene identifier used for GT-mesh pairing and source lineage."""
 
     snippet_id: str
-    """ASE snippet identifier."""
+    """ATEK WebDataset sample identifier normalized to the compact public form."""
 
     vin_snippet: VinSnippetView
-    """Minimal model-facing VIN snippet view."""
+    """Actor-visible MPS/EFM point and trajectory substrate decoded from numeric blocks."""
 
     oracle: VinOfflineOracleBlock
-    """Oracle-label block stored for the sample."""
+    """GT-mesh-derived candidate labels kept outside the actor-visible state."""
 
     sample_index: int = -1
     """Global zero-based sample index from ``sample_index.jsonl``."""
@@ -122,60 +133,31 @@ class VinOfflineSample:
     """Zero-based row offset inside ``source_shard_id`` used for rollout lineage."""
 
     candidates: CandidateSamplingResult | None = None
-    """Optional candidate-sampling payload preserved for diagnostics."""
+    """Optional regenerated/stored candidate metadata; not required by VIN training."""
 
     backbone_out: EvlBackboneOutput | None = None
-    """Optional cached EVL backbone outputs."""
+    """Optional actor-visible EVL evidence tied to serialized backbone config.
+
+    The manifest records resolved asset paths but no checkpoint-content hash.
+    """
 
     depths: CandidateDepths | None = None
-    """Optional cached candidate depth maps."""
+    """Optional oracle-rendered candidate depths and masks for diagnostics."""
 
     candidate_pcs: CandidatePointClouds | None = None
-    """Optional cached candidate point clouds."""
+    """Optional world-frame point clouds backprojected from oracle candidate depths."""
 
     efm_snippet_view: EfmSnippetView | None = None
-    """Optional raw EFM snippet view attached live from the source dataset in `aria_nbv.data_handling`."""
+    """Worker-local live ATEK/EFM view; loaded on demand and never copied into the store."""
 
     gt_obbs: CompactObbBlock | None = None
-    """Optional compact GT OBBs decoded from persisted blocks."""
+    """Optional ASE GT OBB label/evaluation payload; never an actor-visible target input."""
 
     detected_obbs: CompactObbBlock | None = None
-    """Optional compact detected OBBs decoded from persisted blocks."""
+    """Optional actor-visible EVL detected boxes decoded from persisted blocks."""
 
     trajectory: CompactTrajectoryBlock | None = None
-    """Optional persisted trajectory timing and gravity metadata."""
-
-    def to_vin_oracle_batch(self) -> VinOracleBatch:
-        """Convert the offline sample into a model-facing VIN batch.
-
-        Returns:
-            ``VinOracleBatch`` built from the sample's VIN and oracle blocks.
-        """
-
-        return VinOracleBatch(
-            efm_snippet_view=self.vin_snippet if self.efm_snippet_view is None else self.efm_snippet_view,
-            candidate_poses_world_cam=self.oracle.candidate_poses_world_cam,
-            reference_pose_world_rig=self.oracle.reference_pose_world_rig,
-            rri=self.oracle.rri,
-            pm_dist_before=self.oracle.pm_dist_before,
-            pm_dist_after=self.oracle.pm_dist_after,
-            pm_acc_before=self.oracle.pm_acc_before,
-            pm_comp_before=self.oracle.pm_comp_before,
-            pm_acc_after=self.oracle.pm_acc_after,
-            pm_comp_after=self.oracle.pm_comp_after,
-            p3d_cameras=self.oracle.p3d_cameras,
-            candidate_count=torch.tensor(
-                int(self.oracle.candidate_count),
-                device=self.oracle.rri.device,
-                dtype=torch.int64,
-            ),
-            scene_id=self.scene_id,
-            snippet_id=self.snippet_id,
-            backbone_out=self.backbone_out,
-            gt_obbs=self.gt_obbs,
-            detected_obbs=self.detected_obbs,
-            trajectory=self.trajectory,
-        )
+    """Optional MPS/EFM pose timestamps and world-frame gravity metadata."""
 
 
 VinOfflineDatasetItem = VinOfflineSample | VinOracleBatch
@@ -187,7 +169,7 @@ class VinOfflineDatasetConfig(TargetConfig["VinOfflineDataset"]):
 
     @property
     def target_type(self) -> type["VinOfflineDataset"]:
-        """Return the dataset factory target."""
+        """Return :class:`VinOfflineDataset` for config-as-factory construction."""
 
         return VinOfflineDataset
 

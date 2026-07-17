@@ -1,4 +1,9 @@
-"""Candidate depth rendering panel."""
+"""Oracle candidate-depth and backprojected-hit diagnostics.
+
+This panel provides metric camera-z depth grids, hit statistics, and optional
+world-frame point-cloud overlays derived from the ASE mesh; these rendered
+values are evaluation evidence and never actor observations.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +23,14 @@ def render_depth_page(
     *,
     pcs: CandidatePointClouds | None,
 ) -> None:
+    """Render oracle depth maps and optional world-frame depth-hit clouds.
+
+    Args:
+        sample: Optional source snippet needed for 3D scene context.
+        depth_batch: Mesh-rendered depths ``Tensor[\"C H W\", float]`` in metres.
+        pcs: Optional backprojections ``Tensor[\"C P 3\", float]`` in world metres.
+    """
+
     st.header("Candidate Renders")
 
     depths = depth_batch.depths

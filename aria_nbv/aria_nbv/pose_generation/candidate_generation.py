@@ -17,6 +17,11 @@ frame (LUF camera convention: x=left, y=up, z=forward).
 full sampled shell as masks/diagnostics. Mixture generation should wrap this
 single-family generator rather than changing its ordering semantics.
 
+This module owns the single-family generator, its config factory, sampling
+orchestration, and assembly of :class:`CandidateSamplingResult`. Direction and
+orientation primitives, pruning-rule implementations, mixture concatenation,
+rendering, and actor/oracle action selection belong to sibling subsystems.
+
 Theory:
     Sampling uses a physical reference pose and, by default, a gravity-aligned
     sampling pose. Center samples are transformed into world-frame candidate
@@ -224,6 +229,7 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
 
     @model_validator(mode="after")
     def set_debug(self) -> CandidateViewGeneratorConfig:
+        """Resolve debug verbosity and inherited view-jitter defaults."""
         if self.is_debug:
             object.__setattr__(self, "verbosity", Verbosity.VERBOSE)
         if self.view_kappa is None:
@@ -236,14 +242,17 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
 
     @property
     def min_elev_rad(self) -> float:
+        """Return the lower candidate elevation bound in radians."""
         return radians(self.min_elev_deg)
 
     @property
     def max_elev_rad(self) -> float:
+        """Return the upper candidate elevation bound in radians."""
         return radians(self.max_elev_deg)
 
     @property
     def delta_azimuth_rad(self) -> float:
+        """Return the candidate azimuth span in radians."""
         return radians(self.delta_azimuth_deg)
 
 

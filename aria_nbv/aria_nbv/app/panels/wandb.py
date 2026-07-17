@@ -1,4 +1,9 @@
-"""Weights & Biases comparison panel."""
+"""Weights & Biases run comparison and training-dynamics diagnostics.
+
+The panel provides cached entity/project discovery, bounded run filtering,
+metric curves, summary comparisons, dynamics plots, and logged-media previews
+through the optional W&B API.
+"""
 
 from __future__ import annotations
 

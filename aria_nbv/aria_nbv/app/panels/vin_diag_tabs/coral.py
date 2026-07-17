@@ -1,4 +1,9 @@
-"""CORAL diagnostics tab for VIN."""
+"""CORAL ordinal-output and calibration diagnostics for VIN.
+
+The tab provides threshold logits, class probabilities, monotonicity checks,
+entropy and loss views, comparing actor-facing predictions with separately
+labeled oracle RRI targets when available.
+"""
 
 from __future__ import annotations
 

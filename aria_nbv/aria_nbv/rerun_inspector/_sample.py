@@ -1,12 +1,19 @@
-"""Sample selection helpers for the offline Rerun inspector."""
+"""Resolve one immutable VIN sample for offline Rerun inspection.
+
+This module owns selector precedence and read-only dataset instantiation:
+stable sample key first, then scene/snippet identity, then split-local index.
+The selected sample retains source-store identity and is never copied back or
+modified by the inspector.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import cast
 
-from aria_nbv.data_handling import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
-from aria_nbv.data_handling.efm_dataset_utils import compact_ase_atek_sample_id
+from aria_nbv.data_handling import VinOfflineDataset, VinOfflineDatasetConfig
+from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id
+from aria_nbv.data_handling.offline.dataset import VinOfflineSample
 
 from ._config import RerunInspectorSelectionConfig
 

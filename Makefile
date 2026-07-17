@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
@@ -93,20 +94,25 @@ empty :=
 space := $(empty) $(empty)
 KG_MODALITY_ARGS = $(foreach modality,$(subst $(comma),$(space),$(strip $(KG_MODALITY))),--modality $(modality))
 PACKAGE_SMOKE_RUFF_PATHS := \
-	aria_nbv/data_handling/_offline_writer.py \
+	aria_nbv/app/panels/vin_diagnostics_runtime.py \
+	aria_nbv/data_handling/offline/writer.py \
 	aria_nbv/pose_generation/types.py \
 	aria_nbv/rendering/candidate_depth_renderer.py \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/rollouts/test_counterfactuals.py \
 	tests/rendering/test_candidate_renderer_cpu_backend.py \
-	tests/lightning/test_vin_batch_collate.py
+	tests/lightning/test_vin_batch_collate.py \
+	tests/app/panels/test_vin_diagnostics_runtime.py \
+	tests/vin/test_vin_diagnostics_runtime.py
 PACKAGE_SMOKE_TESTS := \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/rollouts/test_counterfactuals.py \
 	tests/rendering/test_candidate_renderer_cpu_backend.py \
-	tests/lightning/test_vin_batch_collate.py
+	tests/lightning/test_vin_batch_collate.py \
+	tests/app/panels/test_vin_diagnostics_runtime.py \
+	tests/vin/test_vin_diagnostics_runtime.py
 
 # Read-only operator inspection defaults.
 OFFLINE_STORE ?= vin_offline
@@ -201,6 +207,12 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
+
+graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
+	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
+
+api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
+	@./scripts/tests/test_quarto_generate_api_docs.sh
 
 check-agent-memory: _check_python ## 🗺️ Validate agent memory scaffolding and debrief hygiene
 	@$(PYTHON_INTERPRETER) scripts/validate_agent_memory.py
@@ -858,9 +870,9 @@ docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces
 package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev pytest $(PACKAGE_SMOKE_TESTS)
+	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

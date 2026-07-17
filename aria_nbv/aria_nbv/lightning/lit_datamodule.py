@@ -1,17 +1,22 @@
-"""LightningDataModule for VIN training with online or immutable offline labels.
+"""Provide stage-aware VIN datasets and candidate-table collation to Lightning.
 
 The training data-flow mirrors `aria_nbv/scripts/train_vin.py`:
 
 EFM snippet → candidate generation → depth rendering → backprojection → oracle RRI → VIN (CORAL).
 
-This module keeps the expensive oracle labeler in the data pipeline by default,
-but can switch to immutable VIN offline stores for fast parallel reading.
+This module owns dataset construction, stage reuse, candidate shuffling, and
+``VinOracleBatch.collate`` selection. It keeps the expensive oracle labeler in
+the data pipeline by default, but can switch to immutable VIN offline stores
+for fast parallel reading. It does not own scorer inputs or losses; those
+boundaries belong to :mod:`aria_nbv.lightning._candidate_scorer_batch` and
+:mod:`aria_nbv.lightning.lit_module`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Annotated, TypeAlias
 
 import pytorch_lightning as pl
 from pydantic import Field, model_validator
@@ -20,12 +25,18 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset
 from ..configs import PathConfig
 from ..data_handling import (
     AseEfmDatasetConfig,
-    VinDatasetSourceConfig,
     VinOracleBatch,
-    VinOracleDatasetBase,
-    VinOracleOnlineDatasetConfig,
 )
+from ..data_handling.offline.batch import VinOracleDatasetBase
+from ..data_handling.offline.source import VinOfflineSourceConfig
+from ..oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 from ..utils import Console, Stage, TargetConfig, Verbosity
+
+VinDatasetSourceConfig: TypeAlias = Annotated[
+    VinOracleOnlineDatasetConfig | VinOfflineSourceConfig,
+    Field(discriminator="kind"),
+]
+"""Split-aware VIN dataset-source union composed by Lightning."""
 
 
 def _default_source() -> VinDatasetSourceConfig:
@@ -42,40 +53,63 @@ def _default_source() -> VinDatasetSourceConfig:
 
 
 class VinDataModuleConfig(TargetConfig["VinDataModule"]):
-    """Configuration for `VinDataModule`."""
+    """Configure stage datasets and candidate-table collation.
+
+    Online sources yield one oracle-labelled snippet at a time and therefore
+    require ``num_workers=0``. Map-style offline sources may collate a batch of
+    size ``B``; candidate rows are right-padded to ``N_q`` and accompanied by
+    per-sample `candidate_count` values used to construct the hard prefix mask.
+    """
 
     @property
     def target_type(self) -> type["VinDataModule"]:
+        """Return the :class:`VinDataModule` factory target."""
+
         return VinDataModule
 
     paths: PathConfig = Field(default_factory=PathConfig)
-    """Project path resolver."""
+    """Project path resolver used by nested dataset/store configurations."""
 
     source: VinDatasetSourceConfig = Field(default_factory=_default_source)
-    """Config-as-factory dataset source."""
+    """Config-as-factory source for online labels or an immutable offline store."""
 
     shuffle: bool = True
-    """Whether to shuffle the train dataset at each epoch (only applies to offline stores)."""
+    """Shuffle map-style training samples each epoch; ignored for iterable sources."""
 
     shuffle_candidates: bool = True
-    """Whether to shuffle candidate views and corresponding labels with each sample (offline stores only)."""
+    """Permute compact valid candidate rows and aligned labels per training sample.
+
+    For a collated table, only each row's valid prefix is permuted; right-padding
+    stays outside :meth:`VinOracleBatch.candidate_valid_mask`.
+    """
 
     num_workers: int = 16
-    """Number of DataLoader worker processes (use >0 for offline stores; keep 0 for online labeler)."""
+    """DataLoader worker count; must be zero for the non-multiprocess-safe online labeler."""
+
     batch_size: int | None = None
-    """Optional DataLoader batch size (offline-store only; requires custom collation)."""
+    """Optional offline batch size ``B`` using :meth:`VinOracleBatch.collate`.
+
+    ``None`` preserves single-sample candidate poses ``PoseTW["N_q 12"]`` and
+    RRI labels ``Tensor["N_q", float32]``. A positive value produces
+    ``PoseTW["B N_q 12"]`` and ``Tensor["B N_q", float32]`` tables padded to
+    the largest compact valid count in the batch.
+    """
 
     persistent_workers: bool = False
-    """Whether to keep DataLoader workers alive between epochs (ignored when num_workers=0)."""
+    """Keep worker processes between epochs; forced off when `num_workers` is zero."""
 
     verbosity: Verbosity = Verbosity.NORMAL
-    """Verbosity level for dataset/labeler diagnostics."""
+    """Dataset and oracle-labeler diagnostic verbosity."""
 
     is_debug: bool = False
-    """Enable debug defaults (forces num_workers=0, lowers verbosity)."""
+    """Serialized compatibility flag; worker and trainer debug policy is configured elsewhere."""
 
     use_train_as_val: bool = False
-    """Use the train dataset instance for validation/testing (applies to online datasets)."""
+    """Reuse the exact train dataset instance for validation and testing.
+
+    This is intended for online diagnostics where a separate validation source
+    is unavailable, not for held-out performance reporting.
+    """
 
     @model_validator(mode="after")
     def _check_compatibility(self) -> VinDataModuleConfig:
@@ -101,7 +135,18 @@ class VinDataModuleConfig(TargetConfig["VinDataModule"]):
 
 
 class VinDataModule(pl.LightningDataModule):
-    """LightningDataModule that yields online or offline oracle-labelled VIN batches."""
+    """Own stage datasets and loaders for oracle-labelled VIN batches.
+
+    Lightning may call :meth:`setup` more than once. Dataset instances are
+    therefore initialized lazily and retained by stage. Scorer-device transfer
+    remains the module's responsibility; this class yields CPU/source-device
+    :class:`VinOracleBatch` objects whose candidate width is compact for a
+    single sample or right-padded after offline collation.
+
+    Attributes:
+        config: Immutable construction policy for sources, batching, and
+            worker lifecycle.
+    """
 
     _train_source: VinOracleDatasetBase | None
     """Optional config-selected dataset for training."""
@@ -185,6 +230,18 @@ class VinDataModule(pl.LightningDataModule):
 
     # --------------------------------------------------------------------- setup
     def setup(self, stage: Stage | str | None = None) -> None:
+        """Initialize and retain the datasets required by one Lightning stage.
+
+        Args:
+            stage: ``train``, ``val``, ``test``, or ``None``. ``None`` prepares
+                both training and validation ownership paths.
+
+        Notes:
+            Repeated calls are idempotent for already-created sources.
+            Validation and test share `_val_source`; when `use_train_as_val` is
+            enabled they deliberately share `_train_source` as well.
+        """
+
         console = Console.with_prefix(self.__class__.__name__, "setup")
         requested = Stage.from_str(stage) if stage is not None else None
         if requested is None or requested is Stage.TRAIN:
@@ -216,6 +273,15 @@ class VinDataModule(pl.LightningDataModule):
 
     # ------------------------------------------------------------------ loaders
     def train_dataloader(self) -> DataLoader:
+        """Build the training loader with optional row and candidate shuffling.
+
+        Returns:
+            DataLoader yielding :class:`VinOracleBatch`. Map-style batching
+            produces poses ``PoseTW["B N_q 12"]``, RRI labels
+            ``Tensor["B N_q", float32]``, and a hard prefix mask derived from
+            `candidate_count`; iterable/online sources remain unbatched.
+        """
+
         plan = self._build_stage_plan(Stage.TRAIN)
         dataset = plan.dataset
         if plan.is_map_style and self.config.shuffle_candidates:
@@ -233,6 +299,13 @@ class VinDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
+        """Build the deterministic validation loader for the retained source.
+
+        Returns:
+            DataLoader yielding unshuffled :class:`VinOracleBatch` objects with
+            the same compact/right-padded shape contract as the training loader.
+        """
+
         plan = self._build_stage_plan(Stage.VAL)
         return DataLoader(
             plan.dataset,
@@ -243,16 +316,22 @@ class VinDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self) -> DataLoader:
+        """Reuse the validation-loader contract for Lightning test evaluation."""
+
         return self.val_dataloader()
 
     # ------------------------------------------------------------------ helpers
     def iter_oracle_batches(self, *, stage: Stage) -> Iterator[VinOracleBatch]:
-        """Iterate oracle batches without going through a DataLoader."""
+        """Return a direct iterator over one stage's oracle-labelled samples.
+
+        This bypasses worker processes and `VinOracleBatch.collate`, so yielded
+        candidate payloads retain their per-sample ``N_q`` width.
+        """
         plan = self._build_stage_plan(stage)
         return iter(plan.dataset)
 
     def _describe_dataset(self, dataset: VinOracleDatasetBase, *, stage: Stage) -> dict[str, object]:
-        from ..data_handling import VinOfflineDatasetConfig, VinOracleOnlineDataset
+        from ..data_handling.offline.dataset import VinOfflineDatasetConfig
 
         summary: dict[str, object] = {
             "stage": stage.value,
@@ -297,4 +376,4 @@ class VinDataModule(pl.LightningDataModule):
         return summary
 
 
-__all__ = ["VinDataModule", "VinDataModuleConfig", "VinOracleBatch"]
+__all__ = ["VinDataModule", "VinDataModuleConfig", "VinDatasetSourceConfig", "VinOracleBatch"]

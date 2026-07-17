@@ -1,4 +1,9 @@
-"""Shared pose-generation helpers used across sampling and rollout modules."""
+"""Frame-preserving pose and directional statistics for candidate generation.
+
+Helpers operate on EFM ``PoseTW`` values or explicitly documented LUF
+reference-frame vectors. Summary functions detach no state and return plain
+statistics suitable for diagnostics and persisted reports.
+"""
 
 from __future__ import annotations
 
@@ -35,7 +40,7 @@ def _axis_stats(x: torch.Tensor) -> dict[str, float]:
 
 
 def summarise_offsets_ref(offsets_ref: torch.Tensor) -> dict[str, dict[str, float]]:
-    # offsets_ref: (N,3) in LUF reference frame
+    """Summarize radii and angles for LUF offsets ``Tensor[\"N 3\"]`` in metres."""
     r = offsets_ref.norm(dim=-1)
     az = torch.rad2deg(torch.atan2(offsets_ref[:, 0], offsets_ref[:, 2]))
     el = torch.rad2deg(torch.atan2(offsets_ref[:, 1], torch.linalg.norm(offsets_ref[:, (0, 2)], dim=-1) + 1e-8))
@@ -43,7 +48,7 @@ def summarise_offsets_ref(offsets_ref: torch.Tensor) -> dict[str, dict[str, floa
 
 
 def summarise_dirs_ref(dirs_ref: torch.Tensor) -> dict[str, dict[str, float]]:
-    # dirs_ref: (N,3) unit forward vectors in reference frame
+    """Summarize azimuth/elevation of LUF directions ``Tensor[\"N 3\"]``."""
     dirs = dirs_ref / dirs_ref.norm(dim=-1, keepdim=True).clamp_min(1e-8)
     az = torch.rad2deg(torch.atan2(dirs[:, 0], dirs[:, 2]))
     el = torch.rad2deg(torch.asin(dirs[:, 1].clamp(-1.0, 1.0)))

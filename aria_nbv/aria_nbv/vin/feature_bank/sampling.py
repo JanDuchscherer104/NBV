@@ -1,4 +1,8 @@
-"""Sampling helpers for building actor-visible point-feature banks."""
+"""Sampling helpers for building actor-visible point-feature banks.
+
+This module owns logged-camera projection, multiview descriptor reduction, and
+assembly of source-labelled `PointFeatureBank` payloads at world-frame points.
+"""
 
 from __future__ import annotations
 
@@ -32,17 +36,21 @@ def sample_logged_image_features_at_world_points(
     """Sample logged image features at semidense or fused world points.
 
     Args:
-        points_world: ``Tensor["N 3"]`` or ``Tensor["B N 3"]`` world points.
-        feat2d: Logged feature maps shaped ``B T C H W`` or ``T C H W``.
+        points_world: ``Tensor["N_p 3", float32]`` or
+            ``Tensor["B N_p 3", float32]`` world-frame points in metres.
+        feat2d: Logged ``Tensor["B T C H W", float32]`` or
+            ``Tensor["T C H W", float32]`` feature maps.
         cameras: `CameraTW` with shape ``B T`` or ``T``.
         t_world_camera: `PoseTW` with shape ``B T`` or ``T``.
         point_weights: Optional point/sample weights for pooling.
         source_frame_indices: Optional frame ids shaped ``B T`` or ``T``.
-        feature_source: Feature source provenance id.
+        feature_source: Approved actor-visible source label. This label does
+            not replace model-config or checkpoint hashes for persisted banks.
         source_role: Actor/oracle provenance role.
         compression_projection: Optional projection matrix for descriptors.
         compression_output_dim: Optional slice dimension for descriptors.
-        compression_id: Stable compression provenance id.
+        compression_id: Stable compression label; content-address the
+            projection separately when durable identity matters.
         eps: Positive denominator guard.
         warn: Forward low-validity warnings from EFM3D `sample_images`.
 

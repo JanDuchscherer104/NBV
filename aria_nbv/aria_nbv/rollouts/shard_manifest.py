@@ -28,13 +28,28 @@ class RolloutShardRow:
     """One VIN offline source row owned by a rollout shard."""
 
     order: int
+    """Zero-based processing order within this generated rollout shard."""
+
     sample_index: int
+    """Stable VIN dataset sample index used to reopen the source row."""
+
     sample_key: str
+    """Canonical VIN sample key used to reject index drift."""
+
     scene_id: str
+    """Source scene identifier persisted into rollout lineage."""
+
     snippet_id: str
+    """Source snippet identifier persisted into rollout lineage."""
+
     split: str
+    """VIN dataset split; all rows in one entry must share it."""
+
     source_shard_id: str
+    """Identifier of the immutable VIN storage shard containing the row."""
+
     source_shard_row: int
+    """Zero-based row within ``source_shard_id``."""
 
     @classmethod
     def from_index_record(cls, record: Any, *, order: int) -> "RolloutShardRow":
@@ -53,7 +68,15 @@ class RolloutShardRow:
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardRow":
-        """Decode one JSON row payload."""
+        """Decode one JSON row while restoring numeric lineage fields.
+
+        Args:
+            payload: Mapping emitted by :meth:`to_jsonable`.
+
+        Returns:
+            Typed source-row ownership record. Entry-level validation checks
+            split consistency and contiguous ordering after decoding.
+        """
 
         return cls(
             order=int(payload["order"]),
@@ -104,18 +127,44 @@ class RolloutShardEntry:
     """One deterministic rollout generation shard entry."""
 
     shard_id: str
+    """Canonical ``shard-000000`` style rollout-generation identifier."""
+
     split: str
+    """VIN dataset split shared by all owned source rows."""
+
     rows: tuple[RolloutShardRow, ...]
+    """Ordered immutable VIN source rows assigned to this output shard."""
+
     writer_config_hash: str
+    """Hash of the complete writer configuration used for drift rejection."""
+
     source_manifest_hash: str
+    """Hash of the immutable VIN offline-store manifest."""
+
     source_cache_version: str
+    """VIN source cache schema/version recorded in generated lineage."""
+
     split_manifest_hash: str
+    """Hash binding split name and ordered source-row records."""
+
     source_store_dir: str
+    """Resolved VIN source-store directory used when the manifest was planned."""
+
     manifest_version: str = ROLLOUT_SHARD_MANIFEST_VERSION
+    """JSONL ownership-contract version."""
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardEntry":
-        """Decode one JSONL manifest entry."""
+        """Decode and canonicalize one JSONL shard ownership entry.
+
+        Args:
+            payload: Parsed JSON object containing source rows and provenance
+                hashes.
+
+        Returns:
+            Typed entry. Call :meth:`validate` before using it to build a
+            rollout store.
+        """
 
         return cls(
             manifest_version=str(payload["manifest_version"]),
@@ -194,7 +243,11 @@ def write_rollout_shard_manifest(path: Path | str, entries: list[RolloutShardEnt
 
 
 def read_rollout_shard_manifest(path: Path | str) -> list[RolloutShardEntry]:
-    """Read a rollout shard JSONL manifest."""
+    """Read and validate all entries in a rollout shard JSONL manifest.
+
+    Blank lines are ignored. Malformed rows, duplicate shard ids, mixed splits,
+    or non-contiguous row ownership fail before any rollout generation begins.
+    """
 
     manifest_path = Path(path).expanduser().resolve()
     entries: list[RolloutShardEntry] = []
@@ -215,7 +268,18 @@ def read_rollout_shard_manifest(path: Path | str) -> list[RolloutShardEntry]:
 
 
 def load_rollout_shard_entry(path: Path | str, shard_id: str | int) -> RolloutShardEntry:
-    """Load one rollout shard entry by id."""
+    """Load one validated manifest entry by canonical or numeric shard id.
+
+    Args:
+        path: Rollout shard JSONL manifest.
+        shard_id: Numeric id or canonical ``shard-000000`` token.
+
+    Returns:
+        Matching validated ownership entry.
+
+    Raises:
+        KeyError: If the requested shard is absent from the manifest.
+    """
 
     canonical = canonical_rollout_shard_id(shard_id)
     for entry in read_rollout_shard_manifest(path):

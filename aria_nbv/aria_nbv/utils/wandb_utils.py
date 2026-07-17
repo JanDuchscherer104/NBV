@@ -29,14 +29,31 @@ class WandbRun(Protocol):
     """Minimal W&B Run interface used by these utilities."""
 
     id: str
+    """Stable W&B run identifier."""
+
     name: str
+    """Human-readable run display name."""
+
     state: str
+    """Remote lifecycle state such as `running` or `finished`."""
+
     group: str | None
+    """Optional experiment group label."""
+
     job_type: str | None
+    """Optional W&B job-role label."""
+
     tags: Sequence[str] | None
+    """Optional ordered run tags."""
+
     created_at: Any
+    """Creation timestamp in the representation returned by the W&B client."""
+
     summary: Mapping[str, Any] | None
+    """Final or latest scalar summary payload."""
+
     config: Mapping[str, Any] | None
+    """Serialized run configuration payload."""
 
     def history(self, keys: list[str] | None = None, samples: int | None = None) -> Any:
         """Return history data (typically a pandas.DataFrame or list of dicts)."""
@@ -46,15 +63,21 @@ class WandbRun(Protocol):
 class WandbApi(Protocol):
     """Minimal W&B API interface used by these utilities."""
 
-    def viewer(self) -> Any: ...  # pragma: no cover - protocol signature only
+    def viewer(self) -> Any:
+        """Return metadata for the authenticated viewer and its teams."""
+        ...  # pragma: no cover - protocol signature only
 
-    def projects(self, entity: str) -> Iterable[Any]: ...  # pragma: no cover - protocol signature only
+    def projects(self, entity: str) -> Iterable[Any]:
+        """Iterate projects visible under one W&B entity."""
+        ...  # pragma: no cover - protocol signature only
 
-    def runs(
-        self, path: str, order: str | None = None
-    ) -> Iterable[WandbRun]: ...  # pragma: no cover - protocol signature only
+    def runs(self, path: str, order: str | None = None) -> Iterable[WandbRun]:
+        """Iterate runs under an `entity/project` path in API order."""
+        ...  # pragma: no cover - protocol signature only
 
-    def run(self, path: str) -> WandbRun: ...  # pragma: no cover - protocol signature only
+    def run(self, path: str) -> WandbRun:
+        """Fetch one run by its fully qualified W&B path."""
+        ...  # pragma: no cover - protocol signature only
 
 
 def _flatten_mapping(

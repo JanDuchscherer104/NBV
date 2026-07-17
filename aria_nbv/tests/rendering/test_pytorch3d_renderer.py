@@ -32,7 +32,7 @@ from efm3d.aria.aria_constants import (
     ARIA_POSE_TIME_NS,
 )
 
-from aria_nbv.data_handling.efm_views import EfmSnippetView
+from aria_nbv.data_handling.raw.views import EfmSnippetView
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 
 try:

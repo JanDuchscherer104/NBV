@@ -1,4 +1,8 @@
-"""Utilities for logging gradient norms."""
+"""Select VIN submodules and compute detached gradient-norm diagnostics.
+
+The helpers aggregate parameter gradients without modifying autograd state and
+bound logging cardinality through explicit depth, include, and exclude rules.
+"""
 
 from __future__ import annotations
 

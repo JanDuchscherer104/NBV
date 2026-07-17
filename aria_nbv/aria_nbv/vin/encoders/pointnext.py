@@ -1,6 +1,6 @@
 """Optional PointNeXt-S encoder for semidense VIN point clouds.
 
-`PointNeXtSEncoder` adapts the OpenPoints PointNeXt-S implementation to the VIN
+This module owns `PointNeXtSEncoder`, which adapts OpenPoints PointNeXt-S to the VIN
 encoder interface. It is only constructed when a model config enables the
 semidense point encoder, so importing `aria_nbv.vin.encoders` does not build an
 OpenPoints model or load a checkpoint.
@@ -105,6 +105,11 @@ class PointNeXtSEncoder(nn.Module):
         The wrapped OpenPoints model is loaded lazily at module construction,
         not at package import time. Active scorer configs must explicitly own
         whether this optional path participates in a model.
+
+        The adapter makes no stronger symmetry claim than the configured
+        OpenPoints model. Its final spatial mean is order-insensitive, but that
+        alone does not establish graph-isomorphism or rigid-motion invariance
+        for the upstream PointNeXt computation.
     """
 
     def __init__(self, config: PointNeXtSEncoderConfig) -> None:

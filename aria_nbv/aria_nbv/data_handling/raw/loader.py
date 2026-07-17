@@ -1,4 +1,10 @@
-"""Shared EFM snippet loader for on-demand access."""
+"""Worker-local on-demand access to raw ATEK/EFM snippets.
+
+This module provides live source reattachment for immutable offline rows. It
+reconstructs :class:`AseEfmDataset` instances from manifest-captured config,
+caches one iterable per ASE scene inside a worker, and returns
+:class:`EfmSnippetView` objects without mutating the offline store.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +12,17 @@ from typing import Any
 
 from ...configs import PathConfig
 from ...utils import Verbosity
-from ..efm_views import EfmSnippetView
 from .dataset import AseEfmDataset, AseEfmDatasetConfig
+from .views import EfmSnippetView
 
 
 class EfmSnippetLoader:
-    """Persistent per-worker loader for on-demand EFM snippets."""
+    """Resolve source snippets through worker-owned, per-scene dataset caches.
+
+    Instances are intentionally not a persisted store component. They reopen
+    ATEK WebDataset shards when a reader requests raw camera, MPS, calibration,
+    or optional GT-mesh context that was not duplicated into offline blocks.
+    """
 
     def __init__(
         self,
@@ -48,7 +59,15 @@ class EfmSnippetLoader:
         return dataset
 
     def load(self, *, scene_id: str, snippet_id: str) -> EfmSnippetView:
-        """Load a snippet view, reusing a cached dataset per scene."""
+        """Load one source snippet, rebuilding a stale scene iterator once.
+
+        Args:
+            scene_id: ASE scene identifier used to locate ATEK shards.
+            snippet_id: Compact or raw ATEK sample identifier to match.
+
+        Returns:
+            Live :class:`EfmSnippetView` backed by the source shard.
+        """
         for attempt in range(2):
             dataset = self._datasets.get(scene_id)
             if dataset is None:

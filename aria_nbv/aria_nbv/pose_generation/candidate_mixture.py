@@ -13,6 +13,12 @@ components require `CandidateGenerationRuntimeContext.target_center_world`
 because the thesis V1 actor may condition on observed/predicted target records
 but not on GT target geometry.
 
+This module owns mixture-component configs, stable strategy/position ids, and
+concatenation of component shells into one provenance-aligned result. Each
+component delegates geometric sampling and pruning to
+:class:`CandidateViewGenerator`; rendering, RRI labels, and final action
+selection remain downstream responsibilities.
+
 Theory:
     The default target-conditioned mixture has 60 full-shell rows:
     `forward_local` 24, `target_bearing_local` 24, and
@@ -126,6 +132,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
 
     @property
     def target_type(self) -> type["CandidateMixtureViewGenerator"]:
+        """Return the fixed-count mixed candidate generator runtime type."""
         return CandidateMixtureViewGenerator
 
     base: CandidateViewGeneratorConfig = Field(
@@ -359,7 +366,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
 
     @property
     def device(self) -> torch.device:
-        """Resolved base generator device."""
+        """Return the resolved device shared by all mixture components."""
 
         return self.base.device
 

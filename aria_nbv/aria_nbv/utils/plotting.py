@@ -1,4 +1,8 @@
-"""Shared plotting helpers for Streamlit diagnostics and reports."""
+"""Shared scalar-field, histogram, and image plotting for diagnostics.
+
+Tensor inputs are detached and transferred to CPU before NumPy/Plotly use;
+this module owns presentation transforms, never training-frame semantics.
+"""
 
 from __future__ import annotations
 

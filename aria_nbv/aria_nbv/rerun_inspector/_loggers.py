@@ -1,4 +1,11 @@
-"""Rerun logging primitives for offline VIN inspector samples."""
+"""Log one immutable VIN sample into a frame-explicit Rerun recording.
+
+This module owns stable entity paths and conversion of semidense world points,
+world-from-camera candidates, trajectories, keyframes, and actor-visible EVL
+evidence into Rerun primitives. GT mesh, GT OBB, depth, and oracle RRI layers
+are diagnostic/evaluation overlays; they are never reclassified as actor input
+or written back to the VIN source store.
+"""
 
 from __future__ import annotations
 
@@ -69,7 +76,7 @@ if TYPE_CHECKING:
     from efm3d.aria.camera import CameraTW
     from numpy.typing import NDArray
 
-    from aria_nbv.data_handling import VinOfflineSample
+    from aria_nbv.data_handling.offline.dataset import VinOfflineSample
 
     from ._config import RerunOfflineInspectorConfig
 

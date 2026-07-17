@@ -1,7 +1,7 @@
 """Typed manifest and index records for the VIN offline dataset format.
 
 The new offline dataset format is an immutable indexed-shard layout optimized
-for multi-worker random access. This module defines the normalized metadata
+for multi-worker random access. This module owns the normalized metadata
 records shared by the writer and runtime dataset reader:
 
 - the top-level dataset manifest,
@@ -33,19 +33,19 @@ class VinOfflineBlockSpec:
     """
 
     name: str
-    """Logical block name."""
+    """Stable dotted block key, such as ``vin.points_world`` or ``oracle.rri``."""
 
     kind: str
-    """Storage kind used to decode the block."""
+    """Decoder contract: ``zarr_array`` or ``msgpack_indexed_records``."""
 
     paths: list[str]
-    """Relative array names or file paths that materialize the block."""
+    """Shard-relative Zarr path or MessagePack payload/offset file pair."""
 
     dtype: str | None = None
-    """NumPy dtype name for numeric blocks."""
+    """Exact NumPy dtype name for numeric blocks; ``None`` for record payloads."""
 
     shape: list[int] | None = None
-    """Full stored array shape for numeric blocks."""
+    """Full persisted shape including the leading shard-row axis."""
 
     optional: bool = False
     """Whether the block may be absent in a valid dataset."""
@@ -186,25 +186,31 @@ class VinOfflineShardSpec:
 
 @dataclass(slots=True)
 class VinOfflineMaterializedBlocks:
-    """Materialized block flags for a VIN offline dataset."""
+    """Declare optional payload families present in a VIN offline store.
+
+    The flags describe store-wide availability, while each shard's
+    :class:`VinOfflineBlockSpec` entries remain the authoritative physical
+    inventory. Backbone and detected-OBB blocks are actor-visible EVL evidence;
+    GT OBBs and candidate depths remain oracle supervision or diagnostics.
+    """
 
     backbone: bool
-    """Whether backbone outputs are materialized."""
+    """Whether checkpoint-dependent EVL voxel/evidence outputs are materialized."""
 
     depths: bool
-    """Whether candidate depth maps are materialized."""
+    """Whether oracle-rendered candidate depth maps and validity masks are materialized."""
 
     candidate_pcs: bool
-    """Whether candidate point clouds are materialized."""
+    """Whether oracle candidate point-cloud diagnostic records are materialized."""
 
     gt_obbs: bool = False
-    """Whether compact GT OBB blocks are materialized."""
+    """Whether ASE GT OBB label/evaluation blocks are materialized."""
 
     detected_obbs: bool = False
-    """Whether compact detected OBB blocks are materialized."""
+    """Whether actor-visible EVL detected-OBB blocks are materialized."""
 
     trajectory: bool = False
-    """Whether trajectory timing/gravity blocks are materialized."""
+    """Whether MPS/EFM pose timestamps and world-frame gravity are materialized."""
 
 
 @dataclass(slots=True)
@@ -224,28 +230,31 @@ class VinOfflineManifest:
     """
 
     version: int
-    """Dataset-format version."""
+    """Strict dataset-format version checked against :data:`OFFLINE_DATASET_VERSION`."""
 
     created_at: str
     """UTC creation timestamp."""
 
     source: dict[str, Any]
-    """Raw dataset provenance and configuration snapshot."""
+    """ATEK/ASE source config and signature for shard, scene, and mesh lineage."""
 
     oracle: dict[str, Any]
-    """Oracle-label pipeline provenance and storage policy."""
+    """Oracle/EVL config signatures, resolved asset paths, and candidate policy.
+
+    The signatures hash serialized configuration, not checkpoint contents.
+    """
 
     vin: dict[str, Any]
-    """VIN-specific padding and collapse settings."""
+    """VIN point padding and MPS semidense-collapse settings used by the writer."""
 
     materialized_blocks: VinOfflineMaterializedBlocks
     """Flags describing which optional blocks are materialized."""
 
     stats: dict[str, Any] = field(default_factory=dict)
-    """Aggregate dataset statistics."""
+    """Build counts for samples, shards, split membership, and interruption state."""
 
     provenance: dict[str, Any] = field(default_factory=dict)
-    """Writer provenance and build hints."""
+    """Writer identity, split policy, destination, and finalization provenance."""
 
     shards: list[VinOfflineShardSpec] = field(default_factory=list)
     """Immutable shard descriptors."""
@@ -291,16 +300,16 @@ class VinOfflineIndexRecord:
     """Global zero-based sample index."""
 
     sample_key: str
-    """Stable dataset sample key."""
+    """Stable compact ASE/ATEK sample key, independent of iteration order."""
 
     scene_id: str
-    """ASE scene identifier."""
+    """ASE scene identifier used for mesh pairing and scene-disjoint lineage."""
 
     snippet_id: str
-    """ASE snippet identifier."""
+    """Compact ATEK sample identifier originating from a WebDataset shard key."""
 
     split: str
-    """Canonical split membership."""
+    """Deterministic ``train`` or ``val`` membership; ``all`` is the union view."""
 
     shard_id: str
     """Shard that stores the sample."""

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.app.panels.vin_utils import _setup_vin_diagnostics_runtime
+from aria_nbv.app.panels.vin_diagnostics_runtime import setup_vin_diagnostics_runtime
 from aria_nbv.configs import PathConfig
 from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_module import VinLightningModule
@@ -74,7 +74,7 @@ def test_checkpoint_diagnostics_use_strict_inference_loader(
     monkeypatch.setattr(type(cfg.datamodule_config), "setup_target", lambda _self: datamodule)
     monkeypatch.setattr(VinLightningModule, "load_for_inference", staticmethod(_load_for_inference))
 
-    runtime = _setup_vin_diagnostics_runtime(cfg, stage=Stage.VAL)
+    runtime = setup_vin_diagnostics_runtime(cfg, stage=Stage.VAL)
 
     assert runtime.module is module
     assert runtime.datamodule is datamodule
@@ -97,7 +97,7 @@ def test_checkpoint_diagnostics_propagate_load_errors(
     monkeypatch.setattr(VinLightningModule, "load_for_inference", staticmethod(_load_for_inference))
 
     with pytest.raises(RuntimeError, match="checkpoint load failed"):
-        _setup_vin_diagnostics_runtime(cfg, stage=Stage.TEST)
+        setup_vin_diagnostics_runtime(cfg, stage=Stage.TEST)
 
 
 def test_config_built_diagnostics_fail_closed_on_prepare_errors(
@@ -119,6 +119,6 @@ def test_config_built_diagnostics_fail_closed_on_prepare_errors(
     monkeypatch.setattr(AriaNBVExperimentConfig, "setup_target", _setup_target)
 
     with pytest.raises(RuntimeError, match="prepare failed"):
-        _setup_vin_diagnostics_runtime(cfg, stage=Stage.TRAIN)
+        setup_vin_diagnostics_runtime(cfg, stage=Stage.TRAIN)
 
     assert module.prepare_calls == 1

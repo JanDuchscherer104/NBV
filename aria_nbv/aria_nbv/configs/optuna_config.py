@@ -1,4 +1,9 @@
-"""Optuna integration helpers for experiment orchestration."""
+"""Optuna study construction and config-tree search-space application.
+
+This module owns the optional Optuna boundary for ARIA-NBV experiments. It
+maps :class:`Optimizable` field metadata onto trials while experiment execution
+and metric reporting remain owned by :mod:`aria_nbv.lightning`.
+"""
 
 from __future__ import annotations
 
@@ -56,7 +61,7 @@ class OptunaConfig(TargetConfig["optuna.Study"]):
     """Latest trial suggestions applied to the config tree (W&B friendly)."""
 
     def setup_target(self) -> "optuna.Study":  # type: ignore[name-defined]
-        """Create or load an Optuna study."""
+        """Create or resume the configured study in the project SQLite store."""
         optuna = _require_optuna()
         sampler = optuna.samplers.TPESampler() if self.sampler == "tpe" else optuna.samplers.RandomSampler()
         pruner = optuna.pruners.MedianPruner() if self.pruner == "median" else optuna.pruners.SuccessiveHalvingPruner()

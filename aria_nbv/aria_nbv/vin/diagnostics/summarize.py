@@ -1,4 +1,8 @@
-"""Summary helpers for VIN v3 inputs, predictions, and cached batch structure."""
+"""Summary helpers for VIN v3 inputs, predictions, and cached batch structure.
+
+This module provides a text report spanning actor-visible tensors, candidate
+CORAL outputs, optional oracle-labelled metrics, and trainable-module structure.
+"""
 
 from __future__ import annotations
 
@@ -15,9 +19,8 @@ from torch.nn import functional as functional
 from ...data_handling import (
     EfmSnippetView,
     VinSnippetView,
-    is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
 )
+from ...data_handling.raw.views import is_efm_snippet_view_instance, is_vin_snippet_view_instance
 from ...utils.rich_summary import capture_tree, rich_summary, summarize
 from ..ordinal import coral_monotonicity_violation_rate
 from .summary_stats import pearson_corr, quantile_stats, spearman_corr
@@ -34,6 +37,26 @@ def summarize_vin_v3(
     include_torchsummary: bool = True,
     torchsummary_depth: int = 3,
 ) -> str:
+    """Build a human-readable VIN-Core report for one oracle-labelled batch.
+
+    The summary runs a debug forward pass from the batch's snippet view and
+    cached actor-visible EVL evidence, then reports tensor shapes/statistics,
+    candidate validity diagnostics, CORAL monotonicity, and optional comparison
+    with oracle labels. Oracle values are used only in the report; they are not
+    passed into the scorer.
+
+    Args:
+        self: VIN-Core scorer to inspect.
+        batch: Batch carrying candidates, camera rows, cached evidence, and
+            optional oracle supervision.
+        include_torchsummary: Include a parameter/module summary when ``True``.
+        torchsummary_depth: Maximum nested module depth for that summary.
+
+    Returns:
+        Rendered multiline diagnostic report. The scorer's original training
+        mode is restored before returning.
+    """
+
     if batch.efm_snippet_view is None and batch.backbone_out is None:
         raise RuntimeError(
             "VIN v3 summary requires efm inputs or cached backbone outputs.",

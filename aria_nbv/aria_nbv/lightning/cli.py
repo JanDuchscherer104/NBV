@@ -1,8 +1,10 @@
-"""CLI entry points for `AriaNBVExperimentConfig`.
+"""Provide installed CLI entry points for Lightning experiments and W&B exports.
 
-This module exists so we can expose stable console scripts via `[project.scripts]`
-in `aria_nbv/pyproject.toml` (unlike `aria_nbv/scripts/*.py`, which are not
-importable when the package is installed).
+This module owns command-line/TOML precedence, run-mode convenience wrappers,
+and local export dispatch while leaving runtime construction to
+:class:`AriaNBVExperimentConfig`. The importable entry points are registered in
+``pyproject.toml``; they do not duplicate datamodule, scorer, loss, or trainer
+logic.
 """
 
 from __future__ import annotations

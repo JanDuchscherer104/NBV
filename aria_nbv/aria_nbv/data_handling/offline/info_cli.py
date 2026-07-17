@@ -1,4 +1,10 @@
-"""Command-line diagnostics for immutable VIN offline stores."""
+"""Command-line diagnostics for immutable VIN offline stores.
+
+This module provides read-only summary, tree, sample-table, and deterministic
+random-index commands over :class:`VinOfflineStoreReader`. It validates through
+the strict manifest/version path and never rewrites manifests, split arrays,
+sample indices, shards, or optional diagnostic payloads.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +30,7 @@ from ...utils.cli_format import (
     summary_table,
 )
 from ...utils.typer_cli import run_typer_app
-from ..efm_dataset_utils import compact_ase_atek_identifiers, compact_ase_atek_sample_id
+from ..identifiers import compact_ase_atek_identifiers, compact_ase_atek_sample_id
 from .diagnostics import NumericSummary, collect_vin_offline_dataset_stats
 from .format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader

@@ -23,10 +23,10 @@ from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.configs import PathConfig
-from aria_nbv.oracle.labels import OracleCandidateLabels, RetainedOracleEvidence
+from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
-from aria_nbv.oracle.target_selection import TargetCandidateRow
+from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidateViewGeneratorConfig,
@@ -35,12 +35,14 @@ from aria_nbv.pose_generation import (
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
-    CounterfactualSelectionPolicy,
-    CounterfactualStepResult,
     CounterfactualTrajectory,
     RolloutZarrStoreReader,
-    write_rollout_zarr_store,
 )
+from aria_nbv.rollouts.inspection import candidate_audit_rows
+from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.rollouts.replay.state import CounterfactualStepResult
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
 
 _PATH_CONFIG_FIELDS = (
@@ -74,8 +76,10 @@ def _evaluated_single_step(result, transition, *, metrics=None, evidence=None) -
         steps={
             (0, transition.step_index): EvaluatedRolloutStep(
                 transition=transition,
-                labels=labels,
-                evidence=RetainedOracleEvidence() if evidence is None else evidence,
+                evaluation=OracleCandidateEvaluation(
+                    labels=labels,
+                    evidence=RetainedOracleEvidence() if evidence is None else evidence,
+                ),
             )
         },
     )
@@ -136,41 +140,25 @@ def _candidate_result_for_pose(pose: PoseTW) -> CandidateSamplingResult:
     )
 
 
-def _target_row(*, gt_label_valid: bool = True) -> TargetCandidateRow:
-    return TargetCandidateRow(
-        scene_id="scene_a",
-        snippet_id="snippet_1",
-        source="detected_obbs",
-        source_index=2,
+def _target_row(*, gt_label_valid: bool = True) -> OracleTargetTask:
+    return OracleTargetTask(
+        source_index=9,
         target_row_id=4,
-        target_id="scene_a:snippet_1:detected_obbs:2",
-        sem_id=3,
+        target_id="scene_a:snippet_1:gt_obbs_oracle:9",
+        descriptor=TargetDescriptor(
+            sem_id=3,
+            class_name="chair",
+            pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
+            extents_m=(0.5, 0.6, 0.7),
+            relative_pose_reference_object=tuple(float(v) for v in range(12)),
+        ),
         inst_id=62,
-        class_name="chair",
         confidence=0.9,
-        center_world=(1.0, 2.0, 3.0),
-        extents=(0.5, 0.6, 0.7),
-        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0),
-        relative_pose_reference_object=tuple(float(v) for v in range(12)),
-        projected_area_pixels=64.0,
-        projected_area_fraction=0.01,
-        semidense_support_count=5,
-        evl_support_count=7,
-        effective_support_count=12.0,
-        visibility_score=0.8,
-        support_score=0.7,
-        deficit_score=0.1,
-        score=0.75,
-        eligible=True,
-        invalid_reason_bitset=0,
-        primary_invalid_reason=0,
         selected_rank=0,
-        gt_label_valid=gt_label_valid,
-        gt_target_row_id=9,
-        gt_target_id="gt:9",
-        gt_match_iou=0.5,
-        gt_match_score=0.5,
-        gt_match_status="accepted",
+        selection_probability=1.0,
+        identity_status=(
+            TargetTaskIdentityStatus.MATCHED.value if gt_label_valid else TargetTaskIdentityStatus.UNMATCHED.value
+        ),
     )
 
 
@@ -270,18 +258,18 @@ def test_loaded_sample_info_documents_target_table_columns() -> None:
         assert f"`{column}`" in rollout_panel._LOADED_SAMPLE_INFO
 
 
-def test_target_rows_table_preserves_score_decomposition() -> None:
+def test_target_rows_table_exposes_compact_task_audit() -> None:
     row = rollout_panel._target_rows_table((_target_row(),))[0]
 
+    assert row["target_row_id"] == 4
+    assert row["selected_rank"] == 0
+    assert row["class"] == "chair"
+    assert row["sem_id"] == 3
+    assert row["inst_id"] == 62
     assert row["confidence"] == pytest.approx(0.9)
-    assert row["projected_area_px"] == pytest.approx(64.0)
-    assert row["semidense_support"] == 5
-    assert row["evl_support"] == 7
-    assert row["effective_support"] == pytest.approx(12.0)
-    assert row["visibility_score"] == pytest.approx(0.8)
-    assert row["support_score"] == pytest.approx(0.7)
-    assert row["selection_score"] == pytest.approx(0.75)
-    assert row["gt_match_score"] == pytest.approx(0.5)
+    assert row["selection_probability"] == pytest.approx(1.0)
+    assert row["admitted"] is True
+    assert row["identity_status"] == TargetTaskIdentityStatus.MATCHED.value
 
 
 def test_active_target_info_documents_descriptor_and_oracle_boundary() -> None:
@@ -343,9 +331,13 @@ def test_live_selected_depth_rows_report_unretained_depth() -> None:
 
 def test_live_depth_target_overlays_project_descriptor_target() -> None:
     step = SimpleNamespace(
-        selected_depth_focal_px=(100.0, 100.0),
-        selected_depth_principal_point_px=(50.0, 50.0),
-        selected_pose_world=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0)),
+        transition=SimpleNamespace(selected_pose_world=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0))),
+        evaluation=SimpleNamespace(
+            evidence=SimpleNamespace(
+                selected_depth_focal_px=(100.0, 100.0),
+                selected_depth_principal_point_px=(50.0, 50.0),
+            )
+        ),
     )
 
     overlays = rollout_panel._live_depth_target_overlays(
@@ -361,24 +353,15 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
     assert overlays[0].corners_px.shape == (8, 2)
 
 
-def test_format_rollout_option_includes_context_and_nan_beam() -> None:
-    reader = _FakeRolloutReader(
-        {
-            "rollouts/rollout_row_id": np.asarray([0], dtype=np.int64),
-            "rollouts/policy_id": np.asarray([0], dtype=np.int32),
-            "rollouts/scene_id": np.asarray([0], dtype=np.int32),
-            "rollouts/target_row_id": np.asarray([0], dtype=np.int64),
-            "rollouts/chain_id": np.asarray([0], dtype=np.int32),
-            "rollouts/horizon": np.asarray([1], dtype=np.int16),
-            "rollouts/branch_factor": np.asarray([1], dtype=np.int16),
-            "rollouts/beam_width": np.asarray([-1], dtype=np.int16),
-            "dictionaries/policy": _json_dictionary_array(["random_valid"]),
-            "dictionaries/scene": _json_dictionary_array(["81286"]),
-        }
+def test_format_rollout_option_includes_context_and_nan_beam(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=51)[:1],
     )
+    reader = RolloutZarrStoreReader(result.store_dir)
 
     assert stored_rollouts_panel.format_rollout_option(reader, 0) == (
-        "0 · scene 81286 · target 0 · random_valid · chain 0 · H=1 · B=1 · beam=NaN"
+        "0 · scene fixture_box · target 0 · oracle_greedy · chain 0 · H=2 · B=1 · beam=NaN"
     )
 
 
@@ -574,7 +557,7 @@ def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> No
     )
     reader = RolloutZarrStoreReader(result.store_dir)
 
-    rows = stored_rollouts_panel.candidate_rows_for_rollout(reader, 0)
+    rows = candidate_audit_rows(reader, rollout_row_id=0)
 
     assert rows[0]["strategy"] != ""
     assert rows[0]["position"] == "forward_local"
@@ -634,7 +617,7 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
 
     def _fake_setup_target(self, **kwargs):  # noqa: ANN001
         assert kwargs["target_sample"] is fake_sample
-        assert kwargs["target_row"] is target
+        assert kwargs["target_task"] is target
         return fake_evaluator
 
     monkeypatch.setattr(TargetRriScorerConfig, "setup_target", _fake_setup_target)
@@ -745,8 +728,8 @@ def test_trajectory_metric_rows_use_empirical_95_band_not_min_mean_max() -> None
 
 def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True])),
-        metric_vectors={"target_rri": torch.tensor([0.0, 0.1, 0.2, 0.3])},
+        transition=SimpleNamespace(candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True]))),
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_rri": torch.tensor([0.0, 0.1, 0.2, 0.3])})),
     )
 
     with pytest.raises(ValueError, match="Candidate validity mask shape"):
@@ -755,8 +738,10 @@ def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
 
 def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, True])),
-        metric_vectors={"target_root_gain": torch.tensor([0.5, float("nan"), 0.9])},
+        transition=SimpleNamespace(candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, True]))),
+        evaluation=SimpleNamespace(
+            labels=SimpleNamespace(metrics={"target_root_gain": torch.tensor([0.5, float("nan"), 0.9])})
+        ),
     )
 
     values = rollout_panel._valid_step_metric_values(step, "target_root_gain")
@@ -764,22 +749,43 @@ def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
     assert values.tolist() == pytest.approx([0.5, 0.9])
 
 
+def test_live_step_diagnostics_reads_replay_transition_candidates(monkeypatch) -> None:
+    candidates = object()
+    observed = []
+    monkeypatch.setattr(rollout_panel, "_info_popover", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        rollout_panel,
+        "candidate_result_diagnostic_counts",
+        lambda value: observed.append(value) or {},
+    )
+    monkeypatch.setattr(rollout_panel.st, "info", lambda *_args, **_kwargs: None)
+
+    rollout_panel._render_live_step_candidate_diagnostics(
+        SimpleNamespace(candidates=candidates),
+        None,
+    )
+
+    assert observed == [candidates]
+
+
 def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(
-            mask_valid=torch.tensor([True, False, True]),
-            position_id=torch.tensor([1, 2, 3]),
-            strategy_id=torch.tensor([0, 1, 2]),
-            mixture_id=torch.tensor([0, 1, 2]),
-            sampler_probability=torch.tensor([0.2, 0.3, 0.5]),
-            component_name=("forward", "target", "lateral"),
+        transition=SimpleNamespace(
+            candidates=SimpleNamespace(
+                mask_valid=torch.tensor([True, False, True]),
+                position_id=torch.tensor([1, 2, 3]),
+                strategy_id=torch.tensor([0, 1, 2]),
+                mixture_id=torch.tensor([0, 1, 2]),
+                sampler_probability=torch.tensor([0.2, 0.3, 0.5]),
+                component_name=("forward", "target", "lateral"),
+            ),
+            selected_valid_index=1,
+            selected_shell_index=2,
+            selection_scores=torch.tensor([0.1, 0.9]),
+            selection_probabilities=torch.tensor([0.25, 0.75]),
+            selection_logits=torch.tensor([-1.0, 1.0]),
         ),
-        selected_valid_index=1,
-        selected_shell_index=2,
-        selection_scores=torch.tensor([0.1, 0.9]),
-        selection_probabilities=torch.tensor([0.25, 0.75]),
-        selection_logits=torch.tensor([-1.0, 1.0]),
-        metric_vectors={"target_root_gain": torch.tensor([0.2, 0.8])},
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_root_gain": torch.tensor([0.2, 0.8])})),
     )
 
     rows = rollout_panel._live_step_candidate_score_rows(step)
@@ -797,20 +803,22 @@ def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
 
 def test_live_step_candidate_score_rows_align_full_shell_vectors() -> None:
     step = SimpleNamespace(
-        candidates=SimpleNamespace(
-            mask_valid=torch.tensor([True, False, True]),
-            position_id=None,
-            strategy_id=None,
-            mixture_id=None,
-            sampler_probability=None,
-            component_name=None,
+        transition=SimpleNamespace(
+            candidates=SimpleNamespace(
+                mask_valid=torch.tensor([True, False, True]),
+                position_id=None,
+                strategy_id=None,
+                mixture_id=None,
+                sampler_probability=None,
+                component_name=None,
+            ),
+            selected_valid_index=0,
+            selected_shell_index=0,
+            selection_scores=torch.tensor([0.1, -1.0, 0.9]),
+            selection_probabilities=None,
+            selection_logits=None,
         ),
-        selected_valid_index=0,
-        selected_shell_index=0,
-        selection_scores=torch.tensor([0.1, -1.0, 0.9]),
-        selection_probabilities=None,
-        selection_logits=None,
-        metric_vectors={"target_rri": torch.tensor([0.3, 100.0, 0.7])},
+        evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_rri": torch.tensor([0.3, 100.0, 0.7])})),
     )
 
     rows = rollout_panel._live_step_candidate_score_rows(step)

@@ -1,4 +1,9 @@
-"""Pooling helpers for actor-visible point descriptors."""
+"""Pooling helpers for actor-visible point descriptors.
+
+This module provides frame-axis weighted means and masked point-set reductions.
+The latter use only commutative reductions, so reordering selected point rows
+does not change their outputs.
+"""
 
 from __future__ import annotations
 
@@ -67,9 +72,15 @@ def pool_point_query(
 ) -> PointQueryPool:
     """Compute permutation-invariant masked point-pool summaries.
 
+    Mean, maximum, population standard deviation, and count are symmetric in
+    the ``N_p`` axis. Jointly permuting ``point_features`` and ``point_mask``
+    therefore leaves every output unchanged. This is set-permutation
+    invariance, not a graph-isomorphism contract; no edges or message passing
+    are constructed here.
+
     Args:
-        point_features: ``Tensor["B N C"]`` point descriptors.
-        point_mask: ``Tensor["B N", bool]`` points included in the query.
+        point_features: ``Tensor["B N_p C", float32]`` point descriptors.
+        point_mask: ``Tensor["B N_p", bool]`` points included in the query.
         eps: Positive denominator guard for mean and std.
 
     Returns:

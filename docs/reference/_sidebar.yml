@@ -25,10 +25,8 @@ website:
             file: reference/data_handling.atek_downloads.downloader.qmd
           - text: metadata
             file: reference/data_handling.atek_downloads.metadata.qmd
-        - text: efm_dataset_utils
-          file: reference/data_handling.efm_dataset_utils.qmd
-        - text: efm_views
-          file: reference/data_handling.efm_views.qmd
+        - text: identifiers
+          file: reference/data_handling.identifiers.qmd
         - text: mesh_cache
           file: reference/data_handling.mesh_cache.qmd
         - text: offline
@@ -38,8 +36,6 @@ website:
             file: reference/data_handling.offline.adapter.qmd
           - text: batch
             file: reference/data_handling.offline.batch.qmd
-          - text: cli
-            file: reference/data_handling.offline.cli.qmd
           - text: dataset
             file: reference/data_handling.offline.dataset.qmd
           - text: diagnostics
@@ -50,6 +46,8 @@ website:
             file: reference/data_handling.offline.info_cli.qmd
           - text: inventory
             file: reference/data_handling.offline.inventory.qmd
+          - text: source
+            file: reference/data_handling.offline.source.qmd
           - text: store
             file: reference/data_handling.offline.store.qmd
           - text: writer
@@ -61,6 +59,8 @@ website:
             file: reference/data_handling.raw.dataset.qmd
           - text: loader
             file: reference/data_handling.raw.loader.qmd
+          - text: views
+            file: reference/data_handling.raw.views.qmd
       - text: lightning
         file: reference/lightning.qmd
         contents:
@@ -92,8 +92,14 @@ website:
             file: reference/oracle.pipelines.cli.qmd
           - text: evaluated_rollout
             file: reference/oracle.pipelines.evaluated_rollout.qmd
+          - text: offline_vin
+            file: reference/oracle.pipelines.offline_vin.qmd
+          - text: online_vin
+            file: reference/oracle.pipelines.online_vin.qmd
           - text: rollout_dataset
             file: reference/oracle.pipelines.rollout_dataset.qmd
+          - text: scene_labels
+            file: reference/oracle.pipelines.scene_labels.qmd
           - text: shards
             file: reference/oracle.pipelines.shards.qmd
         - text: scene_rri
@@ -102,11 +108,6 @@ website:
           file: reference/oracle.target_rri.qmd
         - text: target_selection
           file: reference/oracle.target_selection.qmd
-      - text: pipelines
-        file: reference/pipelines.qmd
-        contents:
-        - text: oracle_rri_labeler
-          file: reference/pipelines.oracle_rri_labeler.qmd
       - text: pose_generation
         file: reference/pose_generation.qmd
         contents:
@@ -154,6 +155,8 @@ website:
           file: reference/rollouts.inspection.qmd
         - text: manifest
           file: reference/rollouts.manifest.qmd
+        - text: read_model
+          file: reference/rollouts.read_model.qmd
         - text: replay
           file: reference/rollouts.replay.qmd
           contents:
