@@ -21,6 +21,7 @@ from ...rollouts.shard_manifest import load_rollout_shard_entry
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
 from ...utils.typer_cli import run_typer_app
+from ..target_selection import ORACLE_TARGET_TASK_SOURCE
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
@@ -165,6 +166,12 @@ def build_rollouts_command(
     console = cli_console()
     config_path = resolve_config_toml_path(config_path)
     cfg = RolloutDatasetWriterConfig.from_toml(config_path)
+    sampler_target_cap = cfg.oracle_target_task_sampler.max_targets_per_sample
+    target_cap = (
+        sampler_target_cap
+        if cfg.max_targets_per_sample is None
+        else min(cfg.max_targets_per_sample, sampler_target_cap)
+    )
     console.print(
         key_value_panel(
             "Rollout Build",
@@ -172,7 +179,8 @@ def build_rollouts_command(
                 ("config", config_path),
                 ("source store", cfg.source.store.store_dir),
                 ("rollout store", cfg.store.store_dir),
-                ("target cap", cfg.oracle_target_task_sampler.max_targets_per_sample),
+                ("target source", ORACLE_TARGET_TASK_SOURCE),
+                ("target cap", target_cap),
                 ("candidate budget", cfg.candidate_mixture.total_count),
                 ("dry run", dry_run),
             ],

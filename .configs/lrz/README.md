@@ -140,13 +140,18 @@ Use `scripts/templates/lrz/rollout_generation.sbatch` after a one-row local or
 interactive LRZ smoke succeeds. The real template runs `nbv-build-rollouts`
 inside Pyxis for one deterministic shard per array task and expects:
 
-1. A copied, edited rollout config based on the canonical thesis-default
-   `.configs/build_rollouts_v1_realistic.toml`; keep LRZ DSS paths and
-   campaign-scale counts in the copied untracked run config.
+1. A copied, edited rollout config based on
+   `.configs/build_rollouts_v1_lrz.template.toml`; keep concrete LRZ DSS paths
+   and any run-specific split/retention changes in the copied untracked config.
 2. A shard manifest planned with `nbv-plan-rollout-shards`.
 3. An array range matching the manifest shard count.
 4. `RUN_ID`, `CONFIG_PATH`, `SHARD_MANIFEST`, `ARIA_DSS`, `ARIA_REPO`, and
    `LRZ_CONTAINER_IMAGE` exported in the submission environment.
+
+Use one copied config, manifest, and run ID per scene-level split. The checked-in
+template defaults to `source.split = "train"`; create separate validation/test
+campaign configs after the VIN source manifest contains the reviewed scene
+split. Do not use `split = "all"` to mix thesis splits in one campaign.
 
 Copy the template before submitting and replace the `/ABS/PATH/TO/ARIA_DSS`
 `#SBATCH --output` and `#SBATCH --error` placeholders with the concrete DSS log
@@ -163,7 +168,7 @@ export RUN_ID=rollouts-v1-smoke-YYYYMMDD
 export CONFIG_PATH="$ARIA_DSS/data/staging/rollouts/build_rollouts_${RUN_ID}.toml"
 export SHARD_MANIFEST="$ARIA_DSS/data/staging/manifests/rollout_shards_${RUN_ID}.jsonl"
 
-cp "$ARIA_REPO/.configs/build_rollouts_v1_realistic.toml" "$CONFIG_PATH"
+cp "$ARIA_REPO/.configs/build_rollouts_v1_lrz.template.toml" "$CONFIG_PATH"
 # Edit "$CONFIG_PATH" so source/store paths point at DSS artifacts and the
 # sample/shard counts match the intended LRZ campaign.
 
@@ -173,7 +178,10 @@ uv run nbv-plan-rollout-shards \
   --rows-per-shard 1 \
   --output-manifest "$SHARD_MANIFEST"
 
-sbatch "$ARIA_DSS/data/staging/rollouts/rollout_generation_${RUN_ID}.sbatch"
+NUM_SHARDS="$(wc -l < "$SHARD_MANIFEST")"
+test "$NUM_SHARDS" -gt 0
+sbatch --array="0-$((NUM_SHARDS - 1))" \
+  "$ARIA_DSS/data/staging/rollouts/rollout_generation_${RUN_ID}.sbatch"
 
 uv run nbv-status-rollout-shards \
   --shard-manifest "$SHARD_MANIFEST" \
@@ -181,6 +189,12 @@ uv run nbv-status-rollout-shards \
   --output-json "$ARIA_DSS/data/staging/rollouts/$RUN_ID/manifests/status.json" \
   --require-complete
 ```
+
+Prepare the checkout and `.venv` once before submission. The real array
+template intentionally uses `uv run --frozen --no-sync`: concurrent array
+tasks must not install packages, resolve dependencies, or mutate one shared
+environment. The template also requires `SLURM_ARRAY_TASK_ID`, so submitting it
+without an explicit manifest-sized `--array` range fails before generation.
 
 For retries, derive the retry set from `nbv-status-rollout-shards`, not from a
 recursive DSS scan. A final shard directory is reusable only when validation

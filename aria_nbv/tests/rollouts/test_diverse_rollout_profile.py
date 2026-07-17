@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -89,6 +90,48 @@ def test_diverse_rollout_profile_matches_named_code_presets() -> None:
 
     recipe_preset = RolloutRecipeConfig.diverse_suite()
     assert [recipe.model_dump() for recipe in recipe_preset] == [recipe.model_dump() for recipe in config.recipes]
+
+
+def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> None:
+    config_names = (
+        "build_rollouts_v1_realistic.toml",
+        "build_rollouts_v1_diverse.toml",
+        "build_rollouts_v1_lrz.template.toml",
+    )
+
+    for config_name in config_names:
+        payload = tomllib.loads((_repo_root() / ".configs" / config_name).read_text())
+        assert "target_source" not in payload
+        assert "target_selector" not in payload
+        assert set(payload["oracle_target_task_sampler"]) == {
+            "max_targets_per_sample",
+            "seed",
+            "policy",
+        }
+        assert payload["max_targets_per_sample"] == payload["oracle_target_task_sampler"]["max_targets_per_sample"]
+        assert payload["target_scorer"]["depth"]["renderer"]["cull_backfaces"] is False
+
+
+def test_lrz_profile_keeps_realistic_generation_semantics_without_smoke_caps() -> None:
+    realistic = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_realistic.toml")
+    lrz = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_lrz.template.toml")
+
+    assert lrz.max_samples is None
+    assert lrz.source.limit is None
+    assert lrz.candidate_mixture.model_dump() == realistic.candidate_mixture.model_dump()
+    assert lrz.target_scorer.model_dump() == realistic.target_scorer.model_dump()
+    assert lrz.selected_depth.model_dump() == realistic.selected_depth.model_dump()
+    assert [recipe.model_dump() for recipe in lrz.recipes] == [recipe.model_dump() for recipe in realistic.recipes]
+
+
+def test_real_lrz_array_does_not_mutate_shared_environment_or_hide_array_size() -> None:
+    script = (_repo_root() / "scripts" / "templates" / "lrz" / "rollout_generation.sbatch").read_text()
+
+    assert "#SBATCH --array=" not in script
+    assert "SLURM_ARRAY_TASK_ID:?" in script
+    assert "pip install" not in script
+    assert "uv sync" not in script
+    assert "uv run --frozen --no-sync nbv-build-rollouts" in script
 
 
 def _repo_root() -> Path:

@@ -833,8 +833,15 @@ Use LRZ only after the local one-row smoke succeeds.
    export RUN_ID=rollouts-v1-smoke-YYYYMMDD
    export CONFIG_PATH="$ARIA_DSS/data/staging/rollouts/build_rollouts_${RUN_ID}.toml"
    export SHARD_MANIFEST="$ARIA_DSS/data/staging/manifests/rollout_shards_${RUN_ID}.jsonl"
-   sbatch "$ARIA_DSS/data/staging/rollouts/rollout_generation_${RUN_ID}.sbatch"
+   NUM_SHARDS="$(wc -l < "$SHARD_MANIFEST")"
+   test "$NUM_SHARDS" -gt 0
+   sbatch --array="0-$((NUM_SHARDS - 1))" \
+     "$ARIA_DSS/data/staging/rollouts/rollout_generation_${RUN_ID}.sbatch"
    ```
+
+   Prepare the project environment once before submission. Array tasks run
+   `uv run --frozen --no-sync` and deliberately never install packages or
+   mutate a shared `.venv`.
 
 7. Summarize the campaign:
 

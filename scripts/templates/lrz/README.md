@@ -1,10 +1,9 @@
-# LRZ Dry-Run Templates
+# LRZ Slurm Templates
 
-These Slurm templates document the expected LRZ launch shape for future ARIA-NBV
-scale jobs. They are deliberately dry-run only: after replacing the SBATCH log
-path placeholders, submitting one should print the paths, ownership contract,
-and placeholder command, then exit without generating oracle labels, rollouts,
-VIN checkpoints, or diagnostics artifacts.
+Most templates in this directory are dry-run contracts. The exception is
+`rollout_generation.sbatch`, which is the real manifest-driven rollout array
+launcher. It requires an explicit `sbatch --array=0-(NUM_SHARDS-1)` submission
+and a project environment prepared before the array starts.
 
 Before converting any template into a real job:
 
@@ -27,6 +26,7 @@ Before converting any template into a real job:
 | `DATASET_VERSION` | placeholder | Dataset/cache/offline-store version. |
 | `SHARD_MANIFEST` | workflow-specific path | Deterministic shard manifest. |
 
-The templates use Slurm comments and Pyxis options as documentation. They do not
-call `srun` by default, because the current task is to define the dry-run
-contract rather than to launch containers or implement generation code.
+The `*_dry_run.sbatch` templates use Slurm comments and Pyxis options as
+documentation and do not call `srun`. The real rollout template calls `srun`,
+uses one manifest shard per array task, and never installs or synchronizes
+dependencies inside array tasks.

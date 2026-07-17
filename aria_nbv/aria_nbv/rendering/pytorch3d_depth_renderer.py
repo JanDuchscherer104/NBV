@@ -41,11 +41,11 @@ class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
     znear: float = 1e-3
     """Near clipping plane (metres); triangles closer than this are clipped."""
 
-    cull_backfaces: bool = True
-    """Requested back-face culling policy retained for config compatibility.
+    cull_backfaces: bool = False
+    """If ``True`` drop triangles with normals pointing away from the camera.
 
-    The current rasterizer renders both sides because NBV cameras are typically
-    inside closed room meshes. This field is not forwarded to PyTorch3D.
+    NBV cameras are typically *inside* closed meshes (rooms); back-face culling
+    would therefore remove interior walls. The default renders both sides.
     """
 
     blur_radius: float = 0.0
@@ -170,7 +170,7 @@ class Pytorch3DDepthRenderer:
             image_size=(int(height), int(width)),
             blur_radius=self.config.blur_radius,
             faces_per_pixel=1,  # Closest simplex only
-            cull_backfaces=False,
+            cull_backfaces=self.config.cull_backfaces,
             bin_size=self.config.bin_size,
             max_faces_per_bin=self.config.max_faces_per_bin,
             cull_to_frustum=False,

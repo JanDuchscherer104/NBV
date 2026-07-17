@@ -20,6 +20,7 @@ import torch
 import trimesh  # type: ignore[import-untyped]
 
 from ..utils import Console
+from ..utils.frames import world_up_tensor
 from .geometry import point_mesh_distance
 from .types import CandidateContext, CollisionBackend
 
@@ -208,7 +209,8 @@ class MotionRealismRule(RuleBase):
         if self.config.max_step_distance_m is not None:
             reject |= step_length > float(self.config.max_step_distance_m)
 
-        height_delta = (ctx.centers_world[:, 1] - ctx.reference_pose.t.reshape(1, 3)[:, 1]).abs()
+        world_up = world_up_tensor(device=ctx.centers_world.device, dtype=ctx.centers_world.dtype)
+        height_delta = ((ctx.centers_world - ctx.reference_pose.t.reshape(1, 3)) * world_up).sum(dim=1).abs()
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_height_delta_m", height_delta)
         if self.config.max_height_delta_m is not None:
@@ -220,7 +222,7 @@ class MotionRealismRule(RuleBase):
         if self.config.max_backward_step_m is not None:
             reject |= backward_step > float(self.config.max_backward_step_m)
 
-        yaw_delta = _forward_yaw_delta(ctx.reference_pose, ctx.shell_poses)
+        yaw_delta = _forward_yaw_delta(ctx.sampling_pose, ctx.shell_poses)
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_yaw_delta_rad", yaw_delta)
         if self.config.max_yaw_delta_deg is not None:
@@ -236,13 +238,17 @@ def _forward_yaw_delta(reference_pose: "PoseTW", shell_poses: "PoseTW") -> torch
 
     ref_forward = reference_pose.R.reshape(-1, 3, 3)[0, :, 2]
     cand_forward = shell_poses.R.reshape(-1, 3, 3)[:, :, 2]
-    ref_h = ref_forward.clone()
-    cand_h = cand_forward.clone()
-    ref_h[1] = 0.0
-    cand_h[:, 1] = 0.0
-    ref_h = ref_h / ref_h.norm().clamp_min(1e-8)
-    cand_h = cand_h / cand_h.norm(dim=1, keepdim=True).clamp_min(1e-8)
-    cos = (cand_h * ref_h.reshape(1, 3)).sum(dim=1).clamp(-1.0, 1.0)
+    world_up = world_up_tensor(device=ref_forward.device, dtype=ref_forward.dtype)
+    ref_h = ref_forward - (ref_forward * world_up).sum() * world_up
+    cand_h = cand_forward - (cand_forward * world_up.reshape(1, 3)).sum(dim=1, keepdim=True) * world_up
+    ref_h_norm = ref_h.norm()
+    cand_h_norm = cand_h.norm(dim=1)
+    ref_h = ref_h / ref_h_norm.clamp_min(1e-8)
+    cand_h = cand_h / cand_h_norm.reshape(-1, 1).clamp_min(1e-8)
+    horizontal_cos = (cand_h * ref_h.reshape(1, 3)).sum(dim=1)
+    full_cos = (cand_forward * ref_forward.reshape(1, 3)).sum(dim=1)
+    use_full_axes = (ref_h_norm < 1e-8) | (cand_h_norm < 1e-8)
+    cos = torch.where(use_full_axes, full_cos, horizontal_cos).clamp(-1.0, 1.0)
     return torch.acos(cos)
 
 

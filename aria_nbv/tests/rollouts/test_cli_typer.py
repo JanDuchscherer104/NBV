@@ -17,6 +17,7 @@ def _fake_rollout_config(tmp_path):
     return SimpleNamespace(
         source=SimpleNamespace(store=SimpleNamespace(store_dir=tmp_path / "vin_offline")),
         store=SimpleNamespace(store_dir=tmp_path / "rollouts.zarr"),
+        max_targets_per_sample=2,
         oracle_target_task_sampler=SimpleNamespace(max_targets_per_sample=2),
         candidate_mixture=SimpleNamespace(total_count=60),
         setup_target=lambda: SimpleNamespace(run=lambda **kwargs: None),
@@ -36,6 +37,8 @@ def test_build_rollouts_dry_run_parses_config_path(tmp_path, monkeypatch) -> Non
 
     assert result.exit_code == 0
     assert "Dry run complete" in result.output
+    assert "gt_obbs_oracle" in result.output
+    assert "target cap" in result.output
 
 
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path, monkeypatch) -> None:

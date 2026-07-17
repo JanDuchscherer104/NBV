@@ -152,3 +152,48 @@ def test_align_to_gravity_levels_forward_rig_orientations() -> None:
 
     assert torch.all(dot_no_align < -0.8)
     assert torch.all(dot_align > 0.99)
+
+
+def test_gravity_aligned_sampling_and_motion_realism_use_the_same_world_up_axis() -> None:
+    device = torch.device("cpu")
+    dtype = torch.float32
+    wup = world_up_tensor(device=device, dtype=dtype)
+    ref_level = _make_level_pose(wup=wup)
+    ref_roll = PoseTW.from_Rt(ref_level.R @ _local_roll_z(math.pi / 2, device=device, dtype=dtype), ref_level.t)
+    mesh, verts, faces = _dummy_mesh(device=device)
+    cam_template = CameraTW(torch.zeros(34, device=device, dtype=dtype))
+    occ = torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], device=device, dtype=dtype)
+    config = CandidateViewGeneratorConfig(
+        device=device,
+        num_samples=128,
+        oversample_factor=1.0,
+        align_to_gravity=True,
+        min_radius=1.0,
+        max_radius=1.0,
+        min_elev_deg=-5.0,
+        max_elev_deg=5.0,
+        delta_azimuth_deg=360.0,
+        view_direction_mode=ViewDirectionMode.FORWARD_RIG,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+        ensure_free_space=False,
+        ensure_collision_free=False,
+        min_distance_to_mesh=0.0,
+        enforce_motion_realism=True,
+        max_step_distance_m=1.01,
+        max_height_delta_m=0.1,
+        max_backward_step_m=None,
+        max_yaw_delta_deg=1.0,
+        seed=0,
+    )
+
+    result = config.setup_target().generate(
+        reference_pose=ref_roll,
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=cam_template,
+        occupancy_extent=occ,
+    )
+
+    assert result.mask_valid.all()

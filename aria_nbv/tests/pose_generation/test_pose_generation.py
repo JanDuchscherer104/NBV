@@ -317,7 +317,7 @@ def test_motion_realism_rule_records_diagnostics():
     rule(ctx)
     assert torch.equal(ctx.mask_valid, torch.tensor([True, True]))
     assert torch.allclose(ctx.debug["motion_step_length_m"], torch.linalg.norm(poses.t, dim=1))
-    assert torch.allclose(ctx.debug["motion_height_delta_m"], torch.tensor([0.0, 0.2]))
+    assert torch.allclose(ctx.debug["motion_height_delta_m"], torch.tensor([0.0, 0.4]))
     assert torch.allclose(ctx.debug["motion_backward_step_m"], torch.tensor([0.0, 0.4]))
     assert torch.allclose(ctx.debug["motion_yaw_delta_rad"], torch.zeros(2))
     assert torch.equal(ctx.debug["motion_realism_reject_mask"], torch.tensor([False, False]))

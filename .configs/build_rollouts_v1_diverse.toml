@@ -24,6 +24,11 @@ verbosity = 1
 [source.store]
 store_dir = "vin_offline"
 
+[oracle_target_task_sampler]
+max_targets_per_sample = 2
+seed = 0
+policy = "uniform_without_replacement"
+
 [candidate_mixture.base]
 camera_label = "rgb"
 num_samples = 48
@@ -109,13 +114,31 @@ eval_fusion_voxel_size_m = 0.02
 eval_fusion_max_points = 200000
 target_eval_max_points = 50000
 reward_mode = "root_normalized_gain"
+eval_depth_far_m = 20.0
+target_crop_policy = "gt_obb_oriented_any_vertex_v1"
+scene_crop_policy = "snippet_occupancy_extent_v1"
 log_timing = true
 verbosity = 1
+
+[target_scorer.oracle]
+fusion_voxel_size_m = 0.02
+fusion_max_points = 200000
 
 [target_scorer.depth]
 device = "cpu"
 max_candidates_final = 48
 resolution_scale = 0.2
+verbosity = 1
+
+[target_scorer.depth.renderer]
+device = "cpu"
+zfar = 20.0
+znear = 0.001
+cull_backfaces = false
+blur_radius = 0.0
+bin_size = 0
+dtype = "float32"
+is_debug = false
 verbosity = 1
 
 [selected_depth]
@@ -133,6 +156,7 @@ split_manifest_hash = "configured-at-runtime"
 discount_gamma = 1.0
 q_h_chunk_states = 64
 target_eval_crop_max_points = 50000
+target_eval_crops_enabled = false
 
 [[recipes]]
 name = "random_valid_diverse"

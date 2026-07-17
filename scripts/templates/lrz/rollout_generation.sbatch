@@ -5,7 +5,6 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
 #SBATCH --time=02:00:00
-#SBATCH --array=0-0
 #SBATCH --output=/ABS/PATH/TO/ARIA_DSS/logs/slurm/%x-%A_%a.out
 #SBATCH --error=/ABS/PATH/TO/ARIA_DSS/logs/slurm/%x-%A_%a.err
 
@@ -18,7 +17,8 @@ set -euo pipefail
 : "${CONFIG_PATH:?Set CONFIG_PATH to a rollout writer TOML with DSS-backed paths.}"
 : "${SHARD_MANIFEST:?Set SHARD_MANIFEST to the JSONL emitted by nbv-plan-rollout-shards.}"
 
-ARRAY_TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
+: "${SLURM_ARRAY_TASK_ID:?Submit with --array=0-(NUM_SHARDS-1).}"
+ARRAY_TASK_ID="$SLURM_ARRAY_TASK_ID"
 SHARD_ID="$(printf 'shard-%06d' "$ARRAY_TASK_ID")"
 JOB_ID="${SLURM_JOB_ID:-manual}"
 FINAL_SHARD_DIR="$ARIA_DSS/data/staging/rollouts/$RUN_ID/shards/$SHARD_ID"
@@ -44,11 +44,10 @@ srun --ntasks=1 \
 cd "$ARIA_REPO"
 source .agents/skills/lrz-ai-systems/scripts/lrz-aria-env.sh "$ARIA_DSS"
 nvidia-smi
-python -m pip install --user -U uv
-export PATH="$HOME/.local/bin:$PATH"
+command -v uv >/dev/null
 cd aria_nbv
-uv sync --all-extras
-uv run nbv-build-rollouts \
+test -x .venv/bin/python
+uv run --frozen --no-sync nbv-build-rollouts \
   --config-path "$CONFIG_PATH" \
   --shard-manifest "$SHARD_MANIFEST" \
   --shard-id "$SHARD_ID" \
