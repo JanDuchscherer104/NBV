@@ -1,14 +1,13 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
 #import "@preview/booktabs:0.0.4": *
 
-== Objectives and Hypotheses
+== Study Population and Evidence Gates
 
-The first aim defines target-specific oracle @relative-reconstruction-improvement while keeping ordinary policy input actor-visible. The actor uses observed or predicted target descriptors #symb.entity.target_desc. @ground-truth:short crops, boxes, meshes, and all-candidate renders are restricted to labels, bounded oracle references, and evaluation. The required evidence is target eligibility, match score, unmatched/ambiguous counts, endpoint #symb.entity.endpoint_gain, separate scene @relative-reconstruction-improvement:short, and acquisition cost.
+The source population comprises ASE/ATEK snippet windows from scenes for which the configured @ground-truth:short mesh and object-box table resolve. A frozen manifest assigns entire scenes to train, validation, or test before model selection; no scene may cross these boundaries through another snippet. Each reported run records the manifest hash and the exact counts of scenes, snippets, admitted target tasks, rollout chains, transitions, and retained candidate rows. A capped train-only pilot is therefore a throughput and support probe, not a sample from which held-out policy performance can be estimated.
 
-The render-path boundary in @fig:qh-teacher-student-render-path makes this restriction explicit for render-derived training signals.
+The present data generator defines oracle target tasks by seeded sampling from geometry-valid @ground-truth:short OBB rows. Its task-coverage report therefore describes the available GT pool, sampled tasks, classes, scenes, and later oracle-evaluation failures. It does not measure proposal matching, IoU ambiguity, projected visibility, or actor-observation support. Those quantities belong to a future observed-target selector required for deployable-input claims. Until that selector exists, @ground-truth:short target geometry may define labels and bounded oracle references but cannot be presented as actor-visible input. The render-path boundary in @fig:qh-teacher-student-render-path makes the same restriction explicit for render-derived evidence.
 
 #figure(
   align(center, image(
@@ -18,44 +17,40 @@ The render-path boundary in @fig:qh-teacher-student-render-path makes this restr
   caption: [Teacher/student render path for leakage-safe training. The student branch consumes actor-visible state and current-belief render products, while privileged @ground-truth:short meshes, target crops, and dense candidate renders may produce oracle returns, teacher values, or distillation targets only. Dense @ground-truth:short candidate depth is therefore label or teacher evidence, not a V1 actor input.],
 ) <fig:qh-teacher-student-render-path>
 
-The second aim trains a VIN-style myopic scorer over the same candidate table that later feeds #symb.rl.qh. The scorer predicts target @relative-reconstruction-improvement:short from actor-visible scene, target, and candidate features. It is the required learned one-step control, evaluated by rank correlation, top-$k$ oracle hit rate, calibration, selected-candidate oracle @relative-reconstruction-improvement:short, target visibility, invalid fraction, and grouped failures.
+The first policy gate is an actor-visible myopic scorer over the same finite candidate table intended for #symb.rl.qh. The scorer must expose one value per candidate, respect the hard action mask, and be assessed by candidate ranking, calibration, and oracle-rescored selected actions. The existing scene-level VIN scorer is historical substrate; it is not a target-conditioned control until the observed target descriptor is wired into the model and evaluated on a frozen held-out split.
 
-The third aim first estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
+The second policy gate estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
 
 $
   #eqs.entity.lookahead_headroom
 $
 
-Only if this headroom is positive is #symb.rl.qh expected to recover part of it from offline rollout traces:
+Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for recovery from offline rollout traces:
 
 $
   #eqs.entity.q_recovery
 $
 
-Success is measured by oracle-rescored selected actions, not predicted values. If oracle lookahead has negligible headroom relative to the frozen metric noise floor, the thesis reports a scoped negative result for the evaluated split, target set, horizon, branch factor, candidate distribution, and validity regime. If lookahead has headroom but #symb.rl.qh fails to recover it, the analysis separates target observability, candidate support, rollout coverage, reward definition, and model-capacity explanations without selecting among them absent evidence.
+Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
 
 #figure(
   table(
-    columns: (0.86fr, 1.32fr, 1.48fr),
+    columns: (0.82fr, 1.18fr, 1.52fr),
     toprule(),
     table.header([*Claim*], [*Primary evidence*], [*Decision rule*]),
     midrule(),
-    [Target utility],
-    [#symb.entity.endpoint_gain, #symb.entity.return_h, scene @relative-reconstruction-improvement:short, cost],
-
-    [#symb.entity.endpoint_gain decides endpoint quality; #symb.entity.return_h trains and ranks rollouts.],
-    [Input safety],
-    [actor-visible #symb.entity.target_desc, match score, support, leakage checks],
-
-    [@ground-truth:short is label/evaluation only for the V1 result.],
+    [Population],
+    [scene-split manifest and coverage bundle],
+    [Inference is restricted to the frozen held-out scene population.],
+    [Task protocol],
+    [GT pool, sampled tasks, classes, and oracle failures],
+    [Current evidence is oracle-task coverage, not observed-target matching.],
     [Myopic control],
-    [target-rank metrics, selected-candidate oracle @relative-reconstruction-improvement:short, calibration],
-
-    [One-step target scoring is the comparator for #symb.rl.qh, not the final policy claim.],
+    [ranking, calibration, and oracle-rescored selections],
+    [Actor-visible target conditioning must be implemented before comparison.],
     [Planning headroom],
     [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-
-    [#symb.rl.qh is meaningful only relative to measured oracle-lookahead headroom.], bottomrule(),
+    [#symb.rl.qh is evaluated only after a meaningful-headroom gate.], bottomrule(),
   ),
   caption: [Objective-to-evidence matrix.],
 ) <tab:thesis-objective-evidence>

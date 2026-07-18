@@ -1,94 +1,53 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
 == Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
 
-This chapter fixes the implementation-invariant chain from task definition to evaluation. The logged actor-visible state $s_t^"hist"$ contains observations available at the recorded root. The counterfactual actor state $s_t^"cf0"$ augments that evidence only with acquired or simulated observations that the actor contract permits. The privileged oracle state $s_t^"oracle"$ additionally contains ground-truth geometry, matched target crops, all-candidate renders, and oracle labels. The three states are distinct objects even when they share identifiers or poses.
+An oracle target task fixes the entity identity and @ground-truth:short evaluation crop. A deployable target descriptor would instead be predicted from actor-visible observations. The current rollout generator has only the first contract: it projects a selected @ground-truth:short box into a compact instruction for candidate generation. Consequently, the present target descriptor denotes the requested object and its geometry; it does not establish actor-visible target discovery.
 
-Target selection is part of the oracle data-generation pipeline. An *oracle target task* fixes the supervised entity identity and ground-truth evaluation crop. An *actor-visible target descriptor* is the observation-derived or predicted representation supplied to a learned policy. The former defines what is evaluated; the latter defines what the actor may condition on. A target task is not a claim that the actor autonomously discovers the target of interest.
-
-The target descriptor records the task and the cheap evidence available for diagnostics or later descriptor ablations:
+The general descriptor notation remains
 
 $
   #eqs.entity.target_descriptor
 $
 
-In this descriptor, $hat(bold(B))_e$ is observed, predicted, or otherwise proposed OBB geometry for the target task; $hat(bold(y))_e$ is class probabilities or class embedding; $hat(pi)_e$ is confidence; $A_e^"proj"$ is projected area; $n_e^"semi"$ and $n_e^"EVL"$ are semidense and @egocentric-voxel-lifting:short support counts; $omega_e^"EVL"$ records local @egocentric-voxel-lifting:short coverage; $ell_e^"src"$ records the actor-visible source mode; and $bold(T)_(r_t,e)$ / $bold(T)_(c_t,e)$ record reference- and current-frame target geometry. These fields are not all target-task gates in the first implementation. Class, confidence, current projection, semidense support, @egocentric-voxel-lifting:short support, distance, and target bearing are retained as descriptor and audit fields so that later subsets can ask whether the target-conditioned model depends on semantic correctness or observation quality.
+#parbreak()
+The implemented oracle sampler populates only @ground-truth:short identity, class, confidence, pose, extent, and reference-relative geometry. Projected area, semidense support, @egocentric-voxel-lifting:short support, and proposal-match scores are not measured by this path and must not be interpreted from their schema placeholders.
 
 The finite action interface consists of a candidate table $cal(Q)_t$, hard validity mask $bold(m)_t$, and invalid-reason vector $bold(rho)_t$. The admissible set is $cal(A)_t = {i : m_(t,i)=1}$. Invalid rows remain logged for coverage and failure analysis but lie outside policy argmax, sampling, loss targets, and bootstrap maximization. Low RRI is a valid low-utility outcome; it is never an encoding for infeasibility.
 
-For target $e$, reconstruction quality is defined by target-cropped point--mesh error $Delta_t^e$. The immediate reward is the reduction $Delta_t^e-Delta_(t+1)^e$ normalized by the root error $Delta_0^e$, the finite-horizon return accumulates those root-normalized gains, and endpoint gain compares $Delta_0^e$ with $Delta_H^e$ after a fixed acquisition budget. This shared root denominator makes cumulative gain and endpoint gain comparable; endpoint gain remains the primary policy estimand.
-
-Oracle-lookahead headroom is the paired endpoint-gain difference between bounded oracle lookahead and one-step oracle-greedy selection. The recovered-headroom fraction compares a learned finite-horizon policy with the learned one-step control relative to that bounded oracle reference. The fraction is reported only when measured headroom exceeds a prespecified threshold derived from the oracle metric's repeatability or noise floor. Neither reference is a universal upper bound: both are conditional on the candidate generator, target pool, hard validity regime, horizon, branch factor, and acquisition budget.
-
-#validation_todo(
-  [Establish sampling-density and mesh-tessellation sensitivity before treating target-cropped point--mesh error as stable. Invariance is a required metric-validity property, not an established result.],
-  source: [RQ1 metric-validity contract; peer review],
-  gate: [oracle and metric validity results],
-)
+For target $e$, the oracle computes a target-cropped point--mesh error $Delta_t^e$. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
 
 === Oracle Label Provenance
 
-The seminar paper is implemented evidence for the one-step scene-level oracle substrate, not the current thesis objective. Its labeler constructs a candidate table for an @aria-synthetic-environments:short snippet, renders candidate depth from the @ground-truth:short mesh under a calibrated camera/rasterization convention, backprojects and fuses candidate points with the current semi-dense reconstruction, and computes point-mesh accuracy/completeness as @relative-reconstruction-improvement:short labels @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. ARIA-NBV reuses that substrate for label provenance, but changes the task unit: the thesis sampler first creates target tasks, target crops define the error surface, and selected counterfactual transitions are written to a standalone rollout store for finite-horizon #symb.rl.qh.
+The one-step scene-level oracle from the seminar work supplies the rendering and point--mesh substrate @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. The target-specific pipeline renders valid candidates from the @ground-truth:short mesh, backprojects their depth, fuses candidate points with the privileged current evaluation cloud, crops both points and mesh to the selected target box, and evaluates the resulting point--mesh error. In the current protocol the root evaluation cloud is reconstructed from ASE @ground-truth:short depth, so both the crop and the root metric are oracle-only.
 
 #figure(
   align(center, image(
     "../../figures/camera_frame_ray_contract.pdf",
     width: 100%,
   )),
-  caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the matched target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
+  caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the selected target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
 ) <fig:camera-frame-ray-contract>
 
 === Target Selection
 
-Automatic target selection constitutes the first procedural layer in target-centric oracle data generation. Given a historic snippet and its egocentric encodings, the sampler chooses target tasks for which supervised target-conditioned @next-best-view:short is meaningful. A useful target task must be identifiable, evaluable, and potentially action-sensitive: the oracle must know which @ground-truth:short object the task refers to, target-specific error must be computable, and at least some feasible candidate views should expose non-marginal target-specific @relative-reconstruction-improvement:short after oracle evaluation. Near-solved targets are therefore not discarded before storage, but their low headroom must be measured and preserved as evidence.
-
-#conflict_todo(
-  [Resolve the admission rule. The canonical protocol admits identity-valid, evaluable targets before headroom measurement and preserves near-zero-headroom cases; non-marginal candidate gain therefore cannot also be a target-admission requirement.],
-  source: [same section target-selection protocol; roadmap; candidate-sampling theory],
-  gate: [target-task eligibility freeze],
-)
+The implemented sampler does not match actor proposals to @ground-truth:short objects. It enumerates the non-padding @ground-truth:short OBB rows in a snippet, accepts rows with finite positive geometry, and applies seeded uniform sampling without replacement up to the configured per-snippet cap. Thus the stored `matched` status currently means geometry-valid @ground-truth:short task row, not successful proposal-to-identity association. IoU, ambiguity-gap, visibility, and support thresholds are absent from this admission rule.
 
 #figure(
   align(center, image(
     "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
-  caption: [Oracle target-task sampling contract. @ground-truth:short OBBs and meshes define identity-valid supervised target tasks through an IoU and ambiguity-gap gate, a deterministic capped sampler writes target-task rows with descriptor and audit fields, and rollout generation later measures target @relative-reconstruction-improvement:short and headroom. The actor-visible target selector remains a separate diagnostic or later deployment contract, not the source of thesis labels.],
+  caption: [Implemented oracle target-task sampler. Geometry-valid @ground-truth:short OBB rows form the task pool, and seeded uniform sampling without replacement applies the manifest-defined cap. Rollout scoring later decides whether the selected crop is evaluable. No actor proposal, IoU match, visibility gate, or support gate is used.],
 ) <fig:oracle-target-task-sampler-contract>
 
-The cheap admission gate is identity matching. A proposed target OBB is identity-valid when it matches exactly one @ground-truth:short target OBB by configured 3D IoU and ambiguity margin:
-
-$
-  #eqs.entity.target_identity_iou
-$
-
-$
-  #eqs.entity.target_identity_acceptance
-$
-
-Here $mu_1$ and $mu_2$ are the best and second-best target-to-@ground-truth:short IoU scores for the proposal. The threshold values are protocol parameters, not theory constants. The implementation should use a moderate default and report a threshold sweep so that coverage can be inspected under looser and stricter identity definitions.
-
-Class prediction and confidence do not decide target-task eligibility in the first pass. They are recorded because semantic correctness may matter for target descriptors and failure analysis, but the oracle can compute target-specific @relative-reconstruction-improvement:short for a geometrically identified target even when the class head is noisy. Current RGB projection, semidense support, and @egocentric-voxel-lifting:short support are likewise audit fields rather than hard gates unless a later subset explicitly asks for projected-only or support-qualified targets.
-
-The sampler keeps rollout cost bounded by selecting a capped number of identity-valid targets per source snippet. Within that cap, it samples uniformly with a deterministic seed rather than always taking the largest or highest-IoU object. The audit surface must still report how many identity-valid targets existed before the cap, how many were selected, and how their IoU, ambiguity gap, class, confidence, projected area, support, distance, and bearing were distributed.
-
-Headroom is evaluated after target selection because it depends on oracle candidate scoring. The rollout store should persist identity-valid targets even when measured target headroom is low; training and evaluation loaders can then filter or stratify by headroom band. This preserves negative evidence: if many well-identified targets have no candidate with useful gain, the result is a candidate/support/headroom limitation rather than a target-selection failure hidden by pre-filtering.
-
-Counterfactual trajectory naturalness is a candidate and rollout diagnostic, not an identity gate. Hard turns, target-bearing changes, and support collapse should be measured with candidate provenance and invalid-reason fields so that the thesis can distinguish target identity failures from unrealistic or unsupported view proposals.
+The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
 
 === Candidate View Generation
 
-Candidate view generation is the second procedural layer: it turns one target task into a finite action table for one rollout state. The current thesis profile deliberately uses a small family mixture rather than the older unconstrained shell from the seminar paper. The checked-in data-generation profile consumes the strict offline actor-state store, uses a training split for the first real audit subset, samples one oracle target task per source sample, and writes a separate rollout/replay store. It is an audit-scale thesis default, not an LRZ path template and not final scale evidence.
-
-#validation_todo(
-  [Replace the current/canonical/audit-profile language and every numeric sampler, pruning, horizon, beam, and temperature setting below with the versioned final experiment configuration and manifest statistics. Reconcile the candidate-family vocabulary with the thesis roadmap.],
-  source: [thesis peer review; current roadmap; final experiment manifests],
-  gate: [candidate and rollout protocol freeze],
-)
+Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. The Methods text defines semantics only; it does not designate one mutable TOML profile as canonical.
 
 At rollout step $t$, candidate generation constructs a full shell
 
@@ -96,20 +55,7 @@ $
   #eqs.action.candidate_shell
 $
 
-with one fixed provenance component $k(i)$ per row. The canonical `v1_realistic_3family` mixture is
-
-#figure(
-  table(
-    columns: (1.0fr, 0.42fr, 0.9fr, 0.9fr),
-    toprule(),
-    table.header([*Component*], [*Rows*], [*Center family*], [*View family*]),
-    midrule(), [`forward_local`], [24], [`forward_local`],
-    [`forward_rig`], [`target_bearing_local`], [24], [`target_bearing_local`],
-    [`target_point`], [`lateral_target_bypass`], [12], [`lateral_target_bypass`],
-    [`target_point`], bottomrule(),
-  ),
-  caption: [Canonical three-family finite candidate table for real thesis rollouts. Counts are full-shell rows; valid-action counts are measured after geometry and motion pruning.],
-) <tab:realistic-three-family-mixture>
+with a fixed provenance component $k(i)$ per row. The core mixture contains forward-local, target-bearing, and lateral-bypass motion; the diversity challenger may additionally allocate mass to local refinement and revisit/backtrack components. The resolved manifest, rather than prose, determines which components and counts apply to a run.
 
 For each row, the raw direction is sampled in the reference rig frame. The realistic profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
 
@@ -127,17 +73,17 @@ $
   #eqs.action.capped_direction
 $
 
-The geometry behind this finite action table is easier to read as a gauge choice than as a list of Cartesian offsets. The sampler first draws a capped direction in the reference rig frame, then each family gives that direction a different semantic axis: egocentric forward motion, target-bearing motion, or lateral target bypass. The target-looking families additionally construct a camera frame whose optical axis points to the selected actor-visible target center.
+The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
 
 #figure(
   align(center, image(
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
   )),
-  caption: [Schematic geometry of the target-conditioned three-family candidate shell. Panel A shows the root/reference-frame direction cap; panel B shows how the same shell support is reinterpreted by the forward-local, target-bearing, and lateral-bypass center families; panel C shows the target-look camera construction and the resulting target-frustum relation. Exact sampling densities, radius draws, and pruning constraints are defined by the surrounding equations, not by the schematic scale.],
+  caption: [Schematic geometry of the core target-conditioned candidate families. The reference-frame direction support is reinterpreted as forward, target-bearing, or lateral-bypass motion, and target-looking cameras point toward the supplied target instruction. The manifest supplies family counts and all quantitative bounds.],
 ) <fig:candidate-generation-geometry>
 
-The three position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the actor-visible target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
+The three core position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
 
 $
   #eqs.action.family_directions
@@ -149,13 +95,13 @@ $
   #eqs.action.candidate_center_world
 $
 
-`forward_local` keeps the reference rig orientation. The two target-looking families orient the camera to the selected actor-visible target center $bold(p)_e$:
+`forward_local` keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
 
 $
   #eqs.action.target_lookat_frame
 $
 
-These equations are the mathematical description of the implemented sampler, not a claim that the mixture is optimal. The three-family design has a direct downstream impact: `forward_local` preserves egocentric motion continuity; `target_bearing_local` tests whether moving along the target bearing produces supervised target gain; and `lateral_target_bypass` creates side-step views that may improve occluded target surfaces without leaving the local walking envelope. If the target-aware families do not survive pruning, the resulting rollout dataset degenerates into a forward-only dataset and cannot support a target-conditioned planning claim.
+These equations describe the sampler, not an optimal proposal distribution. `forward_local` preserves egocentric continuity, `target_bearing_local` moves along the target ray, and `lateral_target_bypass` introduces side-step views; the optional challenger families test smaller corrections and reversals. Candidate-profile utility must be judged after pruning. A store in which target-aware families rarely survive cannot support a target-conditioned planning claim.
 
 Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
 
@@ -163,7 +109,7 @@ $
   #eqs.action.motion_pruning_limits
 $
 
-The full shell is still retained with `position_id`, `strategy_id`, `mixture_id`, `sampler_probability`, rule masks, debug diagnostics, and invalid-reason bitsets. Invalid candidates are hard-masked constraints with explicit reasons. They are never low-@relative-reconstruction-improvement:short examples, and they must not enter #symb.rl.qh argmax, softmax, or loss targets. The canonical real config requires at least 15 valid root actions for a 60-row shell, matching the first production gate:
+The full shell is retained with position, strategy, mixture, sampling probability, rule masks, diagnostics, and invalid-reason bitsets. Invalid candidates are hard constraints and cannot enter #symb.rl.qh selection, stochastic normalization, or loss targets. A manifest-defined root-support threshold may reject an entire rollout task when too few actions remain:
 
 #figure(
   align(center, image(
@@ -177,27 +123,13 @@ $
   #eqs.action.valid_support_threshold
 $
 
-This threshold is a data-support guard: it prevents low-support roots from masquerading as planning evidence, while preflight still reports the blocked roots and per-family failure modes.
+This threshold is a data-support guard, not a reward threshold. Preflight reporting must retain rejected-root counts and failure reasons by candidate family.
 
 === Rollout Branch Sampling and Dataset Impact
 
-Rollout generation samples finite branches over the valid candidate table. The canonical thesis profile materializes four recipe families:
+Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.
 
-#figure(
-  table(
-    columns: (1fr, 0.58fr, 0.58fr, 0.58fr, 1.12fr),
-    toprule(),
-    table.header([*Recipe*], [*$H$*], [*$B$*], [*Beam*], [*Selection rule*]),
-    midrule(), [`random_valid`], [1], [1], [1],
-    [Uniform over valid rows.], [`oracle_greedy`], [1], [1], [1],
-    [Argmax of oracle target-root gain.], [`oracle_lookahead`], [2], [2], [2],
-    [Bounded oracle greedy branches.], [`temperature_softmax`], [2], [2], [2],
-    [Softmax over robust oracle scores with $tau=1$.], bottomrule(),
-  ),
-  caption: [Canonical rollout recipes for the real thesis profile. The recipes create replay diversity and oracle-lookahead references; they do not train #symb.rl.qh by themselves.],
-) <tab:realistic-rollout-recipes>
-
-The bounded oracle-lookahead recipe differs from one-step greedy selection because it scores first actions by the best retained finite-horizon chain, not by immediate gain alone (@fig:oracle-lookahead-tree). Invalid candidates remain masked and are not expanded into oracle branches.
+Bounded oracle lookahead can select a different first action from one-step greedy because it ranks retained finite-horizon chains rather than immediate gain alone (@fig:oracle-lookahead-tree). The persisted artifact contains these selected or beam-retained chains and their full per-step candidate shells; it is not an exhaustive materialization of the counterfactual action tree.
 
 #figure(
   align(center, image(
@@ -213,37 +145,25 @@ $
   #eqs.action.robust_temperature_softmax
 $
 
-The downstream effect of these choices is scientific rather than cosmetic. The target source controls what counts as a supervised task; the candidate mixture controls the support on which #symb.rl.qh can learn finite-action values; the validity rules decide which actions are admissible; and the branch sampler determines whether the replay store contains only myopic winners or also valid lower-ranked alternatives. A trustworthy thesis dataset must therefore report, per scene and target, selected target counts, valid candidates, valid candidates by `position_id`, invalid reasons by family, selected-family histograms, marginal and cumulative target-root gain, diagnostic state-relative target @relative-reconstruction-improvement:short, and storage/retention settings. Only after these diagnostics show non-degenerate target-aware support should failures or successes be attributed to planning rather than to the data-generation profile.
+The target source defines the supervised task, the candidate mixture defines learnable action support, validity defines admissibility, and the recipe defines which chains enter replay. Reporting must therefore cover target-task coverage, valid fanout and invalid reasons by family, selected-family diversity, gain distributions, and retention cost before attributing policy behavior to non-myopic planning. The paired train-only pilots are bandwidth and candidate-profile probes; they are non-confirmatory and provide no held-out policy-performance evidence.
 
 === Target-Specific @relative-reconstruction-improvement:short
 
-Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated points to the matched target region. The target error is the target-cropped version of the VIN-NBV @relative-reconstruction-improvement:short objective @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness on the crop.
+Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evaluation points to the selected target region. The target error adapts the VIN-NBV objective to this crop @VIN-NBV-frahm2025: point-to-mesh accuracy plus mesh-to-point completeness.
 
 #figure(
   align(center, image(
     "../../figures/target_rri_point_mesh_geometry.pdf",
     width: 100%,
   )),
-  caption: [Target-specific point-mesh error behind @relative-reconstruction-improvement:short labels. Blue points are the target crop of accumulated actor-visible geometry, green points are the selected candidate contribution, the orange curve is the matched target mesh, purple witnesses indicate point-to-mesh accuracy, and dashed red witnesses indicate mesh-to-point completeness. Adding a valid candidate view is useful only insofar as it reduces the target-cropped aggregate error used by the oracle reward.],
+  caption: [Target-specific point-mesh error behind @relative-reconstruction-improvement:short labels. Blue points are the target crop of accumulated oracle evaluation geometry, green points are the selected candidate contribution, the orange curve is the selected target mesh, purple witnesses indicate point-to-mesh accuracy, and dashed red witnesses indicate mesh-to-point completeness. Adding a valid candidate view is useful only insofar as it reduces the target-cropped aggregate error used by the oracle reward.],
 ) <fig:target-rri-point-mesh-geometry>
 
 $
   #eqs.entity.target_error
 $
 
-Area weighting or uniformly sampled target-surface points prevent target-specific @relative-reconstruction-improvement:short from reflecting mesh tessellation density. For reproducibility, the current implementation computes point-mesh distances through `PreparedRriScorer.score` and `chamfer_point_mesh_batched`, while `aria_nbv.oracle.evidence` owns target-crop preparation and `aria_nbv.oracle.target_rri` owns target scoring. Empty or unsupported target crops are typed invalid label cases, not low-@relative-reconstruction-improvement:short samples.
-
-#validation_todo(
-  [Do not retain the tessellation-invariance claim until the actual metric uses documented area weighting or uniform surface sampling and passes a triangulation-density test. The current face-mean path can change weighting when a surface is subdivided.],
-  source: [thesis peer review; active oracle metric implementation],
-  gate: [target-RRI metric validation],
-)
-
-#validation_todo(
-  [Specify and validate homogeneous root/candidate evaluation geometry before using target-RRI labels as thesis evidence: point source, render stride, fusion/downsampling, point cap, crop policy, and density-parity test must be matched or their bias quantified.],
-  source: [RRI theory review; thesis peer review],
-  gate: [oracle label validity study],
-)
+The implementation crops mesh faces when any vertex lies inside the oriented target OBB and evaluates the configured point--mesh scorer. Geometry-invalid candidates are removed by the hard action mask and retain persisted candidate reason codes. Empty mesh crops, insufficient current support, or unusable renders instead invalidate the separate oracle evaluation: the recipe either skips the affected row or table, or clears `oracle_label_mask` and `q_train_mask`, while reporting the oracle failure independently rather than assigning a candidate reason code. The current face-based metric is not yet established as invariant to mesh tessellation or root/candidate sampling density; confirmatory use therefore requires the sensitivity tests specified in @sec:thesis-experimental-design.
 
 The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
 
@@ -263,22 +183,10 @@ $
   #eqs.entity.endpoint_gain
 $
 
-The log-gain variant is retained as a scale-sensitivity ablation, mirroring the broader NBV literature's use of logarithmic error reduction while keeping the root-normalized endpoint gain as the default thesis metric:
-
-#research_todo(
-  [Either cite a reviewed NBV source that specifically supports logarithmic error reduction or remove the literature-generalization clause. The current repo evidence supports log gain only as an internal scale-sensitivity ablation.],
-  source: [thesis questions; literature cross-check],
-  gate: [final metric-citation audit],
-)
+The log-gain variant is retained only as an internal scale-sensitivity ablation:
 
 $
   #eqs.entity.log_gain
 $
 
-#symb.entity.endpoint_gain is the primary fixed-horizon endpoint metric, #symb.entity.return_h is the rollout training return, and #symb.entity.log_gain is only an algebraic scale-sensitivity ablation. The default immediate rollout / #symb.rl.qh reward is root-normalized by #symb.entity.target_error_0, so with $gamma=1$ its additive return telescopes to endpoint gain up to epsilon under equal-horizon, equal-budget comparisons. The current-error denominator defines state-relative one-step @relative-reconstruction-improvement:short for diagnostics and VIN compatibility only; the final discount and clipping policy remain open protocol parameters.
-
-#decision_todo(
-  [Lock identity-IoU thresholds, ambiguity gap, per-snippet target cap, near-solved-target filtering policy for loaders, clipping, and final gamma policy.],
-  source: [target-selection interview; target-selection autoresearch report],
-  gate: [RQ1/RQ2 protocol freeze],
-)
+#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. Root-normalized gains telescope to endpoint gain when the discount is unity and geometry, horizon, and acquisition budget are matched. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.

@@ -1,12 +1,6 @@
-#import "../../../shared/macros.typ": *
-#import "../../../shared/symbols.typ": symb
-#import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
-
 = Experimental Design <sec:thesis-experimental-design>
 
-The experiment design evaluates whether the oracle/data-generation pipeline from @sec:thesis-oracle-data-generation and the learned method from @sec:thesis-method produce leakage-safe target-aware view choices under matched acquisition budgets. It treats data support, target identity, validity masks, replay integrity, and oracle-lookahead headroom as preconditions for interpreting value-model performance.
+The experiments separate feasibility evidence from policy evidence. Feasibility requires a frozen scene-level population, reproducible target and candidate support, valid replay linkage, and measured oracle throughput. Policy inference additionally requires a held-out scene split, matched acquisition budgets, independent endpoint oracle evaluation, and an implemented actor-visible decision rule. The current train-only bandwidth pilots address only the first category: incomplete runs and resource failures characterize the generation system, but they cannot support comparisons between policies.
 
 #include "05-01-objectives-and-hypotheses.typ"
 

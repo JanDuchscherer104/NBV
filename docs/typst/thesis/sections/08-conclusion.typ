@@ -1,16 +1,7 @@
-#import "../../shared/macros.typ": *
-#import "../draft_markers.typ": *
+= Conclusion <sec:thesis-conclusion>
 
-= Conclusion
+This thesis defines a leakage-auditable experiment for target-conditioned finite-candidate next-best-view planning. Its present contribution is the separation of actor-visible state from oracle supervision, the target-specific reconstruction objective, hard validity and replay contracts, and an artifact-driven reporting seam that keeps provenance and missingness attached to later results.
 
-The expected final contribution is a reproducible target-aware finite-candidate view-selection study, not a broad claim that continuous reinforcement learning has been solved for egocentric reconstruction. The thesis tests a single planning hypothesis: after oracle target-task sampling and target-specific supervision are defined, finite-candidate oracle lookahead should expose whether non-myopic target-specific @relative-reconstruction-improvement:short headroom exists, and a learned finite-horizon value model should recover part of that headroom under matched oracle re-evaluation.
+The available evidence does not answer whether bounded oracle lookahead improves fixed-budget target reconstruction or whether a learned finite-horizon policy recovers such headroom. The current training-source rollout attempts establish pipeline reachability and reveal a renderer resource gate; the development report fixture establishes the data contract only. Neither supports a held-out policy claim, a population-level effect, or a scale estimate.
 
-The scope limit is central to the conclusion. The thesis does not claim full continuous-control @next-best-view:short, online RL, real-device deployment, or replacement of target-specific point-mesh @relative-reconstruction-improvement:short by coverage, uncertainty, or semantic proxy objectives. Online discrete interaction, continuous target-then-pose policies, simulator-backed actor-critic, SceneScript, VLM planning, sparse/point backbones, and 3DGS control are escalation studies; they enter only if they preserve the finite-candidate target-specific @relative-reconstruction-improvement:short comparison.
-
-The conclusion follows a fixed decision matrix. Positive and stable headroom together with learned recovery supports a scoped learnable non-myopic-planning claim for the evaluated regime. Negligible headroom supports a setup-specific negative result, not a universal myopia claim. An invalid or unstable oracle metric prevents downstream planning claims and restricts the thesis contribution to oracle validation. If valid headroom exists but #symb.rl.qh does not recover it, the result is a learned-control failure; target observability, candidate support, rollout coverage, reward definition, and model capacity remain competing explanations unless the sensitivity analysis discriminates among them.
-
-#research_todo(
-  [Rewrite the conclusion after final evidence is known. Preserve the conditional success/failure structure rather than forcing a positive planning claim.],
-  source: [proposal risk control; advisor handout],
-  gate: [final writing freeze],
-)
+The final scientific conclusion is therefore conditional on evidence that is not yet available. A stable oracle metric and positive paired lookahead effect would define measurable headroom for the evaluated finite support. Negligible headroom would be a setup-specific negative result. Unstable oracle evaluation would block planning claims, and stable headroom without learned recovery would remain a learned-control failure with several unresolved mechanisms. These outcomes delimit the thesis without extending it to continuous control, online reinforcement learning, or real-device deployment.

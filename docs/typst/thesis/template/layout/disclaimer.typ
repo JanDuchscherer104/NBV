@@ -5,7 +5,7 @@
   title: "",
   thesisKindGerman: "Abschlussarbeit",
   author: "",
-  submissionDate: datetime,
+  submissionDate: none,
   submissionDateText: "",
 ) = {
   set page(
@@ -23,10 +23,14 @@
   [Ich versichere, dass ich diese #thesisKindGerman selbststaendig verfasst und keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe.]
 
   v(18mm)
-  grid(
-    columns: 2,
-    gutter: 1fr,
-    "Muenchen, " + if submissionDateText != "" { submissionDateText } else { submissionDate.display("[day].[month].[year]") },
-    author,
-  )
+  if submissionDateText != "" or submissionDate != none {
+    grid(
+      columns: 2,
+      gutter: 1fr,
+      "Muenchen, " + if submissionDateText != "" { submissionDateText } else { submissionDate.display("[day].[month].[year]") },
+      author,
+    )
+  } else {
+    align(right, author)
+  }
 }

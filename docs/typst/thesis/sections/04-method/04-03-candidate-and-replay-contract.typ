@@ -1,49 +1,22 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
-== Candidate and Replay Contract
+== Finite Candidate and Replay Contract
 
-// source: aria_nbv/aria_nbv/pose_generation/candidate_mixture.py:16-24 and aria_nbv/aria_nbv/pose_generation/candidate_mixture.py:150-177 define the three-family default and per-row provenance.
-// source: aria_nbv/aria_nbv/rollouts/zarr_store.py:224-263 persists candidate masks, sampler provenance, rewards, and support metrics.
-Each decision state carries a finite candidate table #symb.rl.candidate_table, hard mask $bold(m)_t$, invalid-reason vector $bold(rho)_t$, and the target descriptor #symb.entity.target_desc. It also stores selected-view history and remaining budget. The admissible action is a valid candidate row index:
+// implementation: rollouts/replay/types.py; rollouts/replay/engine.py; rollouts/zarr_store.py
+At step $t$, candidate generation returns a finite full-shell table #symb.rl.candidate_table with a hard-valid mask $bold(m)_t$ and versioned invalid-reason bitsets. Scores are stored compactly only for hard-valid rows and are bound back to their stable shell indices before selection. The admissible action set is therefore
 
 $
   #eqs.rl.finite_action_set
 $
 
-The storage side of this contract is the normalized rollout replay schema in @fig:offline-rollout-store-relation and @fig:rollout-replay-store-layout. This method section therefore defines the tensors and descriptors derived for learning, not a second data format. Row identity, target identity, selected-transition lineage, invalidity, and reward provenance remain owned by the Chapter 03 replay store contract.
+and a selected action is one valid shell row, never an arbitrary continuous pose. The score contract verifies both equality with the table's hard mask and one-to-one alignment between score values and valid shell indices. Invalid rows remain present for diagnostics and dense replay, but they cannot be selected.
 
-Selecting a candidate means choosing a valid index $a_t=i in cal(A)_t$ for the transition. Oracle rendering follows the calibrated depth-rendering contract, so camera-frame and rasterizer conventions are part of the label contract rather than model input @PyTorch3D-Cameras-2025. All valid candidates may be rendered at the oracle layer to score one-step labels, while the rollout writer separately persists selected/parent depth at a canonical configured resolution as actor-history state for successor #symb.rl.qh encoders.
+Rollout expansion records one transition for every retained branch. A transition contains the full candidate table, selected valid and shell indices, policy scores and probabilities, the selection policy, and the random seed. The trajectory appends the selected pose to the root pose chain. At the next depth, the generator uses the previous selected pose as its reference and regenerates a new finite table while applying the configured history and sibling-diversity constraints. Thus the implemented state transition changes pose, history, budget, and candidate table; it does not claim to synthesize a new actor-visible image or update a learned scene field.
 
-After selection, acquired geometry is added to the current geometry:
+The persisted factual tables preserve source and target identity, lineage hashes, step order, selected candidate row, candidate masks, reason codes, sampler provenance, rewards, and support diagnostics. Target root gain is the finite-horizon reward field. A candidate enters the training mask only when it is actor-selectable, the target and GT label are valid, and the target-root-gain reward is finite. Invalid rows have false masks and `NaN` labels; scene RRI is never substituted for a missing target label.
 
-$
-  #eqs.rl.counterfactual_transition
-$
+The derived `q_h/` view right-pads each state to the maximum candidate count in the store. It exposes state, source, target, candidate, and position identifiers; valid-action and training masks; selected candidate indices; one-step target RRI and target root gain; invalid-reason bitsets; and selected-transition temporal-difference fields. The latter contain the selected candidate row, selected reward, next step row, terminal flag, and discount. The store validates this cache against the canonical step and candidate tables, so readers can rebuild it at a different discount without changing factual replay.
 
-The representation-level transition also updates the sparse ray-aware memory:
-
-$
-  #eqs.scene.ray_memory_update
-$
-
-This update can add selected surface evidence, ray-carve selected free space, convert unknown cells into observed-free or observed-surface cells, update support counts and uncertainty, and refresh target-local directional memory. It cannot attach a visual descriptor to newly selected counterfactual geometry unless a corresponding actor-visible RGB observation exists; those cells instead carry a selected-depth geometry source and a missing-visual-descriptor mask.
-
-The next candidate table $cal(Q)_(t+1)$ is regenerated from updated geometry, selected-view history, and remaining horizon metadata with the same logged mixture families, while root local @egocentric-voxel-lifting:short evidence remains fixed unless a later ablation explicitly recomputes it. The current target-conditioned mixture vocabulary contains forward/local candidates, target-bearing candidates, lateral target-bypass candidates, bounded orientation jitter, and per-row strategy provenance. The older radial free-shell sampler from the seminar paper is retained as a historical upper-bound or stress ablation, not as the default target-conditioned candidate distribution.
-
-Candidate provenance is a model input only through typed scalar or embedding channels. The row stores `strategy_id`, `position_id`, `mixture_id`, `sampler_probability`, target-distance/bearing diagnostics, motion-realism diagnostics, and invalid-reason bits. The training reader may embed these as candidate-family tokens, but the model must still pass row-shuffle and duplicate-row tests: the family label explains how the row was sampled, not an ordering prior.
-
-Candidate order has no semantics, so shuffled-candidate evaluation is required. The descriptor section defines the candidate self token, query-local relation encodings, and target-local directional memory used by the model. The replay contract stores the canonical facts those descriptors are derived from: poses in documented frames, selected-view lineage, candidate-family provenance, target/support counters, masks, and reason codes. This keeps row descriptors reproducible without making their current tensor encoding the immutable data format.
-
-The minimum replay row contains scene/snippet/target/step identifiers, counterfactual state, target descriptor, candidate table, masks, invalid reasons, selected action, target reward, successor state, successor candidates, successor masks, and policy/seed/sampler metadata. This row reproduces the mask, selected transition, value target, and oracle re-evaluation.
-
-#figure(
-  image(
-    "../../figures/rollout_replay_doubleq_process.pdf",
-    width: 100%,
-  ),
-  caption: [Replay-to-learning process for finite-candidate #symb.rl.qh. Panel A separates all-valid-row oracle labels from the one selected action that materializes successor geometry and a regenerated candidate table. Panel B shows the masked Double-Q backup: the online network selects a valid successor row, the target network evaluates that row, and held-out policy quality is measured only by oracle re-scoring selected trajectories @DoubleDQN-vanHasselt2015.],
-) <fig:rollout-replay-doubleq-process>
+Selected-depth rasters and optional target-evaluation crops are separate oracle artifacts. They are aligned to selected steps or candidate rows and carry camera, shape, mask, crop-policy, and source-role metadata. They support successor-state experiments and audits, but their GT-mesh origin prevents them from being silently treated as sensor observations at deployment time.

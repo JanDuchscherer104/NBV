@@ -1,65 +1,48 @@
-#import "../../shared/macros.typ": *
 #import "../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
-= Draft Intake and Open Work
-
-#archive_note(
-  [This chapter preserves substantive planning material from the retired proposal and advisor handout. It is part of the thesis seed, not final thesis prose. Each item should either graduate into the main chapters, move to an appendix, or be removed after its source decision is resolved.],
-  source: [archived proposal and advisor handout],
-)
-
-== Seminar-to-Thesis Adoption Ledger
-
-The seminar paper remains historical evidence for the one-step scene-level oracle substrate: calibrated ground-truth-mesh depth rendering, point--mesh RRI, ordinal scorer diagnostics, and an immutable one-step store. The thesis adaptation changes the scientific task to oracle-defined target tasks, target-cropped error, actor-visible target descriptors, selected-transition replay, and conditional finite-horizon evaluation. Legacy shell sampling, run-specific W&B records, cache sizes, and dated audit stores remain development provenance until final manifests replace them; they are not current target-conditioned planning evidence.
+= Development Diary
 
 #archive_note(
-  [This adoption ledger was removed from the Method chapter because it described document migration rather than the final scientific method.],
-  source: [seminar paper; thesis source-order contract],
+  [This marked diary is a development-only record. It is excluded from submission mode; only evidence-backed definitions, protocols, and results graduate into the thesis body.],
+  source: [thesis mode contract],
 )
 
-== Schedule and Risk Control
+== Decisions Retained
 
-The planned thesis window from the proposal ran from 29 April 2026 to 30 September 2026. The roadmap owns the live schedule; this appendix keeps only the exit-condition logic. The work must progress from source-aligned proposal scope, through data/oracle validation, one-step target scoring, target-task rollouts, oracle-lookahead headroom, and #symb.rl.qh recovery, before bridge designs such as online discrete control or continuous policies are promoted. Final writing freezes only after manifests, coverage, failure cases, reproducible configs, and PDF artifacts are generated.
+The thesis keeps the privileged oracle and actor-visible policy as separate contracts, evaluates finite candidate sets under a shared validity mask, and treats target-specific reconstruction improvement as the common comparison signal. Rollout stores retain selected transitions and provenance rather than becoming a second implementation of the oracle or training pipeline.
 
-#conflict_todo(
-  [The absolute dates are retained from the proposal source but must be checked against the current roadmap before they appear as final thesis text.],
-  source: [proposal schedule; current roadmap],
-  gate: [roadmap synchronization],
+#decision_todo(
+  [Freeze the scene-disjoint analysis population and the minimum evidence scale only when the resolved manifests and exclusion ledger are available.],
+  source: [experimental-design contract],
+  gate: [confirmatory bundle freeze],
 )
 
-== Preliminary Thesis Outline
+== Failures That Changed the Plan
 
-The active thesis body now uses the expanded chapter graph: foundations, oracle/data generation, method, experimental design, results, discussion, and conclusion. That split keeps oracle state, target-RRI labels, candidate validity, and rollout/replay stores out of the learned-method chapter, while Chapter 04 owns the scene representation, descriptor/query pools, candidate-row architecture, and finite-horizon #symb.rl.qh model.
+Early rollout attempts reached the mesh-rendering path but exceeded available accelerator memory when candidate views were rendered without a bounded batch. This failure narrowed the immediate claim to implementation readiness and made peak memory, throughput, failure provenance, and completed-store validation explicit scale gates.
 
-#research_todo(
-  [Freeze whether any remaining appendix-only draft material should be promoted into the active 01--08 chapter graph.],
-  source: [proposal outline; current main.typ chapter graph],
-  gate: [thesis structure freeze],
+#validation_todo(
+  [Require completed stores, matching manifests, resource summaries, and recorded failures before extrapolating rollout bandwidth or storage demand.],
+  source: [rollout attempt artifacts],
+  gate: [cluster-readiness evidence],
 )
 
-== Open Decisions and Questions
+== Rejected Scope
 
-Open advisor decisions are the final scene-level split; symbolic target-match thresholds $(tau_mu, tau_"gap", tau_"support")$; the CORAL-to-#symb.rl.qh interface; the initial actor-visible crop descriptor ablation; the final evidence scale and subset rule; and whether any external or online scaling substrate preserves comparable mesh/oracle target-specific @relative-reconstruction-improvement:short labels. These choices affect the strength and scope of the final evidence, not the target-conditioned finite-candidate question.
+Continuous actions, online simulators, additional scene representations, and alternative reinforcement-learning families are excluded from the core study while the finite-candidate target-conditioned comparison remains unvalidated. They would change both the action contract and the supervision regime, so adding them now would weaken rather than extend the primary experiment.
 
-#decision_todo([Lock final scene-level split and acceptable scale fallback.], source: [advisor handout; roadmap], gate: [M4/M5])
+#prune_todo(
+  [Delete bridge material that cannot be tied to a concrete limitation or a matched follow-up experiment after the confirmatory analysis is complete.],
+  source: [scope review],
+  gate: [discussion freeze],
+)
 
-#decision_todo([Lock target-match thresholds, ambiguity gap, target eligibility, and target-invalid reporting.], source: [proposal problem; advisor handout], gate: [RQ2 protocol])
+== Next Evidence Gates
 
-#decision_todo([Lock whether the myopic scorer freezes, slow-finetunes, or end-to-end fine-tunes when fitting residual #symb.rl.qh.], source: [advisor value-model section], gate: [Q_H training plan])
+The next admissible evidence is a validated report bundle that fixes the study population, records target and candidate exclusions, supplies paired endpoint outcomes with uncertainty, and joins runtime and storage statistics to the same manifests. Only then can the manuscript replace the present availability statements with policy comparisons.
 
-#question_todo([Can a privileged critic use @ground-truth:short mesh, OBB, or segmentation cues without weakening the non-privileged learned-policy result?], source: [advisor handout], gate: [critic/surrogate decision])
-
-#question_todo([When, if ever, do RGB, semantics, or 3DGS enter the thesis core rather than a bridge study?], source: [proposal and advisor follow-up sections], gate: [M6 scope])
-
-#impl_todo([Validate that Rerun examples, replay integrity, shuffled-candidate evaluation, duplicate-row robustness, and valid-count sensitivity are available for final evidence reporting.], source: [advisor evidence contract], gate: [evaluation implementation audit])
-
-== Future Bridges Retained from Source Material
-
-Continuous control, external simulators, 3DGS control, SceneScript, VLM planning, IQL, CQL, BCQ, sequence decoding, soft/energy policies, PPO, SAC, privileged-teacher distillation, distributional #symb.rl.qh heads, EGNN candidate graphs, sparse/point backbones, and Hestia-style target-then-pose policies remain future or post-M5 ablation material unless the finite-candidate rollout store is stable and preserves the target-specific @relative-reconstruction-improvement:short comparison.
-
-#research_todo(
-  [Route each bridge to final discussion, appendix, or deletion after the implemented evidence is known. Do not promote these bridges to thesis-core claims without matched target-specific @relative-reconstruction-improvement:short supervision and oracle re-evaluation.],
-  source: [proposal method; advisor adoption ledger],
-  gate: [discussion/future-work pass],
+#impl_todo(
+  [Export the confirmatory report bundle, compile both thesis modes against it, and inspect the resulting tables and failure cases before freezing claims.],
+  source: [reporting contract],
+  gate: [claim freeze],
 )

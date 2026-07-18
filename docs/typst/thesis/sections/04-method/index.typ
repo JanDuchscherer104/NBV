@@ -1,14 +1,11 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
-#import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
 = Method <sec:thesis-method>
 
-ARIA-NBV is a target-conditioned, finite-candidate @next-best-view problem in the Project Aria / @aria-synthetic-environments:short / @egocentric-foundation-model-3d:short observation regime. The learned method tests whether bounded planning over a valid finite candidate table improves target reconstruction quality beyond myopic selection. It does not claim first-order continuous control, complete scene reconstruction, or fresh counterfactual image understanding.
+ARIA-NBV is formulated as target-conditioned selection from a finite candidate table. The implemented substrate generates and evaluates masked multi-step pose rollouts, records their selected transitions, and exposes a dense training view for a future finite-horizon value model. The current learned component remains the seminar-era myopic VIN scorer. Consequently, this chapter separates implemented data and replay contracts from the finite-horizon learning interface that they are intended to support; it does not report an untrained #symb.rl.qh model as a completed method.
 
-The chapter proceeds in dependency order. First, it states the representation requirements imposed by actor-visible target selection and counterfactual rollout. Second, it defines the descriptor protocol: the typed target, scene, history, candidate, relation, support, mask, and provenance tensors available to the actor. Third, it states the replay contract that turns valid candidate rows into selected transitions. Finally, it gives the value-model contract and the acceptance tests needed before heavier geometric attention or equivariant modules can be credited.
+The chapter first identifies the actor-visible state that current scorers and candidate generators actually consume. It then specifies the descriptors that are persisted or can be derived without privileged labels, the finite-action and replay semantics, and the tested symmetry and mask invariants. The final section defines the bounded #symb.rl.qh training problem and states the remaining implementation gap.
 
 #include "04-01-scene-representation-requirements.typ"
 

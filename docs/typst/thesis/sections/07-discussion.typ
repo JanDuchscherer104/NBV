@@ -1,17 +1,11 @@
-#import "../../shared/macros.typ": *
 #import "../../shared/symbols.typ": symb
-#import "../draft_markers.typ": *
 
 = Discussion <sec:thesis-discussion>
 
-The discussion will interpret failures and gains only after the prerequisite support checks are available. If oracle lookahead has little headroom, the correct conclusion is about the evaluated target set, candidate distribution, horizon, and support regime, not about neural planning capacity in general. If headroom exists but #symb.rl.qh fails to recover it, the diagnosis should separate target identity, candidate validity, scene-representation support, replay coverage, mask handling, calibration, and model capacity.
+The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, or learned model performs better than another.
 
-Representation conclusions should preserve the actor/oracle boundary. EFM3D/EVL can be credited as Aria-native local target and support evidence; sparse ray-aware memory, semidense support, and logged DINO-on-point descriptors should be discussed as actor-visible representation ablations. CubeRCNN-style ROI features remain detector/appearance baselines unless an ARIA/ASE target-evidence contract comparable to EFM3D is demonstrated.
+The rollout attempts also expose a concrete systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain the feasible branch factor and rollout volume before statistical efficiency becomes relevant. The observed out-of-memory failure is diagnostic evidence for batching and resource measurement, not evidence about the candidate distribution or planning objective. A completed pair of validated stores is required before throughput, storage, or failure rates can be generalized even to the configured training-source pilot.
 
-Sequence models, recurrent refinement, continuous control, 3D Gaussian Splatting, semantic planners, point or sparse backbones, spherical harmonics, residual heads, and attention ladders are bridge hypotheses. They may explain a measured bottleneck or define future experiments, but they are not consequences of the formal problem statement and cannot be presented as validated architecture choices without comparative evidence.
+The scientific limitations are more restrictive. The current attempts use training sources, the default JSON bundle is a schema fixture, and no held-out paired policy table supports the endpoint estimand. Metric repeatability and a meaningful-headroom gate have not yet been established, while the learned finite-horizon #symb.rl.qh comparison remains downstream of those checks. Accordingly, the thesis cannot yet distinguish negligible oracle headroom from inadequate candidate support, insufficient rollout coverage, target observability, or learned-control failure.
 
-#research_todo(
-  [After final experiments, move only evidence-backed limitations and future-work claims here; keep implementation recipes in Quarto implementation notes.],
-  source: [thesis migration plan],
-  gate: [final results pass],
-)
+The next evidential step is procedural rather than architectural: complete validated stores under resolved manifests, freeze the eligible population and exclusions, establish oracle stability, and only then run matched held-out policy comparisons. Additional representations, continuous control, or semantic planners would address different hypotheses and are not justified by the present readiness evidence.

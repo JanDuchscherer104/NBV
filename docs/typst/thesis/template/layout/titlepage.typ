@@ -19,8 +19,8 @@
   author: "",
   email: "",
   matriculationNumber: "",
-  startDate: datetime,
-  submissionDate: datetime,
+  startDate: none,
+  submissionDate: none,
   submissionDateText: "",
 ) = {
   let compact-table(entries) = {
@@ -98,14 +98,20 @@
 
   v(10mm)
   let examEntries = ()
-  examEntries.push(("First Examiner", firstExaminer))
-  if secondExaminer != "" {
+  if firstExaminer != none and firstExaminer != "" {
+    examEntries.push(("First Examiner", firstExaminer))
+  }
+  if secondExaminer != none and secondExaminer != "" {
     examEntries.push(("Second Examiner", secondExaminer))
   }
   if supervisors.len() > 0 {
     let supervisorField = "Supervisor" + if supervisors.len() > 1 { "s" } else { "" }
     examEntries.push((supervisorField, supervisors.join(", ")))
   }
-  examEntries.push(("Submission Date", if submissionDateText != "" { submissionDateText } else { submissionDate.display("[day].[month].[year]") }))
+  if submissionDateText != "" {
+    examEntries.push(("Submission Date", submissionDateText))
+  } else if submissionDate != none {
+    examEntries.push(("Submission Date", submissionDate.display("[day].[month].[year]")))
+  }
   compact-table(examEntries)
 }

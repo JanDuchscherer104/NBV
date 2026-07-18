@@ -4,29 +4,29 @@
 
 == State and Visibility Boundary
 
-The initial non-myopic experiment is a #emph[masked finite-horizon candidate-decision process], not a stationary deployment MDP. It is an offline, mesh-supervised #emph[controlled counterfactual replay] process over Project Aria-style @aria-synthetic-environments:short snippets: logged egocentric observations and frozen @egocentric-voxel-lifting:short evidence define the actor state, while @aria-synthetic-environments:short meshes and annotations provide target matching, rendered counterfactual geometry, labels, and evaluation @ProjectAria-ASE-2025 @EFM3D-straub2024 @VIN-NBV-frahm2025. The core scientific constraint is therefore a leakage boundary: oracle products may supervise a loss or report an upper bound, but they must not become inputs to the learned #symb.rl.qh actor unless the experiment is explicitly named as privileged.
+The thesis studies a masked finite-horizon candidate-decision process through offline, mesh-supervised counterfactual replay. Logged egocentric observations and frozen @egocentric-voxel-lifting:short evidence define the actor substrate, whereas @aria-synthetic-environments:short meshes, annotations, synthetic target instructions, rendered counterfactual geometry, and labels define privileged data generation @ProjectAria-ASE-2025 @EFM3D-straub2024 @VIN-NBV-frahm2025. An oracle product may supervise a loss or define an upper bound, but it may not enter the learned #symb.rl.qh actor unless the experiment is explicitly labelled privileged.
 
 #figure(
   align(center, image(
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor-visible and oracle-only state boundary for the V1 thesis protocol. Solid arrows denote legal #symb.rl.qh inputs: accumulated geometry, frozen @egocentric-voxel-lifting:short evidence, target descriptors, history, budget, candidates, masks, and invalid reasons. @ground-truth:short meshes, @ground-truth:short boxes, target crops, dense candidate renders, target labels, returns, and endpoint metrics remain on the oracle side and can supervise labels, upper bounds, evaluation, or explicitly named teacher ablations only.],
+  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are accumulated actor geometry, frozen @egocentric-voxel-lifting:short evidence, an explicitly declared target instruction, selected-view history, remaining budget, candidates, masks, and reason codes. @ground-truth:short geometry, target crops, dense counterfactual renders, labels, and endpoint evaluation remain privileged.],
 ) <fig:qh-actor-oracle-contract>
 
-The three state spaces referenced by the protocol tuple are the codomains of the shared state equations. The logged historic state contains only the original trajectory evidence,
+The logged historic state contains the recorded trajectory evidence,
 
 $
   #eqs.rl.s_hist
 $
 
-the counterfactual actor state is the deployable state for #symb.rl.qh decisions,
+the counterfactual actor state adds only evidence acquired along the selected synthetic history,
 
 $
   #eqs.rl.s_cf0
 $
 
-and the privileged oracle state is a label/evaluation state outside the actor input graph:
+and the oracle state adds privileged geometry and labels outside the actor input graph:
 
 $
   #eqs.rl.s_oracle
@@ -36,6 +36,6 @@ $
   #eqs.rl.nbv_process_tuple
 $
 
-The model separates logged snippet state, counterfactual actor state, and privileged oracle state because real egocentric trajectories contain modalities that are not available after synthetic view choices. The raw historic state is available on the logged @aria-synthetic-environments:short trajectory. The planner state keeps local root @egocentric-voxel-lifting:short evidence fixed while updating the fused geometry proxy, optional point-feature bank, selected-view history, remaining horizon metadata, target descriptor, candidates, masks, and reason codes. The privileged oracle state augments this with @ground-truth:short geometry, the matched target mesh, all-candidate rendered points, and oracle labels for target-task selection, label generation, upper-bound planning, and evaluation.
+This separation is necessary because the logged snippet contains modalities that cannot be regenerated after a synthetic action. The counterfactual state therefore keeps root features fixed and updates only the fused geometry proxy, selected-view history, budget metadata, finite candidates, masks, and reason codes. In the current oracle protocol, the target descriptor supplied to candidate generation is a privileged task instruction derived from the selected @ground-truth:short box; it is not evidence that an actor-visible detector found or localized the target. A deployable experiment must replace that instruction with an observation-derived descriptor and preserve the same crop-free actor interface.
 
-@ground-truth:short meshes, @ground-truth:short OBBs, @ground-truth:short crops, @ground-truth:short semantic labels, and all-candidate @ground-truth:short renders are oracle assets. They may define target tasks and labels, but they are not learned actor inputs unless a named upper-bound or privileged-teacher ablation explicitly says so. Invalidity is modeled as a constraint: masks apply before argmax, temperature softmax, loss targets, and bootstrap maximization. True infeasibility or absent evaluation samples are invalid rows; low immediate target support is reported as a diagnostic unless it prevents valid oracle evaluation.
+Invalidity is a constraint rather than a reward value. Geometry-invalid candidates receive a hard action mask and a persisted candidate reason code before policy selection, stochastic normalization, loss construction, and bootstrap maximization. A geometrically feasible candidate may still have low or negative target gain. Failure of the separate oracle evaluation does not create a candidate reason code: depending on the configured recipe, the affected row or table is skipped, or its `oracle_label_mask` and `q_train_mask` are cleared and the oracle failure is reported separately.

@@ -3,14 +3,18 @@
 #import "../shared/macros.typ": *
 #import "../shared/glossary.typ": *
 #import "../shared/notation.typ": print-thesis-symbols
-#import "draft_markers.typ": *
+#import "experiment_data.typ": thesis-report-settings, load-thesis-report
 #import "@preview/booktabs:0.0.4": *
+
+#let report-settings = thesis-report-settings()
+#let _publication-gate = load-thesis-report(
+  report-settings.path,
+  evidence-status: report-settings.evidence-status,
+  required-role: report-settings.required-role,
+)
 
 #set document(title: titleEnglish, author: author)
 #set text(font: "New Computer Modern")
-
-#let thesis_mode = sys.inputs.at("aria-thesis-mode", default: "development")
-#let development_mode = thesis_mode == "development"
 
 #show: booktabs-default-table-style
 #show: make-glossary
@@ -38,25 +42,16 @@
   submissionDate: submissionDate,
   submissionDateText: submissionDateText,
   abstract_en: [
-    This thesis investigates target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It uses target-specific @relative-reconstruction-improvement as the supervision and evaluation signal for finite candidate view selection, measures bounded oracle-lookahead headroom, and tests whether an actor-visible finite-horizon value model can recover part of that headroom under matched oracle re-evaluation.
-
-    #validation_todo(
-      [Rewrite this proposal-style abstract from the frozen evidence. The final abstract must distinguish training reward from endpoint evaluation, report the principal quantitative result and uncertainty, state the supported conclusion, and name the main limitation.],
-      source: [thesis peer review; current results scaffold; thesis questions and roadmap],
-      gate: [final results and claim freeze],
-    )
+    This thesis studies target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It defines target-specific @relative-reconstruction-improvement as an oracle signal, constructs finite candidate and replay contracts, and separates privileged label generation from the actor-visible inputs available to a learned finite-horizon value model. The evaluation is designed to measure oracle-lookahead headroom and the fraction recovered by a learned policy under matched oracle re-evaluation. The evidence available for this version establishes the evaluation contract and implementation readiness, but does not contain confirmatory held-out policy outcomes; it therefore supports no claim that a learned policy improves over the specified baselines. The main remaining limitation is the absence of a validated, population-level rollout bundle with paired endpoint estimates and uncertainty.
   ],
   abstract_de: [
-    #question_todo(
-      [Write the German abstract after the English thesis claim and final evidence scale are stable.],
-      source: [main thesis seed],
-    )
+    Diese Arbeit untersucht zielkonditionierte, qualitätsgetriebene Planung der nächsten besten Ansicht für die egozentrische 3D-Rekonstruktion in @aria-synthetic-environments. Sie definiert die zielspezifische @relative-reconstruction-improvement als Orakelsignal, legt Verträge für endliche Kandidatenmengen und Replay-Daten fest und trennt die privilegierte Erzeugung von Trainingssignalen von den für ein gelerntes Modell mit endlichem Horizont sichtbaren Eingaben. Die Evaluation soll den Spielraum einer vorausschauenden Orakelstrategie und den durch eine gelernte Strategie erreichten Anteil unter identischer Orakel-Neubewertung messen. Die für diese Fassung verfügbare Evidenz belegt den Evaluationsvertrag und die Implementierungsbereitschaft, enthält jedoch keine bestätigenden Ergebnisse auf zurückgehaltenen Daten. Daher wird keine Überlegenheit einer gelernten Strategie gegenüber den festgelegten Baselines behauptet. Die wesentliche verbleibende Einschränkung ist das Fehlen eines validierten Rollout-Datensatzes auf Populationsebene mit gepaarten Endpunktschätzungen und Unsicherheitsangaben.
   ],
   acknowledgement: [
-    #question_todo([Fill acknowledgements close to submission.], source: [main thesis seed])
+    Acknowledgements are omitted from this version.
   ],
   transparency_ai_tools: [
-    AI-assisted tools were used to organize literature notes, check consistency across repository documentation, and draft parts of the thesis seed. The author remains responsible for the final research scope, technical claims, citations, implementation, experiments, and submitted document. #validation_todo([Update this statement against final institutional requirements before submission.], source: [proposal transparency text])
+    Generative-AI tools supported literature-note organization, consistency checks, and language revision. The author selected the research questions, verified sources and technical claims, implemented and evaluated the system, and remains responsible for the submitted work.
   ],
   front_matter_after_contents: [
     #heading(numbering: none, outlined: false)[Glossary and Abbreviations]
@@ -74,7 +69,7 @@
     #heading(numbering: none, outlined: false)[List of Symbols]
     #print-thesis-symbols()
   ],
-  appendix_content: if development_mode [#include "appendix/index.typ"] else { none },
+  appendix_content: [#include "appendix/index.typ"],
 )
 
 #include "sections/01-introduction.typ"

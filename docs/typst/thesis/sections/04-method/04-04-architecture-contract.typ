@@ -1,31 +1,19 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
-#import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
-== Architecture Contract and Geometric Acceptance Tests <sec:thesis-method-geometry-contract>
+== Geometric and Mask Acceptance Tests <sec:thesis-method-geometry-contract>
 
-// source: docs/contents/theory/candidate_view_dependence.qmd:83-89 and docs/contents/theory/candidate_view_dependence.qmd:384-421 define the candidate-set architecture ladder.
-// source: aria_nbv/aria_nbv/rollouts/zarr_store.py:2502-2603 defines the derived q_h training view, masks, rewards, and TD links.
-The geometric-learning rationale in @sec:thesis-geometric-learning-theory becomes replay-field acceptance tests. Each module must answer a symmetry or provenance requirement: candidate rows need row-level permutation equivariance; invalid and padded rows need mask isolation; candidate, target, and history geometry need local frames; and actor/oracle fields need separate provenance. The task is gravity aligned and egocentric, so exact global $op("SO")(3)$ or $op("SE")(3)$ equivariance is an ablation claim, not the default system claim. This is the scientific role of the architecture section: it turns representation requirements into falsifiable tests rather than adding attention layers until validation loss improves @GeometricDeepLearning-bronstein2021.
+// implementation evidence: vin/types/prediction.py; vin/modules/heads.py; tests/lightning/test_vin_batch_collate.py; tests/rollouts/test_zarr_store.py
+Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned candidate inputs by $Pi$ should therefore permute the outputs by the same amount,
 
-#figure(
-  align(center, image(
-    "../../figures/qh_symmetry_acceptance_contract.pdf",
-    width: 100%,
-  )),
-  caption: [Minimum symmetry and provenance contract for the finite-candidate #symb.rl.qh model. The contract requires row-level equivariance, mask isolation, local-frame geometry, target-local directional memory, and oracle/actor provenance gates; it does not claim exact global $op("SE")(3)$ equivariance.],
-) <fig:qh-symmetry-contract>
+$
+  f_theta(Pi X_t, Pi bold(m)_t) = Pi f_theta(X_t, bold(m)_t).
+$
 
-The first model family should therefore use scalar invariant and local-frame relative features before heavier equivariant tensor machinery. Reference-pose transforms such as #symb.spatial.ref_candidate_transform and candidate-local target relations such as #symb.spatial.candidate_target_rel_feat are deliberate gauge choices: they remove irrelevant global-coordinate dependence while preserving yaw, elevation, distance, gravity/up, frustum, and approach-direction signals needed for visibility. Directional history is a separate object. A selected view direction belongs on $bb(S)^2$ and should be stored as a target-local histogram, second-moment matrix, or low-order spherical-harmonic memory rather than being merged into generic pose features. This separation follows the geometric-learning distinction between physical symmetries and useful task structure, and it protects the interpretation of each ablation: a QCNet-style relative positional bias tests candidate-candidate geometry, while directional memory tests whether the target has already been observed from similar directions @GeometricDeepLearning-bronstein2021 @zhou2023query @e3nn-SphericalHarmonics-2025.
+The current VINv3 scorer uses row-wise maps, shared-token queries, and symmetric normalization without candidate-index embeddings, so its deterministic evaluation graph has this structural property. Supporting tests verify that candidate shuffling preserves row-aligned poses, cameras, labels, and the padded tail, and the metric implementation explicitly inverse-aligns a supplied permutation. These tests validate the data and metric surfaces; they are not yet an end-to-end permutation test for a finite-horizon model.
 
-The architecture acceptance tests are as important as validation loss. Row-shuffle tests must satisfy $f_theta (Pi X_t, m_t)=Pi f_theta (X_t, m_t)$ up to numerical tolerance for every per-candidate output used by selection. Mask tests must show that invalid rows cannot alter valid scores except through explicit valid-count or support features. Valid-count and duplicate-row stress tests check whether attention normalization has corrupted absolute target-specific @relative-reconstruction-improvement:short calibration. Only after the independent scorer and candidate-to-state query controls pass these tests should DeepSets context, masked Set Transformer interaction, Fisher/SCONE overlap bias, QCNet-style local relative positional encoding, or EGNN-style candidate graphs be credited as architectural gains @DeepSets-zaheer2017 @SetTransformer-lee2019 @FisherRF-jiang2024 @SCONE-guedon2022 @EGNN-satorras2021.
+Masks have two distinct meanings. The valid-action mask gates selection and any successor maximization, whereas the narrower training mask also requires a finite oracle target. The replay-store tests establish that the training mask is a subset of the valid-action mask, padding rows are invalid, invalid rewards remain `NaN`, and selected temporal-difference rewards equal the selected row's target root gain. A future #symb.rl.qh implementation must apply the valid-action mask to argmax, softmax, and bootstrap operations, use the training mask for supervised losses, and ensure that padded or invalid rows cannot change valid values.
 
-The token design follows the same separation of concerns. State tokens summarize known actor-visible evidence before the next view; candidate tokens describe one finite action and its mask/reason code; relation tokens describe target/candidate/history geometry; label tokens store GT target crops, target gains, endpoint metrics, and TD targets outside the actor graph. The first model should therefore start with a per-candidate scorer and candidate-to-state cross-attention; pooled set context or masked candidate-candidate attention is an ablation only when interaction is needed. This makes the proposed ladder comparable to Deep Sets and Set Transformer controls without importing their assumptions as untested defaults @DeepSets-zaheer2017 @SetTransformer-lee2019.
+Coordinate handling is deliberately weaker than a claim of exact $op("SE")(3)$ equivariance. The store retains world poses for reproducibility and root-relative poses for model construction. The current task is gravity-aligned and metric, so range, height, yaw, camera direction, target orientation, and motion constraints are physical variables rather than nuisances. Local relative features may reduce dependence on the arbitrary world origin, but no exact global-equivariance result is claimed @GeometricDeepLearning-bronstein2021.
 
-#research_todo(
-  [Treat Fisher/SCONE overlap attention and QCNet-style relative encodings as ablation hypotheses until row-shuffle, mask-isolation, and paired oracle policy evidence show they improve target-specific endpoint gain over simpler controls.],
-  source: [autoresearch thesis-lit-review report; docs/contents/theory/candidate_view_dependence.qmd],
-  gate: [A2/A3/A4 architecture ablation tables],
-)
+Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, rendered depth, and target crops may supervise or audit a model but may not enter its actor graph unless the experiment is explicitly labelled privileged. The replay schema and reason-code versions make this boundary inspectable. An implemented finite-horizon model will require its own source-dropout, row-permutation, mask-isolation, duplicate-row, and local-frame tests before architectural comparisons are scientifically interpretable.

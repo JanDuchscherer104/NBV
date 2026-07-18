@@ -1,12 +1,8 @@
 #import "../../../shared/macros.typ": *
-#import "../../../shared/symbols.typ": symb
-#import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": *
-#import "@preview/booktabs:0.0.4": *
 
 = Oracle and Data Generation <sec:thesis-oracle-data-generation>
 
-This chapter defines the non-deployable machinery that turns logged ASE snippets into supervised target-conditioned NBV tasks. It owns the actor/oracle state boundary, target-task selection, candidate generation, hard validity masks, target-specific RRI labels, and rollout/replay evidence. The learned method in @sec:thesis-method consumes actor-visible products from this pipeline; GT meshes, GT target crops, dense candidate renders, and oracle lookahead remain label, teacher, upper-bound, or evaluation assets.
+This chapter defines the non-deployable pipeline that turns logged ASE snippets into supervised target-conditioned @next-best-view:short tasks. It separates actor state from privileged data-generation state, specifies target-task and candidate construction, defines hard invalidity and target-specific @relative-reconstruction-improvement:short, and records the resulting selected counterfactual chains. The learned method in @sec:thesis-method may consume only the actor-side projection of these artifacts; @ground-truth:short geometry, counterfactual renders, labels, and oracle search remain instruction, supervision, or evaluation assets.
 
 #include "03-01-state-and-visibility.typ"
 
