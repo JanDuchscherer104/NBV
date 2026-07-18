@@ -7,10 +7,12 @@ mutating persisted training data.
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from pathlib import Path
 
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import torch
 
@@ -23,7 +25,9 @@ from ...data_handling.offline.diagnostics import (
     collect_vin_offline_dataset_stats,
 )
 from ...data_handling.offline.source import VinOfflineSourceConfig
+from ...dataset_topology import build_dataset_topology
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
+from ...rollouts.inspection import discover_rollout_store_paths
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
 from .stored_rollouts import render_stored_rollouts_panel
@@ -628,6 +632,20 @@ def render_offline_dataset_page() -> None:
             st.error(f"Could not resolve VIN offline store: {type(exc).__name__}: {exc}")
         store = None
 
+    workspace = st.segmented_control(
+        "VIN inspection workspace",
+        options=["Diagnostics", "Trust & Topology"],
+        default="Diagnostics",
+        key="vin_offline_dataset_workspace",
+        width="stretch",
+    )
+    if workspace == "Trust & Topology":
+        if store is None:
+            st.info("Select a VIN store to resolve its artifact topology.")
+            return
+        _render_vin_topology(store=store, paths=paths)
+        return
+
     if launch_rerun:
         try:
             if store is None:
@@ -709,6 +727,104 @@ def render_offline_dataset_page() -> None:
         binner_classes=binner_classes,
         log_y=log_y,
         coverage=coverage,
+    )
+
+
+def _render_vin_topology(*, store: VinOfflineStoreConfig, paths: PathConfig) -> None:
+    """Render the shared read-only artifact topology from the VIN page."""
+
+    rollout_paths = discover_rollout_store_paths(paths.offline_cache_dir)
+    options: list[Path | None] = [None, *rollout_paths]
+    rollout_path = st.selectbox(
+        "Rollout store to resolve against this VIN manifest",
+        options=options,
+        format_func=lambda value: "VIN only" if value is None else str(value),
+        key="vin_topology_rollout_store",
+    )
+    try:
+        topology = build_dataset_topology(
+            rollout_store_dir=rollout_path,
+            vin_store_dirs=[store.store_dir],
+            path_config=paths,
+        )
+    except Exception as exc:
+        st.error(f"Could not resolve dataset topology: {type(exc).__name__}: {exc}")
+        return
+
+    st.subheader("Trust & Topology")
+    st.caption(
+        "Manifest hashes and persisted identifiers determine links. Inferred paths, missing artifacts, and ambiguity remain explicit."
+    )
+    with st.popover("How to read the topology", icon="ℹ️"):
+        st.markdown(
+            """
+**Question**
+
+Which VIN, rollout, source, mesh, report, and Rerun artifacts are physically embedded or resolvable locally?
+
+**Population / grain**
+
+Artifact nodes and typed pointer edges. Source rows stay collapsed until drill-down.
+
+**Metric / units**
+
+Edge width is relationship count, not bytes, sample count, or scientific effect size.
+
+**Denominator / masks**
+
+All topology relationships recorded by the selected manifests and `PathConfig` resolution.
+
+**Comparison conditions**
+
+Compare resolution classes only. A wide node does not imply better data.
+
+**Expected pattern**
+
+Manifest hashes resolve uniquely and required modalities have a clear owner.
+
+**Warnings / failures**
+
+Missing and ambiguous links report incomplete local provenance; inferred paths are weaker than persisted pointers.
+
+**Evidence role / sources**
+
+Provenance from VIN and rollout manifests, sample indexes, configured roots, and mesh locations.
+"""
+        )
+    sankey = topology.sankey_data()
+    if sankey.get("link", {}).get("source"):
+        fig = go.Figure(go.Sankey(node=sankey["node"], link=sankey["link"]))
+        fig.update_layout(title="VIN, rollout, mesh, report, and Rerun artifact topology", height=500)
+        st.plotly_chart(fig, width="stretch")
+    modality_rows = topology.modality_rows()
+    if modality_rows:
+        st.dataframe(modality_rows, hide_index=True, width="stretch")
+    with st.expander("Selected-source drill-down and Rich-compatible tree"):
+        source_rows = topology.source_rows()
+        if source_rows:
+            source_id = st.selectbox(
+                "Source row",
+                options=[int(row["source_row_id"]) for row in source_rows],
+                key="vin_topology_source_row",
+            )
+            topology = build_dataset_topology(
+                rollout_store_dir=rollout_path,
+                vin_store_dirs=[store.store_dir],
+                path_config=paths,
+                selected_source_row_id=int(source_id),
+            )
+            st.dataframe(
+                [row for row in source_rows if int(row["source_row_id"]) == int(source_id)],
+                hide_index=True,
+                width="stretch",
+            )
+        st.code(topology.plain_text_tree(), language="text")
+    payload = json.dumps(topology.to_jsonable(), indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    st.download_button(
+        "Download topology JSON",
+        data=payload,
+        file_name="vin-dataset-topology.json",
+        mime="application/json",
     )
 
 

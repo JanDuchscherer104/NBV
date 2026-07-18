@@ -226,6 +226,78 @@ class RerunInspectorRolloutDepthConfig(BaseConfig):
     """Raise when selected-depth rows are missing instead of logging metadata warnings."""
 
 
+class RerunInspectorLayerState(BaseConfig):
+    """Control whether one Rerun layer is recorded and initially shown.
+
+    ``included`` controls entity production. ``visible`` is a blueprint-only
+    initial-view preference and therefore cannot enable an excluded entity.
+    """
+
+    included: bool = True
+    """Whether entities owned by this layer are written to the recording."""
+
+    visible: bool = True
+    """Whether included entities are initially visible in the Rerun blueprint."""
+
+    @model_validator(mode="after")
+    def _visible_requires_included(self) -> "RerunInspectorLayerState":
+        """Reject a blueprint visibility request for an excluded layer."""
+
+        if self.visible and not self.included:
+            raise ValueError("A Rerun layer cannot be visible when it is not included.")
+        return self
+
+
+class RerunInspectorRolloutLayersConfig(BaseConfig):
+    """Resolve recording inclusion and initial visibility by scientific role.
+
+    The layer groups are presentation policy only. They do not alter rollout
+    masks, candidate ordering, geometry, RRI values, or source-store content.
+    Presets are resolved into these explicit fields before each launch so a
+    saved TOML is a complete, reproducible record of the requested view.
+    """
+
+    actor_context: RerunInspectorLayerState = Field(default_factory=RerunInspectorLayerState)
+    """Actor-visible semidense, detected-object, and EFM context."""
+
+    oracle_mesh_gt: RerunInspectorLayerState = Field(
+        default_factory=lambda: RerunInspectorLayerState(included=True, visible=False)
+    )
+    """Privileged GT mesh, GT OBB, reference-pose, and trajectory overlays."""
+
+    target_overlay: RerunInspectorLayerState = Field(default_factory=RerunInspectorLayerState)
+    """Target identity, actor-visible target box, and matched evaluation overlay."""
+
+    rollout_candidates: RerunInspectorLayerState = Field(
+        default_factory=lambda: RerunInspectorLayerState(included=True, visible=False)
+    )
+    """Selected and valid rollout candidate cameras, centers, and group summaries."""
+
+    invalid_candidates: RerunInspectorLayerState = Field(
+        default_factory=lambda: RerunInspectorLayerState(included=True, visible=False)
+    )
+    """Invalid rollout candidate cameras, centers, and reason groups."""
+
+    selected_path: RerunInspectorLayerState = Field(default_factory=RerunInspectorLayerState)
+    """Factual selected rollout path in world coordinates."""
+
+    selected_depth: RerunInspectorLayerState = Field(
+        default_factory=lambda: RerunInspectorLayerState(included=True, visible=False)
+    )
+    """Privileged selected-action mesh-depth evaluation artifact."""
+
+    rgb_depth_context: RerunInspectorLayerState = Field(
+        default_factory=lambda: RerunInspectorLayerState(included=False, visible=False)
+    )
+    """Optional RGB and depth camera context loaded from source data."""
+
+    scalar_plots: RerunInspectorLayerState = Field(default_factory=RerunInspectorLayerState)
+    """Rollout RRI and diagnostics time-series entities."""
+
+    metadata: RerunInspectorLayerState = Field(default_factory=RerunInspectorLayerState)
+    """Sample, rollout, step, target, and resolved-config metadata documents."""
+
+
 class RerunInspectorEfmVoxelConfig(BaseConfig):
     """Display actor-visible EVL/EFM fields with their source provenance intact.
 
@@ -372,6 +444,9 @@ class RerunOfflineInspectorConfig(TargetConfig[Any]):
     rollout_depths: RerunInspectorRolloutDepthConfig = Field(default_factory=RerunInspectorRolloutDepthConfig)
     """Selected-depth visualization policy for rollout-Zarr inspection."""
 
+    rollout_layers: RerunInspectorRolloutLayersConfig = Field(default_factory=RerunInspectorRolloutLayersConfig)
+    """Rollout entity inclusion and initial blueprint visibility policy."""
+
     efm_voxels: RerunInspectorEfmVoxelConfig = Field(default_factory=RerunInspectorEfmVoxelConfig)
     """EFM voxel-field visualization settings."""
 
@@ -392,6 +467,8 @@ __all__ = [
     "RerunInspectorPerformanceConfig",
     "RerunInspectorPrimitivesConfig",
     "RerunInspectorRolloutDepthConfig",
+    "RerunInspectorLayerState",
+    "RerunInspectorRolloutLayersConfig",
     "RerunInspectorRolloutPlotConfig",
     "RerunInspectorSelectionConfig",
     "RerunOfflineInspectorConfig",

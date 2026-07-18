@@ -16,6 +16,7 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.rerun_inspector._config import RerunOfflineInspectorConfig
 from aria_nbv.rerun_inspector._entities import ENTITY_WORLD
+from aria_nbv.rerun_inspector._layers import resolve_rollout_layer_config
 from aria_nbv.rerun_inspector._rollout_zarr import (
     ENTITY_ROLLOUT_DIAGNOSTICS_ROOT,
     ENTITY_ROLLOUT_INVALID_FRACTION,
@@ -259,12 +260,12 @@ def test_rollout_zarr_logger_logs_multistep_candidate_layers(
     rollout_overrides = _world_view_overrides_from_blueprint(fake.blueprints[-1])
     assert rollout_contents == ["+ /world/**"]
     assert all(not rule.startswith("- ") for rule in rollout_contents)
-    assert "/world/efm/obbs/detected" in rollout_overrides
+    assert "/world/efm/obbs/detected" not in rollout_overrides
     assert f"/{chain_root}/step_000/valid" in rollout_overrides
     assert f"/{chain_root}/step_000/invalid" in rollout_overrides
     assert f"/{chain_root}/step_001/valid" in rollout_overrides
     assert f"/{chain_root}/step_001/invalid" in rollout_overrides
-    assert f"/{chain_root}/step_000/selected" not in rollout_overrides
+    assert f"/{chain_root}/step_000/selected" in rollout_overrides
     assert all(override.visible.as_arrow_array().to_pylist() == [False] for override in rollout_overrides.values())
     selected_path_entity = f"{chain_root}/selected_path"
     assert selected_path_entity in fake.logged
@@ -710,3 +711,47 @@ def test_rollout_zarr_logger_required_context_uses_rollout_lineage(
     selection = calls[0][1]
     assert selection.scene_id == "fixture_box"
     assert selection.snippet_id == "smoke"
+
+
+def test_minimal_layer_policy_excludes_candidates_depth_and_scalars(tmp_path: Path) -> None:
+    """Excluded groups must not create entities in the saved recording."""
+
+    store_dir = _fixture_rollout_store(tmp_path)
+    cfg = RerunOfflineInspectorConfig()
+    cfg.selection.rollout_context_mode = "off"
+    cfg.rollout_layers = resolve_rollout_layer_config("Minimal selected path")
+    fake = _FakeRerun()
+
+    rows = RerunRolloutZarrLogger(cfg, rr_module=fake).log_store(store_dir=store_dir, rollout_index=0)
+
+    chain_root = f"{ENTITY_ROLLOUT_ROOT}/rollout_{rows.rollout_row_id:06d}/chain_{rows.chain_id:06d}"
+    assert f"{chain_root}/selected_path" in fake.logged
+    assert f"{chain_root}/target/center" in fake.logged
+    assert not any("/candidate_shell_" in path for path in fake.logged)
+    assert not any("/depth" in path or "/points" in path for path in fake.logged)
+    assert not any(path.startswith(ENTITY_ROLLOUT_RRI_ROOT) for path in fake.logged)
+    assert not any(path.startswith(ENTITY_ROLLOUT_DIAGNOSTICS_ROOT) for path in fake.logged)
+
+
+def test_included_hidden_candidates_are_blueprint_hidden_and_invalid_are_absent(tmp_path: Path) -> None:
+    """Inclusion controls logging while visibility controls only the blueprint."""
+
+    store_dir = _fixture_rollout_store(tmp_path)
+    cfg = RerunOfflineInspectorConfig()
+    cfg.selection.rollout_context_mode = "off"
+    cfg.rollout_layers = resolve_rollout_layer_config(
+        "Candidate debugging",
+        {
+            "rollout_candidates": {"included": True, "visible": False},
+            "invalid_candidates": {"included": False, "visible": False},
+        },
+    )
+    fake = _FakeRerun()
+
+    rows = RerunRolloutZarrLogger(cfg, rr_module=fake).log_store(store_dir=store_dir, rollout_index=0)
+
+    chain_root = f"{ENTITY_ROLLOUT_ROOT}/rollout_{rows.rollout_row_id:06d}/chain_{rows.chain_id:06d}"
+    assert any(f"{chain_root}/step_" in path and "/valid/" in path for path in fake.logged)
+    assert not any(f"{chain_root}/step_" in path and "/invalid/" in path for path in fake.logged)
+    overrides = _world_view_overrides_from_blueprint(fake.blueprints[-1])
+    assert any(path.startswith(f"/{chain_root}/step_") and path.endswith("/valid") for path in overrides)

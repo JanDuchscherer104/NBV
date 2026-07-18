@@ -123,23 +123,28 @@ class RerunRolloutZarrLogger:
         self._log_rollout_blueprint(rows=rows, steps=steps)
         self._log_static_context(reader=reader, rows=rows, target=target)
         self._log_rollout_target(target)
-        self._log_static_metadata(reader=reader, rows=rows, validation_errors=validation.errors, target=target)
+        if self.config.rollout_layers.metadata.included:
+            self._log_static_metadata(reader=reader, rows=rows, validation_errors=validation.errors, target=target)
         self._log_rollout_plots(reader=reader, selected_rows=rows)
 
         selected_path: list[list[float]] = _rollout_root_path(rows)
+        rollout_depths = self.config.rollout_depths
+        if not self.config.rollout_layers.selected_depth.included:
+            rollout_depths = rollout_depths.model_copy(update={"enabled": False})
         for order, stored_step in enumerate(steps):
             self._set_rollout_step_time(order)
             step = _step_payload(
                 reader,
                 rollout=rows,
                 step=stored_step,
-                rollout_depths=self.config.rollout_depths,
+                rollout_depths=rollout_depths,
                 target_metadata=target.metadata,
             )
             self._log_step(step)
             if step.selected_center is not None:
                 selected_path.append(step.selected_center.tolist())
-            self._log_selected_path(rows=rows, selected_path=selected_path)
+            if self.config.rollout_layers.selected_path.included:
+                self._log_selected_path(rows=rows, selected_path=selected_path)
         return rows
 
     def _log_rollout_blueprint(self, *, rows: StoredRollout, steps: tuple[StoredStep, ...]) -> None:
@@ -147,7 +152,10 @@ class RerunRolloutZarrLogger:
 
         log_default_inspector_blueprint(
             self.rr,
-            hidden_world_paths=_rollout_candidate_group_hidden_paths(rows=rows, steps=steps),
+            hidden_world_paths=_rollout_layer_hidden_paths(config=self.config, rows=rows, steps=steps),
+            use_default_hidden_paths=False,
+            scalar_plots_visible=self.config.rollout_layers.scalar_plots.visible,
+            metadata_visible=self.config.rollout_layers.metadata.visible,
         )
 
     def _log_static_context(
@@ -163,6 +171,10 @@ class RerunRolloutZarrLogger:
         if mode == "off":
             self._context_warnings.append("VIN context logging disabled by selection.rollout_context_mode='off'.")
             return
+        context_config = _rollout_context_config(self.config)
+        if not _rollout_context_is_included(context_config):
+            self._context_warnings.append("VIN context logging excluded by rollout layer policy.")
+            return
         selection = _rollout_context_selection(rows=rows, fallback=self.config.selection)
         if selection is None:
             message = "No rollout scene/snippet or explicit sample selector available for VIN context logging."
@@ -173,9 +185,9 @@ class RerunRolloutZarrLogger:
         try:
             selected = select_rerun_sample(dataset_config=self.config.dataset.offline, selection=selection)
             inventory = collect_visual_inventory(selected.sample)
-            validate_required_inventory(self.config, inventory)
+            validate_required_inventory(context_config, inventory)
             logger = RerunOfflineLogger(
-                self.config,
+                context_config,
                 rr_module=self.rr,
                 target_obb_hint=str(
                     target.metadata.get("matched_gt_target_id")
@@ -187,7 +199,8 @@ class RerunRolloutZarrLogger:
             )
             logger.log_sample(sample=selected.sample, inventory=inventory, selection=selected.description)
             logger.log_metadata(sample=selected.sample, inventory=inventory, selection=selected.description)
-            self._log_matched_gt_target_obb(sample=selected.sample, target=target)
+            if self.config.rollout_layers.target_overlay.included:
+                self._log_matched_gt_target_obb(sample=selected.sample, target=target)
         except Exception as exc:
             if mode == "required":
                 raise
@@ -283,7 +296,8 @@ class RerunRolloutZarrLogger:
     def _log_rollout_target(self, target: "_RolloutTargetPayload") -> None:
         """Log a visible target overlay scoped to the selected rollout chain."""
 
-        if target.center is not None and np.isfinite(target.center).all():
+        include_overlay = self.config.rollout_layers.target_overlay.included
+        if include_overlay and target.center is not None and np.isfinite(target.center).all():
             self.rr.log(
                 f"{target.entity_root}/center",
                 self.rr.Points3D(
@@ -294,7 +308,8 @@ class RerunRolloutZarrLogger:
                 static=True,
             )
         if (
-            target.center is not None
+            include_overlay
+            and target.center is not None
             and target.extents is not None
             and target.pose_world_object is not None
             and np.isfinite(target.center).all()
@@ -313,40 +328,69 @@ class RerunRolloutZarrLogger:
                 self.rr.AnyValues(**compact_ase_atek_identifiers(target.metadata)),
                 static=True,
             )
-        self.rr.log(
-            f"{target.entity_root}/metadata",
-            self.rr.TextDocument(
-                json.dumps(compact_ase_atek_identifiers(target.metadata), indent=2, sort_keys=True),
-                media_type="application/json",
-            ),
-            static=True,
-        )
+        if self.config.rollout_layers.metadata.included:
+            self.rr.log(
+                f"{target.entity_root}/metadata",
+                self.rr.TextDocument(
+                    json.dumps(compact_ase_atek_identifiers(target.metadata), indent=2, sort_keys=True),
+                    media_type="application/json",
+                ),
+                static=True,
+            )
 
     def _log_step(self, step: "_RolloutStepPayload") -> None:
-        for candidate in step.candidates:
+        candidates = [candidate for candidate in step.candidates if self._candidate_layer_included(candidate)]
+        camera_candidates = list(candidates)
+        included_row_ids = {candidate.row_id for candidate in camera_candidates}
+        if self.config.rollout_layers.selected_depth.included:
+            camera_candidates.extend(
+                candidate
+                for candidate in step.candidates
+                if candidate.selected and candidate.row_id not in included_row_ids
+            )
+        for candidate in camera_candidates:
             self._log_candidate_camera(candidate)
             self._log_selected_depth_representation(candidate)
+        for candidate in candidates:
             self._log_candidate_center(candidate)
-        self._log_candidate_group_centers(step)
-        self.rr.log(ENTITY_ROLLOUT_VALID_COUNT, self.rr.Scalars(float(step.valid_candidate_count)))
-        self.rr.log(ENTITY_ROLLOUT_SELECTED_PROBABILITY, self.rr.Scalars(_finite_or_zero(step.selected_probability)))
-        self.rr.log(ENTITY_ROLLOUT_SELECTED_TARGET_RRI, self.rr.Scalars(_finite_or_zero(step.selected_target_rri)))
-        self.rr.log(
-            ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN,
-            self.rr.Scalars(_finite_or_zero(step.selected_target_root_gain)),
+        self._log_candidate_group_centers(step, candidates=candidates)
+        if self.config.rollout_layers.scalar_plots.included:
+            self.rr.log(ENTITY_ROLLOUT_VALID_COUNT, self.rr.Scalars(float(step.valid_candidate_count)))
+            self.rr.log(
+                ENTITY_ROLLOUT_SELECTED_PROBABILITY,
+                self.rr.Scalars(_finite_or_zero(step.selected_probability)),
+            )
+            self.rr.log(
+                ENTITY_ROLLOUT_SELECTED_TARGET_RRI,
+                self.rr.Scalars(_finite_or_zero(step.selected_target_rri)),
+            )
+            self.rr.log(
+                ENTITY_ROLLOUT_SELECTED_TARGET_ROOT_GAIN,
+                self.rr.Scalars(_finite_or_zero(step.selected_target_root_gain)),
+            )
+            self.rr.log(ENTITY_ROLLOUT_INVALID_FRACTION, self.rr.Scalars(_finite_or_zero(step.invalid_fraction)))
+            self.rr.log(ENTITY_ROLLOUT_SELECTED_POSITION_ID, self.rr.Scalars(float(step.selected_position_id)))
+        if self.config.rollout_layers.metadata.included:
+            self.rr.log(
+                step.metadata_entity,
+                self.rr.TextDocument(
+                    json.dumps(compact_ase_atek_identifiers(step.metadata), indent=2, sort_keys=True),
+                    media_type="application/json",
+                ),
+            )
+
+    def _candidate_layer_included(self, candidate: "_RolloutCandidatePayload") -> bool:
+        """Return whether the candidate's validity class is recorded."""
+
+        layer = (
+            self.config.rollout_layers.rollout_candidates
+            if candidate.valid
+            else self.config.rollout_layers.invalid_candidates
         )
-        self.rr.log(ENTITY_ROLLOUT_INVALID_FRACTION, self.rr.Scalars(_finite_or_zero(step.invalid_fraction)))
-        self.rr.log(ENTITY_ROLLOUT_SELECTED_POSITION_ID, self.rr.Scalars(float(step.selected_position_id)))
-        self.rr.log(
-            step.metadata_entity,
-            self.rr.TextDocument(
-                json.dumps(compact_ase_atek_identifiers(step.metadata), indent=2, sort_keys=True),
-                media_type="application/json",
-            ),
-        )
+        return layer.included
 
     def _log_rollout_plots(self, *, reader: RolloutZarrStoreReader, selected_rows: StoredRollout) -> None:
-        if not self.config.rollout_plots.enabled:
+        if not self.config.rollout_plots.enabled or not self.config.rollout_layers.scalar_plots.included:
             return
         plot_rows = _resolve_plot_rollout_rows(
             reader,
@@ -465,7 +509,12 @@ class RerunRolloutZarrLogger:
             ),
         )
 
-    def _log_candidate_group_centers(self, step: "_RolloutStepPayload") -> None:
+    def _log_candidate_group_centers(
+        self,
+        step: "_RolloutStepPayload",
+        *,
+        candidates: list["_RolloutCandidatePayload"],
+    ) -> None:
         """Log low-cardinality candidate center groups for fast Rerun filtering."""
 
         group_specs = (
@@ -474,7 +523,7 @@ class RerunRolloutZarrLogger:
         )
         for group_name, attr_name in group_specs:
             grouped: dict[str, list[_RolloutCandidatePayload]] = {}
-            for candidate in step.candidates:
+            for candidate in candidates:
                 grouped.setdefault(str(getattr(candidate, attr_name)), []).append(candidate)
             for value, candidates in grouped.items():
                 points = np.stack([candidate.center for candidate in candidates], axis=0).astype(np.float32)
@@ -498,7 +547,7 @@ class RerunRolloutZarrLogger:
                 )
 
     def _log_selected_depth_representation(self, candidate: "_RolloutCandidatePayload") -> None:
-        if candidate.selected_depth is None:
+        if candidate.selected_depth is None or not self.config.rollout_layers.selected_depth.included:
             return
         representation = self.config.rollout_depths.representation
         if representation in ("depth_image", "both"):
@@ -556,6 +605,7 @@ class _RolloutCandidatePayload:
     step_row_id: int
     compact_valid_index: int
     selected: bool
+    valid: bool
     pose: NDArray[np.float32]
     center: NDArray[np.float32]
     position_id: int
@@ -1051,6 +1101,59 @@ def _rollout_root_path(rows: StoredRollout) -> list[list[float]]:
     return [_pose_centers(rows.root_pose_world.reshape(1, 12))[0].tolist()]
 
 
+def _rollout_context_config(config: "RerunOfflineInspectorConfig") -> "RerunOfflineInspectorConfig":
+    """Project rollout layer policy onto the existing offline-context logger."""
+
+    cfg = config.model_copy(deep=True)
+    layers = cfg.rollout_layers
+    primitives = cfg.primitives
+    primitives.log_semidense = layers.actor_context.included
+    primitives.log_detected_obbs = layers.actor_context.included
+    primitives.log_efm_voxels = layers.actor_context.included
+    primitives.log_reference_pose = layers.oracle_mesh_gt.included
+    primitives.log_gt_mesh = layers.oracle_mesh_gt.included
+    primitives.log_gt_obbs = layers.oracle_mesh_gt.included
+    primitives.log_gt_trajectory = layers.oracle_mesh_gt.included
+    primitives.log_rgb_keyframes = layers.rgb_depth_context.included
+    primitives.log_depth_keyframes = layers.rgb_depth_context.included
+    primitives.log_candidate_depths = layers.rgb_depth_context.included
+    include_candidates = layers.rollout_candidates.included or layers.invalid_candidates.included
+    primitives.log_candidate_frusta = include_candidates
+    primitives.log_candidate_centers = layers.rollout_candidates.included
+    primitives.log_candidate_points = False
+    primitives.log_metadata = layers.metadata.included
+    if layers.rollout_candidates.included and not layers.invalid_candidates.included:
+        cfg.candidate.subset_mode = "valid_only"
+    elif layers.invalid_candidates.included and not layers.rollout_candidates.included:
+        cfg.candidate.subset_mode = "invalid_only"
+    else:
+        cfg.candidate.subset_mode = "all"
+    return cfg
+
+
+def _rollout_context_is_included(config: "RerunOfflineInspectorConfig") -> bool:
+    """Return whether the projected offline logger has any entity to produce."""
+
+    primitives = config.primitives
+    return any(
+        (
+            primitives.log_semidense,
+            primitives.log_reference_pose,
+            primitives.log_candidate_frusta,
+            primitives.log_candidate_centers,
+            primitives.log_candidate_depths,
+            primitives.log_gt_mesh,
+            primitives.log_gt_obbs,
+            primitives.log_detected_obbs,
+            primitives.log_gt_trajectory,
+            primitives.log_rgb_keyframes,
+            primitives.log_depth_keyframes,
+            primitives.log_efm_voxels,
+            primitives.log_metadata,
+        )
+    )
+
+
 def _rollout_chain_entity(*, rollout_row_id: int, chain_id: int) -> str:
     return f"{ENTITY_ROLLOUT_ROOT}/rollout_{int(rollout_row_id):06d}/chain_{int(chain_id):06d}"
 
@@ -1088,27 +1191,49 @@ def _rollout_target_entity(*, rollout_row_id: int, chain_id: int) -> str:
     return f"{_rollout_chain_entity(rollout_row_id=rollout_row_id, chain_id=chain_id)}/target"
 
 
-def _rollout_candidate_group_hidden_paths(
+def _rollout_layer_hidden_paths(
     *,
+    config: "RerunOfflineInspectorConfig",
     rows: StoredRollout,
     steps: tuple[StoredStep, ...],
 ) -> tuple[str, ...]:
-    """Return exact rollout candidate subtrees hidden by default in the viewer."""
+    """Return exact included-but-hidden entity roots for the resolved blueprint."""
 
-    hidden_paths: list[str] = []
+    layers = config.rollout_layers
+    hidden: list[str] = []
+
+    def add_if_hidden(layer: Any, *paths: str) -> None:
+        if layer.included and not layer.visible:
+            hidden.extend(paths)
+
+    add_if_hidden(layers.actor_context, "world/ase/semidense", "world/efm")
+    add_if_hidden(
+        layers.oracle_mesh_gt,
+        "world/gt",
+        "world/ase/reference",
+        "world/ase/trajectory",
+    )
+    add_if_hidden(layers.rgb_depth_context, "world/ase/cameras")
+    chain_entity = _rollout_chain_entity(rollout_row_id=rows.rollout_row_id, chain_id=rows.chain_id)
+    add_if_hidden(layers.target_overlay, f"{chain_entity}/target")
+    add_if_hidden(layers.selected_path, f"{chain_entity}/selected_path")
     for step in steps:
-        selected_shell_index = (
-            int(step.shell_indices[step.selected_local_index]) if step.selected_local_index >= 0 else -1
-        )
         step_entity = _rollout_step_entity(
             rollout_row_id=rows.rollout_row_id,
             chain_id=rows.chain_id,
             step_index=step.step_index,
         )
-        hidden_paths.extend((f"{step_entity}/valid", f"{step_entity}/invalid"))
-        selected_camera = f"{step_entity}/selected/candidate_shell_{int(selected_shell_index):03d}/camera"
-        hidden_paths.extend((f"{selected_camera}/depth", f"{selected_camera}/points"))
-    return tuple(hidden_paths)
+        add_if_hidden(layers.rollout_candidates, f"{step_entity}/selected", f"{step_entity}/valid")
+        add_if_hidden(layers.invalid_candidates, f"{step_entity}/invalid")
+        if (layers.rollout_candidates.included or layers.invalid_candidates.included) and not (
+            layers.rollout_candidates.visible or layers.invalid_candidates.visible
+        ):
+            hidden.append(f"{step_entity}/groups")
+        if step.selected_local_index >= 0:
+            selected_shell_index = int(step.shell_indices[step.selected_local_index])
+            selected_camera = f"{step_entity}/selected/candidate_shell_{selected_shell_index:03d}/camera"
+            add_if_hidden(layers.selected_depth, f"{selected_camera}/depth", f"{selected_camera}/points")
+    return tuple(hidden)
 
 
 def _target_rri_ranks(
@@ -1227,6 +1352,7 @@ def _candidate_payloads(
                 step_row_id=int(step_row_id),
                 compact_valid_index=int(compact),
                 selected=bool(is_selected),
+                valid=bool(is_valid),
                 pose=np.asarray(pose, dtype=np.float32).reshape(12),
                 center=np.asarray(center, dtype=np.float32).reshape(3),
                 position_id=int(position_id),

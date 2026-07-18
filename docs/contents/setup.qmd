@@ -213,6 +213,43 @@ cd aria_nbv
 uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
 ```
 
+## Stored Dataset Inspector {#stored-dataset-inspector}
+
+Open the Streamlit app with `uv run nbv-st`, then choose **VIN Offline
+Dataset** or **Stored Rollouts**. The stored-rollout inspector is organized as
+five active workspaces: **Trust & Topology**, **Scientific Evidence**,
+**Targets & Action Support**, **Failure Triage**, and **Inspect, Export &
+Rerun**. Only the selected workspace performs its expensive projections.
+
+Start with Trust & Topology. Its invariant matrix distinguishes actor-visible
+evidence, privileged oracle/evaluation artifacts, derived `q_h` training
+caches, and provenance. The topology resolves rollout lineage to VIN manifests
+by hash and reports embedded, resolved, lineage-only, inferred, missing, and
+ambiguous links without mutating any store. The same topology model is
+available from the VIN page.
+
+Policy summaries are emitted only for exactly matched source, target protocol,
+horizon and acquisition budget, candidate/oracle configuration, and branch
+schedule cohorts. If those keys differ, the inspector reports the mismatched
+keys instead of drawing an unpaired policy comparison. Candidate geometry is
+root-relative in the ARIA right-handed Z-up world frame and metres; unrelated
+absolute scene origins are never aggregated.
+
+Every normalized table can be copied through Streamlit's dataframe controls.
+Explicit downloads preserve the complete filtered CSV or JSON row set and
+state the exported count. Candidate CSV is bounded to the selected rollout and
+step. The canonical evidence-bundle download defaults to `pilot`;
+`confirmatory` requires an explicit acknowledgement.
+
+Rerun launches use one of four layer presets—**Scientific context**, **Target
+protocol**, **Candidate debugging**, or **Minimal selected path**—with separate
+included and initially-visible settings. The launch surface supports native
+live spawn, save then open in the native viewer, save then `--serve-web`, and
+save-only recording. Web serving binds to loopback by default; LAN exposure is
+explicit. The page retains the resolved TOML, `.rrd`, stdout/stderr, process
+health, and verified viewer URL. Selected depth and target evaluation overlays
+remain visibly marked as privileged evaluation evidence.
+
 ## Entry Points {#entry-points}
 
 ```sh

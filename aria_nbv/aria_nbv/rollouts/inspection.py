@@ -7,9 +7,11 @@ choose its own rendering library without owning rollout-store semantics.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -29,11 +31,30 @@ from .read_model import (
     selected_depth_for_step,
     target_rows,
 )
-from .trace import _candidate_invalid_reasons
-from .zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader, _required_groups
+from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
+from .zarr_store import (
+    Q_H_ARRAY_NAMES,
+    Q_H_REWARD_METRIC,
+    Q_H_TD_SEMANTICS,
+    ROLLOUT_ZARR_SCHEMA_VERSION,
+    RolloutZarrStoreReader,
+    _required_groups,
+)
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
+_POLICY_COHORT_KEY_FIELDS = (
+    "source_sample_key",
+    "target_id",
+    "target_protocol",
+    "horizon",
+    "acquisition_budget_steps",
+    "branch_factor",
+    "beam_width",
+    "candidate_config",
+    "oracle_config",
+    "branch_schedule",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +127,85 @@ def rollout_store_inventory_rows(store_paths: Iterable[Path]) -> list[dict[str, 
         ),
         reverse=True,
     )
+
+
+def rollout_statistics(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compute the compact statistics shared by CLI and report consumers.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        manifest_payload: Optional result of :meth:`RolloutZarrStoreReader.manifest`.
+            The reader is queried when omitted.
+
+    Returns:
+        Nested candidate-validity, selected-action, policy, and source-coverage
+        statistics. Missing numeric samples remain explicit ``None`` values.
+    """
+
+    manifest_payload = reader.manifest() if manifest_payload is None else manifest_payload
+    valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    primary_invalid_reason = np.asarray(reader.array("candidates/primary_invalid_reason"), dtype=np.int64).reshape(-1)
+    strategy_id = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    mixture_id = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
+    valid_per_step = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.float64).reshape(-1)
+    policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
+    policy_names = _read_string_array(reader, "dictionaries/policy")
+    component_names = _component_names(manifest_payload)
+    return {
+        "candidate_validity": {
+            "valid": int(valid.sum()),
+            "total": int(valid.size),
+            "fraction": _safe_fraction(int(valid.sum()), int(valid.size)),
+            "valid_per_step": _distribution(valid_per_step),
+            "invalid_reasons": _reason_counts(primary_invalid_reason[~valid]),
+        },
+        "selected": {
+            "total": int(selected.sum()),
+            "strategy_counts": _id_counts(strategy_id[selected], names=_STRATEGY_NAMES),
+            "component_counts": _id_counts(mixture_id[selected], names=component_names),
+            "path_length_m": _distribution(_selected_path_lengths(reader)),
+        },
+        "valid_candidates": {
+            "strategy_counts": _id_counts(strategy_id[valid], names=_STRATEGY_NAMES),
+            "component_counts": _id_counts(mixture_id[valid], names=component_names),
+        },
+        "policy_counts": _id_counts(policy_ids, names=dict(enumerate(policy_names))),
+        "source_coverage": dict(manifest_payload.get("manifest", {}).get("source_coverage", {})),
+    }
+
+
+def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict[str, float | int]:
+    """Return compact file-count and byte-cost statistics for one store.
+
+    Args:
+        store_dir: Rollout Zarr directory whose regular files are measured.
+        candidate_count: Persisted candidate rows used to normalize byte cost.
+
+    Returns:
+        Storage totals and the existing rollout-preflight limits. The function
+        reads file metadata only and does not open or mutate Zarr arrays.
+    """
+
+    file_count = 0
+    total_bytes = 0
+    for path in Path(store_dir).rglob("*"):
+        if not path.is_file():
+            continue
+        file_count += 1
+        total_bytes += int(path.stat().st_size)
+    denominator = max(1, int(candidate_count))
+    return {
+        "file_count": file_count,
+        "total_bytes": total_bytes,
+        "bytes_per_candidate": float(total_bytes) / float(denominator),
+        "file_count_limit": max(2000, denominator * 20),
+        "bytes_per_candidate_limit": 2_000_000.0,
+    }
 
 
 def candidate_audit_rows(
@@ -242,10 +342,167 @@ def validity_waterfall_rows(reader: RolloutZarrStoreReader) -> list[dict[str, ob
     ]
 
 
-def candidate_group_summary_rows(reader: RolloutZarrStoreReader, *, group_by: str) -> list[dict[str, object]]:
-    """Summarize candidate validity and labels by a decoded categorical field."""
+def mask_combination_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Return observed candidate-mask combinations with explicit denominators.
 
-    rows = candidate_audit_rows(reader)
+    ``selected_mask`` is an actor decision and therefore only implies
+    ``actor_action_mask``. It is not a stage after ``q_train_mask``. The
+    training mask independently requires actor validity and oracle-label
+    availability, so selected-but-not-training rows remain valid evidence.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+
+    Returns:
+        Rows for observed Boolean combinations. Counts use the full persisted
+        candidate table as their denominator, including invalid candidates.
+    """
+
+    actor = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    oracle = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_).reshape(-1)
+    q_train = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    total = int(actor.size)
+    rows: list[dict[str, object]] = []
+    for actor_value in (False, True):
+        for oracle_value in (False, True):
+            for q_train_value in (False, True):
+                for selected_value in (False, True):
+                    mask = (
+                        (actor == actor_value)
+                        & (oracle == oracle_value)
+                        & (q_train == q_train_value)
+                        & (selected == selected_value)
+                    )
+                    count = int(mask.sum())
+                    if count == 0:
+                        continue
+                    contract_valid = (not selected_value or actor_value) and (
+                        not q_train_value or (actor_value and oracle_value)
+                    )
+                    rows.append(
+                        {
+                            "actor_action": actor_value,
+                            "oracle_label": oracle_value,
+                            "q_train": q_train_value,
+                            "selected": selected_value,
+                            "count": count,
+                            "denominator": total,
+                            "fraction_of_all": _safe_fraction(count, total),
+                            "contract_valid": contract_valid,
+                            "interpretation": _mask_combination_interpretation(
+                                actor_action=actor_value,
+                                oracle_label=oracle_value,
+                                q_train=q_train_value,
+                                selected=selected_value,
+                            ),
+                        }
+                    )
+    return rows
+
+
+def store_invariant_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest: dict[str, Any] | None = None,
+    manifest_payload: dict[str, Any] | None = None,
+) -> list[dict[str, object]]:
+    """Project the store's scientific and structural invariants as evidence rows.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        manifest: Optional result of :meth:`RolloutZarrStoreReader.manifest`.
+            The sidecar is read when omitted.
+        manifest_payload: Backward-compatible keyword for ``manifest`` used by
+            existing inspection callers. Passing both keywords is invalid.
+
+    Returns:
+        Deterministically ordered PASS/WARN/FAIL rows with expected conditions,
+        observed evidence, source arrays, and actor/oracle/derived-data roles.
+
+    Notes:
+        This helper does not repair stale or inconsistent data. In particular,
+        the factual ``steps/`` and ``candidates/`` tables remain authoritative;
+        ``q_h/`` is checked as a derived training cache.
+    """
+
+    if manifest is not None and manifest_payload is not None:
+        raise ValueError("Pass either manifest or manifest_payload, not both.")
+    payload = manifest or manifest_payload or reader.manifest()
+    manifest_data = payload.get("manifest", payload)
+    root_attrs = dict(reader.root.attrs)
+    rows = [_schema_manifest_invariant(root_attrs, manifest_data)]
+    rows.append(_row_identity_invariant(reader))
+
+    actor = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    oracle = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_).reshape(-1)
+    q_train = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    target_rri = np.asarray(reader.array("candidates/target_rri"), dtype=np.float64).reshape(-1)
+    target_root_gain = np.asarray(reader.array("candidates/target_root_gain"), dtype=np.float64).reshape(-1)
+
+    selected_violations = int(np.count_nonzero(selected & (~actor)))
+    rows.append(
+        _invariant_row(
+            invariant_id="selected_actor_mask",
+            category="mask",
+            status="PASS" if selected_violations == 0 else "FAIL",
+            summary="Selected candidates are actor-selectable.",
+            expected="selected_mask implies actor_action_mask; selected_mask does not imply q_train_mask.",
+            observed=f"{selected_violations} selected rows violate actor validity; "
+            f"{int(np.count_nonzero(selected & (~q_train)))} selected rows are intentionally outside q_train.",
+            source_fields=("candidates/selected_mask", "candidates/actor_action_mask", "candidates/q_train_mask"),
+            data_role="actor-visible",
+            violation_count=selected_violations,
+        )
+    )
+
+    q_train_violations = q_train & (
+        (~actor) | (~oracle) | (~np.isfinite(target_rri)) | (~np.isfinite(target_root_gain))
+    )
+    rows.append(
+        _invariant_row(
+            invariant_id="q_train_supervision",
+            category="mask",
+            status="PASS" if not q_train_violations.any() else "FAIL",
+            summary="Training rows have actor-valid, finite oracle supervision.",
+            expected="q_train_mask implies actor_action_mask, oracle_label_mask, and finite target labels.",
+            observed=f"{int(q_train_violations.sum())} of {int(q_train.sum())} q_train rows violate supervision.",
+            source_fields=(
+                "candidates/q_train_mask",
+                "candidates/actor_action_mask",
+                "candidates/oracle_label_mask",
+                "candidates/target_rri",
+                "candidates/target_root_gain",
+            ),
+            data_role="derived training data",
+            violation_count=int(q_train_violations.sum()),
+        )
+    )
+    rows.append(_selected_depth_invariant(reader, root_attrs))
+    rows.append(_target_eval_invariant(reader, root_attrs))
+    rows.append(_target_protocol_invariant(reader, root_attrs))
+    rows.extend(_q_h_invariant_rows(reader, root_attrs))
+    return rows
+
+
+def candidate_group_summary_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    group_by: str,
+    audit_rows: Iterable[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    """Summarize candidate validity and labels by a decoded categorical field.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        group_by: Decoded categorical key present in candidate audit rows.
+        audit_rows: Optional already-materialized candidate rows. Reusing this
+            projection avoids repeated full-store joins when one active view
+            needs several groupings.
+    """
+
+    rows = candidate_audit_rows(reader) if audit_rows is None else audit_rows
     groups: dict[str, dict[str, float]] = {}
     for row in rows:
         key = str(row.get(group_by, "unknown"))
@@ -280,6 +537,289 @@ def candidate_group_summary_rows(reader: RolloutZarrStoreReader, *, group_by: st
             }
         )
     return output
+
+
+def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, object]:
+    """Build exact matched cohorts for scientifically valid policy comparison.
+
+    Cohorts match on source sample, target identity/protocol, horizon and search
+    budget, candidate/oracle configuration, and branch schedule. Policy and
+    rollout recipe identify the comparison dimension and are never averaged as
+    if they were independent unmatched populations.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+
+    Returns:
+        Mapping with rollout-level ``cohort_rows``, exact
+        ``eligible_cohort_rows``, nearest-key ``mismatch_rows``, comparison
+        labels, and the ordered cohort-key field names.
+    """
+
+    rows = _policy_cohort_projection_rows(reader)
+    key_fields = _POLICY_COHORT_KEY_FIELDS
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["cohort_key"]), []).append(row)
+
+    cohort_summaries: list[dict[str, object]] = []
+    eligible_summaries: list[dict[str, object]] = []
+    for cohort_key, cohort_rows in sorted(grouped.items()):
+        by_label: dict[str, list[dict[str, object]]] = {}
+        for row in cohort_rows:
+            by_label.setdefault(str(row["comparison_label"]), []).append(row)
+        labels = tuple(sorted(by_label))
+        duplicate_labels = tuple(sorted(label for label, values in by_label.items() if len(values) != 1))
+        eligible = len(labels) >= 2 and not duplicate_labels
+        first = cohort_rows[0]
+        summary = {
+            "cohort_id": str(first["cohort_id"]),
+            "cohort_key": cohort_key,
+            **{field: first[field] for field in key_fields},
+            "comparison_labels": labels,
+            "comparison_count": len(labels),
+            "rollout_count": len(cohort_rows),
+            "eligible": eligible,
+            "reason": "matched" if eligible else _cohort_ineligibility_reason(labels, duplicate_labels),
+        }
+        cohort_summaries.append(summary)
+        if eligible:
+            eligible_summaries.append(summary)
+
+    comparison_labels = tuple(sorted({str(row["comparison_label"]) for row in rows}))
+    mismatch_rows = _nearest_policy_mismatch_rows(rows, comparison_labels, grouped)
+    return {
+        "eligible": bool(eligible_summaries),
+        "key_fields": key_fields,
+        "comparison_policies": comparison_labels,
+        "cohort_rows": rows,
+        "cohort_summary_rows": cohort_summaries,
+        "eligible_cohort_rows": eligible_summaries,
+        "mismatch_rows": mismatch_rows,
+    }
+
+
+def paired_policy_comparison_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    bootstrap_samples: int = 2_000,
+    confidence: float = 0.95,
+    seed: int = 0,
+) -> list[dict[str, object]]:
+    """Summarize paired endpoint differences over exact policy cohorts.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        bootstrap_samples: Number of paired bootstrap resamples. Intervals are
+            emitted only for at least three matched cohorts.
+        confidence: Central bootstrap interval probability in ``(0, 1)``.
+        seed: Base seed for deterministic policy-pair and metric resampling.
+
+    Returns:
+        One row per sorted policy/recipe pair and endpoint metric, including
+        cohort count, median/IQR per policy, median paired delta ``B - A``, and
+        a deterministic bootstrap interval when sufficiently supported.
+
+    Raises:
+        ValueError: If ``bootstrap_samples`` or ``confidence`` is invalid.
+    """
+
+    if int(bootstrap_samples) < 1:
+        raise ValueError("bootstrap_samples must be positive.")
+    if not 0.0 < float(confidence) < 1.0:
+        raise ValueError("confidence must lie strictly between zero and one.")
+
+    projection = comparable_policy_cohorts(reader)
+    eligible_keys = {str(row["cohort_key"]) for row in projection["eligible_cohort_rows"]}
+    grouped: dict[str, dict[str, dict[str, object]]] = {}
+    for row in projection["cohort_rows"]:
+        cohort_key = str(row["cohort_key"])
+        if cohort_key not in eligible_keys:
+            continue
+        grouped.setdefault(cohort_key, {})[str(row["comparison_label"])] = row
+
+    output: list[dict[str, object]] = []
+    labels = tuple(str(value) for value in projection["comparison_policies"])
+    metrics = (
+        ("final_cumulative_target_rri", "dimensionless cumulative target RRI"),
+        ("final_cumulative_target_root_gain", "dimensionless root-normalized target gain"),
+    )
+    summary_index = 0
+    for policy_a, policy_b in combinations(labels, 2):
+        matched = [
+            (cohort_key, values[policy_a], values[policy_b])
+            for cohort_key, values in sorted(grouped.items())
+            if policy_a in values and policy_b in values
+        ]
+        if not matched:
+            continue
+        for metric, units in metrics:
+            finite = [
+                (cohort_key, float(left[metric]), float(right[metric]))
+                for cohort_key, left, right in matched
+                if _finite_or_none(left.get(metric)) is not None and _finite_or_none(right.get(metric)) is not None
+            ]
+            if not finite:
+                continue
+            a = np.asarray([value_a for _key, value_a, _value_b in finite], dtype=np.float64)
+            b = np.asarray([value_b for _key, _value_a, value_b in finite], dtype=np.float64)
+            delta = b - a
+            ci_low, ci_high = _paired_bootstrap_interval(
+                delta,
+                bootstrap_samples=int(bootstrap_samples),
+                confidence=float(confidence),
+                seed=int(seed) + summary_index,
+            )
+            output.append(
+                {
+                    "policy_a": policy_a,
+                    "policy_b": policy_b,
+                    "policy_pair": f"{policy_b} - {policy_a}",
+                    "metric": metric,
+                    "units": units,
+                    "matched_cohort_count": int(delta.size),
+                    "matched_cohort_ids": tuple(_cohort_id_from_key(key) for key, _a, _b in finite),
+                    "policy_a_median": float(np.median(a)),
+                    "policy_a_q25": float(np.percentile(a, 25)),
+                    "policy_a_q75": float(np.percentile(a, 75)),
+                    "policy_b_median": float(np.median(b)),
+                    "policy_b_q25": float(np.percentile(b, 25)),
+                    "policy_b_q75": float(np.percentile(b, 75)),
+                    "paired_delta_median": float(np.median(delta)),
+                    "median_paired_delta": float(np.median(delta)),
+                    "paired_delta_q25": float(np.percentile(delta, 25)),
+                    "paired_delta_q75": float(np.percentile(delta, 75)),
+                    "bootstrap_ci_low": ci_low,
+                    "bootstrap_ci_high": ci_high,
+                    "bootstrap_confidence": float(confidence) if ci_low is not None else None,
+                    "bootstrap_samples": int(bootstrap_samples) if ci_low is not None else 0,
+                    "delta_direction": "policy_b - policy_a",
+                }
+            )
+            summary_index += 1
+    return output
+
+
+def selected_candidate_rank_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Rank each selected candidate against finite actor-valid alternatives.
+
+    Rank and regret use ``target_root_gain`` only where the oracle label is
+    finite. A negative finite reward remains a valid supervised outcome and is
+    never conflated with an invalid or missing candidate label.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+
+    Returns:
+        One row per rollout step with selected rank, regret to the best valid
+        alternative, and the finite valid-candidate reward band.
+    """
+
+    rows: list[dict[str, object]] = []
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        for step in rollout_steps(reader, rollout):
+            selected = step.selected_local_index
+            finite_valid = step.actor_action_mask & np.isfinite(step.target_root_gain)
+            values = np.asarray(step.target_root_gain[finite_valid], dtype=np.float64)
+            selected_value = None if selected < 0 else _finite_or_none(step.target_root_gain[selected])
+            selected_actor_valid = bool(selected >= 0 and step.actor_action_mask[selected])
+            selected_rank = None
+            regret = None
+            if selected_value is not None and selected_actor_valid and values.size:
+                selected_rank = 1 + int(np.count_nonzero(values > float(selected_value)))
+                regret = float(np.max(values) - float(selected_value))
+            rows.append(
+                {
+                    "rollout_row_id": rollout.rollout_row_id,
+                    "step_row_id": step.step_row_id,
+                    "step_index": step.step_index,
+                    "source_row_id": rollout.source_row_id,
+                    "target_row_id": rollout.target_row_id,
+                    "policy": rollout.policy,
+                    "selected_candidate_row_id": step.selected_candidate_row_id,
+                    "selected_actor_valid": selected_actor_valid,
+                    "selected_label_available": selected_value is not None,
+                    "selected_target_root_gain": selected_value,
+                    "selected_reward_negative": selected_value is not None and selected_value < 0.0,
+                    "selected_rank": selected_rank,
+                    "regret_to_best": regret,
+                    "valid_candidate_count": int(step.actor_action_mask.sum()),
+                    "finite_valid_label_count": int(values.size),
+                    "best_valid_target_root_gain": None if values.size == 0 else float(np.max(values)),
+                    "valid_target_root_gain_q25": None if values.size == 0 else float(np.percentile(values, 25)),
+                    "valid_target_root_gain_median": None if values.size == 0 else float(np.median(values)),
+                    "valid_target_root_gain_q75": None if values.size == 0 else float(np.percentile(values, 75)),
+                    "worst_valid_target_root_gain": None if values.size == 0 else float(np.min(values)),
+                    "units": "dimensionless root-normalized target gain",
+                }
+            )
+    return rows
+
+
+def root_relative_candidate_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    rollout_row_id: int | None = None,
+    step_row_id: int | None = None,
+    actor_valid_only: bool = False,
+) -> list[dict[str, object]]:
+    """Return candidate centers relative to each rollout root in Z-up metres.
+
+    The translation is ``candidate_center_world - root_center_world``. This
+    keeps ARIA world axes, including the gravity-aligned Z axis, while removing
+    unrelated scene origins. It intentionally does not aggregate or expose raw
+    absolute world coordinates as comparison axes.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        rollout_row_id: Optional stable rollout-row filter.
+        step_row_id: Optional stable step-row filter.
+        actor_valid_only: Exclude candidates outside the hard actor action set.
+
+    Returns:
+        Candidate rows in root-centered ARIA world coordinates with metres as
+        units and ``RIGHT_HAND_Z_UP`` as the frame convention.
+    """
+
+    rows: list[dict[str, object]] = []
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
+            continue
+        root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        for step in rollout_steps(reader, rollout):
+            if step_row_id is not None and step.step_row_id != int(step_row_id):
+                continue
+            for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
+                if actor_valid_only and not bool(step.actor_action_mask[local]):
+                    continue
+                relative = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64) - root_center
+                rows.append(
+                    {
+                        "candidate_row_id": int(candidate_row_id),
+                        "rollout_row_id": rollout.rollout_row_id,
+                        "step_row_id": step.step_row_id,
+                        "step_index": step.step_index,
+                        "source_row_id": rollout.source_row_id,
+                        "scene": rollout.scene,
+                        "policy": rollout.policy,
+                        "target_row_id": rollout.target_row_id,
+                        "actor_action": bool(step.actor_action_mask[local]),
+                        "selected": bool(step.selected_mask[local]),
+                        "position": str(step.position_names[local]),
+                        "mixture": str(step.mixture_names[local]),
+                        "root_relative_x_m": float(relative[0]),
+                        "root_relative_y_m": float(relative[1]),
+                        "root_relative_z_m": float(relative[2]),
+                        "root_distance_m": float(np.linalg.norm(relative)),
+                        "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                        "units": "m",
+                    }
+                )
+    return rows
 
 
 def rollout_step_objective_rows(
@@ -612,11 +1152,97 @@ def suspicious_rollout_rows(
 
     cfg = config or RolloutSuspiciousQueryConfig()
     rows: list[dict[str, object]] = []
+    rows.extend(_mask_violation_rows(reader))
     rows.extend(_low_fanout_rows(reader, cfg))
     rows.extend(_dominant_invalid_reason_rows(reader, cfg))
     rows.extend(_missing_label_rows(reader))
     rows.extend(_high_score_invalid_target_rows(reader, cfg))
+    rows.extend(_target_ambiguity_rows(reader))
     rows.extend(_selected_motion_outlier_rows(reader, cfg))
+    rows.extend(_selected_depth_health_rows(reader))
+    return rows
+
+
+def _mask_violation_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Return exact hard-mask implication violations at candidate-row grain."""
+
+    candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
+    step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
+    actor = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    oracle = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_).reshape(-1)
+    q_train = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    step_table_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    step_rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
+    rollout_by_step = {int(step): int(rollout) for step, rollout in zip(step_table_ids, step_rollout_ids, strict=True)}
+    rows: list[dict[str, object]] = []
+    for index in np.flatnonzero(selected & (~actor)).tolist():
+        step_id = int(step_ids[index])
+        rows.append(
+            {
+                "kind": "selected_actor_mask_violation",
+                "severity": "error",
+                "rollout_row_id": rollout_by_step.get(step_id),
+                "step_row_id": step_id,
+                "candidate_row_id": int(candidate_ids[index]),
+                "message": "selected_mask=true requires actor_action_mask=true",
+            }
+        )
+    for index in np.flatnonzero(q_train & ((~actor) | (~oracle))).tolist():
+        step_id = int(step_ids[index])
+        rows.append(
+            {
+                "kind": "q_train_mask_violation",
+                "severity": "error",
+                "rollout_row_id": rollout_by_step.get(step_id),
+                "step_row_id": step_id,
+                "candidate_row_id": int(candidate_ids[index]),
+                "message": "q_train_mask=true requires actor_action_mask=true and oracle_label_mask=true",
+            }
+        )
+    return rows
+
+
+def _target_ambiguity_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Return persisted target-match ambiguity without treating it as low reward."""
+
+    rows: list[dict[str, object]] = []
+    for target in target_audit_rows(reader):
+        status = str(target.get("gt_match_status", "")).lower()
+        if "ambigu" not in status:
+            continue
+        rows.append(
+            {
+                "kind": "target_ambiguity",
+                "severity": "warning",
+                "rollout_row_id": None,
+                "step_row_id": None,
+                "candidate_row_id": None,
+                "message": f"target_row_id={target['target_row_id']} has GT match status {status!r}",
+            }
+        )
+    return rows
+
+
+def _selected_depth_health_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Return selected-depth linkage or finite-pixel failures when depth is enabled."""
+
+    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
+        return []
+    rows: list[dict[str, object]] = []
+    for depth in selected_depth_summary_rows(reader, limit=None):
+        if bool(depth.get("available")) and int(depth.get("finite_pixels") or 0) > 0:
+            continue
+        rows.append(
+            {
+                "kind": "selected_depth_health",
+                "severity": "error" if not bool(depth.get("available")) else "warning",
+                "rollout_row_id": depth.get("rollout_row_id"),
+                "step_row_id": depth.get("step_row_id"),
+                "candidate_row_id": depth.get("candidate_row_id"),
+                "message": str(depth.get("warning") or "selected depth has no finite pixels"),
+            }
+        )
     return rows
 
 
@@ -971,6 +1597,652 @@ def _numeric_summary(root: Any, path: str) -> str:
     return f"{unique[0]}..{unique[-1]} ({len(unique)} values)"
 
 
+def _mask_combination_interpretation(
+    *,
+    actor_action: bool,
+    oracle_label: bool,
+    q_train: bool,
+    selected: bool,
+) -> str:
+    if selected and not actor_action:
+        return "invalid contract: selected action is outside the actor action set"
+    if q_train and not (actor_action and oracle_label):
+        return "invalid contract: training label lacks actor validity or oracle supervision"
+    if selected and not q_train:
+        return "selected actor action without a training label; valid for execution, excluded from supervised Q_H"
+    if q_train and selected:
+        return "selected actor action with finite supervised Q_H label"
+    if q_train:
+        return "unselected actor alternative with finite supervised Q_H label"
+    if actor_action and oracle_label:
+        return "actor-valid oracle evidence excluded from q_train by stricter target/label requirements"
+    if actor_action:
+        return "actor-valid candidate without complete oracle supervision"
+    return "candidate outside the hard actor action set"
+
+
+def _invariant_row(
+    *,
+    invariant_id: str,
+    category: str,
+    status: str,
+    summary: str,
+    expected: str,
+    observed: str,
+    source_fields: tuple[str, ...],
+    data_role: str,
+    violation_count: int,
+) -> dict[str, object]:
+    return {
+        "invariant_id": invariant_id,
+        "category": category,
+        "status": status,
+        "summary": summary,
+        "expected": expected,
+        "observed": observed,
+        "source_fields": source_fields,
+        "data_role": data_role,
+        "violation_count": int(violation_count),
+    }
+
+
+def _schema_manifest_invariant(root_attrs: dict[str, Any], manifest: object) -> dict[str, object]:
+    manifest_dict = manifest if isinstance(manifest, dict) else {}
+    root_schema = root_attrs.get("schema_version")
+    manifest_schema = manifest_dict.get("schema_version")
+    manifest_version = manifest_dict.get("manifest_version")
+    violations = int(root_schema != ROLLOUT_ZARR_SCHEMA_VERSION) + int(manifest_schema != root_schema)
+    return _invariant_row(
+        invariant_id="schema_manifest",
+        category="schema",
+        status="PASS" if violations == 0 else "FAIL",
+        summary="Root and sidecar identify the same current rollout schema.",
+        expected=f"root and manifest schema_version equal {ROLLOUT_ZARR_SCHEMA_VERSION!r}.",
+        observed=f"root={root_schema!r}, manifest={manifest_schema!r}, manifest_version={manifest_version!r}.",
+        source_fields=("root.attrs/schema_version", "rollout_store_manifest.json/schema_version"),
+        data_role="provenance",
+        violation_count=violations,
+    )
+
+
+def _row_identity_invariant(reader: RolloutZarrStoreReader) -> dict[str, object]:
+    sources = np.asarray(reader.array("sources/source_row_id"), dtype=np.int64).reshape(-1)
+    targets = np.asarray(reader.array("targets/target_row_id"), dtype=np.int64).reshape(-1)
+    rollouts = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    rollout_sources = np.asarray(reader.array("rollouts/source_row_id"), dtype=np.int64).reshape(-1)
+    rollout_targets = np.asarray(reader.array("rollouts/target_row_id"), dtype=np.int64).reshape(-1)
+    lineage_rollouts = np.asarray(reader.array("lineage/rollout_row_id"), dtype=np.int64).reshape(-1)
+    violations = (
+        sources.size
+        - np.unique(sources).size
+        + targets.size
+        - np.unique(targets).size
+        + rollouts.size
+        - np.unique(rollouts).size
+        + int(not np.isin(rollout_sources, sources).all())
+        + int(not np.isin(rollout_targets, targets).all())
+        + int(not np.array_equal(lineage_rollouts, rollouts))
+    )
+    return _invariant_row(
+        invariant_id="row_identity_lineage",
+        category="lineage",
+        status="PASS" if violations == 0 else "FAIL",
+        summary="Source, target, rollout, and lineage identifiers form unique resolved joins.",
+        expected="row ids are unique; rollout foreign keys resolve; lineage rows align one-to-one with rollouts.",
+        observed=(
+            f"sources={sources.size}, targets={targets.size}, rollouts={rollouts.size}, "
+            f"lineage_rows={lineage_rollouts.size}, violations={violations}."
+        ),
+        source_fields=(
+            "sources/source_row_id",
+            "targets/target_row_id",
+            "rollouts/rollout_row_id",
+            "rollouts/source_row_id",
+            "rollouts/target_row_id",
+            "lineage/rollout_row_id",
+        ),
+        data_role="provenance",
+        violation_count=int(violations),
+    )
+
+
+def _selected_depth_invariant(
+    reader: RolloutZarrStoreReader,
+    root_attrs: dict[str, Any],
+) -> dict[str, object]:
+    enabled = bool(root_attrs.get("selected_depth_enabled", False))
+    if not enabled:
+        return _invariant_row(
+            invariant_id="selected_depth_alignment",
+            category="evaluation artifact",
+            status="WARN",
+            summary="Privileged selected-depth evidence is disabled for this store.",
+            expected="When enabled, one depth row aligns with each selected step transition.",
+            observed="selected_depth_enabled=false; dependent views must remain unavailable.",
+            source_fields=("root.attrs/selected_depth_enabled", "selected_depth/*"),
+            data_role="oracle/evaluation",
+            violation_count=0,
+        )
+    try:
+        step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+        selected_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+        depth_steps = np.asarray(reader.array("selected_depth/step_row_id"), dtype=np.int64).reshape(-1)
+        depth_candidates = np.asarray(reader.array("selected_depth/candidate_row_id"), dtype=np.int64).reshape(-1)
+        expected_shape = (
+            int(step_ids.size),
+            int(root_attrs.get("selected_depth_height_px", -1)),
+            int(root_attrs.get("selected_depth_width_px", -1)),
+        )
+        depth_shape = tuple(reader.root["selected_depth/depth_m"].shape)
+        mask_shape = tuple(reader.root["selected_depth/valid_mask"].shape)
+        violations = (
+            int(not np.array_equal(depth_steps, step_ids))
+            + int(not np.array_equal(depth_candidates, selected_ids))
+            + int(depth_shape != expected_shape)
+            + int(mask_shape != expected_shape)
+        )
+        observed = (
+            f"rows={depth_steps.size}/{step_ids.size}, candidate_link={np.array_equal(depth_candidates, selected_ids)}, "
+            f"depth_shape={depth_shape}, mask_shape={mask_shape}."
+        )
+    except (KeyError, ValueError) as exc:
+        violations = 1
+        observed = f"selected-depth arrays unavailable or malformed: {type(exc).__name__}: {exc}"
+    return _invariant_row(
+        invariant_id="selected_depth_alignment",
+        category="evaluation artifact",
+        status="PASS" if violations == 0 else "FAIL",
+        summary="Privileged selected-depth rows align with selected factual transitions.",
+        expected="step ids and selected candidate ids align one-to-one; dense depth and mask shapes match metadata.",
+        observed=observed,
+        source_fields=(
+            "steps/step_row_id",
+            "steps/selected_candidate_row_id",
+            "selected_depth/step_row_id",
+            "selected_depth/candidate_row_id",
+            "selected_depth/depth_m",
+            "selected_depth/valid_mask",
+        ),
+        data_role="oracle/evaluation",
+        violation_count=violations,
+    )
+
+
+def _target_eval_invariant(
+    reader: RolloutZarrStoreReader,
+    root_attrs: dict[str, Any],
+) -> dict[str, object]:
+    enabled = bool(root_attrs.get("target_eval_crops_enabled", False))
+    try:
+        crop_ids = np.asarray(reader.array("target_eval_crops/crop_row_id"), dtype=np.int64).reshape(-1)
+    except KeyError:
+        crop_ids = np.asarray([], dtype=np.int64)
+        missing_group = True
+    else:
+        missing_group = False
+    if not enabled:
+        violations = int(missing_group or crop_ids.size != 0)
+        return _invariant_row(
+            invariant_id="target_eval_alignment",
+            category="evaluation artifact",
+            status="PASS" if violations == 0 else "FAIL",
+            summary="Privileged target-evaluation crops are disabled and carry no rows.",
+            expected="Disabled target-evaluation storage contains zero crop rows.",
+            observed=f"enabled=false, crop_rows={crop_ids.size}, group_missing={missing_group}.",
+            source_fields=("root.attrs/target_eval_crops_enabled", "target_eval_crops/crop_row_id"),
+            data_role="oracle/evaluation",
+            violation_count=violations,
+        )
+    try:
+        step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+        candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
+        crop_steps = np.asarray(reader.array("target_eval_crops/step_row_id"), dtype=np.int64).reshape(-1)
+        crop_candidates = np.asarray(reader.array("target_eval_crops/candidate_row_id"), dtype=np.int64).reshape(-1)
+        roles = np.asarray(reader.array("target_eval_crops/source_role_id"), dtype=np.int32).reshape(-1)
+        lengths = np.asarray(reader.array("target_eval_crops/lengths"), dtype=np.int64).reshape(-1)
+        mask = np.asarray(reader.array("target_eval_crops/mask"), dtype=np.bool_)
+        candidate_refs = crop_candidates[roles == 1]
+        current_refs = crop_candidates[roles == 0]
+        violations = (
+            int(missing_group)
+            + int(not np.isin(crop_steps, step_ids).all())
+            + int(current_refs.size > 0 and np.any(current_refs != -1))
+            + int(candidate_refs.size > 0 and not np.isin(candidate_refs, candidate_ids).all())
+            + int(mask.ndim != 2 or lengths.shape != (mask.shape[0],))
+            + int(mask.ndim == 2 and lengths.shape == (mask.shape[0],) and not np.array_equal(mask.sum(1), lengths))
+        )
+        observed = (
+            f"crop_rows={crop_ids.size}, current_rows={current_refs.size}, candidate_rows={candidate_refs.size}, "
+            f"linked_steps={np.isin(crop_steps, step_ids).all()}."
+        )
+    except (KeyError, ValueError, IndexError) as exc:
+        violations = 1
+        observed = f"target-evaluation arrays unavailable or malformed: {type(exc).__name__}: {exc}"
+    return _invariant_row(
+        invariant_id="target_eval_alignment",
+        category="evaluation artifact",
+        status="PASS" if violations == 0 else "FAIL",
+        summary="Privileged target-evaluation crops resolve to factual steps and candidates.",
+        expected="crop masks match lengths; current rows use candidate -1; candidate rows resolve to factual ids.",
+        observed=observed,
+        source_fields=(
+            "target_eval_crops/step_row_id",
+            "target_eval_crops/candidate_row_id",
+            "target_eval_crops/source_role_id",
+            "target_eval_crops/lengths",
+            "target_eval_crops/mask",
+        ),
+        data_role="oracle/evaluation",
+        violation_count=violations,
+    )
+
+
+def _target_protocol_invariant(
+    reader: RolloutZarrStoreReader,
+    root_attrs: dict[str, Any],
+) -> dict[str, object]:
+    expected = str(root_attrs.get("target_protocol_version", ""))
+    values = _decoded_array(reader, "lineage/target_protocol_version_id", "config")
+    unique = tuple(sorted(set(values)))
+    violations = int(not expected) + sum(value != expected for value in values)
+    return _invariant_row(
+        invariant_id="target_protocol_lineage",
+        category="target protocol",
+        status="PASS" if violations == 0 else "FAIL",
+        summary="Every rollout uses the store-declared target protocol.",
+        expected="lineage/target_protocol_version_id decodes to root target_protocol_version for every rollout.",
+        observed=f"root={expected!r}, lineage_values={unique!r}.",
+        source_fields=("root.attrs/target_protocol_version", "lineage/target_protocol_version_id"),
+        data_role="provenance",
+        violation_count=int(violations),
+    )
+
+
+def _q_h_invariant_rows(
+    reader: RolloutZarrStoreReader,
+    root_attrs: dict[str, Any],
+) -> list[dict[str, object]]:
+    try:
+        persisted = reader.q_h_view()
+        gamma = float(root_attrs.get("discount_gamma", 1.0))
+        derived = reader.q_h_view(discount_gamma=gamma)
+    except (KeyError, ValueError) as exc:
+        observed = f"Q_H cache unavailable or malformed: {type(exc).__name__}: {exc}"
+        return [
+            _invariant_row(
+                invariant_id=invariant_id,
+                category="derived Q_H",
+                status="FAIL",
+                summary=summary,
+                expected=expected,
+                observed=observed,
+                source_fields=source_fields,
+                data_role="derived training data",
+                violation_count=1,
+            )
+            for invariant_id, summary, expected, source_fields in (
+                (
+                    "q_h_padding",
+                    "Q_H padding is masked and carries no labels.",
+                    "candidate id -1 implies false masks and NaN one-step labels.",
+                    ("q_h/candidate_row_id", "q_h/valid_action_mask", "q_h/q_train_mask"),
+                ),
+                (
+                    "q_h_selected_transition",
+                    "Q_H TD rows link to factual selected transitions.",
+                    "selected candidate, next-step, terminal, reward, and discount metadata align.",
+                    ("q_h/td_selected_candidate_row_id", "q_h/td_reward", "q_h/td_discount"),
+                ),
+                (
+                    "q_h_factual_consistency",
+                    "Persisted Q_H equals the factual-table projection.",
+                    "every persisted Q_H array equals the deterministic derivation from factual tables.",
+                    ("steps/*", "candidates/*", "rollouts/*", "targets/*", "q_h/*"),
+                ),
+            )
+        ]
+
+    padded = np.asarray(persisted["candidate_row_id"], dtype=np.int64) < 0
+    valid = np.asarray(persisted["valid_action_mask"], dtype=np.bool_)
+    q_train = np.asarray(persisted["q_train_mask"], dtype=np.bool_)
+    rri = np.asarray(persisted["one_step_target_rri"], dtype=np.float64)
+    gain = np.asarray(persisted["one_step_target_root_gain"], dtype=np.float64)
+    padding_violations = int(np.count_nonzero(padded & (valid | q_train | np.isfinite(rri) | np.isfinite(gain))))
+    padding_row = _invariant_row(
+        invariant_id="q_h_padding",
+        category="derived Q_H",
+        status="PASS" if padding_violations == 0 else "FAIL",
+        summary="Q_H padding is masked and carries no labels.",
+        expected="candidate id -1 implies false valid/q_train masks and NaN one-step labels.",
+        observed=f"padded_cells={int(padded.sum())}, violating_cells={padding_violations}.",
+        source_fields=(
+            "q_h/candidate_row_id",
+            "q_h/valid_action_mask",
+            "q_h/q_train_mask",
+            "q_h/one_step_target_rri",
+            "q_h/one_step_target_root_gain",
+        ),
+        data_role="derived training data",
+        violation_count=padding_violations,
+    )
+
+    step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    selected_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+    q_step_ids = np.asarray(persisted["state_step_row_id"], dtype=np.int64).reshape(-1)
+    q_selected_ids = np.asarray(persisted["td_selected_candidate_row_id"], dtype=np.int64).reshape(-1)
+    terminal = np.asarray(persisted["td_terminal_mask"], dtype=np.bool_).reshape(-1)
+    discount = np.asarray(persisted["td_discount"], dtype=np.float64).reshape(-1)
+    q_group_attrs = dict(reader.root["q_h"].attrs)
+    linkage_violations = (
+        int(not np.array_equal(q_step_ids, step_ids))
+        + int(not np.array_equal(q_selected_ids, selected_ids))
+        + int(np.count_nonzero(terminal & (discount != 0.0)))
+        + int(q_group_attrs.get("td_semantics") != Q_H_TD_SEMANTICS)
+        + int(q_group_attrs.get("reward_metric") != Q_H_REWARD_METRIC)
+        + int(float(q_group_attrs.get("discount_gamma", float("nan"))) != float(root_attrs.get("discount_gamma", 1.0)))
+    )
+    transition_row = _invariant_row(
+        invariant_id="q_h_selected_transition",
+        category="derived Q_H",
+        status="PASS" if linkage_violations == 0 else "FAIL",
+        summary="Q_H TD rows link to factual selected transitions and declared reward/discount semantics.",
+        expected=(
+            f"step and selected ids align; terminal discount is zero; td_semantics={Q_H_TD_SEMANTICS!r}; "
+            f"reward_metric={Q_H_REWARD_METRIC!r}."
+        ),
+        observed=(
+            f"states={q_step_ids.size}, selected_links={q_selected_ids.size}, terminal_rows={int(terminal.sum())}, "
+            f"reward_metric={q_group_attrs.get('reward_metric')!r}, gamma={q_group_attrs.get('discount_gamma')!r}."
+        ),
+        source_fields=(
+            "steps/step_row_id",
+            "steps/selected_candidate_row_id",
+            "q_h/state_step_row_id",
+            "q_h/td_selected_candidate_row_id",
+            "q_h/td_reward",
+            "q_h/td_next_step_row_id",
+            "q_h/td_terminal_mask",
+            "q_h/td_discount",
+            "q_h.attrs/reward_metric",
+        ),
+        data_role="derived training data",
+        violation_count=int(linkage_violations),
+    )
+
+    mismatches = tuple(
+        name
+        for name in Q_H_ARRAY_NAMES
+        if name not in persisted or name not in derived or not _arrays_equal(persisted[name], derived[name])
+    )
+    factual_row = _invariant_row(
+        invariant_id="q_h_factual_consistency",
+        category="derived Q_H",
+        status="PASS" if not mismatches else "FAIL",
+        summary="Persisted Q_H equals the deterministic factual-table projection.",
+        expected="every persisted Q_H array matches the view derived from steps, candidates, rollouts, and targets.",
+        observed=f"checked_arrays={len(Q_H_ARRAY_NAMES)}, mismatched_arrays={mismatches!r}.",
+        source_fields=("steps/*", "candidates/*", "rollouts/*", "targets/*", "q_h/*"),
+        data_role="derived training data",
+        violation_count=len(mismatches),
+    )
+    return [padding_row, transition_row, factual_row]
+
+
+def _arrays_equal(left: np.ndarray, right: np.ndarray) -> bool:
+    left_array = np.asarray(left)
+    right_array = np.asarray(right)
+    if left_array.shape != right_array.shape or left_array.dtype != right_array.dtype:
+        return False
+    if np.issubdtype(left_array.dtype, np.floating):
+        return bool(np.array_equal(left_array, right_array, equal_nan=True))
+    return bool(np.array_equal(left_array, right_array))
+
+
+def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    source_ids = np.asarray(reader.array("rollouts/source_row_id"), dtype=np.int64).reshape(-1)
+    target_ids = np.asarray(reader.array("rollouts/target_row_id"), dtype=np.int64).reshape(-1)
+    policies = _decoded_array(reader, "rollouts/policy_id", "policy")
+    source_rows = np.asarray(reader.array("sources/source_row_id"), dtype=np.int64).reshape(-1)
+    source_keys = _decoded_array(reader, "sources/sample_key_id", "source_key")
+    source_indices = np.asarray(reader.array("sources/sample_index"), dtype=np.int64).reshape(-1)
+    source_by_id = {
+        int(row_id): (source_keys[index] or f"source_row:{int(row_id)}", int(source_indices[index]))
+        for index, row_id in enumerate(source_rows.tolist())
+    }
+    target_rows = np.asarray(reader.array("targets/target_row_id"), dtype=np.int64).reshape(-1)
+    target_names = _decoded_array(reader, "targets/target_id", "target")
+    target_by_id = {int(row_id): target_names[index] for index, row_id in enumerate(target_rows.tolist())}
+    candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
+    oracle_configs = _decoded_array(reader, "lineage/oracle_config_id", "config")
+    rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
+    schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
+    protocols = _decoded_array(reader, "lineage/target_protocol_version_id", "config")
+    horizons = np.asarray(reader.array("rollouts/horizon"), dtype=np.int64).reshape(-1)
+    branch_factors = np.asarray(reader.array("rollouts/branch_factor"), dtype=np.int64).reshape(-1)
+    beam_widths = np.asarray(reader.array("rollouts/beam_width"), dtype=np.int64).reshape(-1)
+    chain_ids = np.asarray(reader.array("rollouts/chain_id"), dtype=np.int64).reshape(-1)
+    final_rri = np.asarray(reader.array("rollouts/final_cumulative_target_rri"), dtype=np.float64).reshape(-1)
+    final_gain = np.asarray(reader.array("rollouts/final_cumulative_target_root_gain"), dtype=np.float64).reshape(-1)
+
+    rows: list[dict[str, object]] = []
+    for index, rollout_row_id in enumerate(rollout_ids.tolist()):
+        source_key, source_index = source_by_id.get(int(source_ids[index]), (f"source_row:{source_ids[index]}", -1))
+        row: dict[str, object] = {
+            "rollout_row_id": int(rollout_row_id),
+            "chain_id": int(chain_ids[index]),
+            "source_row_id": int(source_ids[index]),
+            "source_sample_index": source_index,
+            "source_sample_key": source_key,
+            "target_row_id": int(target_ids[index]),
+            "target_id": target_by_id.get(int(target_ids[index]), f"target_row:{target_ids[index]}"),
+            "target_protocol": protocols[index],
+            "horizon": int(horizons[index]),
+            "acquisition_budget_steps": int(horizons[index]),
+            "branch_factor": int(branch_factors[index]),
+            "beam_width": int(beam_widths[index]),
+            "candidate_config": candidate_configs[index],
+            "oracle_config": oracle_configs[index],
+            "branch_schedule": schedules[index],
+            "policy": policies[index],
+            "rollout_recipe": rollout_configs[index],
+            "final_cumulative_target_rri": _finite_or_none(final_rri[index]),
+            "final_cumulative_target_root_gain": _finite_or_none(final_gain[index]),
+        }
+        cohort_key = json.dumps({field: row[field] for field in _POLICY_COHORT_KEY_FIELDS}, sort_keys=True)
+        row["cohort_key"] = cohort_key
+        row["cohort_id"] = _cohort_id_from_key(cohort_key)
+        rows.append(row)
+
+    recipes_by_policy: dict[str, set[str]] = {}
+    for row in rows:
+        recipes_by_policy.setdefault(str(row["policy"]), set()).add(str(row["rollout_recipe"]))
+    for row in rows:
+        policy = str(row["policy"])
+        recipe = str(row["rollout_recipe"])
+        row["comparison_label"] = policy if len(recipes_by_policy[policy]) == 1 else f"{policy}@{recipe[:12]}"
+    return rows
+
+
+def _decoded_array(reader: RolloutZarrStoreReader, path: str, dictionary: str) -> list[str]:
+    ids = np.asarray(reader.array(path), dtype=np.int64).reshape(-1)
+    values = _read_string_array(reader, f"dictionaries/{dictionary}")
+    return [values[int(value)] if 0 <= int(value) < len(values) else "" for value in ids.tolist()]
+
+
+def _cohort_ineligibility_reason(labels: tuple[str, ...], duplicates: tuple[str, ...]) -> str:
+    if len(labels) < 2:
+        return "only one policy/recipe is represented for this exact cohort"
+    if duplicates:
+        return f"multiple rollout chains make policy/recipe rows ambiguous: {', '.join(duplicates)}"
+    return "not comparable"
+
+
+def _nearest_policy_mismatch_rows(
+    rows: list[dict[str, object]],
+    labels: tuple[str, ...],
+    grouped: dict[str, list[dict[str, object]]],
+) -> list[dict[str, object]]:
+    output: list[dict[str, object]] = []
+    by_label = {label: [row for row in rows if row["comparison_label"] == label] for label in labels}
+    for left_label, right_label in combinations(labels, 2):
+        exact_match = any(
+            {str(row["comparison_label"]) for row in cohort_rows}.issuperset({left_label, right_label})
+            for cohort_rows in grouped.values()
+        )
+        if exact_match:
+            continue
+        candidates: list[tuple[int, int, int, dict[str, object], dict[str, object], tuple[str, ...]]] = []
+        for left in by_label[left_label]:
+            for right in by_label[right_label]:
+                mismatches = tuple(field for field in _POLICY_COHORT_KEY_FIELDS if left.get(field) != right.get(field))
+                candidates.append(
+                    (
+                        len(mismatches),
+                        int(left["rollout_row_id"]),
+                        int(right["rollout_row_id"]),
+                        left,
+                        right,
+                        mismatches,
+                    )
+                )
+        if not candidates:
+            continue
+        _count, _left_id, _right_id, left, right, mismatches = min(
+            candidates,
+            key=lambda value: (value[0], value[1], value[2]),
+        )
+        output.append(
+            {
+                "policy_a": left_label,
+                "policy_b": right_label,
+                "mismatched_fields": mismatches,
+                "mismatch_count": len(mismatches),
+                "nearest_policy_a_rollout_row_id": int(left["rollout_row_id"]),
+                "nearest_policy_b_rollout_row_id": int(right["rollout_row_id"]),
+                "policy_a_values": {field: left[field] for field in mismatches},
+                "policy_b_values": {field: right[field] for field in mismatches},
+            }
+        )
+    return output
+
+
+def _cohort_id_from_key(cohort_key: str) -> str:
+    digest = hashlib.sha256(cohort_key.encode("utf-8")).hexdigest()[:12]
+    return f"cohort-{digest}"
+
+
+def _paired_bootstrap_interval(
+    delta: np.ndarray,
+    *,
+    bootstrap_samples: int,
+    confidence: float,
+    seed: int,
+) -> tuple[float | None, float | None]:
+    values = np.asarray(delta, dtype=np.float64).reshape(-1)
+    if values.size < 3:
+        return None, None
+    rng = np.random.default_rng(seed)
+    indices = rng.integers(0, values.size, size=(bootstrap_samples, values.size))
+    estimates = np.median(values[indices], axis=1)
+    tail = (1.0 - confidence) / 2.0
+    return float(np.quantile(estimates, tail)), float(np.quantile(estimates, 1.0 - tail))
+
+
+def _selected_path_lengths(reader: RolloutZarrStoreReader) -> np.ndarray:
+    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    root_pose = np.asarray(reader.array("rollouts/root_pose_world"), dtype=np.float32).reshape(len(rollout_ids), 12)
+    candidate_rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
+    candidate_steps = np.asarray(reader.array("candidates/step_index"), dtype=np.int64).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    candidate_poses = np.asarray(reader.array("candidates/pose_world_cam"), dtype=np.float32).reshape(-1, 12)
+    lengths: list[float] = []
+    for rollout_row, rollout_id in enumerate(rollout_ids):
+        indices = np.flatnonzero(selected & (candidate_rollout_ids == int(rollout_id)))
+        if indices.size == 0:
+            lengths.append(0.0)
+            continue
+        ordered = indices[np.argsort(candidate_steps[indices], kind="stable")]
+        points = [root_pose[rollout_row, 9:12], *[candidate_poses[index, 9:12] for index in ordered]]
+        lengths.append(
+            float(
+                sum(
+                    np.linalg.norm(np.asarray(points[index + 1]) - np.asarray(points[index]))
+                    for index in range(len(points) - 1)
+                )
+            )
+        )
+    return np.asarray(lengths, dtype=np.float64)
+
+
+def _reason_counts(reason_codes: np.ndarray) -> dict[str, int]:
+    names = {code: name for name, code in INVALID_REASON_CODES.items()}
+    return _id_counts(np.asarray(reason_codes, dtype=np.int64), names=names)
+
+
+def _id_counts(values: np.ndarray, *, names: dict[int, str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in np.asarray(values, dtype=np.int64).reshape(-1):
+        if value < 0:
+            continue
+        key = names.get(int(value), f"id_{int(value)}")
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _component_names(manifest_payload: dict[str, Any]) -> dict[int, str]:
+    writer_config = manifest_payload.get("manifest", {}).get("generation", {}).get("writer_config")
+    components = []
+    if isinstance(writer_config, dict):
+        candidate_mixture = writer_config.get("candidate_mixture")
+        if isinstance(candidate_mixture, dict):
+            components = candidate_mixture.get("components") or []
+    names: dict[int, str] = {}
+    if isinstance(components, list):
+        for index, component in enumerate(components):
+            if isinstance(component, dict):
+                name = component.get("name") or component.get("family") or component.get("position_mode")
+                if name is not None:
+                    names[index] = str(name)
+    return names
+
+
+def _read_string_array(reader: RolloutZarrStoreReader, path: str) -> list[str]:
+    try:
+        encoded = np.asarray(reader.array(path), dtype=np.uint8)
+    except KeyError:
+        return []
+    return json.loads(encoded.tobytes().decode("utf-8"))
+
+
+def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
+    finite = np.asarray(values, dtype=np.float64).reshape(-1)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return {
+            "count": 0,
+            "min": None,
+            "p5": None,
+            "p25": None,
+            "median": None,
+            "mean": None,
+            "p75": None,
+            "p95": None,
+            "max": None,
+        }
+    return {
+        "count": int(finite.size),
+        "min": float(np.min(finite)),
+        "p5": float(np.percentile(finite, 5)),
+        "p25": float(np.percentile(finite, 25)),
+        "median": float(np.median(finite)),
+        "mean": float(np.mean(finite)),
+        "p75": float(np.percentile(finite, 75)),
+        "p95": float(np.percentile(finite, 95)),
+        "max": float(np.max(finite)),
+    }
+
+
 def _finite_or_none(value: object) -> float | None:
     try:
         value_float = float(value)
@@ -990,13 +2262,23 @@ __all__ = [
     "candidate_audit_rows",
     "candidate_group_summary_rows",
     "candidate_result_diagnostic_counts",
+    "comparable_policy_cohorts",
     "decode_invalid_reason",
     "decode_position_id",
     "decode_strategy_id",
     "decode_target_invalid_reason",
     "discover_rollout_store_paths",
+    "mask_combination_rows",
+    "paired_policy_comparison_rows",
+    "root_relative_candidate_rows",
     "rollout_store_inventory_rows",
+    "rollout_statistics",
+    "runtime_storage_statistics",
     "rollout_step_objective_rows",
+    "selected_candidate_rank_rows",
+    "selected_depth_preview",
+    "selected_depth_summary_rows",
+    "store_invariant_rows",
     "suspicious_rollout_rows",
     "target_audit_rows",
     "validity_waterfall_rows",

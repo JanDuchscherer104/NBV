@@ -21,17 +21,16 @@ import typer
 from ..data_handling.identifiers import compact_ase_atek_identifiers
 from ..utils.cli_format import cli_console, counts_table, distribution_table, key_value_panel
 from ..utils.typer_cli import run_typer_app
-from .trace import INVALID_REASON_CODES
+from .inspection import rollout_statistics, runtime_storage_statistics
+from .reporting import (
+    THESIS_REPORT_BUNDLE_ROLE,
+    THESIS_REPORT_BUNDLE_VERSION,
+    build_thesis_report_frames,
+    write_thesis_report_bundle,
+)
 from .zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreConfig, RolloutZarrStoreReader
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
-_STRATEGY_NAMES = {
-    0: "forward_rig",
-    1: "radial_away",
-    2: "radial_towards",
-    3: "target_point",
-}
-
 app = typer.Typer(
     add_completion=False,
     context_settings=_HELP_SETTINGS,
@@ -79,9 +78,37 @@ def info_command(
         typer.Option("--min-horizon", min=0, help="Minimum rollout horizon required by --random-index."),
     ] = 2,
     seed: Annotated[int | None, typer.Option("--seed", help="Seed for deterministic --random-index selection.")] = None,
+    thesis_bundle_output: Annotated[
+        Path | None,
+        typer.Option(
+            "--thesis-bundle-output",
+            help="Write a strict thesis evidence JSON bundle for this validated store.",
+        ),
+    ] = None,
+    thesis_evidence_status: Annotated[
+        str | None,
+        typer.Option(
+            "--thesis-evidence-status",
+            help="Required bundle evidence class: pilot or confirmatory.",
+        ),
+    ] = None,
+    thesis_sidecar: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--thesis-sidecar",
+            help="JSON/JSONL evidence sidecar to audit and merge; repeat for multiple inputs.",
+        ),
+    ] = None,
 ) -> None:
     """Print rollout-store metadata, optional validation, optional stats, or a random row index."""
 
+    sidecar_paths = [] if thesis_sidecar is None else thesis_sidecar
+    _validate_thesis_export_options(
+        output=thesis_bundle_output,
+        evidence_status=thesis_evidence_status,
+        sidecars=sidecar_paths,
+        random_index=random_index,
+    )
     store_dir = RolloutZarrStoreConfig(store_dir=store).store_dir
     reader = RolloutZarrStoreReader(store_dir)
     if random_index:
@@ -104,7 +131,7 @@ def info_command(
             "errors": validation.errors,
         }
     if stats or preflight:
-        payload["stats"] = _stats_payload(reader=reader, manifest_payload=payload)
+        payload["stats"] = rollout_statistics(reader, manifest_payload=payload)
     if preflight:
         payload["preflight"] = _preflight_payload(
             reader=reader,
@@ -113,6 +140,23 @@ def info_command(
             stats_payload=payload["stats"],
             profile=profile,
         )
+    if thesis_bundle_output is not None:
+        assert thesis_evidence_status in {"pilot", "confirmatory"}
+        try:
+            frames = build_thesis_report_frames(
+                [store_dir],
+                sidecar_paths=sidecar_paths,
+                evidence_status=thesis_evidence_status,
+            )
+            digest = write_thesis_report_bundle(thesis_bundle_output, frames)
+        except (FileNotFoundError, TypeError, ValueError) as error:
+            raise typer.BadParameter(str(error)) from error
+        payload["thesis_bundle"] = {
+            "bundle_role": THESIS_REPORT_BUNDLE_ROLE,
+            "path": thesis_bundle_output.expanduser().resolve().as_posix(),
+            "schema_version": THESIS_REPORT_BUNDLE_VERSION,
+            "sha256": digest,
+        }
     payload = compact_ase_atek_identifiers(payload)
     if json_output:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -122,6 +166,21 @@ def info_command(
     _print_text_summary(payload, validate=validate or preflight, stats=stats or preflight, preflight=preflight)
     if preflight and not payload["preflight"]["go"]:
         raise SystemExit(1)
+
+
+def _validate_thesis_export_options(
+    *,
+    output: Path | None,
+    evidence_status: str | None,
+    sidecars: list[Path],
+    random_index: bool,
+) -> None:
+    if output is None and (evidence_status is not None or sidecars):
+        raise typer.BadParameter("--thesis-evidence-status and --thesis-sidecar require --thesis-bundle-output.")
+    if output is not None and evidence_status not in {"pilot", "confirmatory"}:
+        raise typer.BadParameter("--thesis-bundle-output requires --thesis-evidence-status pilot|confirmatory.")
+    if random_index and output is not None:
+        raise typer.BadParameter("--random-index cannot be combined with --thesis-bundle-output.")
 
 
 def _random_index_payload(*, reader: RolloutZarrStoreReader, min_horizon: int, seed: int | None) -> dict[str, Any]:
@@ -137,39 +196,6 @@ def _random_index_payload(*, reader: RolloutZarrStoreReader, min_horizon: int, s
         "index": index,
         "horizon": int(horizon[index]),
         "num_eligible": int(eligible.size),
-    }
-
-
-def _stats_payload(*, reader: RolloutZarrStoreReader, manifest_payload: dict[str, Any]) -> dict[str, Any]:
-    valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
-    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
-    primary_invalid_reason = np.asarray(reader.array("candidates/primary_invalid_reason"), dtype=np.int64).reshape(-1)
-    strategy_id = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
-    mixture_id = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
-    valid_per_step = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.float64).reshape(-1)
-    policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
-    policy_names = _read_string_array(reader, "dictionaries/policy")
-    component_names = _component_names(manifest_payload)
-    return {
-        "candidate_validity": {
-            "valid": int(valid.sum()),
-            "total": int(valid.size),
-            "fraction": _safe_fraction(int(valid.sum()), int(valid.size)),
-            "valid_per_step": _distribution(valid_per_step),
-            "invalid_reasons": _reason_counts(primary_invalid_reason[~valid]),
-        },
-        "selected": {
-            "total": int(selected.sum()),
-            "strategy_counts": _id_counts(strategy_id[selected], names=_STRATEGY_NAMES),
-            "component_counts": _id_counts(mixture_id[selected], names=component_names),
-            "path_length_m": _distribution(_selected_path_lengths(reader)),
-        },
-        "valid_candidates": {
-            "strategy_counts": _id_counts(strategy_id[valid], names=_STRATEGY_NAMES),
-            "component_counts": _id_counts(mixture_id[valid], names=component_names),
-        },
-        "policy_counts": _id_counts(policy_ids, names=dict(enumerate(policy_names))),
-        "source_coverage": dict(manifest_payload.get("manifest", {}).get("source_coverage", {})),
     }
 
 
@@ -226,7 +252,7 @@ def _preflight_payload(
         else:
             warnings.append(message)
 
-    storage = _storage_payload(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
+    storage = runtime_storage_statistics(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
     if (
         storage["file_count"] > storage["file_count_limit"]
         or storage["bytes_per_candidate"] > storage["bytes_per_candidate_limit"]
@@ -293,121 +319,6 @@ def _reward_signal_payload(reader: RolloutZarrStoreReader) -> dict[str, float | 
     }
 
 
-def _storage_payload(store_dir: Path, *, candidate_count: int) -> dict[str, float | int]:
-    file_count = 0
-    total_bytes = 0
-    for path in store_dir.rglob("*"):
-        if not path.is_file():
-            continue
-        file_count += 1
-        total_bytes += int(path.stat().st_size)
-    denominator = max(1, int(candidate_count))
-    return {
-        "file_count": file_count,
-        "total_bytes": total_bytes,
-        "bytes_per_candidate": float(total_bytes) / float(denominator),
-        "file_count_limit": max(2000, denominator * 20),
-        "bytes_per_candidate_limit": 2_000_000.0,
-    }
-
-
-def _selected_path_lengths(reader: RolloutZarrStoreReader) -> np.ndarray:
-    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
-    root_pose = np.asarray(reader.array("rollouts/root_pose_world"), dtype=np.float32).reshape(len(rollout_ids), 12)
-    candidate_rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
-    candidate_steps = np.asarray(reader.array("candidates/step_index"), dtype=np.int64).reshape(-1)
-    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
-    candidate_poses = np.asarray(reader.array("candidates/pose_world_cam"), dtype=np.float32).reshape(-1, 12)
-    lengths: list[float] = []
-    for rollout_row, rollout_id in enumerate(rollout_ids):
-        indices = np.flatnonzero(selected & (candidate_rollout_ids == int(rollout_id)))
-        if indices.size == 0:
-            lengths.append(0.0)
-            continue
-        ordered = indices[np.argsort(candidate_steps[indices], kind="stable")]
-        points = [root_pose[rollout_row, 9:12], *[candidate_poses[index, 9:12] for index in ordered]]
-        segment_lengths = [
-            float(np.linalg.norm(np.asarray(points[index + 1]) - np.asarray(points[index])))
-            for index in range(len(points) - 1)
-        ]
-        lengths.append(float(sum(segment_lengths)))
-    return np.asarray(lengths, dtype=np.float64)
-
-
-def _reason_counts(reason_codes: np.ndarray) -> dict[str, int]:
-    names = {code: name for name, code in INVALID_REASON_CODES.items()}
-    return _id_counts(np.asarray(reason_codes, dtype=np.int64), names=names)
-
-
-def _id_counts(values: np.ndarray, *, names: dict[int, str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in np.asarray(values, dtype=np.int64).reshape(-1):
-        if value < 0:
-            continue
-        key = names.get(int(value), f"id_{int(value)}")
-        counts[key] = counts.get(key, 0) + 1
-    return dict(sorted(counts.items()))
-
-
-def _component_names(manifest_payload: dict[str, Any]) -> dict[int, str]:
-    writer_config = manifest_payload.get("manifest", {}).get("generation", {}).get("writer_config")
-    components = []
-    if isinstance(writer_config, dict):
-        candidate_mixture = writer_config.get("candidate_mixture")
-        if isinstance(candidate_mixture, dict):
-            components = candidate_mixture.get("components") or []
-    names: dict[int, str] = {}
-    if isinstance(components, list):
-        for index, component in enumerate(components):
-            if isinstance(component, dict):
-                name = component.get("name") or component.get("family") or component.get("position_mode")
-                if name is not None:
-                    names[index] = str(name)
-    return names
-
-
-def _read_string_array(reader: RolloutZarrStoreReader, path: str) -> list[str]:
-    try:
-        encoded = np.asarray(reader.array(path), dtype=np.uint8)
-    except KeyError:
-        return []
-    return json.loads(encoded.tobytes().decode("utf-8"))
-
-
-def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
-    finite = np.asarray(values, dtype=np.float64).reshape(-1)
-    finite = finite[np.isfinite(finite)]
-    if finite.size == 0:
-        return {
-            "count": 0,
-            "min": None,
-            "p5": None,
-            "p25": None,
-            "median": None,
-            "mean": None,
-            "p75": None,
-            "p95": None,
-            "max": None,
-        }
-    return {
-        "count": int(finite.size),
-        "min": float(np.min(finite)),
-        "p5": float(np.percentile(finite, 5)),
-        "p25": float(np.percentile(finite, 25)),
-        "median": float(np.median(finite)),
-        "mean": float(np.mean(finite)),
-        "p75": float(np.percentile(finite, 75)),
-        "p95": float(np.percentile(finite, 95)),
-        "max": float(np.max(finite)),
-    }
-
-
-def _safe_fraction(numerator: int, denominator: int) -> float | None:
-    if denominator <= 0:
-        return None
-    return float(numerator) / float(denominator)
-
-
 def _print_text_summary(payload: dict[str, Any], *, validate: bool, stats: bool, preflight: bool = False) -> None:
     """Print a human-readable manifest and stats summary."""
 
@@ -460,6 +371,19 @@ def _print_text_summary(payload: dict[str, Any], *, validate: bool, stats: bool,
                     ("go", result.get("go")),
                     ("blockers", result.get("blockers", [])),
                     ("warnings", result.get("warnings", [])),
+                ],
+            )
+        )
+    if "thesis_bundle" in payload:
+        bundle = payload["thesis_bundle"]
+        console.print(
+            key_value_panel(
+                "Thesis Evidence Bundle",
+                [
+                    ("role", bundle.get("bundle_role")),
+                    ("schema", bundle.get("schema_version")),
+                    ("path", bundle.get("path")),
+                    ("sha256", bundle.get("sha256")),
                 ],
             )
         )

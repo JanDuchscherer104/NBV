@@ -22,6 +22,7 @@ from ._colors import (
     step_to_rgba,
     validity_to_rgba,
 )
+from ._config import RerunInspectorLayerState, RerunInspectorRolloutLayersConfig
 from ._frusta import (
     CandidateFrustumLineStrips,
     apply_display_cw90,
@@ -29,6 +30,7 @@ from ._frusta import (
     frusta_from_camera_tw,
     frusta_from_p3d_cameras,
 )
+from ._layers import RolloutLayerName, RolloutLayerPreset, resolve_rollout_layer_config
 
 __all__ = [
     "ColorMode",
@@ -38,6 +40,10 @@ __all__ = [
     "TARGET_OBB_RGBA",
     "UNKNOWN_RGBA",
     "CandidateFrustumLineStrips",
+    "RerunInspectorLayerState",
+    "RerunInspectorRolloutLayersConfig",
+    "RolloutLayerName",
+    "RolloutLayerPreset",
     "apply_display_cw90",
     "candidate_labels",
     "candidate_rgba",
@@ -46,6 +52,7 @@ __all__ = [
     "obb_semantic_rgba",
     "oracle_rri_to_rgba",
     "rank_to_rgba",
+    "resolve_rollout_layer_config",
     "step_to_rgba",
     "validity_to_rgba",
 ]

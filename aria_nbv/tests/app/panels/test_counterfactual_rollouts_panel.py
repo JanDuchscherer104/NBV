@@ -117,6 +117,11 @@ def _metric_values(app: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in app.metric}
 
 
+def _set_stored_rollout_workspace(app: AppTest, workspace: str) -> AppTest:
+    control = next(group for group in app.get("button_group") if group.label == "Inspection workspace")
+    return control.set_value(workspace).run()
+
+
 def _dummy_camera() -> CameraTW:
     return CameraTW.from_surreal(
         width=torch.tensor([64.0]),
@@ -353,127 +358,6 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
     assert overlays[0].corners_px.shape == (8, 2)
 
 
-def test_format_rollout_option_includes_context_and_nan_beam(tmp_path) -> None:
-    result = write_rollout_zarr_store(
-        tmp_path / "rollouts.zarr",
-        build_rollout_records(horizon=2, num_samples=6, seed=51)[:1],
-    )
-    reader = RolloutZarrStoreReader(result.store_dir)
-
-    assert stored_rollouts_panel.format_rollout_option(reader, 0) == (
-        "0 · scene fixture_box · target 0 · oracle_greedy · chain 0 · H=2 · B=1 · beam=NaN"
-    )
-
-
-def test_format_rollout_store_option_includes_schema_validation_and_counts(tmp_path) -> None:
-    row = {
-        "path": (tmp_path / "rollouts_v1_smoke.zarr").as_posix(),
-        "schema_status": "stale",
-        "validation_ok": False,
-        "observed_rollouts": 18,
-        "observed_steps": 54,
-        "observed_candidates": 270,
-    }
-
-    label = stored_rollouts_panel.format_rollout_store_option(row, root=tmp_path)
-
-    assert label == "rollouts_v1_smoke.zarr · stale · FAILED · R/S/C=18/54/270"
-
-
-def test_candidate_distribution_frame_coerces_display_fields() -> None:
-    audit_df = pd.DataFrame(
-        [
-            {
-                "candidate_row_id": "7",
-                "rollout_row_id": 1,
-                "step_index": "0",
-                "center_x": "1.25",
-                "center_y": "2.5",
-                "center_z": "3.75",
-                "selected": True,
-                "actor_action": None,
-                "q_train": False,
-                "position": None,
-                "strategy": "target_bearing_local",
-                "mixture": "component_a",
-                "invalid_reason": None,
-                "motion_yaw_delta_deg": "45.5",
-                "target_bearing_yaw_deg": "-32.0",
-                "target_root_gain": "0.125",
-            }
-        ]
-    )
-
-    df = stored_rollouts_panel._candidate_distribution_frame(audit_df)
-
-    assert df.loc[0, "candidate_row_id"] == pytest.approx(7.0)
-    assert df.loc[0, "center_x"] == pytest.approx(1.25)
-    assert bool(df.loc[0, "actor_action"]) is False
-    assert df.loc[0, "position"] == "unknown"
-    assert df.loc[0, "invalid_reason"] == "unknown"
-    assert df.loc[0, "motion_yaw_delta_deg"] == pytest.approx(45.5)
-
-
-def test_candidate_angle_frame_keeps_available_sources() -> None:
-    diagnostics_df = pd.DataFrame(
-        {
-            "target_bearing_yaw_deg": [-90.0, np.nan, 45.0],
-            "motion_yaw_delta_deg": [0.0, 30.0, np.nan],
-        }
-    )
-
-    angle_df = stored_rollouts_panel._candidate_angle_frame(diagnostics_df)
-
-    assert set(angle_df["angle_source"]) == {"target bearing yaw", "motion yaw delta"}
-    assert angle_df["angle_deg"].tolist() == [-90.0, 45.0, 0.0, 30.0]
-
-
-def test_target_selection_frame_coerces_scores_and_masks() -> None:
-    targets = pd.DataFrame(
-        [
-            {
-                "target_row_id": "4",
-                "source": None,
-                "class": "chair",
-                "confidence": "0.9",
-                "selection_rank": "1",
-                "selection_score": "0.75",
-                "target_valid": None,
-                "gt_label_valid": True,
-                "gt_match_status": None,
-                "projected_area_fraction": "0.01",
-            }
-        ]
-    )
-
-    df = stored_rollouts_panel._target_selection_frame(targets)
-
-    assert df.loc[0, "target_row_id"] == pytest.approx(4.0)
-    assert df.loc[0, "selection_score"] == pytest.approx(0.75)
-    assert bool(df.loc[0, "target_valid"]) is False
-    assert bool(df.loc[0, "gt_label_valid"]) is True
-    assert df.loc[0, "source"] == "unknown"
-    assert df.loc[0, "gt_match_status"] == "unknown"
-
-
-def test_first_available_numeric_skips_absent_and_empty_columns() -> None:
-    df = pd.DataFrame(
-        {
-            "projected_area_fraction": [np.nan, np.nan],
-            "projected_area_pixels": [32.0, np.nan],
-        }
-    )
-
-    assert (
-        stored_rollouts_panel._first_available_numeric(
-            df,
-            ("effective_support", "projected_area_fraction", "projected_area_pixels"),
-        )
-        == "projected_area_pixels"
-    )
-    assert stored_rollouts_panel._first_available_numeric(df, ("missing",)) is None
-
-
 def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "current.zarr",
@@ -484,46 +368,63 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
 
     assert not app.exception
     assert [header.value for header in app.header] == ["Stored Rollout Zarr"]
-    assert "Rollout Stores" in [subheader.value for subheader in app.subheader]
-    assert "Selected Rollout Row" in [subheader.value for subheader in app.subheader]
+    assert "Trust & Topology" in [subheader.value for subheader in app.subheader]
     assert _metric_values(app)["Validation"] == "OK"
     assert _metric_values(app)["Rollouts"] == "1"
     assert _metric_values(app)["Steps"] == "1"
     assert _metric_values(app)["Candidates"] == "12"
-    assert _metric_values(app)["Discovered stores"] == "1"
-    assert _metric_values(app)["Current valid stores"] == "1"
-    assert _metric_values(app)["Blocked stores"] == "0"
-    assert _metric_values(app)["Observed R/S"] == "1/1"
-    assert _metric_values(app)["Q-train candidates"] == "12"
-    assert {selectbox.label for selectbox in app.selectbox} >= {
-        "rollouts.zarr store",
-        "Selected-depth step",
-        "Geometry / label metric",
-        "Color / split by",
-        "Target breakdown",
-        "Rollout row",
+    workspace = next(group for group in app.get("button_group") if group.label == "Inspection workspace")
+    assert workspace.options == [
+        "Trust & Topology",
+        "Scientific Evidence",
+        "Targets & Action Support",
+        "Failure Triage",
+        "Inspect, Export & Rerun",
+    ]
+    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+    assert {button.label for button in app.get("download_button")} >= {
+        "Download invariant CSV",
+        "Download invariant JSON",
+        "Download topology JSON",
     }
-    assert {text_input.label for text_input in app.text_input} >= {
-        "Manual rollouts.zarr path",
-        "Rerun inspector config",
-        "RRD save directory",
-    }
-    assert {number_input.label for number_input in app.number_input} >= {
-        "Rerun web-viewer port",
-        "Rerun gRPC/proxy port",
-        "Selected-depth row limit",
-        "Candidate audit row limit (0 = all)",
-        "Min valid fanout",
-    }
-    assert {slider.label for slider in app.slider} >= {
-        "Dominant invalid fraction",
-        "High target score",
-        "Max selected step (m)",
-    }
-    assert {button.label for button in app.button} >= {"Open in Native Rerun", "Open in Rerun Web Viewer"}
-    assert len(app.get("plotly_chart")) >= 8
-    assert len(app.dataframe) >= 10
     assert not app.error
+
+    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
+    assert not app.exception
+    assert "Scientific Evidence" in [subheader.value for subheader in app.subheader]
+    assert _metric_values(app)["Matched comparison eligible"] == "NO"
+    assert any("comparison is blocked" in warning.value for warning in app.warning)
+    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+
+    app = _set_stored_rollout_workspace(app, "Targets & Action Support")
+    assert not app.exception
+    assert "Targets & Action Support" in [subheader.value for subheader in app.subheader]
+    assert {button.label for button in app.get("download_button")} >= {
+        "Download target protocol CSV",
+        "Download mask combinations CSV",
+        "Download family support CSV",
+    }
+
+    app = _set_stored_rollout_workspace(app, "Failure Triage")
+    assert not app.exception
+    assert "Failure Triage" in [subheader.value for subheader in app.subheader]
+    assert "Minimum valid fanout" in {item.label for item in app.number_input}
+    assert "Dominant invalidity fraction" in {item.label for item in app.slider}
+
+    app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
+    assert not app.exception
+    assert "Inspect, Export & Rerun" in [subheader.value for subheader in app.subheader]
+    assert {selectbox.label for selectbox in app.selectbox} >= {
+        "Rollout row",
+        "Step row",
+        "Layer preset",
+        "Launch mode",
+    }
+    assert {button.label for button in app.get("download_button")} >= {
+        "Download selected-step candidate CSV",
+        "Download deterministic evidence bundle",
+    }
+    assert "Launch Rerun" in {button.label for button in app.button}
 
 
 def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config, tmp_path) -> None:
@@ -537,17 +438,53 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     app = _stored_rollouts_app(tmp_path).run()
 
     assert not app.exception
-    assert _metric_values(app)["Validation"] == "FAILED"
+    assert _metric_values(app)["Validation"] == "BLOCKED"
     assert _metric_values(app)["Rollouts"] == "2"
     assert _metric_values(app)["Steps"] == "4"
     assert _metric_values(app)["Candidates"] == "8"
-    assert _metric_values(app)["Discovered stores"] == "1"
-    assert _metric_values(app)["Current valid stores"] == "0"
-    assert _metric_values(app)["Blocked stores"] == "1"
-    assert _metric_values(app)["Observed R/S"] == "2/4"
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert any("requires a store that passes" in info.value for info in app.info)
+    assert {button.label for button in app.get("download_button")} >= {
+        "Download store metadata JSON",
+        "Download topology JSON",
+    }
+
+    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
+    assert not app.exception
+    assert any("disabled because this store" in warning.value for warning in app.warning)
     assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
+    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+    assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
+
+
+def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config, tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        isolated_path_config.offline_cache_dir / "missing-depth.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=48)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    root.attrs["selected_depth_enabled"] = False
+
+    app = _stored_rollouts_app(tmp_path).run()
+    app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
+
+    assert not app.exception
+    assert any("No selected-depth row" in info.value for info in app.info)
+    assert "Download selected-step candidate CSV" in {button.label for button in app.get("download_button")}
+    assert "Launch Rerun" in {button.label for button in app.button}
+
+
+def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolated_path_config, tmp_path) -> None:
+    write_rollout_zarr_store(
+        isolated_path_config.offline_cache_dir / "large.zarr",
+        build_rollout_records(horizon=3, num_samples=12, seed=49),
+    )
+
+    app = _stored_rollouts_app(tmp_path).run()
+
+    assert not app.exception
+    assert "Trust & Topology" in [subheader.value for subheader in app.subheader]
+    assert not any(selectbox.label in {"Rollout row", "Step row", "Launch mode"} for selectbox in app.selectbox)
+    assert not any(number.label == "Candidate preview row limit" for number in app.number_input)
 
 
 def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> None:

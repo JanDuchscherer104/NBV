@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 import pytest
 import zarr
@@ -15,12 +17,18 @@ from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_group_summary_rows,
+    comparable_policy_cohorts,
     discover_rollout_store_paths,
+    mask_combination_rows,
+    paired_policy_comparison_rows,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
+    root_relative_candidate_rows,
+    selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
+    store_invariant_rows,
     suspicious_rollout_rows,
     target_audit_rows,
     validity_waterfall_rows,
@@ -268,3 +276,208 @@ def test_selected_depth_preview_returns_one_bounded_image_payload(tmp_path) -> N
     assert np.isfinite(preview["depth_m"]).all()
     assert preview["valid_mask"].all()
     assert preview["image_size_hw"] == (240, 240)
+
+
+def test_mask_combinations_preserve_selected_rows_outside_q_train(tmp_path) -> None:
+    """Selection is an actor decision, not a sequential stage after the training mask."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=50)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
+    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+
+    rows = mask_combination_rows(RolloutZarrStoreReader(result.store_dir))
+    selected_without_training = next(row for row in rows if row["selected"] is True and row["q_train"] is False)
+
+    assert selected_without_training["actor_action"] is True
+    assert selected_without_training["count"] == 1
+    assert selected_without_training["contract_valid"] is True
+    assert selected_without_training["denominator"] == result.num_candidates
+    assert selected_without_training["fraction_of_all"] == pytest.approx(1.0 / result.num_candidates)
+
+
+def test_store_invariants_expose_mask_depth_target_and_q_h_contracts(tmp_path) -> None:
+    """Invariant evidence should name the persisted contracts rather than hide them in validation text."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=51)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = store_invariant_rows(reader, manifest=reader.manifest())
+    assert store_invariant_rows(reader, manifest_payload=reader.manifest()) == rows
+    by_id = {str(row["invariant_id"]): row for row in rows}
+
+    assert by_id["schema_manifest"]["status"] == "PASS"
+    assert by_id["selected_actor_mask"]["status"] == "PASS"
+    assert by_id["q_train_supervision"]["status"] == "PASS"
+    assert by_id["selected_depth_alignment"]["data_role"] == "oracle/evaluation"
+    assert by_id["target_eval_alignment"]["data_role"] == "oracle/evaluation"
+    assert by_id["target_protocol_lineage"]["status"] == "PASS"
+    assert by_id["q_h_padding"]["status"] == "PASS"
+    assert by_id["q_h_selected_transition"]["status"] == "PASS"
+    assert by_id["q_h_factual_consistency"]["status"] == "PASS"
+    assert "q_h/td_reward" in by_id["q_h_selected_transition"]["source_fields"]
+
+
+def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train(tmp_path) -> None:
+    """A selected invalid action is a violation, while selected-not-q-train remains allowed."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=52)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
+    root["candidates/actor_action_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+
+    by_id = {str(row["invariant_id"]): row for row in store_invariant_rows(RolloutZarrStoreReader(result.store_dir))}
+
+    assert by_id["selected_actor_mask"]["status"] == "FAIL"
+    assert by_id["selected_actor_mask"]["violation_count"] == 1
+    assert by_id["q_train_supervision"]["status"] == "PASS"
+
+
+def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path) -> None:
+    """Policy comparison should use matched source, target, budget, and generator lineage."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=53)
+    for record in records[1:]:
+        record.lineage.source = copy.deepcopy(records[0].lineage.source)
+        record.lineage.target = copy.deepcopy(records[0].lineage.target)
+    result = write_rollout_zarr_store(tmp_path / "matched.zarr", records)
+
+    projection = comparable_policy_cohorts(RolloutZarrStoreReader(result.store_dir))
+
+    assert projection["eligible"] is True
+    assert len(projection["eligible_cohort_rows"]) == 1
+    assert projection["eligible_cohort_rows"][0]["comparison_count"] == 3
+    assert projection["mismatch_rows"] == []
+    assert "candidate_config" in projection["key_fields"]
+    assert "horizon" in projection["key_fields"]
+
+    mismatched_records = build_rollout_records(horizon=2, num_samples=6, seed=54)[:2]
+    mismatched_records[1].lineage.source = copy.deepcopy(mismatched_records[0].lineage.source)
+    mismatched_records[1].lineage.target = copy.deepcopy(mismatched_records[0].lineage.target)
+    mismatched_records[1].lineage.policy.candidate_config_hash = "different-candidate-config"
+    mismatch_result = write_rollout_zarr_store(tmp_path / "mismatched.zarr", mismatched_records)
+
+    blocked = comparable_policy_cohorts(RolloutZarrStoreReader(mismatch_result.store_dir))
+
+    assert blocked["eligible"] is False
+    assert blocked["eligible_cohort_rows"] == []
+    assert blocked["mismatch_rows"]
+    assert "candidate_config" in blocked["mismatch_rows"][0]["mismatched_fields"]
+
+
+def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) -> None:
+    """Paired summaries should bootstrap cohort deltas deterministically once three matches exist."""
+
+    records = []
+    base_records = build_rollout_records(horizon=1, num_samples=6, seed=55)[:2]
+    for source_row_id in range(3):
+        source_records = copy.deepcopy(base_records)
+        for record in source_records:
+            record.lineage.source = copy.deepcopy(source_records[0].lineage.source)
+            record.lineage.source.source_row_id = source_row_id
+            record.lineage.source.source_sample_index = source_row_id
+            record.lineage.source.source_sample_key = f"fixture:paired:{source_row_id}"
+            record.lineage.source.source_shard_row = source_row_id
+            record.lineage.target = copy.deepcopy(source_records[0].lineage.target)
+            record.lineage.target.target_row_id = source_row_id
+            record.lineage.target.target_id = f"fixture-target-paired-{source_row_id}"
+            record.lineage.target.matched_gt_target_row_id = 100 + source_row_id
+            record.lineage.target.matched_gt_target_id = f"fixture-gt-target-paired-{source_row_id}"
+        records.extend(source_records)
+    result = write_rollout_zarr_store(tmp_path / "paired.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    first = paired_policy_comparison_rows(reader, bootstrap_samples=256, seed=7)
+    second = paired_policy_comparison_rows(reader, bootstrap_samples=256, seed=7)
+
+    assert first == second
+    assert len(first) == 2
+    assert {row["metric"] for row in first} == {
+        "final_cumulative_target_rri",
+        "final_cumulative_target_root_gain",
+    }
+    assert all(row["matched_cohort_count"] == 3 for row in first)
+    assert all(row["policy_pair"] for row in first)
+    assert all(row["median_paired_delta"] == row["paired_delta_median"] for row in first)
+    assert all(row["bootstrap_ci_low"] is not None for row in first)
+    assert all(row["bootstrap_ci_high"] is not None for row in first)
+
+
+def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invalidity(tmp_path) -> None:
+    """Regret ranks finite valid rewards even when the selected reward is negative."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=8, seed=58)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
+    valid_rows = np.flatnonzero(np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_))
+    alternative_row = int(next(row for row in valid_rows.tolist() if row != selected_row))
+    root["candidates/target_root_gain"][selected_row] = np.asarray(-0.25, dtype=np.float32)
+    root["candidates/target_root_gain"][alternative_row] = np.asarray(0.75, dtype=np.float32)
+
+    row = selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))[0]
+
+    assert row["selected_actor_valid"] is True
+    assert row["selected_reward_negative"] is True
+    assert row["selected_rank"] > 1
+    assert float(row["best_valid_target_root_gain"]) >= 0.75
+    assert row["regret_to_best"] == pytest.approx(
+        float(row["best_valid_target_root_gain"]) - float(row["selected_target_root_gain"])
+    )
+
+
+def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path) -> None:
+    """Geometry projection should never expose cross-scene absolute centers as comparison axes."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=59)[:1]
+    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
+    root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
+    records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = root_relative_candidate_rows(reader, rollout_row_id=0)
+    first = rows[0]
+    world_pose = np.asarray(reader.array("candidates/pose_world_cam")[0], dtype=np.float32)
+    root_pose = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float32)
+
+    assert len(rows) == result.num_candidates
+    assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
+    assert first["units"] == "m"
+    assert first["root_relative_x_m"] == pytest.approx(float(world_pose[9] - root_pose[9]))
+    assert first["root_relative_y_m"] == pytest.approx(float(world_pose[10] - root_pose[10]))
+    assert first["root_relative_z_m"] == pytest.approx(float(world_pose[11] - root_pose[11]))
+    assert "center_x" not in first
+
+
+def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:
+    """Hard mask violations should carry exact rollout, step, and candidate identifiers."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=60)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
+    root["candidates/actor_action_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+
+    failures = suspicious_rollout_rows(RolloutZarrStoreReader(result.store_dir))
+    violation = next(row for row in failures if row["kind"] == "selected_actor_mask_violation")
+
+    assert violation["severity"] == "error"
+    assert violation["rollout_row_id"] == 0
+    assert violation["step_row_id"] == 0
+    assert violation["candidate_row_id"] == int(root["candidates/candidate_row_id"][selected_row])
