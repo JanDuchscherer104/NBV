@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from ...data_handling.offline.dataset import VinOfflineDatasetConfig
 from ...rollouts.manifest import (
     RolloutStoreInvocation,
     collect_runtime_provenance,
@@ -28,8 +29,10 @@ from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_SUCCESS_FILENAME,
     RolloutShardEntry,
     RolloutShardRow,
+    RolloutSourceManifest,
     read_rollout_shard_manifest,
     write_rollout_shard_manifest,
+    write_rollout_source_manifest,
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -140,6 +143,37 @@ class RolloutShardCampaignStatus:
             "counts": self.counts,
             "shards": [shard.to_jsonable() for shard in self.shards],
         }
+
+
+def plan_rollout_source_manifest(source: VinOfflineDatasetConfig) -> RolloutSourceManifest:
+    """Freeze the source reader's ordered rows independently of rollout profile.
+
+    The returned contract deliberately excludes candidate families, policies,
+    retention, and output paths so paired campaigns can derive their own shard
+    manifests from one reviewed source population.
+    """
+
+    dataset = source.setup_target()
+    if dataset is None:
+        raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
+    return RolloutSourceManifest.from_index_records(
+        dataset._records,
+        source_manifest_hash=stable_msgspec_hash(dataset.manifest),
+        source_cache_version=str(dataset.manifest.version),
+        source_store_dir=Path(source.store.store_dir).expanduser().resolve().as_posix(),
+    )
+
+
+def write_rollout_source_manifest_from_config(
+    source: VinOfflineDatasetConfig,
+    *,
+    manifest_path: Path | str,
+) -> RolloutSourceManifest:
+    """Plan and write one profile-independent ordered source manifest."""
+
+    manifest = plan_rollout_source_manifest(source)
+    write_rollout_source_manifest(manifest_path, manifest)
+    return manifest
 
 
 def plan_rollout_shards(
@@ -495,8 +529,10 @@ __all__ = [
     "RolloutShardCampaignStatus",
     "RolloutShardRunResult",
     "RolloutShardStatus",
+    "plan_rollout_source_manifest",
     "plan_rollout_shards",
     "run_rollout_shard",
     "summarize_rollout_shard_campaign",
     "write_rollout_shard_manifest_from_config",
+    "write_rollout_source_manifest_from_config",
 ]

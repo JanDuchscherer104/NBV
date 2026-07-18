@@ -1,19 +1,18 @@
-# Canonical thesis-default V1 rollout generation profile.
+# Paired 50-source V1 rollout pilot: realistic candidate-family baseline.
 #
 # Usage:
 #   cd aria_nbv
 #   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml --dry-run
 #   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_realistic.toml
 #
-# This is the checked-in "real rollout" semantic contract. It is portable and
-# cache-relative by default; local smoke runs and LRZ campaigns may copy it and
-# override paths or counts in untracked run configs. It intentionally does not
-# rebuild EFM/backbone outputs. It consumes the existing immutable VIN offline
-# store in sample mode and writes a separate rollouts.zarr replay/training
-# artifact. Q_H training settings do not belong in this TOML.
+# This paired pilot consumes the reviewed source manifest below and rejects
+# source-count, source-store identity, or split-hash drift. Regenerate and
+# review that manifest before changing its source population. The immutable VIN
+# store remains cache-relative; rollout replay is written separately. Q_H
+# training settings do not belong in this TOML.
 
-max_samples            = 25
-max_targets_per_sample = 1
+max_samples            = 50
+source_manifest_path   = ".configs/rollout_pilot50_source_manifest.json"
 require_label_valid    = true
 min_valid_root_candidates = 15
 log_timing             = true
@@ -21,7 +20,7 @@ verbosity              = 1
 
 [source]
 split                    = "train"
-limit                    = 25
+limit                    = 50
 return_format            = "sample"
 include_efm_snippet      = true
 include_gt_mesh          = true
@@ -36,7 +35,7 @@ map_location             = "cuda"
 verbosity                = 1
 
     [source.store]
-    store_dir = "vin_offline"
+    store_dir = "vin_offline_rollout_pilot50_v7"
 
 [oracle_target_task_sampler]
 max_targets_per_sample            = 1
@@ -46,8 +45,6 @@ policy                            = "uniform_without_replacement"
 [candidate_mixture.base]
 camera_label           = "rgb"
 num_samples            = 60
-oversample_factor      = 3.0
-max_resamples          = 2
 align_to_gravity       = true
 min_radius             = 0.25
 max_radius             = 1.1
@@ -137,6 +134,7 @@ log_timing                  = true
         cull_backfaces    = false
         blur_radius       = 0.0
         bin_size          = 0
+        max_views_per_batch = 2
         dtype             = "float32"
         is_debug          = false
         verbosity         = 1
@@ -148,11 +146,11 @@ height_px   = 240
 chunk_steps = 16
 
 [store]
-store_dir                    = "rollouts_v1_realistic.zarr"
+store_dir                    = "rollouts_v1_realistic_pilot50.zarr"
 target_protocol_version      = "v1_observed"
 field_retention_policy       = "compact_selected_heavy"
 source_offline_store_version = "vin-offline-v7"
-split_manifest_hash          = "configured-at-runtime"
+split_manifest_hash          = "0c746d304c1feac2"
 discount_gamma               = 1.0
 q_h_chunk_states             = 64
 target_eval_crop_max_points  = 50000

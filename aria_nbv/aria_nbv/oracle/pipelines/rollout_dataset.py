@@ -18,11 +18,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 import torch
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
+from ...configs import PathConfig
 from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
@@ -44,7 +46,13 @@ from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestCon
 from ...rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
 from ...rollouts.replay.state import CounterfactualRolloutResult
-from ...rollouts.shard_manifest import RolloutShardEntry
+from ...rollouts.shard_manifest import (
+    RolloutShardEntry,
+    RolloutShardRow,
+    RolloutSourceManifest,
+    build_rollout_split_manifest_hash,
+    read_rollout_source_manifest,
+)
 from ...rollouts.trace import INVALID_REASON_VERSION, PolicyLineage, RolloutLineage, SourceLineage, TargetLineage
 from ...rollouts.zarr_store import (
     RolloutZarrStoreConfig,
@@ -302,6 +310,9 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     )
     """VIN strict-v7 source reader; must return samples with live snippet and GT mesh."""
 
+    source_manifest_path: Path | None = None
+    """Optional reviewed ordered-source manifest enforced before direct generation."""
+
     oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
     """Oracle GT target-task sampler used by default for rollout data generation."""
 
@@ -347,6 +358,38 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Enable debug logging in writer dependencies."""
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
+
+    @field_validator("source_manifest_path", mode="before")
+    @classmethod
+    def _resolve_source_manifest_path(cls, value: Path | str | None) -> Path | None:
+        """Resolve a configured source manifest relative to the repository root."""
+
+        if value is None:
+            return None
+        return PathConfig().resolve_artifact_path(value, expected_suffix=".json", create_parent=False)
+
+    @model_validator(mode="after")
+    def _validate_source_manifest_contract(self) -> "RolloutDatasetWriterConfig":
+        """Require direct pilot configs to match their reviewed ordered source rows."""
+
+        if self.source_manifest_path is None:
+            return self
+        manifest = read_rollout_source_manifest(self.source_manifest_path)
+        expected_rows = len(manifest.rows)
+        if self.max_samples != expected_rows or self.source.limit != expected_rows:
+            raise ValueError(
+                "source_manifest_path requires max_samples and source.limit to equal "
+                f"the manifest row count ({expected_rows})."
+            )
+        if self.source.split != manifest.split:
+            raise ValueError(
+                f"Configured source split {self.source.split!r} does not match source manifest {manifest.split!r}."
+            )
+        if self.source.store.store_dir.name != Path(manifest.source_store_dir).name:
+            raise ValueError("Configured VIN source-store identity does not match source_manifest_path provenance.")
+        if self.store.split_manifest_hash != manifest.split_manifest_hash:
+            raise ValueError("Configured rollout split_manifest_hash does not match source_manifest_path.")
+        return self
 
     @field_validator("max_targets_per_sample")
     @classmethod
@@ -413,12 +456,11 @@ class _RolloutSourceLineageBuilder:
     def build_split_manifest_hash(*, source_manifest_hash: str, split: str, records: list[dict[str, object]]) -> str:
         """Hash the split-local ordered source rows used for a rollout shard."""
 
-        payload = {
-            "source_manifest_hash": source_manifest_hash,
-            "split": split,
-            "records": records,
-        }
-        return stable_msgspec_hash(payload)
+        return build_rollout_split_manifest_hash(
+            source_manifest_hash=source_manifest_hash,
+            split=split,
+            records=records,
+        )
 
     @staticmethod
     def dataset_records_for_hash(dataset: VinOfflineDataset, *, limit: int) -> list[dict[str, object]]:
@@ -494,6 +536,15 @@ class RolloutDatasetWriter:
         dataset = self.config.source.setup_target()
         if dataset is None:
             raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
+        source_manifest = (
+            None
+            if self.config.source_manifest_path is None
+            else read_rollout_source_manifest(self.config.source_manifest_path)
+        )
+        if source_manifest is not None and shard_entry is not None:
+            raise ValueError("source_manifest_path cannot be combined with shard mode; the shard manifest owns rows.")
+        if source_manifest is not None:
+            self._apply_source_manifest(dataset, source_manifest)
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
         oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
@@ -503,6 +554,8 @@ class RolloutDatasetWriter:
             else min(int(self.config.max_samples), len(dataset))
         )
         source_lineage = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=max_samples)
+        if source_manifest is not None:
+            self._validate_source_manifest_lineage(source_lineage, source_manifest)
         if shard_entry is not None:
             self._validate_shard_lineage(source_lineage, shard_entry)
         records = []
@@ -595,24 +648,56 @@ class RolloutDatasetWriter:
         """Filter a source dataset to the ordered rows owned by one shard entry."""
 
         shard_entry.validate()
+        self._apply_manifest_rows(dataset, shard_entry.rows, owner=f"rollout shard {shard_entry.shard_id!r}")
+
+    @staticmethod
+    def _apply_source_manifest(dataset: VinOfflineDataset, manifest: RolloutSourceManifest) -> None:
+        """Filter a direct build to the reviewed profile-independent source rows."""
+
+        manifest.validate()
+        RolloutDatasetWriter._apply_manifest_rows(dataset, manifest.rows, owner="rollout source manifest")
+
+    @staticmethod
+    def _apply_manifest_rows(
+        dataset: VinOfflineDataset,
+        rows: Sequence[RolloutShardRow],
+        *,
+        owner: str,
+    ) -> None:
+        """Filter and order a VIN reader from validated source-row records."""
+
         records_by_shard_row = {(str(record.shard_id), int(record.row)): record for record in dataset._records}
         selected_records = []
-        for row in shard_entry.rows:
+        for row in rows:
             record = records_by_shard_row.get((row.source_shard_id, int(row.source_shard_row)))
             if record is None:
                 raise ValueError(
-                    f"Rollout shard {shard_entry.shard_id!r} row {row.order} is not exposed by the configured "
+                    f"{owner.capitalize()} row {row.order} is not exposed by the configured "
                     f"VIN source split/limit: source_shard_id={row.source_shard_id!r} "
                     f"source_shard_row={row.source_shard_row}."
                 )
             if not row.matches_record(record):
                 raise ValueError(
-                    f"Rollout shard {shard_entry.shard_id!r} row {row.order} does not match the configured "
+                    f"{owner.capitalize()} row {row.order} does not match the configured "
                     "VIN source sample_index.jsonl record."
                 )
             selected_records.append(record)
         dataset._records = selected_records
         dataset._record_by_pair = {(record.scene_id, record.snippet_id): record for record in selected_records}
+
+    @staticmethod
+    def _validate_source_manifest_lineage(
+        source_lineage: _RolloutSourceLineageBuilder,
+        manifest: RolloutSourceManifest,
+    ) -> None:
+        """Verify the direct reader still matches the reviewed source manifest."""
+
+        if source_lineage.source_manifest_hash != manifest.source_manifest_hash:
+            raise ValueError("Configured source manifest hash does not match the active VIN source store.")
+        if source_lineage.source_cache_version != manifest.source_cache_version:
+            raise ValueError("Configured source cache version does not match the active VIN source store.")
+        if source_lineage.split_manifest_hash != manifest.split_manifest_hash:
+            raise ValueError("Configured ordered source rows do not match source_manifest_path.")
 
     @staticmethod
     def _validate_shard_lineage(

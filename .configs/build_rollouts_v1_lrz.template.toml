@@ -6,7 +6,6 @@
 # manifest carries the reviewed scene split. Local sample caps do not belong in
 # a production campaign config.
 
-max_targets_per_sample = 2
 require_label_valid = true
 min_valid_root_candidates = 15
 log_timing = true
@@ -129,6 +128,7 @@ znear = 0.001
 cull_backfaces = false
 blur_radius = 0.0
 bin_size = 0
+        max_views_per_batch = 2
 dtype = "float32"
 is_debug = false
 verbosity = 1

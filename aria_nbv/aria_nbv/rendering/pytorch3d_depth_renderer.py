@@ -61,6 +61,9 @@ class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
     max_faces_per_bin: int | None = None
     """Performance knob mirroring ``RasterizationSettings.max_faces_per_bin``."""
 
+    max_views_per_batch: int = Field(default=4, ge=1)
+    """Maximum cameras rasterized together, bounding replicated mesh memory."""
+
     dtype: Literal["float32", "float16", "bfloat16"] = "float32"
     """Computation dtype; use float16/bfloat16 on CUDA for speed"""
 
@@ -151,11 +154,10 @@ class Pytorch3DDepthRenderer:
             principal_point = principal_point.expand(batch_size, -1)
             image_size = image_size.expand(batch_size, -1)
 
-        # Build (and cache) PyTorch3D mesh structure
+        # Keep one base mesh and replicate it only for each bounded view batch.
         verts_t, faces_t = mesh
 
         mesh_struct_single = Meshes(verts=[verts_t.to(self.device)], faces=[faces_t.to(self.device)])
-        mesh_struct = mesh_struct_single.extend(rotations.shape[0])
 
         cameras = PerspectiveCameras(
             device=self.device,
@@ -176,13 +178,26 @@ class Pytorch3DDepthRenderer:
             cull_to_frustum=False,
             z_clip_value=self.config.znear,
         )
-        rasterizer = MeshRasterizer(cameras=cameras, raster_settings=raster_settings)
         autocast_enable = dtype != torch.float32 and self.device.type == "cuda"
-        with torch.autocast(device_type=self.device.type, dtype=dtype, enabled=autocast_enable):
-            fragments = rasterizer.forward(mesh_struct)
+        depth_batches: list[Tensor] = []
+        pix_to_face_batches: list[Tensor] = []
+        num_faces = int(faces_t.shape[0])
+        max_views_per_batch = min(batch_size, int(self.config.max_views_per_batch))
+        for start in range(0, batch_size, max_views_per_batch):
+            stop = min(start + max_views_per_batch, batch_size)
+            batch_indices = torch.arange(start, stop, device=self.device, dtype=torch.long)
+            batch_cameras = cameras[batch_indices]
+            mesh_struct = mesh_struct_single.extend(stop - start)
+            rasterizer = MeshRasterizer(cameras=batch_cameras, raster_settings=raster_settings)
+            with torch.autocast(device_type=self.device.type, dtype=dtype, enabled=autocast_enable):
+                fragments = rasterizer.forward(mesh_struct)
+                depth_batches.append(fragments.zbuf.squeeze(-1))
+                pix_to_face = fragments.pix_to_face.squeeze(-1)
+                global_face_offset = start * num_faces
+                pix_to_face_batches.append(torch.where(pix_to_face >= 0, pix_to_face + global_face_offset, pix_to_face))
 
-            depth = fragments.zbuf.squeeze(-1)  # (B, H, W)
-            pix_to_face = fragments.pix_to_face.squeeze(-1)  # (B, H, W)
+        depth = torch.cat(depth_batches, dim=0)
+        pix_to_face = torch.cat(pix_to_face_batches, dim=0)
 
         return (
             depth,

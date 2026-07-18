@@ -11,8 +11,9 @@ import pytest
 from pydantic import ValidationError
 
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
-from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig, CandidatePositionMode, ViewDirectionMode
+from aria_nbv.pose_generation import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts import CounterfactualPoseGeneratorConfig, RolloutPolicySpec
+from aria_nbv.rollouts.shard_manifest import read_rollout_source_manifest
 
 
 def test_replay_and_recipe_configs_each_have_one_policy_field() -> None:
@@ -42,54 +43,98 @@ def test_rollout_policy_spec_is_immutable() -> None:
         policy.horizon = 3
 
 
-def test_diverse_rollout_profile_emphasizes_radial_and_backtrack_families() -> None:
-    config = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_diverse.toml")
+def test_paired_rollout_profiles_differ_only_in_candidate_families_and_destination() -> None:
+    realistic, diverse = _paired_pilot_configs()
+    realistic_payload = realistic.model_dump_jsonable()
+    diverse_payload = diverse.model_dump_jsonable()
 
-    components = config.candidate_mixture.components
-    component_by_name = {component.name: component for component in components}
+    realistic_mixture = realistic_payload.pop("candidate_mixture")
+    diverse_mixture = diverse_payload.pop("candidate_mixture")
+    assert realistic_mixture["base"] == diverse_mixture["base"]
 
-    assert config.candidate_mixture.total_count == 48
-    assert component_by_name["radial_towards_target_bearing"].view_mode is ViewDirectionMode.RADIAL_TOWARDS
-    assert component_by_name["radial_away_target_bearing"].view_mode is ViewDirectionMode.RADIAL_AWAY
-    assert component_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
-
-    radial_or_backtrack = sum(
-        component.count
-        for component in components
-        if component.view_mode in {ViewDirectionMode.RADIAL_TOWARDS, ViewDirectionMode.RADIAL_AWAY}
-        or component.position_mode is CandidatePositionMode.REVISIT_BACKTRACK
-    )
-    assert radial_or_backtrack / config.candidate_mixture.total_count >= 0.9
+    realistic_store = realistic_payload.pop("store")
+    diverse_store = diverse_payload.pop("store")
+    assert realistic_store.pop("store_dir") != diverse_store.pop("store_dir")
+    assert realistic_store == diverse_store
+    assert realistic_payload == diverse_payload
 
 
-def test_diverse_rollout_profile_enables_sibling_diversity_controls() -> None:
-    config = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_diverse.toml")
+def test_paired_rollout_profiles_use_the_planned_candidate_families() -> None:
+    realistic, diverse = _paired_pilot_configs()
 
-    assert {recipe.name for recipe in config.recipes} == {
-        "random_valid_diverse",
-        "oracle_lookahead_diverse",
-        "temperature_softmax_diverse",
-    }
-    for recipe in config.recipes:
-        assert recipe.policy.branch_factor == 3
-        assert recipe.policy.beam_width == 3
-        assert recipe.policy.require_sibling_strategy_diversity is True
-        assert recipe.policy.min_sibling_distance_m > 0.0
-        assert recipe.policy.min_sibling_yaw_deg == 20.0
-        assert recipe.policy.min_sibling_target_bearing_deg == 20.0
-
-
-def test_diverse_rollout_profile_matches_named_code_presets() -> None:
-    config = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_diverse.toml")
-
-    candidate_preset = CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family()
-    assert candidate_preset.base.model_dump() == config.candidate_mixture.base.model_dump()
-    assert [component.model_dump() for component in candidate_preset.components] == [
-        component.model_dump() for component in config.candidate_mixture.components
+    assert [(component.name, component.count) for component in realistic.candidate_mixture.components] == [
+        ("forward_local", 24),
+        ("target_bearing_local", 24),
+        ("lateral_target_bypass", 12),
     ]
+    assert [(component.name, component.count) for component in diverse.candidate_mixture.components] == [
+        ("forward_local", 18),
+        ("target_bearing_local", 18),
+        ("lateral_target_bypass", 12),
+        ("local_refinement", 6),
+        ("revisit_backtrack", 6),
+    ]
+    assert realistic.candidate_mixture.total_count == diverse.candidate_mixture.total_count == 60
 
-    recipe_preset = RolloutRecipeConfig.diverse_suite()
-    assert [recipe.model_dump() for recipe in recipe_preset] == [recipe.model_dump() for recipe in config.recipes]
+    diverse_by_name = {component.name: component for component in diverse.candidate_mixture.components}
+    assert diverse_by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
+    assert diverse_by_name["local_refinement"].position_mode is CandidatePositionMode.LOCAL_REFINEMENT
+    assert diverse_by_name["revisit_backtrack"].view_mode is ViewDirectionMode.FORWARD_RIG
+    assert diverse_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert all(
+        component.view_mode not in {ViewDirectionMode.RADIAL_TOWARDS, ViewDirectionMode.RADIAL_AWAY}
+        for component in diverse.candidate_mixture.components
+    )
+
+
+def test_paired_rollout_profiles_bind_the_exact_source_manifest_and_shared_recipes() -> None:
+    realistic, diverse = _paired_pilot_configs()
+    assert realistic.source_manifest_path == diverse.source_manifest_path
+    assert realistic.source_manifest_path is not None
+
+    source_manifest = read_rollout_source_manifest(realistic.source_manifest_path)
+    assert len(source_manifest.rows) == realistic.max_samples == diverse.max_samples == 50
+    assert source_manifest.split == realistic.source.split == diverse.source.split == "train"
+    assert len({row.scene_id for row in source_manifest.rows}) == 5
+    assert source_manifest.source_manifest_hash == "0cfa7252e18c1565"
+    assert Path(source_manifest.source_store_dir).name == realistic.source.store.store_dir.name
+    assert source_manifest.split_manifest_hash == realistic.store.split_manifest_hash
+    assert source_manifest.split_manifest_hash == diverse.store.split_manifest_hash
+
+    expected_recipes = {
+        "random_valid": ("random_valid", 1, 1, None, 1.0),
+        "oracle_greedy": ("oracle_greedy", 1, 1, None, 1.0),
+        "oracle_lookahead": ("oracle_greedy", 2, 2, 2, 1.0),
+        "temperature_softmax": ("temperature_softmax", 2, 2, 2, 1.0),
+    }
+    assert {
+        recipe.name: (
+            recipe.policy.selection_policy.value,
+            recipe.policy.horizon,
+            recipe.policy.branch_factor,
+            recipe.policy.beam_width,
+            recipe.policy.selection_temperature,
+        )
+        for recipe in realistic.recipes
+    } == expected_recipes
+
+
+def test_paired_rollout_profile_rejects_source_manifest_drift() -> None:
+    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    payload = tomllib.loads(config_path.read_text())
+    payload["max_samples"] = 49
+    with pytest.raises(ValidationError, match="manifest row count"):
+        RolloutDatasetWriterConfig.model_validate(payload)
+
+    payload = tomllib.loads(config_path.read_text())
+    payload["store"]["split_manifest_hash"] = "stale-split-hash"
+    with pytest.raises(ValidationError, match="split_manifest_hash"):
+        RolloutDatasetWriterConfig.model_validate(payload)
+
+    payload = tomllib.loads(config_path.read_text())
+    payload["source"]["store"]["store_dir"] = "different-vin-store"
+    with pytest.raises(ValidationError, match="source-store identity"):
+        RolloutDatasetWriterConfig.model_validate(payload)
 
 
 def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> None:
@@ -108,7 +153,11 @@ def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> N
             "seed",
             "policy",
         }
-        assert payload["max_targets_per_sample"] == payload["oracle_target_task_sampler"]["max_targets_per_sample"]
+        assert "max_targets_per_sample" not in payload
+        if config_name in {"build_rollouts_v1_realistic.toml", "build_rollouts_v1_diverse.toml"}:
+            assert payload["oracle_target_task_sampler"]["max_targets_per_sample"] == 1
+            assert "oversample_factor" not in payload["candidate_mixture"]["base"]
+            assert "max_resamples" not in payload["candidate_mixture"]["base"]
         assert payload["target_scorer"]["depth"]["renderer"]["cull_backfaces"] is False
 
 
@@ -118,7 +167,11 @@ def test_lrz_profile_keeps_realistic_generation_semantics_without_smoke_caps() -
 
     assert lrz.max_samples is None
     assert lrz.source.limit is None
-    assert lrz.candidate_mixture.model_dump() == realistic.candidate_mixture.model_dump()
+    lrz_candidate = lrz.candidate_mixture.model_dump_jsonable()
+    realistic_candidate = realistic.candidate_mixture.model_dump_jsonable()
+    lrz_candidate["base"].pop("oversample_factor")
+    realistic_candidate["base"].pop("oversample_factor")
+    assert lrz_candidate == realistic_candidate
     assert lrz.target_scorer.model_dump() == realistic.target_scorer.model_dump()
     assert lrz.selected_depth.model_dump() == realistic.selected_depth.model_dump()
     assert [recipe.model_dump() for recipe in lrz.recipes] == [recipe.model_dump() for recipe in realistic.recipes]
@@ -136,3 +189,13 @@ def test_real_lrz_array_does_not_mutate_shared_environment_or_hide_array_size() 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
+
+
+def _paired_pilot_configs() -> tuple[RolloutDatasetWriterConfig, RolloutDatasetWriterConfig]:
+    """Parse the two profile TOMLs through the production config model."""
+
+    config_dir = _repo_root() / ".configs"
+    return (
+        RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_realistic.toml"),
+        RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_diverse.toml"),
+    )

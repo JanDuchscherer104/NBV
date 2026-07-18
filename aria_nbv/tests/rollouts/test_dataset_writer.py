@@ -23,7 +23,12 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     SelectedDepthRetentionConfig,
     _RolloutSourceLineageBuilder,
 )
-from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard, summarize_rollout_shard_campaign
+from aria_nbv.oracle.pipelines.shards import (
+    plan_rollout_shards,
+    plan_rollout_source_manifest,
+    run_rollout_shard,
+    summarize_rollout_shard_campaign,
+)
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
 from aria_nbv.oracle.target_selection import (
     OracleTargetTask,
@@ -34,7 +39,13 @@ from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
 from aria_nbv.rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
-from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, canonical_rollout_shard_id, write_rollout_shard_manifest
+from aria_nbv.rollouts.shard_manifest import (
+    RolloutShardEntry,
+    canonical_rollout_shard_id,
+    read_rollout_source_manifest,
+    write_rollout_shard_manifest,
+    write_rollout_source_manifest,
+)
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
@@ -462,6 +473,45 @@ def test_rollout_shard_campaign_status_reports_retry_classes(tmp_path: Path) -> 
     assert by_id["shard-000001"].failed_markers
     assert by_id["shard-000002"].status == "incomplete"
     assert by_id["shard-000003"].status == "missing"
+
+
+def test_rollout_source_manifest_is_profile_independent_and_roundtrips(tmp_path: Path) -> None:
+    records = [_fake_record(index) for index in range(3)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+
+    manifest = plan_rollout_source_manifest(config.source)
+    output_path = tmp_path / "source-manifest.json"
+    write_rollout_source_manifest(output_path, manifest)
+    restored = read_rollout_source_manifest(output_path)
+
+    assert restored == manifest
+    assert [row.sample_key for row in restored.rows] == [record.sample_key for record in records]
+    assert restored.split_manifest_hash == _RolloutSourceLineageBuilder.build_split_manifest_hash(
+        source_manifest_hash=restored.source_manifest_hash,
+        split="train",
+        records=[row.hash_record() for row in restored.rows],
+    )
+    assert "writer_config_hash" not in restored.to_jsonable()
+
+
+def test_rollout_source_manifest_rejects_duplicate_source_rows(tmp_path: Path) -> None:
+    records = [_fake_record(0), _fake_record(0)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="duplicate source-row identities"):
+        plan_rollout_source_manifest(config.source)
+
+
+def test_rollout_writer_applies_reviewed_source_manifest_order(tmp_path: Path) -> None:
+    records = [_fake_record(index) for index in range(3)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+    manifest = plan_rollout_source_manifest(config.source)
+    dataset = config.source.setup_target()
+    dataset._records = list(reversed(dataset._records))
+
+    RolloutDatasetWriter._apply_source_manifest(dataset, manifest)
+
+    assert [record.sample_key for record in dataset._records] == [row.sample_key for row in manifest.rows]
 
 
 def _fake_record(index: int) -> SimpleNamespace:
