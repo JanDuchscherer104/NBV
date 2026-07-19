@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Regression checks for the local Graphify freshness contract."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import tempfile
+
+SCRIPT = Path(__file__).resolve().parents[1] / "check_graphify_freshness.py"
+SPEC = importlib.util.spec_from_file_location("check_graphify_freshness", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+freshness = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(freshness)
+
+REFRESH_SCRIPT = Path(__file__).resolve().parents[1] / "graphify_refresh.py"
+REFRESH_SPEC = importlib.util.spec_from_file_location(
+    "graphify_refresh", REFRESH_SCRIPT
+)
+assert REFRESH_SPEC is not None and REFRESH_SPEC.loader is not None
+refresh = importlib.util.module_from_spec(REFRESH_SPEC)
+REFRESH_SPEC.loader.exec_module(refresh)
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+
+def _write_fresh_graph(root: Path, out: Path, head: str) -> None:
+    policy = root / ".graphifyignore"
+    (out / "graph.json").write_text(
+        json.dumps({"built_at_commit": head}), encoding="utf-8"
+    )
+    (out / "aria_nbv_freshness.json").write_text(
+        json.dumps(
+            {
+                "built_at_commit": head,
+                "corpus_policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
+                "semantic_pending": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def main() -> None:
+    assert refresh._is_code(Path("aria_nbv/aria_nbv/model.py"))
+    assert refresh._is_code(Path(".agents/issues.toml"))
+    assert refresh._is_code(Path("Makefile"))
+    assert refresh._is_semantic(Path("aria_nbv/README.md"))
+    assert refresh._is_semantic(Path("docs/typst/thesis/main.typ"))
+    assert refresh._is_semantic(Path(".graphifyignore"))
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "freshness@example.invalid"],
+            cwd=root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "freshness-test"], cwd=root, check=True
+        )
+        policy_text = (
+            "*\n**\n!aria_nbv/\n!aria_nbv/**\naria_nbv/tests/\ngraphify-out/\n"
+        )
+        policy = root / ".graphifyignore"
+        policy.write_text(policy_text, encoding="utf-8")
+        source = root / "aria_nbv/aria_nbv/model.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("VALUE = 1\n", encoding="utf-8")
+        excluded = root / "aria_nbv/tests/test_model.py"
+        excluded.parent.mkdir(parents=True)
+        excluded.write_text("VALUE = 1\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", ".graphifyignore", "aria_nbv"], cwd=root, check=True
+        )
+        subprocess.run(["git", "commit", "-qm", "initial"], cwd=root, check=True)
+        head = _git(root, "rev-parse", "HEAD")
+
+        out = root / "graphify-out"
+        out.mkdir()
+        _write_fresh_graph(root, out, head)
+        freshness.ROOT = root
+        freshness.OUT = out
+        assert freshness.freshness_errors() == []
+
+        source.write_text("VALUE = 2\n", encoding="utf-8")
+        assert "aria_nbv/aria_nbv/model.py" in " ".join(freshness.freshness_errors())
+        source.write_text("VALUE = 1\n", encoding="utf-8")
+        assert freshness.freshness_errors() == []
+
+        new_source = root / "aria_nbv/aria_nbv/new_model.py"
+        new_source.write_text("VALUE = 1\n", encoding="utf-8")
+        assert "aria_nbv/aria_nbv/new_model.py" in " ".join(
+            freshness.freshness_errors()
+        )
+        new_source.unlink()
+
+        excluded.write_text("VALUE = 2\n", encoding="utf-8")
+        assert freshness.freshness_errors() == []
+        excluded.write_text("VALUE = 1\n", encoding="utf-8")
+
+        (out / "graph.json").write_text("[", encoding="utf-8")
+        assert "graphify-out/graph.json is malformed JSON" in " ".join(
+            freshness.freshness_errors()
+        )
+        (out / "graph.json").write_text("[]", encoding="utf-8")
+        assert "graphify-out/graph.json is not a JSON object" in " ".join(
+            freshness.freshness_errors()
+        )
+        _write_fresh_graph(root, out, head)
+        (out / "aria_nbv_freshness.json").write_text("[", encoding="utf-8")
+        assert "freshness metadata is malformed JSON" in " ".join(
+            freshness.freshness_errors()
+        )
+        (out / "aria_nbv_freshness.json").write_text("[]", encoding="utf-8")
+        assert "freshness metadata is not a JSON object" in " ".join(
+            freshness.freshness_errors()
+        )
+        _write_fresh_graph(root, out, head)
+
+        policy.write_text(policy_text + "docs/_site/\n", encoding="utf-8")
+        assert ".graphifyignore changed" in " ".join(freshness.freshness_errors())
+        policy.write_text(policy_text, encoding="utf-8")
+        (out / "needs_update").touch()
+        assert "extraction is pending" in " ".join(freshness.freshness_errors())
+
+        refresh.ROOT = root
+        refresh.OUT = out
+        refresh.STATE = out / "aria_nbv_freshness.json"
+        refresh.shutil.which = lambda _: "/usr/bin/true"
+        refresh.os.environ["GRAPHIFY_CHANGED"] = "aria_nbv/aria_nbv/model.py"
+        assert refresh.main() == 0
+        state = json.loads(refresh.STATE.read_text(encoding="utf-8"))
+        assert state["semantic_pending"] is True
+        assert (out / "needs_update").exists()
+
+        captured: list[str] = []
+
+        class _Completed:
+            returncode = 0
+
+        def _run(command: list[str], **_: object) -> _Completed:
+            captured.extend(command)
+            return _Completed()
+
+        (out / "needs_update").unlink()
+        refresh.STATE.unlink()
+        refresh.shutil.which = lambda _: None
+        refresh.subprocess.run = _run
+        refresh._git_head = lambda: head
+        assert refresh.main() == 0
+        assert captured[:3] == [refresh.sys.executable, "-m", "graphify"]
+
+
+if __name__ == "__main__":
+    main()

@@ -17,19 +17,24 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class OracleCandidateLabels:
-    """Compact Oracle labels aligned with stable valid candidate rows."""
+    """Compact Oracle labels aligned with stable valid candidate rows.
+
+    ``V`` is the hard-valid subset of a candidate shell. These labels are
+    privileged supervision and audit outputs; actor inputs receive only the
+    separately projected candidate context.
+    """
 
     scores: torch.Tensor
-    """Values used by the configured Oracle selection objective."""
+    """Selection-objective values as ``Tensor["V", float32]``."""
 
     score_label: str
     """Stable semantic name for `scores`."""
 
     metrics: dict[str, torch.Tensor]
-    """Candidate-wise Oracle metrics and diagnostics in compact valid order."""
+    """Oracle metrics, each ``Tensor["V", float32]`` in compact-valid order."""
 
     candidate_shell_indices: torch.Tensor
-    """Full-shell row ids corresponding one-to-one with compact label rows."""
+    """Full-shell row ids as ``Tensor["V", int64]`` for compact label rows."""
 
     provenance: str
     """Scorer family that produced the labels, such as `target_rri`."""
@@ -67,22 +72,27 @@ class OracleCandidateLabels:
 
 @dataclass(slots=True)
 class RetainedOracleEvidence:
-    """Heavy Oracle evidence retained temporarily or for explicit audits."""
+    """Heavy Oracle evidence retained temporarily or for explicit audits.
+
+    Candidate-leading tensors use the compact hard-valid axis ``V``. Point
+    coordinates are world-frame metres and padded axes are paired with length
+    vectors so padding never becomes geometric evidence.
+    """
 
     candidate_point_clouds_world: torch.Tensor | None = None
-    """Padded world-frame candidate point clouds in compact valid order."""
+    """Padded clouds as ``Tensor["V P 3", float32]`` in world metres."""
 
     candidate_point_cloud_lengths: torch.Tensor | None = None
-    """Valid point count for each candidate point cloud."""
+    """Valid point counts as ``Tensor["V", int64]`` for padded clouds."""
 
     target_eval_current_points_world: torch.Tensor | None = None
-    """Current target-crop evidence points in world coordinates."""
+    """Current target crop as ``Tensor["P_t 3", float32]`` in world metres."""
 
     target_eval_candidate_points_world: torch.Tensor | None = None
-    """Candidate target-crop evidence in compact valid order."""
+    """Candidate target crops as ``Tensor["V P_q 3", float32]`` in world metres."""
 
     target_eval_candidate_point_lengths: torch.Tensor | None = None
-    """Valid point count for each candidate target-crop payload."""
+    """Valid target-crop counts as ``Tensor["V", int64]``."""
 
     target_eval_crop_policy: str | None = None
     """Versioned target-crop policy used for retained evidence."""
@@ -94,10 +104,10 @@ class RetainedOracleEvidence:
     """Configured target-evidence point budget."""
 
     selected_depth_m: torch.Tensor | None = None
-    """Optional selected-action depth image in metres."""
+    """Selected depth as ``Tensor["H_d W_d", float32]`` in metres."""
 
     selected_depth_valid_mask: torch.Tensor | None = None
-    """Validity mask aligned with `selected_depth_m`."""
+    """Finite-hit mask as ``Tensor["H_d W_d", bool]`` for `selected_depth_m`."""
 
     selected_depth_focal_px: tuple[float, float] | None = None
     """Selected-depth focal lengths `(fx, fy)` in pixels."""
@@ -182,10 +192,17 @@ class RetainedOracleEvidence:
 
 @dataclass(frozen=True, slots=True)
 class OracleCandidateEvaluation:
-    """One scorer result split into labels and retained evidence."""
+    """One scorer result split into compact labels and retained evidence.
+
+    Both payloads align to the same hard-valid axis ``V``; validation rejects
+    any shell-index or leading-axis mismatch before replay consumes scores.
+    """
 
     labels: OracleCandidateLabels
+    """Compact supervision labels and full-shell row mapping."""
+
     evidence: RetainedOracleEvidence
+    """Optional heavy geometry retained outside actor-visible state."""
 
     def validate(
         self,

@@ -60,6 +60,7 @@ docs/literature/**
 # Explicit exclusions after reincludes.
 AGENTS.md
 graphify-out/
+graphify-out/**
 external/
 .agent/skills/
 .agents/external/
@@ -82,12 +83,15 @@ aria_nbv/tests/
 scripts/
 
 docs/_build/
+docs/_extensions/
+docs/_inv/
 docs/.quarto/
 docs/_freeze/
 docs/_generated/
 docs/_site/
 docs/site_libs/
 docs/index_files/
+docs/*_files/
 docs/reference/
 docs/search.json
 docs/literature/pdf/

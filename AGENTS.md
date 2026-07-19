@@ -109,8 +109,10 @@ media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
 
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,
-  first run `graphify query "<question>"` when `graphify-out/graph.json`
-  exists. Use `graphify path "<A>" "<B>"` for relationships and
+  first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
+  succeeds, use `graphify query "<question>"`; otherwise fall back to the
+  owning source files until the graph is refreshed. Use
+  `graphify path "<A>" "<B>"` for relationships and
   `graphify explain "<concept>"` for focused concepts.
 - Dirty `graphify-out/` files are expected after hooks or incremental updates;
   dirty graph files are not a reason to skip Graphify. Only skip Graphify if
@@ -119,9 +121,12 @@ Rules:
 - If `graphify-out/wiki/index.md` exists, use it for broad navigation before
   raw source browsing. Read `graphify-out/GRAPH_REPORT.md` for broad
   architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current
-  (AST-only, no API cost). Semantic refreshes for docs, papers, or media are
-  explicit Graphify extraction work, not an automatic edit hook requirement.
+- After modifying code, run `python3 scripts/graphify_refresh.py` with the
+  changed paths in `GRAPHIFY_CHANGED`, or run `graphify update .` followed by
+  the freshness check. Documentation, paper, and diagram changes set
+  `graphify-out/needs_update`; refresh them with the Graphify extraction
+  workflow, whose completion records the current policy digest, before treating
+  semantic links as current.
 - `litkg-rs` remains the source-authority layer for `kg-search`,
   `kg-route`, `kg-claim-check`, Semantic Scholar/literature enrichment, and
   thesis/advisor evidence. Use Graphify for navigation first; use litkg for

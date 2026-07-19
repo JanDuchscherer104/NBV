@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
-.PHONY: graphify-skill-self-test api-docs-self-test
+.PHONY: help ci graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
@@ -212,6 +212,14 @@ scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
 
+graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, freshness wiring, and hook dispatch
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
+	@./scripts/tests/test_post_commit_graph_dispatch.sh
+
+graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
+
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
 
@@ -226,15 +234,15 @@ claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude 
 	@scripts/sync_claude_skills.sh
 
 install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
-	@GIT_DIR="$$(git rev-parse --git-dir 2>/dev/null)"; \
-	if [ -z "$$GIT_DIR" ]; then \
+	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
+	if [ -z "$$HOOK_DIR" ]; then \
 		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
 	fi; \
-	mkdir -p "$$GIT_DIR/hooks"; \
+	mkdir -p "$$HOOK_DIR"; \
 	for hook in scripts/git_hooks/*; do \
 		[ -f "$$hook" ] || continue; \
 		name=$$(basename "$$hook"); \
-		target="$$GIT_DIR/hooks/$$name"; \
+		target="$$HOOK_DIR/$$name"; \
 		ln -sf "$(CURDIR)/$$hook" "$$target" && \
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
