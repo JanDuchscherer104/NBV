@@ -29,6 +29,23 @@ def _git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
 
+def _write_fresh_graph(root: Path, out: Path, head: str) -> None:
+    policy = root / ".graphifyignore"
+    (out / "graph.json").write_text(
+        json.dumps({"built_at_commit": head}), encoding="utf-8"
+    )
+    (out / "aria_nbv_freshness.json").write_text(
+        json.dumps(
+            {
+                "built_at_commit": head,
+                "corpus_policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
+                "semantic_pending": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     assert refresh._is_code(Path("aria_nbv/aria_nbv/model.py"))
     assert refresh._is_code(Path(".agents/issues.toml"))
@@ -56,24 +73,29 @@ def main() -> None:
 
         out = root / "graphify-out"
         out.mkdir()
-        (out / "graph.json").write_text(
-            json.dumps({"built_at_commit": head}), encoding="utf-8"
-        )
-        (out / "aria_nbv_freshness.json").write_text(
-            json.dumps(
-                {
-                    "built_at_commit": head,
-                    "corpus_policy_sha256": hashlib.sha256(
-                        policy.read_bytes()
-                    ).hexdigest(),
-                    "semantic_pending": False,
-                }
-            ),
-            encoding="utf-8",
-        )
+        _write_fresh_graph(root, out, head)
         freshness.ROOT = root
         freshness.OUT = out
         assert freshness.freshness_errors() == []
+
+        (out / "graph.json").write_text("[", encoding="utf-8")
+        assert "graphify-out/graph.json is malformed JSON" in " ".join(
+            freshness.freshness_errors()
+        )
+        (out / "graph.json").write_text("[]", encoding="utf-8")
+        assert "graphify-out/graph.json is not a JSON object" in " ".join(
+            freshness.freshness_errors()
+        )
+        _write_fresh_graph(root, out, head)
+        (out / "aria_nbv_freshness.json").write_text("[", encoding="utf-8")
+        assert "freshness metadata is malformed JSON" in " ".join(
+            freshness.freshness_errors()
+        )
+        (out / "aria_nbv_freshness.json").write_text("[]", encoding="utf-8")
+        assert "freshness metadata is not a JSON object" in " ".join(
+            freshness.freshness_errors()
+        )
+        _write_fresh_graph(root, out, head)
 
         policy.write_text("graphify-out/\ndocs/_site/\n", encoding="utf-8")
         assert ".graphifyignore changed" in " ".join(freshness.freshness_errors())

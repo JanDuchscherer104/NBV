@@ -120,6 +120,11 @@ If the import succeeds, print nothing and move straight to Step 2.
 
 ### Step 2 - Detect files
 
+ARIA-NBV boundary: the internal Python imports in this vendored skill are
+upstream-owned, version-pinned pipeline recipes. Repo-owned CI, hooks, and
+runtime checks must use Graphify's public CLI and must not copy these private
+imports into ARIA-NBV scripts.
+
 ```bash
 $(cat graphify-out/.graphify_python) -c "
 import json

@@ -215,6 +215,7 @@ graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation
 graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, freshness wiring, and hook dispatch
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder

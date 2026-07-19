@@ -23,6 +23,20 @@ def _policy_digest() -> str:
     return hashlib.sha256((ROOT / ".graphifyignore").read_bytes()).hexdigest()
 
 
+def _read_json_object(
+    path: Path, label: str
+) -> tuple[dict[str, object] | None, str | None]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return None, f"{label} is malformed JSON: {exc}"
+    except OSError as exc:
+        return None, f"{label} cannot be read: {exc}"
+    if not isinstance(data, dict):
+        return None, f"{label} is not a JSON object"
+    return data, None
+
+
 def freshness_errors() -> list[str]:
     """Return reasons the local graph must not be trusted for navigation."""
     graph_path = OUT / "graph.json"
@@ -32,10 +46,18 @@ def freshness_errors() -> list[str]:
     if not state_path.exists():
         return ["Graphify freshness metadata is absent"]
 
-    graph = json.loads(graph_path.read_text(encoding="utf-8"))
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    head = _head()
     errors: list[str] = []
+    graph, graph_error = _read_json_object(graph_path, "graphify-out/graph.json")
+    state, state_error = _read_json_object(state_path, "Graphify freshness metadata")
+    if graph_error:
+        errors.append(graph_error)
+    if state_error:
+        errors.append(state_error)
+    if errors:
+        return errors
+
+    assert graph is not None and state is not None
+    head = _head()
     if graph.get("built_at_commit") != head:
         errors.append("graph.json was built from a different commit")
     if state.get("built_at_commit") != head:
