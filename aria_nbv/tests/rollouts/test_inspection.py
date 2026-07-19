@@ -16,11 +16,13 @@ from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
+    candidate_flow_rows,
     candidate_group_summary_rows,
     comparable_policy_cohorts,
     discover_rollout_store_paths,
     mask_combination_rows,
     paired_policy_comparison_rows,
+    rollout_endpoint_metric_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
@@ -31,6 +33,7 @@ from aria_nbv.rollouts.inspection import (
     store_invariant_rows,
     suspicious_rollout_rows,
     target_audit_rows,
+    temporal_metric_summary_rows,
     validity_waterfall_rows,
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
@@ -80,6 +83,20 @@ def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores
     assert by_name["unreadable.zarr"]["first_error"]
 
 
+def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discovery(tmp_path) -> None:
+    current = write_rollout_zarr_store(
+        tmp_path / "current.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=42)[:1],
+    )
+
+    row = rollout_store_inventory_rows([current.store_dir], validate=False)[0]
+
+    assert row["schema_status"] == "current"
+    assert row["validation_ok"] is None
+    assert row["validation_status"] == "unknown"
+    assert row["observed_candidates"] == current.num_candidates
+
+
 def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None:
     """Discovery should recursively find candidate Zarr directories only."""
 
@@ -111,6 +128,8 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert first["mixture"] != ""
     assert first["target_root_gain"] != first["target_rri"]
     assert "motion_step_length_m" in first
+    assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
+    assert first["units"] == "m"
 
     target_rows = target_audit_rows(reader)
     assert len(target_rows) == 1
@@ -139,6 +158,9 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
             "mean_target_root_gain": pytest.approx(float(np.nanmean(reader.array("candidates/target_root_gain")))),
         }
     ]
+    flow = candidate_flow_rows(reader)
+    assert {row["root_denominator"] for row in flow} == {result.num_candidates}
+    assert sum(row["count"] for row in flow if row["source_stage"] == "root") == result.num_candidates
 
 
 def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path) -> None:
@@ -193,6 +215,260 @@ def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fiel
     assert rows[0]["selected_entropy"] is not None
     assert rows[0]["num_candidates"] >= 6
     assert rows[0]["num_valid_candidates"] <= rows[0]["num_candidates"]
+    temporal = temporal_metric_summary_rows(
+        reader,
+        metric="cumulative_target_root_gain",
+        group_fields=("policy",),
+    )
+    assert [row["step_index"] for row in temporal] == [0, 1]
+    assert all(row["total_count"] == row["finite_count"] + row["missing_count"] for row in temporal)
+
+
+def test_temporal_metric_summary_rows_use_exact_finite_only_linear_statistics() -> None:
+    """Temporal summaries should expose exact counts and deterministic linear quantiles."""
+
+    step_rows = [
+        {"policy": "a", "step_index": 0, "selected_target_root_gain": value} for value in (0.0, 10.0, np.nan, np.inf)
+    ] + [
+        {"policy": "a", "step_index": 1, "selected_target_root_gain": None},
+        {"policy": "b", "step_index": 0, "selected_target_root_gain": -2.0},
+    ]
+
+    rows = temporal_metric_summary_rows(
+        step_rows,
+        metric="selected_target_root_gain",
+        group_fields=("policy",),
+    )
+
+    assert rows == [
+        {
+            "metric": "selected_target_root_gain",
+            "units": "fraction",
+            "step_index": 0,
+            "policy": "a",
+            "total_count": 4,
+            "finite_count": 2,
+            "missing_count": 2,
+            "median": 5.0,
+            "q25": 2.5,
+            "q75": 7.5,
+            "mean": 5.0,
+            "min": 0.0,
+            "max": 10.0,
+        },
+        {
+            "metric": "selected_target_root_gain",
+            "units": "fraction",
+            "step_index": 1,
+            "policy": "a",
+            "total_count": 1,
+            "finite_count": 0,
+            "missing_count": 1,
+            "median": None,
+            "q25": None,
+            "q75": None,
+            "mean": None,
+            "min": None,
+            "max": None,
+        },
+        {
+            "metric": "selected_target_root_gain",
+            "units": "fraction",
+            "step_index": 0,
+            "policy": "b",
+            "total_count": 1,
+            "finite_count": 1,
+            "missing_count": 0,
+            "median": -2.0,
+            "q25": -2.0,
+            "q75": -2.0,
+            "mean": -2.0,
+            "min": -2.0,
+            "max": -2.0,
+        },
+    ]
+    assert all(row["total_count"] == row["finite_count"] + row["missing_count"] for row in rows)
+
+
+def test_temporal_metric_summary_rows_validate_metrics_and_grouping_vocabulary() -> None:
+    """Temporal grouping should distinguish supported factual and selected-action fields."""
+
+    rows = [
+        {
+            "step_index": 0,
+            "num_valid_candidates": 3,
+            "selected_position": "forward_local",
+        }
+    ]
+
+    assert (
+        temporal_metric_summary_rows(
+            rows,
+            metric="valid_fanout",
+            group_fields=("selected_position",),
+        )[0]["median"]
+        == 3.0
+    )
+    with pytest.raises(ValueError, match="Unsupported temporal metric"):
+        temporal_metric_summary_rows(rows, metric="not_a_metric")
+    with pytest.raises(ValueError, match="Unsupported temporal group field"):
+        temporal_metric_summary_rows(rows, metric="valid_fanout", group_fields=("scene",))
+
+
+def test_rollout_endpoint_metric_summary_uses_one_factual_endpoint_per_rollout() -> None:
+    """Endpoint statistics must retain mixed horizons and weight rollouts equally."""
+
+    rows: list[dict[str, object]] = []
+    for rollout_row_id, endpoint in enumerate((0.0, 0.0, 0.0, 0.0, 100.0)):
+        rows.extend(
+            [
+                {
+                    "rollout_row_id": rollout_row_id,
+                    "policy": "large_group",
+                    "step_index": 0,
+                    "selected_target_root_gain": -1.0,
+                },
+                {
+                    "rollout_row_id": rollout_row_id,
+                    "policy": "large_group",
+                    "step_index": 1,
+                    "selected_target_root_gain": endpoint,
+                },
+            ]
+        )
+    rows.extend(
+        [
+            {
+                "rollout_row_id": 5,
+                "policy": "small_group",
+                "step_index": 1,
+                "selected_target_root_gain": 100.0,
+            },
+            {
+                "rollout_row_id": 6,
+                "policy": "short_horizon",
+                "step_index": 0,
+                "selected_target_root_gain": 50.0,
+            },
+            {
+                "rollout_row_id": 7,
+                "policy": "missing_endpoint",
+                "step_index": 0,
+                "selected_target_root_gain": 25.0,
+            },
+            {
+                "rollout_row_id": 7,
+                "policy": "missing_endpoint",
+                "step_index": 1,
+                "selected_target_root_gain": np.nan,
+            },
+        ]
+    )
+
+    summary = rollout_endpoint_metric_summary(rows, metric="selected_target_root_gain")
+
+    assert summary == {
+        "metric": "selected_target_root_gain",
+        "units": "fraction",
+        "total_count": 8,
+        "finite_count": 7,
+        "missing_count": 1,
+        "median": 0.0,
+    }
+    grouped = temporal_metric_summary_rows(rows, metric="selected_target_root_gain", group_fields=("policy",))
+    global_max_depth = max(int(row["step_index"]) for row in grouped)
+    misleading_median = np.median(
+        [float(row["median"]) for row in grouped if row["step_index"] == global_max_depth and row["median"] is not None]
+    )
+    assert misleading_median == 50.0
+
+
+class _NarrowCandidateFlowReader:
+    """Fail-closed reader that exposes only the approved categorical flow surface."""
+
+    def __init__(self) -> None:
+        self.requested: list[str] = []
+        self._arrays = {
+            "rollouts/rollout_row_id": np.asarray([10, 11], dtype=np.int64),
+            "rollouts/policy_id": np.asarray([0, 1], dtype=np.int32),
+            "dictionaries/policy": np.frombuffer(b'["greedy", "softmax"]', dtype=np.uint8),
+            "candidates/rollout_row_id": np.asarray([10, 10, 10, 11, 11, 11], dtype=np.int64),
+            "candidates/step_index": np.asarray([0, 0, 1, 0, 1, 1], dtype=np.int16),
+            "candidates/mixture_id": np.asarray([0, 0, -1, 1, 1, 1], dtype=np.int32),
+            "candidates/position_id": np.asarray([0, 1, -1, 0, 1, 1], dtype=np.int32),
+            "candidates/strategy_id": np.asarray([0, 1, -1, 0, 1, 1], dtype=np.int32),
+            "candidates/actor_action_mask": np.asarray([True, True, False, True, False, True]),
+            "candidates/selected_mask": np.asarray([True, False, True, False, False, True]),
+        }
+
+    def array(self, path: str) -> np.ndarray:
+        self.requested.append(path)
+        if path not in self._arrays:
+            raise AssertionError(f"candidate flow accessed forbidden array: {path}")
+        return self._arrays[path]
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "manifest": {
+                "generation": {
+                    "writer_config": {
+                        "candidate_mixture": {
+                            "components": [{"name": "forward"}, {"name": "lateral"}],
+                        }
+                    }
+                }
+            }
+        }
+
+
+def test_candidate_flow_rows_are_narrow_conservative_and_preserve_violations() -> None:
+    """The default provenance flow should conserve candidates without heavy audit reads."""
+
+    reader = _NarrowCandidateFlowReader()
+    rows = candidate_flow_rows(reader)
+
+    assert rows == candidate_flow_rows(_NarrowCandidateFlowReader())
+    assert {row["root_denominator"] for row in rows} == {6}
+    assert all(row["fraction_of_root"] == pytest.approx(row["count"] / 6.0) for row in rows)
+    assert sum(row["count"] for row in rows if row["source_stage"] == "root") == 6
+    assert sum(row["count"] for row in rows if row["target_stage"] == "selection_outcome") == 6
+    assert any(row["target_label"] == "selection_contract_violation" and row["count"] == 1 for row in rows)
+    assert any(row["target_label"] == "unknown" for row in rows)
+    assert not any("oracle" in str(value) or "q_train" in str(value) for row in rows for value in row.values())
+    assert set(reader.requested) == {
+        "rollouts/rollout_row_id",
+        "rollouts/policy_id",
+        "dictionaries/policy",
+        "candidates/rollout_row_id",
+        "candidates/step_index",
+        "candidates/mixture_id",
+        "candidates/position_id",
+        "candidates/strategy_id",
+        "candidates/actor_action_mask",
+        "candidates/selected_mask",
+    }
+
+    incoming: dict[str, int] = {}
+    outgoing: dict[str, int] = {}
+    for row in rows:
+        outgoing[str(row["source_id"])] = outgoing.get(str(row["source_id"]), 0) + int(row["count"])
+        incoming[str(row["target_id"])] = incoming.get(str(row["target_id"]), 0) + int(row["count"])
+    for node_id in incoming.keys() & outgoing.keys():
+        assert incoming[node_id] == outgoing[node_id]
+
+
+def test_candidate_flow_rows_apply_policy_and_depth_filters_to_the_root_denominator() -> None:
+    """Policy and depth filters should be applied before all flow fractions are computed."""
+
+    rows = candidate_flow_rows(
+        _NarrowCandidateFlowReader(),
+        policies=("softmax",),
+        step_indices=(1,),
+    )
+
+    assert {row["root_denominator"] for row in rows} == {2}
+    assert sum(row["count"] for row in rows if row["source_stage"] == "root") == 2
+    assert not any(row["target_label"] == "selection_contract_violation" for row in rows)
 
 
 def test_rollout_tree_summary_rows_group_selected_branch_provenance(tmp_path) -> None:

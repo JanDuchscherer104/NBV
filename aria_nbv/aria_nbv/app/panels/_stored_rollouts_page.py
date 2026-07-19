@@ -7,8 +7,10 @@ only interaction state, progressive disclosure, plotting, and download widgets.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
+from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -26,13 +28,16 @@ from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
+    candidate_flow_rows,
     candidate_group_summary_rows,
     comparable_policy_cohorts,
     discover_rollout_store_paths,
     mask_combination_rows,
     paired_policy_comparison_rows,
+    rollout_endpoint_metric_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_tree_summary_rows,
     root_relative_candidate_rows,
     selected_candidate_rank_rows,
     selected_depth_preview,
@@ -40,6 +45,7 @@ from ...rollouts.inspection import (
     store_invariant_rows,
     suspicious_rollout_rows,
     target_audit_rows,
+    temporal_metric_summary_rows,
 )
 from ...rollouts.reporting import build_thesis_report_frames, serialize_thesis_report_bundle
 from ..rerun_launch import (
@@ -70,6 +76,43 @@ _ROLE_COLORS = {
 }
 _SECTION_KEY = "stored_rollouts_section"
 _LAUNCH_HANDLE_KEY = "stored_rollouts_rerun_handle"
+_ACTIVE_QUERY_STORE_KEY = "stored_rollouts_active_query_store"
+_QUERY_SCOPES = ("Rollout summaries", "Factual steps", "Candidates")
+_CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
+_TEMPORAL_METRIC_LABELS = {
+    "Cumulative target root gain": "cumulative_target_root_gain",
+    "Selected one-step target root gain": "selected_target_root_gain",
+    "Selected target RRI": "selected_target_rri",
+    "Marginal target RRI": "marginal_target_rri",
+    "Valid candidate fanout": "valid_fanout",
+    "Invalid candidate fraction": "invalid_fraction",
+    "Selected-action probability": "selected_probability",
+    "Selected-action entropy": "selected_entropy",
+}
+_TEMPORAL_GROUP_CLASSES = {
+    "Upstream experiment dimensions": ("policy", "horizon", "budget_configuration"),
+    "Selected-action provenance (descriptive, non-causal)": (
+        "selected_position",
+        "selected_strategy",
+        "selected_mixture",
+    ),
+}
+_TEMPORAL_SOURCE_FIELDS = {
+    "valid_fanout": "num_valid_candidates",
+}
+_TEMPORAL_EVIDENCE_ROLES: dict[
+    str,
+    Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"],
+] = {
+    "cumulative_target_root_gain": "oracle/evaluation",
+    "selected_target_root_gain": "oracle/evaluation",
+    "selected_target_rri": "oracle/evaluation",
+    "marginal_target_rri": "oracle/evaluation",
+    "valid_fanout": "actor-visible",
+    "invalid_fraction": "actor-visible",
+    "selected_probability": "actor-visible",
+    "selected_entropy": "actor-visible",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +162,142 @@ class ScientificExplanation:
             raise ValueError("Scientific explanations require every interpretation field and at least one source.")
 
 
+@st.cache_resource(show_spinner=False)
+def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    """Open and validate one immutable rollout store once per Streamlit process."""
+
+    reader = RolloutZarrStoreReader(Path(store_path))
+    validation = reader.validate()
+    try:
+        manifest_payload = reader.manifest()
+    except Exception:
+        manifest_payload = {"root_attrs": {}, "manifest": {}}
+    return reader, validation, manifest_payload
+
+
+@st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
+def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
+    """Project the immutable rollout-store inventory once per cache root."""
+
+    return rollout_store_inventory_rows(
+        discover_rollout_store_paths(Path(cache_root)),
+        validate=False,
+    )
+
+
+@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
+def _cached_projection(
+    store_path: str,
+    projection: str,
+    *,
+    rollout_row_id: int | None = None,
+    step_row_id: int | None = None,
+    limit: int | None = None,
+    group_by: str | None = None,
+    metric: str | None = None,
+    group_fields: tuple[str, ...] = (),
+    policies: tuple[str, ...] | None = None,
+    step_indices: tuple[int, ...] | None = None,
+) -> Any:
+    """Cache serializable inspection projections for an immutable store."""
+
+    reader, _, manifest_payload = _cached_store_bundle(store_path)
+    if projection == "invariants":
+        return store_invariant_rows(reader, manifest_payload=manifest_payload)
+    if projection == "cohorts":
+        return comparable_policy_cohorts(reader)
+    if projection == "paired":
+        return paired_policy_comparison_rows(reader)
+    if projection == "steps":
+        return rollout_step_objective_rows(reader, rollout_row_id=rollout_row_id)
+    if projection == "temporal":
+        if metric is None:
+            raise ValueError("temporal projection requires metric")
+        return temporal_metric_summary_rows(reader, metric=metric, group_fields=group_fields)
+    if projection == "candidate_flow":
+        return candidate_flow_rows(reader, policies=policies, step_indices=step_indices)
+    if projection == "ranks":
+        return selected_candidate_rank_rows(reader)
+    if projection == "targets":
+        return target_audit_rows(reader)
+    if projection == "masks":
+        return mask_combination_rows(reader)
+    if projection == "candidates":
+        return candidate_audit_rows(
+            reader,
+            rollout_row_id=rollout_row_id,
+            step_row_id=step_row_id,
+            limit=limit,
+        )
+    if projection == "candidate_group":
+        if group_by is None:
+            raise ValueError("candidate_group projection requires group_by")
+        audit_rows = _cached_projection(store_path, "candidates", limit=limit)
+        return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
+    if projection == "tree":
+        return rollout_tree_summary_rows(reader)
+    if projection == "root_geometry":
+        rows = root_relative_candidate_rows(reader, actor_valid_only=False)
+        return rows if limit is None else rows[:limit]
+    if projection == "depth_summary":
+        return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
+    raise ValueError(f"Unknown cached rollout projection: {projection}")
+
+
+@st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
+def _cached_topology(
+    store_path: str,
+    vin_store_dirs: tuple[str, ...],
+    paths: PathConfig,
+    selected_source_row_id: int | None = None,
+) -> Any:
+    """Resolve one immutable cross-store topology and reuse its Rich tree."""
+
+    return build_dataset_topology(
+        rollout_store_dir=Path(store_path),
+        vin_store_dirs=[Path(value) for value in vin_store_dirs],
+        path_config=paths,
+        selected_source_row_id=selected_source_row_id,
+    )
+
+
+@st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
+def _cached_failures(
+    store_path: str,
+    min_valid_candidates: int,
+    dominant_invalid_fraction: float,
+    max_step_distance_m: float,
+) -> list[dict[str, object]]:
+    """Cache failure triage for one immutable store and threshold tuple."""
+
+    reader, _, _ = _cached_store_bundle(store_path)
+    config = RolloutSuspiciousQueryConfig(
+        min_valid_candidates=min_valid_candidates,
+        dominant_invalid_fraction=dominant_invalid_fraction,
+        max_step_distance_m=max_step_distance_m,
+    )
+    return suspicious_rollout_rows(reader, config=config)
+
+
+@st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
+def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
+    """Build one deterministic bundle only after the operator requests it."""
+
+    frames = build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
+    return serialize_thesis_report_bundle(frames)
+
+
+def _clear_stored_rollout_caches() -> None:
+    """Clear only the inspector caches after stores are created or replaced."""
+
+    _cached_inventory.clear()
+    _cached_projection.clear()
+    _cached_topology.clear()
+    _cached_failures.clear()
+    _cached_evidence_bundle.clear()
+    _cached_store_bundle.clear()
+
+
 def render_stored_rollouts_page() -> None:
     """Render the five-workspace stored-rollout inspection workflow."""
 
@@ -127,7 +306,7 @@ def render_stored_rollouts_page() -> None:
     _render_role_legend()
 
     paths = PathConfig()
-    inventory = rollout_store_inventory_rows(discover_rollout_store_paths(paths.offline_cache_dir))
+    inventory = _cached_inventory(paths.offline_cache_dir.as_posix())
     store_path = _render_store_selector(paths, inventory)
     if store_path is None:
         st.info("No rollout store is selected. Choose a discovered store or enter a path.")
@@ -135,50 +314,62 @@ def render_stored_rollouts_page() -> None:
 
     selected_inventory = next((row for row in inventory if Path(str(row["path"])) == store_path), None)
     try:
-        reader = RolloutZarrStoreReader(store_path)
-        validation = reader.validate()
+        reader, validation, manifest_payload = _cached_store_bundle(store_path.as_posix())
     except Exception as exc:
         st.error(f"The selected store cannot be opened: {type(exc).__name__}: {exc}")
         _download_json("Download store identity JSON", "rollout-store-identity.json", selected_inventory or {})
         return
 
-    try:
-        manifest_payload = reader.manifest()
-    except Exception:
-        manifest_payload = {"root_attrs": {}, "manifest": {}}
-
-    section = st.segmented_control(
-        "Inspection workspace",
-        options=list(_SECTIONS),
-        default=_SECTIONS[0],
+    tabs = st.tabs(
+        list(_SECTIONS),
+        default=st.session_state.get(_SECTION_KEY, _SECTIONS[0]),
         key=_SECTION_KEY,
+        on_change="rerun",
         width="stretch",
     )
-    section = section or _SECTIONS[0]
     current = bool(validation.ok)
 
-    if section == "Trust & Topology":
-        _render_trust_and_topology(
-            reader=reader,
-            store_path=store_path,
-            inventory_row=selected_inventory,
-            manifest_payload=manifest_payload,
-            paths=paths,
-        )
-        return
-
-    if not current:
-        _render_stale_store_boundary(validation, inventory_row=selected_inventory, manifest_payload=manifest_payload)
-        return
-
-    if section == "Scientific Evidence":
-        _render_scientific_evidence(reader)
-    elif section == "Targets & Action Support":
-        _render_targets_and_support(reader)
-    elif section == "Failure Triage":
-        _render_failure_triage(reader)
-    else:
-        _render_inspect_export_rerun(reader, store_path=store_path, manifest_payload=manifest_payload, paths=paths)
+    if tabs[0].open:
+        with tabs[0]:
+            _render_trust_and_topology(
+                reader=reader,
+                store_path=store_path,
+                inventory_row=selected_inventory,
+                manifest_payload=manifest_payload,
+                paths=paths,
+                validation_ok=current,
+            )
+    for tab, renderer in zip(
+        tabs[1:],
+        (_render_scientific_evidence, _render_targets_and_support, _render_failure_triage),
+        strict=False,
+    ):
+        if not tab.open:
+            continue
+        with tab:
+            if current:
+                renderer(reader)
+            else:
+                _render_stale_store_boundary(
+                    validation,
+                    inventory_row=selected_inventory,
+                    manifest_payload=manifest_payload,
+                )
+    if tabs[4].open:
+        with tabs[4]:
+            if current:
+                _render_inspect_export_rerun(
+                    reader,
+                    store_path=store_path,
+                    manifest_payload=manifest_payload,
+                    paths=paths,
+                )
+            else:
+                _render_stale_store_boundary(
+                    validation,
+                    inventory_row=selected_inventory,
+                    manifest_payload=manifest_payload,
+                )
 
 
 def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]) -> Path | None:
@@ -198,7 +389,7 @@ def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]
             key="rollout_store_selector",
         )
         selected = Path(str(row["path"])).expanduser().resolve()
-        col_status.metric("Validation", "OK" if row.get("validation_ok") else "BLOCKED")
+        col_status.metric("Schema", str(row.get("schema_status", "unknown")).upper())
     else:
         col_store.info(f"No `*.zarr` rollout stores found below `{paths.offline_cache_dir}`.")
 
@@ -209,6 +400,9 @@ def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]
             if not candidate.is_absolute():
                 candidate = paths.resolve_cache_artifact_dir(manual)
             selected = candidate.resolve()
+    if col_status.button("Refresh stores", help="Clear inspector caches after creating or replacing a store."):
+        _clear_stored_rollout_caches()
+        st.rerun()
     return selected
 
 
@@ -221,7 +415,8 @@ def _render_role_legend() -> None:
     st.markdown(
         "**Evidence roles:** "
         + badges
-        + "  \\n+        Actor-visible inputs, privileged evaluation, derived training caches, and provenance are never interchangeable.",
+        + "<br><span style='font-size:.85rem'>Actor-visible inputs, privileged evaluation, derived training caches, "
+        "and provenance are never interchangeable.</span>",
         unsafe_allow_html=True,
     )
 
@@ -233,17 +428,19 @@ def _render_trust_and_topology(
     inventory_row: dict[str, object] | None,
     manifest_payload: dict[str, Any],
     paths: PathConfig,
+    validation_ok: bool,
 ) -> None:
     st.subheader("Trust & Topology")
     counts = inventory_row or {}
-    cols = st.columns(4)
+    cols = st.columns(5)
     cols[0].metric("Schema", str(counts.get("schema_status", "unknown")))
-    cols[1].metric("Rollouts", str(counts.get("observed_rollouts", "?")))
-    cols[2].metric("Steps", str(counts.get("observed_steps", "?")))
-    cols[3].metric("Candidates", str(counts.get("observed_candidates", "?")))
+    cols[1].metric("Validation", "OK" if validation_ok else "BLOCKED")
+    cols[2].metric("Rollouts", str(counts.get("observed_rollouts", "?")))
+    cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
+    cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
     try:
-        invariants = store_invariant_rows(reader, manifest_payload=manifest_payload)
+        invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
     except Exception as exc:
         invariants = [{"status": "FAIL", "invariant": "invariant projection", "evidence": str(exc)}]
     inv_df = pd.DataFrame(invariants)
@@ -257,10 +454,10 @@ def _render_trust_and_topology(
 
     vin_dirs = discover_vin_store_dirs(paths.offline_cache_dir)
     try:
-        topology = build_dataset_topology(
-            rollout_store_dir=store_path,
-            vin_store_dirs=vin_dirs,
-            path_config=paths,
+        topology = _cached_topology(
+            store_path.as_posix(),
+            tuple(path.as_posix() for path in vin_dirs),
+            paths,
         )
     except Exception as exc:
         st.warning(f"Topology could not be fully resolved: {type(exc).__name__}: {exc}")
@@ -305,11 +502,11 @@ def _render_trust_and_topology(
                     ),
                     key="stored_topology_source_row",
                 )
-                topology = build_dataset_topology(
-                    rollout_store_dir=store_path,
-                    vin_store_dirs=vin_dirs,
-                    path_config=paths,
-                    selected_source_row_id=int(source_id),
+                topology = _cached_topology(
+                    store_path.as_posix(),
+                    tuple(path.as_posix() for path in vin_dirs),
+                    paths,
+                    int(source_id),
                 )
                 st.dataframe(
                     [row for row in source_rows if int(row["source_row_id"]) == int(source_id)],
@@ -328,14 +525,15 @@ def _render_trust_and_topology(
 
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Scientific Evidence")
-    cohort = comparable_policy_cohorts(reader)
+    store_path = reader.store_dir.as_posix()
+    cohort = _cached_projection(store_path, "cohorts")
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
     st.caption(
         "Policies are comparison dimensions only after source sample, target protocol, horizon/budget, candidate/oracle configuration, and branch schedule match."
     )
     if eligibility:
-        comparison = pd.DataFrame(paired_policy_comparison_rows(reader))
+        comparison = pd.DataFrame(_cached_projection(store_path, "paired"))
         if comparison.empty:
             st.info("Matched cohorts exist, but no finite paired endpoint metric is available.")
         else:
@@ -384,47 +582,220 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
             st.dataframe(mismatch, hide_index=True, width="stretch")
             _download_frame("Download mismatch evidence CSV", "policy-cohort-mismatches.csv", mismatch)
 
-    steps = pd.DataFrame(rollout_step_objective_rows(reader))
+    steps = pd.DataFrame(_cached_projection(store_path, "steps"))
     if not steps.empty:
-        value_cols = [
-            column
-            for column in ("cumulative_target_root_gain", "marginal_target_rri")
-            if column in steps and steps[column].notna().any()
-        ]
-        if value_cols:
-            long = steps.melt(
-                id_vars=[column for column in ("rollout_row_id", "policy", "step_index") if column in steps],
-                value_vars=value_cols,
-                var_name="metric",
-                value_name="value",
-            )
+        _render_temporal_explorer(store_path, steps, matched_cohorts=eligibility)
+        _download_frame("Download selected-chain CSV", "selected-chain-evidence.csv", steps)
+
+    with st.expander("Additional branching and selected-rank evidence", expanded=False):
+        if st.toggle(
+            "Load branching, rank/regret, and root-relative evidence",
+            value=False,
+            help="These projections traverse every factual step and candidate shell, then remain cached for this store.",
+        ):
+            _render_branching_evidence(steps, pd.DataFrame(_cached_projection(store_path, "tree")))
+            _render_selected_rank_and_geometry(store_path)
+
+
+def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
+    """Render one population metric at a time and a one-rollout raw drill-down."""
+
+    available_labels = [
+        label
+        for label, metric in _TEMPORAL_METRIC_LABELS.items()
+        if (source := _TEMPORAL_SOURCE_FIELDS.get(metric, metric)) in steps and steps[source].notna().any()
+    ]
+    if not available_labels:
+        st.info("No supported finite temporal metric is available in this store.")
+        return
+    metric_label = st.selectbox("Temporal metric", options=available_labels)
+    metric = _TEMPORAL_METRIC_LABELS[metric_label]
+    group_class = st.selectbox("Temporal grouping class", options=list(_TEMPORAL_GROUP_CLASSES))
+    group_field = st.selectbox("Temporal grouping field", options=list(_TEMPORAL_GROUP_CLASSES[group_class]))
+    if group_class.startswith("Selected-action provenance"):
+        st.warning(
+            "Selected-action provenance is descriptive and post-selection, not a causal sampling-policy effect. "
+            "It explains which persisted provenance supplied selected outcomes; full candidate-family availability "
+            "belongs to the support flow in Targets & Action Support."
+        )
+    elif group_field == "policy":
+        comparison_status = "eligible" if matched_cohorts else "not eligible"
+        st.caption(
+            f"Policy trajectories are descriptive here; exact matched-cohort inference is {comparison_status} "
+            "and remains a separate surface above."
+        )
+
+    summary = pd.DataFrame(
+        _cached_projection(
+            store_path,
+            "temporal",
+            metric=metric,
+            group_fields=(group_field,),
+        )
+    )
+    if summary.empty:
+        st.info(f"No temporal rows are available for {metric_label} grouped by {group_field}.")
+        return
+    finite_count = int(summary["finite_count"].sum())
+    total_count = int(summary["total_count"].sum())
+    missing_count = int(summary["missing_count"].sum())
+    endpoint_depth = int(summary["step_index"].max())
+    endpoint = rollout_endpoint_metric_summary(steps.to_dict("records"), metric=metric)
+    endpoint_median = endpoint["median"]
+    cols = st.columns(4)
+    cols[0].metric("Finite temporal rows", f"{finite_count:,} / {total_count:,}")
+    cols[1].metric("Missing temporal rows", f"{missing_count:,}")
+    cols[2].metric("Observed depth", f"0–{endpoint_depth}")
+    cols[3].metric(
+        "Factual endpoint median",
+        "n/a" if endpoint_median is None else f"{float(endpoint_median):.4g}",
+        delta=f"{int(endpoint['finite_count']):,} / {int(endpoint['total_count']):,} finite",
+        delta_color="off",
+        help="One terminal factual step per rollout, including rollouts whose persisted horizon ends earlier.",
+    )
+    _render_plot(
+        _temporal_summary_figure(summary, group_field=group_field, metric_label=metric_label),
+        ScientificExplanation(
+            question=f"How does {metric_label.lower()} change over persisted rollout depth?",
+            population=f"One aggregate per {group_field} and step_index over factual selected-step rows; individual rollouts are not connected.",
+            metric=f"Median with linear-interpolated IQR; units are {summary['units'].iloc[0]}.",
+            denominator_masks="Each point reports finite_count / total_count and missing fraction; statistics use finite values only with no zero fill or depth interpolation.",
+            comparability="Upstream policy/recipe groups are descriptive unless exact cohort keys match; selected-action provenance groups are post-selection strata only.",
+            expected_pattern="Central tendency and dispersion change smoothly where repeated evidence exists, with sample size visible at every depth.",
+            failure_interpretation="Wide IQR, small n, abrupt missingness, or divergent strata require row-level inspection; they are not automatically policy effects.",
+            evidence_role=_temporal_evidence_role(metric),
+            source_fields=(
+                "inspection.temporal_metric_summary_rows",
+                f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
+            ),
+        ),
+    )
+    st.dataframe(summary, hide_index=True, width="stretch")
+    _download_frame("Download temporal summary CSV", "temporal-metric-summary.csv", summary)
+
+    with st.expander("Raw selected-rollout trajectory drill-down", expanded=False):
+        rollout_ids = sorted(int(value) for value in steps["rollout_row_id"].dropna().unique().tolist())
+        selected_rollout = st.selectbox("Raw trajectory rollout", options=rollout_ids)
+        selected_rows = steps.loc[steps["rollout_row_id"] == selected_rollout].sort_values("step_index")
+        source_field = _TEMPORAL_SOURCE_FIELDS.get(metric, metric)
+        raw = selected_rows.dropna(subset=[source_field])
+        if raw.empty:
+            st.info(f"Rollout {selected_rollout} has no finite {metric_label.lower()} rows.")
+        else:
             fig = px.line(
-                long,
+                raw,
                 x="step_index",
-                y="value",
-                color="policy",
-                facet_row="metric",
+                y=source_field,
                 markers=True,
-                title="Selected-chain gain by depth",
+                title=f"Raw trajectory for rollout {selected_rollout}",
+                hover_data=[column for column in ("step_row_id", "policy") if column in raw],
             )
-            fig.update_yaxes(matches=None)
             _render_plot(
                 fig,
                 ScientificExplanation(
-                    question="Does the factual selected chain accumulate useful target evidence beyond the first action?",
-                    population="One row per selected rollout step; lines retain rollout policy and depth.",
-                    metric="Cumulative root-normalized gain and marginal target RRI, dimensionless, on independent axes.",
-                    denominator_masks="Selected transitions only; invalid and unselected alternatives are excluded.",
-                    comparability="Compare depths only within equal horizons/budgets; policy conclusions still require matched cohorts.",
-                    expected_pattern="Cumulative gain grows while marginal gain remains informative rather than collapsing immediately.",
-                    failure_interpretation="Flat or negative valid marginal gain can be scientifically real; linkage/mask failures are separate invariants.",
-                    evidence_role="oracle/evaluation",
-                    source_fields=("steps/cumulative_target_root_gain", "steps/cumulative_target_rri"),
+                    question=f"What exact {metric_label.lower()} trajectory produced rollout {selected_rollout}?",
+                    population="One explicitly selected rollout only; no line joins unrelated rollout_row_id values.",
+                    metric=f"Persisted {source_field}; units follow the aggregate view above.",
+                    denominator_masks="Finite factual selected-step rows for this rollout; missing depths remain absent rather than interpolated.",
+                    comparability="Use this for case inspection, not population or policy inference.",
+                    expected_pattern="The raw trajectory should explain one aggregate contribution without hiding its exact step ids.",
+                    failure_interpretation="Abrupt jumps or negative valid gains can identify an interesting case for Inspect/Rerun.",
+                    evidence_role=_temporal_evidence_role(metric),
+                    source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
                 ),
             )
-        _download_frame("Download selected-chain CSV", "selected-chain-evidence.csv", steps)
 
-    ranks = pd.DataFrame(selected_candidate_rank_rows(reader))
+
+def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_label: str) -> go.Figure:
+    """Build deterministic median/IQR traces without connecting rollout rows."""
+
+    figure = go.Figure()
+    palette = px.colors.qualitative.Plotly
+    for index, (group_value, rows) in enumerate(summary.groupby(group_field, sort=True, dropna=False)):
+        ordered = rows.sort_values("step_index")
+        color = palette[index % len(palette)]
+        custom = np.column_stack(
+            (
+                ordered["finite_count"],
+                ordered["total_count"],
+                ordered["missing_count"] / ordered["total_count"].clip(lower=1),
+                ordered["mean"],
+                ordered["min"],
+                ordered["max"],
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=ordered["step_index"],
+                y=ordered["q25"],
+                mode="lines",
+                line={"color": color, "width": 0},
+                legendgroup=str(group_value),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=ordered["step_index"],
+                y=ordered["q75"],
+                mode="lines",
+                line={"color": color, "width": 0},
+                fill="tonexty",
+                fillcolor=_with_alpha(color, 0.18),
+                legendgroup=str(group_value),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=ordered["step_index"],
+                y=ordered["median"],
+                mode="lines+markers",
+                line={"color": color},
+                name=str(group_value),
+                legendgroup=str(group_value),
+                customdata=custom,
+                hovertemplate=(
+                    f"{group_field}={group_value}<br>step=%{{x}}<br>median=%{{y:.4g}}"
+                    "<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}"
+                    "<br>missing=%{customdata[2]:.1%}<br>mean=%{customdata[3]:.4g}"
+                    "<br>min=%{customdata[4]:.4g}<br>max=%{customdata[5]:.4g}<extra></extra>"
+                ),
+            )
+        )
+    figure.update_layout(
+        title=f"{metric_label}: median and interquartile range by rollout depth",
+        xaxis_title="rollout step_index",
+        yaxis_title=f"{summary['metric'].iloc[0]} ({summary['units'].iloc[0]})",
+        hovermode="x unified",
+    )
+    return figure
+
+
+def _with_alpha(color: str, alpha: float) -> str:
+    """Convert one Plotly hex color into an rgba fill color."""
+
+    red, green, blue = (int(color[index : index + 2], 16) for index in (1, 3, 5))
+    return f"rgba({red},{green},{blue},{alpha})"
+
+
+def _temporal_evidence_role(
+    metric: str,
+) -> Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]:
+    """Return the information boundary for one validated temporal metric."""
+
+    try:
+        return _TEMPORAL_EVIDENCE_ROLES[metric]
+    except KeyError as exc:
+        raise ValueError(f"Temporal metric {metric!r} has no explicit evidence role.") from exc
+
+
+def _render_selected_rank_and_geometry(store_path: str) -> None:
+    """Render expensive selected-rank and complete root-relative evidence on demand."""
+
+    ranks = pd.DataFrame(_cached_projection(store_path, "ranks"))
     if not ranks.empty:
         rank_col = "selected_rank" if "selected_rank" in ranks else next((c for c in ranks if "rank" in c), None)
         regret_col = "regret" if "regret" in ranks else next((c for c in ranks if "regret" in c), None)
@@ -447,7 +818,7 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
                     comparability="Ranks are shell-local; compare regret only under equivalent reward definitions and budgets.",
                     expected_pattern="Most selected actions have low rank and small regret without total diversity collapse.",
                     failure_interpretation="High regret suggests selection/model mismatch; negative valid rewards remain distinct from invalid rows.",
-                    evidence_role="derived training data",
+                    evidence_role="oracle/evaluation",
                     source_fields=(
                         "inspection.selected_candidate_rank_rows",
                         "candidates/actor_action_mask",
@@ -458,24 +829,139 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
         st.dataframe(ranks, hide_index=True, width="stretch")
         _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
-    with st.expander("Root-relative candidate geometry (Z-up metres)"):
-        if st.checkbox("Load root-relative candidate rows", value=False):
-            geometry = pd.DataFrame(root_relative_candidate_rows(reader, actor_valid_only=False))
-            if geometry.empty:
-                st.info("No candidate geometry is available.")
-            else:
-                st.caption(
-                    "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."
-                )
-                st.dataframe(geometry.head(500), hide_index=True, width="stretch")
-                st.caption(f"Showing {min(500, len(geometry)):,} of {len(geometry):,}; export is complete.")
-                _download_frame("Download root-relative geometry CSV", "root-relative-candidates.csv", geometry)
+    geometry = pd.DataFrame(_cached_projection(store_path, "root_geometry"))
+    if not geometry.empty:
+        st.caption(
+            "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."
+        )
+        st.dataframe(geometry.head(500), hide_index=True, width="stretch")
+        st.caption(f"Showing {min(500, len(geometry)):,} of {len(geometry):,}; export is complete.")
+        _download_frame("Download root-relative geometry CSV", "root-relative-candidates.csv", geometry)
+
+
+def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
+    """Restore selection, fanout, and family-provenance plots from the prior inspector."""
+
+    with st.expander("Branching, selection confidence, and sampled families", expanded=True):
+        probability_cols = [
+            name for name in ("selected_probability", "selected_entropy") if name in steps and steps[name].notna().any()
+        ]
+        if probability_cols:
+            long = steps.melt(
+                id_vars=[name for name in ("rollout_row_id", "policy", "step_index") if name in steps],
+                value_vars=probability_cols,
+                var_name="metric",
+                value_name="value",
+            ).dropna(subset=["value"])
+            fig = px.line(
+                long,
+                x="step_index",
+                y="value",
+                color="policy" if "policy" in long else "rollout_row_id",
+                facet_row="metric",
+                markers=True,
+                title="Selected-action probability and entropy by depth",
+            )
+            fig.update_yaxes(matches=None)
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Does action selection become prematurely deterministic or remain indecisive with depth?",
+                    population="One factual selected step; probability and entropy are shown on independent axes.",
+                    metric="Selected probability and categorical entropy, both dimensionless.",
+                    denominator_masks="The persisted candidate shell and selection distribution for each factual step.",
+                    comparability="Candidate budget, temperature, beam width, and policy recipe must agree.",
+                    expected_pattern="Confidence can rise with evidence while entropy does not collapse identically across every sample.",
+                    failure_interpretation="Near-zero entropy everywhere suggests collapse; low probability with high regret suggests selection mismatch.",
+                    evidence_role=_temporal_evidence_role("selected_probability"),
+                    source_fields=("steps/selected_probability", "steps/selected_entropy"),
+                ),
+            )
+
+        fanout_cols = [
+            name for name in ("num_valid_candidates", "invalid_fraction") if name in steps and steps[name].notna().any()
+        ]
+        if fanout_cols:
+            long = steps.melt(
+                id_vars=[name for name in ("rollout_row_id", "policy", "step_index") if name in steps],
+                value_vars=fanout_cols,
+                var_name="metric",
+                value_name="value",
+            ).dropna(subset=["value"])
+            fig = px.line(
+                long,
+                x="step_index",
+                y="value",
+                color="policy" if "policy" in long else "rollout_row_id",
+                facet_row="metric",
+                markers=True,
+                title="Valid fanout and invalid fraction by depth",
+            )
+            fig.update_yaxes(matches=None)
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Where does the usable action set narrow along the selected chain?",
+                    population="One candidate shell per factual rollout step.",
+                    metric="Valid candidate count and invalid fraction; separate axes prevent mixed-unit distortion.",
+                    denominator_masks="Fanout counts actor-action-valid candidates; invalid fraction uses the complete sampled shell.",
+                    comparability="Candidate shell size and generator configuration must match.",
+                    expected_pattern="Fanout remains sufficient across depth and invalidity does not abruptly dominate.",
+                    failure_interpretation="Low fanout or rising invalidity points to geometry, collision, or generator-support failures.",
+                    evidence_role="actor-visible",
+                    source_fields=("steps/num_valid_candidates", "steps/invalid_fraction"),
+                ),
+            )
+
+        if not tree.empty and {"step_label", "selected_steps", "selected_position"}.issubset(tree.columns):
+            fig = px.bar(
+                tree,
+                x="step_label",
+                y="selected_steps",
+                color="selected_position",
+                facet_col="policy" if "policy" in tree and tree["policy"].nunique() > 1 else None,
+                hover_data=[
+                    name
+                    for name in ("selected_strategy", "selected_mixture", "mean_valid_fanout", "mean_invalid_fraction")
+                    if name in tree
+                ],
+                title="Observed selected-family provenance by rollout depth",
+            )
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Which candidate families actually supply the selected actions at each depth?",
+                    population="Aggregated factual selected steps grouped by recipe, depth, and persisted family provenance.",
+                    metric="Selected-step count; this is observed provenance, not a reconstructed search tree.",
+                    denominator_masks="Selected actor-valid transitions only.",
+                    comparability="Family vocabulary, mixture weights, policy recipe, and horizon must match.",
+                    expected_pattern="Multiple intended families contribute without unexplained monopolies or disappearing depths.",
+                    failure_interpretation="Single-family dominance can reflect policy preference, generator imbalance, or mask collapse and needs row-level inspection.",
+                    evidence_role="provenance",
+                    source_fields=(
+                        "inspection.rollout_tree_summary_rows",
+                        "candidate family ids",
+                        "steps/selected_candidate_row_id",
+                    ),
+                ),
+            )
+            _download_frame("Download branching provenance CSV", "rollout-branching-provenance.csv", tree)
 
 
 def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Targets & Action Support")
-    candidate_rows = candidate_audit_rows(reader)
-    targets = pd.DataFrame(target_audit_rows(reader))
+    store_path = reader.store_dir.as_posix()
+    candidate_plot_limit = int(
+        st.number_input(
+            "Candidate plot row limit",
+            min_value=1_000,
+            max_value=500_000,
+            value=50_000,
+            step=10_000,
+            help="Bounds interactive geometry traces only; aggregate masks and family counts still use the full store.",
+        )
+    )
+    targets = pd.DataFrame(_cached_projection(store_path, "targets"))
     if not targets.empty:
         protocol = (
             targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False)
@@ -509,8 +995,11 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             ),
         )
         _download_frame("Download target protocol CSV", "target-protocol.csv", targets)
+        _render_target_score_diagnostics(targets)
 
-    masks = pd.DataFrame(mask_combination_rows(reader))
+    _render_candidate_provenance_flow(store_path)
+
+    masks = pd.DataFrame(_cached_projection(store_path, "masks"))
     if not masks.empty:
         label_cols = [c for c in ("actor_action", "oracle_label", "q_train", "selected") if c in masks]
         masks["combination"] = masks[label_cols].astype(str).agg(" · ".join, axis=1)
@@ -534,7 +1023,122 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             "Download mask combinations CSV", "candidate-mask-combinations.csv", masks.drop(columns="combination")
         )
 
-    families = pd.DataFrame(candidate_group_summary_rows(reader, group_by="position", audit_rows=candidate_rows))
+    if st.toggle(
+        "Load complete candidate aggregate breakdowns",
+        value=False,
+        help="Builds the heavyweight candidate audit used by the restored family, mask-population, and invalid-reason tables.",
+    ):
+        _render_candidate_aggregate_breakdowns(store_path)
+
+    if st.toggle(
+        "Load bounded candidate geometry and reward plots",
+        value=False,
+        help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
+    ):
+        candidate_rows = _cached_projection(store_path, "candidates", limit=candidate_plot_limit)
+        _render_candidate_geometry_diagnostics(
+            pd.DataFrame(candidate_rows),
+            pd.DataFrame(candidate_rows),
+            total_candidates=int(reader.array("candidates/candidate_row_id").size),
+        )
+
+
+def _render_candidate_provenance_flow(store_path: str) -> None:
+    """Render the lightweight complete-population candidate provenance flow."""
+
+    steps = pd.DataFrame(_cached_projection(store_path, "steps"))
+    policy_options = sorted(str(value) for value in steps.get("policy", pd.Series(dtype=str)).dropna().unique())
+    depth_options = sorted(int(value) for value in steps.get("step_index", pd.Series(dtype=int)).dropna().unique())
+    col_policy, col_depth = st.columns(2)
+    selected_policies = col_policy.multiselect("Flow policies", options=policy_options, default=policy_options)
+    selected_depths = col_depth.multiselect("Flow rollout depths", options=depth_options, default=depth_options)
+    flow = pd.DataFrame(
+        _cached_projection(
+            store_path,
+            "candidate_flow",
+            policies=tuple(selected_policies),
+            step_indices=tuple(selected_depths),
+        )
+    )
+    if flow.empty:
+        st.info("No candidate rows match the active policy and rollout-depth filters.")
+        return
+    denominator = int(flow["root_denominator"].iloc[0])
+    st.caption(
+        f"Filtered root population: {denominator:,} candidate rows. This is candidate provenance and support, not a stored rollout search tree."
+    )
+    _render_plot(
+        _candidate_flow_figure(flow),
+        ScientificExplanation(
+            question="How does persisted candidate-generation provenance flow into actor-valid support and selected outcomes?",
+            population="Every candidate row matching the visible policy/depth filters, aggregated through mixture, position, orientation, actor validity, and selection outcome.",
+            metric="Candidate count and fraction of the filtered root population; no reward or geometric units.",
+            denominator_masks="The filtered complete candidate population is the root denominator. Actor validity is a hard action constraint; selected actor-invalid rows remain explicit selection_contract_violation evidence.",
+            comparability="Candidate mixture, family vocabulary, orientation strategy, budget, and active policy/depth filters must match.",
+            expected_pattern="Intended mixture, position, and orientation support survives actor validation, and selected rows remain a subset of actor-valid support.",
+            failure_interpretation="Unknown provenance indicates missing persisted labels; disappearing families indicate support loss; selection_contract_violation is a hard invariant failure.",
+            evidence_role="provenance",
+            source_fields=(
+                "inspection.candidate_flow_rows",
+                "candidates/mixture_id",
+                "candidates/position_id",
+                "candidates/strategy_id",
+                "candidates/actor_action_mask",
+                "candidates/selected_mask",
+            ),
+        ),
+    )
+    st.dataframe(flow, hide_index=True, width="stretch")
+    _download_frame("Download candidate provenance flow CSV", "candidate-provenance-flow.csv", flow)
+
+
+def _candidate_flow_figure(flow: pd.DataFrame) -> go.Figure:
+    """Build one stage-stable Sankey from normalized candidate-flow links."""
+
+    stage_order = ("root", "mixture", "position", "orientation", "actor_validity", "selection_outcome")
+    nodes: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for stage in stage_order:
+        candidates = [
+            (str(row[f"{side}_id"]), str(row[f"{side}_label"]), stage)
+            for _, row in flow.iterrows()
+            for side in ("source", "target")
+            if str(row[f"{side}_stage"]) == stage
+        ]
+        for node in sorted(candidates, key=lambda value: (value[1], value[0])):
+            if node[0] not in seen:
+                seen.add(node[0])
+                nodes.append(node)
+    node_index = {node_id: index for index, (node_id, _label, _stage) in enumerate(nodes)}
+    custom = np.column_stack((flow["root_denominator"], flow["fraction_of_root"]))
+    figure = go.Figure(
+        go.Sankey(
+            arrangement="snap",
+            node={
+                "label": [label for _node_id, label, _stage in nodes],
+                "customdata": [stage for _node_id, _label, stage in nodes],
+                "hovertemplate": "%{label}<br>stage=%{customdata}<extra></extra>",
+            },
+            link={
+                "source": [node_index[str(value)] for value in flow["source_id"]],
+                "target": [node_index[str(value)] for value in flow["target_id"]],
+                "value": flow["count"].astype(int).tolist(),
+                "customdata": custom,
+                "hovertemplate": (
+                    "%{source.label} → %{target.label}<br>count=%{value:,}"
+                    "<br>root denominator=%{customdata[0]:,.0f}<br>fraction of root=%{customdata[1]:.2%}<extra></extra>"
+                ),
+            },
+        )
+    )
+    figure.update_layout(title="Candidate provenance and support flow")
+    return figure
+
+
+def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
+    """Render restored complete-store candidate audit plots on demand."""
+
+    families = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by="position"))
     if not families.empty:
         families["selection_rate_given_available"] = np.where(
             families["actor_valid"] > 0,
@@ -571,11 +1175,50 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         )
         _download_frame("Download family support CSV", "candidate-family-support.csv", families)
 
-    with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(
-            candidate_group_summary_rows(reader, group_by="invalid_reason", audit_rows=candidate_rows)
+    breakdown_by = st.selectbox(
+        "Candidate aggregate breakdown",
+        options=["position", "strategy", "mixture", "invalid_reason", "policy"],
+        help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
+    )
+    breakdown = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by=breakdown_by))
+    count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
+    if not breakdown.empty and count_fields:
+        long = breakdown.melt(
+            id_vars=breakdown_by,
+            value_vars=count_fields,
+            var_name="mask_population",
+            value_name="count",
         )
-        fanout = pd.DataFrame(rollout_step_objective_rows(reader))
+        fig = px.bar(
+            long,
+            x=breakdown_by,
+            y="count",
+            color="mask_population",
+            barmode="group",
+            title=f"Candidate support by {breakdown_by}",
+        )
+        _render_plot(
+            fig,
+            ScientificExplanation(
+                question=f"How do actor-valid, trainable, and selected populations differ across {breakdown_by}?",
+                population=f"Complete-store candidate rows grouped by persisted {breakdown_by} provenance.",
+                metric="Candidate count in each explicitly named mask population.",
+                denominator_masks="Actor-valid, q_train, and selected are overlapping sets, not sequential waterfall stages.",
+                comparability="Candidate protocol, group vocabulary, and store schema must match.",
+                expected_pattern="Trainable support is no larger than label availability permits, and selection stays within actor support.",
+                failure_interpretation="Missing groups, selected-only spikes, or large actor/train gaps identify generator, mask, or label-cache issues.",
+                evidence_role="derived training data",
+                source_fields=(
+                    "inspection.candidate_group_summary_rows",
+                    f"candidate {breakdown_by}",
+                    "candidate masks",
+                ),
+            ),
+        )
+
+    with st.expander("Invalid reasons and valid fanout"):
+        invalid = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by="invalid_reason"))
+        fanout = pd.DataFrame(_cached_projection(store_path, "steps"))
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")
         if not fanout.empty:
@@ -599,18 +1242,318 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             )
 
 
+def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
+    """Restore interpretable target-selection plots and replace the scatter matrix."""
+
+    with st.expander("Target selection score diagnostics", expanded=True):
+        rank_rows = targets.dropna(subset=[name for name in ("selection_rank", "selection_score") if name in targets])
+        if {"selection_rank", "selection_score"}.issubset(targets.columns) and not rank_rows.empty:
+            fig = px.scatter(
+                rank_rows,
+                x="selection_rank",
+                y="selection_score",
+                color="gt_match_status" if "gt_match_status" in rank_rows else None,
+                symbol="gt_label_valid" if "gt_label_valid" in rank_rows else None,
+                hover_data=[
+                    name
+                    for name in ("target_row_id", "class", "source", "target_valid", "effective_support")
+                    if name in rank_rows
+                ],
+                title="Target selection rank versus score",
+            )
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Does persisted target rank agree with the score used to prioritize targets?",
+                    population="One target proposal with finite rank and selection score.",
+                    metric="Selection rank is ordinal; selection score is a dimensionless configured composite.",
+                    denominator_masks="All scored target proposals, including actor-invalid and GT-invalid rows.",
+                    comparability="Target-selection weights, proposal source, and GT-matching protocol must match.",
+                    expected_pattern="Higher-priority ranks follow higher scores while validity classes remain visibly distinct.",
+                    failure_interpretation="Rank inversions, score ties, or high-scoring invalid targets indicate selection or matching problems.",
+                    evidence_role="provenance",
+                    source_fields=("targets/selection_rank", "targets/selection_score", "targets/gt_match_status_id"),
+                ),
+            )
+
+        support_field = next(
+            (
+                name
+                for name in ("effective_support", "projected_area_fraction", "visibility_score")
+                if name in targets and targets[name].notna().any()
+            ),
+            None,
+        )
+        if support_field is not None and "selection_score" in targets:
+            support_rows = targets.dropna(subset=[support_field, "selection_score"])
+            if not support_rows.empty:
+                fig = px.scatter(
+                    support_rows,
+                    x=support_field,
+                    y="selection_score",
+                    color="gt_match_status" if "gt_match_status" in support_rows else None,
+                    symbol="target_valid" if "target_valid" in support_rows else None,
+                    hover_data=[name for name in ("target_row_id", "class", "gt_label_valid") if name in support_rows],
+                    title=f"Selection score versus {support_field}",
+                )
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="How strongly does visible target support influence the persisted target score?",
+                        population=f"One target proposal with finite selection score and {support_field}.",
+                        metric=f"{support_field} and selection score are dimensionless configured diagnostics.",
+                        denominator_masks="Scored target proposals; actor and GT validity remain explicit marks.",
+                        comparability="Support computation, crop geometry, score weights, and target source must match.",
+                        expected_pattern="Support contributes monotonically without becoming the only determinant of score.",
+                        failure_interpretation="High scores at negligible support or validity-separated clusters can reveal weighting or GT-association issues.",
+                        evidence_role="oracle/evaluation",
+                        source_fields=(
+                            f"targets/{support_field}",
+                            "targets/selection_score",
+                            "targets/gt_label_valid_mask",
+                        ),
+                    ),
+                )
+
+        component_cols = [
+            name
+            for name in (
+                "selection_score",
+                "visibility_score",
+                "support_score",
+                "deficit_score",
+                "projected_area_fraction",
+                "gt_match_iou",
+            )
+            if name in targets and targets[name].notna().any()
+        ]
+        if len(component_cols) >= 3:
+            corr = targets[component_cols].apply(pd.to_numeric, errors="coerce").corr(min_periods=2)
+            fig = go.Figure(
+                go.Heatmap(
+                    z=corr.to_numpy(),
+                    x=corr.columns.tolist(),
+                    y=corr.index.tolist(),
+                    zmin=-1,
+                    zmax=1,
+                    colorscale="RdBu",
+                    reversescale=True,
+                    text=np.round(corr.to_numpy(), 2),
+                    texttemplate="%{text}",
+                )
+            )
+            fig.update_layout(title="Target score-component correlation", height=440)
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Which target-score components are redundant, opposed, or unexpectedly disconnected?",
+                    population="Pairwise-complete target proposals for each component pair.",
+                    metric="Pearson correlation coefficient, dimensionless in [-1, 1].",
+                    denominator_masks="Finite pairwise component values; pairwise denominators may differ.",
+                    comparability="Only compare matrices from identical score definitions and target protocols.",
+                    expected_pattern="Components reflect their intended roles without perfect accidental duplication.",
+                    failure_interpretation="Near-perfect correlations suggest redundancy; unexpected signs can expose score wiring errors.",
+                    evidence_role="oracle/evaluation",
+                    source_fields=tuple(f"targets/{name}" for name in component_cols),
+                ),
+            )
+
+
+def _render_candidate_geometry_diagnostics(
+    candidates: pd.DataFrame,
+    root_geometry: pd.DataFrame,
+    *,
+    total_candidates: int,
+) -> None:
+    """Restore bounded candidate plots in scientifically valid root-relative coordinates."""
+
+    if candidates.empty:
+        return
+    with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
+        st.caption(
+            f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
+            "Coordinates are root-relative ARIA world metres (RIGHT_HAND_Z_UP), never pooled absolute scene origins."
+        )
+        metric_options = [
+            name
+            for name in (
+                "motion_step_length_m",
+                "motion_height_delta_m",
+                "motion_backward_step_m",
+                "motion_yaw_delta_deg",
+                "mesh_distance_m",
+                "path_min_clearance_m",
+                "free_space_margin_m",
+                "target_distance_m",
+                "target_root_gain",
+                "target_rri",
+            )
+            if name in candidates and candidates[name].notna().any()
+        ]
+        if metric_options:
+            metric = st.selectbox("Geometry / label distribution", options=metric_options)
+            metric_rows = candidates.dropna(subset=[metric])
+            fig = px.histogram(
+                metric_rows,
+                x=metric,
+                color="invalid_reason" if "invalid_reason" in metric_rows else None,
+                marginal="box",
+                title=f"{metric} distribution",
+            )
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question=f"What is the support, tail behavior, and invalidity structure of {metric}?",
+                    population="Bounded candidate audit rows with a finite selected metric.",
+                    metric=f"{metric}; units follow the field suffix (`_m`, `_deg`) or are dimensionless for reward/RRI.",
+                    denominator_masks="Finite metric rows; invalid reasons remain explicit rather than silently filtered.",
+                    comparability="Field definition, candidate protocol, and interactive row limit must match.",
+                    expected_pattern="Support respects configured physical bounds and avoids unexplained clipping or spikes.",
+                    failure_interpretation="Heavy tails, discontinuities, or invalidity-specific modes guide row-level debugging.",
+                    evidence_role="oracle/evaluation"
+                    if metric in {"target_root_gain", "target_rri"}
+                    else "actor-visible",
+                    source_fields=(f"candidate audit/{metric}", "candidates/invalid_reason_bitset"),
+                ),
+            )
+        if not root_geometry.empty:
+            fig = px.scatter(
+                root_geometry,
+                x="root_relative_x_m",
+                y="root_relative_y_m",
+                color="position" if "position" in root_geometry else None,
+                symbol="selected" if "selected" in root_geometry else None,
+                hover_data=[
+                    name
+                    for name in ("rollout_row_id", "step_index", "root_relative_z_m", "actor_action", "mixture")
+                    if name in root_geometry
+                ],
+                title="Candidate centers relative to each rollout root (ground plane)",
+            )
+            fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Do candidate families cover the intended local motion support around each rollout root?",
+                    population="Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
+                    metric="Root-relative X/Y displacement in metres; Z-up height is available on hover.",
+                    denominator_masks="Bounded full candidate shell; actor validity and selection remain explicit fields.",
+                    comparability="Coordinate convention, generator profile, and plotting row limit must match.",
+                    expected_pattern="Families occupy their intended local regions with selected actions inside actor-valid support.",
+                    failure_interpretation="Collapsed clusters, extreme radii, or family overlap can expose pose, frame, or generator defects.",
+                    evidence_role="actor-visible",
+                    source_fields=(
+                        "inspection.root_relative_candidate_rows",
+                        "candidate pose_world_cam",
+                        "rollout root_pose_world",
+                    ),
+                ),
+            )
+
+        angle_cols = [
+            name
+            for name in ("target_bearing_yaw_deg", "motion_yaw_delta_deg")
+            if name in candidates and candidates[name].notna().any()
+        ]
+        if angle_cols:
+            angle_rows = candidates[angle_cols].melt(var_name="angle_source", value_name="angle_deg").dropna()
+            fig = px.histogram(
+                angle_rows,
+                x="angle_deg",
+                color="angle_source",
+                nbins=72,
+                barmode="overlay",
+                opacity=0.7,
+                title="Target-bearing and executed-yaw support",
+            )
+            fig.update_xaxes(range=[-180, 180])
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Do candidate motions cover the target-bearing angles that the store presents?",
+                    population="Bounded candidate rows with finite bearing or motion-yaw diagnostics.",
+                    metric="Yaw angle in degrees in the persisted ARIA convention.",
+                    denominator_masks="Finite angle diagnostics; invalid candidates remain included unless absent from the persisted audit row.",
+                    comparability="Angle convention, generator families, and candidate budget must match.",
+                    expected_pattern="Executed yaw support overlaps relevant target bearings without implausible spikes.",
+                    failure_interpretation="Systematic offsets suggest frame errors; narrow motion support suggests generator or constraint collapse.",
+                    evidence_role="actor-visible",
+                    source_fields=(
+                        "candidate_diagnostics/target_bearing_yaw_deg",
+                        "candidate_diagnostics/motion_yaw_delta_deg",
+                    ),
+                ),
+            )
+
+        motion_required = {"motion_step_length_m", "motion_yaw_delta_deg"}
+        if motion_required.issubset(candidates.columns):
+            motion = candidates.dropna(subset=list(motion_required))
+            if not motion.empty:
+                fig = px.scatter(
+                    motion,
+                    x="motion_step_length_m",
+                    y="motion_yaw_delta_deg",
+                    color="position" if "position" in motion else None,
+                    symbol="selected" if "selected" in motion else None,
+                    hover_data=[name for name in ("invalid_reason", "target_distance_m", "policy") if name in motion],
+                    title="Motion length versus yaw change",
+                )
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="Are translation and rotation jointly plausible for sampled and selected actions?",
+                        population="Bounded candidate rows with finite motion diagnostics.",
+                        metric="Step length in metres and yaw change in degrees.",
+                        denominator_masks="Finite motion rows; validity, family, and selected state remain inspectable.",
+                        comparability="Motion limits and generator configuration must match.",
+                        expected_pattern="Samples respect configured motion support and selected actions avoid extreme corners.",
+                        failure_interpretation="Outliers or family-specific streaks can indicate transform errors, unrealistic moves, or constraint failures.",
+                        evidence_role="actor-visible",
+                        source_fields=(
+                            "candidate_diagnostics/motion_step_length_m",
+                            "candidate_diagnostics/motion_yaw_delta_deg",
+                        ),
+                    ),
+                )
+
+        if {"target_root_gain", "position", "selected"}.issubset(candidates.columns):
+            rewards = candidates.dropna(subset=["target_root_gain"])
+            if not rewards.empty:
+                fig = px.box(
+                    rewards,
+                    x="position",
+                    y="target_root_gain",
+                    color="selected",
+                    points="outliers",
+                    title="Target root gain by candidate family and selection",
+                )
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="Which candidate families contain useful oracle reward support, and what does selection choose?",
+                        population="Bounded candidates with finite target root gain, split by family and selected state.",
+                        metric="Target root-normalized gain, dimensionless; negative valid rewards remain real values.",
+                        denominator_masks="Finite oracle labels only; invalid or missing labels are excluded rather than assigned low reward.",
+                        comparability="Target protocol, reward definition, candidate mixture, and row limit must match.",
+                        expected_pattern="Selected rewards occupy competitive support without every family collapsing to one value.",
+                        failure_interpretation="Selected low-tail rewards suggest policy mismatch; missing families suggest generator or label coverage gaps.",
+                        evidence_role="oracle/evaluation",
+                        source_fields=(
+                            "candidates/target_root_gain",
+                            "candidates/selected_mask",
+                            "candidates/position_id",
+                        ),
+                    ),
+                )
+
+
 def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Failure Triage")
     with st.expander("Advanced thresholds"):
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
         max_step = float(st.slider("Maximum selected step (m)", min_value=0.1, max_value=5.0, value=1.25))
-    cfg = RolloutSuspiciousQueryConfig(
-        min_valid_candidates=min_valid,
-        dominant_invalid_fraction=dominant,
-        max_step_distance_m=max_step,
-    )
-    failures = pd.DataFrame(suspicious_rollout_rows(reader, config=cfg))
+    failures = pd.DataFrame(_cached_failures(reader.store_dir.as_posix(), min_valid, dominant, max_step))
     if failures.empty:
         st.success("No failure rows match the active thresholds.")
         return
@@ -661,6 +1604,316 @@ def _carry_failure_to_inspect(row: dict[str, object]) -> None:
     st.session_state[_SECTION_KEY] = "Inspect, Export & Rerun"
 
 
+def _canonical_query_store_identity(store_path: Path) -> str:
+    """Return a stable compact identity for one canonical immutable-store path."""
+
+    canonical = store_path.expanduser().resolve().as_posix()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def _query_namespace(store_identity: str, scope: str, candidate_population: str) -> str:
+    """Return the disjoint session-state namespace for one query grain."""
+
+    grain = hashlib.sha256(f"{scope}\0{candidate_population}".encode()).hexdigest()[:12]
+    return f"stored_query:{store_identity}:{grain}"
+
+
+def _query_key(namespace: str, name: str) -> str:
+    """Return one namespaced query or inspector widget key."""
+
+    return f"{namespace}:{name}"
+
+
+def _activate_query_store(state: MutableMapping[str, Any], store_identity: str) -> None:
+    """Discard query state from the previously active canonical store."""
+
+    previous = state.get(_ACTIVE_QUERY_STORE_KEY)
+    if previous is not None and previous != store_identity:
+        prefix = f"stored_query:{previous}:"
+        for key in [str(value) for value in state if str(value).startswith(prefix)]:
+            state.pop(key, None)
+    state[_ACTIVE_QUERY_STORE_KEY] = store_identity
+
+
+def _normalized_query_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Copy a projection into deterministic columns, row order, and RangeIndex."""
+
+    normalized = frame.loc[:, sorted(str(column) for column in frame.columns)].copy()
+    row_keys = [
+        column
+        for column in ("rollout_row_id", "step_row_id", "candidate_row_id", "target_row_id")
+        if column in normalized
+    ]
+    if row_keys:
+        normalized = normalized.sort_values(row_keys, kind="mergesort")
+    return normalized.reset_index(drop=True)
+
+
+def _evaluate_query_frame(frame: pd.DataFrame, expression: str) -> pd.DataFrame:
+    """Evaluate one trusted-local pandas expression against a copied frame."""
+
+    source = _normalized_query_frame(frame)
+    if not expression.strip():
+        return source
+    result = source.query(
+        expression,
+        engine="python",
+        local_dict={},
+        global_dict={},
+    )
+    return result.loc[:, source.columns].copy().reset_index(drop=True)
+
+
+def _clear_query_state(state: MutableMapping[str, Any], namespace: str) -> None:
+    """Clear expression/result state without mutating rollout or step selection."""
+
+    for name in (
+        "draft_expression",
+        "applied_expression",
+        "last_valid_result",
+        "last_error",
+        "selected_result_row",
+        "pending_promotion",
+        "source_signature",
+    ):
+        state.pop(_query_key(namespace, name), None)
+
+
+def _apply_query_state(
+    state: MutableMapping[str, Any],
+    namespace: str,
+    source: pd.DataFrame,
+) -> None:
+    """Apply the draft expression, preserving the last valid result on error."""
+
+    draft = str(state.get(_query_key(namespace, "draft_expression"), ""))
+    try:
+        result = _evaluate_query_frame(source, draft)
+    except Exception as exc:
+        state[_query_key(namespace, "last_error")] = f"{type(exc).__name__}: {exc}"
+        return
+    state[_query_key(namespace, "applied_expression")] = draft
+    state[_query_key(namespace, "last_valid_result")] = result
+    state[_query_key(namespace, "last_error")] = None
+    state.pop(_query_key(namespace, "selected_result_row"), None)
+    state.pop(_query_key(namespace, "pending_promotion"), None)
+
+
+def _queue_query_promotion(namespace: str, payload: dict[str, int | None]) -> None:
+    """Streamlit callback that writes only a pending promotion record."""
+
+    st.session_state[_query_key(namespace, "pending_promotion")] = dict(payload)
+
+
+def _apply_query_callback(namespace: str, source: pd.DataFrame) -> None:
+    """Apply callback evaluated only after the operator presses Apply."""
+
+    _apply_query_state(st.session_state, namespace, source)
+
+
+def _clear_query_callback(namespace: str, signature: str) -> None:
+    """Clear callback that runs before expression/result widgets instantiate."""
+
+    _clear_query_state(st.session_state, namespace)
+    st.session_state[_query_key(namespace, "source_signature")] = signature
+
+
+def _consume_pending_promotion(
+    state: MutableMapping[str, Any],
+    namespace: str,
+    *,
+    rollout_ids: list[int],
+    steps_by_rollout: dict[int, list[int]],
+) -> str | None:
+    """Validate and apply pending ids before rollout/step widgets instantiate."""
+
+    pending_key = _query_key(namespace, "pending_promotion")
+    pending = state.pop(pending_key, None)
+    if not isinstance(pending, dict):
+        return None
+    try:
+        rollout_id = int(pending["rollout_row_id"])
+    except (KeyError, TypeError, ValueError):
+        return "Pending query promotion has no valid rollout_row_id; prior selection was preserved."
+    if rollout_id not in rollout_ids:
+        return f"Pending query promotion references stale rollout_row_id={rollout_id}; prior selection was preserved."
+    valid_steps = steps_by_rollout.get(rollout_id, [])
+    if not valid_steps:
+        return f"Pending query promotion rollout_row_id={rollout_id} has no persisted steps; prior selection was preserved."
+    requested_step = pending.get("step_row_id")
+    try:
+        step_id = valid_steps[0] if requested_step is None else int(requested_step)
+    except (TypeError, ValueError):
+        return "Pending query promotion has no valid step_row_id; prior selection was preserved."
+    if step_id not in valid_steps:
+        return (
+            f"Pending query promotion references stale step_row_id={step_id} for rollout_row_id={rollout_id}; "
+            "prior selection was preserved."
+        )
+    state[_query_key(namespace, "rollout_widget")] = rollout_id
+    state[_query_key(namespace, "step_widget")] = step_id
+    return None
+
+
+def _query_source_frame(
+    store_path: str,
+    *,
+    scope: str,
+    candidate_population: str,
+    rollout_id: int,
+    step_id: int,
+    all_steps: pd.DataFrame,
+) -> pd.DataFrame:
+    """Return the normalized source projection for one explicit query grain."""
+
+    if scope == "Rollout summaries":
+        if all_steps.empty:
+            return _normalized_query_frame(all_steps)
+        endpoints = (
+            all_steps.sort_values(["rollout_row_id", "step_index"], kind="mergesort")
+            .groupby("rollout_row_id", as_index=False, sort=True)
+            .tail(1)
+        )
+        return _normalized_query_frame(endpoints)
+    if scope == "Factual steps":
+        return _normalized_query_frame(all_steps)
+    if scope != "Candidates":
+        raise ValueError(f"Unsupported query scope: {scope}")
+    if candidate_population == "Selected step":
+        rows = _cached_projection(store_path, "candidates", rollout_row_id=rollout_id, step_row_id=step_id)
+    elif candidate_population == "Selected rollout":
+        rows = _cached_projection(store_path, "candidates", rollout_row_id=rollout_id)
+    elif candidate_population == "Explicit full store":
+        rows = _cached_projection(store_path, "candidates")
+    else:
+        raise ValueError(f"Unsupported candidate population: {candidate_population}")
+    return _normalized_query_frame(pd.DataFrame(rows))
+
+
+def _query_source_signature(frame: pd.DataFrame) -> str:
+    """Return a deterministic identity for the active immutable source population."""
+
+    identifiers = [
+        column for column in ("rollout_row_id", "step_row_id", "candidate_row_id") if column in frame.columns
+    ]
+    payload = "\0".join(frame.columns.astype(str).tolist()).encode("utf-8")
+    if identifiers and not frame.empty:
+        payload += pd.util.hash_pandas_object(frame[identifiers], index=False).values.tobytes()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _promotion_payload(row: pd.Series) -> dict[str, int | None]:
+    """Extract exact owning rollout/step ids from one normalized query row."""
+
+    rollout = row.get("rollout_row_id")
+    step = row.get("step_row_id")
+    return {
+        "rollout_row_id": None if pd.isna(rollout) else int(rollout),
+        "step_row_id": None if pd.isna(step) else int(step),
+    }
+
+
+def _render_query_workbench(
+    namespace: str,
+    source: pd.DataFrame,
+    *,
+    scope: str,
+    candidate_population: str,
+) -> None:
+    """Render trusted-local pandas querying, complete export, and row promotion."""
+
+    st.markdown("#### Query and promote evidence")
+    st.caption(
+        "Trusted local operator feature: the expression is evaluated only against a copied normalized DataFrame "
+        'with `df.query(expression, engine="python")`. It is not a security sandbox and never mutates the store.'
+    )
+    st.caption(f"Available columns: {', '.join(f'`{column}`' for column in source.columns)}")
+    st.caption(
+        "Examples: `cumulative_target_root_gain > 0.5`, `selected_target_root_gain < 0`, "
+        '`position == "lateral_target_bypass" and actor_action`, `root_distance_m > 1.0`.'
+    )
+    signature = _query_source_signature(source)
+    signature_key = _query_key(namespace, "source_signature")
+    if st.session_state.get(signature_key) not in (None, signature):
+        _clear_query_state(st.session_state, namespace)
+    st.session_state[signature_key] = signature
+    draft_key = _query_key(namespace, "draft_expression")
+    st.text_area("Pandas query expression", key=draft_key, placeholder="Leave empty to match every row")
+    col_apply, col_clear = st.columns(2)
+    col_apply.button(
+        "Apply query",
+        key=_query_key(namespace, "apply"),
+        type="primary",
+        on_click=_apply_query_callback,
+        args=(namespace, source),
+    )
+    col_clear.button(
+        "Clear query",
+        key=_query_key(namespace, "clear"),
+        on_click=_clear_query_callback,
+        args=(namespace, signature),
+    )
+    error = st.session_state.get(_query_key(namespace, "last_error"))
+    if error:
+        st.error(f"Query failed; the last valid result is preserved. {error}")
+    result = st.session_state.get(_query_key(namespace, "last_valid_result"))
+    result = source if result is None else result
+    result = _normalized_query_frame(result)
+    preview_limit = int(
+        st.number_input(
+            "Query preview row limit",
+            min_value=1,
+            max_value=10_000,
+            value=200,
+            step=50,
+            key=_query_key(namespace, "preview_limit"),
+        )
+    )
+    shown = result.head(preview_limit)
+    applied = str(st.session_state.get(_query_key(namespace, "applied_expression"), ""))
+    st.caption(
+        f"Scope: {scope}; candidate population: {candidate_population}. Applied expression: {applied or '(empty)'}. "
+        f"Input rows: {len(source):,}; matched rows: {len(result):,}; displayed rows: {len(shown):,}; "
+        f"exported rows: {len(result):,}. Preview truncation never affects export."
+    )
+    st.dataframe(shown, hide_index=True, width="stretch")
+    _download_frame("Download queried rows CSV", "stored-rollout-query.csv", result)
+    if result.empty or "rollout_row_id" not in result:
+        st.info("No matched row with a rollout_row_id is available for promotion.")
+        return
+    choices = result.index.astype(int).tolist()
+    selection_key = _query_key(namespace, "selected_result_row")
+    if st.session_state.get(selection_key) not in choices:
+        st.session_state[selection_key] = choices[0]
+    selected_index = int(
+        st.selectbox(
+            "Matched row to promote",
+            options=choices,
+            key=selection_key,
+            format_func=lambda index: _query_row_label(result.loc[index]),
+        )
+    )
+    payload = _promotion_payload(result.loc[selected_index])
+    st.button(
+        "Promote queried row",
+        key=_query_key(namespace, "promote"),
+        on_click=_queue_query_promotion,
+        args=(namespace, payload),
+        type="primary",
+    )
+
+
+def _query_row_label(row: pd.Series) -> str:
+    """Format stable ids for one query-result promotion choice."""
+
+    fields = [
+        f"{name}={int(row[name])}"
+        for name in ("rollout_row_id", "step_row_id", "candidate_row_id")
+        if name in row and not pd.isna(row[name])
+    ]
+    return " · ".join(fields)
+
+
 def _render_inspect_export_rerun(
     reader: RolloutZarrStoreReader,
     *,
@@ -669,25 +1922,92 @@ def _render_inspect_export_rerun(
     paths: PathConfig,
 ) -> None:
     st.subheader("Inspect, Export & Rerun")
+    store_path_key = reader.store_dir.as_posix()
+    store_identity = _canonical_query_store_identity(store_path)
+    _activate_query_store(st.session_state, store_identity)
+    scope_key = f"stored_query:{store_identity}:scope"
+    population_key = f"stored_query:{store_identity}:candidate_population"
+    scope = st.selectbox("Query scope", options=_QUERY_SCOPES, key=scope_key)
+    candidate_population = (
+        st.selectbox("Candidate population", options=_CANDIDATE_POPULATIONS, key=population_key)
+        if scope == "Candidates"
+        else "not_applicable"
+    )
+    namespace = _query_namespace(store_identity, scope, candidate_population)
+
     rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1).tolist()
+    if not rollout_ids:
+        st.warning("This store has no rollout rows to inspect or query.")
+        return
+    all_steps = pd.DataFrame(_cached_projection(store_path_key, "steps"))
+    steps_by_rollout = {
+        int(rollout): sorted(group["step_row_id"].astype(int).tolist())
+        for rollout, group in all_steps.groupby("rollout_row_id", sort=True)
+    }
+    promotion_error = _consume_pending_promotion(
+        st.session_state,
+        namespace,
+        rollout_ids=[int(value) for value in rollout_ids],
+        steps_by_rollout=steps_by_rollout,
+    )
+    if promotion_error:
+        st.error(promotion_error)
+    rollout_widget_key = _query_key(namespace, "rollout_widget")
+    step_widget_key = _query_key(namespace, "step_widget")
+    legacy_rollout = st.session_state.pop("stored_rollout_id", None)
+    legacy_step = st.session_state.pop("stored_step_id", None)
+    if legacy_rollout in rollout_ids:
+        st.session_state[rollout_widget_key] = int(legacy_rollout)
+        if legacy_step in steps_by_rollout.get(int(legacy_rollout), []):
+            st.session_state[step_widget_key] = int(legacy_step)
+    requested_rollout = st.session_state.get(rollout_widget_key)
+    if requested_rollout not in rollout_ids:
+        st.session_state[rollout_widget_key] = int(rollout_ids[0])
     rollout_id = int(
         st.selectbox(
             "Rollout row",
             rollout_ids,
-            key="stored_rollout_id",
+            key=rollout_widget_key,
         )
     )
-    steps = pd.DataFrame(rollout_step_objective_rows(reader, rollout_row_id=rollout_id))
+    steps = pd.DataFrame(_cached_projection(store_path_key, "steps", rollout_row_id=rollout_id))
     step_ids = steps["step_row_id"].astype(int).tolist() if not steps.empty else []
     if not step_ids:
         st.warning("The selected rollout has no persisted steps.")
         return
-    requested_step = st.session_state.get("stored_step_id")
+    requested_step = st.session_state.get(step_widget_key)
     if requested_step not in step_ids:
-        st.session_state["stored_step_id"] = step_ids[0]
-    step_id = int(st.selectbox("Step row", step_ids, key="stored_step_id"))
+        st.session_state[step_widget_key] = step_ids[0]
+    step_id = int(st.selectbox("Step row", step_ids, key=step_widget_key))
 
-    candidates = pd.DataFrame(candidate_audit_rows(reader, rollout_row_id=rollout_id, step_row_id=step_id))
+    if scope == "Candidates" and candidate_population == "Explicit full store":
+        st.warning(
+            "Explicit full-store candidate query selected. This materializes the heavyweight normalized candidate audit; "
+            "use Selected step or Selected rollout for routine inspection."
+        )
+    query_source = _query_source_frame(
+        store_path_key,
+        scope=scope,
+        candidate_population=candidate_population,
+        rollout_id=rollout_id,
+        step_id=step_id,
+        all_steps=all_steps,
+    )
+    _render_query_workbench(
+        namespace,
+        query_source,
+        scope=scope,
+        candidate_population=candidate_population,
+    )
+
+    candidates = pd.DataFrame(
+        _cached_projection(
+            store_path_key,
+            "candidates",
+            rollout_row_id=rollout_id,
+            step_row_id=step_id,
+        )
+    )
     preview_limit = int(st.number_input("Candidate preview row limit", min_value=1, max_value=5000, value=200, step=25))
     shown = candidates.head(preview_limit)
     st.caption(
@@ -698,7 +2018,7 @@ def _render_inspect_export_rerun(
         "Download selected-step candidate CSV", f"rollout-{rollout_id}-step-{step_id}-candidates.csv", candidates
     )
 
-    depth_rows = pd.DataFrame(selected_depth_summary_rows(reader, rollout_row_id=rollout_id, limit=None))
+    depth_rows = pd.DataFrame(_cached_projection(store_path_key, "depth_summary", rollout_row_id=rollout_id))
     selected_depth = depth_rows[depth_rows["step_row_id"] == step_id] if not depth_rows.empty else depth_rows
     with st.expander("Privileged selected-depth evaluation artifact", expanded=not selected_depth.empty):
         st.warning("Selected depth is privileged oracle/evaluation evidence, never actor-visible policy input.")
@@ -755,18 +2075,14 @@ def _render_evidence_bundle_download(store_path: Path) -> None:
     )
     allowed = status == "pilot" or acknowledge
     if allowed:
-        try:
-            frames = build_thesis_report_frames([store_path], evidence_status=status)
-            data = serialize_thesis_report_bundle(frames)
-        except Exception as exc:
-            st.warning(f"Evidence bundle unavailable: {type(exc).__name__}: {exc}")
-        else:
-            st.download_button(
-                "Download deterministic evidence bundle",
-                data=data,
-                file_name=f"rollout-evidence-{status}.json",
-                mime="application/json",
-            )
+        st.download_button(
+            "Download deterministic evidence bundle",
+            data=lambda: _cached_evidence_bundle(store_path.as_posix(), status),
+            file_name=f"rollout-evidence-{status}.json",
+            mime="application/json",
+            on_click="ignore",
+            help="Built lazily on click, then cached by immutable store path and evidence status.",
+        )
     else:
         st.info("Acknowledge the confirmatory evidence contract to enable this download.")
 
@@ -926,30 +2242,61 @@ def _render_plot(fig: go.Figure, explanation: ScientificExplanation) -> None:
         unsafe_allow_html=True,
     )
     with col_info.popover("How to read this", icon="ℹ️"):
-        st.markdown(f"**Question**  \\n+{html.escape(explanation.question)}")
-        st.markdown(f"**Population / grain**  \\n+{html.escape(explanation.population)}")
-        st.markdown(f"**Metric / units**  \\n+{html.escape(explanation.metric)}")
-        st.markdown(f"**Denominator / masks**  \\n+{html.escape(explanation.denominator_masks)}")
-        st.markdown(f"**Valid comparison conditions**  \\n+{html.escape(explanation.comparability)}")
-        st.markdown(f"**Expected pattern**  \\n+{html.escape(explanation.expected_pattern)}")
-        st.markdown(f"**Warnings / failure modes**  \\n+{html.escape(explanation.failure_interpretation)}")
-        st.markdown("**Sources**  \\n+" + ", ".join(f"`{html.escape(value)}`" for value in explanation.source_fields))
+        _explanation_item("Question", explanation.question)
+        _explanation_item("Population / grain", explanation.population)
+        _explanation_item("Metric / units", explanation.metric)
+        _explanation_item("Denominator / masks", explanation.denominator_masks)
+        _explanation_item("Valid comparison conditions", explanation.comparability)
+        _explanation_item("Expected pattern", explanation.expected_pattern)
+        _explanation_item("Warnings / failure modes", explanation.failure_interpretation)
+        _explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
     st.plotly_chart(fig, width="stretch")
 
 
-def _download_frame(label: str, file_name: str, frame: pd.DataFrame) -> None:
-    """Offer the complete filtered frame and state its exact exported row count."""
+def _explanation_item(label: str, value: str, *, code: bool = False) -> None:
+    """Render one explanation field without leaking patch or HTML escapes."""
 
-    data = frame.to_csv(index=False).encode("utf-8")
-    st.download_button(label, data=data, file_name=file_name, mime="text/csv")
+    rendered = f"`{value}`" if code else value
+    st.markdown(f"**{label}**\n\n{rendered}")
+
+
+def _download_frame(label: str, file_name: str, frame: pd.DataFrame) -> None:
+    """Offer a complete filtered CSV without registering eager media URLs."""
+
+    st.download_button(
+        label,
+        data=lambda: _serialize_frame_csv(frame),
+        file_name=file_name,
+        mime="text/csv",
+        on_click="ignore",
+        help="Materialized lazily on click so tab reruns do not retain stale media URLs.",
+    )
     st.caption(f"Export rows: {len(frame):,} (complete filtered dataset).")
 
 
 def _download_json(label: str, file_name: str, payload: object) -> None:
-    """Offer a deterministic, human-readable JSON payload."""
+    """Offer deterministic JSON without registering eager media URLs."""
 
-    data = json.dumps(payload, indent=2, sort_keys=True, default=_json_default).encode("utf-8") + b"\n"
-    st.download_button(label, data=data, file_name=file_name, mime="application/json")
+    st.download_button(
+        label,
+        data=lambda: _serialize_json(payload),
+        file_name=file_name,
+        mime="application/json",
+        on_click="ignore",
+        help="Materialized lazily on click so tab reruns do not retain stale media URLs.",
+    )
+
+
+def _serialize_frame_csv(frame: pd.DataFrame) -> bytes:
+    """Serialize every dataframe row in deterministic displayed column order."""
+
+    return frame.to_csv(index=False).encode("utf-8")
+
+
+def _serialize_json(payload: object) -> bytes:
+    """Serialize one payload as stable, indented UTF-8 JSON."""
+
+    return json.dumps(payload, indent=2, sort_keys=True, default=_json_default).encode("utf-8") + b"\n"
 
 
 def _json_default(value: object) -> object:

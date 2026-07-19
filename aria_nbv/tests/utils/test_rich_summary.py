@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from aria_nbv.utils import summarize, summarize_shape
+from aria_nbv.utils import rich_summary, summarize, summarize_shape
+from aria_nbv.utils.rich_summary import capture_tree
 from aria_nbv.utils.summary import summarize as legacy_summarize
 
 
@@ -35,3 +36,12 @@ def test_summarize_preserves_collection_and_shape_contracts() -> None:
 
 def test_legacy_summary_module_reexports_canonical_implementation() -> None:
     assert legacy_summarize is summarize
+
+
+def test_capture_tree_is_ansi_free_for_web_and_log_renderers() -> None:
+    tree = rich_summary({"sample": {"shape": (2, 3), "valid": True}}, is_print=False)
+
+    rendered = capture_tree(tree)
+
+    assert "sample" in rendered
+    assert "\x1b[" not in rendered

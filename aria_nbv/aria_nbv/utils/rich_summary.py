@@ -223,10 +223,10 @@ def rich_summary(
 
 
 def capture_tree(tree: Tree) -> str:
-    """Render a rich tree into plain text using the project console settings."""
+    """Render a Rich tree as ANSI-free plain text for logs and web UIs."""
     from .console import Console
 
-    console = Console()
+    console = Console(force_terminal=False, color_system=None)
     with console.capture() as capture:
         console.print(
             tree,

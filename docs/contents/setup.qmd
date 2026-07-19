@@ -217,9 +217,11 @@ uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml
 
 Open the Streamlit app with `uv run nbv-st`, then choose **VIN Offline
 Dataset** or **Stored Rollouts**. The stored-rollout inspector is organized as
-five active workspaces: **Trust & Topology**, **Scientific Evidence**,
+five native, lazy Streamlit tabs: **Trust & Topology**, **Scientific Evidence**,
 **Targets & Action Support**, **Failure Triage**, and **Inspect, Export &
-Rerun**. Only the selected workspace performs its expensive projections.
+Rerun**. Tab changes rerun the app, but only the open tab performs its expensive
+projections. Immutable-store inventories and normalized evidence projections
+are cached; use **Refresh stores** after creating or replacing a store.
 
 Start with Trust & Topology. Its invariant matrix distinguishes actor-visible
 evidence, privileged oracle/evaluation artifacts, derived `q_h` training
@@ -228,18 +230,65 @@ by hash and reports embedded, resolved, lineage-only, inferred, missing, and
 ambiguous links without mutating any store. The same topology model is
 available from the VIN page.
 
-Policy summaries are emitted only for exactly matched source, target protocol,
-horizon and acquisition budget, candidate/oracle configuration, and branch
-schedule cohorts. If those keys differ, the inspector reports the mismatched
-keys instead of drawing an unpaired policy comparison. Candidate geometry is
-root-relative in the ARIA right-handed Z-up world frame and metres; unrelated
-absolute scene origins are never aggregated.
+Scientific Evidence keeps matched inference and descriptive temporal summaries
+separate. Paired policy comparisons are emitted only for exactly matched
+source, target protocol, horizon and acquisition budget, candidate/oracle
+configuration, and branch-schedule cohorts. If those keys differ, the inspector
+reports the mismatched keys instead of drawing an unpaired policy comparison.
+
+The temporal explorer displays one metric and unit at a time as the median and
+interquartile range over rollout depth. Quartiles use deterministic linear
+interpolation over finite rows only. Every point reports
+`finite_count / total_count`, missingness, mean, minimum, and maximum; missing
+depths are neither zero-filled nor interpolated. Upstream experiment dimensions
+such as persisted policy, horizon, and budget configuration are descriptive
+unless the matched-cohort gate passes. **Selected-action provenance** groups
+(`selected_position`, `selected_strategy`, and `selected_mixture`) are
+post-selection strata, not causal candidate-sampling effects. Raw connected
+lines are restricted to one explicitly selected rollout in the drill-down.
+
+Targets & Action Support includes a complete, filtered **Candidate provenance
+and support flow**. This Sankey follows candidate rows—not rollout branches—from
+persisted mixture through position family, orientation strategy, actor-action
+validity, and selected/unselected outcome. Unknown persisted labels stay
+visible, and a selected actor-invalid row terminates at
+`selection_contract_violation`. Oracle-label and `q_train` masks are not shown
+as false sequential stages; their overlapping populations remain in the mask
+matrix. Policy and depth filters define the Sankey root denominator, and its
+CSV contains every aggregated link. Restored complete candidate breakdowns and
+bounded geometry, angle, motion, and reward plots remain explicit load-on-demand
+views. Candidate geometry is root-relative in the ARIA right-handed Z-up world
+frame and metres; unrelated absolute scene origins are never aggregated.
+
+Every primary plot exposes its population, units, denominator, comparability
+requirements, interpretation, failure modes, and source fields through its
+information popover.
 
 Every normalized table can be copied through Streamlit's dataframe controls.
 Explicit downloads preserve the complete filtered CSV or JSON row set and
-state the exported count. Candidate CSV is bounded to the selected rollout and
-step. The canonical evidence-bundle download defaults to `pilot`;
-`confirmatory` requires an explicit acknowledgement.
+state the exported count. In **Inspect, Export & Rerun**, the query workbench
+supports rollout summaries, factual steps, and candidates. Candidate scope
+defaults to the selected step; the selected rollout and explicit full store are
+available alternatives. Full-store candidate querying materializes the heavy
+candidate audit and therefore requires an explicit population choice.
+
+Enter the expression portion of a regular pandas query, for example
+`cumulative_target_root_gain > 0.5`, `selected_target_root_gain < 0`, or
+`position == "lateral_target_bypass" and actor_action`. **Apply query** and
+**Clear query** are the only evaluation transitions; typing alone does not
+recompute the result. This is trusted local operator functionality over a copied
+normalized dataframe using `DataFrame.query(..., engine="python")`, not a
+security sandbox. An invalid expression reports the pandas error while
+preserving the last valid result and current rollout/step selection.
+
+The workbench reports exact input, matched, displayed, and exported counts.
+Preview truncation affects only the displayed dataframe; the queried CSV always
+contains the complete matched result in deterministic order. Choose a matched
+row and use **Promote queried row** to carry its exact rollout and step into the
+Inspect selectors and Rerun launch form. A candidate promotes its owning step.
+The existing selected-step candidate download remains bounded to that selected
+rollout and step. The canonical evidence-bundle download is built lazily on
+click and defaults to `pilot`; `confirmatory` requires explicit acknowledgement.
 
 Rerun launches use one of four layer presets—**Scientific context**, **Target
 protocol**, **Candidate debugging**, or **Minimal selected path**—with separate

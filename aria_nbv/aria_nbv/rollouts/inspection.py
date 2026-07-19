@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,33 @@ _POLICY_COHORT_KEY_FIELDS = (
     "candidate_config",
     "oracle_config",
     "branch_schedule",
+)
+_TEMPORAL_METRICS = {
+    "cumulative_target_rri": ("cumulative_target_rri", "RRI"),
+    "marginal_target_rri": ("marginal_target_rri", "RRI"),
+    "cumulative_scene_rri": ("cumulative_scene_rri", "RRI"),
+    "cumulative_target_root_gain": ("cumulative_target_root_gain", "fraction"),
+    "cumulative_scene_root_gain": ("cumulative_scene_root_gain", "fraction"),
+    "selected_target_rri": ("selected_target_rri", "RRI"),
+    "selected_target_root_gain": ("selected_target_root_gain", "fraction"),
+    "selected_scene_rri": ("selected_scene_rri", "RRI"),
+    "valid_fanout": ("num_valid_candidates", "candidates"),
+    "invalid_fraction": ("invalid_fraction", "fraction"),
+    "selected_probability": ("selected_probability", "probability"),
+    "selected_entropy": ("selected_entropy", "nats"),
+}
+_TEMPORAL_GROUP_FIELDS = frozenset(
+    {
+        "policy",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+        "temperature",
+        "budget_configuration",
+        "selected_position",
+        "selected_strategy",
+        "selected_mixture",
+    }
 )
 
 
@@ -113,10 +141,21 @@ def discover_rollout_store_paths(base_dir: Path, *, pattern: str = "**/*.zarr") 
     return sorted(stores, key=lambda path: (_path_mtime(path), path.as_posix()), reverse=True)
 
 
-def rollout_store_inventory_rows(store_paths: Iterable[Path]) -> list[dict[str, object]]:
-    """Return schema, validation, count, lineage, and storage rows for stores."""
+def rollout_store_inventory_rows(
+    store_paths: Iterable[Path],
+    *,
+    validate: bool = True,
+) -> list[dict[str, object]]:
+    """Return schema, validation, count, lineage, and storage rows for stores.
 
-    rows = [_rollout_store_inventory_row(Path(path).expanduser().resolve()) for path in store_paths]
+    Args:
+        store_paths: Candidate rollout-store directories.
+        validate: Run the full cross-array validator for every discovered
+            store. Interactive selectors may disable this and validate only
+            the selected immutable store.
+    """
+
+    rows = [_rollout_store_inventory_row(Path(path).expanduser().resolve(), validate=validate) for path in store_paths]
     return sorted(
         rows,
         key=lambda row: (
@@ -217,19 +256,33 @@ def candidate_audit_rows(
 ) -> list[dict[str, object]]:
     """Return candidate rows joined with candidate-generation diagnostics."""
     rows: list[dict[str, object]] = []
+    oracle_label_mask = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_)
+    q_train_mask = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_)
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64)
+    target_log_error_gain = np.asarray(reader.array("candidates/target_log_error_gain"))
+    target_pm_dist_before = np.asarray(reader.array("candidates/target_pm_dist_before"))
+    target_pm_dist_after = np.asarray(reader.array("candidates/target_pm_dist_after"))
+    path_collision_mask = np.asarray(reader.array("candidate_diagnostics/path_collision_mask"), dtype=np.bool_)
+    free_space_margin_m = np.asarray(reader.array("candidate_diagnostics/free_space_margin_m"))
+    motion_height_delta_m = np.asarray(reader.array("candidate_diagnostics/motion_height_delta_m"))
+    motion_backward_step_m = np.asarray(reader.array("candidate_diagnostics/motion_backward_step_m"))
+    motion_yaw_delta_deg = np.asarray(reader.array("candidate_diagnostics/motion_yaw_delta_deg"))
+    target_bearing_yaw_deg = np.asarray(reader.array("candidate_diagnostics/target_bearing_yaw_deg"))
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
         if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
+        root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
             for local, row in enumerate(step.candidate_row_positions.tolist()):
                 if limit is not None and len(rows) >= max(0, int(limit)):
                     return rows
-                strategy_id = int(reader.array("candidates/strategy_id")[row])
+                strategy_id = int(strategy_ids[row])
                 pose = step.pose_world_cam[local]
+                relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
                 rows.append(
                     {
                         "candidate_row_id": int(step.candidate_row_ids[local]),
@@ -244,8 +297,8 @@ def candidate_audit_rows(
                         "target_row_id": rollout.target_row_id,
                         "selected": bool(step.selected_mask[local]),
                         "actor_action": bool(step.actor_action_mask[local]),
-                        "oracle_label": bool(reader.array("candidates/oracle_label_mask")[row]),
-                        "q_train": bool(reader.array("candidates/q_train_mask")[row]),
+                        "oracle_label": bool(oracle_label_mask[row]),
+                        "q_train": bool(q_train_mask[row]),
                         "strategy_id": strategy_id,
                         "strategy": decode_strategy_id(strategy_id),
                         "position_id": int(step.position_ids[local]),
@@ -257,36 +310,272 @@ def candidate_audit_rows(
                         "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
                         "target_rri": _finite_or_none(step.target_rri[local]),
                         "target_root_gain": _finite_or_none(step.target_root_gain[local]),
-                        "target_log_error_gain": _finite_or_none(reader.array("candidates/target_log_error_gain")[row]),
-                        "target_pm_dist_before": _finite_or_none(reader.array("candidates/target_pm_dist_before")[row]),
-                        "target_pm_dist_after": _finite_or_none(reader.array("candidates/target_pm_dist_after")[row]),
+                        "target_log_error_gain": _finite_or_none(target_log_error_gain[row]),
+                        "target_pm_dist_before": _finite_or_none(target_pm_dist_before[row]),
+                        "target_pm_dist_after": _finite_or_none(target_pm_dist_after[row]),
                         "scene_rri": _finite_or_none(step.scene_rri[local]),
                         "selection_probability": _finite_or_none(step.selection_probabilities[local]),
                         "center_x": float(pose[9]),
                         "center_y": float(pose[10]),
                         "center_z": float(pose[11]),
+                        "root_relative_x_m": float(relative[0]),
+                        "root_relative_y_m": float(relative[1]),
+                        "root_relative_z_m": float(relative[2]),
+                        "root_distance_m": float(np.linalg.norm(relative)),
+                        "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                        "units": "m",
                         "mesh_distance_m": _finite_or_none(step.mesh_distance_m[local]),
                         "path_min_clearance_m": _finite_or_none(step.path_min_clearance_m[local]),
-                        "path_collision": bool(reader.array("candidate_diagnostics/path_collision_mask")[row]),
-                        "free_space_margin_m": _finite_or_none(
-                            reader.array("candidate_diagnostics/free_space_margin_m")[row]
-                        ),
+                        "path_collision": bool(path_collision_mask[row]),
+                        "free_space_margin_m": _finite_or_none(free_space_margin_m[row]),
                         "motion_step_length_m": _finite_or_none(step.motion_step_length_m[local]),
-                        "motion_height_delta_m": _finite_or_none(
-                            reader.array("candidate_diagnostics/motion_height_delta_m")[row]
-                        ),
-                        "motion_backward_step_m": _finite_or_none(
-                            reader.array("candidate_diagnostics/motion_backward_step_m")[row]
-                        ),
-                        "motion_yaw_delta_deg": _finite_or_none(
-                            reader.array("candidate_diagnostics/motion_yaw_delta_deg")[row]
-                        ),
+                        "motion_height_delta_m": _finite_or_none(motion_height_delta_m[row]),
+                        "motion_backward_step_m": _finite_or_none(motion_backward_step_m[row]),
+                        "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
                         "target_distance_m": _finite_or_none(step.target_distance_m[local]),
-                        "target_bearing_yaw_deg": _finite_or_none(
-                            reader.array("candidate_diagnostics/target_bearing_yaw_deg")[row]
-                        ),
+                        "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
                     }
                 )
+    return rows
+
+
+def temporal_metric_summary_rows(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    *,
+    metric: str,
+    group_fields: Iterable[str] = (),
+) -> list[dict[str, object]]:
+    """Aggregate one factual rollout metric over depth and explicit strata.
+
+    Args:
+        source: Reader or already-normalized output from
+            :func:`rollout_step_objective_rows`.
+        metric: Validated scientific metric name. ``valid_fanout`` maps to the
+            factual ``num_valid_candidates`` field.
+        group_fields: Upstream experiment dimensions or selected-action
+            provenance fields. Selected-action fields are descriptive
+            post-selection strata, not causal sampling-policy effects.
+
+    Returns:
+        One deterministic row per grouping tuple and ``step_index``. Counts
+        include all source rows; statistics use finite values only and use
+        linear interpolation for quartiles.
+
+    Raises:
+        ValueError: If the metric or a grouping field is unsupported.
+    """
+
+    if metric not in _TEMPORAL_METRICS:
+        raise ValueError(f"Unsupported temporal metric {metric!r}; expected one of {sorted(_TEMPORAL_METRICS)}.")
+    groups = tuple(group_fields)
+    if len(set(groups)) != len(groups):
+        raise ValueError("Temporal group fields must be unique.")
+    unsupported = tuple(field for field in groups if field not in _TEMPORAL_GROUP_FIELDS)
+    if unsupported:
+        raise ValueError(
+            f"Unsupported temporal group field(s) {unsupported!r}; expected fields from "
+            f"{sorted(_TEMPORAL_GROUP_FIELDS)}."
+        )
+
+    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else list(source)
+    value_field, units = _TEMPORAL_METRICS[metric]
+    grouped: dict[tuple[object, ...], list[object]] = {}
+    for source_row in source_rows:
+        row = dict(source_row)
+        step_index = row.get("step_index")
+        if step_index is None:
+            raise ValueError("Temporal source rows require an explicit step_index.")
+        key = (*(_temporal_group_value(row, field) for field in groups), int(step_index))
+        grouped.setdefault(key, []).append(row.get(value_field))
+
+    output: list[dict[str, object]] = []
+    for key, values in sorted(
+        grouped.items(),
+        key=lambda item: (*tuple(str(value) for value in item[0][:-1]), int(item[0][-1])),
+    ):
+        normalized_values = [_finite_or_none(value) for value in values]
+        finite_values = np.asarray([value for value in normalized_values if value is not None], dtype=np.float64)
+        total_count = len(values)
+        finite_count = int(finite_values.size)
+        missing_count = total_count - finite_count
+        if finite_count:
+            q25, median, q75 = np.quantile(
+                np.sort(finite_values),
+                (0.25, 0.5, 0.75),
+                method="linear",
+            ).tolist()
+            statistics: dict[str, float | None] = {
+                "median": float(median),
+                "q25": float(q25),
+                "q75": float(q75),
+                "mean": float(np.mean(finite_values)),
+                "min": float(np.min(finite_values)),
+                "max": float(np.max(finite_values)),
+            }
+        else:
+            statistics = dict.fromkeys(("median", "q25", "q75", "mean", "min", "max"))
+        row_output: dict[str, object] = {
+            "metric": metric,
+            "units": units,
+            "step_index": int(key[-1]),
+            **{field: key[index] for index, field in enumerate(groups)},
+            "total_count": total_count,
+            "finite_count": finite_count,
+            "missing_count": missing_count,
+            **statistics,
+        }
+        output.append(row_output)
+    return output
+
+
+def rollout_endpoint_metric_summary(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    *,
+    metric: str,
+) -> dict[str, object]:
+    """Summarize one terminal factual step per rollout for a metric.
+
+    Each rollout contributes exactly its greatest persisted ``step_index``;
+    shorter factual chains are therefore retained. Statistics use finite
+    terminal values only, while the denominator counts every rollout endpoint.
+    """
+
+    if metric not in _TEMPORAL_METRICS:
+        raise ValueError(f"Unsupported temporal metric {metric!r}; expected one of {sorted(_TEMPORAL_METRICS)}.")
+    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else list(source)
+    value_field, units = _TEMPORAL_METRICS[metric]
+    endpoints: dict[int, tuple[int, int, object]] = {}
+    for position, source_row in enumerate(source_rows):
+        row = dict(source_row)
+        if row.get("rollout_row_id") is None or row.get("step_index") is None:
+            raise ValueError("Endpoint source rows require rollout_row_id and step_index.")
+        rollout_row_id = int(row["rollout_row_id"])
+        candidate = (int(row["step_index"]), position, row.get(value_field))
+        current = endpoints.get(rollout_row_id)
+        if current is None or candidate[:2] > current[:2]:
+            endpoints[rollout_row_id] = candidate
+
+    values = [_finite_or_none(endpoint[2]) for endpoint in endpoints.values()]
+    finite_values = np.asarray([value for value in values if value is not None], dtype=np.float64)
+    total_count = len(values)
+    finite_count = int(finite_values.size)
+    return {
+        "metric": metric,
+        "units": units,
+        "total_count": total_count,
+        "finite_count": finite_count,
+        "missing_count": total_count - finite_count,
+        "median": None if not finite_count else float(np.median(finite_values)),
+    }
+
+
+def candidate_flow_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    policies: Iterable[str] | None = None,
+    step_indices: Iterable[int] | None = None,
+) -> list[dict[str, object]]:
+    """Return a count-conserving categorical candidate-provenance flow.
+
+    The projection reads only rollout policy, candidate depth, provenance,
+    actor-validity, and selected-status arrays. It deliberately excludes
+    geometry, rewards, oracle labels, training masks, motion, and dense depth.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        policies: Optional decoded policy allowlist applied before aggregation.
+        step_indices: Optional rollout-depth allowlist applied before
+            aggregation.
+
+    Returns:
+        Consecutive stage links over the complete filtered candidate
+        population. Every count and fraction uses the filtered population as
+        its root denominator. A selected actor-invalid row terminates at
+        ``selection_contract_violation``.
+    """
+
+    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
+    policy_names = _read_string_array(reader, "dictionaries/policy")
+    if rollout_ids.size != policy_ids.size or np.unique(rollout_ids).size != rollout_ids.size:
+        raise ValueError("Candidate flow requires unique, aligned rollout policy rows.")
+    policy_by_rollout = {
+        int(rollout_id): _decoded_id(int(policy_id), names=dict(enumerate(policy_names)), prefix="policy")
+        for rollout_id, policy_id in zip(rollout_ids.tolist(), policy_ids.tolist(), strict=True)
+    }
+
+    candidate_rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
+    candidate_steps = np.asarray(reader.array("candidates/step_index"), dtype=np.int64).reshape(-1)
+    mixture_ids = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
+    position_ids = np.asarray(reader.array("candidates/position_id"), dtype=np.int64).reshape(-1)
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    actor_action = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    candidate_count = int(candidate_rollout_ids.size)
+    arrays = (candidate_steps, mixture_ids, position_ids, strategy_ids, actor_action, selected)
+    if any(array.size != candidate_count for array in arrays):
+        raise ValueError("Candidate flow arrays must have one aligned value per candidate row.")
+
+    policy_filter = None if policies is None else {str(value) for value in policies}
+    step_filter = None if step_indices is None else {int(value) for value in step_indices}
+    include = np.ones(candidate_count, dtype=np.bool_)
+    for index, rollout_id in enumerate(candidate_rollout_ids.tolist()):
+        policy = policy_by_rollout.get(int(rollout_id), "unknown")
+        if policy_filter is not None and policy not in policy_filter:
+            include[index] = False
+        if step_filter is not None and int(candidate_steps[index]) not in step_filter:
+            include[index] = False
+
+    component_names = _component_names(reader.manifest())
+    transition_counts: Counter[tuple[str, str, str, str, str, str]] = Counter()
+    root = ("root:filtered_candidates", "filtered candidates", "root")
+    for index in np.flatnonzero(include).tolist():
+        mixture = _decoded_id(int(mixture_ids[index]), names=component_names, prefix="mixture")
+        position = decode_position_id(int(position_ids[index])) if int(position_ids[index]) >= 0 else "unknown"
+        strategy = decode_strategy_id(int(strategy_ids[index]))
+        validity = "actor_valid" if bool(actor_action[index]) else "actor_invalid"
+        outcome = (
+            "selection_contract_violation"
+            if bool(selected[index]) and not bool(actor_action[index])
+            else "selected"
+            if bool(selected[index])
+            else "unselected"
+        )
+        nodes = (
+            root,
+            (f"mixture:{mixture}", mixture, "mixture"),
+            (f"position:{position}", position, "position"),
+            (f"orientation:{strategy}", strategy, "orientation"),
+            (f"actor_validity:{validity}", validity, "actor_validity"),
+            (f"selection_outcome:{outcome}", outcome, "selection_outcome"),
+        )
+        for source_node, target_node in pairwise(nodes):
+            transition_counts[(*source_node, *target_node)] += 1
+
+    denominator = int(include.sum())
+    rows: list[dict[str, object]] = []
+    stage_order = {
+        stage: index for index, stage in enumerate(("root", "mixture", "position", "orientation", "actor_validity"))
+    }
+    for transition, count in sorted(
+        transition_counts.items(),
+        key=lambda item: (stage_order[item[0][2]], item[0][0], item[0][3]),
+    ):
+        source_id, source_label, source_stage, target_id, target_label, target_stage = transition
+        rows.append(
+            {
+                "source_id": source_id,
+                "source_label": source_label,
+                "source_stage": source_stage,
+                "target_id": target_id,
+                "target_label": target_label,
+                "target_stage": target_stage,
+                "transition": f"{source_stage} -> {target_stage}",
+                "count": int(count),
+                "root_denominator": denominator,
+                "fraction_of_root": _safe_fraction(int(count), denominator),
+            }
+        )
     return rows
 
 
@@ -1377,7 +1666,7 @@ def _selected_motion_outlier_rows(
     return output
 
 
-def _rollout_store_inventory_row(store_path: Path) -> dict[str, object]:
+def _rollout_store_inventory_row(store_path: Path, *, validate: bool = True) -> dict[str, object]:
     try:
         root = zarr.open_group(store_path, mode="r")
     except Exception as exc:
@@ -1411,19 +1700,20 @@ def _rollout_store_inventory_row(store_path: Path) -> dict[str, object]:
     validation_ok: bool | None = None
     validation_errors: list[str] = []
     validator_counts = {"validator_rollouts": None, "validator_steps": None, "validator_candidates": None}
-    try:
-        validation = RolloutZarrStoreReader(store_path).validate()
-    except Exception as exc:
-        validation_errors = [f"{type(exc).__name__}: {exc}"]
-        validation_ok = False
-    else:
-        validation_ok = validation.ok
-        validation_errors = list(validation.errors)
-        validator_counts = {
-            "validator_rollouts": int(validation.num_rollouts),
-            "validator_steps": int(validation.num_steps),
-            "validator_candidates": int(validation.num_candidates),
-        }
+    if validate:
+        try:
+            validation = RolloutZarrStoreReader(store_path).validate()
+        except Exception as exc:
+            validation_errors = [f"{type(exc).__name__}: {exc}"]
+            validation_ok = False
+        else:
+            validation_ok = validation.ok
+            validation_errors = list(validation.errors)
+            validator_counts = {
+                "validator_rollouts": int(validation.num_rollouts),
+                "validator_steps": int(validation.num_steps),
+                "validator_candidates": int(validation.num_candidates),
+            }
 
     missing_required = [name for name in _required_groups() if name not in root]
     row: dict[str, object] = {
@@ -2207,6 +2497,22 @@ def _component_names(manifest_payload: dict[str, Any]) -> dict[int, str]:
     return names
 
 
+def _decoded_id(value: int, *, names: Mapping[int, str], prefix: str) -> str:
+    if value < 0:
+        return "unknown"
+    return str(names.get(value) or f"{prefix}_{value}")
+
+
+def _temporal_group_value(row: Mapping[str, object], field: str) -> object:
+    if field == "budget_configuration":
+        existing = row.get(field)
+        if existing not in (None, ""):
+            return existing
+        return " | ".join(f"{name}={row.get(name, 'unknown')}" for name in ("horizon", "branch_factor", "beam_width"))
+    value = row.get(field)
+    return "unknown" if value in (None, "") else value
+
+
 def _read_string_array(reader: RolloutZarrStoreReader, path: str) -> list[str]:
     try:
         encoded = np.asarray(reader.array(path), dtype=np.uint8)
@@ -2260,6 +2566,7 @@ def _safe_fraction(numerator: int, denominator: int) -> float | None:
 __all__ = [
     "RolloutSuspiciousQueryConfig",
     "candidate_audit_rows",
+    "candidate_flow_rows",
     "candidate_group_summary_rows",
     "candidate_result_diagnostic_counts",
     "comparable_policy_cohorts",
@@ -2275,11 +2582,13 @@ __all__ = [
     "rollout_statistics",
     "runtime_storage_statistics",
     "rollout_step_objective_rows",
+    "rollout_endpoint_metric_summary",
     "selected_candidate_rank_rows",
     "selected_depth_preview",
     "selected_depth_summary_rows",
     "store_invariant_rows",
     "suspicious_rollout_rows",
     "target_audit_rows",
+    "temporal_metric_summary_rows",
     "validity_waterfall_rows",
 ]
