@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -217,6 +217,8 @@ graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, f
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
+
+graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -879,7 +881,7 @@ package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test graphify-integration-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

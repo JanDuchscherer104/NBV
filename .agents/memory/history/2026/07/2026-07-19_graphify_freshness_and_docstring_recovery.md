@@ -28,7 +28,9 @@ The tracked post-commit hook terminated in the litkg branch before Graphify
 could run and embedded a Linux-user-specific interpreter plus private Graphify
 internals. The hook now composes both refreshes and delegates Graphify lifecycle
 work to one repository module using the supported CLI. Local navigation is
-fail-closed on commit, corpus-policy digest, and pending semantic extraction.
+fail-closed on commit, corpus-policy digest, pending semantic extraction, and
+tracked or untracked corpus sources selected by ``.graphifyignore``. Excluded
+tests, generated files, and runtime state do not invalidate the committed graph.
 
 Graphify 0.9.20 detection found 310 intended sources after excluding generated
 Quarto support trees and local graph memory. Package code remains the structural
@@ -45,6 +47,8 @@ Deleted compatibility modules remain deleted.
 ## Verification
 
 - `make graphify-integration-self-test graphify-skill-self-test PYTHON_INTERPRETER=/opt/homebrew/bin/python3`
+- Default `make ci` keeps the external Graphify integration opt-in; hosted CI
+  installs the pinned CLI and runs `make graphify-ci` explicitly.
 - Ruff format and lint on changed Python files
 - Python `compileall` and POSIX shell syntax checks
 - Normalized AST equality for the two docstring-only package edits

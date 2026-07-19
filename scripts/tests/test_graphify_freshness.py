@@ -65,9 +65,20 @@ def main() -> None:
         subprocess.run(
             ["git", "config", "user.name", "freshness-test"], cwd=root, check=True
         )
+        policy_text = (
+            "*\n**\n!aria_nbv/\n!aria_nbv/**\naria_nbv/tests/\ngraphify-out/\n"
+        )
         policy = root / ".graphifyignore"
-        policy.write_text("graphify-out/\n", encoding="utf-8")
-        subprocess.run(["git", "add", ".graphifyignore"], cwd=root, check=True)
+        policy.write_text(policy_text, encoding="utf-8")
+        source = root / "aria_nbv/aria_nbv/model.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("VALUE = 1\n", encoding="utf-8")
+        excluded = root / "aria_nbv/tests/test_model.py"
+        excluded.parent.mkdir(parents=True)
+        excluded.write_text("VALUE = 1\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", ".graphifyignore", "aria_nbv"], cwd=root, check=True
+        )
         subprocess.run(["git", "commit", "-qm", "initial"], cwd=root, check=True)
         head = _git(root, "rev-parse", "HEAD")
 
@@ -77,6 +88,22 @@ def main() -> None:
         freshness.ROOT = root
         freshness.OUT = out
         assert freshness.freshness_errors() == []
+
+        source.write_text("VALUE = 2\n", encoding="utf-8")
+        assert "aria_nbv/aria_nbv/model.py" in " ".join(freshness.freshness_errors())
+        source.write_text("VALUE = 1\n", encoding="utf-8")
+        assert freshness.freshness_errors() == []
+
+        new_source = root / "aria_nbv/aria_nbv/new_model.py"
+        new_source.write_text("VALUE = 1\n", encoding="utf-8")
+        assert "aria_nbv/aria_nbv/new_model.py" in " ".join(
+            freshness.freshness_errors()
+        )
+        new_source.unlink()
+
+        excluded.write_text("VALUE = 2\n", encoding="utf-8")
+        assert freshness.freshness_errors() == []
+        excluded.write_text("VALUE = 1\n", encoding="utf-8")
 
         (out / "graph.json").write_text("[", encoding="utf-8")
         assert "graphify-out/graph.json is malformed JSON" in " ".join(
@@ -97,9 +124,9 @@ def main() -> None:
         )
         _write_fresh_graph(root, out, head)
 
-        policy.write_text("graphify-out/\ndocs/_site/\n", encoding="utf-8")
+        policy.write_text(policy_text + "docs/_site/\n", encoding="utf-8")
         assert ".graphifyignore changed" in " ".join(freshness.freshness_errors())
-        policy.write_text("graphify-out/\n", encoding="utf-8")
+        policy.write_text(policy_text, encoding="utf-8")
         (out / "needs_update").touch()
         assert "extraction is pending" in " ".join(freshness.freshness_errors())
 

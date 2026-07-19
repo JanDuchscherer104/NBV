@@ -97,3 +97,6 @@ jobs:
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
         run: make ci PYTEST_ARGS=
+
+      - name: Run opt-in Graphify integration contract
+        run: make graphify-ci

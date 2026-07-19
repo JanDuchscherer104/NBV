@@ -23,6 +23,43 @@ def _policy_digest() -> str:
     return hashlib.sha256((ROOT / ".graphifyignore").read_bytes()).hexdigest()
 
 
+def _git_paths(*args: str) -> set[Path]:
+    output = subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.STDOUT)
+    return {
+        Path(value.decode(errors="surrogateescape"))
+        for value in output.split(b"\0")
+        if value
+    }
+
+
+def _is_graphify_source(path: Path) -> bool:
+    if path.name == ".graphifyignore":
+        return True
+    result = subprocess.run(
+        [
+            "git",
+            "-c",
+            f"core.excludesFile={ROOT / '.graphifyignore'}",
+            "check-ignore",
+            "--no-index",
+            "-q",
+            "--",
+            path.as_posix(),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+    return result.returncode != 0
+
+
+def _dirty_graphify_sources() -> list[str]:
+    changed = _git_paths("diff", "--name-only", "-z", "HEAD", "--")
+    untracked = _git_paths("ls-files", "--others", "--exclude-standard", "-z")
+    return sorted(
+        path.as_posix() for path in changed | untracked if _is_graphify_source(path)
+    )
+
+
 def _read_json_object(
     path: Path, label: str
 ) -> tuple[dict[str, object] | None, str | None]:
@@ -64,6 +101,12 @@ def freshness_errors() -> list[str]:
         errors.append("freshness metadata was built from a different commit")
     if state.get("corpus_policy_sha256") != _policy_digest():
         errors.append(".graphifyignore changed since the last refresh")
+    dirty_sources = _dirty_graphify_sources()
+    if dirty_sources:
+        errors.append(
+            "Graphify corpus sources have uncommitted changes: "
+            + ", ".join(dirty_sources[:10])
+        )
     if state.get("semantic_pending") or (OUT / "needs_update").exists():
         errors.append("documentation, literature, or diagram extraction is pending")
     return errors

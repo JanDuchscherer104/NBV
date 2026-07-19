@@ -241,6 +241,17 @@ def test_semantic_policy_requires_reinclude_rules() -> None:
     assert "Quarto docs: !docs/contents/**" in message
 
 
+def test_default_ci_keeps_graphify_integration_opt_in() -> None:
+    makefile = (integration.ROOT / "Makefile").read_text(encoding="utf-8")
+    ci_line = next(line for line in makefile.splitlines() if line.startswith("ci:"))
+    graphify_line = next(
+        line for line in makefile.splitlines() if line.startswith("graphify-ci:")
+    )
+
+    assert "graphify-integration-self-test" not in ci_line
+    assert "graphify-integration-self-test" in graphify_line
+
+
 def main() -> None:
     test_manifest_contracts()
     test_structural_inclusion_exclusion()
@@ -248,6 +259,7 @@ def main() -> None:
     test_version_mismatch_diagnostic()
     test_extract_failure_diagnostic()
     test_semantic_policy_requires_reinclude_rules()
+    test_default_ci_keeps_graphify_integration_opt_in()
 
 
 if __name__ == "__main__":
