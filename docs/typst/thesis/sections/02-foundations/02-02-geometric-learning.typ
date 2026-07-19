@@ -33,7 +33,7 @@ The third required structure is explicit selected-view history. A camera pose al
     midrule(), [Candidate rows], [Permutation-equivariant per-row value map.],
     [Row-shuffle tests must satisfy $f_theta(Pi X, Pi m)=Pi f_theta(X, m)$ for every selection score.],
     [Invalid and padded rows],
-    [Hard mask isolation.],
+    [Separate feasibility head, trained on every non-padding row; RRI/value loss only on rows certified valid. Hard action masking is the initial policy, with a later calibrated soft feasibility gate.],
 
     [Invalid rows cannot change valid-row scores except through explicit valid-count or support features.],
     [Candidate-target geometry],
@@ -51,5 +51,9 @@ The third required structure is explicit selected-view history. A camera pose al
   ),
   caption: [Minimum geometric-learning contract for the finite-candidate value model.],
 ) <tab:geometric-learning-contract>
+
+Invalidity is a supervised reject decision, rather than an artificial low-@relative-reconstruction-improvement target. The preceding masked-candidate-selection equation defines $m_(t,i)=0$ as exclusion from the action set, not as a numerical return; its shared definition is `rl.masked_candidate_selection` in `docs/typst/shared/equations/rl.typ:32--40`. For each non-padding row, the model should emit both a feasibility probability and an RRI/value estimate. Binary cross-entropy supplies the negative signal on invalid rows, while the RRI loss is evaluated only when $m_(t,i)=1$. Thus an invalid row's RRI is undefined/don't-care: it must be neither forced to zero nor assigned a synthetic negative target, because zero can be a legitimate valid-row RRI and either choice would conflate feasibility with quality. This factorization follows selective prediction with a learned reject option @SelectiveNet-geifman2019.
+
+The hard mask remains the deployment safety constraint. A soft feasibility score is only a training and ranking ablation: after held-out feasibility calibration, compare a score proportional to predicted validity times the conditional valid-row value against the hard-mask baseline, while retaining the hard mask wherever it is available. The abstention literature likewise models rejection as a separate outcome rather than a continuous-regression target @DeepGamblers-liu2019. The curriculum hypothesis is therefore to train feasibility from the first batch, warm up the value head only on oracle-valid rows, and then introduce the calibrated soft-gate ablation @CurriculumLearning-bengio2009. It must never reintroduce an RRI target or RRI gradient for invalid rows.
 
 These requirements become replay-field and model acceptance tests in Chapter @sec:thesis-method-geometry-contract. Row shuffles must permute outputs, invalid-row perturbations must leave valid scores unchanged, and equivalent local-frame encodings must preserve physical candidate identity. Architectural comparisons are interpretable only after those contracts hold.
