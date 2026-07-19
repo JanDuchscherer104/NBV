@@ -49,6 +49,10 @@ compact command index.
 
 ## KG And Optional Tooling
 
+- Graphify integration and corpus policy:
+  `make graphify-integration-self-test`
+- Local Graphify navigation freshness:
+  `python3 scripts/check_graphify_freshness.py`
 - Fast KG health probe:
   `make kg-status`
 - KG capabilities and routing:

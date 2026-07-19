@@ -50,7 +50,18 @@ Drop any folder of code, docs, papers, images, or video into graphify and get a 
 
 If the user invoked `/graphify --help` or `/graphify -h` (with no other arguments), print the contents of the `## Usage` section above verbatim and stop. Do not run any commands, do not detect files, do not default the path to `.`. Just print the Usage block and return.
 
-**Fast path — existing graph:** Before doing anything else, check whether `graphify-out/graph.json` exists. The expected location is `graphify-out/graph.json` relative to the **current working directory** (i.e. the project root where you are running commands). If it exists AND the user's request is a natural-language question about the codebase (e.g. "How does X work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For /graphify query`.** Run `graphify query "<question>"` immediately. Do not run detect. Do not check corpus size. Do not ask the user to narrow. The graph is already built — use it.
+**Fast path — fresh existing graph:** Before doing anything else, check whether
+`graphify-out/graph.json` exists. In ARIA-NBV, also run
+`python3 scripts/check_graphify_freshness.py --quiet`; the graph is eligible for
+the fast path only when that command succeeds. A failed check means the graph's
+commit, corpus policy, or semantic sources are stale, so fall back to the owning
+source files until refresh completes. If the graph is fresh AND the user's
+request is a natural-language question about the codebase (e.g. "How does X
+work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit
+rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies
+fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For
+/graphify query`.** Run `graphify query "<question>"` immediately. Do not run
+detect. Do not check corpus size. Do not ask the user to narrow.
 
 If no path was given, use `.` (current directory). Do not ask the user for a path.
 
@@ -660,7 +671,7 @@ print(f'This run: {input_tok:,} input tokens, {output_tok:,} output tokens')
 print(f'All time: {cost[\"total_input_tokens\"]:,} input, {cost[\"total_output_tokens\"]:,} output ({len(cost[\"runs\"])} runs)')
 "
 rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json
-rm -f graphify-out/.needs_update 2>/dev/null || true
+GRAPHIFY_SEMANTIC_COMPLETE=1 python3 scripts/graphify_refresh.py
 ```
 
 Replace INPUT_PATH with the actual path (same value used in Steps 4-5) so the manifest is relativized to the scan root.
