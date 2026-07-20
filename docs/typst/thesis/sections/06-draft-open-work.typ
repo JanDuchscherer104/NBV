@@ -37,6 +37,22 @@ Continuous actions, online simulators, additional scene representations, and alt
   gate: [discussion freeze],
 )
 
+== Directional-Memory Hypothesis
+
+#research_todo(
+  [Treat target-centred directional memory as an ablation hypothesis, not an actor feature or contribution. The representation must be implemented, mask-audited, and compared against pose distance and overlap before any predictive claim enters the manuscript.],
+  source: [RQ3 representation hypothesis],
+  gate: [paired held-out ablation],
+)
+
+#figure(
+  align(center, image(
+    "../figures/directional_memory_view_novelty.pdf",
+    width: 100%,
+  )),
+  caption: [Development-only directional-memory fixture. The sphere and Mollweide panels show the same logged ASE camera directions in a target-object frame; the orange query is another logged pose used to inspect one prospective second-moment novelty definition. No smooth field, spherical-harmonic representation, or learned benefit is claimed.],
+) <fig:directional-memory-hypothesis>
+
 == Next Evidence Gates
 
 The next admissible evidence is a validated report bundle that fixes the study population, records target and candidate exclusions, supplies paired endpoint outcomes with uncertainty, and joins runtime and storage statistics to the same manifests. Only then can the manuscript replace the present availability statements with policy comparisons.

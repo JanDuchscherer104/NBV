@@ -8,6 +8,8 @@ available in the local Typst environment.
 | Prose glossary terms | `@preview/glossarium:0.5.10` | Owns thesis/proposal term entries and native `@term` / `@term:short` references. |
 | Thesis architecture or process diagrams | Mermaid source rendered to PNG/SVG/PDF | Best for diffable pipeline figures and Quarto/Typst reuse. |
 | Typst-native diagrams | Fletcher | Use when the diagram must inherit Typst styling or math layout. |
+| Sparse typed 3D geometry | `@preview/scenery:0.1.0` | Pure-vector CeTZ output; fixture-gated and limited by painter ordering. |
+| Local PLY/OBJ/STL bodies | `@preview/maquette:0.1.1` | SVG for moderate meshes; z-buffered PNG for dense meshes. |
 | Result or comparison tables | Typst-native tables with `booktabs` rules | Use `@preview/booktabs:0.0.4` by default for thesis/proposal tables. |
 | Typst slide decks | Local `definitely-not-isec-slides` template with Touying reveal helpers | Read `references/slides.md`; keep shared notation imports explicit. |
 | Simple network schematics | `neural-netz` | Prefer Mermaid/Fletcher for ARIA-NBV pipelines. |
@@ -21,6 +23,9 @@ Current package notes:
 
 - `booktabs.md` and `booktabs-*.typ` - table rules and examples.
 - `cetz.md` - native scientific geometry figures.
+- `scenery.md` and `scenery-smoke.typ` - fixture-gated sparse 3D geometry.
+- `maquette.md`, `maquette-smoke.typ`, and `maquette-octahedron.obj` -
+  fixture-gated local mesh rendering.
 - `fletcher.md` and `fletcher-*.typ` - diagram rules and examples.
 - `neural-netz.md` and `neural-netz-example.typ` - simple network schematic
   fallback.

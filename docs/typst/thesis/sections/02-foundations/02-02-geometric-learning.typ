@@ -48,7 +48,8 @@ The third required structure is explicit selected-view history. A camera pose al
     [Actor/oracle boundary],
     [Typed provenance for target descriptors, labels, and support features.],
 
-    [GT-defined tasks, meshes, crops, and all-candidate renders supervise data generation and evaluation only.], bottomrule(),
+    [GT-defined tasks, meshes, crops, and all-candidate renders supervise data generation and evaluation only.],
+    bottomrule(),
   ),
   caption: [Minimum geometric-learning contract for the finite-candidate value model.],
 ) <tab:geometric-learning-contract>

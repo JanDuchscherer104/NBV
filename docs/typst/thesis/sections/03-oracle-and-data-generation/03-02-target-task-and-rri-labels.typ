@@ -23,13 +23,12 @@ For target $e$, the oracle computes a target-cropped point--mesh error $Delta_t^
 
 The one-step scene-level oracle from the seminar work supplies the rendering and point--mesh substrate @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. The target-specific pipeline renders valid candidates from the @ground-truth:short mesh, backprojects their depth, fuses candidate points with the privileged current evaluation cloud, crops both points and mesh to the selected target box, and evaluates the resulting point--mesh error. In the current protocol the root evaluation cloud is reconstructed from ASE @ground-truth:short depth, so both the crop and the root metric are oracle-only.
 
-#figure(
-  align(center, image(
-    "../../figures/camera_frame_ray_contract.pdf",
-    width: 100%,
-  )),
-  caption: [Camera-frame and ray contract behind oracle labels. Panel A fixes the candidate camera as a calibrated left-up-forward camera and renders depth from the @ground-truth:short mesh. Panel B shows the induced unprojection: a depth pixel becomes a camera-frame ray sample, is transformed into the world frame, enters the selected candidate point set, and is cropped against the selected target surface before target-specific error is scored @ProjectAria-ASE-2025 @PyTorch3D-Cameras-2025.],
-) <fig:camera-frame-ray-contract>
+Camera geometry is therefore useful here only as part of a relation: a logged
+trajectory, a target crop, a finite candidate set, or a rendered oracle query.
+The calibrated camera boundary is not a contribution by itself. The consolidated
+candidate-support figure in @fig:candidate-generation-geometry uses camera
+glyphs only to expose those relations; native `CameraTW` unprojection and
+world-from-camera `PoseTW` remain the geometry owners behind the render path.
 
 === Target Selection
 
@@ -80,7 +79,7 @@ The sampler draws a capped direction in the reference rig frame and reinterprets
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
   )),
-  caption: [Schematic geometry of the core target-conditioned candidate families. The reference-frame direction support is reinterpreted as forward, target-bearing, or lateral-bypass motion, and target-looking cameras point toward the supplied target instruction. The manifest supplies family counts and all quantitative bounds.],
+  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A places the logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. This is an auditable contract example, not a policy-performance result.],
 ) <fig:candidate-generation-geometry>
 
 The three core position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
@@ -109,15 +108,7 @@ $
   #eqs.action.motion_pruning_limits
 $
 
-The full shell is retained with position, strategy, mixture, sampling probability, rule masks, diagnostics, and invalid-reason bitsets. Invalid candidates are hard constraints and cannot enter #symb.rl.qh selection, stochastic normalization, or loss targets. A manifest-defined root-support threshold may reject an entire rollout task when too few actions remain:
-
-#figure(
-  align(center, image(
-    "../../figures/candidate_validity_pruning_examples.pdf",
-    width: 100%,
-  )),
-  caption: [Candidate validity and pruning examples. The support envelope, mesh-clearance constraint, and path-collision check remove infeasible rows by setting #symb.rl.validity_mask to false and recording an invalid-reason code #symb.rl.invalid_reason. A candidate with low target support or low expected gain remains valid if it satisfies the feasibility rules; it is a supervised low-utility row rather than an invalid action.],
-) <fig:candidate-validity-pruning-examples>
+The full shell is retained with position, strategy, mixture, sampling probability, rule masks, diagnostics, and invalid-reason bitsets. Panel B of @fig:candidate-generation-geometry makes the distinction concrete for one stored table: invalid rows remain inspectable but sit outside the admissible set. Invalid candidates cannot enter #symb.rl.qh selection, stochastic normalization, or loss targets. Conversely, a feasible row with weak target support or low expected gain remains a valid low-utility example rather than receiving an invalid-reason code. A manifest-defined root-support threshold may reject an entire rollout task when too few actions remain:
 
 $
   #eqs.action.valid_support_threshold
@@ -156,14 +147,14 @@ Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evalua
     "../../figures/target_rri_point_mesh_geometry.pdf",
     width: 100%,
   )),
-  caption: [Target-specific point-mesh error behind @relative-reconstruction-improvement:short labels. Blue points are the target crop of accumulated oracle evaluation geometry, green points are the selected candidate contribution, the orange curve is the selected target mesh, purple witnesses indicate point-to-mesh accuracy, and dashed red witnesses indicate mesh-to-point completeness. Adding a valid candidate view is useful only insofar as it reduces the target-cropped aggregate error used by the oracle reward.],
+  caption: [Point--mesh metric contract and controlled validity fixture. Panel A isolates the exact point-to-triangle primitive. Panel B distinguishes the point-to-face accuracy and face-to-point completeness reductions using computed closest-point witnesses. Panel C holds the planar support and point set fixed while changing only the triangle table; the measured equal-face completeness term changes from $0.03640$ to $0.02284$ $"m"^2$. These values are generated by the repository's PyTorch3D metric on a synthetic fixture and demonstrate a tessellation-sensitivity mechanism; they are not an ASE performance result.],
 ) <fig:target-rri-point-mesh-geometry>
 
 $
   #eqs.entity.target_error
 $
 
-The implementation crops mesh faces when any vertex lies inside the oriented target OBB and evaluates the configured point--mesh scorer. Geometry-invalid candidates are removed by the hard action mask and retain persisted candidate reason codes. Empty mesh crops, insufficient current support, or unusable renders instead invalidate the separate oracle evaluation: the recipe either skips the affected row or table, or clears `oracle_label_mask` and `q_train_mask`, while reporting the oracle failure independently rather than assigning a candidate reason code. The current face-based metric is not yet established as invariant to mesh tessellation or root/candidate sampling density; confirmatory use therefore requires the sensitivity tests specified in @sec:thesis-experimental-design.
+The implementation crops mesh faces when any vertex lies inside the oriented target OBB and evaluates the configured point--mesh scorer. Geometry-invalid candidates are removed by the hard action mask and retain persisted candidate reason codes. Empty mesh crops, insufficient current support, or unusable renders instead invalidate the separate oracle evaluation: the recipe either skips the affected row or table, or clears `oracle_label_mask` and `q_train_mask`, while reporting the oracle failure independently rather than assigning a candidate reason code. The controlled fixture in @fig:target-rri-point-mesh-geometry demonstrates that the current equal-face completeness reduction is not invariant to non-uniform retessellation, even when the planar support and point set are fixed. Its sensitivity to root and candidate point sampling remains unmeasured. Confirmatory use therefore requires the sensitivity tests and metric-validity gate specified in @sec:thesis-experimental-design; freezing one mesh does not by itself establish a representation-independent oracle.
 
 The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
 

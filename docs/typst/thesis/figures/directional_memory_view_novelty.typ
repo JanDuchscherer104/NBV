@@ -1,117 +1,142 @@
 #import "@preview/cetz:0.5.2"
+#import "@preview/scenery:0.1.0": build-scene, uv-sphere, sphere, edge, arrow, camera, render-scene
 
-#set page(width: auto, height: auto, margin: 0mm, fill: white)
-#set text(font: "New Computer Modern", size: 8pt)
+#set page(width: 160mm, height: auto, margin: 0mm, fill: white)
+#set text(font: "New Computer Modern", size: 9.2pt, fill: rgb("#17202a"))
 
-#let ink = rgb("#1f2937")
-#let muted = rgb("#64748b")
-#let panel-fill = rgb("#f8fafc")
-#let panel-stroke = rgb("#cbd5e1")
-#let target-color = rgb("#b45309")
-#let history-color = rgb("#2563eb")
-#let moment-color = rgb("#7c3aed")
-#let cand-color = rgb("#16a34a")
-#let novelty-color = rgb("#dc2626")
+#let data = json("data/directional_memory_81286_000024_inst128.json")
+#let ink = rgb("#17202a")
+#let muted = rgb("#5f6b78")
+#let rule = rgb("#c9d2dc")
+#let pale = rgb("#f5f7f9")
+#let history-color = rgb("#3269a8")
+#let query-color = rgb("#b56a19")
+#let sphere-color = rgb("#d7dee6")
+#let x-color = rgb("#b23a48")
+#let y-color = rgb("#23856d")
+#let z-color = rgb("#5c4fa3")
 
-#let label(body) = text(size: 7.1pt, body)
-#let tiny(body) = text(size: 6.2pt, fill: muted, body)
-#let formula(body) = text(size: 6.8pt, body)
+#let v2(a) = (a.at(0), a.at(1))
+#let v3(a) = (a.at(0), a.at(1), a.at(2))
+#let history = data.at("history_directions").map(v3)
+#let query = v3(data.at("query_direction"))
 
-#cetz.canvas(length: 8mm, padding: .28, {
+#let sphere-scene = build-scene(
+  uv-sphere(
+    (0, 0, 0),
+    1,
+    segments: 18,
+    rings: 9,
+    color: sphere-color,
+    // Scenery interprets fill-opacity as a transparentize amount.
+    fill-opacity: 100%,
+    stroke: (paint: rgb("#8d9baa"), thickness: .3pt),
+    hidden-stroke: (paint: rgb("#c7d0da"), thickness: .16pt),
+    cull: none,
+  ),
+  ..history.map(direction => edge(
+    (0, 0, 0),
+    direction,
+    color: history-color,
+    width: .65pt,
+  )),
+  ..history.map(direction => sphere(direction, .045, color: history-color, specular: false)),
+  edge((0, 0, 0), query, color: query-color, width: 1.1pt),
+  sphere(query, .065, color: query-color, specular: false),
+  arrow((0, 0, 0), (1.14, 0, 0), color: x-color, w: .016),
+  arrow((0, 0, 0), (0, 1.14, 0), color: y-color, w: .016),
+  arrow((0, 0, 0), (0, 0, 1.14), color: z-color, w: .016),
+)
+
+#let panel(title, subtitle, body) = block(
+  width: 100%,
+  inset: (top: 2.2mm, left: 2.5mm, right: 2.5mm, bottom: 2.2mm),
+  stroke: (top: .7pt + ink, bottom: .45pt + rule),
+  [
+    #text(size: 10.2pt, weight: "bold", title)
+    #linebreak()
+    #text(size: 8pt, fill: muted, subtitle)
+    #v(1.4mm)
+    #body
+  ],
+)
+
+#let mollweide-map = cetz.canvas(length: 10.8mm, padding: .12, {
   import cetz.draw: *
-
-  let arrow-style = (end: ">", scale: .72)
-  let panel(x, title, subtitle) = {
-    rect(
-      (x, 0), (x + 6.05, 6.45),
-      radius: .12,
-      fill: panel-fill,
-      stroke: .65pt + panel-stroke,
-    )
-    content((x + .25, 6.08), align(left, text(weight: "bold", title)))
-    content((x + .25, 5.68), align(left, tiny(subtitle)))
+  let outline = data.at("mollweide_outline").map(v2)
+  let grid-color = rgb("#aeb8c3")
+  line(..outline, close: true, fill: white, stroke: .7pt + rgb("#657383"))
+  for curve in data.at("mollweide_graticule").at("latitudes") {
+    line(..curve.map(v2), stroke: .35pt + grid-color)
   }
-  let camera(p, tint: history-color, name: none) = {
-    circle(p, radius: .095, fill: tint, stroke: none)
-    line(p, (p.at(0) - .34, p.at(1) + .34), (p.at(0) + .34, p.at(1) + .34),
-      close: true,
-      fill: tint.lighten(80%),
-      stroke: .55pt + tint)
-    if name != none {
-      content((p.at(0), p.at(1) - .35), tiny(name))
-    }
+  for curve in data.at("mollweide_graticule").at("longitudes") {
+    line(..curve.map(v2), stroke: .35pt + grid-color)
   }
-  let target(p, name: [$bold(v)$]) = {
-    circle(p, radius: .13, fill: target-color, stroke: .4pt + ink)
-    content((p.at(0) + .25, p.at(1) + .1), label(name))
+  for point in data.at("history_mollweide") {
+    circle(v2(point), radius: .055, fill: history-color, stroke: none)
   }
-  let dir-line(a, b, tint: history-color, dashed: false) = {
-    line(a, b,
-      stroke: (paint: tint, thickness: .8pt, dash: if dashed { "dashed" } else { () }),
-      mark: arrow-style)
-  }
-  let sphere(cx, cy, tint: muted) = {
-    circle((cx, cy), radius: 1.42, fill: white, stroke: .75pt + tint)
-    line((cx - 1.18, cy + .18), (cx - .5, cy + .4), (cx + .5, cy + .4), (cx + 1.18, cy + .18),
-      stroke: (paint: tint.lighten(10%), thickness: .48pt, dash: "dashed"))
-    line((cx - 1.18, cy - .18), (cx - .5, cy - .4), (cx + .5, cy - .4), (cx + 1.18, cy - .18),
-      stroke: (paint: tint.lighten(10%), thickness: .48pt, dash: "dashed"))
-    line((cx - 1.42, cy), (cx + 1.42, cy),
-      stroke: (paint: tint.lighten(10%), thickness: .45pt, dash: "dashed"))
-    line((cx, cy - 1.42), (cx, cy + 1.42),
-      stroke: (paint: tint.lighten(10%), thickness: .45pt, dash: "dashed"))
-  }
-  let token(x, y, title, body, tint) = {
-    rect((x, y), (x + 2.55, y + .88),
-      radius: .08,
-      fill: tint.lighten(84%),
-      stroke: .62pt + tint)
-    content((x + 1.27, y + .58), align(center, text(size: 6.7pt, weight: "bold", title)))
-    content((x + 1.27, y + .24), align(center, text(size: 5.8pt, fill: ink, body)))
-  }
-
-  panel(0, [A. Target-local observations], [history lives around points, not in pose tokens])
-  let v = (3.05, 2.65)
-  target(v)
-  for c in ((.95, 1.15), (1.55, 4.75), (4.95, 4.6), (5.15, 1.35)) {
-    camera(c)
-    dir-line(v, c)
-  }
-  content((.7, .68), tiny([$bold(c)_0$]))
-  content((1.38, 5.18), tiny([$bold(c)_1$]))
-  content((4.9, 5.04), tiny([$bold(c)_2$]))
-  content((5.04, .86), tiny([$bold(c)_3$]))
-  content((2.18, 4.18), formula([$bold(d)_o(bold(v)) in bb(S)^2$]))
-  content((.7, 5.28), tiny([selected camera centers only]))
-
-  panel(6.45, [B. Directional memory], [store a distribution over directions])
-  sphere(9.47, 3.18, tint: moment-color)
-  for p in ((8.65, 2.5), (8.9, 3.75), (9.85, 4.15), (10.25, 2.3)) {
-    circle(p, radius: .08, fill: history-color, stroke: none)
-  }
-  content((9.47, 4.92), label([$bb(S)^2$]))
-  token(6.95, 1.18, [$bold(mu)_t(bold(v))$], [mean direction], moment-color)
-  token(9.95, 1.18, [$bold(M)_t(bold(v))$], [second moment], moment-color)
-  content((7.0, 5.22), formula([$sum_o w_o bold(d)_o bold(d)_o^top$]))
-  content((7.72, .62), tiny([or low-order $Y_(ell m)$ coefficients when ablated]))
-  line((8.7, 2.35), (8.18, 2.04), stroke: .62pt + moment-color, mark: arrow-style)
-  line((10.15, 2.28), (11.05, 2.04), stroke: .62pt + moment-color, mark: arrow-style)
-
-  panel(12.9, [C. Candidate query], [read novelty from the proposed view])
-  let vc = (15.8, 2.55)
-  target(vc, name: [$bold(v)$])
-  camera((14.05, 1.05), tint: history-color, name: [`old`])
-  camera((17.65, 1.05), tint: history-color, name: [`old`])
-  camera((17.5, 4.8), tint: cand-color, name: [$q_(t,i)$])
-  dir-line(vc, (14.05, 1.05), tint: history-color)
-  dir-line(vc, (17.65, 1.05), tint: history-color)
-  dir-line(vc, (17.5, 4.8), tint: cand-color)
-  arc(vc, start: 39deg, delta: 58deg, radius: 1.18,
-    stroke: (paint: novelty-color, thickness: .72pt, dash: "dashed"))
-  content((16.95, 3.65), formula([$Delta_"dir"$]))
-  token(13.25, 4.24, [$bold(d)_i(bold(v))$], [candidate direction], cand-color)
-  token(16.15, .42, [$nu_(t,i)(bold(v))$], [view novelty], novelty-color)
-  line((16.55, 3.94), (17.02, 3.8), stroke: .6pt + cand-color, mark: arrow-style)
-  line((16.9, 1.45), (16.8, 1.3), stroke: .6pt + novelty-color, mark: arrow-style)
-  content((13.22, 5.42), tiny([added to candidate row, not a new observation]))
+  let q = v2(data.at("query_mollweide"))
+  circle(q, radius: .09, fill: white, stroke: 1pt + query-color)
+  line((q.at(0) - .055, q.at(1)), (q.at(0) + .055, q.at(1)), stroke: .8pt + query-color)
+  line((q.at(0), q.at(1) - .055), (q.at(0), q.at(1) + .055), stroke: .8pt + query-color)
 })
+
+#grid(
+  columns: (1.05fr, 1.18fr),
+  gutter: 4mm,
+  panel(
+    [A. Target-centred directions on $bb(S)^2$],
+    [actual logged camera centres, expressed in the target-object frame],
+    align(center, [
+      #render-scene(
+        sphere-scene,
+        camera(azimuth: -38deg, elevation: 19deg),
+        width: 69mm,
+      )
+      #text(size: 7.5pt)[
+        #text(fill: history-color)[● logged history direction] #h(2.5mm)
+        #text(fill: query-color)[⊕ example query]
+      ]
+      #linebreak()
+      #text(size: 7.3pt, fill: muted)[
+        Scene #data.at("scene_id"), sample #data.at("snippet_id"), target instance
+        #data.at("target_instance_id"); frames
+        #data.at("history_frames").map(str).join([, ]) and query frame
+        #data.at("query_frame").
+      ]
+    ]),
+  ),
+  panel(
+    [B. Complete-domain view and prospective compression],
+    [Mollweide is equal-area; no smooth field or SH lobe is implied],
+    [
+      #align(center, mollweide-map)
+      #align(center, text(size: 7.4pt, fill: muted)[
+        $+x_e$ at map centre · $+z_e$ north · wrap seam at $plus.minus 180 degree$
+      ])
+      #v(2.5mm)
+      #align(center, $bold(M)_"dir"(v) = sum_(k<t) w_k(v) bold(d)_k(v) bold(d)_k(v)^top$)
+      #v(1.8mm)
+      #align(center, $nu_i(v) = 1 - frac(bold(d)_i^top bold(M)_"dir" bold(d)_i, op("tr") bold(M)_"dir" + epsilon)$)
+      #v(2.5mm)
+      #text(size: 7.8pt)[
+        This fixture uses uniform weights and a logged future pose only to make
+        the second-moment query inspectable. It does not claim that the learner
+        currently stores $bold(M)_"dir"$ or that this novelty predicts target
+        RRI.
+      ]
+      #v(2.5mm)
+      #block(
+        inset: 2mm,
+        radius: 1mm,
+        fill: none,
+        stroke: (left: 1.1pt + query-color),
+        text(size: 7.5pt, fill: ink)[
+          HYPOTHESIS / ABLATION MATERIAL. Keep outside submission claims until
+          the representation exists and paired evaluation tests whether it adds
+          information beyond pose distance and overlap.
+        ],
+      )
+    ],
+  ),
+)

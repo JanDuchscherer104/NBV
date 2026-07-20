@@ -49,9 +49,10 @@ and canonical project memory. The seminar paper records historical implemented
 evidence from the earlier project phase and should not override the current
 thesis contract.
 
-## Paper
+## Thesis and Seminar Paper
 
-- [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Historical implemented evidence from the earlier project phase.
+- [Thesis](typst/thesis/main.pdf), [Typst Source](typst/thesis/main.typ): Current thesis direction and canonical research + development memory.
+- [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Historical implemented evidence from the earlier project phase: Single-step RRI based scene scorer.
 
 ## Project Slides
 
