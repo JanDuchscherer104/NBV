@@ -1,11 +1,33 @@
 #import "../../shared/symbols.typ": symb
+#import "../draft_markers.typ": thesis_status, research_todo
 
 = Discussion <sec:thesis-discussion>
 
-The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, or learned model performs better than another.
+The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, representation, or learned model performs better than another.
 
-The rollout attempts also expose a concrete systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain the feasible branch factor and rollout volume before statistical efficiency becomes relevant. The observed out-of-memory failure is diagnostic evidence for batching and resource measurement, not evidence about the candidate distribution or planning objective. A completed pair of validated stores is required before throughput, storage, or failure rates can be generalized even to the configured training-source pilot.
+The rollout attempts also expose a systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain feasible branch factor and rollout volume before statistical efficiency becomes relevant. An out-of-memory observation is evidence for batching and resource measurement, not for or against the candidate distribution or planning objective. Completed validated stores are required before throughput, storage, or failure rates are generalized.
 
-The scientific limitations are more restrictive. The current attempts use training sources, the default JSON bundle is a schema fixture, and no held-out paired policy table supports the endpoint estimand. Metric repeatability and a meaningful-headroom gate have not yet been established, while the learned finite-horizon #symb.rl.qh comparison remains downstream of those checks. Accordingly, the thesis cannot yet distinguish negligible oracle headroom from inadequate candidate support, insufficient rollout coverage, target observability, or learned-control failure.
+The scientific limitations are more restrictive. Current attempts use training sources, no held-out paired policy table supports the endpoint estimand, metric repeatability and meaningful oracle-lookahead headroom remain unestablished, and the target-conditioned finite-horizon comparison is not implemented. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
 
-The next evidential step is procedural rather than architectural: complete validated stores under resolved manifests, freeze the eligible population and exclusions, establish oracle stability, and only then run matched held-out policy comparisons. Additional representations, continuous control, or semantic planners would address different hypotheses and are not justified by the present readiness evidence.
+== Evidence-conditioned architecture bridges
+
+#thesis_status(
+  implementation: "exploratory",
+  evidence: "pending",
+  source: [@tab:thesis-scene-representation-design-space; @tab:geometric-learning-ladder],
+  gate: [a measured limitation that the proposed bridge directly tests],
+)[Alternative representations and policies remain part of the thesis design registry, but they are promoted only as responses to diagnosed bottlenecks.]
+
+If the local EFM3D field is the limiting variable, broad semidense memory, sparse occupied/free/unknown state, target-centred re-lifting, or logged appearance features provide progressively stronger representation tests. If compact descriptors lose relevant spatial structure, point, sparse, or equivariant encoders become justified. If independent candidate queries leave errors correlated with the valid candidate set, DeepSets or masked candidate interaction becomes relevant. If selected-view history fails specifically by approach direction, signed first- plus second-moment memory, followed only if needed by spherical harmonics, becomes the targeted ablation. A renderable 3DGS state is appropriate only when candidate rendering or soft instance membership is itself the measured missing capability.
+
+Continuous and hierarchical policies change the action contract rather than merely increasing model capacity. A target-then-pose policy could first select or mask a target token and then condition pose queries on target, horizon, and step; multiple targets can share scene encodings and be evaluated in parallel. This remains post-core work because continuous pose generation requires separate feasibility, safety, support, and simulator-realism evidence. The finite-candidate model is retained as the calibrated control even if a continuous policy is later introduced.
+
+Sequence or recurrent models are similarly conditional. They become scientifically motivated when errors persist after explicit history, time, horizon, and scene-memory conditioning, not simply because the dataset contains trajectories. Looping or recurrent refinement must preserve causal masks and candidate-row equivariance and must be compared against the same fixed-budget endpoint oracle evaluation.
+
+#research_todo(
+  [After the primary evidence chain is complete, promote only bridges tied to a measured failure: EVL support, target observability, directional history, valid-set interaction, long-horizon credit, or action-support mismatch.],
+  source: [method design-space registry],
+  gate: [artifact-backed failure analysis],
+)
+
+The next evidential step remains procedural: complete validated stores under resolved manifests, freeze the eligible population and exclusions, establish oracle stability and headroom, train the matched controls, and only then interpret architectural differences. The registry above preserves concrete follow-up hypotheses without presenting them as validated conclusions.

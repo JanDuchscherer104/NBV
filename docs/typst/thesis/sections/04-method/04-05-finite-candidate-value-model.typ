@@ -1,23 +1,98 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
+#import "../../draft_markers.typ": thesis_status, research_todo, decision_todo
 
-== Finite-Horizon Value Interface
+== Target-Conditioned Finite-Horizon Value Model
 
-// implementation boundary: vin/models/target_finite_horizon.py; lightning/_candidate_scorer_contract.py; rollouts/zarr_store.py
-The intended learned quantity is the value of choosing one valid row from the current finite table and then following a bounded policy for at most $H-1$ further selections. With target-root-gain reward $r_(t+k)^e$ and discount $gamma$, the training target is
+=== Implemented control and explicit scaffold
+
+#thesis_status(
+  implementation: "partial",
+  evidence: "pending",
+  citation: [@VIN-NBV-frahm2025 @CORAL-cao2019],
+  source: "aria_nbv/aria_nbv/vin/models/target_myopic.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/_candidate_scorer_contract.py",
+  gate: [retain the current one-step scorer as the matched myopic control],
+)[The one-step VIN/CORAL scorer and finite-horizon configuration scaffold exist. Frozen matched-control evidence is pending. Positive-width target conditioning and the finite-horizon network are not implemented.]
+
+The current VINv3 scorer predicts per-candidate ordinal one-step RRI evidence from scene and candidate geometry without a learned target token. Its target-conditioned configuration accepts only target-descriptor width zero. The finite-horizon configuration records horizon, discount, and candidate-token width, but model construction raises `NotImplementedError`, and the current Lightning contract rejects the configuration because its CORAL objective does not consume rollout returns, hard action masks, or selected-transition links.
+
+This boundary makes the implemented VIN path a necessary control rather than evidence for the proposed planner. Learned-policy claims require a dedicated `q_h/` reader, finite-horizon checkpoint, frozen split and configuration, and oracle re-evaluation of selected trajectories.
+
+=== Canonical planned transformer
+
+#thesis_status(
+  implementation: "planned",
+  evidence: "pending",
+  citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @DoubleDQN-vanHasselt2015],
+  source: "docs/literature/tex-src/arXiv-Set-Transformer/03_main.tex, Sec. Set Transformer, lines 2--51; docs/literature/tex-src/arXiv-QCNet/main.tex, Sec. Query-Centric Scene Encoder, lines 159--161; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [A0 reader/MLP control, A1 implementation, invariant tests, and held-out oracle policy comparison],
+)[The canonical model is a minimal target-conditioned candidate-to-state Transformer. Candidate-candidate interaction, exact equivariance, and richer scene encoders are ordered ablations rather than prerequisites.]
+
+For target $e$, the return over at most $H$ selections is
 
 $
-  Q_H(s_t, a_t)
-  =
-  bb(E) [sum_(k=0)^(H-1) gamma^k r_(t+k)^e mid s_t, a_t].
+  #eqs.rl.finite_horizon_return
 $
 
-The action dimension is the padded full-shell axis of the `q_h/` view. Every predicted value must remain aligned with its candidate row, and invalid rows must be excluded from action selection and bootstrap maximization. The selected-transition fields provide the observed reward, successor step identifier, terminal flag, and discount needed for a masked temporal-difference objective. Held-out policy quality must still be measured by oracle re-scoring the trajectories selected by the learned model rather than by training loss alone.
+and the learned quantity is
 
-The existing myopic VINv3 scorer is a control, not an implementation of this value function. It predicts per-candidate ordinal one-step RRI scores through the current CORAL training path and consumes scene evidence plus candidate geometry without a target token. The target-conditioned myopic configuration is runnable only with target-descriptor width zero. Positive target widths are deliberately rejected until target-token ownership is implemented.
+$
+  #eqs.rl.q_h
+$
 
-The finite-horizon scorer is likewise an explicit scaffold. Its configuration records a horizon, discount, and candidate-token width, but constructing the model raises `NotImplementedError`. The existing Lightning module rejects this configuration because its CORAL `VinPrediction` objective does not consume rollout returns, hard valid-action masks, or selected-transition links. Therefore no candidate-query Transformer, residual value head, target network, Double-Q update, distributional head, or trained multi-step policy is claimed here.
+One candidate row is one query. Target, scene, selected history, remaining budget, current step, and requested horizon form shared state tokens. The canonical interaction is
 
-The immediate implementation task is narrow: build a dedicated reader and training module over the validated `q_h/` arrays, join only actor-admissible target and candidate fields, emit one value per padded shell row, and enforce the masks described in @sec:thesis-method-geometry-contract. A row-independent masked MLP is the necessary first control because its semantics are easy to test. Candidate-to-state attention or candidate-candidate interaction should be introduced only after the control passes the same oracle-evaluated policy comparison. This order tests whether multi-step replay contains learnable headroom before attributing gains to a more elaborate architecture.
+$
+  #eqs.model.qh_candidate_state_cross_attention
+$
 
-The method is consequently complete at the data-contract level but not at the learned-planner level. The present thesis can evaluate rollout coverage, target-root-gain headroom, mask correctness, and policy baselines from the stored artifacts. Claims about learned finite-horizon improvement require a subsequent trained checkpoint, frozen configuration, held-out split, and oracle re-evaluation.
+followed by a shared per-row value head. The valid-action mask is applied to attention where rows are keys, to selection, and to every bootstrap maximum. The training mask gates supervised losses. No candidate-index embedding is permitted. Multiple target tokens may share scene and candidate encodings and be evaluated in parallel under a target--candidate mask, which preserves the same network for single-target and multi-target inference.
+
+Time and horizon conditioning prevent an otherwise identical candidate from receiving the same value at different remaining budgets. They do not reveal future observations: a state at step $t$ contains only logged or selected evidence available through $t$. A requested horizon longer than the remaining rollout support is masked or terminated rather than padded with invented transitions.
+
+The first implementation sequence is A0 followed by A1 from @tab:geometric-learning-ladder. A0 establishes whether the replay target is learnable without attention. A1 then tests whether reusable target and scene tokens explain additional value. Candidate-candidate attention is introduced only if fixed-state candidate queries leave a measurable error correlated with valid-set context.
+
+=== One-step base and finite-horizon residual
+
+#thesis_status(
+  implementation: "exploratory",
+  evidence: "pending",
+  citation: [@CORAL-cao2019 @DoubleDQN-vanHasselt2015],
+  source: "docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex, ordinal RRI paragraph, line 125; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [target-specific label audit and direct-versus-residual ablation],
+)[The residual decomposition is a testable hypothesis, not a consequence of object-centric NBV literature. Direct continuous $Q_H$ remains the required control.]
+
+The hypothesis separates calibrated immediate utility from downstream effects:
+
+$
+  #eqs.rl.qh_residual_decomposition
+$
+
+The base $b_(psi,i)$ represents one-step target gain. The residual captures candidate regeneration, selected-history geometry, occlusion, support, and remaining horizon. It is not exactly mean-centred within each candidate table because duplicate or unrelated rows would then change absolute temporal-difference targets. Magnitude regularization may be tested without redefining the value field:
+
+$
+  #eqs.rl.qh_uncentered_residual
+$
+
+CORAL remains a motivated one-step ranking and calibration interface,
+
+$
+  #eqs.rl.qh_coral_interface
+$
+
+but additive finite-horizon returns are learned in continuous units. The direct continuous $Q_H$ head, the residual head with a frozen base, and the residual head with slow or joint fine-tuning form the controlled comparison.
+
+#research_todo(
+  [Compare direct continuous value prediction against the uncentred residual only after the target-specific label distribution, one-step calibration, and positive oracle-lookahead headroom are established.],
+  source: [finite-horizon model contract],
+  gate: [A0/A1 learning and headroom report],
+)
+
+#decision_todo(
+  [Freeze, slow-fine-tune, and joint-training variants are all admissible until validation evidence selects one; the final thesis must record the chosen base-network update rule and checkpoint provenance.],
+  source: [residual training hypothesis],
+  gate: [model-selection protocol freeze],
+)
+
+The scientific endpoint is not training loss. For every trained policy, selected trajectories are regenerated under the documented candidate contract and re-scored by the same target-specific oracle used for the baselines. The model succeeds only if it recovers a prespecified fraction of positive oracle-lookahead headroom on held-out scenes without violating mask, provenance, or support constraints.

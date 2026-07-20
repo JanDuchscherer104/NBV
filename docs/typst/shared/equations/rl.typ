@@ -29,6 +29,15 @@
     =
     Pi f_theta (bold(X)_t, bold(m)_t)
   $,
+  candidate_mask_isolation: $
+    op("Mask") (bold(X)_t, bold(m)_t)
+    =
+    op("Mask") (bold(X)'_t, bold(m)_t)
+    quad arrow.r.double quad
+    op("Mask") (f_theta (bold(X)_t, bold(m)_t), bold(m)_t)
+    =
+    op("Mask") (f_theta (bold(X)'_t, bold(m)_t), bold(m)_t)
+  $,
   masked_candidate_selection: $
     cal(A)_t
     =
@@ -117,41 +126,57 @@
     quad
     #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i) = 1}
   $,
+  replay_transition: $
+    (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
+    =
+    op("Step")(
+      x_t,
+      bold(H)_t,
+      b_t,
+      q_(t,a_t),
+      xi_t
+    )
+  $,
   counterfactual_transition: $
     #(symb.oracle.points) _(t+1) = #(symb.oracle.points) _t union #(symb.oracle.points) _(q_t)
   $,
   target_rri_reward: $
-    #symb.rl.reward_target = op("RRI")_e (q_t | #(symb.oracle.points) _t, #symb.ase.mesh_target)
+    #symb.entity.target_reward
+    =
+    (#symb.entity.target_error - #symb.entity.target_error_next)
+    /
+    (#symb.entity.target_error_0 + epsilon)
   $,
   finite_horizon_return: $
-    #symb.rl.return_h = sum_(k=0)^(#symb.rl.H - 1) #symb.rl.gamma^k r_(t+k)^e
+    G_(t,e)^((h))
+    =
+    sum_(k=0)^(min(h, b_t) - 1) #symb.rl.gamma^k r_(t+k)^e
   $,
   q_h: $
-    #symb.rl.qh (#symb.rl.s_cf0, #(symb.rl.a) _t)
+    Q_(h,e) (s_t, i)
     =
-    bb(E)[G_t^((H)) | s_t = #symb.rl.s_cf0, a_t = #(symb.rl.a) _t]
-  $,
-  qh_residual: $
-    #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
-    =
-    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
-    +
-    A_theta^H (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_table, bold(h)_t, i)
+    bb(E)[G_(t,e)^((h)) | s_t, a_t=i],
+    quad
+    i in cal(A)_t,
+    quad
+    1 <= h <= b_t,
+    quad
+    Q_(0,e) (s, i) = 0
   $,
   qh_residual_decomposition: $
     b_(psi,i)
     =
     f_psi^"1-step" (s_t^"cf0", #symb.entity.target_desc, q_(t,i)),
     quad
-    delta_(theta,i)^H
+    delta_(theta,t,e,i)^h
     =
-    g_theta (bold(x)_(t,i), {#symb.model.target_token, #symb.scene.ray_memory_t, bold(H)_t, #symb.scene.evl_local}, h_t),
+    g_theta (cal(I)_(t,e), q_(t,i), h),
     quad
-    Q_(H,theta,i)
+    Q_(h,theta,e,i)
     =
     b_(psi,i)
     +
-    delta_(theta,i)^H
+    delta_(theta,t,e,i)^h
   $,
   qh_coral_interface: $
     p_(t,i,k)^"CORAL"
@@ -168,25 +193,25 @@
     sum_(k=0)^(K - 1) pi_(t,i,k)^"CORAL" u_k
   $,
   qh_uncentered_residual: $
-    #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    Q_(h,theta,e,i)
     =
     hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
     +
-    delta_(theta,i)^H (#symb.rl.s_cf0, #symb.entity.target_desc, bold(H)_t),
+    delta_(theta,t,e,i)^h (cal(I)_(t,e), q_(t,i)),
     quad
     cal(L)_delta
     =
     lambda_delta
     (1) / (abs(#symb.rl.action_set_t))
-    sum_(j in #symb.rl.action_set_t) (delta_(theta,j)^H)^2
+    sum_(j in #symb.rl.action_set_t) (delta_(theta,t,e,j)^h)^2
   $,
   qh_candidate_token: $
     #symb.rl.candidate_token
     =
-    (op("Transformer")_theta (#symb.rl.candidate_features))_i
+    op("Enc")_theta (cal(I)_(t,e), q_(t,i))
   $,
   qh_candidate_value: $
-    #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    Q_(h,theta,e) (s_t, i)
     =
     #symb.rl.q_weight^top #symb.rl.candidate_token
   $,
@@ -194,34 +219,45 @@
     #symb.rl.selected_action_theta
     =
     op("argmax", limits: #true)_(i : m_(t,i) = 1)
-    #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    Q_(h,theta,e) (s_t, i)
   $,
   qh_doubleq_index: $
-    i^star
+    B_t^((h,e))
     =
-    op("argmax", limits: #true)_(i : m_(t+1,i) = 1)
-    #symb.rl.qh_theta (#symb.rl.s_cf0_next, #symb.entity.target_desc, q_(t+1,i))
+    cases(
+      Q_(h-1,theta^-,e) (
+        s_(t+1),
+        op("argmax", limits: #true)_(i : m_(t+1,i) = 1)
+        Q_(h-1,theta,e) (s_(t+1), i)
+      ) & "if " h > 1, d_t = 0, sum_i m_(t+1,i) > 0,
+      0 & "otherwise"
+    )
   $,
   qh_doubleq_target: $
-    #symb.rl.td_target
+    y_t^((h,e))
     =
     #symb.entity.target_reward
     +
     gamma
-    (1 - d_t)
-    #symb.rl.qh_target (#symb.rl.s_cf0_next, #symb.entity.target_desc, q_(t+1,i^star))
+    B_t^((h,e))
   $,
   qh_loss: $
     #symb.rl.q_loss
     =
-    (1) / (abs(cal(D)))
-    sum_((s,a,r,s') in cal(D))
-    m_(t,a)
     (
-      #symb.rl.qh_theta (#symb.rl.s_cf0, #symb.entity.target_desc, q_(t,a))
-      -
-      #symb.rl.td_target
-    )^2
+      sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1),d_t) in cal(D))
+      m_(t,a_t)^"train"
+      (
+        Q_(h,theta,e) (s_t, a_t)
+        -
+        y_t^((h,e))
+      )^2
+    )
+    /
+    (
+      sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1),d_t) in cal(D)) m_(t,a_t)^"train"
+      + epsilon
+    )
   $,
   reward_log: $
     #(symb.rl.r) _t

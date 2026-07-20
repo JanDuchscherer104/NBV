@@ -168,13 +168,13 @@ The implementation crops mesh faces when any vertex lies inside the oriented tar
 The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
 
 $
-  #eqs.entity.target_rri_reward
+  #eqs.rl.target_rri_reward
 $
 
 The finite-horizon return is the discounted sum of those target rewards along a selected counterfactual branch. It is a training target for #symb.rl.qh, not a claim that the deployed system has an online continuous-control policy:
 
 $
-  #eqs.entity.finite_horizon_return
+  #eqs.rl.finite_horizon_return
 $
 
 Endpoint gain is the primary fixed-budget comparison metric because it measures the target quality after the same number of acquisitions for each policy:

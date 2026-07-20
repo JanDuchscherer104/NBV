@@ -13,22 +13,28 @@
     #symb.spatial.sh_basis (bold(d)_k (bold(v)))
   $,
   direction_memory_moment: $
+    bold(mu)_t^"dir" (bold(v))
+    =
+    (sum_(k < t) w_k (bold(v)) bold(d)_k (bold(v)))
+    /
+    (sum_(k < t) w_k (bold(v)) + epsilon),
+    quad
     #symb.spatial.dir_moment (bold(v))
     =
-    sum_(k < t) w_k (bold(v))
-    bold(d)_k (bold(v)) (bold(d)_k (bold(v)))^top
+    (sum_(k < t) w_k (bold(v))
+    bold(d)_k (bold(v)) (bold(d)_k (bold(v)))^top)
+    /
+    (sum_(k < t) w_k (bold(v)) + epsilon)
   $,
   direction_novelty: $
-    nu_(t,i)^"dir" (bold(v))
+    bold(phi)_(t,i)^"dir" (bold(v))
     =
-    1 -
-    (
-    (bold(d)_(t,i) (bold(v)))^top
-    #symb.spatial.dir_moment (bold(v))
-    bold(d)_(t,i) (bold(v))
+    op("concat") (
+      (bold(d)_(t,i) (bold(v)))^top bold(mu)_t^"dir" (bold(v)),
+      (bold(d)_(t,i) (bold(v)))^top
+      #symb.spatial.dir_moment (bold(v))
+      bold(d)_(t,i) (bold(v))
     )
-    /
-    (op("tr") (#symb.spatial.dir_moment (bold(v))) + epsilon)
   $,
   candidate_reference_transform: $
     #symb.spatial.ref_candidate_transform

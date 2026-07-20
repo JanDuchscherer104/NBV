@@ -1,6 +1,7 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
+#import "../../draft_markers.typ": thesis_status
 #import "@preview/booktabs:0.0.4": *
 
 == Replay Eligibility and Learning Gate
@@ -44,7 +45,15 @@ All eligible candidate rows can support one-step supervision. Finite-horizon tem
     [completed held-out paired comparison under equal budget], bottomrule(),
   ),
   caption: [Learning-readiness gates. Data-contract evidence does not substitute for an implemented and evaluated policy.],
-) <tab:seminar-to-thesis-evidence>
+) <tab:thesis-learning-readiness>
+
+#thesis_status(
+  implementation: "planned",
+  evidence: "pending",
+  citation: [@DoubleDQN-vanHasselt2015],
+  source: "aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
+  gate: [finite-horizon reader, learner, checkpoint, and held-out oracle re-evaluation],
+)[The replay tensors required for a masked Double-Q learner exist; the learner and policy evidence do not.]
 
 The intended finite-candidate value model decodes actions only over valid candidate tokens:
 
@@ -56,7 +65,7 @@ $
   #eqs.rl.qh_masked_argmax
 $
 
-The planned first backup is fitted masked Double-Q @DoubleDQN-vanHasselt2015. Here $d_t=1$ at horizon termination, budget termination, or when no valid successor action exists:
+The planned first backup is fitted masked Double-Q @DoubleDQN-vanHasselt2015. Here $d_t=1$ at horizon termination, budget termination, or when no valid successor action exists. The boundary value $Q_(0,e)=0$ makes a one-step target non-bootstrapping by definition:
 
 $
   #eqs.rl.qh_doubleq_index

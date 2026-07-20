@@ -74,24 +74,12 @@
     +
     #symb.entity.target_error_mp
   $,
-  target_rri_reward: $
-    #symb.entity.target_reward
-    =
-    (#symb.entity.target_error - #symb.entity.target_error_next)
-    /
-    (#symb.entity.target_error_0 + epsilon)
-  $,
   state_relative_rri: $
     r_(t,"state")^e
     =
     (#symb.entity.target_error - #symb.entity.target_error_next)
     /
     (#symb.entity.target_error + epsilon)
-  $,
-  finite_horizon_return: $
-    #symb.entity.return_h
-    =
-    sum_(k=0)^(H - 1) gamma^k r_(t+k)^e
   $,
   endpoint_gain: $
     #symb.entity.endpoint_gain

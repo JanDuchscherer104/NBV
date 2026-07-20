@@ -521,7 +521,7 @@
           #v(0.2em)
           #text(size: 11.6pt)[
             $
-              #eqs.features.qh_scene_memory
+              #eqs.scene.qh_scene_memory
               \
               #eqs.features.point_dino_token
             $
@@ -536,7 +536,7 @@
 
           #v(0.18em)
           $
-            #eqs.features.candidate_query_pools
+            #eqs.scene.candidate_query_pools
           $
 
           #v(0.22em)
@@ -596,7 +596,7 @@
           $
             #eqs.entity.target_descriptor
             \
-            #eqs.features.candidate_pose_features
+            #eqs.spatial.candidate_pose_features
           $
         ]
         #v(0.12em)

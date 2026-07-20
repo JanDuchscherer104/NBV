@@ -1,8 +1,16 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
+#import "../../draft_markers.typ": thesis_status, validation_todo, decision_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Policy Comparison and Statistical Protocol
+
+#thesis_status(
+  implementation: "partial",
+  evidence: "pending",
+  source: "aria_nbv/aria_nbv/rollouts/reporting.py; docs/typst/thesis/experiment_data.typ",
+  gate: [frozen held-out manifest, completed paired endpoints, and validated report bundle],
+)[The aggregation and artifact-driven reporting seam exists, but confirmatory paired policy evidence does not.]
 
 The experimental unit is the scene. Every comparison is paired by scene, target task, root state, candidate-generation distribution, hard validity regime, and acquisition horizon. Planner depth may differ because it defines the decision rule, but every policy receives the same acquisition budget. Repeated snippets, targets, and seeds are aggregated within scene before the primary comparison so that densely sampled scenes do not dominate the estimand.
 
@@ -27,6 +35,24 @@ Support and failure strata are fixed before policy inspection. The report distin
 ) <tab:thesis-policy-comparison>
 
 The first inferential comparison is bounded oracle lookahead against one-step oracle greedy. Repeated oracle evaluation estimates the metric noise floor, and the analysis artifact freezes the meaningful-headroom rule before learned-policy inspection. Recovered-headroom ratios are reported only when their denominator passes that gate. The learned comparison then contrasts #symb.rl.qh with the actor-visible myopic control under the same endpoint evaluation and acquisition budget; because neither learned target-conditioned control is presently complete, this comparison remains prospective.
+
+#validation_todo(
+  [Populate the evidence chain in order: metric repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon recovery, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
+  source: [thesis objective-to-evidence contract],
+  gate: [artifact-backed Results bundle],
+)
+
+#validation_todo(
+  [Run row-shuffle, mask-isolation, duplicate-row, valid-count, frame-transform, target-source-dropout, and horizon-boundary tests for every model admitted to the policy comparison.],
+  source: [geometric acceptance contract],
+  gate: [architecture validity report],
+)
+
+#decision_todo(
+  [Freeze the scene aggregation, interval procedure, interval level, comparison family, and meaningful-headroom threshold in the resolved analysis manifest rather than in thesis prose.],
+  source: [artifact-driven reporting plan],
+  gate: [confirmatory analysis freeze],
+)
 
 == Outcome Logic
 

@@ -1,6 +1,18 @@
 #import "../symbols.typ": symb
 
 #let scene = (
+  actor_state_read: $
+    bold(h)_(t,e,i)
+    =
+    op("Read")(
+      #symb.scene.scene_memory_t,
+      #symb.model.target_token,
+      q_(t,i),
+      bold(H)_t,
+      t,
+      #symb.rl.H
+    )
+  $,
   evl_local_support_read: $
     #symb.scene.evl_support_frac
     =
@@ -48,7 +60,7 @@
       bold(W)_(t,i)^"target",
       bold(C)_(t,i)^"support",
       bold(Sigma)_(t,i)^"geom",
-      nu_(t,i)^"dir"
+      bold(phi)_(t,i)^"dir"
     )
   $,
   ray_memory_update: $
@@ -56,8 +68,10 @@
     =
     op("Fuse")(
       #symb.scene.ray_memory_t,
-      #symb.obs.points_cand_ti,
-      #symb.obs.selected_rays_ti
-    )
+      bold(P)_(t+1)^"selected-obs" (a_t),
+      cal(R)_(t+1)^"selected-obs" (a_t)
+    ),
+    quad
+    a_t in cal(A)_t
   $,
 )
