@@ -1,8 +1,8 @@
 // ARIA-NBV thesis metadata. Unknown registration fields remain absent until
 // they are confirmed by the owner.
 
-#let titleEnglish = "Aria-NBV: Quality-Driven Next-Best-View Planning with Egocentric Foundation Models"
-#let titleGerman = "Aria-NBV: Qualitätsgetriebene Next-Best-View-Planung mit egozentrischen Foundation-Modellen"
+#let titleEnglish = "Quality-Driven Next-Best-View Planning for Target-Conditioned Egocentric 3D Reconstruction"
+#let titleGerman = "Qualitätsgetriebene Next-Best-View-Planung für zielkonditionierte egozentrische 3D-Rekonstruktion"
 
 #let thesisKindEnglish = "Master's Thesis"
 #let thesisKindGerman = "Masterarbeit"
@@ -16,7 +16,7 @@
 #let matriculationNumber = "00807819"
 
 #let firstExaminer = "Prof. Dr. Markus Friedrich"
-#let secondExaminer = ""
+#let secondExaminer = "Prof. Dr. David Spieler"
 #let supervisors = ("Prof. Dr. Markus Friedrich",)
 #let examiner = firstExaminer
 
@@ -28,6 +28,6 @@
 #let department = facultyEnglish
 #let location = "Munich, Germany"
 
-#let startDate = none
-#let submissionDate = none
-#let submissionDateText = ""
+#let startDate = datetime(day: 07, month: 07, year: 2026)
+#let submissionDate = datetime(day: 07, month: 01, year: 2027)
+#let submissionDateText = submissionDate.display("[day padding:none]. [month repr:short] [year]")
