@@ -8,7 +8,7 @@
 
 The factual rollout tables determine which records may supervise each learning problem. `valid_action_mask` defines actor-selectable actions. The stricter `q_train_mask` additionally requires a valid target/GT label state and finite target-root-gain and diagnostic target-RRI labels. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
 
-All eligible candidate rows can support one-step supervision. Finite-horizon temporal-difference supervision is narrower: the factual selected action must have a stored reward, successor step identifier, terminal flag, and discount, and the successor must expose a reproducible candidate table and hard mask. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions. The replay pipeline in @fig:qh-rollout-replay-doubleq visualizes this distinction.
+All eligible candidate rows can support one-step supervision. Finite-horizon temporal-difference supervision is narrower: the factual selected action must have a stored reward, terminal flag, and discount. A nonterminal transition additionally requires a valid successor step identifier whose state exposes a reproducible candidate table and hard mask; a terminal transition instead carries no successor id and has zero bootstrap discount. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions. The replay pipeline in @fig:qh-rollout-replay-doubleq visualizes this distinction.
 
 #figure(
   table(
@@ -23,7 +23,7 @@ All eligible candidate rows can support one-step supervision. Finite-horizon tem
     [`q_train_mask`], [admit one-step labels],
     [actor-selectable rows with valid target state and finite target labels],
     [selected transitions], [admit TD linkage],
-    [reward, successor id, terminal flag, discount, and successor mask],
+    [reward, terminal flag, discount, and—when nonterminal—successor id and mask],
     bottomrule(),
   ),
   caption: [Required support evidence. Each narrower learning surface inherits the validity requirements above it.],
@@ -86,7 +86,7 @@ $
     "../../figures/qh_learning_evidence_loop.pdf",
     width: 100%,
   ),
-  caption: [Selected-transition replay contract for #symb.rl.qh. All valid candidates can receive one-step oracle target labels, but bootstrapped finite-horizon targets require materialized selected actions, successor counterfactual state, regenerated successor candidate tables, masks, terminal flags, and masked Double-Q targets.],
+  caption: [Factual replay lineage and planned masked Double-Q computation. Panel A contains only implemented evidence: every candidate row admitted by its row-wise `q_train_mask` entry may carry a one-step oracle label, whereas TD admission additionally requires that the selected candidate entry is train-valid and that factual transition fields identify either a valid successor or a terminal transition. Panel B states the proposed masked backup mathematically and is not evidence that a learner, residual head, or policy evaluation already exists.],
 ) <fig:qh-rollout-replay-doubleq>
 
 The repository currently implements the replay and mask contract but not the finite-horizon learner. Consequently, rollout audits may establish data readiness and oracle headroom, whereas #symb.rl.qh policy performance remains outside the supported evidence until a learner and matched held-out evaluation exist.

@@ -79,7 +79,7 @@ The sampler draws a capped direction in the reference rig frame and reinterprets
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
   )),
-  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A places the logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. This is an auditable contract example, not a policy-performance result.],
+  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. This is an auditable contract example, not a policy-performance result.],
 ) <fig:candidate-generation-geometry>
 
 The three core position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
@@ -127,7 +127,7 @@ Bounded oracle lookahead can select a different first action from one-step greed
     "../../figures/oracle_lookahead_tree.pdf",
     width: 100%,
   )),
-  caption: [Bounded oracle-lookahead tree used as a rollout reference. Valid first-action rows may be expanded into selected-depth successor states and scored by cumulative root-normalized return #symb.rl.return_h; invalid rows are hard-masked and receive no branch. The selected first action can differ from the one-step greedy winner when a lower immediate reward opens a better second-step target view.],
+  caption: [Constructed symbolic topology of the bounded oracle-lookahead reference. Nodes are counterfactual states and edge labels are candidate actions with immediate rewards. Only valid first-action rows produce children; the beam retains a bounded prefix set, and invalid rows receive no branch. The inequalities illustrate how the selected first action can differ from one-step greedy without inventing measured reward values.],
 ) <fig:oracle-lookahead-tree>
 
 For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is

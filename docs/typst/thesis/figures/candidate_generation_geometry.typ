@@ -147,7 +147,7 @@
   gutter: 3.2mm,
   panel(
     [A. One decision state in its ASE scene],
-    [logged RGB-camera history, oracle target OBB, and a thinned candidate overlay],
+    [35° vertical-FOV perspective; logged history, target OBB, and thinned candidates],
     scene-canvas(data.at("oblique"), mode: "oblique"),
     [
       #text(size: 7.2pt, fill: muted)[
@@ -158,7 +158,7 @@
   ),
   panel(
     [B. Full finite action set in bird's-eye view],
-    [all candidate centres retain shell identity; invalid rows lie outside the admissible set],
+    [orthographic 7.8 m-wide BEV; all centres retain shell identity and validity],
     scene-canvas(data.at("top"), mode: "top"),
     [
       #grid(

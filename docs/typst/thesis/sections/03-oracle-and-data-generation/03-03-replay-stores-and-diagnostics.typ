@@ -1,48 +1,22 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
-#import "../../../shared/data-layout-trees.typ": *
 #import "@preview/booktabs:0.0.4": *
 
 == Replay Stores and Diagnostic Evidence
 
 The pipeline materializes two stores with different ownership. Immutable `vin_offline/` caches logged snippet evidence and expensive one-step oracle products. Standalone `rollouts.zarr/` references those source rows and stores target tasks, retained rollout chains, per-step finite candidate shells, masks, reason codes, selected-action successor evidence, and a derived #symb.rl.qh view. This separation prevents counterfactual experiments from mutating the source substrate and prevents one-step candidate labels from being mistaken for multi-step replay.
 
-The source store is immutable because it defines the logged actor substrate. Its manifest records source identity, split, schema, materialized blocks, and provenance. A source row may contain frozen EVL/VIN fields, one-step candidate poses and labels, compact rendering payloads, and semidense geometry/history. These fields support scorer training and rollout construction, but they do not themselves define target-conditioned finite-horizon data.
-
-#figure(
-  vin-offline-tree(
-    compact: true,
-    text-size: 6.9pt,
-    node-width: 15.5em,
-    spacing: (6pt, 8pt),
-    orientation: "lr",
-  ),
-  caption: [Immutable VIN offline-store schema. Row-aligned Zarr arrays store tensor fields, while indexed MessagePack blocks retain variable diagnostics. The main text needs the row roles and actor/oracle boundary; version-specific layout belongs in the resolved reproducibility record.],
-) <fig:vin-offline-store-layout>
+The source store is immutable because it defines the logged actor substrate. Its manifest records source identity, split, schema, materialized blocks, and provenance. A source row may contain frozen EVL/VIN fields, one-step candidate poses and labels, compact rendering payloads, and semidense geometry/history. These fields support scorer training and rollout construction, but they do not themselves define target-conditioned finite-horizon data. Exact directory names, array groups, chunking, and codec choices are versioned reproducibility metadata rather than scientific entities, so they are not reproduced as directory-tree figures in the main text.
 
 The rollout store is normalized around replay identity. One source can produce multiple target rows, each target can produce multiple recipe and retained-chain rows, each chain expands into selected steps, and each step owns a full candidate shell. The store therefore captures selected or beam-retained chain evidence, not the complete counterfactual search tree. Padded `q_h/` arrays are a validated cache over the factual row tables. Invalid candidate rows remain inspectable, but action, training, and bootstrap masks exclude them.
 
 #figure(
-  offline-rollout-relation-tree(
-    compact: true,
-    text-size: 6.9pt,
-    node-width: 16.5em,
-    spacing: (6pt, 9pt),
-    orientation: "lr",
-  ),
-  caption: [Relation between immutable VIN rows and target-conditioned replay. `rollouts.zarr/` stores joins, target tasks, retained chains, full per-step candidate shells, selected-depth successor history, and a derived #symb.rl.qh view without rewriting the source store.],
+  align(center, image(
+    "../../figures/replay_lineage_relations.pdf",
+    width: 100%,
+  )),
+  caption: [Normalized lineage of the implemented replay evidence. An immutable VIN source row may define several oracle target tasks; each target may produce several retained policy chains; each chain contains ordered steps; and each step owns one full candidate shell. The step row may identify one chosen candidate through `selected_candidate_row_id`; selected-action successor and TD fields are then constructed in the derived `q_h/` join rather than persisted as a separate transition table.],
 ) <fig:offline-rollout-store-relation>
-
-#figure(
-  rollout-zarr-tree(
-    compact: true,
-    text-size: 6.3pt,
-    node-width: 16.7em,
-    spacing: (6pt, 8pt),
-    orientation: "lr",
-  ),
-  caption: [Implemented rollout replay schema. Row tables are the facts; `q_h/` is a dense training cache validated against steps, candidates, retained chains, and targets.],
-) <fig:rollout-replay-store-layout>
 
 #figure(
   table(

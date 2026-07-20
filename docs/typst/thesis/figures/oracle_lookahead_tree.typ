@@ -24,18 +24,6 @@
   corner-radius: 4pt,
 )
 
-#let row(pos, title, body, tint: valid, width: 30mm) = node(
-  pos,
-  align(center)[
-    #text(size: 7.8pt, weight: "bold")[#title] \
-    #text(size: 7.2pt, fill: ink)[#body]
-  ],
-  width: width,
-  fill: tint.lighten(84%),
-  stroke: .7pt + tint.darken(8%),
-  corner-radius: 4pt,
-)
-
 #let note(pos, body, tint: muted, width: 34mm) = node(
   pos,
   align(center)[#text(size: 7.0pt, fill: tint.darken(10%))[#body]],
@@ -43,6 +31,16 @@
   fill: tint.lighten(90%),
   stroke: .52pt + tint.lighten(28%),
   corner-radius: 3pt,
+)
+
+#let transition(from, to, action, tint: muted, dash: none, thickness: .85pt) = edge(
+  from,
+  to,
+  "-|>",
+  label: text(size: 7pt, fill: tint.darken(8%))[#action],
+  label-fill: white,
+  stroke: thickness + tint,
+  dash: dash,
 )
 
 #diagram(
@@ -54,69 +52,54 @@
 
   block((2.6, 0), [root state], [
     $s_t$, target $e$ \
-    finite table $cal(Q)_t$
+    valid rows $cal(A)_t$
   ], tint: state, width: 32mm),
 
-  row((0, 1.35), [$q_(t,1)$], [
-    $m=1$, $r_0=0.32$ \
-    myopic winner
-  ], tint: valid),
-  row((1.75, 1.35), [$q_(t,2)$], [
-    $m=1$, $r_0=0.24$ \
-    opens target side
-  ], tint: selected),
-  row((3.5, 1.35), [$q_(t,3)$], [
-    $m=1$, $r_0=0.13$ \
-    lower prefix
-  ], tint: valid),
-  row((5.25, 1.35), [$q_(t,4)$], [
-    $m=0$, $rho="path"$ \
-    hard mask
-  ], tint: invalid),
+  block((0.55, 1.75), [successor state], [
+    $s_(t+1)^((1))$ \
+    regenerated table
+  ], tint: valid, width: 34mm),
+  block((2.6, 1.75), [successor state], [
+    $s_(t+1)^((2))$ \
+    regenerated table
+  ], tint: selected, width: 34mm),
+  block((4.65, 1.75), [legal, not retained], [
+    $s_(t+1)^((3))$ \
+    outside beam $B=2$
+  ], tint: muted, width: 36mm),
 
-  note((2.6, 2.35), [
-    beam $B=2$ retains \
-    valid prefixes $q_1,q_2$
+  block((0.55, 3.55), [depth-$2$ leaf], [
+    return $G_1^((2))$ \
+    terminal or horizon
+  ], tint: valid, width: 34mm),
+  block((2.6, 3.55), [depth-$2$ leaf], [
+    return $G_2^((2))$ \
+    terminal or horizon
+  ], tint: selected, width: 34mm),
+
+  note((4.9, .25), [
+    $q_(t,4): m_(t,4)=0$ \
+    invalid row; no child
+  ], tint: invalid, width: 35mm),
+  note((4.85, 3.55), [
+    constructed symbolic topology \
+    no measured reward is implied
   ], tint: beam, width: 40mm),
 
-  row((0.9, 3.35), [$q_1 -> q'_a$], [
-    continuation $+0.03$ \
-    $G^((2))=0.35$
-  ], tint: valid, width: 32mm),
-  row((2.9, 3.35), [$q_2 -> q'_b$], [
-    continuation $+0.23$ \
-    $G^((2))=0.47$
-  ], tint: selected, width: 32mm),
-  row((4.9, 3.35), [not expanded], [
-    valid row outside \
-    retained beam
-  ], tint: muted, width: 32mm),
+  block((.55, 4.8), [one-step greedy], [
+    $r_(t,1) > r_(t,2)$ \
+    selects first action $q_(t,1)$
+  ], tint: valid, width: 38mm),
+  block((2.75, 4.8), [bounded lookahead], [
+    $G_2^((2)) > G_1^((2))$ \
+    selects first action $q_(t,2)$
+  ], tint: selected, width: 42mm),
 
-  block((1.65, 4.75), [greedy label], [
-    one-step would \
-    choose $a_t=1$
-  ], tint: valid, width: 30mm),
-  block((3.55, 4.75), [lookahead label], [
-    best chain selects \
-    first action $a_t=2$
-  ], tint: selected, width: 36mm),
-  note((5.35, 4.75), [
-    invalid rows get \
-    no branch and no \
-    return target
-  ], tint: oracle, width: 32mm),
-
-  edge((2.6, 0), (0, 1.35), "-|>"),
-  edge((2.6, 0), (1.75, 1.35), "-|>"),
-  edge((2.6, 0), (3.5, 1.35), "-|>"),
-  edge((2.6, 0), (5.25, 1.35), "--|>"),
-  edge((0, 1.35), (2.6, 2.35), "-|>"),
-  edge((1.75, 1.35), (2.6, 2.35), "-|>"),
-  edge((2.6, 2.35), (0.9, 3.35), "-|>"),
-  edge((2.6, 2.35), (2.9, 3.35), "-|>"),
-  edge((3.5, 1.35), (4.9, 3.35), "--|>"),
-  edge((5.25, 1.35), (5.35, 4.75), "--|>"),
-  edge((0.9, 3.35), (1.65, 4.75), "--|>"),
-  edge((2.9, 3.35), (3.55, 4.75), "-|>"),
-  edge((0.9, 3.35), (3.55, 4.75), "--|>"),
+  transition((2.6, 0), (.55, 1.75), [$q_(t,1), r_(t,1)$], tint: valid),
+  transition((2.6, 0), (2.6, 1.75), [$q_(t,2), r_(t,2)$], tint: selected, thickness: 1.35pt),
+  transition((2.6, 0), (4.65, 1.75), [$q_(t,3), r_(t,3)$], dash: "dashed"),
+  transition((.55, 1.75), (.55, 3.55), [$q'_(1), r'_(1)$], tint: valid),
+  transition((2.6, 1.75), (2.6, 3.55), [$q'_(2), r'_(2)$], tint: selected, thickness: 1.35pt),
+  edge((.55, 3.55), (.55, 4.8), "--|>", stroke: .7pt + valid),
+  edge((2.6, 3.55), (2.75, 4.8), "-|>", stroke: 1.1pt + selected),
 )

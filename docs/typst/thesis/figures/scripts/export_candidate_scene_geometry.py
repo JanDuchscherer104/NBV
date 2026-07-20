@@ -49,6 +49,19 @@ SELECTED_SHELL = 47
 SOURCE_SAMPLE_INDEX = 35
 SCENE_ID = "81286"
 SNIPPET_ID = "AriaSyntheticEnvironment_81286_AtekDataSample_000035"
+RENDER_WIDTH_PX = 1500
+RENDER_HEIGHT_PX = 920
+OBLIQUE_VERTICAL_FOV_DEG = 35.0
+OBLIQUE_NEAR_M = 0.1
+OBLIQUE_FAR_M = 35.0
+OBLIQUE_CENTRE_WORLD = (-7.55, -8.82, 1.05)
+OBLIQUE_EYE_WORLD = (-0.15, -17.02, 6.85)
+TOP_CENTRE_WORLD = (-8.10, -8.90, 0.75)
+TOP_EYE_WORLD = (-8.10, -8.90, 14.75)
+TOP_HALF_WIDTH_M = 3.90
+TOP_HALF_HEIGHT_M = TOP_HALF_WIDTH_M / (RENDER_WIDTH_PX / RENDER_HEIGHT_PX)
+TOP_NEAR_M = 0.1
+TOP_FAR_M = 30.0
 
 FRUSTUM_LOCAL = np.asarray(
     [
@@ -219,11 +232,16 @@ def _render_oblique(
     renderer: o3d.visualization.rendering.OffscreenRenderer,
     output: Path,
 ) -> Projection:
-    width_px, height_px = 1500, 920
-    centre = np.asarray([-7.55, -8.82, 1.05], dtype=np.float32)
-    eye = centre + np.asarray([7.4, -8.2, 5.8], dtype=np.float32)
+    width_px, height_px = RENDER_WIDTH_PX, RENDER_HEIGHT_PX
+    centre = np.asarray(OBLIQUE_CENTRE_WORLD, dtype=np.float32)
+    eye = np.asarray(OBLIQUE_EYE_WORLD, dtype=np.float32)
     renderer.setup_camera(
-        35.0, centre, eye, np.asarray([0.0, 0.0, 1.0], dtype=np.float32), 0.1, 35.0
+        OBLIQUE_VERTICAL_FOV_DEG,
+        centre,
+        eye,
+        np.asarray([0.0, 0.0, 1.0], dtype=np.float32),
+        OBLIQUE_NEAR_M,
+        OBLIQUE_FAR_M,
     )
     image = renderer.render_to_image()
     o3d.io.write_image(str(output), image, quality=9)
@@ -240,23 +258,21 @@ def _render_top(
     renderer: o3d.visualization.rendering.OffscreenRenderer,
     output: Path,
 ) -> Projection:
-    width_px, height_px = 1500, 920
-    centre = np.asarray([-8.10, -8.90, 0.75], dtype=np.float32)
+    width_px, height_px = RENDER_WIDTH_PX, RENDER_HEIGHT_PX
+    centre = np.asarray(TOP_CENTRE_WORLD, dtype=np.float32)
     renderer.scene.camera.look_at(
         centre,
-        centre + np.asarray([0.0, 0.0, 14.0], dtype=np.float32),
+        np.asarray(TOP_EYE_WORLD, dtype=np.float32),
         np.asarray([0.0, 1.0, 0.0], dtype=np.float32),
     )
-    half_width = 3.90
-    half_height = half_width / (width_px / height_px)
     renderer.scene.camera.set_projection(
         o3d.visualization.rendering.Camera.Projection.Ortho,
-        -half_width,
-        half_width,
-        -half_height,
-        half_height,
-        0.1,
-        30.0,
+        -TOP_HALF_WIDTH_M,
+        TOP_HALF_WIDTH_M,
+        -TOP_HALF_HEIGHT_M,
+        TOP_HALF_HEIGHT_M,
+        TOP_NEAR_M,
+        TOP_FAR_M,
     )
     image = renderer.render_to_image()
     o3d.io.write_image(str(output), image, quality=9)
@@ -544,6 +560,29 @@ def main() -> None:
             "evidential_role": "auditable finite-candidate contract example, not a performance result",
             "frustum_primitive": "Viser five-vertex wire topology, Apache-2.0; no filled faces",
             "render_backend": f"Open3D {o3d.__version__} offscreen z-buffer; CeTZ overlays remain vector",
+            "view_contracts": {
+                "oblique": {
+                    "projection": "perspective",
+                    "vertical_fov_deg": OBLIQUE_VERTICAL_FOV_DEG,
+                    "near_m": OBLIQUE_NEAR_M,
+                    "far_m": OBLIQUE_FAR_M,
+                    "look_at_world_m": OBLIQUE_CENTRE_WORLD,
+                    "eye_world_m": OBLIQUE_EYE_WORLD,
+                    "up_world": (0.0, 0.0, 1.0),
+                    "resolution_px": (RENDER_WIDTH_PX, RENDER_HEIGHT_PX),
+                },
+                "bird_eye": {
+                    "projection": "orthographic",
+                    "width_m": 2.0 * TOP_HALF_WIDTH_M,
+                    "height_m": 2.0 * TOP_HALF_HEIGHT_M,
+                    "near_m": TOP_NEAR_M,
+                    "far_m": TOP_FAR_M,
+                    "look_at_world_m": TOP_CENTRE_WORLD,
+                    "eye_world_m": TOP_EYE_WORLD,
+                    "up_world": (0.0, 1.0, 0.0),
+                    "resolution_px": (RENDER_WIDTH_PX, RENDER_HEIGHT_PX),
+                },
+            },
         },
         "counts": {
             "candidates": int(valid.size),
