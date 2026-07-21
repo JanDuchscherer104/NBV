@@ -1,3 +1,8 @@
+---
+kind: plan
+status: accepted
+---
+
 # Thesis method-registry restoration ledger
 
 ## Scope and decision rule
