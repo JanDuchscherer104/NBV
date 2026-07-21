@@ -143,4 +143,3 @@ class SceneBundleSupervision:
 
 
 __all__ = ["ActorSceneBundle", "SceneBundleSupervision"]
-

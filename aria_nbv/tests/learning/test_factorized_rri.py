@@ -284,4 +284,3 @@ def test_loss_uses_both_actor_and_oracle_masks() -> None:
     assert hierarchical_masked_loss(prediction, supervision, pair_valid=pair_valid) == 1.0
     with pytest.raises(ValueError, match="at least one"):
         hierarchical_masked_loss(prediction, supervision, pair_valid=torch.zeros_like(pair_valid))
-
