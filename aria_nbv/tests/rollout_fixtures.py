@@ -22,6 +22,7 @@ from aria_nbv.rollouts.replay.engine import (
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
 from aria_nbv.rollouts.replay.state import CounterfactualTrajectory
 from aria_nbv.rollouts.trace import INVALID_REASON_VERSION, PolicyLineage, RolloutLineage, SourceLineage, TargetLineage
+from aria_nbv.targets.protocol import ORACLE_GT_TARGET_SOURCE
 from aria_nbv.utils.fingerprints import stable_config_hash
 
 if TYPE_CHECKING:
@@ -104,14 +105,14 @@ def build_rollout_records(
                         split_manifest_hash="fixture-split-manifest",
                     ),
                     target=TargetLineage(
-                        target_protocol_version="v1-observed",
+                        target_protocol_version="v0_gt_input",
                         target_crop_policy=TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1,
                         target_row_id=source_row_id,
                         target_id=f"fixture-target-{source_row_id}",
                         target_selection_policy="fixture_top_k",
                         target_selection_rank=source_row_id,
                         target_selection_score=1.0 - 0.1 * source_row_id,
-                        target_source="fixture_obbs",
+                        target_source=ORACLE_GT_TARGET_SOURCE,
                         target_source_index=source_row_id,
                         target_sem_id=source_row_id + 1,
                         target_inst_id=1000 + source_row_id,
@@ -128,6 +129,20 @@ def build_rollout_records(
                         target_center_world=(float(source_row_id), 0.0, 0.5),
                         target_extents=(0.4, 0.5, 0.6),
                         target_pose_world_object=(
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            float(source_row_id),
+                            0.0,
+                            0.5,
+                        ),
+                        target_relative_pose_reference_object=(
                             1.0,
                             0.0,
                             0.0,

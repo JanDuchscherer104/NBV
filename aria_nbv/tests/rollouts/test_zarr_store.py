@@ -49,7 +49,7 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
         tmp_path / "rollouts.zarr",
         records,
         discount_gamma=0.95,
-        target_protocol_version="v1-observed",
+        target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
         split_manifest_hash="fixture-split-manifest",
     )

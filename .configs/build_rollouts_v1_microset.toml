@@ -79,7 +79,7 @@ verbosity = 1
 
 [store]
 store_dir = "rollouts_v1_microset.zarr"
-target_protocol_version = "v1_observed"
+target_protocol_version = "v0_gt_input"
 field_retention_policy = "compact_selected_heavy"
 source_offline_store_version = "vin-offline-v7"
 split_manifest_hash = "configured-at-runtime"

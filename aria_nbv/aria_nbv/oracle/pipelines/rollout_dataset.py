@@ -60,6 +60,11 @@ from ...rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+from ...targets.protocol import (
+    TargetDescriptorProvenance,
+    TargetInputProtocol,
+    validate_target_protocol_admission,
+)
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from .evaluated_rollout import (
@@ -378,7 +383,7 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     store: RolloutZarrStoreConfig = Field(
         default_factory=lambda: RolloutZarrStoreConfig(
-            target_protocol_version="v1_observed",
+            target_protocol_version=TargetInputProtocol.V0_GT_INPUT,
             field_retention_policy="compact_selected_heavy",
         )
     )
@@ -409,6 +414,18 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Enable debug logging in writer dependencies."""
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
+
+    @model_validator(mode="after")
+    def _validate_target_protocol(self) -> "RolloutDatasetWriterConfig":
+        """Reject actor-visible protocol claims from the Oracle GT generator."""
+
+        validate_target_protocol_admission(
+            self.store.target_protocol_version,
+            target_source=ORACLE_TARGET_TASK_SOURCE,
+            descriptor_source=ORACLE_TARGET_TASK_SOURCE,
+            descriptor_provenance=TargetDescriptorProvenance.ORACLE_GT,
+        )
+        return self
 
     @field_validator("source_manifest_path", mode="before")
     @classmethod

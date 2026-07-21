@@ -30,6 +30,7 @@ from aria_nbv.rollouts import (
     RolloutZarrStoreConfig,
 )
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.targets.protocol import TargetInputProtocol
 from aria_nbv.utils.grad_norms import GradNormLoggingConfig
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 
@@ -87,3 +88,27 @@ def test_config_field_constraints_reject_invalid_values(
 ) -> None:
     with pytest.raises(ValidationError):
         factory(**kwargs)
+
+
+def test_rollout_store_target_protocol_default_and_roundtrip() -> None:
+    config = RolloutZarrStoreConfig()
+
+    assert config.target_protocol_version is TargetInputProtocol.V0_GT_INPUT
+    assert config.model_dump_jsonable()["target_protocol_version"] == "v0_gt_input"
+    assert (
+        RolloutZarrStoreConfig.model_validate_json(config.model_dump_json()).target_protocol_version
+        is TargetInputProtocol.V0_GT_INPUT
+    )
+
+
+@pytest.mark.parametrize("protocol", ["v1-observed", "unknown"])
+def test_rollout_store_config_rejects_noncanonical_target_protocol(protocol: str) -> None:
+    with pytest.raises(ValidationError, match="v0_gt_input.*v1_observed"):
+        RolloutZarrStoreConfig(target_protocol_version=protocol)
+
+
+def test_oracle_rollout_writer_rejects_observed_protocol() -> None:
+    assert RolloutDatasetWriterConfig().store.target_protocol_version is TargetInputProtocol.V0_GT_INPUT
+
+    with pytest.raises(ValidationError, match="v1_observed.*Oracle GT.*rebuild"):
+        RolloutDatasetWriterConfig(store=RolloutZarrStoreConfig(target_protocol_version="v1_observed"))
