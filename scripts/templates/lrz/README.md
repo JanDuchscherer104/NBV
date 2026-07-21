@@ -5,6 +5,15 @@ Most templates in this directory are dry-run contracts. The exception is
 launcher. It requires an explicit `sbatch --array=0-(NUM_SHARDS-1)` submission
 and a project environment prepared before the array starts.
 
+`qh_training_one_node.sbatch` is the real one-node Q_H training launcher. It
+starts one Pyxis container task with `srun`, then lets one standalone TorchRun
+launcher create one worker per allocated GPU through the checkout's prepared
+`.venv` with `uv run --frozen --no-sync`. Set `ARIA_DSS`, `ARIA_REPO`, and
+`QH_CONFIG`; optionally set `QH_RESUME` to an explicit full-state checkpoint.
+The script rejects missing or mismatched GPU allocation, multi-node/per-GPU
+task topology, missing frozen-environment preflights, and duplicate launcher
+invocations before entering the container.
+
 Before converting any template into a real job:
 
 1. Inspect current ARIA console entry points from the LRZ checkout.

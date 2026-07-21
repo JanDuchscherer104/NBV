@@ -18,3 +18,22 @@ offline source configuration is implemented by
 
 The `kind = "online"` and `kind = "offline"` discriminators and all nested
 TOML fields are frozen configuration contracts.
+
+## Finite-Horizon Q_H Training
+
+The target-conditioned rollout path is intentionally separate from the
+scene-wise one-step CORAL stack:
+
+- `qh_data.py` joins lazy rollout transitions with actor-only VIN evidence and
+  owns padded distributed training plus replicated exact validation/test
+  loading, avoiding uneven-rank DDP evaluation.
+- `qh_module.py` owns selected-action fitted Double-Q loss and the frozen hard-
+  synchronized target network.
+- `qh_experiment.py` and `qh_cli.py` compose the dedicated stack behind
+  `nbv-train-qh` without widening `VinLightningModule`.
+
+Use `.configs/train_qh_v0_smoke.toml` locally and
+`.configs/train_qh_v0_lrz.template.toml` with
+`scripts/templates/lrz/qh_training_one_node.sbatch` on one LRZ node. Replace
+all `/ABS/PATH/...` placeholders before running; resume from an explicit
+Lightning checkpoint with `--resume`.

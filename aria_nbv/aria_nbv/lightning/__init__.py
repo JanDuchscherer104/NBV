@@ -4,8 +4,11 @@ This package provides the config-as-factory experiment, data-module, training
 module, trainer, callback, and optimizer surfaces used by the runnable
 one-step CORAL scorer. It owns Lightning lifecycle and optimization wiring;
 actor-visible feature construction belongs to :mod:`aria_nbv.vin`, oracle
-labels belong to :mod:`aria_nbv.rri_metrics`, and full-shell finite-horizon
-``Q_H`` replay remains owned by :mod:`aria_nbv.rollouts`.
+labels belong to :mod:`aria_nbv.rri_metrics`, and the separate finite-horizon
+``Q_H`` stack remains leaf-owned by :mod:`aria_nbv.lightning.qh_data`,
+:mod:`aria_nbv.lightning.qh_module`, and
+:mod:`aria_nbv.lightning.qh_experiment` rather than widening the one-step
+package-root interface.
 """
 
 from .aria_nbv_experiment import AriaNBVExperimentConfig
