@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "boundary": "WP6",
+  "active_skills": [
+    "agents-db",
+    "aria-docs",
+    "aria-nbv-context",
+    "dataset-cache-ops",
+    "lrz-ai-systems",
+    "measured-autoresearch",
+    "plan-grill",
+    "python-docstrings",
+    "rerun-nbv-inspector"
+  ],
+  "removed_wp6_skills": [
+    "aria-litkg-memory",
+    "semantic-scholar-litkg"
+  ]
+}

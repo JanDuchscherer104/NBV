@@ -16,9 +16,8 @@ into the same scaffold that Codex and Gemini already use.
 4. The owning skill under `.agents/skills/<name>/SKILL.md` once the lane is known.
 
 ## Behavior
-- Apply the `agent-behavior` skill before any non-trivial change. Its principles
-  are: state assumptions, inspect the owner, narrowest sufficient edit,
-  preserve unrelated work, verify before claiming done.
+- For non-trivial changes: state assumptions, inspect the owner, make the
+  narrowest sufficient edit, preserve unrelated work, and verify before done.
 - Capture durable instruction in the smallest correct surface (`AGENTS.md`,
   `.agents/skills/*/SKILL.md`, `.agents/references/human_owner_intent.md`,
   the exact package/docs owner, or the agents DB via `make agents-db`).
@@ -29,7 +28,8 @@ into the same scaffold that Codex and Gemini already use.
 - Format/lint: `ruff format <file>` and `ruff check <file>`.
 - Tests: `cd aria_nbv && uv run pytest <path>`.
 - Memory + DB checks: `make check-agent-memory`, `make agents-db`.
-- KG (probationary): see `.agents/references/litkg_quick_reference.md`.
+- Exact-source inspection: `make context-contracts`, document outlines, targeted
+  `rg`, and `.agents/references/direct_source_claim_checklist.md`.
 
 ## Claude-Specific Surfaces
 - Slash commands: `.claude/commands/` mirrors the most-used scaffold verbs.

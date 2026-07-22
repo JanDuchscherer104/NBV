@@ -1,12 +1,9 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
-.PHONY: context-qmd-tree qmd-frontmatter-check
-.PHONY: context-index context-get context-contracts context-modules context-classes context-functions
-.PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
-.PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
-.PHONY: memory-mine agents-db glossary kg-up kg-down kg-status kg-capabilities kg-ollama-check kg-search kg-route kg-claim-check kg-consolidate kg-show-paper kg-sync kg-materialize kg-index-code kg-ingest-docs kg-load-bundle kg-mcp-install kg-doctor kg-enrich kg-ingest-papers kg-export-neo4j kg-semantic-enrich kg-refresh-light kg-refresh-code kg-refresh-lit kg-refresh-semantic kg-refresh-full
+.PHONY: context-qmd-tree context-contracts context-qmd-outline context-typst-outline context-typst-includes context-dir-tree uml qmd-frontmatter-check
+.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test scaffold-audit scaffold-audit-self-test wp6-direct-source-check check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
 .PHONY: offline-info offline-tree offline-samples offline-random-index offline-rerun-random offline-sample-rerun-random
@@ -43,23 +40,12 @@ PYTHON_INTERPRETER ?= $(VENV_PYTHON)
 FORCE_ACTIV_CONDA_ENV ?= 0  # set to 1 only if you insist on the old conda env check
 CONDA_ENV_NAME ?= aria-nbv       # legacy: expected conda env name
 QMD_FORMATTER := scripts/format_qmd_lists.py
-CONTEXT_DIR ?= docs/_generated/context
-CONTEXT_OUT ?= $(CONTEXT_DIR)/context_snapshot.md
-CONTEXT_INDEX_OUT ?= $(CONTEXT_DIR)/source_index.md
-CONTEXT_UML_OUT ?= $(CONTEXT_DIR)/aria_nbv_uml.mmd
-CONTEXT_UML_FILTERED_OUT ?= $(CONTEXT_DIR)/aria_nbv_filtered_uml.mmd
-CONTEXT_DOCSTRINGS_OUT ?= $(CONTEXT_DIR)/aria_nbv_class_docstrings.md
-CONTEXT_CONTRACTS_OUT ?= $(CONTEXT_DIR)/data_contracts.md
-CONTEXT_TREE_OUT ?= $(CONTEXT_DIR)/aria_nbv_tree.md
-CONTEXT_MERMAID_EXCLUDE ?= data.downloader,vin.experimental,app
-LITERATURE_INDEX_OUT ?= $(CONTEXT_DIR)/literature_index.md
-GET_CONTEXT_MODE ?= packages
-GET_CONTEXT_QUERY ?=
-GET_CONTEXT_ROOT ?=
 QMD_OUTLINE_ARGS ?= --compact
 TYPST_OUTLINE_ARGS ?= --paper --mode outline
 TYPST_INCLUDES_ARGS ?= --paper --mode includes
-LITERATURE_SEARCH_QUERY ?=
+UML_ROOT ?=
+UML_OUT ?=
+UML_PYTHON ?= $(PYTHON_INTERPRETER)
 MIGRATE_CODEX_MEMORY_ARGS ?=
 CODEX_TRANSCRIPT_ARGS ?=
 MMDC ?= mmdc
@@ -73,26 +59,6 @@ LRZ_SKILL_DIR ?= .agents/skills/lrz-ai-systems
 LRZ_SCRIPTS_DIR ?= $(LRZ_SKILL_DIR)/scripts
 LRZ_RESOURCES_ARGS ?= summary
 LRZ_CMD ?=
-LITKG_MANIFEST ?= .agents/external/litkg-rs/Cargo.toml
-LITKG_CONFIG ?= .configs/litkg.toml
-LITKG_REPO_ROOT ?= .
-LITKG_PROFILE ?= thesis-coding
-KG_BUNDLE_ROOT ?= .agents/kg/generated/neo4j-export
-KG_QUERY ?=
-KG_TOPIC ?=
-KG_TASK ?=
-KG_CLAIM ?=
-KG_RELATED_PATH ?=
-KG_PAPER ?=
-KG_LIMIT ?= 24
-KG_FORMAT ?= text
-KG_MODALITY ?=
-KG_DOC_PATHS ?=
-KG_DOCTOR_ARGS ?=
-comma := ,
-empty :=
-space := $(empty) $(empty)
-KG_MODALITY_ARGS = $(foreach modality,$(subst $(comma),$(space),$(strip $(KG_MODALITY))),--modality $(modality))
 PACKAGE_SMOKE_RUFF_PATHS := \
 	aria_nbv/app/panels/vin_diagnostics_runtime.py \
 	aria_nbv/data_handling/offline/writer.py \
@@ -142,60 +108,17 @@ _check_python:
 	fi
 	@echo "$(GREEN)Using python: $(PYTHON_INTERPRETER)$(NC)"
 
-context-package: _check_python ## 🗺️ Summarize symbols per module (classes/functions/constants)
-	@$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py packages --root aria_nbv/aria_nbv
-
-context-index: ## 🗺️ Regenerate docs/_generated/context/source_index.md
-	@./scripts/nbv_context_index.sh "$(CONTEXT_INDEX_OUT)"
-
-context-get: _check_python ## 🗺️ Run AST context helper (GET_CONTEXT_MODE, optional GET_CONTEXT_QUERY / GET_CONTEXT_ROOT)
-	@bash -lc 'set -euo pipefail; \
-		args=("$(GET_CONTEXT_MODE)"); \
-		if [[ -n "$(strip $(GET_CONTEXT_QUERY))" ]]; then \
-			args+=("$(GET_CONTEXT_QUERY)"); \
-		fi; \
-		if [[ -n "$(strip $(GET_CONTEXT_ROOT))" ]]; then \
-			args+=("$(GET_CONTEXT_ROOT)"); \
-		fi; \
-		./scripts/nbv_get_context.sh "$${args[@]}"'
-
 context-contracts: _check_python ## 🗺️ Show data/config contract index for aria_nbv
-	@./scripts/nbv_get_context.sh contracts
-
-context-modules: _check_python ## 🗺️ Show aria_nbv module map
-	@./scripts/nbv_get_context.sh modules
-
-context-classes: _check_python ## 🗺️ Show class summaries for aria_nbv
-	@./scripts/nbv_get_context.sh classes
-
-context-functions: _check_python ## 🗺️ Show public function summaries for aria_nbv
-	@./scripts/nbv_get_context.sh functions
-
-context-match: _check_python ## 🗺️ Search AST summaries (set GET_CONTEXT_QUERY=<term>)
-	@if [ -z "$(strip $(GET_CONTEXT_QUERY))" ]; then \
-		echo "$(RED)GET_CONTEXT_QUERY is required, e.g. make context-match GET_CONTEXT_QUERY=VinPrediction$(NC)"; \
-		exit 2; \
-	fi
-	@./scripts/nbv_get_context.sh match "$(GET_CONTEXT_QUERY)"
+	@$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py --root aria_nbv/aria_nbv
 
 context-qmd-outline: _check_python ## 🗺️ Outline Quarto pages (QMD_OUTLINE_ARGS='--compact' by default)
 	@./scripts/nbv_qmd_outline.sh $(QMD_OUTLINE_ARGS)
 
 context-typst-outline: _check_python ## 🗺️ Outline Typst paper/slides (TYPST_OUTLINE_ARGS='--paper --mode outline')
-	@$(PYTHON_INTERPRETER) ./scripts/nbv_typst_includes.py $(TYPST_OUTLINE_ARGS)
+	@$(PYTHON_INTERPRETER) .agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py $(TYPST_OUTLINE_ARGS)
 
 context-typst-includes: _check_python ## 🗺️ Print Typst include edges (TYPST_INCLUDES_ARGS='--paper --mode includes')
-	@$(PYTHON_INTERPRETER) ./scripts/nbv_typst_includes.py $(TYPST_INCLUDES_ARGS)
-
-context-literature-index: ## 🗺️ Regenerate docs/_generated/context/literature_index.md
-	@./scripts/nbv_literature_index.sh "$(LITERATURE_INDEX_OUT)"
-
-context-literature-search: ## 🗺️ Search literature sources (set LITERATURE_SEARCH_QUERY=<term>)
-	@if [ -z "$(strip $(LITERATURE_SEARCH_QUERY))" ]; then \
-		echo "$(RED)LITERATURE_SEARCH_QUERY is required, e.g. make context-literature-search LITERATURE_SEARCH_QUERY=GenNBV$(NC)"; \
-		exit 2; \
-	fi
-	@./scripts/nbv_literature_search.sh "$(LITERATURE_SEARCH_QUERY)"
+	@$(PYTHON_INTERPRETER) .agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py $(TYPST_INCLUDES_ARGS)
 
 migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into .agents/memory
 	@$(PYTHON_INTERPRETER) scripts/migrate_codex_memory.py $(MIGRATE_CODEX_MEMORY_ARGS)
@@ -222,6 +145,9 @@ scaffold-audit: scaffold-wp0-baseline _check_python ## 🧭 Validate agent skill
 
 scaffold-audit-self-test: scaffold-wp0-baseline-self-test _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
+
+wp6-direct-source-check: ## 🧭 Verify retired routes, preserved literature, exact-source fallback, claims, and scoped UML
+	@PYTHON_INTERPRETER="$(PYTHON_INTERPRETER)" ./scripts/tests/test_wp6_direct_source.sh
 
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
@@ -260,7 +186,7 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude Code activation
 	@scripts/sync_claude_skills.sh
 
-install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
+install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
 		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
@@ -376,180 +302,6 @@ memory-mine: _check_python ## 🧠 Mine current repo state (docs, code, history)
 	@$(PYTHON_INTERPRETER) -m mempalace --palace .artifacts/mempalace/palace mine .agents/memory --mode convos
 	@echo "$(GREEN)MemPalace mining complete.$(NC)"
 
-kg-up: ## 📚 Start the optional litkg Neo4j runtime
-	@.agents/external/litkg-rs/scripts/kg/up.sh
-
-kg-down: ## 📚 Stop the optional litkg Neo4j runtime
-	@.agents/external/litkg-rs/scripts/kg/down.sh
-
-kg-status: ## 📚 Fast 0/1 litkg health probe (no full capabilities run); prints reason on stderr
-	@scripts/kg/status.sh
-
-kg-capabilities: ## 📚 Show litkg backend/source readiness (set KG_FORMAT=json for machine output)
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- capabilities \
-		--config "$(LITKG_CONFIG)" \
-		--repo-root "$(LITKG_REPO_ROOT)" \
-		--format "$(KG_FORMAT)"
-
-kg-ollama-check: ## 📚 Validate Mac/remote Ollama model endpoint for litkg runtime refresh
-	@python3 .agents/external/litkg-rs/scripts/kg/ollama_http.py check \
-		--config "$(LITKG_CONFIG)"
-
-kg-search: ## 📚 Search litkg-indexed code/docs/memory/backlog/literature (set KG_QUERY='...'; KG_MODALITY='literature,docs'; KG_VERBOSE=1 or KG_FORMAT=json for full payload)
-	@if [ -z "$(strip $(KG_QUERY))" ]; then \
-		echo "$(RED)KG_QUERY is required, e.g. make kg-search KG_QUERY='entity-aware RRI'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ] || [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg find \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--limit "$(KG_LIMIT)" \
-			$(KG_MODALITY_ARGS) \
-			--format "$(KG_FORMAT)" \
-			"$(KG_QUERY)"; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg find \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--limit "$(KG_LIMIT)" \
-			$(KG_MODALITY_ARGS) \
-			--format json \
-			"$(KG_QUERY)" | jq -r -f scripts/kg/compact_search.jq; \
-	fi
-
-kg-route: ## 📚 Route a broad task through litkg evidence and backlog (set KG_TASK='...'; KG_VERBOSE=1 for legacy full payload, KG_FORMAT=json for lean JSON)
-	@if [ -z "$(strip $(KG_TASK))" ]; then \
-		echo "$(RED)KG_TASK is required, e.g. make kg-route KG_TASK='debug candidate pose frame mismatch'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format "$(or $(KG_FORMAT),json)" \
-			--full; \
-	elif [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json | jq -r -f scripts/kg/compact_route.jq; \
-	fi
-
-kg-claim-check: ## 📚 Claim-check against litkg context (set KG_CLAIM='...'; KG_VERBOSE=1 for legacy full payload, KG_FORMAT=json for lean JSON)
-	@if [ -z "$(strip $(KG_CLAIM))" ]; then \
-		echo "$(RED)KG_CLAIM is required, e.g. make kg-claim-check KG_CLAIM='ARIA-NBV is an end-to-end policy'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format "$(or $(KG_FORMAT),json)" \
-			--full; \
-	elif [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json | jq -r -f scripts/kg/compact_claim_check.jq; \
-	fi
-
-kg-consolidate: ## 📚 Propose memory/backlog consolidation updates without editing files
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg consolidate \
-		--config "$(LITKG_CONFIG)" \
-		--repo-root "$(LITKG_REPO_ROOT)" \
-		--format "$(KG_FORMAT)"
-
-kg-show-paper: ## 📚 Show one registered paper (set KG_PAPER='VIN-NBV-frahm2025')
-	@if [ -z "$(strip $(KG_PAPER))" ]; then \
-		echo "$(RED)KG_PAPER is required, e.g. make kg-show-paper KG_PAPER='VIN-NBV-frahm2025'$(NC)"; \
-		exit 2; \
-	fi
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- lit show \
-		--config "$(LITKG_CONFIG)" \
-		--paper "$(KG_PAPER)" \
-		--format "$(KG_FORMAT)"
-
-kg-sync: ## 📚 Sync literature registry from docs/references.bib
-	@./scripts/kg/ingest_papers.sh sync
-
-kg-materialize: ## 📚 Materialize literature into Markdown for agent consumption
-	@echo "$(BLUE)Materializing literature...$(NC)"
-	@./scripts/kg/ingest_papers.sh materialize
-	@echo "$(GREEN)Literature materialized to .agents/kg/generated/literature/.$(NC)"
-
-kg-index-code: ## 🏗️ Index aria_nbv code into Neo4j
-	@./scripts/kg/index_code.sh
-
-kg-ingest-docs: ## 📝 Ingest docs/ into Neo4j/Graphiti (set KG_SMOKE=1 for a single-doc smoke pass)
-	@if [ "$(KG_SMOKE)" = "1" ]; then \
-		GRAPHITI_DOC_CHAR_LIMIT=1200 ./scripts/kg/ingest_docs.sh AGENTS.md; \
-	else \
-		./scripts/kg/ingest_docs.sh $(KG_DOC_PATHS); \
-	fi
-
-kg-load-bundle: ## 📚 Load the litkg Neo4j export bundle into the live Neo4j runtime
-	@python3 .agents/external/litkg-rs/scripts/kg/load_bundle.py \
-		--bundle-root "$(KG_BUNDLE_ROOT)"
-
-kg-mcp-install: ## 🔌 Print the litkg-cypher MCP profile install steps (gateway-side)
-	@./scripts/kg/install_mcp_profile.sh
-
-kg-doctor: ## 🩺 Health + drift checks (tunnels, vector index, embedding coverage, smoke)
-	@python3 scripts/kg/doctor.py $(KG_DOCTOR_ARGS)
-
-kg-enrich: ## 📚 Refresh litkg runtime embeddings and code↔doc links
-	@KG_OLLAMA_CONFIG="$(LITKG_CONFIG)" \
-		KG_CODE_REPO_ROOT="$(CURDIR)" \
-		KG_CODE_PATH_PREFIX="$(KG_SRC_DIR)" \
-		python3 .agents/external/litkg-rs/scripts/kg/enrich_embeddings.py
-
-kg-ingest-papers: ## 📚 Full literature pipeline (sync, download, parse, materialize)
-	@./scripts/kg/ingest_papers.sh
-
-kg-export-neo4j: ## 📚 Export literature and memory nodes to a Neo4j import bundle
-	@./scripts/kg/ingest_papers.sh export-neo4j
-
-kg-semantic-enrich: ## 📚 Enrich literature registry with Semantic Scholar metadata
-	@./scripts/kg/ingest_papers.sh semantic-enrich
-
-kg-refresh-light: context kg-capabilities ## 📚 Refresh lightweight generated context and inspect litkg readiness
-
-kg-refresh-code: kg-index-code ## 📚 Refresh litkg code-symbol index
-
-kg-refresh-lit: kg-sync kg-materialize kg-export-neo4j ## 📚 Refresh literature registry/materialization/export; enrich with S2 when keyed
-	@if [ -n "$$SEMANTIC_SCHOLAR_API_KEY" ]; then \
-		$(MAKE) kg-semantic-enrich; \
-	else \
-		echo "$(YELLOW)Skipping Semantic Scholar enrichment; SEMANTIC_SCHOLAR_API_KEY is not set.$(NC)"; \
-	fi
-
-kg-refresh-semantic: kg-refresh-lit kg-load-bundle kg-enrich ## 📚 Refresh literature export, load it into Neo4j, and embed semantic nodes
-
-kg-refresh-full: kg-refresh-light kg-refresh-code kg-refresh-lit ## 📚 Refresh lightweight context, code index, and literature artifacts
-
 #  ═══════════════════════════════════════════════════════════════════════
 #  🔧 LRZ AI Systems operator helpers
 #  ═══════════════════════════════════════════════════════════════════════
@@ -620,190 +372,20 @@ lrz-sbatch-multigpu: ## 🔧 Submit LRZ multi-GPU torchrun batch job (requires A
 	@ARIA_DSS="$(ARIA_DSS)" ARIA_REPO="$(ARIA_REPO)" LRZ_PARTITION="$(LRZ_PARTITION)" LRZ_GPUS="$(LRZ_GPUS)" LRZ_NODES="$(LRZ_NODES)" LRZ_TIME="$(LRZ_TIME)" LRZ_CPUS="$(LRZ_CPUS)" LRZ_MEM="$(LRZ_MEM)" LRZ_CONTAINER_IMAGE="$(LRZ_CONTAINER_IMAGE)" \
 		$(LRZ_SCRIPTS_DIR)/lrz-sbatch-multigpu.sh '$(LRZ_CMD)'
 
-context: _check_python ## 🗺️ Refresh lightweight context artifacts (source index, literature index, data contracts)
-	@bash -lc 'set -euo pipefail; \
-		context_dir="$(CONTEXT_DIR)"; \
-		index_out="$(CONTEXT_INDEX_OUT)"; \
-		contracts_out="$(CONTEXT_CONTRACTS_OUT)"; \
-		lit_index_out="$(LITERATURE_INDEX_OUT)"; \
-		mkdir -p "$$context_dir"; \
-		mkdir -p "$$(dirname "$$index_out")"; \
-		scripts/nbv_context_index.sh "$$index_out" >/dev/null; \
-		scripts/nbv_literature_index.sh "$$lit_index_out" >/dev/null; \
-		{ \
-			echo "# Data Contracts (aria_nbv)"; \
-			echo ""; \
-			$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py contracts --root aria_nbv/aria_nbv \
-				| sed "1{/^# Data Contracts$$/d;}"; \
-		} > "$$contracts_out"; \
-		echo "Wrote: $$index_out"; \
-		echo "Wrote: $$lit_index_out"; \
-		echo "Wrote: $$contracts_out"'
-	@echo "$(GREEN)Refreshed lightweight context artifacts in $(CONTEXT_DIR)$(NC)"
-	@echo "$(BLUE)Heavy fallback: make context-heavy$(NC)"
-	@echo "$(BLUE)Tip: rg -n \"<pattern>\" $(CONTEXT_INDEX_OUT)$(NC)"
-
-context-uml: _check_python ## 🗺️ Generate aria_nbv UML artifacts without printing them
-	@bash -lc 'set -euo pipefail; \
-		context_dir="$(CONTEXT_DIR)"; \
-		uml_out="$(CONTEXT_UML_OUT)"; \
-		uml_filtered_out="$(CONTEXT_UML_FILTERED_OUT)"; \
-		mkdir -p "$$context_dir"; \
-		mermaid_tmp="$$(mktemp)"; \
-		mermaid_filtered="$$(mktemp)"; \
-		$(PYTHON_INTERPRETER) -m syrenka classdiagram aria_nbv/aria_nbv > "$$mermaid_tmp"; \
-		exclude_list="$(CONTEXT_MERMAID_EXCLUDE)"; \
-		if [[ -z "$$exclude_list" ]]; then \
-			cp "$$mermaid_tmp" "$$mermaid_filtered"; \
-		else \
-			$(PYTHON_INTERPRETER) scripts/filter_mermaid.py \
-				--input "$$mermaid_tmp" \
-				--output "$$mermaid_filtered" \
-				--exclude "$$exclude_list"; \
-		fi; \
-		cp "$$mermaid_tmp" "$$uml_out"; \
-		cp "$$mermaid_filtered" "$$uml_filtered_out"; \
-		rm -f "$$mermaid_tmp" "$$mermaid_filtered"; \
-		echo "Wrote: $$uml_out"; \
-		echo "Wrote: $$uml_filtered_out"'
-
-context-uml-preview: _check_python ## 🗺️ Print the filtered aria_nbv UML to stdout
-	@$(MAKE) --no-print-directory context-uml >/dev/null
-	@echo "# Mermaid UML Diagram of the aria_nbv:"
-	@echo "\`\`\`{mermaid}"
-	@cat "$(CONTEXT_UML_FILTERED_OUT)"
-	@echo "\`\`\`"
-
-context-docstrings: _check_python ## 🗺️ Generate full aria_nbv class docstrings artifact
-	@bash -lc 'set -euo pipefail; \
-		context_dir="$(CONTEXT_DIR)"; \
-		docstrings_out="$(CONTEXT_DOCSTRINGS_OUT)"; \
-		mkdir -p "$$context_dir"; \
-		{ \
-			echo "# Class Docstrings (aria_nbv)"; \
-			echo ""; \
-			$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py classes --root aria_nbv/aria_nbv --full-doc; \
-		} > "$$docstrings_out"; \
-		echo "Wrote: $$docstrings_out"'
-
-context-tree: _check_python ## 🗺️ Generate aria_nbv directory tree artifact
-	@bash -lc 'set -euo pipefail; \
-		context_dir="$(CONTEXT_DIR)"; \
-		tree_out="$(CONTEXT_TREE_OUT)"; \
-		mkdir -p "$$context_dir"; \
-		{ \
-			echo "# Directory Tree (aria_nbv)"; \
-			echo ""; \
-			echo "Directory tree for aria_nbv/aria_nbv/:"; \
-			if command -v tree >/dev/null 2>&1; then \
-				tree aria_nbv/aria_nbv/ -I "__pycache__"; \
-			else \
-				find aria_nbv/aria_nbv/ -path "*/__pycache__" -prune -o -print \
-					| sed "s#^aria_nbv/aria_nbv/##" \
-					| sed "/^$$/d" \
-					| sort; \
-			fi; \
-		} > "$$tree_out"; \
-		echo "Wrote: $$tree_out"'
-
-context-heavy: _check_python ## 🗺️ Generate heavyweight fallback artifacts and combined context snapshot
-	@$(MAKE) --no-print-directory context
-	@$(MAKE) --no-print-directory context-uml
-	@$(MAKE) --no-print-directory context-docstrings
-	@$(MAKE) --no-print-directory context-tree
-	@bash -lc 'set -euo pipefail; \
-		out="$(CONTEXT_OUT)"; \
-		index_out="$(CONTEXT_INDEX_OUT)"; \
-		uml_out="$(CONTEXT_UML_OUT)"; \
-		docstrings_out="$(CONTEXT_DOCSTRINGS_OUT)"; \
-		contracts_out="$(CONTEXT_CONTRACTS_OUT)"; \
-		tree_out="$(CONTEXT_TREE_OUT)"; \
-		mkdir -p "$$(dirname "$$out")"; \
-		{ \
-			echo "# Context Snapshot (make context-heavy)"; \
-			echo ""; \
-			echo "Generated: $$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")"; \
-			echo ""; \
-			echo "## Contents"; \
-			echo "0) Source index (all context pools)"; \
-			echo "1) Environment"; \
-			echo "2) Data contracts (aria_nbv)"; \
-			echo "3) Mermaid UML (aria_nbv)"; \
-			echo "4) Class docstrings (aria_nbv)"; \
-			echo "5) Directory tree (aria_nbv)"; \
-			echo ""; \
-			echo "## 0) Source index (all context pools)"; \
-			if [[ -f "$$index_out" ]]; then \
-				sed "s/^#/###/" "$$index_out"; \
-			else \
-				echo "(missing $$index_out)"; \
-			fi; \
-			echo ""; \
-			echo "## 1) Environment"; \
-			echo "Python: $(PYTHON_INTERPRETER)"; \
-			echo "Venv: $(VENV_PYTHON)"; \
-			echo "Recreate: UV_PYTHON=/home/jandu/miniforge3/envs/aria-nbv/bin/python uv sync --extra dev --extra notebook --extra pytorch3d"; \
-			echo ""; \
-			echo "## 2) Data contracts (aria_nbv)"; \
-			if [[ -f "$$contracts_out" ]]; then \
-				sed "1{/^# Data Contracts (aria_nbv)$$/d;}" "$$contracts_out"; \
-			else \
-				echo "(missing $$contracts_out)"; \
-			fi; \
-			echo ""; \
-			echo "## 3) Mermaid UML (aria_nbv)"; \
-			echo "\`\`\`{mermaid}"; \
-			cat "$$uml_out"; \
-			echo "\`\`\`"; \
-			echo ""; \
-			echo "## 4) Class docstrings (aria_nbv)"; \
-			if [[ -f "$$docstrings_out" ]]; then \
-				sed "1{/^# Class Docstrings (aria_nbv)$$/d;}" "$$docstrings_out"; \
-			else \
-				echo "(missing $$docstrings_out)"; \
-			fi; \
-			echo ""; \
-			echo "## 5) Directory tree (aria_nbv)"; \
-			if [[ -f "$$tree_out" ]]; then \
-				sed "1{/^# Directory Tree (aria_nbv)$$/d;}" "$$tree_out"; \
-			else \
-				echo "(missing $$tree_out)"; \
-			fi; \
-		} > "$$out"; \
-		echo "Wrote: $$out"'
-	@echo "$(GREEN)Wrote heavyweight context snapshot to $(CONTEXT_OUT)$(NC)"
-
-context-external: _check_python ## 🗺️ List classes with full docstrings
-	@echo "# Mermaid UML Diagram of the external/efm3d:\n\`\`\`{mermaid}"
-	@$(PYTHON_INTERPRETER) -m syrenka classdiagram external/efm3d/efm3d
-	@echo "\`\`\`\n---\n"
-	@$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py classes --root external/efm3d/efm3d --full-doc
-
-	@echo "\n\n"
-
-	echo "# Mermaid UML Diagram of the external/ATEK:\n\`\`\`{mermaid}"
-	@$(PYTHON_INTERPRETER) -m syrenka classdiagram external/ATEK/atek
-	echo "\`\`\`\n---\n"
-	@$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py classes --root external/ATEK/atek --full-doc
-
 context-dir-tree: _check_python ## 🗺️ Print directory tree for `aria_nbv/aria_nbv/` (ignore __pycache__)
-	@$(MAKE) --no-print-directory _context_dir_tree_print
-
-_context_dir_tree_print:
 	@echo "Directory tree for aria_nbv/aria_nbv/:"
-	@bash -lc 'tree aria_nbv/aria_nbv/ -I "__pycache__"'
-
-context-dir-tree-external: _check_python ## 🗺️ Print directory tree for `external/efm3d/efm3d` (ignore __pycache__)
-	@echo "Directory tree for external/efm3d/efm3d/:"
-	@bash -lc 'tree external/efm3d/efm3d/ -I "__pycache__"'
-	@echo "\n\n"
-
-	@echo "Directory tree for external/ATEK/atek/:"
-	@bash -lc 'tree external/ATEK/atek/ -I "__pycache__"'
+	@if command -v tree >/dev/null 2>&1; then tree aria_nbv/aria_nbv -I "__pycache__"; else find aria_nbv/aria_nbv -path "*/__pycache__" -prune -o -print | sort; fi
 
 context-qmd-tree: ## 🗺️ Print docs/ .qmd structure (ignore __pycache__)
 	@echo "Directory tree for docs (.qmd only):"
-	@bash -lc 'tree docs -P "*.qmd" -I "__pycache__"'
+	@if command -v tree >/dev/null 2>&1; then tree docs -P "*.qmd" -I "__pycache__"; else find docs -name '*.qmd' -type f | sort; fi
+
+uml: _check_python ## 🗺️ Generate one scoped UML file (UML_ROOT=... UML_OUT=<absolute ignored path>)
+	@if [ -z "$(strip $(UML_ROOT))" ] || [ -z "$(strip $(UML_OUT))" ]; then \
+		echo "usage: make uml UML_ROOT=aria_nbv/aria_nbv/<package> UML_OUT=$(CURDIR)/.cache/<name>.mmd" >&2; \
+		exit 2; \
+	fi
+	@$(PYTHON_INTERPRETER) scripts/scaffold/run_scoped_uml.py --root "$(UML_ROOT)" --output "$(UML_OUT)" --python "$(UML_PYTHON)"
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  📊 Diagrams

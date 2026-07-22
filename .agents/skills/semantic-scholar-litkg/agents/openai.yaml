@@ -1,4 +1,0 @@
-interface:
-  display_name: "Semantic Scholar litkg"
-  short_description: "Guide ARIA-NBV litkg-rs KG implementation and operation"
-  default_prompt: "Use $semantic-scholar-litkg to implement, review, or operate ARIA-NBV litkg-rs KG ingestion, source coverage, backend/export, or Semantic Scholar enrichment work."

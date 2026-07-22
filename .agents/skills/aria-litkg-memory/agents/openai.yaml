@@ -1,4 +1,0 @@
-interface:
-  display_name: "ARIA litkg Memory"
-  short_description: "KG-backed retrieval, routing, claim checks, and consolidation"
-  default_prompt: "Use $aria-litkg-memory for ARIA-NBV KG-backed retrieval, source-backed routing, claim checks, and memory/backlog consolidation proposals."

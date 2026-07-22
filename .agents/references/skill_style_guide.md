@@ -58,8 +58,7 @@ section, package `AGENTS.md`, or source code contract instead.
 Use optional `context7_refs`, `literature_refs`, and `tool_refs` only as thin
 routing edges. Context7 refs must already exist in
 `.agents/references/context7_library_ids.md`; literature refs must resolve to
-BibTeX keys, Quarto/literature paths, local TeX mirror paths, or route labels
-in `aria-nbv-context/references/context_map.md`; tool refs use canonical
+BibTeX keys, Quarto/literature paths, or local TeX mirror paths; tool refs use canonical
 `mcp__<server>.<tool_name>` names. Do not point skill metadata at generated
 context indexes as source owners.
 

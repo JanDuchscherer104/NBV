@@ -26,6 +26,7 @@ metadata:
   must_read:
     - "docs/AGENTS.md"
     - ".agents/skills/aria-docs/references/workflow.md"
+    - ".agents/references/direct_source_claim_checklist.md for advisor-facing claims"
   canonical_sources:
     - "docs/AGENTS.md"
     - "docs/typst/thesis/main.typ"
@@ -34,6 +35,7 @@ metadata:
     - "tools/mermaid/references/aria_mermaid_style.md"
     - "tools/mermaid/references/aria_symbol_map.yaml"
     - ".agents/references/thesis_code_links.md"
+    - ".agents/references/direct_source_claim_checklist.md"
   context7_refs:
     - "/websites/typst_app"
     - "/websites/quarto"
@@ -59,8 +61,8 @@ shared notation, bibliography, package, test, or thesis source.
 
 - Preserve the public/internal boundary and existing document structure.
 - Reuse `docs/typst/shared` before introducing recurring notation or terms.
-- Resolve citations through `docs/references.bib`; inspect the authoritative
-  source and calibrate advisor-facing wording before publication.
+- Resolve citations through `docs/references.bib`; apply the direct-source
+  claim checklist and calibrate advisor-facing wording before publication.
 - Keep reproducible figure source, frame/units/view metadata, and provenance.
 - Keep `.mmd` as source, use the curated symbol map, lint locally, and render
   locally when `mmdc` is available.

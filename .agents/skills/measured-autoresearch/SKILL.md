@@ -9,7 +9,7 @@ metadata:
     - "the evaluator, budget, or mutable path set is still changing"
   handoff_to:
     - "aria-nbv-context for localizing candidate code or evidence"
-    - "aria-litkg-memory for source-backed inspiration after a measured plateau"
+    - "aria-nbv-context for source-backed inspiration after a measured plateau"
     - "owning OMX autoresearch workflow for continuation or completion"
   evidence_required:
     - "one explicit active mission root and lifecycle owner"

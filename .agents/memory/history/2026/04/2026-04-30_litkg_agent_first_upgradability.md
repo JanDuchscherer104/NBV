@@ -6,8 +6,7 @@ status: done
 topics: [litkg, kg, agent-contract, context-pack]
 confidence: high
 canonical_updates_needed:
-  - AGENTS.md
-  - .agents/skills/semantic-scholar-litkg/SKILL.md
+  - .agents/references/direct_source_claim_checklist.md
 files_touched:
   - AGENTS.md
   - .agents/skills/semantic-scholar-litkg/SKILL.md

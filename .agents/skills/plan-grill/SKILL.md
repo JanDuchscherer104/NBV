@@ -8,7 +8,7 @@ metadata:
     - "the user asks for review of an existing concrete diff"
   handoff_to:
     - "aria-nbv-context when the affected source owner is unknown"
-    - "aria-litkg-memory for KG-backed retrieval or claim checks"
+    - "aria-docs for direct-source claim review"
     - "aria-docs for public narrative after the decision"
     - "specialized diagnostic or review capability for concrete evidence"
   evidence_required:
@@ -37,8 +37,8 @@ metadata:
     - "/websites/quarto"
   literature_refs:
     - "docs/contents/literature/index.qmd"
-    - "finite-candidate-rl"
-    - "quality-driven-rri"
+    - "DoubleDQN-vanHasselt2015"
+    - "VIN-NBV-frahm2025"
   tool_refs:
     - "mcp__MCP_DOCKER.resolve_library_id"
     - "mcp__MCP_DOCKER.get_library_docs"

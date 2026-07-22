@@ -1,25 +1,18 @@
 {
   "version": 2,
-  "purpose": "Positive and adjacent-negative routing fixtures for the eleven-skill WP5 boundary.",
+  "purpose": "Positive and adjacent-negative routing fixtures for the nine-skill WP6 boundary.",
   "fixtures": [
     {
       "id": "local-file-lookup",
       "task": "Locate an unknown ARIA-NBV file, symbol, document, or source family before reading its owner.",
       "expected_skills": ["aria-nbv-context"],
-      "non_goals": ["Do not use a KG route when deterministic local discovery is sufficient."]
+      "non_goals": ["Do not use a documentation workflow when deterministic local discovery is sufficient."]
     },
     {
-      "id": "kg-claim-check",
-      "task": "Run a LitKG claim check for an advisor-facing thesis statement and inspect its cited source.",
-      "expected_skills": ["aria-litkg-memory"],
-      "non_goals": ["Do not route a local-only file lookup through KG retrieval."]
-    },
-    {
-      "id": "litkg-implementation",
-      "task": "Change a litkg-rs Semantic Scholar adapter, ARIA KG config, or backend export contract.",
-      "expected_skills": ["semantic-scholar-litkg"],
-      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
-      "non_goals": ["Do not use the implementation sidecar for ordinary KG claim checking."]
+      "id": "direct-source-claim-review",
+      "task": "Verify an advisor-facing thesis or literature claim against a citation, exact source locator, calibrated wording, and render evidence.",
+      "expected_skills": ["aria-docs"],
+      "non_goals": ["Do not route a local-only file lookup through document claim review."]
     },
     {
       "id": "quarto-typst-mermaid-docs",

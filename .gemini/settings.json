@@ -48,11 +48,6 @@
             "name": "debrief-nudge",
             "type": "command",
             "command": "scripts/debrief_nudge.sh || true"
-          },
-          {
-            "name": "kg-auto-refresh",
-            "type": "command",
-            "command": "scripts/kg/auto_refresh.sh || true"
           }
         ]
       }

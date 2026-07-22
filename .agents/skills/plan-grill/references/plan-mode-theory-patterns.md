@@ -32,8 +32,8 @@ Prefer sources in this order, and state when a conclusion is an inference:
    proposal-critical or advisor-facing evidence for core technical claims.
 
 For advisor-facing proposal, roadmap, research-question, or literature
-synthesis claims, run or request `make kg-claim-check KG_CLAIM="..."` through
-the `aria-litkg-memory` workflow before treating the claim as supported.
+synthesis claims, follow `.agents/references/direct_source_claim_checklist.md`
+before treating the claim as supported.
 
 ## Claim Strength
 

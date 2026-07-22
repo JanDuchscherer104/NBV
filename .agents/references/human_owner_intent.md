@@ -26,7 +26,7 @@ narrative, not current technical truth, and not a repeatable workflow.
 | Current implementation contract | Owning code, tests, docstrings, nearest package `AGENTS.md`, or concise subsystem README |
 | Actionable defect, todo, or refactor | `.agents/issues.toml`, `.agents/todos.toml`, or `.agents/refactors.toml` |
 | Public thesis narrative | `docs/` Quarto or `docs/typst/thesis/main.typ` |
-| Generated routing/context | ignored output under `docs/_generated/context/*.md`, `.agents/generated/`, or `.agents/kg/generated/` with provenance; tracked glossary/KG artifacts are regenerated through the glossary pipeline |
+| Generated terminology or agent mirrors | tracked glossary output or `.agents/generated/` with explicit source provenance |
 
 Prefer the smallest surface that can preserve the instruction without creating
 a second source of truth.

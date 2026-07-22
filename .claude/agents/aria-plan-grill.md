@@ -36,5 +36,6 @@ End with a decision-complete plan naming:
 - verification commands
 - assumptions and deferred decisions
 
-For advisor-facing claims, run `make kg-claim-check KG_CLAIM="..."` before
-treating them as supported.
+For advisor-facing claims, apply
+`.agents/references/direct_source_claim_checklist.md` before treating them as
+supported.

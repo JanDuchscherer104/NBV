@@ -20,15 +20,16 @@ surface for the kind of information being changed.
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
 - Verification gates: `.agents/references/verification_matrix.md`.
-- KG/backend operating details: `.agents/external/litkg-rs/docs/` and
-  `.configs/litkg.toml`.
+- Graph navigation details: the pinned Graphify capability record and
+  `scripts/graphify_*.py`.
 - OMX operator usage: `.agents/references/omx_quick_reference.md`.
 
 ## Tool Boundaries
 
 - OMX orchestrates optional workflows and gates. It must remain replaceable and
   must not become the repo source of truth.
-- litkg retrieval, routing, and claim checks are advisory evidence channels.
+- External research tools are explicit, task-scoped evidence channels; direct
+  source owners remain authoritative.
   Claim checks need human or task-specific verification before they become
   thesis, roadmap, or implementation truth.
 - Graph artifacts, Neo4j exports, Graphiti, MemPalace, and similar systems are

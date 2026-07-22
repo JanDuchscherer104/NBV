@@ -19,11 +19,10 @@ when they are actionable. Otherwise they remain dated debrief or transcript
 evidence and must not become a parallel current-state surface.
 
 Active issues and todos must carry compact prose context plus structured
-`references` pointers. Use `repo:` for internal files, `bib:` for papers in
-`docs/references.bib`, durable identifiers such as `arxiv:`/`doi:`/`s2:`,
-external docs as `url:`, Context7 library docs as `context7:`, and litkg-rs
-evidence as `litkg:`. This keeps local backlog records auditable and
-machine-usable by the litkg-rs context-pack/KG pipeline.
+`references` pointers. Use exact `repo:` paths for internal files, `bib:` keys
+for papers in `docs/references.bib`, durable identifiers such as
+`arxiv:`/`doi:`/`s2:`, and authoritative external sources as `url:` pointers.
+This keeps local backlog records auditable and source-resolvable.
 
 ## Priority Pillars
 
@@ -58,5 +57,5 @@ samples:
 8. `issue-013` / `todo-037`: evidence report once rollout and Q_H smoke outputs
    exist.
 
-Advisor/docs, governance/scaffold, KG, GitHub mirroring, simulator, Gym, and
+Advisor/docs, governance/scaffold, GitHub mirroring, simulator, Gym, and
 continuous-control work stays parallel or deferred unless it blocks this path.

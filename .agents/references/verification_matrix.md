@@ -51,23 +51,20 @@ compact command index.
 - Direct Rerun inspector:
   `cd aria_nbv && uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml ...`
 
-## KG And Optional Tooling
+## Exact-Source And Optional Tooling
 
 - Graphify integration and corpus policy:
   `make graphify-integration-self-test`
 - Local Graphify navigation freshness:
   `python3 scripts/check_graphify_freshness.py`
-- Fast KG health probe:
-  `make kg-status`
-- KG capabilities and routing:
-  `make kg-capabilities KG_FORMAT=json`
-  `make kg-route KG_TASK="<task>" KG_FORMAT=json`
 - Advisor-facing claim checks:
-  `make kg-claim-check KG_CLAIM="<claim>"`
+  follow `.agents/references/direct_source_claim_checklist.md`
+- Exact-source fallback:
+  `make wp6-direct-source-check`
 - Autoresearch adapter contract evidence:
   `rg -n "Autoresearch Adapter|typed config|checkpoint evaluation|raw shell|proposal" .agents/references/alignment_tools_contract.md AGENTS.md`
 - External framework adoption smoke:
-  `rg -n "langgraph|llama_index|open_deep_research|ai-scientist|karpathy/autoresearch" aria_nbv/pyproject.toml aria_nbv/uv.lock .configs scripts aria_nbv`
+  `rg -n "langgraph|llama_index|open_deep_research|ai-scientist|karpathy/autoresearch" aria_nbv/pyproject.toml aria_nbv/uv.lock scripts aria_nbv`
 
 ## Public Docs
 

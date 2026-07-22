@@ -209,9 +209,6 @@ __marimo__/
 # Quarto
 .quarto/
 _site
-docs/_generated/context/*
-!docs/_generated/context/.gitignore
-!docs/_generated/context/glossary.jsonl
 docs/_site/
 docs/site_libs/
 docs/index_files/

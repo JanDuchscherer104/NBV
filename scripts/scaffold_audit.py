@@ -19,7 +19,9 @@ ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / ".agents" / "references" / "scaffold_routing_fixtures.json"
 WP5_INVENTORY = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_inventory.json"
+WP6_INVENTORY = ROOT / ".agents" / "baselines" / "scaffold_wp6_skill_inventory.json"
 WP5_DISPOSITIONS = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_dispositions.csv"
+WP6_CAPABILITIES = ROOT / ".agents" / "baselines" / "scaffold_wp6_capability_dispositions.csv"
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -46,7 +48,6 @@ PREFERRED_HOT_PATH_LINE_BUDGET = 120
 CLOSED_DISPOSITIONS = {"migrated", "already_owned", "duplicate", "obsolete"}
 CONTEXT7_IDS = ROOT / ".agents" / "references" / "context7_library_ids.md"
 BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
-CONTEXT_MAP = ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
 AUDIT_OWNED_TOOL_REFS = {
     "mcp__MCP_DOCKER.analyze_python_file",
@@ -142,9 +143,8 @@ SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
 )
 SEMANTIC_DRIFT_EXEMPTIONS = {
     "aria-docs": {"roadmap-claim"},
-    "aria-litkg-memory": {"roadmap-claim"},
 }
-BROAD_APPLIES_EXEMPTIONS = {"aria-litkg-memory", "aria-nbv-context", "plan-grill"}
+BROAD_APPLIES_EXEMPTIONS = {"aria-nbv-context", "plan-grill"}
 
 
 def slugify_heading(text: str) -> str:
@@ -236,26 +236,6 @@ def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
     if not keys:
         return keys, [f"{rel(path)}: no BibTeX keys found"]
     return keys, []
-
-
-def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[str]]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        return set(), [f"{rel(path)}: cannot read context map: {exc}"]
-    routes: set[str] = set()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped.startswith("|") or "---" in stripped:
-            continue
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
-        if len(cells) < 2:
-            continue
-        label = cells[0].strip("` ")
-        if not label or label.lower() in {"topic", "concept route"}:
-            continue
-        routes.add(label)
-    return routes, []
 
 
 def repo_path_exists(ref: str) -> bool:
@@ -386,21 +366,20 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
     return skills, errors
 
 
-def audit_wp5_inventory(path: Path, skills: list[Skill]) -> list[str]:
-    """Require the exact eleven-skill transitional WP5 boundary."""
+def audit_wp6_inventory(path: Path, skills: list[Skill]) -> list[str]:
+    """Require the exact nine-skill final WP6 boundary."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"{rel(path)}: unreadable WP5 inventory: {exc}"]
 
     declared = data.get("active_skills")
-    temporary = data.get("temporary_wp6_skills")
-    removed = data.get("removed_or_merged_skills")
+    removed = data.get("removed_wp6_skills")
     errors: list[str] = []
     if not isinstance(declared, list) or not all(isinstance(item, str) for item in declared):
         return [f"{rel(path)}: active_skills must be a string list"]
-    if len(declared) != 11 or len(set(declared)) != 11:
-        errors.append(f"{rel(path)}: active_skills must contain exactly eleven unique names")
+    if len(declared) != 9 or len(set(declared)) != 9:
+        errors.append(f"{rel(path)}: active_skills must contain exactly nine unique names")
     actual = {skill.name for skill in skills}
     expected = set(declared)
     if actual != expected:
@@ -408,12 +387,59 @@ def audit_wp5_inventory(path: Path, skills: list[Skill]) -> list[str]:
             f"{rel(path)}: active skill mismatch; missing={sorted(expected - actual)} "
             f"extra={sorted(actual - expected)}"
         )
-    if set(temporary or []) != {"aria-litkg-memory", "semantic-scholar-litkg"}:
-        errors.append(f"{rel(path)}: temporary_wp6_skills must contain exactly the two LitKG skills")
-    if not isinstance(removed, list) or not removed:
-        errors.append(f"{rel(path)}: removed_or_merged_skills must be a non-empty list")
+    if set(removed or []) != {"aria-litkg-memory", "semantic-scholar-litkg"}:
+        errors.append(f"{rel(path)}: removed_wp6_skills must contain exactly the two retired skills")
     elif actual & set(removed):
         errors.append(f"{rel(path)}: removed skill remains active: {sorted(actual & set(removed))}")
+    return errors
+
+
+def audit_wp6_capabilities(path: Path) -> list[str]:
+    """Require all approved WP6 capability families to have closed dispositions."""
+    required_families = {
+        "authority-aware-search-and-task-routing",
+        "claim-checking",
+        "provenance-and-consolidation",
+        "paper-ingestion-and-materialization",
+        "semantic-scholar-enrichment",
+        "neo4j-export-and-runtime",
+        "mcp-integration",
+        "auto-refresh-hooks-and-generated-documentation",
+    }
+    required_fields = {
+        "capability_family",
+        "status",
+        "destination_owner",
+        "evidence",
+        "verification",
+        "rollback_commit",
+        "rationale",
+    }
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    except (OSError, csv.Error) as exc:
+        return [f"{rel(path)}: unreadable WP6 capability ledger: {exc}"]
+    errors: list[str] = []
+    seen: set[str] = set()
+    for index, row in enumerate(rows, start=2):
+        missing = sorted(field for field in required_fields if not (row.get(field) or "").strip())
+        if missing:
+            errors.append(f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}")
+            continue
+        family = row["capability_family"].strip()
+        if family in seen:
+            errors.append(f"{rel(path)}:{index}: duplicate capability family {family!r}")
+        seen.add(family)
+        if row["status"].strip() not in {"replaced", "preserved", "retired"}:
+            errors.append(f"{rel(path)}:{index}: unresolved status {row['status']!r}")
+        if not re.fullmatch(r"[0-9a-f]{40}", row["rollback_commit"].strip()):
+            errors.append(f"{rel(path)}:{index}: rollback_commit must be a full Git hash")
+    if seen != required_families:
+        errors.append(
+            f"{rel(path)}: capability coverage mismatch; missing={sorted(required_families - seen)} "
+            f"extra={sorted(seen - required_families)}"
+        )
     return errors
 
 
@@ -470,10 +496,8 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
     known_names = {skill.name for skill in skills}
     context7_ids, context7_errors = load_context7_ids()
     bibtex_keys, bibtex_errors = load_bibtex_keys()
-    context_routes, context_route_errors = load_context_map_routes()
     errors.extend(context7_errors)
     errors.extend(bibtex_errors)
-    errors.extend(context_route_errors)
 
     for skill in skills:
         prefix = rel(skill.path)
@@ -588,12 +612,12 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                         f"{prefix}: metadata.literature_refs entry {ref!r} points to generated evidence, "
                         "not an owning literature source"
                     )
-                elif ref in bibtex_keys or ref in context_routes or repo_path_exists(ref):
+                elif ref in bibtex_keys or repo_path_exists(ref):
                     continue
                 else:
                     errors.append(
                         f"{prefix}: metadata.literature_refs entry {ref!r} is not a BibTeX key, "
-                        "context-map route label, or existing repo path"
+                        "or existing repo path"
                     )
 
         tool_refs = skill.metadata.get("tool_refs") or []
@@ -919,12 +943,12 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "fixture schema omissions were not rejected",
         )
 
-        local_as_kg = routing_fixture_with_expected("local-file-lookup", ["aria-litkg-memory"])
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, local_as_kg), skills_by_name)
+        local_as_docs = routing_fixture_with_expected("local-file-lookup", ["aria-docs"])
+        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, local_as_docs), skills_by_name)
         expect(
-            "local-lookup-not-kg",
-            any("aria-litkg-memory" in error and "no routing-cue overlap" in error for error in errors),
-            "local lookup incorrectly passed as KG routing",
+            "local-lookup-not-docs",
+            any("aria-docs" in error and "no routing-cue overlap" in error for error in errors),
+            "local lookup incorrectly passed as docs routing",
         )
 
         docs_as_measurement = routing_fixture_with_expected(
@@ -1062,10 +1086,12 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         )
 
         live_skills, live_load_errors = load_skills(SKILLS_DIR)
-        inventory_errors = live_load_errors + audit_wp5_inventory(WP5_INVENTORY, live_skills)
-        expect("wp5-live-inventory", not inventory_errors, "; ".join(inventory_errors))
+        inventory_errors = live_load_errors + audit_wp6_inventory(WP6_INVENTORY, live_skills)
+        expect("wp6-live-inventory", not inventory_errors, "; ".join(inventory_errors))
         disposition_errors = audit_wp5_dispositions(WP5_DISPOSITIONS)
         expect("wp5-closed-dispositions", not disposition_errors, "; ".join(disposition_errors))
+        capability_errors = audit_wp6_capabilities(WP6_CAPABILITIES)
+        expect("wp6-closed-capabilities", not capability_errors, "; ".join(capability_errors))
 
     return passes, failures
 
@@ -1092,8 +1118,9 @@ def main() -> int:
         return 1 if failures else 0
 
     skills, load_errors = load_skills(SKILLS_DIR)
-    inventory_errors = audit_wp5_inventory(WP5_INVENTORY, skills)
+    inventory_errors = audit_wp6_inventory(WP6_INVENTORY, skills)
     disposition_errors = audit_wp5_dispositions(WP5_DISPOSITIONS)
+    capability_errors = audit_wp6_capabilities(WP6_CAPABILITIES)
     skill_errors, skill_warnings = audit_skills(skills)
     drift_warnings = audit_semantic_drift(skills)
     fixture_errors, fixture_warnings = audit_routing_fixtures(
@@ -1101,7 +1128,14 @@ def main() -> int:
         {skill.name: skill for skill in skills},
     )
 
-    errors = load_errors + inventory_errors + disposition_errors + skill_errors + fixture_errors
+    errors = (
+        load_errors
+        + inventory_errors
+        + disposition_errors
+        + capability_errors
+        + skill_errors
+        + fixture_errors
+    )
     warnings = skill_warnings + drift_warnings + fixture_warnings
     payload = {
         "skills": len(skills),

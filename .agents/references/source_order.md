@@ -23,9 +23,9 @@ Use this reference when a task needs current project truth or sources disagree.
   for historical evidence, not for current thesis priority.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
-- Generated routing artifacts: `docs/_generated/context/source_index.md`,
-  `literature_index.md`, and `data_contracts.md`; refresh with `make context`
-  when stale.
+- Source-derived navigation: Graphify when fresh; exact owners, targeted `rg`,
+  contract inspection, document outlines/includes, and bounded directory trees
+  remain the no-tool fallback.
 - Operator aids and long conventions: `.agents/references/`.
 - Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
   read-first, evidence, and verification loops only. They must point to
@@ -38,8 +38,7 @@ Use this reference when a task needs current project truth or sources disagree.
   prompts: move durable truth to the owner above, or justify the text as a
   compact routing/evidence cue.
 - Optional tool and adapter boundaries:
-  `.agents/references/alignment_tools_contract.md`. KG/backend operational
-  details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
+  `.agents/references/alignment_tools_contract.md`.
 - Thesis-to-code links: `.agents/references/thesis_code_links.md` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse

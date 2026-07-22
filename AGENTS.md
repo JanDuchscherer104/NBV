@@ -23,11 +23,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   `tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
   when available and do not use online renderers unless explicitly permitted.
 - Need file localization or deterministic local discovery: use `aria-nbv-context`.
-- Need KG-backed retrieval, source-backed routing, claim checks, or
-  consolidation: use `aria-litkg-memory`.
-- Need to modify litkg-rs, KG source coverage, KG config, or KG operation:
-  use `semantic-scholar-litkg`; keep repo-independent implementation in
-  `.agents/external/litkg-rs`.
+- For authority-sensitive claims, follow the direct-source checklist and open
+  exact bibliography, literature, thesis, and package owners.
 - Vague, high-impact, or advisor-facing plans: use `plan-grill`.
 - Bugs, regressions, suspicious metrics, or failing checks: use the selected
   diagnostic workflow after localizing the owning source and reproducer.
@@ -75,9 +72,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Python: `aria_nbv/.venv/bin/python`
 - Package format/lint: `ruff format <file>` and `ruff check <file>`
 - Package tests: `cd aria_nbv && uv run pytest <path>`
-- Context refresh: `make context`; contract index: `make context-contracts`
+- Contract inspection: `make context-contracts`
+- Source outlines: `make context-qmd-outline`, `make context-typst-outline`,
+  and `make context-typst-includes`
 - Agents DB: `make agents-db`; memory check: `make check-agent-memory`
-- litkg commands: see `.agents/references/litkg_quick_reference.md`.
 - Surface checks: see `.agents/references/verification_matrix.md`.
 
 ## Verification
@@ -90,7 +88,7 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   update docs/memory when behavior changes.
 - Docs edits: render the touched Quarto or Typst surface when non-trivial.
 - Advisor-facing proposal, roadmap, research-question, or literature-synthesis
-  claims require `make kg-claim-check KG_CLAIM="..."`.
+  claims require `.agents/references/direct_source_claim_checklist.md`.
 
 ## Debriefs
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
@@ -133,7 +131,5 @@ Rules:
   `graphify-out/needs_update`; refresh them with the Graphify extraction
   workflow, whose completion records the current policy digest, before treating
   semantic links as current.
-- `litkg-rs` remains the source-authority layer for `kg-search`,
-  `kg-route`, `kg-claim-check`, Semantic Scholar/literature enrichment, and
-  thesis/advisor evidence. Use Graphify for navigation first; use litkg for
-  authority-sensitive claims.
+- Graphify is navigation only. Authority-sensitive claims always resolve to
+  exact bibliography, literature, thesis, package, test, or backlog owners.

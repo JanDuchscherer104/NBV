@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "supported_exact",
+      "claim_text": "The method evaluates a finite candidate set for each observed scene.",
+      "citation_key": "finite-candidates-fixture",
+      "source_path": "scripts/tests/fixtures/wp6_direct_source/source.tex",
+      "locator_type": "section",
+      "locator_value": "Method",
+      "expected_reason": "pass"
+    },
+    {
+      "id": "overstated_generalization",
+      "claim_text": "The method is optimal for all scenes.",
+      "citation_key": "finite-candidates-fixture",
+      "source_path": "scripts/tests/fixtures/wp6_direct_source/source.tex",
+      "locator_type": "section",
+      "locator_value": "Method",
+      "expected_reason": "wording_exceeds_source"
+    },
+    {
+      "id": "missing_citation",
+      "claim_text": "The method evaluates a finite candidate set.",
+      "citation_key": "missing-fixture-key",
+      "source_path": "scripts/tests/fixtures/wp6_direct_source/source.tex",
+      "locator_type": "section",
+      "locator_value": "Method",
+      "expected_reason": "citation_unresolved"
+    },
+    {
+      "id": "missing_locator",
+      "claim_text": "The method evaluates a finite candidate set.",
+      "citation_key": "finite-candidates-fixture",
+      "source_path": "scripts/tests/fixtures/wp6_direct_source/source.tex",
+      "locator_type": "",
+      "locator_value": "",
+      "expected_reason": "locator_required"
+    }
+  ]
+}

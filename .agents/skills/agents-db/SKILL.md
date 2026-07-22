@@ -5,11 +5,11 @@ metadata:
   mode: maintenance
   not_when:
     - "public documentation or thesis narrative is the primary output"
-    - "ordinary KG retrieval or claim checking without backlog edits"
+    - "ordinary source lookup without backlog edits"
     - "tiny cleanup that does not change active debt"
   handoff_to:
     - "aria-docs for public docs or thesis narrative"
-    - "aria-litkg-memory for KG-backed consolidation proposals"
+    - "aria-nbv-context for exact-source discovery"
     - "external codebase-design capability for behavior-preserving pruning"
   evidence_required:
     - "existing record search before adding duplicates"

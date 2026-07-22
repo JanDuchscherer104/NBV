@@ -128,14 +128,6 @@ DOC_SPECS: tuple[DocSpec, ...] = (
         nav_label="aria-nbv-context Skill",
         summary="Discovery-and-routing skill for localizing tasks across paper, docs, memory, and code.",
     ),
-    DocSpec(
-        source=".agents/skills/aria-nbv-context/references/context_map.md",
-        output="skills/context_map.qmd",
-        title="Context Map",
-        section="Skills & Routing",
-        nav_label="Context Map",
-        summary="Concept-to-source routing map for the maintained scaffold surfaces.",
-    ),
 )
 
 SECTION_ORDER = (

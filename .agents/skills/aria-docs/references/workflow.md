@@ -21,8 +21,10 @@ with `--root .`, render affected pages when needed, and inspect them visually.
 
 Resolve bibliography keys in `docs/references.bib`. For an advisor-facing
 claim, inspect an authoritative TeX section, local PDF page, or upstream source
-and retain an exact locator. Figures retain reproducible source plus units,
-coordinate frame, fixed view/projection, export settings, and provenance.
+and retain an exact locator. Follow
+`.agents/references/direct_source_claim_checklist.md`, calibrate wording, and
+record touched-surface render evidence. Figures retain reproducible source plus
+units, coordinate frame, fixed view/projection, export settings, and provenance.
 
 ## Mermaid
 

@@ -38,8 +38,8 @@ metadata:
     - "/websites/streamlit_io"
     - "/facebookresearch/pytorch3d"
   literature_refs:
-    - "quality-driven-rri"
-    - "egocentric-aria-substrate"
+    - "VIN-NBV-frahm2025"
+    - "EFM3D-straub2024"
   tool_refs:
     - "mcp__MCP_DOCKER.get_library_docs"
     - "mcp__MCP_DOCKER.browser_run_code"

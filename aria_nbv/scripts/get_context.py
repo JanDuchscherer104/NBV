@@ -1,16 +1,7 @@
-"""Extract lightweight AST-based context for the ``aria_nbv`` package.
+"""Print contract-style classes and config fields from ``aria_nbv`` source.
 
-Modes
------
-- modules: one-line module map with symbol counts and paths
-- packages: grouped overview of modules and exported symbols
-- classes: classes with first-paragraph docstrings and public methods
-- functions: top-level public functions with signatures and doc summaries
-- contracts: contract-style classes, typed dicts, and configs with public fields
-- match: filter modules, classes, functions, and constants by a query substring
-
-Implementation uses Python's AST only (no imports/exec), so it is safe and fast.
-Outputs Markdown to stdout for targeted repo navigation.
+The inspector uses Python's AST only, performs no imports or execution, and
+writes the bounded contract view to stdout.
 """
 
 from __future__ import annotations
@@ -254,71 +245,6 @@ def scan_root(root: Path) -> list[ModuleInfo]:
     return modules
 
 
-def print_modules(mods: list[ModuleInfo], root: Path) -> None:
-    print("# Module map\n")
-    for module in mods:
-        rel_path = module.path.relative_to(root).as_posix()
-        print(
-            f"- `{module.module}` :: {rel_path} "
-            f"(classes={len(module.classes)}, functions={len(module.functions)}, constants={len(module.constants)})"
-        )
-
-
-def print_packages_overview(mods: list[ModuleInfo], root: Path) -> None:
-    print("# Package symbol overview\n")
-    by_pkg: dict[str, list[ModuleInfo]] = {}
-    for module in mods:
-        top = module.module.split(".")[0]
-        by_pkg.setdefault(top, []).append(module)
-
-    for pkg, modules in sorted(by_pkg.items()):
-        print(f"## {pkg}\n")
-        for module in modules:
-            rel_path = module.path.relative_to(root).as_posix()
-            print(f"### {module.module} ({rel_path})")
-            if module.doc:
-                for line in (_first_paragraph(module.doc) or "").splitlines():
-                    print(f"> {line}")
-                print()
-            if module.classes:
-                print("- Classes: " + ", ".join(class_info.name for class_info in module.classes))
-            if module.functions:
-                print("- Functions: " + ", ".join(function.name for function in module.functions))
-            if module.constants:
-                print("- Constants: " + ", ".join(module.constants))
-            print()
-
-
-def print_classes_with_docs(mods: list[ModuleInfo], max_doc: int, full_doc: bool = False) -> None:
-    print("# Classes with docstrings\n")
-    for module in mods:
-        for class_info in module.classes:
-            doc = class_info.doc.strip() if full_doc and class_info.doc else _first_paragraph(class_info.doc) or "—"
-            if not full_doc and len(doc) > max_doc:
-                doc = doc[: max_doc - 1] + "..."
-            print(f"## {module.module}.{class_info.name}")
-            print(doc)
-            if class_info.methods:
-                print("\nMethods:")
-                for method in class_info.methods:
-                    print(f"- {method.name}{method.signature}")
-            print()
-
-
-def print_functions(mods: list[ModuleInfo], max_doc: int) -> None:
-    print("# Public functions\n")
-    for module in mods:
-        if not module.functions:
-            continue
-        print(f"## {module.module}")
-        for function in module.functions:
-            doc = _first_paragraph(function.doc) or "—"
-            if len(doc) > max_doc:
-                doc = doc[: max_doc - 1] + "..."
-            print(f"- `{function.name}{function.signature}` :: {doc}")
-        print()
-
-
 def print_contracts(mods: list[ModuleInfo], root: Path, max_doc: int) -> None:
     print("# Data Contracts\n")
     for module in mods:
@@ -346,88 +272,22 @@ def print_contracts(mods: list[ModuleInfo], root: Path, max_doc: int) -> None:
             print()
 
 
-def print_matches(mods: list[ModuleInfo], query: str, root: Path, max_doc: int) -> None:
-    needle = query.casefold()
-    print(f"# Matches for {query!r}\n")
-    for module in mods:
-        module_hits: list[str] = []
-        rel_path = module.path.relative_to(root).as_posix()
-        if needle in module.module.casefold() or needle in rel_path.casefold():
-            module_hits.append(f"- Module: `{module.module}` ({rel_path})")
-        for class_info in module.classes:
-            haystacks = [class_info.name, class_info.doc or "", *(field_info.name for field_info in class_info.fields)]
-            if any(needle in item.casefold() for item in haystacks):
-                doc = _first_paragraph(class_info.doc) or "—"
-                if len(doc) > max_doc:
-                    doc = doc[: max_doc - 1] + "..."
-                module_hits.append(f"- Class: `{module.module}.{class_info.name}` :: {doc}")
-            for method in class_info.methods:
-                haystacks = [method.name, method.doc or ""]
-                if any(needle in item.casefold() for item in haystacks):
-                    doc = _first_paragraph(method.doc) or "—"
-                    if len(doc) > max_doc:
-                        doc = doc[: max_doc - 1] + "..."
-                    module_hits.append(
-                        f"- Method: `{module.module}.{class_info.name}.{method.name}{method.signature}` :: {doc}"
-                    )
-        for function in module.functions:
-            haystacks = [function.name, function.doc or ""]
-            if any(needle in item.casefold() for item in haystacks):
-                doc = _first_paragraph(function.doc) or "—"
-                if len(doc) > max_doc:
-                    doc = doc[: max_doc - 1] + "..."
-                module_hits.append(f"- Function: `{module.module}.{function.name}{function.signature}` :: {doc}")
-        for constant in module.constants:
-            if needle in constant.casefold():
-                module_hits.append(f"- Constant: `{module.module}.{constant}`")
-        if module_hits:
-            print(f"## {module.module}")
-            print("\n".join(module_hits))
-            print()
-
-
 def main(argv: Iterable[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Extract aria_nbv source context (AST-based)")
-    parser.add_argument(
-        "mode",
-        choices=["modules", "packages", "classes", "functions", "contracts", "match"],
-        help="modules: one-line module map; packages: grouped symbols; classes/functions: targeted summaries; contracts: contract index; match: query filter",
-    )
-    parser.add_argument("query", nargs="?", help="Query substring for match mode")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
         default=str(Path(__file__).resolve().parents[1] / "aria_nbv"),
         help="Root package directory",
     )
     parser.add_argument("--max-doc", type=int, default=240, help="Max characters for doc summaries")
-    parser.add_argument(
-        "--full-doc",
-        action="store_true",
-        help="Show full class docstrings instead of truncated first paragraph",
-    )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     root = Path(args.root).resolve()
     if not root.exists():
         print(f"error: root directory not found: {root}", file=sys.stderr)
         return 2
-    if args.mode == "match" and not args.query:
-        print("error: match mode requires a query", file=sys.stderr)
-        return 2
-
     modules = scan_root(root)
-    if args.mode == "modules":
-        print_modules(modules, root)
-    elif args.mode == "packages":
-        print_packages_overview(modules, root)
-    elif args.mode == "classes":
-        print_classes_with_docs(modules, args.max_doc, args.full_doc)
-    elif args.mode == "functions":
-        print_functions(modules, args.max_doc)
-    elif args.mode == "contracts":
-        print_contracts(modules, root, args.max_doc)
-    else:
-        print_matches(modules, args.query or "", root, args.max_doc)
+    print_contracts(modules, root, args.max_doc)
     return 0
 
 

@@ -19,5 +19,6 @@ For "$ARGUMENTS":
    public surfaces affected, implementation packages, verification commands,
    assumptions and deferred decisions.
 
-For advisor-facing claims, run `make kg-claim-check KG_CLAIM="..."` before
-treating the claim as supported.
+For advisor-facing claims, apply
+`.agents/references/direct_source_claim_checklist.md` before treating the claim
+as supported.

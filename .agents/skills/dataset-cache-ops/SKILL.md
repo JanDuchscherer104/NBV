@@ -40,7 +40,7 @@ metadata:
     - "/facebookresearch/atek"
     - "/facebookresearch/efm3d"
   literature_refs:
-    - "egocentric-aria-substrate"
+    - "docs/contents/literature/project_aria.qmd"
     - "ProjectAria-ASE-2025"
     - "EFM3D-straub2024"
   tool_refs:

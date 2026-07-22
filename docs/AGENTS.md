@@ -33,14 +33,15 @@ Apply this file when working under `docs/`.
   `.agents/archive/docs/`.
 - If you need current project truth, open the owning source from
   `.agents/references/source_order.md` instead of scanning broad doc trees.
-- Run `make kg-claim-check KG_CLAIM="..."` for advisor-facing proposal,
-  roadmap, research-question, or literature-synthesis claims.
+- For advisor-facing proposal, roadmap, research-question, or
+  literature-synthesis claims, follow
+  `.agents/references/direct_source_claim_checklist.md`.
 - Use `aria-docs` for repeatable Quarto, Typst, citation, scientific-figure,
   Mermaid, and render-inspection workflows; this file and the touched document
   remain the durable owners of public narrative and notation.
 
 ## Commands
-- Context refresh: `make context`
+- Contract inspection: `make context-contracts`
 - API reference refresh: `./scripts/quarto_generate_api_docs.sh`
 - Internal agent scaffold refresh: `./scripts/quarto_generate_agent_docs.py`
 - QMD frontmatter check: `make qmd-frontmatter-check`
@@ -54,6 +55,7 @@ Apply this file when working under `docs/`.
 - Typst slides: `cd docs && typst compile typst/seminar_slides/<file>.typ --root .`
 - QMD tree: `make context-qmd-tree`
 - Outline-first routing: `scripts/nbv_qmd_outline.sh`, `scripts/nbv_typst_includes.py`
+- Scoped UML: `make uml UML_ROOT=aria_nbv/aria_nbv/<package> UML_OUT=<absolute-ignored-path>`
 
 ## Diagram Rules
 - Validate Mermaid before committing diagram edits.

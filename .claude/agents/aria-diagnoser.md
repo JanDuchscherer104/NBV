@@ -13,7 +13,7 @@ loop that reproduces the user-visible symptom before patching:
 - offline store: manifest/sample-index read + `tests/data_handling/test_vin_offline_store.py`
 - Streamlit: import/dispatcher test before manual UI inspection
 - docs: `cd docs && quarto render <page>` or focused typst compile
-- KG: narrowest `make kg-*` command for the failing artifact
+- graph/navigation: Graphify freshness plus the narrowest exact-source reproducer
 
 Workflow:
 1. Search `.agents/resolved.toml` first to avoid redoing settled diagnoses.

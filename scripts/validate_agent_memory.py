@@ -48,7 +48,7 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## KG And Optional Tooling",
+        "## Exact-Source And Optional Tooling",
     ),
     (
         REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
