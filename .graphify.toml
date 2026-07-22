@@ -1,0 +1,89 @@
+schema_version = "aria-graph-v2"
+graphify_package = "graphifyy"
+graphify_version = "0.9.22"
+graphify_upstream_commit = "abff1b1ca4052fcf9d955c5f6a034088723f4536"
+canonical_artifacts = [
+  "graphify-out/graph.json",
+  "graphify-out/manifest.json",
+  "graphify-out/GRAPH_REPORT.md",
+]
+
+[partition.literature]
+semantic_mode = "reviewed-source-reference"
+patterns = [
+  "docs/contents/literature/**",
+  "docs/literature/sources.jsonl",
+  "docs/literature/tex-src/**",
+]
+
+[partition.scaffold]
+semantic_mode = "reviewed-source-reference"
+patterns = [
+  "AGENTS.md",
+  "**/AGENTS.md",
+  ".agents/**",
+  ".codex/skills/graphify/**",
+  ".omx/context/**",
+  ".omx/plans/**",
+  ".omx/archive/accepted-bundles/**",
+  ".github/workflows/ci.yml",
+  ".gitattributes",
+  ".gitignore",
+  ".graphify.toml",
+  ".graphifyignore",
+  "Makefile",
+  "scripts/check_graphify_*.py",
+  "scripts/graphify_*.py",
+  "scripts/graphify_*.sh",
+  "scripts/git_hooks/post-commit",
+  "scripts/tests/test_graphify_*.py",
+  "scripts/tests/test_post_commit_graph_dispatch.sh",
+]
+
+[partition.thesis]
+semantic_mode = "reviewed-source-reference"
+patterns = ["docs/**"]
+
+[partition.code]
+semantic_mode = "structural"
+patterns = ["aria_nbv/**", ".configs/**"]
+
+[corpus]
+text_extensions = [
+  ".bib", ".cfg", ".css", ".json", ".jsonl", ".md", ".mmd", ".py",
+  ".qmd", ".sh", ".tex", ".toml", ".typ", ".yaml", ".yml",
+]
+exclude_patterns = [
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  ".agents/archive/**",
+  ".agents/external/**",
+  ".agents/kg/**",
+  ".agents/memory/history/**",
+  ".agents/memory/transcripts/**",
+  ".agents/work/**",
+  ".omx/archive/**/runtime/**",
+  ".omx/state/**",
+  ".omx/ultragoal/**",
+  "aria_nbv/.venv/**",
+  "docs/_build/**",
+  "docs/_extensions/**",
+  "docs/_freeze/**",
+  "docs/_generated/**",
+  "docs/_inv/**",
+  "docs/_site/**",
+  "docs/**/*_files/**",
+  "docs/literature/pdf/**",
+  "docs/literature/tex-src/**/*.bib",
+  "docs/literature/tex-src/**/*.bst",
+  "docs/literature/tex-src/**/*.cls",
+  "docs/literature/tex-src/**/*.sty",
+  "external/**",
+  "graphify-out/**",
+]
+
+[roles]
+test_patterns = ["aria_nbv/tests/**", "scripts/tests/**"]
+config_patterns = [".configs/**", "**/*.toml", "**/*.yaml", "**/*.yml"]
+guide_patterns = ["**/AGENTS.md", "**/README.md", "docs/**"]

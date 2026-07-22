@@ -1,312 +1,139 @@
 #!/usr/bin/env python3
-"""Check ARIA-NBV's Graphify corpus and tracked integration contracts."""
+"""Check the pinned Graphify corpus, artifacts, provenance, and wiring."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import os
 import re
+import shlex
 import subprocess
 import sys
-import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
-GRAPHIFY_VERSION_FILE = ROOT / ".codex/skills/graphify/.graphify_version"
-FORBIDDEN_PREFIXES = (
-    "docs/_extensions/",
-    "docs/_inv/",
-    "graphify-out/",
+from graphify_contract import (
+    ContractError,
+    PARTITION_ORDER,
+    ROOT,
+    collect_sources,
+    load_canonical,
+    load_config,
+    validate_graph,
 )
-FORBIDDEN_FRAGMENTS = ("_files/",)
-ALLOWED_STRUCTURAL_PATHS = ("Makefile",)
-ALLOWED_STRUCTURAL_PREFIXES = (
-    ".agents/",
-    "aria_nbv/",
-    "docs/",
-)
-REQUIRED_SEMANTIC_FAMILIES = {
-    "Quarto docs": ("docs/**/*.qmd",),
-    "thesis Typst docs": ("docs/typst/thesis/**/*.typ",),
-    "literature sources": (
-        "docs/literature/*.md",
-        "docs/literature/*.qmd",
-        "docs/literature/*.jsonl",
-    ),
-    "diagrams": ("docs/figures/diagrams/**/*.svg",),
-    "agent routing context": (".agents/references/*.md",),
+
+MAX_CANONICAL_BYTES = 35 * 1024 * 1024
+CANONICAL = {
+    "graphify-out/graph.json",
+    "graphify-out/manifest.json",
+    "graphify-out/GRAPH_REPORT.md",
 }
-REQUIRED_SEMANTIC_REINCLUDE_RULES = {
-    "Quarto docs": (
-        "!docs/",
-        "!docs/index.qmd",
-        "!docs/contents/",
-        "!docs/contents/**",
-    ),
-    "thesis Typst docs": (
-        "!docs/typst/",
-        "!docs/typst/thesis/",
-        "!docs/typst/thesis/**",
-    ),
-    "literature sources": (
-        "!docs/literature/",
-        "!docs/literature/*.md",
-        "!docs/literature/*.qmd",
-        "!docs/literature/*.jsonl",
-    ),
-    "diagrams": (
-        "!docs/figures/",
-        "!docs/figures/diagrams/",
-        "!docs/figures/diagrams/**/*.svg",
-    ),
-    "agent routing context": (
-        "!.agents/",
-        "!.agents/references/",
-        "!.agents/references/*.md",
-    ),
-}
-REQUIRED_GENERATED_IGNORE_RULES = (
-    "graphify-out/",
-    "graphify-out/**",
-    "docs/_build/",
-    "docs/_extensions/",
-    "docs/_inv/",
-    "docs/_generated/",
-    "docs/_site/",
-    "docs/*_files/",
-    "docs/**/*_files/",
-)
-
-
-def _expected_version() -> str:
-    try:
-        return GRAPHIFY_VERSION_FILE.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise RuntimeError(f"cannot read {GRAPHIFY_VERSION_FILE}: {exc}") from exc
 
 
 def _graphify_version() -> str:
-    try:
-        version_text = subprocess.check_output(
-            ["graphify", "--version"], text=True, stderr=subprocess.STDOUT
-        ).strip()
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise RuntimeError(
-            "graphify is required; install the graphifyy version declared in "
-            ".codex/skills/graphify/.graphify_version"
-        ) from exc
-    match = re.search(r"(\d+\.\d+\.\d+)", version_text)
-    if match is None:
-        raise RuntimeError(f"cannot parse graphify --version output: {version_text}")
+    executable = shlex.split(os.environ.get("GRAPHIFY_BIN", "graphify"))
+    command = subprocess.run(
+        [*executable, "--version"], text=True, capture_output=True, check=False
+    )
+    match = re.search(r"(\d+\.\d+\.\d+)", command.stdout + command.stderr)
+    if command.returncode or match is None:
+        raise ContractError("graphify executable/version is unavailable")
     return match.group(1)
 
 
-def _load_manifest(path: Path) -> dict[str, object]:
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise RuntimeError(
-            f"Graphify manifest is unavailable at {path}: {exc}"
-        ) from exc
-    try:
-        manifest = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"Graphify manifest is malformed JSON at {path}: {exc}"
-        ) from exc
-    if not isinstance(manifest, dict):
-        raise RuntimeError(f"Graphify manifest must be a JSON object at {path}")
-    return manifest
+def _validate_pin(config: dict) -> None:
+    version_file = (ROOT / ".codex/skills/graphify/.graphify_version").read_text(
+        encoding="utf-8"
+    ).strip()
+    if version_file != config["graphify_version"]:
+        raise ContractError("Graphify version file and capability record differ")
+    found = _graphify_version()
+    if found != version_file:
+        raise ContractError(f"Graphify {version_file} is required; found {found}")
 
 
-def _extract_structural_manifest(out_dir: Path) -> dict[str, object]:
-    command = [
-        "graphify",
-        "extract",
-        ".",
-        "--code-only",
-        "--no-cluster",
-        "--out",
-        str(out_dir),
-    ]
-    try:
-        subprocess.run(
-            command,
-            cwd=ROOT,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        stderr = getattr(exc, "stderr", "") or str(exc)
-        raise RuntimeError(
-            f"Graphify code-only extraction failed: {stderr.strip()}"
-        ) from exc
-    return _load_manifest(out_dir / "graphify-out/manifest.json")
-
-
-def _has_repo_file(patterns: tuple[str, ...]) -> bool:
-    for pattern in patterns:
-        if any(path.is_file() for path in ROOT.glob(pattern)):
-            return True
-    return False
-
-
-def _is_canonical_repo_path(path: str) -> bool:
-    parts = path.split("/")
-    return (
-        path not in {"", ".", ".."}
-        and not Path(path).is_absolute()
-        and not path.startswith("./")
-        and "\\" not in path
-        and all(part not in {"", ".", ".."} for part in parts)
+def _validate_tracked_outputs(config: dict) -> None:
+    expected = set(config["canonical_artifacts"])
+    if expected != CANONICAL:
+        raise ContractError("canonical Graphify artifact allowlist drifted")
+    tracked = set(
+        subprocess.check_output(
+            ["git", "ls-files", "graphify-out"], cwd=ROOT, text=True
+        ).splitlines()
     )
-
-
-def _is_allowed_structural_path(path: str) -> bool:
-    return path in ALLOWED_STRUCTURAL_PATHS or path.startswith(
-        ALLOWED_STRUCTURAL_PREFIXES
-    )
-
-
-def _validate_structural_manifest(manifest: dict[str, object]) -> int:
-    paths = sorted(manifest)
-    noncanonical = [path for path in paths if not _is_canonical_repo_path(path)]
-    if noncanonical:
-        raise RuntimeError(
-            "Graphify manifest contains non-canonical repo-relative paths:\n- "
-            + "\n- ".join(noncanonical[:10])
+    if tracked != expected:
+        raise ContractError(
+            "tracked Graphify output must equal canonical allowlist; found "
+            + ", ".join(sorted(tracked))
         )
-
+    size = sum((ROOT / path).stat().st_size for path in expected)
+    if size > MAX_CANONICAL_BYTES:
+        raise ContractError(f"canonical Graphify output exceeds 35 MB: {size} bytes")
     forbidden = [
         path
-        for path in paths
-        if path.startswith(FORBIDDEN_PREFIXES)
-        or any(fragment in path for fragment in FORBIDDEN_FRAGMENTS)
+        for path in tracked
+        if "wiki" in path.casefold() or path.endswith((".html", "cost.json"))
     ]
     if forbidden:
-        raise RuntimeError(
-            "forbidden Graphify structural sources detected:\n- "
-            + "\n- ".join(forbidden[:20])
-        )
+        raise ContractError("tracked wiki/cache/render output is forbidden")
 
-    outside_allowed = [path for path in paths if not _is_allowed_structural_path(path)]
-    if outside_allowed:
-        raise RuntimeError(
-            "Graphify manifest contains paths outside allowed structural surfaces:\n- "
-            + "\n- ".join(outside_allowed[:20])
-        )
 
-    missing = [path for path in paths if not (ROOT / path).is_file()]
+def _validate_corpus(config: dict) -> None:
+    sources = collect_sources(ROOT, config)
+    partitions = {name: [] for name in PARTITION_ORDER}
+    for source in sources:
+        partitions[source["partition"]].append(source)
+    missing = [name for name, values in partitions.items() if not values]
     if missing:
-        raise RuntimeError(
-            "Graphify manifest contains nonexistent repo paths:\n- "
-            + "\n- ".join(missing[:20])
+        raise ContractError("empty Graphify partitions: " + ", ".join(missing))
+    code_roles = {item["role"] for item in partitions["code"]}
+    if not {"production", "test", "config", "guide"} <= code_roles:
+        raise ContractError(
+            "code partition lacks production/test/config/guide role coverage"
         )
-
-    package_code = [
+    paths = {item["path"] for item in sources}
+    forbidden = {
         path
         for path in paths
-        if path.startswith("aria_nbv/aria_nbv/") and path.endswith(".py")
-    ]
-    if not package_code:
-        raise RuntimeError(
-            "missing required Graphify structural source: aria_nbv/aria_nbv/*.py"
-        )
-
-    return len(paths)
+        if path.startswith(("graphify-out/", ".omx/state/", "docs/_site/"))
+        or "/wiki/" in path
+    }
+    if forbidden:
+        raise ContractError("forbidden Graphify corpus sources: " + ", ".join(sorted(forbidden)))
 
 
-def _validate_semantic_policy() -> None:
-    policy_path = ROOT / ".graphifyignore"
-    try:
-        policy_rules = {
-            line.strip()
-            for line in policy_path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        }
-    except OSError as exc:
-        raise RuntimeError(f"cannot read {policy_path}: {exc}") from exc
-
-    missing_rules = [
-        rule for rule in REQUIRED_GENERATED_IGNORE_RULES if rule not in policy_rules
-    ]
-    if missing_rules:
-        raise RuntimeError(
-            "missing generated-source Graphify ignore rules:\n- "
-            + "\n- ".join(missing_rules)
-        )
-
-    missing_reincludes = [
-        f"{family}: {rule}"
-        for family, rules in REQUIRED_SEMANTIC_REINCLUDE_RULES.items()
-        for rule in rules
-        if rule not in policy_rules
-    ]
-    if missing_reincludes:
-        raise RuntimeError(
-            "missing semantic-source Graphify reinclude rules:\n- "
-            + "\n- ".join(missing_reincludes)
-        )
-
-    missing_families = [
-        name
-        for name, patterns in REQUIRED_SEMANTIC_FAMILIES.items()
-        if not _has_repo_file(patterns)
-    ]
-    if missing_families:
-        raise RuntimeError(
-            "missing Graphify semantic source families:\n- "
-            + "\n- ".join(missing_families)
-        )
-
-
-def _validate_hook_contracts() -> None:
+def _validate_hook_and_merge() -> None:
     hook = (ROOT / "scripts/git_hooks/post-commit").read_text(encoding="utf-8")
-    if "exec scripts/kg/auto_refresh.sh" in hook or "/home/" in hook:
-        raise RuntimeError(
-            "post-commit contains terminal dispatch or a host-specific path"
-        )
-    if "scripts/graphify_refresh.py" not in hook:
-        raise RuntimeError("post-commit does not dispatch the Graphify refresh module")
-    if "nohup" in hook or "python3 scripts/graphify_refresh.py" in hook:
-        raise RuntimeError("post-commit uses a non-portable Graphify launcher")
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    if "git rev-parse --git-path hooks" not in makefile:
-        raise RuntimeError(
-            "hook installation does not resolve Git's effective hooks path"
-        )
+    required = ("GRAPHIFY_CHANGED", "graphify_refresh.py", "start_new_session=True")
+    if any(value not in hook for value in required):
+        raise ContractError("post-commit lacks asynchronous Graphify dispatch contract")
+    forbidden = ("git add", "git commit", "--mode sync", "save-result", "reflect")
+    if any(value in hook for value in forbidden):
+        raise ContractError("post-commit performs forbidden mutation/semantic work")
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    if "graphify-out/graph.json merge=graphify" not in attributes:
+        raise ContractError("Graphify merge driver is not assigned in .gitattributes")
+    if not (ROOT / "scripts/graphify_merge_driver.py").is_file():
+        raise ContractError("Graphify merge driver wrapper is absent")
 
 
-def _check_graphify_version() -> None:
-    expected = _expected_version()
-    found = _graphify_version()
-    if found != expected:
-        raise RuntimeError(
-            f"Graphify {expected} is required by .graphify_version; found {found}"
-        )
-
-
-def run_check() -> int:
-    _check_graphify_version()
-    with tempfile.TemporaryDirectory() as directory:
-        source_count = _validate_structural_manifest(
-            _extract_structural_manifest(Path(directory))
-        )
-    _validate_semantic_policy()
-    _validate_hook_contracts()
-    return source_count
+def run_check() -> tuple[int, int, int]:
+    config = load_config()
+    _validate_pin(config)
+    _validate_tracked_outputs(config)
+    _validate_corpus(config)
+    _validate_hook_and_merge()
+    graph, manifest = load_canonical()
+    errors = validate_graph(graph, manifest)
+    if errors:
+        raise ContractError("canonical graph provenance errors:\n- " + "\n- ".join(errors[:30]))
+    return len(manifest["sources"]), len(graph["nodes"]), len(graph["edges"])
 
 
 def main() -> int:
     try:
-        source_count = run_check()
-    except RuntimeError as exc:
+        sources, nodes, edges = run_check()
+    except (ContractError, OSError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
-
-    print(
-        f"Graphify integration OK: {source_count} policy-conformant structural sources"
-    )
+    print(f"Graphify integration OK: {sources} sources, {nodes} nodes, {edges} edges")
     return 0
 
 

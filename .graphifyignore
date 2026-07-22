@@ -1,113 +1,88 @@
-# ARIA-NBV root Graphify corpus policy.
-#
-# The graph should cover code/navigation surfaces without indexing operator
-# state, vendored repositories, generated sites, cache directories, or bulky
-# media. Graphify merges this with .gitignore using last-match-wins semantics.
-
-# Start closed, then opt in the maintained navigation surfaces.
+# ARIA-NBV's extraction boundary. The richer partition and role contract lives
+# in .graphify.toml; this file constrains the upstream Graphify scanner.
 *
 **
 
+!.graphify.toml
+!.graphifyignore
+!.gitattributes
+!.gitignore
 !Makefile
+!AGENTS.md
 
 !aria_nbv/
 !aria_nbv/**
+!.configs/
+!.configs/**
 
 !docs/
-!docs/index.qmd
-!docs/contents/
-!docs/contents/**
-!docs/typst/
-!docs/typst/shared/
-!docs/typst/shared/**
-!docs/typst/thesis/
-!docs/typst/thesis/**
-!docs/figures/
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-!docs/literature/
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
-!docs/references.bib
+!docs/**
 
 !.agents/
-!.agents/AGENTS_INTERNAL_DB.md
-!.agents/issues.toml
-!.agents/todos.toml
-!.agents/refactors.toml
-!.agents/resolved.toml
-!.agents/references/
-!.agents/references/*.md
-!.agents/memory/
-!.agents/memory/state/
-!.agents/memory/state/*.md
+!.agents/**
+!.codex/
+!.codex/skills/
+!.codex/skills/graphify/
+!.codex/skills/graphify/**
+!.omx/
+!.omx/context/
+!.omx/context/**
+!.omx/plans/
+!.omx/plans/**
+!.omx/archive/
+!.omx/archive/accepted-bundles/
+!.omx/archive/accepted-bundles/**
 
-# Prune broad directory reincludes down to the intended files.
-.agents/references/**
-!.agents/references/*.md
-.agents/memory/**
-!.agents/memory/state/
-!.agents/memory/state/*.md
-docs/figures/**
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-docs/literature/**
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
+!scripts/
+!scripts/check_graphify_*.py
+!scripts/graphify_*.py
+!scripts/graphify_*.sh
+!scripts/git_hooks/
+!scripts/git_hooks/post-commit
+!scripts/tests/
+!scripts/tests/test_graphify_*.py
+!scripts/tests/test_post_commit_graph_dispatch.sh
 
-# Explicit exclusions after reincludes.
-AGENTS.md
-graphify-out/
-graphify-out/**
-external/
-.agent/skills/
+!.github/
+!.github/workflows/
+!.github/workflows/ci.yml
+
+# Generated, inactive, binary, cache, and runtime sources remain out even when
+# a parent above is re-included.
+.agents/archive/
 .agents/external/
-.agents/skills/
 .agents/kg/
 .agents/memory/history/
 .agents/memory/transcripts/
-.agents/archive/
 .agents/work/
-.codex/
-.configs/
-.omx/
-.git/
-.claude/
-.venv/
+.omx/state/
+.omx/ultragoal/
 aria_nbv/.omc/
 aria_nbv/.venv/
-aria_nbv/scripts/
-aria_nbv/tests/
-scripts/
-
 docs/_build/
 docs/_extensions/
-docs/_inv/
-docs/.quarto/
 docs/_freeze/
 docs/_generated/
+docs/_inv/
 docs/_site/
 docs/site_libs/
 docs/index_files/
-docs/*_files/
 docs/reference/
 docs/search.json
-docs/literature/pdf/
-docs/literature/tex-src/
-docs/**/.jupyter_cache/
-docs/**/*.html
 docs/**/*_files/
+docs/**/.jupyter_cache/
+docs/literature/pdf/
+docs/literature/tex-src/**/*.bib
+docs/literature/tex-src/**/*.bst
+docs/literature/tex-src/**/*.cls
+docs/literature/tex-src/**/*.sty
+external/
+graphify-out/
 
 **/__pycache__/
 **/.pytest_cache/
 **/.ruff_cache/
 **/.mypy_cache/
-**/.pyre/
-**/.tox/
-**/.nox/
-
 **/*.7z
 **/*.avi
 **/*.bin

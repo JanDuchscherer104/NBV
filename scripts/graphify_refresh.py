@@ -1,31 +1,33 @@
 #!/usr/bin/env python3
-"""Refresh ARIA-NBV's local Graphify graph through supported CLI commands."""
+"""Run deterministic structural or explicit Graphify synchronization."""
 
 from __future__ import annotations
 
-import hashlib
+import argparse
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "graphify-out"
-STATE = OUT / "aria_nbv_freshness.json"
-SEMANTIC_PREFIXES = (
-    ".agents/",
-    "aria_nbv/",
-    "docs/",
+from graphify_contract import (
+    ContractError,
+    OUT,
+    ROOT,
+    build_canonical,
+    canonical_bytes,
+    classify_path,
+    load_config,
+    load_canonical,
+    write_canonical,
 )
-SEMANTIC_SUFFIXES = {".bib", ".jsonl", ".md", ".pdf", ".png", ".qmd", ".svg", ".typ"}
-STRUCTURAL_SUFFIXES = {".py", ".toml", ".yaml", ".yml"}
+
+PENDING = OUT / "pending.json"
 
 
 def _changed_paths() -> list[Path]:
-    """Return normalized paths supplied by the post-commit dispatcher."""
     return [
         Path(line.strip())
         for line in os.environ.get("GRAPHIFY_CHANGED", "").splitlines()
@@ -33,93 +35,116 @@ def _changed_paths() -> list[Path]:
     ]
 
 
-def _is_semantic(path: Path) -> bool:
-    value = path.as_posix()
-    return path.name == ".graphifyignore" or (
-        value.startswith(SEMANTIC_PREFIXES) and path.suffix.lower() in SEMANTIC_SUFFIXES
+def _graphify_command() -> list[str]:
+    configured = os.environ.get("GRAPHIFY_BIN")
+    if configured:
+        return shlex.split(configured)
+    executable = shutil.which("graphify")
+    return [executable] if executable else [sys.executable, "-m", "graphify"]
+
+
+def _graphify_version(command: list[str]) -> str:
+    result = subprocess.run(
+        [*command, "--version"], text=True, capture_output=True, check=False
     )
+    return result.stdout + result.stderr
 
 
-def _is_code(path: Path) -> bool:
-    value = path.as_posix()
-    return path.name == "Makefile" or (
-        value.startswith((".agents/", "aria_nbv/"))
-        and path.suffix.lower() in STRUCTURAL_SUFFIXES
-    )
-
-
-def _git_head() -> str:
-    return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
-
-
-def _policy_digest() -> str:
-    return hashlib.sha256((ROOT / ".graphifyignore").read_bytes()).hexdigest()
-
-
-def _write_state(*, semantic_pending: bool) -> None:
-    """Atomically record the commit and corpus policy represented locally."""
-    OUT.mkdir(exist_ok=True)
-    payload = {
-        "built_at_commit": _git_head(),
-        "corpus_policy_sha256": _policy_digest(),
-        "semantic_pending": semantic_pending,
-    }
-    with tempfile.NamedTemporaryFile(
-        "w", dir=OUT, delete=False, encoding="utf-8"
-    ) as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        temporary = Path(handle.name)
-    temporary.replace(STATE)
-
-
-def _semantic_pending() -> bool:
-    """Return whether a prior semantic refresh remains outstanding."""
-    if (OUT / "needs_update").exists():
-        return True
-    if not STATE.exists():
-        return False
-    try:
-        return bool(
-            json.loads(STATE.read_text(encoding="utf-8")).get("semantic_pending")
+def _ensure_pin(command: list[str]) -> None:
+    if "0.9.22" not in _graphify_version(command):
+        raise ContractError(
+            "Graphify 0.9.22 is required; set GRAPHIFY_BIN to the pinned executable"
         )
-    except (OSError, ValueError):
-        return True
+
+
+def _pending_partitions(changed: list[Path]) -> set[str]:
+    config = load_config()
+    selected: set[str] = set()
+    for path in changed:
+        try:
+            partition = classify_path(path.as_posix(), config)
+        except ContractError:
+            partition = None
+        if partition:
+            selected.add(partition)
+    return selected
+
+
+def _write_pending(partitions: set[str]) -> None:
+    if not partitions:
+        return
+    OUT.mkdir(exist_ok=True)
+    existing: set[str] = set()
+    try:
+        value = json.loads(PENDING.read_text(encoding="utf-8"))
+        existing = set(value.get("partitions", []))
+    except (OSError, ValueError, AttributeError):
+        pass
+    payload = {"partitions": sorted(existing | partitions)}
+    PENDING.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _compare_generated(generated: dict[str, bytes]) -> list[str]:
+    differences: list[str] = []
+    for name, expected in generated.items():
+        path = OUT / name
+        try:
+            actual = path.read_bytes()
+        except OSError:
+            differences.append(f"missing canonical artifact: {path.relative_to(ROOT)}")
+            continue
+        if actual != expected:
+            differences.append(f"canonical regeneration differs: {path.relative_to(ROOT)}")
+    return differences
+
+
+def run(*, check: bool, mode: str) -> list[str]:
+    command = _graphify_command()
+    _ensure_pin(command)
+    old_graph = None
+    try:
+        old_graph, _ = load_canonical()
+    except ContractError:
+        pass
+    graph, manifest, report = build_canonical(
+        graphify_command=command, old_graph=old_graph
+    )
+    generated = canonical_bytes(graph, manifest, report)
+    if check:
+        return _compare_generated(generated)
+    write_canonical(graph, manifest, report)
+    if mode == "sync":
+        PENDING.unlink(missing_ok=True)
+    return []
 
 
 def main() -> int:
-    """Update code nodes and flag semantic sources that need full extraction."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=("structural", "sync"), default="structural")
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
     changed = _changed_paths()
-    if os.environ.get("GRAPHIFY_SEMANTIC_COMPLETE") == "1":
-        (OUT / "needs_update").unlink(missing_ok=True)
-        _write_state(semantic_pending=False)
+    touched = _pending_partitions(changed)
+    semantic = touched - {"code"}
+    if args.mode == "structural" and semantic:
+        _write_pending(semantic)
         return 0
-    if not changed:
+    if args.mode == "structural" and touched and "code" not in touched:
         return 0
-
-    graphify = shutil.which("graphify")
-    code_changed = any(_is_code(path) for path in changed)
-    semantic_changed = any(_is_semantic(path) for path in changed)
-    semantic_pending = _semantic_pending() or semantic_changed
-
-    if code_changed:
-        command = (
-            [graphify, "update", "."]
-            if graphify is not None
-            else [sys.executable, "-m", "graphify", "update", "."]
-        )
-        result = subprocess.run(command, cwd=ROOT, check=False)
-        if result.returncode:
-            return result.returncode
-
-    if semantic_pending:
-        OUT.mkdir(exist_ok=True)
-        (OUT / "needs_update").touch()
-
-    if code_changed or semantic_changed:
-        _write_state(semantic_pending=semantic_pending)
+    try:
+        differences = run(check=args.check, mode=args.mode)
+    except ContractError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if differences:
+        print("Graphify canonical regeneration is not deterministic/current:")
+        for difference in differences:
+            print(f"- {difference}")
+        return 1
+    if args.check:
+        print("Graphify canonical regeneration is deterministic (no diff).")
+    else:
+        print(f"Graphify {args.mode} refresh wrote canonical artifacts.")
     return 0
 
 

@@ -226,13 +226,26 @@ scaffold-audit-self-test: scaffold-wp0-baseline-self-test _check_python ## 🧭 
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
 
-graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, freshness wiring, and hook dispatch
+graphify-refresh: _check_python ## 🕸️ Explicitly synchronize all canonical Graphify partitions
+	@$(PYTHON_INTERPRETER) scripts/graphify_refresh.py --mode sync
+
+graphify-diff-check: _check_python ## 🕸️ Prove deterministic canonical Graphify regeneration
+	@$(PYTHON_INTERPRETER) scripts/graphify_refresh.py --mode sync --check
+
+graphify-freshness: _check_python ## 🕸️ Validate partition and bridge freshness
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+
+graphify-history: _check_python ## 🕸️ Validate final-tree Graphify synchronization
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_history.py --final-tree
+
+graphify-integration-self-test: _check_python ## 🕸️ Verify corpus, provenance, freshness, history, and hook dispatch
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_history.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
+graphify-ci: graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -260,6 +273,8 @@ install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto
 		ln -sf "$(CURDIR)/$$hook" "$$target" && \
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
+	@git config merge.graphify.name "ARIA-NBV canonical Graphify merge"
+	@git config merge.graphify.driver "$(PYTHON_INTERPRETER) $(CURDIR)/scripts/graphify_merge_driver.py %O %A %B"
 
 install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Claude, Codex, Gemini, and git
 	@if [ ! -f .codex/hooks.json ]; then \

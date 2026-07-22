@@ -1,130 +1,137 @@
 #!/usr/bin/env python3
-"""Validate that the local Graphify graph matches source and corpus policy."""
+"""Validate ARIA-NBV Graphify partitions and bridge revisions."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
+from dataclasses import dataclass
 from pathlib import Path
-import subprocess
+import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "graphify-out"
-
-
-def _head() -> str:
-    return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
-
-
-def _policy_digest() -> str:
-    return hashlib.sha256((ROOT / ".graphifyignore").read_bytes()).hexdigest()
+from graphify_contract import (
+    ContractError,
+    PARTITION_ORDER,
+    ROOT,
+    collect_sources,
+    config_digest,
+    load_canonical,
+    load_config,
+    source_manifest_digest,
+)
 
 
-def _git_paths(*args: str) -> set[Path]:
-    output = subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.STDOUT)
-    return {
-        Path(value.decode(errors="surrogateescape"))
-        for value in output.split(b"\0")
-        if value
-    }
+@dataclass(frozen=True)
+class Freshness:
+    """Partition-local graph trust state."""
+
+    fresh: frozenset[str]
+    stale: dict[str, tuple[str, ...]]
+    bridge_errors: tuple[str, ...]
 
 
-def _is_graphify_source(path: Path) -> bool:
-    if path.name == ".graphifyignore":
-        return True
-    result = subprocess.run(
-        [
-            "git",
-            "-c",
-            f"core.excludesFile={ROOT / '.graphifyignore'}",
-            "check-ignore",
-            "--no-index",
-            "-q",
-            "--",
-            path.as_posix(),
-        ],
-        cwd=ROOT,
-        check=False,
-    )
-    return result.returncode != 0
-
-
-def _dirty_graphify_sources() -> list[str]:
-    changed = _git_paths("diff", "--name-only", "-z", "HEAD", "--")
-    untracked = _git_paths("ls-files", "--others", "--exclude-standard", "-z")
-    return sorted(
-        path.as_posix() for path in changed | untracked if _is_graphify_source(path)
-    )
-
-
-def _read_json_object(
-    path: Path, label: str
-) -> tuple[dict[str, object] | None, str | None]:
+def partition_freshness(root: Path = ROOT) -> Freshness:
+    """Recompute current source/config state against canonical provenance."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return None, f"{label} is malformed JSON: {exc}"
-    except OSError as exc:
-        return None, f"{label} cannot be read: {exc}"
-    if not isinstance(data, dict):
-        return None, f"{label} is not a JSON object"
-    return data, None
-
-
-def freshness_errors() -> list[str]:
-    """Return reasons the local graph must not be trusted for navigation."""
-    graph_path = OUT / "graph.json"
-    state_path = OUT / "aria_nbv_freshness.json"
-    if not graph_path.exists():
-        return ["graphify-out/graph.json is absent"]
-    if not state_path.exists():
-        return ["Graphify freshness metadata is absent"]
-
-    errors: list[str] = []
-    graph, graph_error = _read_json_object(graph_path, "graphify-out/graph.json")
-    state, state_error = _read_json_object(state_path, "Graphify freshness metadata")
-    if graph_error:
-        errors.append(graph_error)
-    if state_error:
-        errors.append(state_error)
-    if errors:
-        return errors
-
-    assert graph is not None and state is not None
-    head = _head()
-    if graph.get("built_at_commit") != head:
-        errors.append("graph.json was built from a different commit")
-    if state.get("built_at_commit") != head:
-        errors.append("freshness metadata was built from a different commit")
-    if state.get("corpus_policy_sha256") != _policy_digest():
-        errors.append(".graphifyignore changed since the last refresh")
-    dirty_sources = _dirty_graphify_sources()
-    if dirty_sources:
-        errors.append(
-            "Graphify corpus sources have uncommitted changes: "
-            + ", ".join(dirty_sources[:10])
+        config = load_config(root)
+        graph, manifest = load_canonical(root / "graphify-out")
+        sources = collect_sources(root, config)
+    except ContractError as exc:
+        return Freshness(
+            frozenset(),
+            {name: (str(exc),) for name in PARTITION_ORDER},
+            (),
         )
-    if state.get("semantic_pending") or (OUT / "needs_update").exists():
-        errors.append("documentation, literature, or diagram extraction is pending")
+    stale: dict[str, tuple[str, ...]] = {}
+    fresh: set[str] = set()
+    current_config = config_digest(config, root)
+    recorded_config = manifest.get("extraction_config_sha256")
+    recorded_partitions = manifest.get("partitions", {})
+    for name in PARTITION_ORDER:
+        reasons: list[str] = []
+        current_sources = [item for item in sources if item["partition"] == name]
+        current_manifest = source_manifest_digest(current_sources)
+        recorded = recorded_partitions.get(name, {})
+        if current_config != recorded_config:
+            reasons.append("extraction configuration changed")
+        if current_manifest != recorded.get("source_manifest_sha256"):
+            reasons.append("source manifest changed")
+        if not recorded.get("semantic_complete"):
+            reasons.append("semantic review is incomplete")
+        if reasons:
+            stale[name] = tuple(reasons)
+        else:
+            fresh.add(name)
+
+    bridge_errors: list[str] = []
+    nodes = {
+        node.get("id"): node
+        for node in graph.get("nodes", [])
+        if isinstance(node, dict)
+    }
+    for edge in graph.get("edges", []):
+        if not isinstance(edge, dict) or "bridge_partition_revisions" not in edge:
+            continue
+        source = nodes.get(edge.get("source"), {})
+        target = nodes.get(edge.get("target"), {})
+        endpoint_partitions = {source.get("partition"), target.get("partition")}
+        if not endpoint_partitions <= fresh:
+            bridge_errors.append(f"{edge.get('id')}: stale endpoint partition")
+            continue
+        expected = {
+            name: recorded_partitions.get(name, {}).get("revision")
+            for name in endpoint_partitions
+        }
+        if edge.get("bridge_partition_revisions") != expected:
+            bridge_errors.append(f"{edge.get('id')}: endpoint revision mismatch")
+    return Freshness(frozenset(fresh), stale, tuple(sorted(bridge_errors)))
+
+
+def freshness_errors(root: Path = ROOT) -> list[str]:
+    """Return stable human-readable reasons graph evidence is incomplete."""
+    state = partition_freshness(root)
+    errors = [
+        f"{name} partition is stale: {', '.join(state.stale[name])}"
+        for name in PARTITION_ORDER
+        if name in state.stale
+    ]
+    errors.extend(f"bridge is stale: {reason}" for reason in state.bridge_errors)
     return errors
+
+
+def require_partitions(
+    required: set[str], *, operation: str, root: Path = ROOT
+) -> tuple[bool, str]:
+    """Apply search-vs-path/explain fail-closed freshness semantics."""
+    state = partition_freshness(root)
+    stale = sorted(required - state.fresh)
+    if not stale:
+        return True, ""
+    if operation == "search" and state.fresh:
+        return True, "excluded stale partitions: " + ", ".join(stale)
+    return False, f"{operation} requires stale partition(s): {', '.join(stale)}"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--operation", choices=("search", "path", "explain"))
+    parser.add_argument("--partition", action="append", choices=PARTITION_ORDER)
     args = parser.parse_args()
+    if args.operation:
+        required = set(args.partition or PARTITION_ORDER)
+        allowed, reason = require_partitions(required, operation=args.operation)
+        if reason and not args.quiet:
+            print(reason)
+        return int(not allowed)
     errors = freshness_errors()
     if errors and not args.quiet:
-        print("Graphify is stale; fall back to source files:")
+        print("Graphify is stale; use only fresh partitions or exact sources:")
         for error in errors:
             print(f"- {error}")
     elif not errors and not args.quiet:
-        print("Graphify is fresh for the current commit and corpus policy.")
+        print("Graphify partitions and bridge revisions are fresh.")
     return int(bool(errors))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

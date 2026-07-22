@@ -11,3 +11,4 @@
 .data/aria_download_urls/ase_mesh_download_urls.json filter=lfs diff=lfs merge=lfs -text
 *.pdf binary
 .omx/archive/accepted-bundles/** -whitespace
+graphify-out/graph.json merge=graphify
