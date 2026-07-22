@@ -65,6 +65,8 @@ website:
             file: reference/data_handling.raw.loader.qmd
           - text: views
             file: reference/data_handling.raw.views.qmd
+      - text: dataset_bundle
+        file: reference/dataset_bundle.qmd
       - text: dataset_topology
         file: reference/dataset_topology.qmd
       - text: lightning

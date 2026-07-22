@@ -6,6 +6,7 @@ their public reexports, while leaf module pages document local symbols.
 
 - [configs](configs.qmd)
 - [data_handling](data_handling.qmd)
+- [dataset_bundle](dataset_bundle.qmd)
 - [dataset_topology](dataset_topology.qmd)
 - [lightning](lightning.qmd)
 - [oracle](oracle.qmd)
