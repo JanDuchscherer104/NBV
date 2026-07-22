@@ -157,10 +157,12 @@ def _touched_partitions(root: Path, commit: str) -> set[str]:
         _selected_literature_dirs_at(root, parent) if parent is not None else set()
     )
     after_selected = _selected_literature_dirs_at(root, commit)
-    before_config = (
-        _config_at(root, parent) if parent is not None else _config_at(root, commit)
-    )
     after_config = _config_at(root, commit)
+    try:
+        before_config = _config_at(root, parent) if parent is not None else after_config
+    except ContractError:
+        # The activation commit introduces the first repository Graphify contract.
+        before_config = after_config
     touched: set[str] = set()
     for _, old_path, new_path in _commit_changes(root, commit):
         for path, selected, config in (
