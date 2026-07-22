@@ -1155,7 +1155,7 @@ def _add_target_semidense_crop(
 
 
 def _render_live_rollouts_tab() -> None:
-    st.header("Live Target-RRI Counterfactual Rollouts")
+    st.header("Live Rollout Lab")
     st.caption(
         "Generate multi-step rollouts from VIN offline roots. Target-RRI mode samples geometry-valid Oracle "
         "tasks and passes sanitized descriptors to candidate generation; scene and geometry modes are diagnostics."
@@ -2015,8 +2015,8 @@ def render_counterfactual_rollouts_page() -> None:
         "live target-rri rollouts",
         "Target-RRI mode loads a VIN offline sample, samples an Oracle target task, "
         "passes a sanitized descriptor to candidate generation, and scores rollout branches "
-        "with target-specific oracle RRI. Persisted rollout-Zarr inspection now lives on "
-        "the VIN Offline Dataset page.",
+        "with target-specific oracle RRI. Inspect persisted rollout Zarr artifacts under "
+        "Training Data → Rollout Supervision.",
     )
     _render_live_rollouts_tab()
 
