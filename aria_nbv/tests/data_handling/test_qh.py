@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import fields, is_dataclass, replace
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -216,6 +217,27 @@ def _dataset() -> tuple[QhDataset, _SparseActorSource]:
         actor_source=source,  # type: ignore[arg-type]
     )
     return dataset, source
+
+
+def test_dataset_config_factory_and_direct_injection_share_runtime_interface() -> None:
+    """The config owns construction while the runtime accepts only adapters."""
+
+    reader = _Reader((_stored_state(0, width=2, terminal=True),))
+    source = _SparseActorSource()
+    config = QhDatasetConfig.model_construct(
+        rollout=SimpleNamespace(setup_target=lambda: reader),
+        actor=SimpleNamespace(setup_target=lambda: source),
+    )
+
+    configured = config.setup_target()
+    injected = QhDataset(rollout_reader=reader, actor_source=source)  # type: ignore[arg-type]
+
+    assert type(configured) is type(injected) is QhDataset
+    assert configured.rollout_reader is injected.rollout_reader is reader
+    assert configured.actor_source is injected.actor_source is source
+    parameters = inspect.signature(QhDataset).parameters
+    assert tuple(parameters) == ("rollout_reader", "actor_source")
+    assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
 
 
 def test_dataset_sparse_join_v0_ownership_and_exact_masks() -> None:

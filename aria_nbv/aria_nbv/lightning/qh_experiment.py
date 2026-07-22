@@ -124,8 +124,6 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
         }[resolved_stage]
         if requested_dataset is None:
             raise ValueError(f"Q_H stage={resolved_stage!s} requires a configured {resolved_stage!s} corpus.")
-        setup_name = {Stage.TRAIN: "fit", Stage.VAL: "validate", Stage.TEST: "test"}[resolved_stage]
-        data.setup(setup_name)
         launched_world_size = _positive_env_int("WORLD_SIZE", default=1)
         launcher_rank = _launcher_rank()
         data.prepare_training_sampler(num_replicas=launched_world_size, rank=launcher_rank)

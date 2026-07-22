@@ -192,7 +192,7 @@ store_dir = "/tmp/vin"
         QhExperimentConfig.from_toml(config_path)
 
 
-def test_setup_admits_and_writes_manifest_before_module_and_trainer(
+def test_setup_admits_without_eager_datamodule_setup_and_writes_manifest_before_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -218,7 +218,7 @@ def test_setup_admits_and_writes_manifest_before_module_and_trainer(
 
     config.setup_target()
 
-    assert events == ["seed:0:False", "data.setup:fit", "sampler:3:0", "manifest", "module", "trainer"]
+    assert events == ["seed:0:False", "sampler:3:0", "manifest", "module", "trainer"]
     manifest = json.loads((tmp_path / "run" / "run_manifest.json").read_text())
     assert manifest["config_hash"]
     assert manifest["corpus"] == data.corpus.provenance
@@ -245,7 +245,7 @@ def test_manifest_write_failure_prevents_module_and_trainer(
     with pytest.raises(OSError, match="full"):
         config.setup_target()
 
-    assert events == ["data.setup:fit", "sampler:1:0"]
+    assert events == ["sampler:1:0"]
 
 
 def test_nonzero_launcher_rank_skips_manifest_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,7 +259,7 @@ def test_nonzero_launcher_rank_skips_manifest_write(tmp_path: Path, monkeypatch:
 
     config.setup_target()
 
-    assert events == ["data.setup:fit", "sampler:1:1"]
+    assert events == ["sampler:1:1"]
 
 
 @pytest.mark.parametrize(("stage", "attr"), [(Stage.VAL, "val"), (Stage.TEST, "test")])

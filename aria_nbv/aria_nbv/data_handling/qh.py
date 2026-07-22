@@ -324,6 +324,14 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
 
         return QhDataset
 
+    def setup_target(self) -> QhDataset:
+        """Construct the reader and actor source behind their owned factories."""
+
+        return QhDataset(
+            rollout_reader=self.rollout.setup_target(),
+            actor_source=self.actor.setup_target(),
+        )
+
 
 class QhDataset(Dataset[QhSample]):
     """Join rollout transitions and immutable actor evidence by exact lineage.
@@ -339,25 +347,17 @@ class QhDataset(Dataset[QhSample]):
 
     def __init__(
         self,
-        config: QhDatasetConfig | None = None,
         *,
-        rollout_reader: rollout_qh.QhRolloutReader | None = None,
-        actor_source: VinActorSource | None = None,
+        rollout_reader: rollout_qh.QhRolloutReader,
+        actor_source: VinActorSource,
     ) -> None:
-        """Construct from a config or explicit adapters for focused tests.
+        """Join explicit reader and actor-source adapters.
 
-        Exactly one construction form must be used. Dependencies are accepted
-        rather than created when explicit adapters are supplied, keeping the
-        dataset interface directly testable.
+        Use :meth:`QhDatasetConfig.setup_target` at configuration boundaries.
+        Accepting adapters here keeps the runtime dataset directly testable
+        without adding a second construction policy to the data plane.
         """
 
-        if config is not None:
-            if rollout_reader is not None or actor_source is not None:
-                raise ValueError("QhDataset accepts either config or explicit adapters, not both.")
-            rollout_reader = config.rollout.setup_target()
-            actor_source = config.actor.setup_target()
-        if rollout_reader is None or actor_source is None:
-            raise ValueError("QhDataset requires both a rollout reader and VIN actor source.")
         self.rollout_reader = rollout_reader
         self.actor_source = actor_source
         self._validate_source_lineage()

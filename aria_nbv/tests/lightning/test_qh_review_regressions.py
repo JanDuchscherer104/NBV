@@ -223,7 +223,7 @@ def test_manual_optimization_rejects_gradient_accumulation() -> None:
 
 
 def test_validate_and_test_share_the_public_evaluation_lifecycle() -> None:
-    """Validation and held-out test expose the same aggregate metric contract."""
+    """Trainer owns setup while validation and test share one metric contract."""
 
     dataset, _ = _dataset()
     data = QhDataModule(
@@ -236,6 +236,14 @@ def test_validate_and_test_share_the_public_evaluation_lifecycle() -> None:
         seed=0,
     )
     module = _module(sync_interval=2)
+    setup_stages: list[object] = []
+    original_setup = data.setup
+
+    def record_setup(stage: object = None) -> None:
+        setup_stages.append(stage)
+        original_setup(stage)  # type: ignore[arg-type]
+
+    data.setup = record_setup  # type: ignore[method-assign]
     trainer = pl.Trainer(
         accelerator="cpu",
         devices=1,
@@ -254,6 +262,7 @@ def test_validate_and_test_share_the_public_evaluation_lifecycle() -> None:
     validation = trainer.validate(module, datamodule=data, verbose=False)[0]
     held_out = trainer.test(module, datamodule=data, verbose=False)[0]
 
+    assert {getattr(stage, "value", stage) for stage in setup_stages} == {"fit", "validate", "test"}
     validation_metrics = {name.removeprefix("val/") for name in validation}
     test_metrics = {name.removeprefix("test/") for name in held_out}
     assert "loss" in validation_metrics
