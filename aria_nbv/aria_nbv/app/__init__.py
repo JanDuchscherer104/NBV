@@ -1,11 +1,7 @@
-"""Streamlit application (refactored).
+"""Grouped Streamlit inspection application with lazy page imports.
 
-This package contains the revised Streamlit UI that replaces the older
-`aria_nbv.dashboard` implementation. The app is intentionally split into:
-
-- **state**: strongly typed session state + cache entries
-- **controller**: pipeline orchestration (data → candidates → renders → RRI)
-- **pages**: UI per tab/page (plots only; no heavy compute)
+The package exposes typed application and configuration factories while
+keeping panel modules unloaded until their navigation callbacks run.
 """
 
 from __future__ import annotations
@@ -18,8 +14,8 @@ __all__ = ["NbvStreamlitApp", "NbvStreamlitAppConfig"]
 def __getattr__(name: str) -> Any:
     """Lazily import Streamlit-heavy modules.
 
-    This keeps `aria_nbv.app.controller` and other non-UI helpers importable in
-    environments where Streamlit isn't installed.
+    This keeps configuration and non-UI helpers importable without loading the
+    Streamlit application frame or any panel modules.
     """
 
     if name == "NbvStreamlitApp":

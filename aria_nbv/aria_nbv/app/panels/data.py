@@ -36,7 +36,7 @@ def render_data_page(
         crop_margin: Optional mesh crop margin in metres for display metadata.
     """
 
-    st.header("Data")
+    st.header("Observed Snippet")
     st.write(f"Scene: **{sample.scene_id}**, snippet: **{sample.snippet_id}**")
 
     first_pose = sample.trajectory.t_world_rig[0]

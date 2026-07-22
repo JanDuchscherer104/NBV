@@ -143,7 +143,7 @@ def _normalize_step_bounds(min_steps: int, max_steps: int) -> tuple[float | None
 
 def render_wandb_analysis_page() -> None:
     """Render cross-run analytics from W&B run history."""
-    st.header("W&B Run Comparison")
+    st.header("W&B Runs")
     _info_popover(
         "wandb comparison",
         "Compare multiple runs within the same project to connect architectural "

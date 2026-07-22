@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -93,3 +94,25 @@ def test_streamlit_app_config_targets_streamlit_app(tmp_path: Path) -> None:
         PathConfig(**original_paths)
 
     assert target_type is NbvStreamlitApp
+
+
+def test_streamlit_entry_module_is_import_light() -> None:
+    """Importing the console entrypoint must not initialize Streamlit panels."""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import aria_nbv.streamlit_app; "
+                "print('aria_nbv.app.app' in sys.modules); "
+                "print(any(name.startswith('aria_nbv.app.panels') for name in sys.modules))"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == ["False", "False"]
+    assert "No runtime found" not in result.stderr

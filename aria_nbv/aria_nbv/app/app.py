@@ -1,61 +1,47 @@
-"""Streamlit entry point and page router for the NBV exploration app.
+"""Lazy page router for the ARIA-NBV Streamlit application.
 
-The module owns exception containment, session-backed pipeline wiring, sidebar
-controls, and dispatch to data, candidate, rendering, oracle, and diagnostics
-panels.
+The application frame owns page configuration, grouped navigation, and
+exception containment. Each page callback imports its panel and constructs any
+single-step pipeline state only after the user selects that page.
 """
 
 from __future__ import annotations
 
 import traceback
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
-from aria_nbv.app.panels.optuna_sweep import render_optuna_sweep_page
-
-from ..utils import Console, Verbosity
-from .config import NbvStreamlitAppConfig
-from .controller import PipelineController
-from .panels import (
-    render_candidates_page,
-    render_counterfactual_rollouts_page,
-    render_data_page,
-    render_depth_page,
-    render_offline_dataset_page,
-    render_rri_binning_page,
-    render_rri_page,
-    render_stored_rollouts_panel,
-    render_vin_diagnostics_page,
-    render_wandb_analysis_page,
-)
-from .state import clear_state, get_state, safe_rerun, store_state
-from .ui import (
-    candidate_config_ui,
-    dataset_config_ui,
-    oracle_config_ui,
-    renderer_config_ui,
-)
+if TYPE_CHECKING:
+    from aria_nbv.app.config import NbvStreamlitAppConfig
+    from aria_nbv.app.controller import PipelineController
+    from aria_nbv.app.state import PipelineState
+    from aria_nbv.utils import Console
 
 
 @dataclass(slots=True)
 class NbvStreamlitApp:
-    """Run the session-scoped NBV explorer from one typed configuration.
+    """Render the grouped NBV inspection application from one configuration.
 
-    UI routing stays here while heavy compute and cache invalidation remain in
-    :class:`aria_nbv.app.controller.PipelineController`.
+    Dataset, rollout, and model pages remain independent of the legacy
+    single-step controller. Only Candidate Proposals and the Foundations /
+    Single-step pages construct :class:`aria_nbv.app.controller.PipelineController`
+    state.
     """
 
     config: NbvStreamlitAppConfig
     """Dataset and oracle-pipeline configuration owned by this app instance."""
 
-    def run(self) -> None:  # pragma: no cover - UI code
+    def run(self) -> None:  # pragma: no cover - Streamlit runner
         """Render one Streamlit session and surface any uncaught traceback."""
+
+        from aria_nbv.utils import Console
 
         console = Console.with_prefix("nbv_streamlit_app")
         try:
-            self._render(console)
-        except Exception as exc:  # pragma: no cover
+            self._render()
+        except Exception as exc:  # pragma: no cover - UI containment
             trace = traceback.format_exc()
             print(trace, flush=True)
             console.error(trace)
@@ -67,211 +53,273 @@ class NbvStreamlitApp:
                 st.code(trace, language="text")
             st.stop()
 
-    def _render(self, console: Console) -> None:  # pragma: no cover - UI code
-        st.set_page_config(page_title="NBV Explorer", layout="wide")
+    def _single_step_runtime(self) -> tuple[Console, PipelineState, PipelineController]:
+        """Construct state and controls for a selected single-step page only."""
+
+        from aria_nbv.app.controller import PipelineController
+        from aria_nbv.app.state import clear_state, get_state, safe_rerun, store_state
+        from aria_nbv.utils import Console, Verbosity
 
         state = get_state(self.config.dataset, self.config.labeler)
-        console = console.set_verbosity(
-            st.sidebar.selectbox(
-                "Verbosity (global)",
+        with st.sidebar.expander("Single-step session", expanded=False):
+            verbosity = st.selectbox(
+                "Verbosity",
                 options=[Verbosity.QUIET, Verbosity.NORMAL, Verbosity.VERBOSE],
-                format_func=lambda v: v.name.title(),
+                format_func=lambda value: value.name.title(),
                 index=2,
-            ),
-        )
+                key="single_step_verbosity",
+            )
+            st.caption(f"sample_idx={state.sample_idx}")
+            st.write(
+                {
+                    "data": state.data.sample is not None,
+                    "candidates": state.candidates.candidates is not None,
+                    "depth": state.depth.depths is not None,
+                    "pcs": bool(state.pcs.by_stride),
+                    "rri": state.rri.result is not None,
+                },
+            )
+            run_all = st.button(
+                "Run full single-step pipeline",
+                key="single_step_run_all",
+                width="stretch",
+            )
+            clear = st.button(
+                "Clear single-step session",
+                key="single_step_clear",
+                width="stretch",
+            )
 
-        controller = PipelineController(
-            state,
-            console=console,
-            progress=lambda msg: st.status(msg, expanded=False),
-        )
-
-        # Global controls -------------------------------------------------
-        st.sidebar.divider()
-        st.sidebar.subheader("Run controls")
-        run_all = st.sidebar.button("Run ALL (data → candidates → renders)")
-        clear = st.sidebar.button("Clear session state")
         if clear:
             clear_state()
             safe_rerun()
 
-        # Show cache status ----------------------------------------------
-        st.sidebar.divider()
-        st.sidebar.subheader("Cache status")
-        st.sidebar.caption(f"sample_idx={state.sample_idx}")
-        st.sidebar.write(
-            {
-                "data": state.data.sample is not None,
-                "candidates": state.candidates.candidates is not None,
-                "depth": state.depth.depths is not None,
-                "pcs": bool(state.pcs.by_stride),
-                "rri": state.rri.result is not None,
-            },
+        console = Console.with_prefix("nbv_streamlit_app").set_verbosity(verbosity)
+        controller = PipelineController(
+            state,
+            console=console,
+            progress=lambda message: st.status(message, expanded=False),
         )
-
         if run_all:
             controller.get_sample(force=True)
             controller.get_candidates(force=True)
             controller.get_renders(force=True)
             store_state(state)
             safe_rerun()
+        return console, state, controller
 
-        # Pages ----------------------------------------------------------
-        def _page_data() -> None:
-            with st.sidebar.form("data_form"):
-                dataset_cfg_prev = state.dataset_cfg
-                dataset_cfg = dataset_config_ui(
-                    st.sidebar,
-                    verbosity=console.verbosity,
-                    is_debug=dataset_cfg_prev.is_debug,
-                )
-                sample_idx = st.number_input(
-                    "Sample index",
-                    min_value=0,
-                    value=int(state.sample_idx),
-                    step=1,
-                )
-                next_sample = st.form_submit_button("Next sample")
-                refresh_data = st.form_submit_button("Run / refresh data")
-            if next_sample:
-                sample_idx += 1
-                refresh_data = True
-            state.sample_idx = int(sample_idx)
-            state.dataset_cfg = dataset_cfg
-            sample = controller.get_sample(force=refresh_data)
-            store_state(state)
+    def _page_training_dataset(self) -> None:
+        """Render the training-dataset composition hub."""
 
-            render_data_page(sample, crop_margin=dataset_cfg.mesh_crop_margin_m)
+        from aria_nbv.app.panels.training_dataset import render_training_dataset_page
 
-        def _page_candidates() -> None:
-            cand_cfg_prev = state.labeler_cfg.generator
-            with st.sidebar.form("cand_form"):
-                cand_cfg = candidate_config_ui(
-                    cand_cfg_prev,
-                    st.sidebar,
-                    is_debug=cand_cfg_prev.is_debug,
-                    verbosity=console.verbosity,
-                )
-                refresh_cand = st.form_submit_button("Run / refresh candidates")
-            state.labeler_cfg = state.labeler_cfg.model_copy(
-                update={"generator": cand_cfg},
+        render_training_dataset_page()
+
+    def _page_root_observation_store(self) -> None:
+        """Render immutable root-observation-store diagnostics."""
+
+        from aria_nbv.app.panels.offline_dataset import render_offline_dataset_page
+
+        render_offline_dataset_page()
+
+    def _page_rollout_supervision(self) -> None:
+        """Render persisted multi-step rollout supervision."""
+
+        from aria_nbv.app.panels.stored_rollouts import render_stored_rollouts_panel
+
+        render_stored_rollouts_panel()
+
+    def _page_live_rollout_lab(self) -> None:
+        """Render the interactive counterfactual-rollout laboratory."""
+
+        from aria_nbv.app.panels.counterfactual_rollouts import render_counterfactual_rollouts_page
+
+        render_counterfactual_rollouts_page()
+
+    def _page_candidate_proposals(self) -> None:
+        """Render proposal diagnostics with page-owned single-step controls."""
+
+        from aria_nbv.app.panels.candidates import render_candidates_page
+        from aria_nbv.app.state import store_state
+        from aria_nbv.app.ui import candidate_config_ui
+
+        console, state, controller = self._single_step_runtime()
+        previous_config = state.labeler_cfg.generator
+        with st.sidebar.form("candidate_proposals_form"):
+            candidate_config = candidate_config_ui(
+                previous_config,
+                st.sidebar,
+                is_debug=previous_config.is_debug,
+                verbosity=console.verbosity,
             )
-            sample = controller.get_sample(force=False)
-            candidates = controller.get_candidates(force=refresh_cand)
-
-            store_state(state)
-
-            render_candidates_page(
-                sample,
-                candidates,
-                cand_cfg,
-            )
-
-        def _page_counterfactual_rollouts() -> None:
-            render_counterfactual_rollouts_page()
-
-        def _page_stored_rollouts() -> None:
-            render_stored_rollouts_panel()
-
-        def _page_renders() -> None:
-            with st.sidebar.form("depth_form"):
-                depth_cfg_prev = state.labeler_cfg.depth
-                depth_cfg = renderer_config_ui(
-                    depth_cfg_prev,
-                    st.sidebar,
-                    is_debug=depth_cfg_prev.is_debug,
-                    verbosity=console.verbosity,
-                )
-                stride_prev = int(state.labeler_cfg.backprojection_stride)
-                stride = st.slider(
-                    "Backprojection stride",
-                    1,
-                    32,
-                    stride_prev,
-                    step=1,
-                    key="depth_stride",
-                )
-                refresh_depth = st.form_submit_button("Run / refresh renders")
-            state.labeler_cfg = state.labeler_cfg.model_copy(
-                update={
-                    "depth": depth_cfg,
-                    "backprojection_stride": int(stride),
-                },
-            )
-
-            depth_batch, pcs = controller.get_renders(force=refresh_depth)
-            sample = controller.get_sample(force=False)
-            store_state(state)
-
-            render_depth_page(sample, depth_batch, pcs=pcs)
-
-        def _page_rri() -> None:
-            with st.sidebar.form("rri_form"):
-                labeler_cfg_prev = state.labeler_cfg
-                oracle_cfg_prev = labeler_cfg_prev.oracle
-                oracle_cfg = oracle_config_ui(oracle_cfg_prev, st.sidebar)
-                stride = st.slider(
-                    "Backprojection stride",
-                    1,
-                    32,
-                    int(labeler_cfg_prev.backprojection_stride),
-                    step=1,
-                    key="rri_stride",
-                )
-                refresh_rri = st.form_submit_button("Run / refresh RRI")
-
-            # Always plot on CPU to keep Plotly conversions predictable.
-            labeler_cfg = state.labeler_cfg.model_copy(
-                update={
-                    "oracle": oracle_cfg,
-                    "backprojection_stride": int(stride),
-                    "output_device": "cpu",
-                },
-            )
-            state.labeler_cfg = labeler_cfg
-
-            sample = controller.get_sample(force=False)
-            depths, pcs, rri = controller.run_labeler(force=refresh_rri)
-            store_state(state)
-
-            render_rri_page(sample, depths, pcs, rri)
-
-        def _page_vin() -> None:
-            render_vin_diagnostics_page()
-
-        def _page_offline_dataset() -> None:
-            render_offline_dataset_page()
-
-        def _page_rri_binning() -> None:
-            render_rri_binning_page()
-
-        def _page_wandb() -> None:
-            render_wandb_analysis_page()
-
-        def _page_optuna_sweep() -> None:
-            render_optuna_sweep_page()
-
-        pages = [
-            st.Page(_page_data, title="Data", default=True),
-            st.Page(_page_candidates, title="Candidate Poses"),
-            st.Page(_page_counterfactual_rollouts, title="Counterfactual Rollouts"),
-            st.Page(_page_stored_rollouts, title="Stored Rollout Zarr"),
-            st.Page(_page_renders, title="Candidate Renders"),
-            st.Page(_page_rri, title="RRI"),
-        ]
-        pages.extend(
-            [
-                st.Page(_page_vin, title="VIN Diagnostics"),
-                st.Page(_page_offline_dataset, title="VIN Offline Dataset"),
-                st.Page(_page_wandb, title="W&B Analysis"),
-                st.Page(_page_optuna_sweep, title="Optuna Sweep"),
-                st.Page(_page_rri_binning, title="RRI Binning"),
-            ]
+            refresh = st.form_submit_button("Run / refresh proposals")
+        state.labeler_cfg = state.labeler_cfg.model_copy(
+            update={"generator": candidate_config},
         )
+        sample = controller.get_sample(force=False)
+        candidates = controller.get_candidates(force=refresh)
+        store_state(state)
+        render_candidates_page(sample, candidates, candidate_config)
+
+    def _page_vin_diagnostics(self) -> None:
+        """Render VIN model diagnostics."""
+
+        from aria_nbv.app.panels.vin_diagnostics import render_vin_diagnostics_page
+
+        render_vin_diagnostics_page()
+
+    def _page_rri_binning(self) -> None:
+        """Render ordinal RRI binning diagnostics."""
+
+        from aria_nbv.app.panels.rri_binning import render_rri_binning_page
+
+        render_rri_binning_page()
+
+    def _page_wandb_runs(self) -> None:
+        """Render Weights & Biases run analysis."""
+
+        from aria_nbv.app.panels.wandb import render_wandb_analysis_page
+
+        render_wandb_analysis_page()
+
+    def _page_optuna_studies(self) -> None:
+        """Render Optuna study analysis."""
+
+        from aria_nbv.app.panels.optuna_sweep import render_optuna_sweep_page
+
+        render_optuna_sweep_page()
+
+    def _page_observed_snippet(self) -> None:
+        """Render one observed snippet with page-owned dataset controls."""
+
+        from aria_nbv.app.panels.data import render_data_page
+        from aria_nbv.app.state import store_state
+        from aria_nbv.app.ui import dataset_config_ui
+
+        console, state, controller = self._single_step_runtime()
+        with st.sidebar.form("observed_snippet_form"):
+            previous_config = state.dataset_cfg
+            dataset_config = dataset_config_ui(
+                st.sidebar,
+                verbosity=console.verbosity,
+                is_debug=previous_config.is_debug,
+            )
+            sample_index = st.number_input(
+                "Sample index",
+                min_value=0,
+                value=int(state.sample_idx),
+                step=1,
+            )
+            next_sample = st.form_submit_button("Next sample")
+            refresh = st.form_submit_button("Run / refresh observation")
+        if next_sample:
+            sample_index += 1
+            refresh = True
+        state.sample_idx = int(sample_index)
+        state.dataset_cfg = dataset_config
+        sample = controller.get_sample(force=refresh)
+        store_state(state)
+        render_data_page(sample, crop_margin=dataset_config.mesh_crop_margin_m)
+
+    def _page_candidate_renders(self) -> None:
+        """Render candidate depths with page-owned renderer controls."""
+
+        from aria_nbv.app.panels.depth import render_depth_page
+        from aria_nbv.app.state import store_state
+        from aria_nbv.app.ui import renderer_config_ui
+
+        console, state, controller = self._single_step_runtime()
+        with st.sidebar.form("candidate_renders_form"):
+            previous_config = state.labeler_cfg.depth
+            depth_config = renderer_config_ui(
+                previous_config,
+                st.sidebar,
+                is_debug=previous_config.is_debug,
+                verbosity=console.verbosity,
+            )
+            stride = st.slider(
+                "Backprojection stride",
+                1,
+                32,
+                int(state.labeler_cfg.backprojection_stride),
+                step=1,
+                key="candidate_renders_stride",
+            )
+            refresh = st.form_submit_button("Run / refresh renders")
+        state.labeler_cfg = state.labeler_cfg.model_copy(
+            update={
+                "depth": depth_config,
+                "backprojection_stride": int(stride),
+            },
+        )
+        depth_batch, point_clouds = controller.get_renders(force=refresh)
+        sample = controller.get_sample(force=False)
+        store_state(state)
+        render_depth_page(sample, depth_batch, pcs=point_clouds)
+
+    def _page_single_step_rri(self) -> None:
+        """Render oracle RRI with page-owned scoring controls."""
+
+        from aria_nbv.app.panels.rri import render_rri_page
+        from aria_nbv.app.state import store_state
+        from aria_nbv.app.ui import oracle_config_ui
+
+        _, state, controller = self._single_step_runtime()
+        with st.sidebar.form("single_step_rri_form"):
+            previous_config = state.labeler_cfg
+            oracle_config = oracle_config_ui(previous_config.oracle, st.sidebar)
+            stride = st.slider(
+                "Backprojection stride",
+                1,
+                32,
+                int(previous_config.backprojection_stride),
+                step=1,
+                key="single_step_rri_stride",
+            )
+            refresh = st.form_submit_button("Run / refresh oracle RRI")
+        state.labeler_cfg = state.labeler_cfg.model_copy(
+            update={
+                "oracle": oracle_config,
+                "backprojection_stride": int(stride),
+                "output_device": "cpu",
+            },
+        )
+        sample = controller.get_sample(force=False)
+        depths, point_clouds, rri = controller.run_labeler(force=refresh)
+        store_state(state)
+        render_rri_page(sample, depths, point_clouds, rri)
+
+    def _render(self) -> None:  # pragma: no cover - Streamlit UI
+        """Configure the frame and run only the currently selected page."""
+
+        st.set_page_config(page_title="ARIA-NBV Training Data", layout="wide")
+        pages = {
+            "": [st.Page(self._page_training_dataset, title="Training Dataset", default=True)],
+            "Training Data": [
+                st.Page(self._page_root_observation_store, title="Root Observation Store"),
+                st.Page(self._page_rollout_supervision, title="Rollout Supervision"),
+            ],
+            "Generation": [
+                st.Page(self._page_live_rollout_lab, title="Live Rollout Lab"),
+                st.Page(self._page_candidate_proposals, title="Candidate Proposals"),
+            ],
+            "Models & Experiments": [
+                st.Page(self._page_vin_diagnostics, title="VIN Diagnostics"),
+                st.Page(self._page_rri_binning, title="RRI Binning"),
+                st.Page(self._page_wandb_runs, title="W&B Runs"),
+                st.Page(self._page_optuna_studies, title="Optuna Studies"),
+            ],
+            "Foundations / Single-step": [
+                st.Page(self._page_observed_snippet, title="Observed Snippet"),
+                st.Page(self._page_candidate_renders, title="Candidate Renders"),
+                st.Page(self._page_single_step_rri, title="Single-step Oracle RRI"),
+            ],
+        }
         st.navigation(pages, position="top").run()
 
 
-# Resolve forward refs now that NbvStreamlitApp is defined
+from aria_nbv.app.config import NbvStreamlitAppConfig  # noqa: E402
+
 NbvStreamlitAppConfig.model_rebuild(
     _types_namespace={"NbvStreamlitApp": NbvStreamlitApp},
 )

@@ -2,9 +2,9 @@
 
 This module owns the `nbv-st`/direct-script dispatch, forwards user CLI
 arguments to Streamlit, and installs a conservative file-watcher default. The
-application layout and data workflows belong to :mod:`aria_nbv.app`; this
-entrypoint does not load experiments or mutate project data itself. The legacy
-dashboard remains available via `aria_nbv.streamlit_app_old`.
+application layout and data workflows belong to :mod:`aria_nbv.app`. This
+entrypoint stays import-light so Streamlit creates its runtime before cached
+panel decorators are evaluated.
 """
 
 from __future__ import annotations
@@ -13,8 +13,10 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from aria_nbv.app import NbvStreamlitApp, NbvStreamlitAppConfig
+if TYPE_CHECKING:
+    from aria_nbv.app import NbvStreamlitApp, NbvStreamlitAppConfig
 
 __all__ = ["NbvStreamlitApp", "NbvStreamlitAppConfig", "main", "streamlit_entry"]
 
@@ -25,7 +27,24 @@ _DEFAULT_FILE_WATCHER_TYPE = "none"
 
 def main() -> None:  # pragma: no cover - Streamlit runner
     """Construct and run the configured ARIA-NBV Streamlit application."""
+
+    from aria_nbv.app.config import NbvStreamlitAppConfig
+
     NbvStreamlitAppConfig().setup_target().run()
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve compatibility exports without eagerly importing the app."""
+
+    if name == "NbvStreamlitApp":
+        from aria_nbv.app.app import NbvStreamlitApp
+
+        return NbvStreamlitApp
+    if name == "NbvStreamlitAppConfig":
+        from aria_nbv.app.config import NbvStreamlitAppConfig
+
+        return NbvStreamlitAppConfig
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _has_file_watcher_override(args: Sequence[str]) -> bool:

@@ -30,7 +30,6 @@ from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rollouts.inspection import discover_rollout_store_paths
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
-from .stored_rollouts import render_stored_rollouts_panel
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
@@ -501,20 +500,10 @@ def _render_stats(
 def render_offline_dataset_page() -> None:
     """Render immutable VIN offline dataset diagnostics as a standalone page."""
 
-    st.header("VIN Offline Dataset")
+    st.header("Root Observation Store")
     st.caption(
         "Inspect immutable VIN offline stores directly from their manifest and indexed shards.",
     )
-    section = st.radio(
-        "Dataset inspection section",
-        options=["VIN Offline Store", "Stored Rollouts"],
-        horizontal=True,
-        key="vin_offline_dataset_section",
-    )
-    if section == "Stored Rollouts":
-        render_stored_rollouts_panel()
-        return
-
     paths = PathConfig()
     config_paths = sorted(
         paths.configs_dir.glob("*.toml"),
@@ -523,7 +512,7 @@ def render_offline_dataset_page() -> None:
     )
 
     with st.sidebar.form("vin_offline_dataset_form"):
-        st.subheader("VIN Offline Dataset")
+        st.subheader("Root Observation Store")
         source_mode = st.radio(
             "Source",
             options=["Store directory", "Experiment config TOML"],

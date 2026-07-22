@@ -33,7 +33,7 @@ def render_rri_page(
         rri: Oracle scores ``Tensor[\"C\", float]`` and distance components.
     """
 
-    st.header("RRI Preview: Point Clouds vs Mesh")
+    st.header("Single-step Oracle RRI")
 
     candidate_ids = depth_batch.candidate_indices.cpu().tolist()
     if len(candidate_ids) == 0:

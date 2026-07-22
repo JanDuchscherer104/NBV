@@ -294,7 +294,7 @@ def _render_live_candidates_page(
     source_caption: str | None = None,
     source_note: str | None = None,
 ) -> None:
-    st.header("Candidate Poses")
+    st.header("Candidate Proposals")
 
     if source_caption:
         st.caption(source_caption)

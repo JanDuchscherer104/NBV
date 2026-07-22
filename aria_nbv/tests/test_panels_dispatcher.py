@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 from aria_nbv.app import panels
 from aria_nbv.app.panels import (
     candidates,
@@ -17,7 +20,7 @@ from aria_nbv.app.panels import (
 
 
 def test_panels_dispatcher_reexports() -> None:
-    """Ensure dispatcher re-exports dedicated panel renderers."""
+    """Ensure the package facade lazily exports dedicated panel renderers."""
     assert panels.render_candidates_page is candidates.render_candidates_page
     assert panels.render_counterfactual_rollouts_page is counterfactual_rollouts.render_counterfactual_rollouts_page
     assert panels.render_data_page is data.render_data_page
@@ -27,3 +30,24 @@ def test_panels_dispatcher_reexports() -> None:
     assert panels.render_rri_binning_page is rri_binning.render_rri_binning_page
     assert panels.render_vin_diagnostics_page is vin_diagnostics.render_vin_diagnostics_page
     assert panels.render_wandb_analysis_page is wandb.render_wandb_analysis_page
+
+
+def test_panels_package_import_does_not_load_panel_modules() -> None:
+    """Importing the facade alone must not evaluate individual panels."""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import aria_nbv.app.panels; "
+                "print(any(name.startswith('aria_nbv.app.panels.') for name in sys.modules))"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "False"
+    assert "No runtime found" not in result.stderr

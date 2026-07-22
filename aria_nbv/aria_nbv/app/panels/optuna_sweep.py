@@ -565,7 +565,7 @@ def _duplicate_configs(df: pd.DataFrame, *, params: list[str]) -> pd.DataFrame:
 def render_optuna_sweep_page() -> None:
     """Render read-only objective and parameter diagnostics for one study."""
 
-    st.header("Optuna Sweep Explorer")
+    st.header("Optuna Studies")
     _info_popover(
         "optuna sweep",
         "Inspect Optuna trial objectives and visualize how swept hyperparameters "
