@@ -7,9 +7,19 @@
       "target": "utils"
     },
     {
-      "importing_modules": 10,
+      "importing_modules": 12,
       "source": "data_handling",
       "target": "utils"
+    },
+    {
+      "importing_modules": 10,
+      "source": "lightning",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 10,
+      "source": "oracle",
+      "target": "data_handling"
     },
     {
       "importing_modules": 10,
@@ -18,7 +28,7 @@
     },
     {
       "importing_modules": 9,
-      "source": "oracle",
+      "source": "vin",
       "target": "data_handling"
     },
     {
@@ -27,24 +37,24 @@
       "target": "configs"
     },
     {
-      "importing_modules": 8,
-      "source": "vin",
-      "target": "data_handling"
-    },
-    {
-      "importing_modules": 7,
-      "source": "lightning",
-      "target": "utils"
-    },
-    {
       "importing_modules": 7,
       "source": "oracle",
       "target": "pose_generation"
     },
     {
+      "importing_modules": 7,
+      "source": "rollouts",
+      "target": "utils"
+    },
+    {
       "importing_modules": 6,
       "source": "lightning",
       "target": "configs"
+    },
+    {
+      "importing_modules": 6,
+      "source": "lightning",
+      "target": "data_handling"
     },
     {
       "importing_modules": 6,
@@ -65,16 +75,6 @@
       "importing_modules": 5,
       "source": "rollouts",
       "target": "pose_generation"
-    },
-    {
-      "importing_modules": 5,
-      "source": "rollouts",
-      "target": "utils"
-    },
-    {
-      "importing_modules": 4,
-      "source": "lightning",
-      "target": "data_handling"
     }
   ],
   "packages": [

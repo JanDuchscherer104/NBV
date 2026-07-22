@@ -32,6 +32,8 @@ website:
         - text: offline
           file: reference/data_handling.offline.qmd
           contents:
+          - text: actor
+            file: reference/data_handling.offline.actor.qmd
           - text: adapter
             file: reference/data_handling.offline.adapter.qmd
           - text: batch
@@ -52,6 +54,8 @@ website:
             file: reference/data_handling.offline.store.qmd
           - text: writer
             file: reference/data_handling.offline.writer.qmd
+        - text: qh
+          file: reference/data_handling.qh.qmd
         - text: raw
           file: reference/data_handling.raw.qmd
           contents:
@@ -61,6 +65,8 @@ website:
             file: reference/data_handling.raw.loader.qmd
           - text: views
             file: reference/data_handling.raw.views.qmd
+      - text: dataset_topology
+        file: reference/dataset_topology.qmd
       - text: lightning
         file: reference/lightning.qmd
         contents:
@@ -78,6 +84,14 @@ website:
           file: reference/lightning.lit_trainer_factory.qmd
         - text: optimizers
           file: reference/lightning.optimizers.qmd
+        - text: qh_cli
+          file: reference/lightning.qh_cli.qmd
+        - text: qh_datamodule
+          file: reference/lightning.qh_datamodule.qmd
+        - text: qh_experiment
+          file: reference/lightning.qh_experiment.qmd
+        - text: qh_module
+          file: reference/lightning.qh_module.qmd
       - text: oracle
         file: reference/oracle.qmd
         contents:
@@ -155,6 +169,8 @@ website:
           file: reference/rollouts.inspection.qmd
         - text: manifest
           file: reference/rollouts.manifest.qmd
+        - text: qh_reader
+          file: reference/rollouts.qh_reader.qmd
         - text: read_model
           file: reference/rollouts.read_model.qmd
         - text: replay
@@ -168,6 +184,8 @@ website:
             file: reference/rollouts.replay.state.qmd
           - text: types
             file: reference/rollouts.replay.types.qmd
+        - text: reporting
+          file: reference/rollouts.reporting.qmd
         - text: shard_manifest
           file: reference/rollouts.shard_manifest.qmd
         - text: trace
@@ -200,6 +218,8 @@ website:
         contents:
         - text: descriptor
           file: reference/targets.descriptor.qmd
+        - text: protocol
+          file: reference/targets.protocol.qmd
       - text: utils
         file: reference/utils.qmd
         contents:

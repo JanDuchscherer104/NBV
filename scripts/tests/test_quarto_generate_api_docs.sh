@@ -6,7 +6,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 SANDBOX="$(mktemp -d)"
 trap 'rm -rf "${SANDBOX}"' EXIT
 
-mkdir -p "${SANDBOX}/scripts" "${SANDBOX}/docs/reference"
+mkdir -p "${SANDBOX}/scripts" "${SANDBOX}/docs/reference" "${SANDBOX}/aria_nbv"
 cp "${REPO_ROOT}/scripts/quarto_generate_api_docs.sh" "${SANDBOX}/scripts/"
 touch "${SANDBOX}/docs/_quarto.yml"
 touch "${SANDBOX}/docs/reference/stale.symbol.qmd"
@@ -31,6 +31,10 @@ if [[ "${1:-}" == *"quartodoc_expand_config.py" ]]; then
 fi
 
 if [[ "${1:-}" == "-m" && "${2:-}" == "quartodoc" && "${3:-}" == "build" ]]; then
+  if [[ "${PYTHONPATH%%:*}" != "${QUARTODOC_EXPECTED_PACKAGE_ROOT}" ]]; then
+    echo "Quartodoc did not receive the current worktree package root first." >&2
+    exit 3
+  fi
   count=0
   if [[ -f "${QUARTODOC_TEST_COUNT}" ]]; then
     count="$(<"${QUARTODOC_TEST_COUNT}")"
@@ -52,6 +56,7 @@ COUNT_FILE="${SANDBOX}/quartodoc-build-count"
 OUTPUT="$({
   QUARTO_PYTHON="${FAKE_PYTHON}" \
     QUARTODOC_TEST_COUNT="${COUNT_FILE}" \
+    QUARTODOC_EXPECTED_PACKAGE_ROOT="${SANDBOX}/aria_nbv" \
     QUARTODOC_INCREMENTAL=1 \
     QUARTODOC_INTERLINKS=0 \
     bash "${SANDBOX}/scripts/quarto_generate_api_docs.sh"
