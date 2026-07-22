@@ -11,9 +11,16 @@ import pytest
 from pydantic import ValidationError
 
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
+from aria_nbv.oracle.pipelines.shards import plan_rollout_shards
 from aria_nbv.pose_generation import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts import CounterfactualPoseGeneratorConfig, RolloutPolicySpec
 from aria_nbv.rollouts.shard_manifest import read_rollout_source_manifest
+
+_HIGH_GAIN_SAMPLE_KEYS = [
+    "ASE_81283_Atek_000005",
+    "ASE_83515_Atek_000000",
+    "ASE_83550_Atek_000000",
+]
 
 
 def test_replay_and_recipe_configs_each_have_one_policy_field() -> None:
@@ -134,6 +141,40 @@ def test_paired_rollout_profile_rejects_source_manifest_drift() -> None:
     payload = tomllib.loads(config_path.read_text())
     payload["source"]["store"]["store_dir"] = "different-vin-store"
     with pytest.raises(ValidationError, match="source-store identity"):
+        RolloutDatasetWriterConfig.model_validate(payload)
+
+
+def test_multihorizon_highgain_profile_selects_exact_ordered_cross_scene_roots() -> None:
+    config = RolloutDatasetWriterConfig.from_toml(
+        _repo_root() / ".configs" / "build_rollouts_v1_multihorizon_highgain.toml"
+    )
+
+    assert config.sample_keys == _HIGH_GAIN_SAMPLE_KEYS
+    assert config.max_samples == len(_HIGH_GAIN_SAMPLE_KEYS)
+    assert config.source.limit == 50
+    assert [(recipe.name, recipe.policy.horizon) for recipe in config.recipes] == [
+        (f"oracle_greedy_h{horizon}", horizon) for horizon in range(3, 9)
+    ]
+    assert all(recipe.policy.branch_factor == 2 for recipe in config.recipes)
+    assert all(recipe.policy.beam_width == 2 for recipe in config.recipes)
+    assert config.target_scorer.depth.renderer.max_views_per_batch == 2
+
+    entries = plan_rollout_shards(config, rows_per_shard=1)
+
+    assert [row.sample_key for entry in entries for row in entry.rows] == _HIGH_GAIN_SAMPLE_KEYS
+    assert [row.scene_id for entry in entries for row in entry.rows] == ["81283", "83515", "83550"]
+
+
+def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() -> None:
+    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    payload = tomllib.loads(config_path.read_text())
+    payload["max_samples"] = 2
+    payload["sample_keys"] = ["ASE_81283_Atek_000005", "ASE_81283_Atek_000005"]
+    with pytest.raises(ValidationError, match="sample_keys must be unique"):
+        RolloutDatasetWriterConfig.model_validate(payload)
+
+    payload["sample_keys"] = ["ASE_81283_Atek_000005", "ASE_missing_Atek_999999"]
+    with pytest.raises(ValidationError, match="sample_keys are missing from source_manifest_path"):
         RolloutDatasetWriterConfig.model_validate(payload)
 
 

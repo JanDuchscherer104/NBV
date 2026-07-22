@@ -279,6 +279,49 @@ class SelectedDepthRetentionConfig(BaseConfig):
         )
 
 
+def _select_source_manifest_rows(
+    manifest: RolloutSourceManifest,
+    sample_keys: Sequence[str] | None,
+) -> tuple[RolloutShardRow, ...]:
+    """Select manifest rows in exact configured sample-key order."""
+
+    if sample_keys is None:
+        return manifest.rows
+    rows_by_key = {row.sample_key: row for row in manifest.rows}
+    missing = [sample_key for sample_key in sample_keys if sample_key not in rows_by_key]
+    if missing:
+        raise ValueError(f"sample_keys are missing from source_manifest_path: {missing!r}.")
+    return tuple(rows_by_key[sample_key] for sample_key in sample_keys)
+
+
+def _apply_manifest_rows(
+    dataset: VinOfflineDataset,
+    rows: Sequence[RolloutShardRow],
+    *,
+    owner: str,
+) -> None:
+    """Filter and order a VIN reader from validated source-row records."""
+
+    records_by_shard_row = {(str(record.shard_id), int(record.row)): record for record in dataset._records}
+    selected_records = []
+    for row in rows:
+        record = records_by_shard_row.get((row.source_shard_id, int(row.source_shard_row)))
+        if record is None:
+            raise ValueError(
+                f"{owner.capitalize()} row {row.order} is not exposed by the configured "
+                f"VIN source split/limit: source_shard_id={row.source_shard_id!r} "
+                f"source_shard_row={row.source_shard_row}."
+            )
+        if not row.matches_record(record):
+            raise ValueError(
+                f"{owner.capitalize()} row {row.order} does not match the configured "
+                "VIN source sample_index.jsonl record."
+            )
+        selected_records.append(record)
+    dataset._records = selected_records
+    dataset._record_by_pair = {(record.scene_id, record.snippet_id): record for record in selected_records}
+
+
 class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Configuration for building standalone target-RRI rollout Zarr stores.
 
@@ -312,6 +355,14 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     source_manifest_path: Path | None = None
     """Optional reviewed ordered-source manifest enforced before direct generation."""
+
+    sample_keys: list[str] | None = None
+    """Optional exact ordered sample-key subset of ``source_manifest_path``.
+
+    Keys are applied in configured order before direct generation or shard
+    planning. Missing, empty, or duplicate keys fail before dataset loading;
+    the reviewed source manifest remains the provenance owner for row identity.
+    """
 
     oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
     """Oracle GT target-task sampler used by default for rollout data generation."""
@@ -368,18 +419,38 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
             return None
         return PathConfig().resolve_artifact_path(value, expected_suffix=".json", create_parent=False)
 
+    @field_validator("sample_keys")
+    @classmethod
+    def _validate_sample_keys(cls, value: list[str] | None) -> list[str] | None:
+        """Normalize an exact ordered sample-key selection and reject ambiguity."""
+
+        if value is None:
+            return None
+        normalized = [str(sample_key).strip() for sample_key in value]
+        if not normalized or any(not sample_key for sample_key in normalized):
+            raise ValueError("sample_keys must contain at least one non-empty key when set.")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("sample_keys must be unique.")
+        return normalized
+
     @model_validator(mode="after")
     def _validate_source_manifest_contract(self) -> "RolloutDatasetWriterConfig":
         """Require direct pilot configs to match their reviewed ordered source rows."""
 
         if self.source_manifest_path is None:
+            if self.sample_keys is not None:
+                raise ValueError("sample_keys requires source_manifest_path for fail-closed row identity validation.")
             return self
         manifest = read_rollout_source_manifest(self.source_manifest_path)
-        expected_rows = len(manifest.rows)
-        if self.max_samples != expected_rows or self.source.limit != expected_rows:
+        selected_rows = self.selected_source_manifest_rows(manifest)
+        expected_rows = len(selected_rows)
+        if self.max_samples != expected_rows:
             raise ValueError(
-                "source_manifest_path requires max_samples and source.limit to equal "
-                f"the manifest row count ({expected_rows})."
+                f"source_manifest_path requires max_samples to equal the selected manifest row count ({expected_rows})."
+            )
+        if self.source.limit != len(manifest.rows):
+            raise ValueError(
+                f"source_manifest_path requires source.limit to equal the manifest row count ({len(manifest.rows)})."
             )
         if self.source.split != manifest.split:
             raise ValueError(
@@ -387,9 +458,23 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
             )
         if self.source.store.store_dir.name != Path(manifest.source_store_dir).name:
             raise ValueError("Configured VIN source-store identity does not match source_manifest_path provenance.")
-        if self.store.split_manifest_hash != manifest.split_manifest_hash:
-            raise ValueError("Configured rollout split_manifest_hash does not match source_manifest_path.")
+        expected_split_manifest_hash = build_rollout_split_manifest_hash(
+            source_manifest_hash=manifest.source_manifest_hash,
+            split=manifest.split,
+            records=[{**row.hash_record(), "order": order} for order, row in enumerate(selected_rows)],
+        )
+        if self.store.split_manifest_hash != expected_split_manifest_hash:
+            raise ValueError("Configured rollout split_manifest_hash does not match the selected source manifest rows.")
         return self
+
+    def selected_source_manifest_rows(self, manifest: RolloutSourceManifest) -> tuple[RolloutShardRow, ...]:
+        """Return source-manifest rows in the exact configured sample-key order.
+
+        The full reviewed manifest remains authoritative for immutable row
+        identity. When `sample_keys` is unset, its complete order is preserved.
+        """
+
+        return _select_source_manifest_rows(manifest, self.sample_keys)
 
     @field_validator("max_targets_per_sample")
     @classmethod
@@ -541,10 +626,8 @@ class RolloutDatasetWriter:
             if self.config.source_manifest_path is None
             else read_rollout_source_manifest(self.config.source_manifest_path)
         )
-        if source_manifest is not None and shard_entry is not None:
-            raise ValueError("source_manifest_path cannot be combined with shard mode; the shard manifest owns rows.")
-        if source_manifest is not None:
-            self._apply_source_manifest(dataset, source_manifest)
+        if source_manifest is not None and shard_entry is None:
+            self._apply_source_manifest(dataset, source_manifest, sample_keys=self.config.sample_keys)
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
         oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
@@ -554,8 +637,12 @@ class RolloutDatasetWriter:
             else min(int(self.config.max_samples), len(dataset))
         )
         source_lineage = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=max_samples)
-        if source_manifest is not None:
-            self._validate_source_manifest_lineage(source_lineage, source_manifest)
+        if source_manifest is not None and shard_entry is None:
+            self._validate_source_manifest_lineage(
+                source_lineage,
+                source_manifest,
+                expected_split_manifest_hash=self.config.store.split_manifest_hash,
+            )
         if shard_entry is not None:
             self._validate_shard_lineage(source_lineage, shard_entry)
         records = []
@@ -648,47 +735,27 @@ class RolloutDatasetWriter:
         """Filter a source dataset to the ordered rows owned by one shard entry."""
 
         shard_entry.validate()
-        self._apply_manifest_rows(dataset, shard_entry.rows, owner=f"rollout shard {shard_entry.shard_id!r}")
+        _apply_manifest_rows(dataset, shard_entry.rows, owner=f"rollout shard {shard_entry.shard_id!r}")
 
     @staticmethod
-    def _apply_source_manifest(dataset: VinOfflineDataset, manifest: RolloutSourceManifest) -> None:
+    def _apply_source_manifest(
+        dataset: VinOfflineDataset,
+        manifest: RolloutSourceManifest,
+        *,
+        sample_keys: Sequence[str] | None = None,
+    ) -> None:
         """Filter a direct build to the reviewed profile-independent source rows."""
 
         manifest.validate()
-        RolloutDatasetWriter._apply_manifest_rows(dataset, manifest.rows, owner="rollout source manifest")
-
-    @staticmethod
-    def _apply_manifest_rows(
-        dataset: VinOfflineDataset,
-        rows: Sequence[RolloutShardRow],
-        *,
-        owner: str,
-    ) -> None:
-        """Filter and order a VIN reader from validated source-row records."""
-
-        records_by_shard_row = {(str(record.shard_id), int(record.row)): record for record in dataset._records}
-        selected_records = []
-        for row in rows:
-            record = records_by_shard_row.get((row.source_shard_id, int(row.source_shard_row)))
-            if record is None:
-                raise ValueError(
-                    f"{owner.capitalize()} row {row.order} is not exposed by the configured "
-                    f"VIN source split/limit: source_shard_id={row.source_shard_id!r} "
-                    f"source_shard_row={row.source_shard_row}."
-                )
-            if not row.matches_record(record):
-                raise ValueError(
-                    f"{owner.capitalize()} row {row.order} does not match the configured "
-                    "VIN source sample_index.jsonl record."
-                )
-            selected_records.append(record)
-        dataset._records = selected_records
-        dataset._record_by_pair = {(record.scene_id, record.snippet_id): record for record in selected_records}
+        rows = _select_source_manifest_rows(manifest, sample_keys)
+        _apply_manifest_rows(dataset, rows, owner="rollout source manifest")
 
     @staticmethod
     def _validate_source_manifest_lineage(
         source_lineage: _RolloutSourceLineageBuilder,
         manifest: RolloutSourceManifest,
+        *,
+        expected_split_manifest_hash: str,
     ) -> None:
         """Verify the direct reader still matches the reviewed source manifest."""
 
@@ -696,7 +763,7 @@ class RolloutDatasetWriter:
             raise ValueError("Configured source manifest hash does not match the active VIN source store.")
         if source_lineage.source_cache_version != manifest.source_cache_version:
             raise ValueError("Configured source cache version does not match the active VIN source store.")
-        if source_lineage.split_manifest_hash != manifest.split_manifest_hash:
+        if source_lineage.split_manifest_hash != expected_split_manifest_hash:
             raise ValueError("Configured ordered source rows do not match source_manifest_path.")
 
     @staticmethod

@@ -31,12 +31,13 @@ from ...rollouts.shard_manifest import (
     RolloutShardRow,
     RolloutSourceManifest,
     read_rollout_shard_manifest,
+    read_rollout_source_manifest,
     write_rollout_shard_manifest,
     write_rollout_source_manifest,
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
-from .rollout_dataset import RolloutDatasetWriterConfig, _RolloutSourceLineageBuilder
+from .rollout_dataset import RolloutDatasetWriterConfig, _apply_manifest_rows, _RolloutSourceLineageBuilder
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +194,13 @@ def plan_rollout_shards(
     dataset = config.source.setup_target()
     if dataset is None:
         raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
+    if config.source_manifest_path is not None:
+        source_manifest = read_rollout_source_manifest(config.source_manifest_path)
+        _apply_manifest_rows(
+            dataset,
+            config.selected_source_manifest_rows(source_manifest),
+            owner="rollout source manifest",
+        )
     source_manifest_hash = stable_msgspec_hash(dataset.manifest)
     writer_config_hash = stable_config_hash(config)
     source_cache_version = str(dataset.manifest.version)

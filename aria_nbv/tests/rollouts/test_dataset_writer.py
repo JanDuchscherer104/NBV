@@ -22,6 +22,7 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriterStats,
     SelectedDepthRetentionConfig,
     _RolloutSourceLineageBuilder,
+    _select_source_manifest_rows,
 )
 from aria_nbv.oracle.pipelines.shards import (
     plan_rollout_shards,
@@ -41,6 +42,8 @@ from aria_nbv.rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
 from aria_nbv.rollouts.shard_manifest import (
     RolloutShardEntry,
+    RolloutShardRow,
+    RolloutSourceManifest,
     canonical_rollout_shard_id,
     read_rollout_source_manifest,
     write_rollout_shard_manifest,
@@ -126,6 +129,8 @@ class _FakeRolloutConfig:
     def __init__(self, records: list[Any], *, store_dir: Path, source_split: str = "train") -> None:
         self.source = _FakeSource(_FakeDataset(records, config_split=source_split), store_dir=store_dir / "vin_offline")
         self.store = SimpleNamespace(store_dir=store_dir / "configured-rollouts.zarr")
+        self.source_manifest_path: Path | None = None
+        self.sample_keys: list[str] | None = None
         self._dump_token = "fake-rollout-config-v1"
 
     def model_dump_jsonable(self) -> dict[str, Any]:
@@ -136,6 +141,9 @@ class _FakeRolloutConfig:
 
     def setup_target(self) -> "_FakeShardWriter":
         return _FakeShardWriter(self)
+
+    def selected_source_manifest_rows(self, manifest: RolloutSourceManifest) -> tuple[RolloutShardRow, ...]:
+        return _select_source_manifest_rows(manifest, self.sample_keys)
 
 
 class _FakeShardWriter:
@@ -512,6 +520,83 @@ def test_rollout_writer_applies_reviewed_source_manifest_order(tmp_path: Path) -
     RolloutDatasetWriter._apply_source_manifest(dataset, manifest)
 
     assert [record.sample_key for record in dataset._records] == [row.sample_key for row in manifest.rows]
+
+
+def test_rollout_writer_applies_exact_source_subset_order_and_validates_lineage(tmp_path: Path) -> None:
+    records = [_fake_record(index) for index in range(3)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+    manifest = plan_rollout_source_manifest(config.source)
+    sample_keys = [records[2].sample_key, records[0].sample_key]
+    dataset = config.source.setup_target()
+
+    RolloutDatasetWriter._apply_source_manifest(dataset, manifest, sample_keys=sample_keys)
+    lineage = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=len(dataset))
+    selected_rows = _select_source_manifest_rows(manifest, sample_keys)
+    expected_subset_hash = _RolloutSourceLineageBuilder.build_split_manifest_hash(
+        source_manifest_hash=manifest.source_manifest_hash,
+        split=manifest.split,
+        records=[{**row.hash_record(), "order": order} for order, row in enumerate(selected_rows)],
+    )
+
+    assert [record.sample_key for record in dataset._records] == sample_keys
+    assert lineage.split_manifest_hash == expected_subset_hash
+    RolloutDatasetWriter._validate_source_manifest_lineage(
+        lineage,
+        manifest,
+        expected_split_manifest_hash=lineage.split_manifest_hash,
+    )
+    with pytest.raises(ValueError, match="ordered source rows"):
+        RolloutDatasetWriter._validate_source_manifest_lineage(
+            lineage,
+            manifest,
+            expected_split_manifest_hash=manifest.split_manifest_hash,
+        )
+
+
+def test_rollout_shard_mode_uses_planned_subset_rows_and_validates_shard_lineage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = [_fake_record(index) for index in range(3)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+    manifest = plan_rollout_source_manifest(config.source)
+    manifest_path = tmp_path / "source-manifest.json"
+    write_rollout_source_manifest(manifest_path, manifest)
+    config.source_manifest_path = manifest_path
+    config.sample_keys = [records[2].sample_key, records[0].sample_key]
+    entries = plan_rollout_shards(config, rows_per_shard=1)
+
+    assert [entry.rows[0].sample_key for entry in entries] == config.sample_keys
+
+    config.oracle_target_task_sampler = object()
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.rollout_dataset.OracleTargetTaskSampler",
+        lambda _config: object(),
+    )
+    validated: list[tuple[_RolloutSourceLineageBuilder, RolloutShardEntry]] = []
+
+    class _ValidationReachedError(RuntimeError):
+        pass
+
+    validate_shard_lineage = RolloutDatasetWriter._validate_shard_lineage
+
+    def _capture_validation(
+        lineage: _RolloutSourceLineageBuilder,
+        shard_entry: RolloutShardEntry,
+    ) -> None:
+        validated.append((lineage, shard_entry))
+        validate_shard_lineage(lineage, shard_entry)
+        raise _ValidationReachedError
+
+    monkeypatch.setattr(RolloutDatasetWriter, "_validate_shard_lineage", staticmethod(_capture_validation))
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = config
+
+    with pytest.raises(_ValidationReachedError):
+        writer.run(shard_entry=entries[0])
+
+    assert len(validated) == 1
+    assert validated[0][0].split_manifest_hash == entries[0].split_manifest_hash
 
 
 def _fake_record(index: int) -> SimpleNamespace:
