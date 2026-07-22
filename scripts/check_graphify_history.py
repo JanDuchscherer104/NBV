@@ -95,7 +95,9 @@ def _manifest_at(root: Path, commit: str) -> dict:
 def _config_at(root: Path, commit: str) -> dict:
     try:
         raw = subprocess.check_output(
-            ["git", "show", f"{commit}:.graphify.toml"], cwd=root
+            ["git", "show", f"{commit}:.graphify.toml"],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
         )
         value = tomllib.loads(raw.decode("utf-8"))
     except (
