@@ -10,7 +10,13 @@ import re
 import sys
 
 from check_graphify_freshness import partition_freshness
-from graphify_contract import ContractError, PARTITION_ORDER, ROOT, collect_sources, load_canonical
+from graphify_contract import (
+    ContractError,
+    PARTITION_ORDER,
+    ROOT,
+    collect_sources,
+    load_canonical,
+)
 
 
 def exact_source_fallback(query: str, root: Path = ROOT, limit: int = 20) -> list[str]:
@@ -31,8 +37,27 @@ def exact_source_fallback(query: str, root: Path = ROOT, limit: int = 20) -> lis
     return matches
 
 
+def _fallback_for_terms(*terms: str, root: Path = ROOT) -> list[str]:
+    matches: list[str] = []
+    for term in terms:
+        for match in exact_source_fallback(term, root):
+            if match not in matches:
+                matches.append(match)
+    return matches
+
+
+def _exact_node_owner(node: dict) -> str:
+    return (
+        f"exact source owner: {node['source_file']}:{node.get('source_location', 'L1')}"
+    )
+
+
 def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
-    terms = [term for term in re.findall(r"[A-Za-z0-9_.-]+", query.casefold()) if len(term) > 1]
+    terms = [
+        term
+        for term in re.findall(r"[A-Za-z0-9_.-]+", query.casefold())
+        if len(term) > 1
+    ]
     ranked = []
     role_rank = {"production": 0, "test": 1, "config": 2, "guide": 3}
     for node in graph.get("nodes", []):
@@ -42,7 +67,10 @@ def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
         score = sum(term in haystack for term in terms)
         if score:
             ranked.append((-score, role_rank.get(node.get("role"), 4), node))
-    return [item[2] for item in sorted(ranked, key=lambda item: (item[0], item[1], item[2]["id"]))]
+    return [
+        item[2]
+        for item in sorted(ranked, key=lambda item: (item[0], item[1], item[2]["id"]))
+    ]
 
 
 def search(query: str, root: Path = ROOT) -> tuple[list[str], list[str]]:
@@ -63,27 +91,43 @@ def search(query: str, root: Path = ROOT) -> tuple[list[str], list[str]]:
 
 def explain(term: str, root: Path = ROOT) -> tuple[bool, list[str]]:
     state = partition_freshness(root)
-    graph, _ = load_canonical(root / "graphify-out")
+    try:
+        graph, _ = load_canonical(root / "graphify-out")
+    except ContractError:
+        return False, _fallback_for_terms(term, root=root)
     all_matches = _matching_nodes(graph, term, set(PARTITION_ORDER))
     if not all_matches:
-        return False, exact_source_fallback(term, root)
+        return False, _fallback_for_terms(term, root=root)
     node = all_matches[0]
     if node["partition"] not in state.fresh:
-        return False, [f"explain rejected: {node['partition']} partition is stale"]
-    return True, [f"{node['label']} — {node['source_file']}:{node.get('source_location', 'L1')}"]
+        return False, [
+            f"explain rejected: {node['partition']} partition is stale",
+            _exact_node_owner(node),
+        ]
+    return True, [
+        f"{node['label']} — {node['source_file']}:{node.get('source_location', 'L1')}"
+    ]
 
 
 def path_between(start: str, end: str, root: Path = ROOT) -> tuple[bool, list[str]]:
     state = partition_freshness(root)
-    graph, _ = load_canonical(root / "graphify-out")
+    try:
+        graph, _ = load_canonical(root / "graphify-out")
+    except ContractError:
+        return False, _fallback_for_terms(start, end, root=root)
     starts = _matching_nodes(graph, start, set(PARTITION_ORDER))
     ends = _matching_nodes(graph, end, set(PARTITION_ORDER))
     if not starts or not ends:
-        return False, exact_source_fallback(start if not starts else end, root)
+        return False, _fallback_for_terms(start, end, root=root)
     source, target = starts[0], ends[0]
     required = {source["partition"], target["partition"]}
     if not required <= state.fresh:
-        return False, ["path rejected: stale partition(s): " + ", ".join(sorted(required - state.fresh))]
+        return False, [
+            "path rejected: stale partition(s): "
+            + ", ".join(sorted(required - state.fresh)),
+            _exact_node_owner(source),
+            _exact_node_owner(target),
+        ]
     adjacency: dict[str, list[tuple[str, dict]]] = {}
     for edge in graph.get("edges", []):
         if edge.get("bridge_partition_revisions") and any(
@@ -98,18 +142,25 @@ def path_between(start: str, end: str, root: Path = ROOT) -> tuple[bool, list[st
         current, route = queue.popleft()
         if current == target["id"]:
             nodes = {node["id"]: node for node in graph["nodes"]}
-            return True, [f"{nodes[node_id]['label']} ({nodes[node_id]['partition']})" for node_id in route]
+            return True, [
+                f"{nodes[node_id]['label']} ({nodes[node_id]['partition']})"
+                for node_id in route
+            ]
         for neighbor, _ in adjacency.get(current, []):
             if neighbor not in seen:
                 seen.add(neighbor)
                 queue.append((neighbor, [*route, neighbor]))
-    return False, ["no fresh path found; inspect exact source owners"]
+    return False, [
+        "no fresh path found; inspect exact source owners",
+        _exact_node_owner(source),
+        _exact_node_owner(target),
+    ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="operation", required=True)
-    search_parser = sub.add_parser("search")
+    search_parser = sub.add_parser("query", aliases=["search"])
     search_parser.add_argument("query")
     explain_parser = sub.add_parser("explain")
     explain_parser.add_argument("term")
@@ -118,7 +169,7 @@ def main() -> int:
     path_parser.add_argument("end")
     args = parser.parse_args()
     try:
-        if args.operation == "search":
+        if args.operation in {"query", "search"}:
             lines, stale = search(args.query)
             if stale:
                 print("excluded stale partitions: " + ", ".join(stale), file=sys.stderr)
@@ -128,7 +179,10 @@ def main() -> int:
         else:
             allowed, lines = path_between(args.start, args.end)
     except ContractError as exc:
-        print(f"Graphify unavailable: {exc}; exact-source fallback required", file=sys.stderr)
+        print(
+            f"Graphify unavailable: {exc}; exact-source fallback required",
+            file=sys.stderr,
+        )
         return 1
     print("\n".join(lines))
     return int(not allowed)

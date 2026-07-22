@@ -30,6 +30,8 @@ def main() -> None:
     metrics = wp7.measure()
     assert not wp7.validate(metrics)
     rejected(metrics, "active_skill_count", 10, "exactly 9")
+    rejected(metrics, "aria_model_visible_skill_count", 8, "model-visible")
+    rejected(metrics, "matt_skill_count", 11, "exactly 12")
     rejected(
         metrics,
         "active_scaffold_source_loc",
@@ -42,6 +44,26 @@ def main() -> None:
         metrics["maximum_description_bytes"] + 1,
         "40 percent",
     )
+    rejected(
+        metrics,
+        "declared_baseline_description_bytes",
+        metrics["baseline_description_bytes"] + 1,
+        "WP0 baseline",
+    )
+    rejected(
+        metrics,
+        "declared_matt_model_visible_description_bytes",
+        metrics["matt_model_visible_description_bytes"] + 1,
+        "Matt description",
+    )
+    for path in (
+        ".agents/references/future_contract.md",
+        ".agents/skills/future-skill/SKILL.md",
+        ".codex/skills/graphify/future.py",
+        "scripts/scaffold/future_active_validator.py",
+    ):
+        assert wp7.is_active_scaffold_source(path)
+    assert not wp7.is_active_scaffold_source("scripts/tests/test_future.py")
     rejected(
         metrics,
         "canonical_graph_bytes",

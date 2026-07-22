@@ -1,6 +1,6 @@
 ---
 name: measured-autoresearch
-description: Use inside an active OMX autoresearch mission when a frozen executable evaluator can decide one empirical ARIA-NBV hypothesis.
+description: Frozen-evaluator empirical research inside ARIA-NBV.
 metadata:
   mode: implementation
   not_when:

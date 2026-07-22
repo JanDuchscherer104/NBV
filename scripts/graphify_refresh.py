@@ -21,6 +21,7 @@ from graphify_contract import (
     classify_path,
     load_config,
     load_canonical,
+    selected_literature_dirs,
     write_canonical,
 )
 
@@ -57,12 +58,17 @@ def _ensure_pin(command: list[str]) -> None:
         )
 
 
-def _pending_partitions(changed: list[Path]) -> set[str]:
-    config = load_config()
+def _pending_partitions(changed: list[Path], root: Path = ROOT) -> set[str]:
+    config = load_config(root)
+    literature_dirs = selected_literature_dirs(root)
     selected: set[str] = set()
     for path in changed:
         try:
-            partition = classify_path(path.as_posix(), config)
+            partition = classify_path(
+                path.as_posix(),
+                config,
+                selected_literature_dirs=literature_dirs,
+            )
         except ContractError:
             partition = None
         if partition:
@@ -94,7 +100,9 @@ def _compare_generated(generated: dict[str, bytes]) -> list[str]:
             differences.append(f"missing canonical artifact: {path.relative_to(ROOT)}")
             continue
         if actual != expected:
-            differences.append(f"canonical regeneration differs: {path.relative_to(ROOT)}")
+            differences.append(
+                f"canonical regeneration differs: {path.relative_to(ROOT)}"
+            )
     return differences
 
 

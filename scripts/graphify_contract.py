@@ -65,6 +65,11 @@ def load_config(root: Path = ROOT) -> dict[str, Any]:
         "abff1b1ca4052fcf9d955c5f6a034088723f4536"
     ):
         raise ContractError("unexpected Graphify upstream capability commit")
+    activation = config.get("history", {}).get("activation_commit")
+    if not isinstance(activation, str) or not re.fullmatch(r"[0-9a-f]{40}", activation):
+        raise ContractError(
+            "Graphify history activation_commit must be an immutable SHA"
+        )
     return config
 
 
@@ -78,7 +83,8 @@ def _matches(path: str, patterns: Iterable[str]) -> bool:
     return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
 
 
-def _selected_literature_dirs(root: Path) -> set[str]:
+def selected_literature_dirs(root: Path = ROOT) -> set[str]:
+    """Return TeX source directories selected by the tracked literature manifest."""
     selected: set[str] = set()
     manifest = root / "docs/literature/sources.jsonl"
     if not manifest.exists():
@@ -107,8 +113,10 @@ def classify_path(
     selected_literature_dirs: set[str] | None = None,
 ) -> str | None:
     """Return the unique first-match partition for a canonical repo path."""
-    if path.startswith("/") or "\\" in path or any(
-        part in {"", ".", ".."} for part in path.split("/")
+    if (
+        path.startswith("/")
+        or "\\" in path
+        or any(part in {"", ".", ".."} for part in path.split("/"))
     ):
         raise ContractError(f"non-canonical Graphify source path: {path!r}")
     corpus = config["corpus"]
@@ -172,15 +180,13 @@ def collect_sources(
 ) -> list[dict[str, str]]:
     """Collect the tracked/worktree corpus with exact source digests."""
     config = config or load_config(root)
-    selected = _selected_literature_dirs(root)
+    selected = selected_literature_dirs(root)
     sources: list[dict[str, str]] = []
     for path in _git_paths(root):
         absolute = root / path
         if not absolute.is_file():
             continue
-        partition = classify_path(
-            path, config, selected_literature_dirs=selected
-        )
+        partition = classify_path(path, config, selected_literature_dirs=selected)
         if partition is None:
             continue
         sources.append(
@@ -317,9 +323,11 @@ def _reference_edges(
     edges: list[dict[str, Any]] = []
     for source in sources:
         try:
-            lines = (root / source["path"]).read_text(
-                encoding="utf-8", errors="strict"
-            ).splitlines()
+            lines = (
+                (root / source["path"])
+                .read_text(encoding="utf-8", errors="strict")
+                .splitlines()
+            )
         except (OSError, UnicodeError):
             continue
         for line_number, line in enumerate(lines, start=1):
@@ -538,7 +546,9 @@ def build_canonical(
 
     generated_references = _reference_edges(root, sources, nodes)
     preserved = _preserved_semantic_edges(old_graph, sources, nodes)
-    edge_by_id = {edge["id"]: edge for edge in [*preserved, *generated_references, *edges]}
+    edge_by_id = {
+        edge["id"]: edge for edge in [*preserved, *generated_references, *edges]
+    }
     edges = list(edge_by_id.values())
 
     partitions: dict[str, dict[str, Any]] = {}
@@ -669,7 +679,11 @@ def write_canonical(
 def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     """Return canonical schema and source-provenance violations."""
     errors: list[str] = []
-    nodes = {node.get("id"): node for node in graph.get("nodes", []) if isinstance(node, dict)}
+    nodes = {
+        node.get("id"): node
+        for node in graph.get("nodes", [])
+        if isinstance(node, dict)
+    }
     source_digests = {
         source.get("path"): source.get("sha256")
         for source in manifest.get("sources", [])

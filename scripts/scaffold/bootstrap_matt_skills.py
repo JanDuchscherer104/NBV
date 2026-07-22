@@ -82,15 +82,27 @@ def _install_to_staging(
 
 
 def _deploy_transaction(
-    catalog: dict[str, str], staged_root: Path, target_root: Path
+    manifest: dict[str, object],
+    checkout: Path,
+    catalog: dict[str, str],
+    staged_root: Path,
+    target_root: Path,
 ) -> None:
-    target_root.mkdir(parents=True, exist_ok=True)
-    conflicts = [name for name in catalog if (target_root / name).exists()]
+    root_existed = target_root.exists()
+    installed_skills = (
+        policy.discover_installed_skills(target_root) if root_existed else {}
+    )
+    conflicts = {
+        name: [str(path) for path in installed_skills.get(name, ())]
+        for name in catalog
+        if installed_skills.get(name) or (target_root / name).exists()
+    }
     if conflicts:
         raise policy.PolicyError(
-            "global skill path collision; rollback or remove the prior Matt installation first: "
-            f"{sorted(conflicts)}"
+            "global skill id/path collision; rollback or remove the prior Matt "
+            f"installation first: {conflicts}"
         )
+    target_root.mkdir(parents=True, exist_ok=True)
     installed: list[Path] = []
     try:
         for name in sorted(catalog):
@@ -100,9 +112,22 @@ def _deploy_transaction(
                 raise policy.PolicyError(f"installer omitted Matt skill: {name}")
             shutil.copytree(source, destination, symlinks=False)
             installed.append(destination)
+        install_errors, _ = policy.validate_installation(
+            manifest, checkout, target_root
+        )
+        if install_errors:
+            raise policy.PolicyError(
+                "deployed Matt skill root failed validation: "
+                + "; ".join(install_errors)
+            )
     except Exception:
         for destination in reversed(installed):
             shutil.rmtree(destination)
+        if not root_existed:
+            try:
+                target_root.rmdir()
+            except OSError:
+                pass
         raise
 
 
@@ -133,7 +158,7 @@ def main() -> int:
         if install_errors:
             raise policy.PolicyError("; ".join(install_errors))
         catalog = policy.discover_catalog(checkout)
-        _deploy_transaction(catalog, staged_root, args.skills_root)
+        _deploy_transaction(manifest, checkout, catalog, staged_root, args.skills_root)
         config_existed = args.project_config.exists()
         config_bytes = args.project_config.read_bytes() if config_existed else b""
         try:

@@ -1,6 +1,6 @@
 ---
 name: dataset-cache-ops
-description: Use for ARIA-NBV ASE/ATEK data, meshes, immutable VIN stores, versions, splits, storage estimates, and smoke checks.
+description: ARIA-NBV ASE/ATEK, VIN stores, splits, caches, and data checks.
 metadata:
   mode: maintenance
   not_when:

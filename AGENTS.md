@@ -114,10 +114,10 @@ authoritative; Graphify is source-derived navigation evidence.
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,
   first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
-  succeeds, use `graphify query "<question>"`; otherwise fall back to the
-  owning source files until the graph is refreshed. Use
-  `graphify path "<A>" "<B>"` for relationships and
-  `graphify explain "<concept>"` for focused concepts.
+  succeeds, use `python3 scripts/graphify_query.py query "<question>"`;
+  otherwise the same wrapper falls back to exact source owners. Use
+  `python3 scripts/graphify_query.py path "<A>" "<B>"` for relationships and
+  `python3 scripts/graphify_query.py explain "<concept>"` for focused concepts.
 - Dirty `graphify-out/` files are expected after hooks or incremental updates;
   dirty graph files are not a reason to skip Graphify. Only skip Graphify if
   the task is about stale or incorrect graph output, or the user explicitly says

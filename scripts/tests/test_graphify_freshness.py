@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 import check_graphify_freshness as freshness  # noqa: E402
 import graphify_contract as contract  # noqa: E402
 import graphify_query as query  # noqa: E402
+import graphify_refresh as refresh  # noqa: E402
 
 
 def _write_fixture(root: Path) -> tuple[dict, dict]:
@@ -105,7 +106,11 @@ def main() -> None:
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert not state.bridge_errors
 
-        roles = {source["role"] for source in contract.collect_sources(root) if source["partition"] == "code"}
+        roles = {
+            source["role"]
+            for source in contract.collect_sources(root)
+            if source["partition"] == "code"
+        }
         assert roles == {"production", "test", "config", "guide"}
 
         (root / "docs/page.qmd").write_text("# Changed thesis\n", encoding="utf-8")
@@ -123,10 +128,21 @@ def main() -> None:
         results, excluded = query.search("Changed thesis", root)
         assert excluded == ["thesis"]
         assert any("docs/page.qmd:1" in result for result in results)
+        allowed, explanation = query.explain("page.qmd", root)
+        assert not allowed
+        assert any(
+            "exact source owner: docs/page.qmd:L1" in line for line in explanation
+        )
+        allowed, route = query.path_between("AGENTS.md", "page.qmd", root)
+        assert not allowed
+        assert any("exact source owner: AGENTS.md:L1" in line for line in route)
+        assert any("exact source owner: docs/page.qmd:L1" in line for line in route)
 
         (root / "docs/page.qmd").write_text("# Thesis\n", encoding="utf-8")
         graph["edges"][0]["bridge_partition_revisions"]["thesis"] = "wrong"
-        (root / "graphify-out/graph.json").write_text(json.dumps(graph), encoding="utf-8")
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(graph), encoding="utf-8"
+        )
         state = freshness.partition_freshness(root)
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert state.bridge_errors == ("bridge: endpoint revision mismatch",)
@@ -135,6 +151,25 @@ def main() -> None:
         fallback, excluded = query.search("Package guide", root)
         assert excluded == list(contract.PARTITION_ORDER)
         assert any("aria_nbv/README.md:1" in result for result in fallback)
+        allowed, fallback = query.explain("Package guide", root)
+        assert not allowed
+        assert any("aria_nbv/README.md:1" in result for result in fallback)
+        allowed, fallback = query.path_between("Package guide", "Thesis", root)
+        assert not allowed
+        assert any("aria_nbv/README.md:1" in result for result in fallback)
+        assert any("docs/page.qmd:1" in result for result in fallback)
+
+        selected_manifest = root / "docs/literature/sources.jsonl"
+        selected_manifest.write_text('{"tex_dir":"arXiv-selected"}\n', encoding="utf-8")
+        selected_tex = root / "docs/literature/tex-src/arXiv-selected/main.tex"
+        selected_tex.parent.mkdir(parents=True)
+        selected_tex.write_text("selected\n", encoding="utf-8")
+        assert refresh._pending_partitions(
+            [Path("docs/literature/tex-src/arXiv-selected/main.tex")], root
+        ) == {"literature"}
+        assert not refresh._pending_partitions(
+            [Path("docs/literature/tex-src/arXiv-unselected/main.tex")], root
+        )
 
 
 if __name__ == "__main__":

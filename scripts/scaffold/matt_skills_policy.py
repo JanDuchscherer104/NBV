@@ -170,6 +170,18 @@ def discover_catalog(checkout: Path) -> dict[str, str]:
     return catalog
 
 
+def discover_installed_skills(skills_root: Path) -> dict[str, tuple[Path, ...]]:
+    """Map every recursively installed skill id to all defining paths."""
+    root = skills_root.resolve(strict=True)
+    discovered: dict[str, list[Path]] = {}
+    for skill_path in sorted(root.glob("**/SKILL.md")):
+        _repo_relative(skill_path, root)
+        name = _frontmatter(skill_path).get("name")
+        if isinstance(name, str):
+            discovered.setdefault(name, []).append(skill_path)
+    return {name: tuple(paths) for name, paths in discovered.items()}
+
+
 def manifest_records(manifest: dict[str, Any]) -> dict[str, SkillRecord]:
     records: dict[str, SkillRecord] = {}
     for raw in manifest.get("skill", []):
@@ -312,21 +324,15 @@ def validate_installation(
     errors = validate_manifest(manifest, checkout)
     root = skills_root.resolve(strict=True)
     installed: dict[str, Path] = {}
-    duplicates: set[str] = set()
-    for skill_path in sorted(root.glob("**/SKILL.md")):
-        try:
-            _repo_relative(skill_path, root)
-            name = _frontmatter(skill_path).get("name")
-        except (OSError, PolicyError, UnicodeError) as exc:
-            errors.append(str(exc))
-            continue
-        if not isinstance(name, str):
-            continue
-        if name in installed:
-            duplicates.add(name)
-        installed[name] = skill_path
+    try:
+        discovered = discover_installed_skills(root)
+    except (OSError, PolicyError, UnicodeError) as exc:
+        errors.append(str(exc))
+        discovered = {}
+    duplicates = sorted(name for name, paths in discovered.items() if len(paths) > 1)
     if duplicates:
-        errors.append(f"duplicate installed skill ids: {sorted(duplicates)}")
+        errors.append(f"duplicate installed skill ids: {duplicates}")
+    installed.update({name: paths[0] for name, paths in discovered.items()})
 
     records = manifest_records(manifest)
     catalog = discover_catalog(checkout)

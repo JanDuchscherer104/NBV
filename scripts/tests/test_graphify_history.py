@@ -31,7 +31,9 @@ def _repo() -> tuple[tempfile.TemporaryDirectory, Path, str]:
     temporary = tempfile.TemporaryDirectory()
     root = Path(temporary.name)
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "graph@example.invalid"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "graph@example.invalid"], cwd=root, check=True
+    )
     subprocess.run(["git", "config", "user.name", "graph-test"], cwd=root, check=True)
     shutil.copy(contract.ROOT / ".graphify.toml", root / ".graphify.toml")
     shutil.copy(contract.ROOT / ".graphifyignore", root / ".graphifyignore")
@@ -42,16 +44,27 @@ def _repo() -> tuple[tempfile.TemporaryDirectory, Path, str]:
     return temporary, root, base
 
 
-def _graph_commit(root: Path, source_commit: str, *, digest: str | None = None) -> str:
+def _graph_commit(
+    root: Path,
+    source_commit: str,
+    *,
+    digest: str | None = None,
+    partitions: tuple[str, ...] = ("code",),
+) -> str:
     touched_digest = digest or history._source_tree_digest_at(root, source_commit)
     out = root / "graphify-out"
     out.mkdir(exist_ok=True)
     manifest = {
         "corpus_tree_sha256": touched_digest,
-        "sync": {"refreshed_partitions": ["code"], "source_tree_sha256": touched_digest},
+        "sync": {
+            "refreshed_partitions": list(partitions),
+            "source_tree_sha256": touched_digest,
+        },
     }
     (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (out / "graph.json").write_text(json.dumps({"corpus_tree_sha256": touched_digest}), encoding="utf-8")
+    (out / "graph.json").write_text(
+        json.dumps({"corpus_tree_sha256": touched_digest}), encoding="utf-8"
+    )
     (out / "GRAPH_REPORT.md").write_text("# Graph\n", encoding="utf-8")
     return _commit(root, "graph sync")
 
@@ -75,12 +88,26 @@ def main() -> None:
         source = root / "aria_nbv/aria_nbv/model.py"
         source.write_text("VALUE = 2\n", encoding="utf-8")
         s = _commit(root, "source")
-        assert any("lacks immediate" in error for error in history.validate_authoring_history(root, [s]))
+        assert any(
+            "lacks immediate" in error
+            for error in history.validate_authoring_history(root, [s])
+        )
 
         source.write_text("VALUE = 3\n", encoding="utf-8")
         t = _commit(root, "second source")
         errors = history.validate_authoring_history(root, [s, t])
-        assert any("unsynchronized" in error for error in errors)
+        assert any("lacks immediate" in error for error in errors)
+
+    temporary, root, _ = _repo()
+    with temporary:
+        source = root / "aria_nbv/aria_nbv/model.py"
+        source.write_text("VALUE = 2\n", encoding="utf-8")
+        s = _commit(root, "source")
+        (root / "notes.txt").write_text("delay\n", encoding="utf-8")
+        delayed = _commit(root, "unrelated delay")
+        g = _graph_commit(root, s)
+        errors = history.validate_authoring_history(root, [s, delayed, g])
+        assert any("lacks immediate" in error for error in errors)
 
     temporary, root, _ = _repo()
     with temporary:
@@ -99,6 +126,38 @@ def main() -> None:
         g = _git(root, "rev-parse", "HEAD")
         errors = history.validate_authoring_history(root, [s, g])
         assert any("digest does not match" in error for error in errors)
+
+    for operation in ("modify", "delete", "rename"):
+        temporary, root, _ = _repo()
+        with temporary:
+            manifest = root / "docs/literature/sources.jsonl"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text('{"tex_dir":"arXiv-selected"}\n', encoding="utf-8")
+            source = root / "docs/literature/tex-src/arXiv-selected/main.tex"
+            source.parent.mkdir(parents=True)
+            source.write_text("selected v1\n", encoding="utf-8")
+            _commit(root, "selected literature base")
+
+            if operation == "modify":
+                source.write_text("selected v2\n", encoding="utf-8")
+            elif operation == "delete":
+                source.unlink()
+            else:
+                subprocess.run(
+                    ["git", "mv", source.name, "renamed.tex"],
+                    cwd=source.parent,
+                    check=True,
+                )
+            literature_commit = _commit(root, f"{operation} selected literature")
+            assert history._touched_partitions(
+                root, literature_commit, contract.load_config(root)
+            ) == {"literature"}
+            graph_commit = _graph_commit(
+                root, literature_commit, partitions=("literature",)
+            )
+            assert not history.validate_authoring_history(
+                root, [literature_commit, graph_commit]
+            )
 
 
 if __name__ == "__main__":

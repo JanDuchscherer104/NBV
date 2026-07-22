@@ -1,6 +1,6 @@
 ---
 name: lrz-ai-systems
-description: Use for ARIA-NBV work on LRZ SSH, DSS, Slurm, Pyxis containers, remote data jobs, training, or job failures.
+description: ARIA-NBV LRZ, SSH, DSS, Slurm, and Pyxis work.
 metadata:
   mode: maintenance
   not_when:

@@ -1,6 +1,6 @@
 ---
 name: rerun-nbv-inspector
-description: Use for ARIA-NBV Rerun offline-store inspection, candidate/frustum visualization, RRI validity diagnostics, camera/depth layers, geometry logging, and `.rrd` smoke artifacts.
+description: ARIA-NBV Rerun VIN, candidate/frustum, RRI, camera, geometry, or `.rrd` inspection.
 metadata:
   mode: implementation
   not_when:

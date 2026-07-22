@@ -1,6 +1,6 @@
 ---
 name: plan-grill
-description: Stress-test vague, high-impact, research-facing, advisor-facing, or cross-surface ARIA-NBV decisions before implementation.
+description: Stress-test high-impact or advisor-facing ARIA-NBV plans.
 metadata:
   mode: router
   not_when:

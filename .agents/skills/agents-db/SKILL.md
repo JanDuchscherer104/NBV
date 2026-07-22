@@ -1,6 +1,6 @@
 ---
 name: agents-db
-description: Use when triaging or maintaining ARIA-NBV internal agent-memory and backlog TOML surfaces with `make agents-db`.
+description: ARIA-NBV memory/backlog TOML maintenance.
 metadata:
   mode: maintenance
   not_when:

@@ -25,6 +25,36 @@ CANONICAL = {
     "graphify-out/manifest.json",
     "graphify-out/GRAPH_REPORT.md",
 }
+SCAFFOLD_IMPLEMENTATIONS = {
+    ".codex/config.example.toml",
+    ".codex/hooks.example.json",
+    ".gemini/settings.json",
+    ".pre-commit-config.yaml",
+    "scripts/agents_db.py",
+    "scripts/codex_transcript_extract.py",
+    "scripts/debrief_nudge.sh",
+    "scripts/new_debrief.py",
+    "scripts/quarto_generate_agent_docs.py",
+    "scripts/scaffold_audit.py",
+    "scripts/sync_claude_skills.sh",
+    "scripts/validate_agent_memory.py",
+    "scripts/validate_scaffold_wp0_baseline.py",
+}
+SCAFFOLD_PREFIXES = (
+    ".claude/",
+    ".codex-plugin/",
+    ".github/workflows/",
+    "aria_nbv/tests/agent_memory/",
+    "scripts/scaffold/",
+    "scripts/tests/fixtures/",
+)
+SCAFFOLD_TEST_PREFIXES = (
+    "scripts/tests/test_matt_",
+    "scripts/tests/test_scaffold_",
+    "scripts/tests/test_validate_omx_",
+    "scripts/tests/test_wp6_",
+    "scripts/tests/test_wp7_",
+)
 
 
 def _graphify_version() -> str:
@@ -39,9 +69,11 @@ def _graphify_version() -> str:
 
 
 def _validate_pin(config: dict) -> None:
-    version_file = (ROOT / ".codex/skills/graphify/.graphify_version").read_text(
-        encoding="utf-8"
-    ).strip()
+    version_file = (
+        (ROOT / ".codex/skills/graphify/.graphify_version")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
     if version_file != config["graphify_version"]:
         raise ContractError("Graphify version file and capability record differ")
     found = _graphify_version()
@@ -89,6 +121,23 @@ def _validate_corpus(config: dict) -> None:
             "code partition lacks production/test/config/guide role coverage"
         )
     paths = {item["path"] for item in sources}
+    scaffold_paths = {item["path"] for item in partitions["scaffold"]}
+    tracked = set(
+        subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    )
+    active_scaffold = SCAFFOLD_IMPLEMENTATIONS & tracked
+    active_scaffold.update(
+        path
+        for path in tracked
+        if path.startswith((*SCAFFOLD_PREFIXES, *SCAFFOLD_TEST_PREFIXES))
+        and not path.startswith(".claude/skills/")
+    )
+    missing_scaffold = active_scaffold - scaffold_paths
+    if missing_scaffold:
+        raise ContractError(
+            "active scaffold sources are absent from the scaffold partition: "
+            + ", ".join(sorted(missing_scaffold))
+        )
     forbidden = {
         path
         for path in paths
@@ -96,7 +145,9 @@ def _validate_corpus(config: dict) -> None:
         or "/wiki/" in path
     }
     if forbidden:
-        raise ContractError("forbidden Graphify corpus sources: " + ", ".join(sorted(forbidden)))
+        raise ContractError(
+            "forbidden Graphify corpus sources: " + ", ".join(sorted(forbidden))
+        )
 
 
 def _validate_hook_and_merge() -> None:
@@ -114,16 +165,40 @@ def _validate_hook_and_merge() -> None:
         raise ContractError("Graphify merge driver wrapper is absent")
 
 
+def _validate_query_routing() -> None:
+    guidance = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    contract = (ROOT / ".agents/references/graphify_contract.md").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        'scripts/graphify_query.py query "<question>"',
+        'scripts/graphify_query.py path "<A>" "<B>"',
+        'scripts/graphify_query.py explain "<concept>"',
+    )
+    if any(value not in guidance for value in required):
+        raise ContractError("AGENTS.md bypasses the stale-aware Graphify query wrapper")
+    if (
+        "Route `query`, `path`, and `explain` through `scripts/graphify_query.py`"
+        not in contract
+    ):
+        raise ContractError(
+            "Graphify contract does not route navigation through its wrapper"
+        )
+
+
 def run_check() -> tuple[int, int, int]:
     config = load_config()
     _validate_pin(config)
     _validate_tracked_outputs(config)
     _validate_corpus(config)
     _validate_hook_and_merge()
+    _validate_query_routing()
     graph, manifest = load_canonical()
     errors = validate_graph(graph, manifest)
     if errors:
-        raise ContractError("canonical graph provenance errors:\n- " + "\n- ".join(errors[:30]))
+        raise ContractError(
+            "canonical graph provenance errors:\n- " + "\n- ".join(errors[:30])
+        )
     return len(manifest["sources"]), len(graph["nodes"]), len(graph["edges"])
 
 

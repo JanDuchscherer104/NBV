@@ -6,6 +6,7 @@ from __future__ import annotations
 import fnmatch
 import json
 from pathlib import Path
+from pathlib import PurePosixPath
 import subprocess
 import sys
 import tomllib
@@ -21,6 +22,48 @@ CANONICAL_GRAPH = (
     ROOT / "graphify-out/GRAPH_REPORT.md",
 )
 MAX_GRAPH_BYTES = 35 * 1024 * 1024
+ACTIVE_SCAFFOLD_DIRS = (
+    ".agents/baselines/",
+    ".agents/memory/index/",
+    ".agents/references/",
+    ".agents/skills/",
+    ".claude/agents/",
+    ".claude/commands/",
+    ".codex-plugin/",
+    ".codex/skills/graphify/",
+    "scripts/git_hooks/",
+    "scripts/scaffold/",
+)
+ACTIVE_SCAFFOLD_FILES = {
+    ".agents/AGENTS_INTERNAL_DB.md",
+    ".claude/settings.json",
+    ".codex/config.example.toml",
+    ".codex/hooks.example.json",
+    ".configs/litkg.toml",
+    ".gemini/settings.json",
+    ".github/workflows/ci.yml",
+    ".graphifyignore",
+    "CLAUDE.md",
+    "Makefile",
+    "scripts/agents_db.py",
+    "scripts/check_graphify_freshness.py",
+    "scripts/check_graphify_history.py",
+    "scripts/check_graphify_integration.py",
+    "scripts/codex_transcript_extract.py",
+    "scripts/debrief_nudge.sh",
+    "scripts/graphify_contract.py",
+    "scripts/graphify_merge_driver.py",
+    "scripts/graphify_query.py",
+    "scripts/graphify_refresh.py",
+    "scripts/nbv_qmd_outline.sh",
+    "scripts/nbv_typst_includes.py",
+    "scripts/new_debrief.py",
+    "scripts/quarto_generate_agent_docs.py",
+    "scripts/scaffold_audit.py",
+    "scripts/sync_claude_skills.sh",
+    "scripts/validate_agent_memory.py",
+    "scripts/validate_scaffold_wp0_baseline.py",
+}
 
 
 def tracked_files() -> list[str]:
@@ -39,32 +82,71 @@ def tracked_files() -> list[str]:
     return sorted(files)
 
 
-def matches(path: str, patterns: list[str]) -> bool:
-    """Match paths with the immutable WP0 glob semantics."""
-    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
+def is_active_scaffold_source(path: str) -> bool:
+    """Return whether a tracked path belongs to a complete active scaffold root."""
+    pure = PurePosixPath(path)
+    return (
+        path == "AGENTS.md"
+        or path.endswith("/AGENTS.md")
+        or path in ACTIVE_SCAFFOLD_FILES
+        or (pure.parent == PurePosixPath(".agents") and pure.suffix == ".toml")
+        or path.startswith(ACTIVE_SCAFFOLD_DIRS)
+    )
+
+
+def frontmatter_fields(path: Path) -> tuple[str, bool]:
+    """Read one skill description and its model-invocation posture."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0] != "---":
+        raise ValueError(f"missing YAML frontmatter: {path}")
+    description: str | None = None
+    model_visible = True
+    for line in lines[1:]:
+        if line == "---":
+            break
+        if line.startswith("description:"):
+            value = line.partition(":")[2].strip()
+            if value.startswith('"'):
+                description = json.loads(value)
+            elif value.startswith("'") and value.endswith("'"):
+                description = value[1:-1]
+            else:
+                description = value
+        elif line == "disable-model-invocation: true":
+            model_visible = False
+    if description is None:
+        raise ValueError(f"missing skill description: {path}")
+    return description, model_visible
 
 
 def measure() -> dict[str, object]:
-    """Measure the final worktree with the immutable WP0 counting rules."""
+    """Measure the complete active final scaffold against the immutable baseline."""
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     skills = json.loads(WP6_SKILLS.read_text(encoding="utf-8"))["active_skills"]
     matt = tomllib.loads(MATT_MANIFEST.read_text(encoding="utf-8"))
     tracked = tracked_files()
-    rules = baseline["counting_rules"]["active_scaffold_source_loc"]
-    scaffold = [
-        path
-        for path in tracked
-        if matches(path, rules["include_globs"])
-        and not matches(path, rules["exclude_globs"])
-    ]
+    scaffold = [path for path in tracked if is_active_scaffold_source(path)]
     live_skills = sorted(
         path.split("/")[-2]
         for path in tracked
         if fnmatch.fnmatchcase(path, ".agents/skills/*/SKILL.md")
     )
-    model_visible = sum(
+    aria_fields = [
+        frontmatter_fields(ROOT / ".agents/skills" / name / "SKILL.md")
+        for name in live_skills
+    ]
+    aria_visible = sum(
+        len(description.encode("utf-8"))
+        for description, model_visible in aria_fields
+        if model_visible
+    )
+    matt_visible = sum(
         item["description_bytes"] for item in matt["skill"] if item["model_visible"]
     )
+    baseline_description_bytes = baseline["codex_environment"][
+        "model_visible_aria_description_bytes"
+    ]
+    maximum_description_bytes = baseline_description_bytes * 2 // 5
     return {
         "baseline_skill_count": baseline["measurements"]["aria_skill_count"],
         "active_skill_count": len(live_skills),
@@ -77,10 +159,26 @@ def measure() -> dict[str, object]:
         "active_scaffold_source_loc": sum(
             len((ROOT / path).read_bytes().splitlines()) for path in scaffold
         ),
-        "baseline_description_bytes": matt["budget"]["baseline_description_bytes"],
-        "maximum_description_bytes": matt["budget"]["maximum_description_bytes"],
-        "model_visible_description_bytes": model_visible,
-        "declared_model_visible_description_bytes": matt["budget"][
+        "matt_skill_count": len(matt["skill"]),
+        "matt_allowlist_count": len(matt["policy"]["allowlist"]),
+        "baseline_description_bytes": baseline_description_bytes,
+        "declared_baseline_description_bytes": matt["budget"][
+            "baseline_description_bytes"
+        ],
+        "maximum_description_bytes": maximum_description_bytes,
+        "declared_maximum_description_bytes": matt["budget"][
+            "maximum_description_bytes"
+        ],
+        "aria_model_visible_description_bytes": aria_visible,
+        "aria_model_visible_skill_count": sum(
+            model_visible for _, model_visible in aria_fields
+        ),
+        "matt_model_visible_description_bytes": matt_visible,
+        "matt_model_visible_skill_count": sum(
+            item["model_visible"] for item in matt["skill"]
+        ),
+        "model_visible_description_bytes": aria_visible + matt_visible,
+        "declared_matt_model_visible_description_bytes": matt["budget"][
             "selected_description_bytes"
         ],
         "canonical_graph_bytes": sum(path.stat().st_size for path in CANONICAL_GRAPH),
@@ -101,15 +199,26 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append("immutable baseline must contain exactly 21 ARIA skills")
     if metrics["active_skill_count"] != 9:
         errors.append("final scaffold must contain exactly 9 ARIA skills")
+    if metrics["aria_model_visible_skill_count"] != 9:
+        errors.append("all 9 retained ARIA skills must be model-visible by default")
     if metrics["active_skills"] != metrics["expected_active_skills"]:
         errors.append("final ARIA skill names differ from the closed WP6 inventory")
+    if metrics["matt_skill_count"] != 12 or metrics["matt_allowlist_count"] != 12:
+        errors.append("final Matt policy must retain exactly 12 allowlisted skills")
     if metrics["active_scaffold_source_loc"] >= metrics["baseline_scaffold_source_loc"]:
         errors.append(
             "active scaffold source LOC is not strictly below the WP0 baseline"
         )
     if (
-        metrics["model_visible_description_bytes"]
-        != metrics["declared_model_visible_description_bytes"]
+        metrics["baseline_description_bytes"]
+        != metrics["declared_baseline_description_bytes"]
+        or metrics["maximum_description_bytes"]
+        != metrics["declared_maximum_description_bytes"]
+    ):
+        errors.append("description budget declarations differ from the WP0 baseline")
+    if (
+        metrics["matt_model_visible_description_bytes"]
+        != metrics["declared_matt_model_visible_description_bytes"]
     ):
         errors.append(
             "model-visible Matt description measurement differs from the manifest"
@@ -141,7 +250,9 @@ def main() -> int:
         f"skills={metrics['baseline_skill_count']}->{metrics['active_skill_count']}, "
         f"scaffold_loc={metrics['active_scaffold_source_loc']}"
         f"<{metrics['baseline_scaffold_source_loc']}, "
-        f"description_bytes={metrics['model_visible_description_bytes']}"
+        f"description_bytes={metrics['aria_model_visible_description_bytes']}+"
+        f"{metrics['matt_model_visible_description_bytes']}="
+        f"{metrics['model_visible_description_bytes']}"
         f"<={metrics['maximum_description_bytes']}, "
         f"graph_bytes={metrics['canonical_graph_bytes']}"
         f"<={metrics['maximum_canonical_graph_bytes']}, "

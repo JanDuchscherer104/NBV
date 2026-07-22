@@ -22,12 +22,15 @@ partitions. Neither mode calls an LLM. The post-commit hook dispatches the
 structural mode asynchronously for code and leaves semantic partitions stale
 for explicit sync.
 
-Run freshness before navigation. Search may omit stale partitions and must name
-them; path, explain, and cross-partition traversal fail closed when required
-partitions or bridge revisions are stale. `scripts/graphify_query.py` falls back
-to exact tracked source matches when graph evidence is unavailable or rejected.
+Route `query`, `path`, and `explain` through `scripts/graphify_query.py`. Query
+may omit stale partitions and must name them; path, explain, and cross-partition
+traversal fail closed when required partitions or bridge revisions are stale.
+All three operations fall back to exact tracked source owners when graph
+evidence is unavailable or rejected.
 
 Authoring history uses `S -> G`: a corpus-changing source commit is followed
 immediately by a graph-only commit that records the source tree digest. Mixed
-authoring commits fail. Merge or squash products are validated from their final
-tree digest and deterministic no-diff regeneration.
+authoring commits and delayed catch-up graph commits fail. CI checks adjacency
+after the immutable activation commit recorded in `.graphify.toml`. Merge or
+squash products are validated from their final tree digest and deterministic
+no-diff regeneration.

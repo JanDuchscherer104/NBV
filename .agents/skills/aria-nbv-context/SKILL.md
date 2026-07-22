@@ -1,6 +1,6 @@
 ---
 name: aria-nbv-context
-description: Use to localize unknown ARIA-NBV files, symbols, docs, or source families through deterministic local discovery before handoff.
+description: Locate ARIA-NBV files, symbols, docs, and owners.
 metadata:
   mode: router
   not_when:

@@ -230,13 +230,57 @@ def main() -> None:
         sentinel.write_text("preserve", encoding="utf-8")
         try:
             bootstrap._deploy_transaction(
-                policy.discover_catalog(checkout), skills_root, collision_root
+                manifest,
+                checkout,
+                policy.discover_catalog(checkout),
+                skills_root,
+                collision_root,
             )
         except policy.PolicyError:
             pass
         else:
             raise AssertionError("bootstrap accepted an existing global path collision")
         assert sentinel.read_text(encoding="utf-8") == "preserve"
+
+        nested_collision_root = temporary / "nested-collision-root"
+        nested_collision = nested_collision_root / "nested/user-copy"
+        nested_collision.mkdir(parents=True)
+        (nested_collision / "SKILL.md").write_text(
+            "---\nname: ask-matt\ndescription: Nested collision.\n---\n",
+            encoding="utf-8",
+        )
+        try:
+            bootstrap._deploy_transaction(
+                manifest,
+                checkout,
+                policy.discover_catalog(checkout),
+                skills_root,
+                nested_collision_root,
+            )
+        except policy.PolicyError as exc:
+            assert "ask-matt" in str(exc)
+        else:
+            raise AssertionError("bootstrap accepted a nested skill id collision")
+        assert (nested_collision / "SKILL.md").is_file()
+
+        invalid_staging = temporary / "invalid-staging"
+        shutil.copytree(skills_root, invalid_staging)
+        invalid_file = invalid_staging / "tdd/tests.md"
+        invalid_file.write_bytes(invalid_file.read_bytes() + b"corrupt\n")
+        transactional_root = temporary / "transactional-root"
+        try:
+            bootstrap._deploy_transaction(
+                manifest,
+                checkout,
+                policy.discover_catalog(checkout),
+                invalid_staging,
+                transactional_root,
+            )
+        except policy.PolicyError as exc:
+            assert "failed validation" in str(exc)
+        else:
+            raise AssertionError("bootstrap accepted an invalid deployed root")
+        assert not transactional_root.exists()
 
         routing = tomllib.loads((FIXTURES / "routing.toml").read_text(encoding="utf-8"))
         records = policy.manifest_records(manifest)

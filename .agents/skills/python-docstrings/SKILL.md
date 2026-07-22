@@ -1,6 +1,6 @@
 ---
 name: python-docstrings
-description: Use for concise contract docstrings on ARIA-NBV Python modules, public APIs, config models, DTOs, wrappers, and streaming or session interfaces.
+description: Contract-focused ARIA-NBV Python docstrings.
 metadata:
   mode: implementation
   not_when:

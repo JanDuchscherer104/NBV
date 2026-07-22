@@ -8,6 +8,9 @@ canonical_artifacts = [
   "graphify-out/GRAPH_REPORT.md",
 ]
 
+[history]
+activation_commit = "c5e8ad862072505bcfc45642664c689d64290872"
+
 [partition.literature]
 semantic_mode = "reviewed-source-reference"
 patterns = [
@@ -21,23 +24,48 @@ semantic_mode = "reviewed-source-reference"
 patterns = [
   "AGENTS.md",
   "**/AGENTS.md",
+  "CLAUDE.md",
   ".agents/**",
+  ".claude/**",
+  ".codex-plugin/**",
+  ".codex/config.example.toml",
+  ".codex/hooks.example.json",
   ".codex/skills/graphify/**",
+  ".gemini/settings.json",
   ".omx/context/**",
   ".omx/plans/**",
   ".omx/archive/accepted-bundles/**",
-  ".github/workflows/ci.yml",
+  ".github/workflows/**",
   ".gitattributes",
   ".gitignore",
   ".graphify.toml",
   ".graphifyignore",
+  ".pre-commit-config.yaml",
   "Makefile",
+  "aria_nbv/tests/agent_memory/**",
+  "scripts/agents_db.py",
   "scripts/check_graphify_*.py",
+  "scripts/codex_transcript_extract.py",
+  "scripts/debrief_nudge.sh",
   "scripts/graphify_*.py",
   "scripts/graphify_*.sh",
   "scripts/git_hooks/post-commit",
+  "scripts/new_debrief.py",
+  "scripts/quarto_generate_agent_docs.py",
+  "scripts/scaffold/**",
+  "scripts/scaffold_audit.py",
+  "scripts/sync_claude_skills.sh",
   "scripts/tests/test_graphify_*.py",
+  "scripts/tests/fixtures/**",
+  "scripts/tests/test_matt_skills_policy.py",
   "scripts/tests/test_post_commit_graph_dispatch.sh",
+  "scripts/tests/test_scaffold_wp0_baseline.py",
+  "scripts/tests/test_validate_omx_artifacts.py",
+  "scripts/tests/test_wp6_*.py",
+  "scripts/tests/test_wp6_*.sh",
+  "scripts/tests/test_wp7_integration.py",
+  "scripts/validate_agent_memory.py",
+  "scripts/validate_scaffold_wp0_baseline.py",
 ]
 
 [partition.thesis]

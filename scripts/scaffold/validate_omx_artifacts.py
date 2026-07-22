@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import tomllib
 from pathlib import Path, PurePosixPath
@@ -37,9 +39,20 @@ BUNDLE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*--[0-9a-f]{16}$")
 TASK_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CURRENT_PREFIXES = (".omx/context/", ".omx/specs/", ".omx/plans/")
 ARCHIVE_PREFIX = ".omx/archive/accepted-bundles"
-LEGACY_PREDECESSOR_ID = (
-    "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
-)
+RECOVERY_GIT_PATH = "omx-bootstrap"
+JOURNAL_SCHEMA_VERSION = 1
+SEED_SCHEMA_VERSION = 1
+SEED_MANIFEST = "seed-manifest.json"
+OMX_PINNED_VERSION = "0.20.3"
+OMX_PINNED_INTEGRITY = "sha512-7wlSTA1Nc9c31WX9w8THYPwlaleWV1dk/0WXqRgxpph34EI4oJM+Z4Egv04Nn8wN2SLI9K2LMfeOpNKI+06LGg=="
+LEGACY_PREDECESSOR_ID = "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
+LEGACY_REDACTION_ALLOWLIST = {
+    ".omx/archive/accepted-bundles/"
+    "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/"
+    "context/agent-scaffold-consensus-20260714T081220Z.md": (
+        "5e73810eb1bb2645ee6169b98b7360926e6a9b32ff5c5c028defeccc80db95da"
+    ),
+}
 BUNDLE_KEYS = {
     "current": {
         "id",
@@ -180,10 +193,32 @@ def _safe_relative(root: Path, value: str) -> tuple[Path | None, str | None]:
         or pure.parts[: len(prefix.parts)] != prefix.parts
     ):
         return None, f"OMX path escapes required root: {value}"
-    resolved = (root / pure).resolve()
+    lexical = root / pure
+    cursor = root
+    for part in pure.parts:
+        cursor /= part
+        if cursor.is_symlink():
+            return None, f"OMX path contains a symlink: {value}"
+    resolved = lexical.resolve()
     required = (root / prefix).resolve()
     if required != resolved and required not in resolved.parents:
         return None, f"OMX path escapes required root: {value}"
+    return resolved, None
+
+
+def _safe_repo_relative(root: Path, value: str) -> tuple[Path | None, str | None]:
+    pure = PurePosixPath(value)
+    if pure.is_absolute() or not pure.parts or ".." in pure.parts:
+        return None, f"repository path escapes root: {value}"
+    cursor = root
+    for part in pure.parts:
+        cursor /= part
+        if cursor.is_symlink():
+            return None, f"repository path contains a symlink: {value}"
+    resolved = (root / pure).resolve()
+    required = root.resolve()
+    if required != resolved and required not in resolved.parents:
+        return None, f"repository path escapes root: {value}"
     return resolved, None
 
 
@@ -211,6 +246,10 @@ def _redaction_errors(path: str, text: str) -> list[str]:
                 continue
             errors.append(f"{path}: contains {label}: {probe[:48]!r}")
     return errors
+
+
+def _legacy_redaction_allowed(path: str, digest: str) -> bool:
+    return LEGACY_REDACTION_ALLOWLIST.get(path) == digest
 
 
 def _validate_artifact_shape(
@@ -269,7 +308,10 @@ def _validate_handoff_data(
         critic = handoff.get("ralplan_critic_review", {})
         check_link(architect, "architect_review", "handoff Architect review")
         check_link(critic, "critic_review", "handoff Critic review")
-        if architect.get("verdict") != "APPROVE" or architect.get("approved") is not True:
+        if (
+            architect.get("verdict") != "APPROVE"
+            or architect.get("approved") is not True
+        ):
             errors.append("handoff Architect review is not APPROVE")
         if critic.get("verdict") != "APPROVE" or critic.get("approved") is not True:
             errors.append("handoff Critic review is not APPROVE")
@@ -283,7 +325,9 @@ def _validate_handoff_data(
         if critic.get("reviewed_architect_sha256") != artifacts.get(
             "architect_review", {}
         ).get("sha256"):
-            errors.append("handoff Critic did not review the registered Architect review")
+            errors.append(
+                "handoff Critic did not review the registered Architect review"
+            )
     elif handoff.get("schema_version") == 1:
         embedded = handoff.get("planning_artifacts", {}).get("artifacts", [])
         expected = {
@@ -364,7 +408,9 @@ def validate_registry(
         if not re.fullmatch(r"[0-9a-f]{64}", handoff_hash):
             errors.append(f"bundle {bundle_id}: handoff_sha256 is invalid")
         elif bundle_id != canonical_bundle_id(task, handoff_hash):
-            errors.append(f"bundle {bundle_id}: id does not derive from handoff SHA-256")
+            errors.append(
+                f"bundle {bundle_id}: id does not derive from handoff SHA-256"
+            )
         if bundle_id in bundle_ids:
             errors.append(f"duplicate bundle id: {bundle_id}")
         bundle_ids.add(bundle_id)
@@ -372,7 +418,9 @@ def validate_registry(
         if bundle.get("acceptance") != "explicit-user-acceptance":
             errors.append(f"bundle {bundle_id}: missing explicit user acceptance")
         if bundle.get("review_order") != ["architect", "critic"]:
-            errors.append(f"bundle {bundle_id}: review order must be Architect then Critic")
+            errors.append(
+                f"bundle {bundle_id}: review order must be Architect then Critic"
+            )
         if commit_error := _commit_error(root, source_commit):
             errors.append(f"bundle {bundle_id}: {commit_error}")
         artifacts = bundle.get("artifacts")
@@ -396,16 +444,22 @@ def validate_registry(
                 errors.append(f"bundle {bundle_id}: duplicate role {role}")
             role_map[role] = artifact
             if native_path in native_paths:
-                errors.append(f"bundle {bundle_id}: duplicate native path {native_path}")
+                errors.append(
+                    f"bundle {bundle_id}: duplicate native path {native_path}"
+                )
             native_paths.add(native_path)
             if not native_path.startswith(CURRENT_PREFIXES):
-                errors.append(f"bundle {bundle_id}: invalid native role path {native_path}")
+                errors.append(
+                    f"bundle {bundle_id}: invalid native role path {native_path}"
+                )
             try:
                 expected_path = _canonical_path(bundle_id, status, native_path)
             except (ValueError, TypeError):
                 expected_path = ""
             if path != expected_path:
-                errors.append(f"bundle {bundle_id}: invalid {status} placement for {role}")
+                errors.append(
+                    f"bundle {bundle_id}: invalid {status} placement for {role}"
+                )
             resolved, path_error = _safe_relative(root, path)
             if path_error:
                 errors.append(f"bundle {bundle_id}: {path_error}")
@@ -421,14 +475,19 @@ def validate_registry(
                 errors.append(f"bundle {bundle_id}: immutable hash mismatch: {path}")
             try:
                 text = content.decode("utf-8")
-                if bundle_id != LEGACY_PREDECESSOR_ID:
-                    errors.extend(_redaction_errors(path, text))
+                redaction_errors = _redaction_errors(path, text)
+                if redaction_errors and not _legacy_redaction_allowed(
+                    path, str(artifact.get("sha256", ""))
+                ):
+                    errors.extend(redaction_errors)
             except UnicodeDecodeError:
                 errors.append(f"bundle {bundle_id}: artifact is not UTF-8 text: {path}")
         if "handoff" not in role_map:
             errors.append(f"bundle {bundle_id}: handoff role is required")
         elif role_map["handoff"].get("sha256") != handoff_hash:
-            errors.append(f"bundle {bundle_id}: handoff hash differs from bundle identity")
+            errors.append(
+                f"bundle {bundle_id}: handoff hash differs from bundle identity"
+            )
         if status == "current":
             if task in current_tasks:
                 errors.append(f"duplicate current task: {task}")
@@ -447,7 +506,10 @@ def validate_registry(
             else:
                 errors.extend(
                     _validate_handoff_data(
-                        handoff, task=task, source_commit=source_commit, artifacts=role_map
+                        handoff,
+                        task=task,
+                        source_commit=source_commit,
+                        artifacts=role_map,
                     )
                 )
 
@@ -459,7 +521,11 @@ def validate_registry(
             errors.append(f"bundle {bundle.get('id')}: successor is not current")
         elif successor.get("task") == bundle.get("task"):
             pass
-        elif bundle.get("id") == "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f" and successor.get("task") == "aria-nbv-agent-scaffold-refresh":
+        elif (
+            bundle.get("id")
+            == "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
+            and successor.get("task") == "aria-nbv-agent-scaffold-refresh"
+        ):
             pass
         else:
             errors.append(f"bundle {bundle.get('id')}: successor task differs")
@@ -488,7 +554,9 @@ def validate_registry(
         if commit_error := _commit_error(root, str(tombstone.get("source_commit", ""))):
             errors.append(f"tombstone {original_path}: {commit_error}")
         else:
-            blob = _git(root, "rev-parse", f"{tombstone['source_commit']}:{original_path}")
+            blob = _git(
+                root, "rev-parse", f"{tombstone['source_commit']}:{original_path}"
+            )
             if blob.returncode or blob.stdout.strip() != tombstone.get("blob_hash"):
                 errors.append(f"tombstone {original_path}: source blob hash differs")
 
@@ -503,7 +571,11 @@ def validate_registry(
 
 
 def _immutable_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
-    value = {key: item for key, item in bundle.items() if key not in {"status", "superseded_by"}}
+    value = {
+        key: item
+        for key, item in bundle.items()
+        if key not in {"status", "superseded_by"}
+    }
     value["artifacts"] = [
         {key: item for key, item in artifact.items() if key != "path"}
         for artifact in bundle.get("artifacts", [])
@@ -600,7 +672,9 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
         historical = _registry_at(root, commit)
         if historical is None:
             if seen:
-                errors.append(f"{commit}: registry deleted after accepted bundles existed")
+                errors.append(
+                    f"{commit}: registry deleted after accepted bundles existed"
+                )
             continue
         historical_by_id = {item["id"]: item for item in historical.get("bundles", [])}
         for bundle_id, bundle in historical_by_id.items():
@@ -616,7 +690,10 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
                     errors.append(f"{commit}: artifact membership drift: {bundle_id}")
                     continue
                 blob = _git(root, "show", f"{commit}:{artifact.get('path', '')}")
-                if blob.returncode or _bytes_sha256(blob.stdout.encode()) != stable["sha256"]:
+                if (
+                    blob.returncode
+                    or _bytes_sha256(blob.stdout.encode()) != stable["sha256"]
+                ):
                     errors.append(
                         f"{commit}: committed payload mutation or missing path: {artifact.get('path')}"
                     )
@@ -692,6 +769,592 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
             os.unlink(temporary)
 
 
+def _git_path(root: Path, name: str) -> Path:
+    result = _git(root, "rev-parse", "--git-path", name)
+    if result.returncode:
+        raise ValueError(f"cannot resolve Git path {name}: {result.stderr.strip()}")
+    path = Path(result.stdout.strip())
+    return path if path.is_absolute() else root / path
+
+
+def _recovery_root(root: Path) -> Path:
+    return _git_path(root, RECOVERY_GIT_PATH)
+
+
+def _index_path(root: Path) -> Path:
+    return _git_path(root, "index")
+
+
+def _remove_empty_parents(path: Path, root: Path) -> None:
+    parent = path.parent
+    boundary = root.resolve()
+    while parent != boundary and boundary in parent.resolve().parents:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+
+
+def _load_journal(root: Path) -> tuple[Path, dict[str, Any]] | None:
+    recovery = _recovery_root(root)
+    journal_path = recovery / "journal.json"
+    if not journal_path.exists():
+        return None
+    try:
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"recovery journal is unreadable: {exc}") from exc
+    expected = {"schema_version", "worktree", "operation", "paths", "index"}
+    errors = _exact_keys(journal, expected, "recovery journal")
+    if errors or journal.get("schema_version") != JOURNAL_SCHEMA_VERSION:
+        raise ValueError("invalid recovery journal: " + "; ".join(errors))
+    if journal.get("worktree") != str(root.resolve()):
+        raise ValueError("recovery journal belongs to another worktree")
+    return recovery, journal
+
+
+def _restore_backup(recovery: Path, entry: dict[str, Any], target: Path) -> None:
+    if not entry.get("existed"):
+        if target.exists() or target.is_symlink():
+            if target.is_dir() and not target.is_symlink():
+                raise ValueError(f"refusing to remove unexpected directory: {target}")
+            target.unlink()
+        return
+    backup_name = entry.get("backup")
+    expected = entry.get("sha256")
+    if not isinstance(backup_name, str) or not isinstance(expected, str):
+        raise ValueError(f"invalid backup entry for {target}")
+    backup = recovery / "backups" / backup_name
+    content = backup.read_bytes()
+    if _bytes_sha256(content) != expected:
+        raise ValueError(f"backup checksum mismatch for {target}")
+    _atomic_write_bytes(target, content)
+
+
+def _validate_backup_entry(recovery: Path, entry: dict[str, Any], label: str) -> None:
+    if set(entry) != {"existed", "sha256", "backup"}:
+        raise ValueError(f"invalid backup entry for {label}")
+    if not entry.get("existed"):
+        if entry.get("sha256") is not None or entry.get("backup") is not None:
+            raise ValueError(f"invalid absent backup entry for {label}")
+        return
+    backup_name = entry.get("backup")
+    expected = entry.get("sha256")
+    if (
+        not isinstance(backup_name, str)
+        or PurePosixPath(backup_name).name != backup_name
+        or not isinstance(expected, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", expected)
+    ):
+        raise ValueError(f"invalid backup metadata for {label}")
+    backup = recovery / "backups" / backup_name
+    if not backup.is_file() or backup.is_symlink() or sha256(backup) != expected:
+        raise ValueError(f"backup checksum mismatch for {label}")
+
+
+def recover_incomplete_transaction(root: Path) -> bool:
+    loaded = _load_journal(root)
+    if loaded is None:
+        return False
+    recovery, journal = loaded
+    entries = journal.get("paths")
+    if not isinstance(entries, list):
+        raise ValueError("recovery journal paths must be a list")
+    validated: list[tuple[dict[str, Any], Path]] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {
+            "path",
+            "existed",
+            "sha256",
+            "backup",
+        }:
+            raise ValueError("invalid recovery path entry")
+        target, error = _safe_repo_relative(root, str(entry["path"]))
+        if error or target is None:
+            raise ValueError(error or "invalid recovery path")
+        backup_entry = {key: entry[key] for key in ("existed", "sha256", "backup")}
+        _validate_backup_entry(recovery, backup_entry, str(entry["path"]))
+        validated.append((entry, target))
+    index_entry = journal.get("index")
+    if not isinstance(index_entry, dict):
+        raise ValueError("invalid recovery index entry")
+    _validate_backup_entry(recovery, index_entry, "Git index")
+    restored: list[Path] = []
+    for entry, target in reversed(validated):
+        _restore_backup(recovery, entry, target)
+        restored.append(target)
+    _restore_backup(recovery, index_entry, _index_path(root))
+    for target in restored:
+        _remove_empty_parents(target, root)
+    shutil.rmtree(recovery)
+    _fsync_dir(recovery.parent)
+    return True
+
+
+def _backup_entry(recovery: Path, path: Path, relative: str) -> dict[str, Any]:
+    if path.exists() or path.is_symlink():
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"transaction path is not a regular file: {relative}")
+        content = path.read_bytes()
+        digest = _bytes_sha256(content)
+        backup_name = f"{digest}.bin"
+        backup = recovery / "backups" / backup_name
+        if not backup.exists():
+            _atomic_write_bytes(backup, content)
+        return {
+            "path": relative,
+            "existed": True,
+            "sha256": digest,
+            "backup": backup_name,
+        }
+    return {"path": relative, "existed": False, "sha256": None, "backup": None}
+
+
+def _begin_transaction(root: Path, operation: str, paths: list[Path]) -> Path:
+    recover_incomplete_transaction(root)
+    recovery = _recovery_root(root)
+    unique: dict[str, Path] = {}
+    for path in paths:
+        try:
+            relative = path.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError(f"transaction path escapes repository: {path}") from exc
+        resolved, error = _safe_repo_relative(root, relative)
+        if error or resolved is None:
+            raise ValueError(error or f"invalid transaction path: {relative}")
+        unique[relative] = resolved
+    recovery.mkdir(parents=True, exist_ok=False)
+    try:
+        entries = [
+            _backup_entry(recovery, path, relative)
+            for relative, path in sorted(unique.items())
+        ]
+        index_path = _index_path(root)
+        index_entry = _backup_entry(recovery, index_path, "index")
+        index_entry.pop("path")
+        journal = {
+            "schema_version": JOURNAL_SCHEMA_VERSION,
+            "worktree": str(root.resolve()),
+            "operation": operation,
+            "paths": entries,
+            "index": index_entry,
+        }
+        _atomic_write_bytes(
+            recovery / "journal.json",
+            (json.dumps(journal, indent=2, sort_keys=True) + "\n").encode(),
+        )
+        _fsync_dir(recovery)
+    except BaseException:
+        shutil.rmtree(recovery, ignore_errors=True)
+        raise
+    return recovery
+
+
+def _finish_transaction(recovery: Path) -> None:
+    shutil.rmtree(recovery)
+    _fsync_dir(recovery.parent)
+
+
+def _rollback_transaction(root: Path, exc: BaseException) -> int:
+    try:
+        recovered = recover_incomplete_transaction(root)
+    except Exception as recovery_exc:
+        print(
+            f"transaction failed ({exc}); durable rollback failed: {recovery_exc}",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"transaction rolled back: {exc}"
+        if recovered
+        else f"transaction failed before journaling: {exc}",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def _registered_file_entries(
+    registry: dict[str, Any], root: Path
+) -> list[tuple[str, bytes, str, str]]:
+    entries: list[tuple[str, bytes, str, str]] = []
+    registry_bytes = (root / REGISTRY_REL).read_bytes()
+    entries.append(
+        (
+            REGISTRY_REL.as_posix(),
+            registry_bytes,
+            "registry",
+            _bytes_sha256(registry_bytes),
+        )
+    )
+    for bundle in registry.get("bundles", []):
+        for artifact in bundle.get("artifacts", []):
+            path = str(artifact["path"])
+            resolved, error = _safe_relative(root, path)
+            if error or resolved is None or not resolved.is_file():
+                raise ValueError(error or f"missing registered artifact: {path}")
+            content = resolved.read_bytes()
+            digest = _bytes_sha256(content)
+            if digest != artifact.get("sha256"):
+                raise ValueError(f"registered artifact hash mismatch: {path}")
+            entries.append((path, content, str(artifact["role"]), digest))
+    return sorted(entries)
+
+
+def _tar_add_bytes(archive: tarfile.TarFile, path: str, content: bytes) -> None:
+    info = tarfile.TarInfo(path)
+    info.size = len(content)
+    info.mode = 0o644
+    info.uid = 0
+    info.gid = 0
+    info.uname = ""
+    info.gname = ""
+    info.mtime = 0
+    archive.addfile(info, io.BytesIO(content))
+
+
+def export_seed(output_dir: Path, root: Path = REPO_ROOT) -> Path:
+    output = output_dir.resolve()
+    repo = root.resolve()
+    if output == repo or repo in output.parents:
+        raise ValueError("seed output must be outside the repository")
+    registry = load_registry(root / REGISTRY_REL)
+    errors = validate_registry(registry, root, check_git=False)
+    if errors:
+        raise ValueError("cannot export invalid registry: " + "\n".join(errors))
+    entries = _registered_file_entries(registry, root)
+    manifest = {
+        "schema_version": SEED_SCHEMA_VERSION,
+        "files": [
+            {"path": path, "role": role, "bytes": len(content), "sha256": digest}
+            for path, content, role, digest in entries
+        ],
+    }
+    manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    output.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".omx-seed-", dir=output)
+    os.close(descriptor)
+    try:
+        with tarfile.open(temporary, "w", format=tarfile.PAX_FORMAT) as archive:
+            _tar_add_bytes(archive, SEED_MANIFEST, manifest_bytes)
+            for path, content, _role, _digest in entries:
+                _tar_add_bytes(archive, path, content)
+        digest = sha256(Path(temporary))
+        target = output / f"{digest}.tar"
+        if target.exists():
+            if sha256(target) != digest:
+                raise ValueError(f"seed path collision: {target}")
+            Path(temporary).unlink()
+        else:
+            os.replace(temporary, target)
+            _fsync_dir(output)
+        verify_seed(target)
+        return target
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def verify_seed(seed_path: Path) -> dict[str, bytes]:
+    expected_name = re.fullmatch(r"([0-9a-f]{64})\.tar", seed_path.name)
+    if expected_name is None or sha256(seed_path) != expected_name.group(1):
+        raise ValueError("seed filename/content digest mismatch")
+    with tarfile.open(seed_path, "r:") as archive:
+        members = archive.getmembers()
+        names = [member.name for member in members]
+        if len(names) != len(set(names)) or SEED_MANIFEST not in names:
+            raise ValueError("seed contains duplicate paths or no manifest")
+        for member in members:
+            pure = PurePosixPath(member.name)
+            if not member.isfile() or pure.is_absolute() or ".." in pure.parts:
+                raise ValueError(f"unsafe seed member: {member.name}")
+        extracted = {
+            member.name: archive.extractfile(member).read()  # type: ignore[union-attr]
+            for member in members
+        }
+    try:
+        manifest = json.loads(extracted.pop(SEED_MANIFEST).decode("utf-8"))
+    except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid seed manifest: {exc}") from exc
+    if (
+        set(manifest) != {"schema_version", "files"}
+        or manifest.get("schema_version") != SEED_SCHEMA_VERSION
+    ):
+        raise ValueError("unsupported seed manifest schema")
+    declared: dict[str, dict[str, Any]] = {}
+    for item in manifest.get("files", []):
+        if not isinstance(item, dict) or set(item) != {
+            "path",
+            "role",
+            "bytes",
+            "sha256",
+        }:
+            raise ValueError("invalid seed file entry")
+        path = str(item["path"])
+        if path in declared:
+            raise ValueError(f"duplicate seed manifest path: {path}")
+        declared[path] = item
+    if set(extracted) != set(declared):
+        raise ValueError("seed payload membership differs from manifest")
+    for path, content in extracted.items():
+        item = declared[path]
+        if len(content) != item["bytes"] or _bytes_sha256(content) != item["sha256"]:
+            raise ValueError(f"seed payload checksum mismatch: {path}")
+    try:
+        registry = tomllib.loads(extracted[REGISTRY_REL.as_posix()].decode("utf-8"))
+    except (KeyError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"seed registry is invalid: {exc}") from exc
+    expected_metadata = {
+        REGISTRY_REL.as_posix(): {
+            "role": "registry",
+            "bytes": len(extracted[REGISTRY_REL.as_posix()]),
+            "sha256": _bytes_sha256(extracted[REGISTRY_REL.as_posix()]),
+        }
+    }
+    for bundle in registry.get("bundles", []):
+        for artifact in bundle.get("artifacts", []):
+            expected_metadata[str(artifact.get("path", ""))] = {
+                "role": artifact.get("role"),
+                "bytes": artifact.get("bytes"),
+                "sha256": artifact.get("sha256"),
+            }
+    for path, expected in expected_metadata.items():
+        observed = declared.get(path, {})
+        if any(observed.get(key) != value for key, value in expected.items()):
+            raise ValueError(f"seed manifest metadata differs from registry: {path}")
+    return extracted
+
+
+def _seed_registry(
+    payloads: dict[str, bytes], root: Path = REPO_ROOT
+) -> dict[str, Any]:
+    try:
+        registry = tomllib.loads(payloads[REGISTRY_REL.as_posix()].decode("utf-8"))
+    except (KeyError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"seed registry is invalid: {exc}") from exc
+    expected = {REGISTRY_REL.as_posix()}
+    for bundle in registry.get("bundles", []):
+        expected.update(
+            str(item.get("path", "")) for item in bundle.get("artifacts", [])
+        )
+    if set(payloads) != expected:
+        raise ValueError("seed does not exactly match registry membership")
+    errors = _validate_registry_shape(registry)
+    if errors:
+        raise ValueError("invalid seed registry: " + "\n".join(errors))
+    by_id = {
+        str(bundle.get("id", "")): bundle
+        for bundle in registry.get("bundles", [])
+        if isinstance(bundle, dict)
+    }
+    for offset, bundle in enumerate(registry.get("bundles", [])):
+        if not isinstance(bundle, dict):
+            errors.append(f"seed bundle {offset} must be a table")
+            continue
+        status = str(bundle.get("status", ""))
+        errors.extend(
+            _exact_keys(bundle, BUNDLE_KEYS.get(status, set()), f"seed bundle {offset}")
+            if status in BUNDLE_KEYS
+            else [f"seed bundle {offset} status is invalid"]
+        )
+        bundle_id = str(bundle.get("id", ""))
+        task = str(bundle.get("task", ""))
+        handoff_hash = str(bundle.get("handoff_sha256", ""))
+        if (
+            not TASK_RE.fullmatch(task)
+            or not BUNDLE_ID_RE.fullmatch(bundle_id)
+            or bundle_id != canonical_bundle_id(task, handoff_hash)
+        ):
+            errors.append(f"seed bundle identity is invalid: {bundle_id}")
+        if commit_error := _commit_error(root, str(bundle.get("source_commit", ""))):
+            errors.append(f"seed bundle {bundle_id}: {commit_error}")
+        role_map: dict[str, dict[str, Any]] = {}
+        for index, artifact in enumerate(bundle.get("artifacts", [])):
+            errors.extend(
+                _validate_artifact_shape(
+                    artifact,
+                    f"seed bundle {bundle_id}.artifacts[{index}]",
+                    str(bundle.get("source_commit", "")),
+                )
+            )
+            if not isinstance(artifact, dict):
+                continue
+            role = str(artifact.get("role", ""))
+            path = str(artifact.get("path", ""))
+            native_path = str(artifact.get("native_path", ""))
+            role_map[role] = artifact
+            try:
+                expected_path = _canonical_path(bundle_id, status, native_path)
+            except (TypeError, ValueError):
+                expected_path = ""
+            if path != expected_path:
+                errors.append(f"seed bundle {bundle_id}: invalid placement for {role}")
+            content = payloads.get(path, b"")
+            if len(content) != artifact.get("bytes") or _bytes_sha256(
+                content
+            ) != artifact.get("sha256"):
+                errors.append(f"seed bundle {bundle_id}: payload mismatch: {path}")
+        handoff_artifact = role_map.get("handoff", {})
+        handoff_content = payloads.get(str(handoff_artifact.get("path", "")))
+        if handoff_content is not None:
+            try:
+                handoff = json.loads(handoff_content.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                errors.append(f"seed bundle {bundle_id}: invalid handoff: {exc}")
+            else:
+                errors.extend(
+                    _validate_handoff_data(
+                        handoff,
+                        task=task,
+                        source_commit=str(bundle.get("source_commit", "")),
+                        artifacts=role_map,
+                    )
+                )
+        if status == "superseded":
+            successor = by_id.get(str(bundle.get("superseded_by", "")))
+            if successor is None or successor.get("status") != "current":
+                errors.append(f"seed bundle {bundle_id}: successor is not current")
+    if errors:
+        raise ValueError("invalid seed registry: " + "\n".join(errors))
+    return registry
+
+
+def restore_seed(seed_path: Path, root: Path = REPO_ROOT) -> int:
+    try:
+        recover_incomplete_transaction(root)
+        payloads = verify_seed(seed_path)
+        registry = _seed_registry(payloads, root)
+        targets: list[Path] = []
+        for relative in sorted(payloads):
+            target, error = _safe_repo_relative(root, relative)
+            if error or target is None:
+                raise ValueError(error or f"invalid seed path: {relative}")
+            if relative != REGISTRY_REL.as_posix() and not relative.startswith(".omx/"):
+                raise ValueError(
+                    f"seed path is outside lifecycle ownership: {relative}"
+                )
+            targets.append(target)
+        registry_path = root / REGISTRY_REL
+        if (
+            registry_path.exists()
+            and registry_path.read_bytes() != payloads[REGISTRY_REL.as_posix()]
+        ):
+            raise ValueError("existing registry differs from verified seed")
+        collisions = [
+            path
+            for path in targets
+            if path != registry_path and (path.exists() or path.is_symlink())
+        ]
+        if collisions:
+            raise ValueError(f"seed restore path already exists: {collisions[0]}")
+        recovery = _begin_transaction(root, "restore-seed", targets)
+        try:
+            for relative, content in sorted(payloads.items()):
+                target, _error = _safe_repo_relative(root, relative)
+                assert target is not None
+                _atomic_write_bytes(target, content)
+            _FAULT_HOOK("restore_after_payload")
+            errors = validate_registry(registry, root, check_git=False)
+            if errors:
+                raise ValueError("restored registry is invalid: " + "\n".join(errors))
+            add = _git(root, "add", "--", *sorted(payloads))
+            if add.returncode:
+                raise ValueError(f"cannot stage restored seed: {add.stderr.strip()}")
+            _FAULT_HOOK("restore_after_index")
+            for relative, content in payloads.items():
+                target, _error = _safe_repo_relative(root, relative)
+                assert target is not None
+                if target.read_bytes() != content:
+                    raise ValueError(f"post-restore verification failed: {relative}")
+            _finish_transaction(recovery)
+        except Exception as exc:
+            return _rollback_transaction(root, exc)
+        return 0
+    except Exception as exc:
+        print(f"seed restore rejected: {exc}", file=sys.stderr)
+        return 1
+
+
+def _registered_snapshot(root: Path) -> dict[str, str]:
+    registry = load_registry(root / REGISTRY_REL)
+    return {
+        path: digest
+        for path, _content, _role, digest in _registered_file_entries(registry, root)
+    }
+
+
+def _protected_snapshot(root: Path) -> dict[str, str]:
+    snapshot = _registered_snapshot(root)
+    archive_root = root / ARCHIVE_PREFIX
+    if archive_root.exists():
+        for path in archive_root.rglob("*"):
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink() or (not path.is_file() and not path.is_dir()):
+                raise ValueError(f"unsafe accepted archive entry: {relative}")
+            if path.is_file():
+                snapshot[relative] = sha256(path)
+    return snapshot
+
+
+def _verified_omx_version(executable: str) -> bool:
+    result = subprocess.run(
+        [executable, "--version"], check=False, capture_output=True, text=True
+    )
+    output = f"{result.stdout}\n{result.stderr}"
+    return (
+        result.returncode == 0
+        and re.search(
+            rf"(?<![0-9.])v?{re.escape(OMX_PINNED_VERSION)}(?![0-9.])", output
+        )
+        is not None
+    )
+
+
+def run_native_operation(command: list[str], root: Path = REPO_ROOT) -> int:
+    allowed = command in (
+        ["omx", "cleanup", "--dry-run"],
+        ["omx", "cleanup"],
+        ["omx", "cancel"],
+    )
+    allowed = allowed or (
+        len(command) == 7
+        and command[:5] == ["omx", "ultragoal", "create-goals", "--force", "--brief"]
+        and command[-1] == "--json"
+    )
+    if not allowed:
+        print("native OMX operation is outside the reviewed allowlist", file=sys.stderr)
+        return 2
+    if not _verified_omx_version(command[0]):
+        print(
+            f"native OMX operation requires oh-my-codex {OMX_PINNED_VERSION}",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        recover_incomplete_transaction(root)
+        before = _protected_snapshot(root)
+        protected_paths = [root / path for path in before]
+        recovery = _begin_transaction(root, "native-operation", protected_paths)
+        result = subprocess.run(command, cwd=root, check=False)
+        after = _protected_snapshot(root)
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return _rollback_transaction(
+            root, ValueError(f"native OMX operation damaged registered evidence: {exc}")
+        )
+    if after != before:
+        for relative in sorted(set(after) - set(before), reverse=True):
+            target, error = _safe_relative(root, relative)
+            if error or target is None or not relative.startswith(f"{ARCHIVE_PREFIX}/"):
+                continue
+            if target.is_file() and not target.is_symlink():
+                target.unlink()
+                _remove_empty_parents(target, root)
+        return _rollback_transaction(
+            root, ValueError("native OMX operation changed registered evidence")
+        )
+    _finish_transaction(recovery)
+    return result.returncode
+
+
 def _load_draft(
     manifest_path: Path, root: Path
 ) -> tuple[dict[str, Any] | None, list[str]]:
@@ -752,9 +1415,7 @@ def _load_draft(
         except UnicodeDecodeError:
             errors.append(f"draft artifact is not UTF-8: {artifact.get('path')}")
     if set(role_map) != set(CURRENT_REQUIRED_ROLES):
-        errors.append(
-            f"draft roles must be exactly {list(CURRENT_REQUIRED_ROLES)}"
-        )
+        errors.append(f"draft roles must be exactly {list(CURRENT_REQUIRED_ROLES)}")
     handoff_source = root / str(role_map.get("handoff", {}).get("path", ""))
     if handoff_source.is_file():
         try:
@@ -840,9 +1501,7 @@ def _current_bundle(
         ],
     }
     content_by_role = {
-        role: handoff_bytes
-        if role == "handoff"
-        else source_by_role[role].read_bytes()
+        role: handoff_bytes if role == "handoff" else source_by_role[role].read_bytes()
         for role in CURRENT_REQUIRED_ROLES
     }
     return current, content_by_role
@@ -851,6 +1510,11 @@ def _current_bundle(
 def promote(
     manifest_path: Path, acceptance: str, dry_run: bool, root: Path = REPO_ROOT
 ) -> int:
+    try:
+        recover_incomplete_transaction(root)
+    except Exception as exc:
+        print(f"promotion recovery failed: {exc}", file=sys.stderr)
+        return 1
     if acceptance != "explicit-user-acceptance":
         print(
             "promotion requires --acceptance explicit-user-acceptance", file=sys.stderr
@@ -896,33 +1560,40 @@ def promote(
     targets = {
         item["role"]: root / item["native_path"] for item in current["artifacts"]
     }
+    for item in current["artifacts"]:
+        _target, path_error = _safe_relative(root, str(item["native_path"]))
+        if path_error:
+            print(f"- {path_error}", file=sys.stderr)
+            return 1
     collisions = [path for path in targets.values() if path.exists()]
     if collisions:
-        print(f"- declared native path already exists: {collisions[0]}", file=sys.stderr)
+        print(
+            f"- declared native path already exists: {collisions[0]}", file=sys.stderr
+        )
         return 1
-    before = registry_path.read_bytes() if registry_path.exists() else b""
-    registry_existed = registry_path.exists()
-    created: list[Path] = []
+    current_errors = validate_registry(registry, root, check_git=False)
+    if current_errors:
+        for error in current_errors:
+            print(f"- pre-mutation registry invalid: {error}", file=sys.stderr)
+        return 1
     try:
+        recovery = _begin_transaction(
+            root, "promote", [registry_path, *targets.values()]
+        )
         for role in CURRENT_REQUIRED_ROLES:
             target = targets[role]
             _atomic_write_bytes(target, content_by_role[role])
-            created.append(target)
         _FAULT_HOOK("promote_after_payload")
         errors = validate_registry(candidate, root, check_git=False)
         if errors:
             raise ValueError("\n".join(errors))
         _atomic_write_bytes(registry_path, rendered.encode())
         _FAULT_HOOK("promote_after_registry")
-    except BaseException as exc:
-        for path in reversed(created):
-            path.unlink(missing_ok=True)
-        if registry_existed:
-            _atomic_write_bytes(registry_path, before)
-        else:
-            registry_path.unlink(missing_ok=True)
-        print(f"promotion rolled back: {exc}", file=sys.stderr)
-        return 1
+        if validate_registry(candidate, root, check_git=False):
+            raise ValueError("post-promotion verification failed")
+        _finish_transaction(recovery)
+    except Exception as exc:
+        return _rollback_transaction(root, exc)
     return 0
 
 
@@ -933,6 +1604,11 @@ def supersede(
     dry_run: bool,
     root: Path = REPO_ROOT,
 ) -> int:
+    try:
+        recover_incomplete_transaction(root)
+    except Exception as exc:
+        print(f"supersession recovery failed: {exc}", file=sys.stderr)
+        return 1
     if acceptance != "explicit-user-acceptance":
         print(
             "supersession requires --acceptance explicit-user-acceptance",
@@ -994,14 +1670,29 @@ def supersede(
     if missing := [path for path in predecessor_paths.values() if not path.is_file()]:
         print(f"- current predecessor artifact missing: {missing[0]}", file=sys.stderr)
         return 1
+    for item in bundle["artifacts"]:
+        path = predecessor_paths[str(item["role"])]
+        if sha256(path) != item.get("sha256"):
+            print(f"- current predecessor hash mismatch: {path}", file=sys.stderr)
+            return 1
     archive_paths = {
         item["role"]: root
         / _canonical_path(bundle_id, "superseded", item["native_path"])
         for item in bundle["artifacts"]
     }
-    if collisions := [path for path in archive_paths.values() if path.exists()]:
-        print(f"- predecessor archive path already exists: {collisions[0]}", file=sys.stderr)
+    archive_bundle_root = root / ARCHIVE_PREFIX / bundle_id
+    if archive_bundle_root.exists() or archive_bundle_root.is_symlink():
+        print(
+            f"- predecessor archive root already exists: {archive_bundle_root}",
+            file=sys.stderr,
+        )
         return 1
+    for path in [*archive_paths.values(), *predecessor_paths.values()]:
+        relative = path.relative_to(root).as_posix()
+        _target, path_error = _safe_relative(root, relative)
+        if path_error:
+            print(f"- {path_error}", file=sys.stderr)
+            return 1
     successor_paths = {
         item["role"]: root / item["native_path"] for item in successor["artifacts"]
     }
@@ -1011,49 +1702,59 @@ def supersede(
         for path in successor_paths.values()
         if path.exists() and path not in predecessor_path_set
     ]:
-        print(f"- successor native path already exists: {collisions[0]}", file=sys.stderr)
+        print(
+            f"- successor native path already exists: {collisions[0]}", file=sys.stderr
+        )
         return 1
-    before = registry_path.read_bytes()
     predecessor_content = {
         role: path.read_bytes() for role, path in predecessor_paths.items()
     }
-    created_archive: list[Path] = []
-    created_successor: list[Path] = []
+    current_errors = validate_registry(registry, root, check_git=False)
+    if current_errors:
+        for error in current_errors:
+            print(f"- pre-mutation registry invalid: {error}", file=sys.stderr)
+        return 1
     try:
-        for path in predecessor_paths.values():
-            path.unlink()
+        recovery = _begin_transaction(
+            root,
+            "supersede",
+            [
+                registry_path,
+                *predecessor_paths.values(),
+                *archive_paths.values(),
+                *successor_paths.values(),
+            ],
+        )
         for role, path in archive_paths.items():
             _atomic_write_bytes(path, predecessor_content[role])
-            created_archive.append(path)
+        for path in predecessor_paths.values():
+            if path not in set(successor_paths.values()):
+                path.unlink()
+                _fsync_dir(path.parent)
         _FAULT_HOOK("supersede_after_archive")
         for role, path in successor_paths.items():
             _atomic_write_bytes(path, successor_content[role])
-            created_successor.append(path)
         _FAULT_HOOK("supersede_after_successor")
         errors = validate_registry(candidate, root, check_git=False)
         if errors:
             raise ValueError("\n".join(errors))
         _atomic_write_bytes(registry_path, rendered.encode())
         _FAULT_HOOK("supersede_after_registry")
-    except BaseException as exc:
-        for path in reversed(created_successor):
-            path.unlink(missing_ok=True)
-        for path in reversed(created_archive):
-            path.unlink(missing_ok=True)
-        archive_bundle_root = root / ARCHIVE_PREFIX / bundle_id
-        if archive_bundle_root.exists():
-            shutil.rmtree(archive_bundle_root)
-        for role, path in predecessor_paths.items():
-            _atomic_write_bytes(path, predecessor_content[role])
-        _atomic_write_bytes(registry_path, before)
-        print(f"supersession rolled back: {exc}", file=sys.stderr)
-        return 1
+        if validate_registry(candidate, root, check_git=False):
+            raise ValueError("post-supersession verification failed")
+        _finish_transaction(recovery)
+    except Exception as exc:
+        return _rollback_transaction(root, exc)
     return 0
 
 
 def check(root: Path = REPO_ROOT, baseline_ref: str | None = None) -> list[str]:
     registry = load_registry(root / REGISTRY_REL)
     errors = validate_registry(registry, root)
+    if _load_journal(root) is not None:
+        errors.append(
+            "incomplete OMX lifecycle transaction; run a mutation command to recover"
+        )
     for label, previous in historical_registries(root, baseline_ref):
         errors.extend(validate_history(registry, previous, label))
     errors.extend(validate_payload_history(registry, root))
@@ -1068,11 +1769,36 @@ def main() -> int:
     actions.add_argument(
         "--supersede", nargs=2, metavar=("BUNDLE", "SUCCESSOR_MANIFEST")
     )
+    actions.add_argument("--export-seed", type=Path)
+    actions.add_argument("--verify-seed", type=Path)
+    actions.add_argument("--restore-seed", type=Path)
+    actions.add_argument("--run-native-operation", nargs=argparse.REMAINDER)
     parser.add_argument("--acceptance", default="")
     parser.add_argument("--baseline-ref")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args()
+    if args.export_seed:
+        try:
+            seed = export_seed(args.export_seed, args.repo_root)
+        except (OSError, ValueError, tarfile.TarError, tomllib.TOMLDecodeError) as exc:
+            print(f"seed export failed: {exc}", file=sys.stderr)
+            return 1
+        print(seed)
+        return 0
+    if args.verify_seed:
+        try:
+            payloads = verify_seed(args.verify_seed)
+            _seed_registry(payloads)
+        except (OSError, ValueError, tarfile.TarError) as exc:
+            print(f"seed verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(f"OMX seed valid: {len(payloads)} registered file(s)")
+        return 0
+    if args.restore_seed:
+        return restore_seed(args.restore_seed, args.repo_root)
+    if args.run_native_operation is not None:
+        return run_native_operation(args.run_native_operation, args.repo_root)
     if args.promote_manifest:
         return promote(
             args.promote_manifest, args.acceptance, args.dry_run, args.repo_root

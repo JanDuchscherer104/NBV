@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import shutil
+import os
 import subprocess
 import sys
 import tempfile
@@ -201,11 +201,23 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             0,
         )
         registry = validator.load_registry(self.registry_path)
-        return next(item["id"] for item in registry["bundles"] if item["status"] == "current")
+        return next(
+            item["id"] for item in registry["bundles"] if item["status"] == "current"
+        )
 
     def commit_registry(self, message: str) -> None:
         self.git("add", "-A")
         self.git("commit", "-qm", message)
+
+    def registered_bytes(self) -> dict[str, bytes]:
+        registry = validator.load_registry(self.registry_path)
+        paths = [validator.REGISTRY_REL.as_posix()]
+        paths.extend(
+            item["path"]
+            for bundle in registry["bundles"]
+            for item in bundle["artifacts"]
+        )
+        return {path: (self.root / path).read_bytes() for path in paths}
 
     def test_promotion_uses_native_paths_and_requires_acceptance(self) -> None:
         manifest = self.make_draft("bundle-a")
@@ -219,23 +231,37 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         registry = validator.load_registry(self.registry_path)
         bundle = registry["bundles"][0]
         self.assertEqual(bundle["status"], "current")
-        self.assertEqual(bundle["id"], validator.canonical_bundle_id(bundle["task"], bundle["handoff_sha256"]))
-        self.assertTrue(all(item["path"] == item["native_path"] for item in bundle["artifacts"]))
+        self.assertEqual(
+            bundle["id"],
+            validator.canonical_bundle_id(bundle["task"], bundle["handoff_sha256"]),
+        )
+        self.assertTrue(
+            all(item["path"] == item["native_path"] for item in bundle["artifacts"])
+        )
         self.assertEqual(validator.validate_registry(registry, self.root), [])
 
-    def test_fixture_roles_are_exact_without_importing_implementation_names(self) -> None:
+    def test_fixture_roles_are_exact_without_importing_implementation_names(
+        self,
+    ) -> None:
         self.promote("bundle-a")
         registry = validator.load_registry(self.registry_path)
         observed = {item["role"] for item in registry["bundles"][0]["artifacts"]}
         self.assertEqual(observed, set(FIXTURE_ROLES))
         missing = json.loads(json.dumps(registry))
         missing["bundles"][0]["artifacts"].pop()
-        self.assertTrue(any("current roles must be exactly" in error for error in validator.validate_registry(missing, self.root)))
+        self.assertTrue(
+            any(
+                "current roles must be exactly" in error
+                for error in validator.validate_registry(missing, self.root)
+            )
+        )
 
     def test_handoff_requires_plan_architect_critic_hash_chain(self) -> None:
         manifest = self.make_draft("bundle-a")
         data = json.loads(manifest.read_text(encoding="utf-8"))
-        handoff_item = next(item for item in data["artifacts"] if item["role"] == "handoff")
+        handoff_item = next(
+            item for item in data["artifacts"] if item["role"] == "handoff"
+        )
         handoff_path = self.root / handoff_item["path"]
         handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
         handoff["ralplan_critic_review"]["reviewed_plan_sha256"] = "0" * 64
@@ -244,7 +270,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         handoff_item["bytes"] = handoff_path.stat().st_size
         data["handoff_sha256"] = handoff_item["sha256"]
         manifest.write_text(json.dumps(data), encoding="utf-8")
-        self.assertEqual(validator.promote(manifest, "explicit-user-acceptance", False, self.root), 1)
+        self.assertEqual(
+            validator.promote(manifest, "explicit-user-acceptance", False, self.root), 1
+        )
 
     def test_structured_redaction_probes_and_placeholder_exemptions(self) -> None:
         rejected = (
@@ -272,10 +300,18 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             with self.subTest(probe=probe):
                 self.assertEqual(validator._redaction_errors("fixture", probe), [])
 
+    def test_legacy_redaction_exception_is_exact_path_and_hash(self) -> None:
+        [(path, digest)] = validator.LEGACY_REDACTION_ALLOWLIST.items()
+        self.assertTrue(validator._legacy_redaction_allowed(path, digest))
+        self.assertFalse(validator._legacy_redaction_allowed(path, "0" * 64))
+        self.assertFalse(validator._legacy_redaction_allowed(path + ".copy", digest))
+
     def test_exact_allowlist_rejects_unregistered_paths(self) -> None:
         self.promote("bundle-a")
         self.write(".omx/plans/unregistered.md", "extra\n")
-        errors = validator.validate_registry(validator.load_registry(self.registry_path), self.root)
+        errors = validator.validate_registry(
+            validator.load_registry(self.registry_path), self.root
+        )
         self.assertTrue(any("unregistered" in error for error in errors))
 
     def test_history_rejects_deletion_rewrite_and_reactivation(self) -> None:
@@ -283,17 +319,32 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         current = validator.load_registry(self.registry_path)
         deleted = json.loads(json.dumps(current))
         deleted["bundles"] = []
-        self.assertTrue(any("deleted" in error for error in validator.validate_history(deleted, current, "base")))
+        self.assertTrue(
+            any(
+                "deleted" in error
+                for error in validator.validate_history(deleted, current, "base")
+            )
+        )
         rewritten = json.loads(json.dumps(current))
         rewritten["bundles"][0]["artifacts"][0]["sha256"] = "0" * 64
-        self.assertTrue(any("rewrite" in error for error in validator.validate_history(rewritten, current, "base")))
+        self.assertTrue(
+            any(
+                "rewrite" in error
+                for error in validator.validate_history(rewritten, current, "base")
+            )
+        )
         superseded = json.loads(json.dumps(current))
         superseded["bundles"][0]["status"] = "superseded"
         superseded["bundles"][0]["superseded_by"] = "successor"
         reactivated = json.loads(json.dumps(superseded))
         reactivated["bundles"][0]["status"] = "current"
         del reactivated["bundles"][0]["superseded_by"]
-        self.assertTrue(any("reactivated" in error for error in validator.validate_history(reactivated, superseded, "base")))
+        self.assertTrue(
+            any(
+                "reactivated" in error
+                for error in validator.validate_history(reactivated, superseded, "base")
+            )
+        )
 
     def test_transition_classes_are_closed(self) -> None:
         self.assertTrue(validator.valid_transition("draft", "current"))
@@ -313,16 +364,22 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.commit_registry("register bundle")
         registry = validator.load_registry(self.registry_path)
         registry["bundles"] = []
-        self.registry_path.write_text(validator.render_registry(registry), encoding="utf-8")
+        self.registry_path.write_text(
+            validator.render_registry(registry), encoding="utf-8"
+        )
         self.assertTrue(any("deleted" in error for error in validator.check(self.root)))
 
     def test_check_rejects_intermediate_bundle_deletion(self) -> None:
         self.promote("bundle-a")
         self.commit_registry("register bundle")
         registry = validator.load_registry(self.registry_path)
-        paths = [self.root / item["path"] for item in registry["bundles"][0]["artifacts"]]
+        paths = [
+            self.root / item["path"] for item in registry["bundles"][0]["artifacts"]
+        ]
         registry["bundles"] = []
-        self.registry_path.write_text(validator.render_registry(registry), encoding="utf-8")
+        self.registry_path.write_text(
+            validator.render_registry(registry), encoding="utf-8"
+        )
         for path in paths:
             path.unlink()
         self.commit_registry("delete bundle")
@@ -340,7 +397,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         }
         successor = self.make_draft("bundle-b", "shared-task")
         self.assertEqual(
-            validator.supersede(predecessor_id, successor, "explicit-user-acceptance", False, self.root),
+            validator.supersede(
+                predecessor_id, successor, "explicit-user-acceptance", False, self.root
+            ),
             0,
         )
         registry = validator.load_registry(self.registry_path)
@@ -349,27 +408,340 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(old["status"], "superseded")
         self.assertEqual(old["superseded_by"], new["id"])
         for item in old["artifacts"]:
-            self.assertEqual((self.root / item["path"]).read_bytes(), predecessor_bytes[item["native_path"]])
-            self.assertTrue(item["path"].startswith(f"{validator.ARCHIVE_PREFIX}/{predecessor_id}/"))
-        self.assertTrue(all(item["path"] == item["native_path"] for item in new["artifacts"]))
+            self.assertEqual(
+                (self.root / item["path"]).read_bytes(),
+                predecessor_bytes[item["native_path"]],
+            )
+            self.assertTrue(
+                item["path"].startswith(f"{validator.ARCHIVE_PREFIX}/{predecessor_id}/")
+            )
+        self.assertTrue(
+            all(item["path"] == item["native_path"] for item in new["artifacts"])
+        )
         self.assertEqual(validator.validate_registry(registry, self.root), [])
 
     def test_supersession_rejects_different_task(self) -> None:
         predecessor_id = self.promote("bundle-a", "task-a")
         successor = self.make_draft("bundle-b", "task-b")
-        self.assertEqual(validator.supersede(predecessor_id, successor, "explicit-user-acceptance", False, self.root), 1)
-        self.assertIn("task must match", self.command("--supersede", predecessor_id, str(successor), "--acceptance", "explicit-user-acceptance").stderr)
+        self.assertEqual(
+            validator.supersede(
+                predecessor_id, successor, "explicit-user-acceptance", False, self.root
+            ),
+            1,
+        )
+        self.assertIn(
+            "task must match",
+            self.command(
+                "--supersede",
+                predecessor_id,
+                str(successor),
+                "--acceptance",
+                "explicit-user-acceptance",
+            ).stderr,
+        )
 
     def test_supersession_rollback_restores_native_predecessor(self) -> None:
         predecessor_id = self.promote("bundle-a", "shared-task")
         before = self.registry_path.read_bytes()
         successor = self.make_draft("bundle-b", "shared-task")
-        validator._FAULT_HOOK = lambda phase: (_ for _ in ()).throw(KeyboardInterrupt()) if phase == "supersede_after_archive" else None
-        self.assertEqual(validator.supersede(predecessor_id, successor, "explicit-user-acceptance", False, self.root), 1)
+        validator._FAULT_HOOK = lambda phase: (
+            (_ for _ in ()).throw(RuntimeError("fault"))
+            if phase == "supersede_after_archive"
+            else None
+        )
+        self.assertEqual(
+            validator.supersede(
+                predecessor_id, successor, "explicit-user-acceptance", False, self.root
+            ),
+            1,
+        )
         self.assertEqual(self.registry_path.read_bytes(), before)
         registry = validator.load_registry(self.registry_path)
-        self.assertTrue(all((self.root / item["native_path"]).is_file() for item in registry["bundles"][0]["artifacts"]))
-        self.assertFalse((self.root / validator.ARCHIVE_PREFIX / predecessor_id).exists())
+        self.assertTrue(
+            all(
+                (self.root / item["native_path"]).is_file()
+                for item in registry["bundles"][0]["artifacts"]
+            )
+        )
+        self.assertFalse(
+            (self.root / validator.ARCHIVE_PREFIX / predecessor_id).exists()
+        )
+
+    def test_preexisting_archive_root_sentinel_is_never_removed(self) -> None:
+        predecessor_id = self.promote("bundle-a", "shared-task")
+        before = self.registered_bytes()
+        archive_root = self.root / validator.ARCHIVE_PREFIX / predecessor_id
+        sentinel = archive_root / "unowned-sentinel.txt"
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text("keep\n", encoding="utf-8")
+        successor = self.make_draft("bundle-b", "shared-task")
+        self.assertEqual(
+            validator.supersede(
+                predecessor_id,
+                successor,
+                "explicit-user-acceptance",
+                False,
+                self.root,
+            ),
+            1,
+        )
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep\n")
+        self.assertEqual(self.registered_bytes(), before)
+
+    def test_interrupted_supersession_recovers_on_restart(self) -> None:
+        predecessor_id = self.promote("bundle-a", "shared-task")
+        successor = self.make_draft("bundle-b", "shared-task")
+        validator._FAULT_HOOK = lambda phase: (
+            (_ for _ in ()).throw(KeyboardInterrupt())
+            if phase == "supersede_after_archive"
+            else None
+        )
+        with self.assertRaises(KeyboardInterrupt):
+            validator.supersede(
+                predecessor_id,
+                successor,
+                "explicit-user-acceptance",
+                False,
+                self.root,
+            )
+        self.assertTrue(
+            (validator._recovery_root(self.root) / "journal.json").is_file()
+        )
+        validator._FAULT_HOOK = lambda _phase: None
+        self.assertEqual(
+            validator.supersede(
+                predecessor_id,
+                successor,
+                "explicit-user-acceptance",
+                False,
+                self.root,
+            ),
+            0,
+        )
+        self.assertFalse(validator._recovery_root(self.root).exists())
+        self.assertEqual(
+            validator.validate_registry(
+                validator.load_registry(self.registry_path), self.root
+            ),
+            [],
+        )
+
+    def test_recovery_validates_all_backups_before_first_restore_write(self) -> None:
+        predecessor_id = self.promote("bundle-a", "shared-task")
+        successor = self.make_draft("bundle-b", "shared-task")
+        validator._FAULT_HOOK = lambda phase: (
+            (_ for _ in ()).throw(KeyboardInterrupt())
+            if phase == "supersede_after_archive"
+            else None
+        )
+        with self.assertRaises(KeyboardInterrupt):
+            validator.supersede(
+                predecessor_id,
+                successor,
+                "explicit-user-acceptance",
+                False,
+                self.root,
+            )
+        recovery = validator._recovery_root(self.root)
+        journal = json.loads((recovery / "journal.json").read_text(encoding="utf-8"))
+        tracked = {
+            entry["path"]: (
+                (self.root / entry["path"]).read_bytes()
+                if (self.root / entry["path"]).is_file()
+                else None
+            )
+            for entry in journal["paths"]
+        }
+        index_before = validator._index_path(self.root).read_bytes()
+        backup_name = next(
+            entry["backup"] for entry in journal["paths"] if entry["existed"]
+        )
+        (recovery / "backups" / backup_name).write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "backup checksum mismatch"):
+            validator.recover_incomplete_transaction(self.root)
+        observed = {
+            path: (
+                (self.root / path).read_bytes()
+                if (self.root / path).is_file()
+                else None
+            )
+            for path in tracked
+        }
+        self.assertEqual(observed, tracked)
+        self.assertEqual(validator._index_path(self.root).read_bytes(), index_before)
+
+    def test_promotion_fault_after_registry_restores_every_path(self) -> None:
+        manifest = self.make_draft("bundle-a")
+        before_registry = self.registry_path.read_bytes()
+        validator._FAULT_HOOK = lambda phase: (
+            (_ for _ in ()).throw(RuntimeError("fault"))
+            if phase == "promote_after_registry"
+            else None
+        )
+        self.assertEqual(
+            validator.promote(manifest, "explicit-user-acceptance", False, self.root),
+            1,
+        )
+        self.assertEqual(self.registry_path.read_bytes(), before_registry)
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        self.assertTrue(
+            all(
+                not (self.root / item["native_path"]).exists()
+                for item in data["artifacts"]
+            )
+        )
+
+    def test_symlink_and_parent_escape_are_rejected_before_mutation(self) -> None:
+        outside_temp = tempfile.TemporaryDirectory(
+            prefix="omx-artifacts-outside-", dir=self.root.parent
+        )
+        self.addCleanup(outside_temp.cleanup)
+        outside = Path(outside_temp.name)
+        sentinel = outside / "sentinel.md"
+        sentinel.write_text("keep\n", encoding="utf-8")
+        manifest = self.make_draft("bundle-a")
+        draft_link = self.root / ".omx/drafts/bundle-a/context.md"
+        draft_link.unlink()
+        draft_link.symlink_to(sentinel)
+        before = self.registry_path.read_bytes()
+        self.assertEqual(
+            validator.promote(manifest, "explicit-user-acceptance", False, self.root),
+            1,
+        )
+        self.assertEqual(self.registry_path.read_bytes(), before)
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep\n")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["artifacts"][0]["path"] = ".omx/../outside.md"
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(
+            validator.promote(manifest, "explicit-user-acceptance", False, self.root),
+            1,
+        )
+
+    def test_seed_is_deterministic_verified_and_restorable(self) -> None:
+        self.promote("bundle-a")
+        expected = self.registered_bytes()
+        with tempfile.TemporaryDirectory(
+            prefix="omx-seed-output-", dir=self.root.parent
+        ) as raw_output:
+            output = Path(raw_output)
+            first = validator.export_seed(output, self.root)
+            second = validator.export_seed(output, self.root)
+            self.assertEqual(first, second)
+            self.assertEqual(set(validator.verify_seed(first)), set(expected))
+            for relative in sorted(expected, reverse=True):
+                (self.root / relative).unlink()
+            index_before = validator._index_path(self.root).read_bytes()
+            self.assertEqual(validator.restore_seed(first, self.root), 0)
+            self.assertEqual(self.registered_bytes(), expected)
+            self.assertNotEqual(
+                validator._index_path(self.root).read_bytes(), index_before
+            )
+
+    def test_seed_restore_collision_preserves_sentinel(self) -> None:
+        self.promote("bundle-a")
+        expected = self.registered_bytes()
+        with tempfile.TemporaryDirectory(
+            prefix="omx-seed-output-", dir=self.root.parent
+        ) as raw_output:
+            seed = validator.export_seed(Path(raw_output), self.root)
+            self.assertEqual(validator.restore_seed(seed, self.root), 1)
+        self.assertEqual(self.registered_bytes(), expected)
+
+    def test_interrupted_seed_restore_recovers_index_on_restart(self) -> None:
+        self.promote("bundle-a")
+        expected = self.registered_bytes()
+        with tempfile.TemporaryDirectory(
+            prefix="omx-seed-output-", dir=self.root.parent
+        ) as raw_output:
+            seed = validator.export_seed(Path(raw_output), self.root)
+            for relative in sorted(expected, reverse=True):
+                (self.root / relative).unlink()
+            original_index = validator._index_path(self.root).read_bytes()
+            validator._FAULT_HOOK = lambda phase: (
+                (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "restore_after_index"
+                else None
+            )
+            with self.assertRaises(KeyboardInterrupt):
+                validator.restore_seed(seed, self.root)
+            self.assertTrue(
+                (validator._recovery_root(self.root) / "journal.json").is_file()
+            )
+            validator._FAULT_HOOK = lambda _phase: None
+            self.assertEqual(validator.restore_seed(seed, self.root), 0)
+            self.assertEqual(self.registered_bytes(), expected)
+            self.assertNotEqual(
+                validator._index_path(self.root).read_bytes(), original_index
+            )
+
+    def test_native_operation_isolation_restores_registered_mutation(self) -> None:
+        self.promote("bundle-a")
+        expected = self.registered_bytes()
+        fake_bin = self.root / "fake-bin"
+        fake_bin.mkdir()
+        fake_omx = fake_bin / "omx"
+        fake_omx.write_text(
+            "#!/bin/sh\n"
+            'if [ "${1:-}" = --version ]; then\n'
+            "  printf 'oh-my-codex v%s\\n' \"${OMX_TEST_VERSION:-0.20.3}\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "mkdir -p .omx/runtime\n"
+            "printf 'runtime\\n' > .omx/runtime/native.txt\n"
+            'if [ "${OMX_TEST_MUTATE:-0}" = 1 ]; then\n'
+            "  printf '\\n# damage\\n' >> .agents/omx_artifacts.toml\n"
+            "fi\n",
+            encoding="utf-8",
+        )
+        fake_omx.chmod(0o755)
+        old_path = os.environ.get("PATH", "")
+        old_mutate = os.environ.get("OMX_TEST_MUTATE")
+        old_version = os.environ.get("OMX_TEST_VERSION")
+
+        def restore_environment() -> None:
+            os.environ["PATH"] = old_path
+            if old_mutate is None:
+                os.environ.pop("OMX_TEST_MUTATE", None)
+            else:
+                os.environ["OMX_TEST_MUTATE"] = old_mutate
+            if old_version is None:
+                os.environ.pop("OMX_TEST_VERSION", None)
+            else:
+                os.environ["OMX_TEST_VERSION"] = old_version
+
+        self.addCleanup(restore_environment)
+        os.environ["PATH"] = f"{fake_bin}{os.pathsep}{old_path}"
+        os.environ.pop("OMX_TEST_MUTATE", None)
+        self.assertEqual(
+            validator.run_native_operation(["omx", "cleanup"], self.root), 0
+        )
+        self.assertEqual(self.registered_bytes(), expected)
+        os.environ["OMX_TEST_VERSION"] = "0.20.2"
+        self.assertEqual(
+            validator.run_native_operation(["omx", "cleanup"], self.root), 2
+        )
+        os.environ.pop("OMX_TEST_VERSION")
+        os.environ["OMX_TEST_MUTATE"] = "1"
+        self.assertEqual(
+            validator.run_native_operation(["omx", "cleanup"], self.root), 1
+        )
+        self.assertEqual(self.registered_bytes(), expected)
+
+    def test_recovery_journal_is_linked_worktree_specific(self) -> None:
+        linked = self.root.parent / f"{self.root.name}-linked"
+        self.git("worktree", "add", "-q", str(linked), "HEAD")
+        try:
+            target = linked / "transaction-target.txt"
+            recovery = validator._begin_transaction(linked, "fixture", [target])
+            self.assertTrue((linked / ".git").is_file())
+            self.assertTrue((recovery / "journal.json").is_file())
+            self.assertNotEqual(recovery, validator._recovery_root(self.root))
+            target.write_text("partial\n", encoding="utf-8")
+            self.assertTrue(validator.recover_incomplete_transaction(linked))
+            self.assertFalse(target.exists())
+        finally:
+            self.git("worktree", "remove", "--force", str(linked))
 
     def test_promotion_collision_preserves_unowned_sentinel(self) -> None:
         manifest = self.make_draft("bundle-a")
@@ -377,14 +749,20 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         target = self.root / data["artifacts"][0]["native_path"]
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("keep\n", encoding="utf-8")
-        self.assertEqual(validator.promote(manifest, "explicit-user-acceptance", False, self.root), 1)
+        self.assertEqual(
+            validator.promote(manifest, "explicit-user-acceptance", False, self.root), 1
+        )
         self.assertEqual(target.read_text(encoding="utf-8"), "keep\n")
 
     def test_bundle_id_is_content_addressed_and_rejects_aliases(self) -> None:
         digest = "a" * 64
         expected = "task-name--aaaaaaaaaaaaaaaa"
         self.assertEqual(validator.canonical_bundle_id("task-name", digest), expected)
-        for alias in ("Task-name--aaaaaaaaaaaaaaaa", "task/name--aaaaaaaaaaaaaaaa", "task-name--aaaa"):
+        for alias in (
+            "Task-name--aaaaaaaaaaaaaaaa",
+            "task/name--aaaaaaaaaaaaaaaa",
+            "task-name--aaaa",
+        ):
             self.assertIsNone(validator.BUNDLE_ID_RE.fullmatch(alias))
 
     def test_legacy_tombstones_are_append_only(self) -> None:
@@ -403,7 +781,12 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         }
         current = json.loads(json.dumps(prior))
         current["tombstones"] = []
-        self.assertTrue(any("tombstone" in error for error in validator.validate_history(current, prior, "base")))
+        self.assertTrue(
+            any(
+                "tombstone" in error
+                for error in validator.validate_history(current, prior, "base")
+            )
+        )
 
 
 if __name__ == "__main__":

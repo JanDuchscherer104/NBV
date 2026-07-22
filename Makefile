@@ -171,7 +171,7 @@ graphify-freshness: _check_python ## 🕸️ Validate partition and bridge fresh
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
 
 graphify-history: _check_python ## 🕸️ Validate final-tree Graphify synchronization
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_history.py --final-tree
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_history.py --activation-range --final-tree
 
 graphify-integration-self-test: _check_python ## 🕸️ Verify corpus, provenance, freshness, history, and hook dispatch
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
