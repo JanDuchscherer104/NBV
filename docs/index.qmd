@@ -38,10 +38,6 @@ This project aims to develop an NBV system that integrates VIN-NBV's key insight
 - Leverage EVL's 3D foundation features—voxel occupancy, centerness, semantic channels, and OBB priors—as state embeddings for RRI estimation and NBV decision making.
 - Entity-aware reconstruction tracking through EVL's OBB detection capabilities.
 
-## Future Work
-
-- Extend towards human-in-the-loop AR guidance, where entity-aware RRI weighting delivers task-specific view suggestions.
-
 # Documentation Navigation
 
 The current thesis direction is owned by the thesis roadmap, research questions,
