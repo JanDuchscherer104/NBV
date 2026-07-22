@@ -2,6 +2,10 @@
 
 Use these templates for native debriefs under `.agents/memory/history/YYYY/MM/`.
 
+`canonical_updates_needed` preserves the debrief workflow name but lists only
+exact existing owner paths: package code/guidance, thesis/docs, references, or
+agents-DB files. It never targets a generic current-state journal.
+
 Existing records with `status: legacy-imported` are grandfathered archive evidence and do not need to be backfilled unless a task explicitly asks for it.
 
 ## Required Frontmatter
@@ -43,8 +47,8 @@ status: done
 topics: [scaffold, codex, memory]
 confidence: high
 canonical_updates_needed:
-  - .agents/memory/state/DECISIONS.md
-  - .agents/memory/state/PROJECT_STATE.md
+  - docs/contents/thesis/questions.qmd
+  - .agents/todos.toml
 ---
 ```
 

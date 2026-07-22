@@ -48,3 +48,7 @@ def test_operator_runtime_state_must_not_be_tracked(path: str) -> None:
 
 def test_unrelated_paths_are_outside_the_runtime_policy() -> None:
     assert not validator.is_forbidden_tracked_runtime_path("aria_nbv/aria_nbv/__init__.py")
+
+
+def test_state_journal_retirement_gate_is_closed() -> None:
+    assert validator.check_state_journal_retirement() == []

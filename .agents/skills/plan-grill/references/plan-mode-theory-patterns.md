@@ -43,8 +43,8 @@ Label claim strength in theory-rich answers when ambiguity matters:
 - `implementation fact`: verified from current code, config, docs, tests, or
   artifacts.
 - `literature claim`: backed by a cited paper or official external source.
-- `project decision`: backed by canonical memory, roadmap/questions, or source
-  order.
+- `project decision`: backed by the exact owning source, roadmap/questions, or
+  source order.
 - `hypothesis`: plausible but not yet supported by ARIA-NBV evidence.
 - `inference`: derived from sources, but not directly stated by them.
 

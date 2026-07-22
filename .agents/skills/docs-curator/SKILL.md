@@ -61,7 +61,7 @@ navigation, and public/internal boundary decisions.
 1. `docs/AGENTS.md`
 2. `.agents/references/source_order.md`
 3. The source that owns the touched role, as defined by source order
-4. `.agents/memory/state/GOTCHAS.md` when behavior or workflow claims are involved
+4. The nearest package guidance and tests when behavior or workflow claims are involved
 
 ## Rules
 
@@ -69,7 +69,7 @@ navigation, and public/internal boundary decisions.
   context, raw scratch history, and OMX runtime notes stay under `.agents/`.
 - Run litkg claim checks for advisor-facing proposal, roadmap,
   research-question, or literature-synthesis claims.
-- Link to canonical state or owning implementation docs instead of repeating long explanations.
+- Link to the owning thesis or implementation source instead of repeating long explanations.
 - Keep bibliography additions in `docs/references.bib`.
 - Use QMD frontmatter to classify rendered pages:
   `phase: thesis | seminar | archive | generated`,
@@ -88,4 +88,4 @@ navigation, and public/internal boundary decisions.
 - `cd docs && typst compile typst/seminar_slides/<file>.typ --root .` for slide edits
 - `scripts/nbv_qmd_outline.sh --compact` for public navigation checks
 - `make qmd-frontmatter-check` for rendered QMD taxonomy changes
-- `make check-agent-memory` for `.agents/` or canonical-memory edits
+- `make check-agent-memory` for `.agents/` guidance or debrief edits

@@ -22,7 +22,8 @@ narrative, not current technical truth, and not a repeatable workflow.
 | Repo-wide invariant or safety rule | `AGENTS.md` or nearest nested `AGENTS.md` |
 | Repeatable workflow | `.agents/skills/[skill-name]/SKILL.md` |
 | Human-owner preference | `.agents/references/human_owner_intent.md` |
-| Current project truth | `.agents/memory/state/*.md` |
+| Current scientific direction or open question | `docs/contents/thesis/roadmap.qmd`, `docs/contents/thesis/questions.qmd`, or the active Typst thesis |
+| Current implementation contract | Owning code, tests, docstrings, nearest package `AGENTS.md`, or concise subsystem README |
 | Actionable defect, todo, or refactor | `.agents/issues.toml`, `.agents/todos.toml`, or `.agents/refactors.toml` |
 | Public thesis narrative | `docs/` Quarto or `docs/typst/thesis/main.typ` |
 | Generated routing/context | ignored output under `docs/_generated/context/*.md`, `.agents/generated/`, or `.agents/kg/generated/` with provenance; tracked glossary/KG artifacts are regenerated through the glossary pipeline |

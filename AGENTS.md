@@ -6,9 +6,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 ## Source Order
 - Use `.agents/references/source_order.md` for current truth and conflict
   resolution.
-- Current thesis direction is owned by thesis roadmap/questions plus canonical
-  memory. The seminar paper is historical implemented evidence, not current
-  thesis priority.
+- Current thesis direction is owned by the thesis roadmap/questions and active
+  Typst thesis. The seminar paper is historical implemented evidence, not
+  current thesis priority.
 
 ## Routing
 - Non-trivial coding, docs, scaffold, research, or memory edits: apply
@@ -61,7 +61,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.
 - Repeatable workflow: update or add a compact `.agents/skills/*/SKILL.md`.
 - Human-owner preference: update `.agents/references/human_owner_intent.md`.
-- Current truth: update `.agents/memory/state/`.
+- Current scientific direction: update the thesis roadmap/questions or active
+  Typst thesis; implementation truth stays with code, tests, and nearest package
+  guidance.
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: update Quarto or Typst docs.
@@ -90,7 +92,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 ## Debriefs
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
 - Native debriefs must follow `.agents/references/agent_memory_templates.md` and
-  include `canonical_updates_needed` even when the list is empty.
+  include `canonical_updates_needed` even when the list is empty; non-empty
+  entries name the exact package, docs, reference, or backlog owners updated.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except
   the intentionally vendored `.codex/skills/graphify/**` project skill.

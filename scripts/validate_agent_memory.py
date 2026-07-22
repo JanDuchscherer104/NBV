@@ -10,6 +10,7 @@ This checker intentionally stays narrow:
 
 from __future__ import annotations
 
+import csv
 import re
 import subprocess
 import sys
@@ -60,6 +61,66 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/hooks.json",
 }
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
+STATE_SALVAGE_LEDGER = REPO_ROOT / ".agents" / "baselines" / "scaffold_wp4_state_salvage.csv"
+RETIRED_STATE_JOURNALS = (
+    ".agents/memory/state/DECISIONS.md",
+    ".agents/memory/state/GOTCHAS.md",
+    ".agents/memory/state/OPEN_QUESTIONS.md",
+    ".agents/memory/state/PROJECT_STATE.md",
+)
+EXPECTED_STATE_LEDGER_IDS = {
+    "decisions-durable-repo-decisions",
+    "decisions-technical-decisions",
+    "decisions-working-project-decisions",
+    "decisions-thesis-sharpening",
+    "decisions-rollout-dto-store",
+    "decisions-vin-offline-v7",
+    "decisions-top-k-target-selector",
+    "decisions-typst-notation",
+    "decisions-target-first-rollout",
+    "decisions-transcript-mined",
+    "decisions-litkg",
+    "gotchas-environment-tooling",
+    "gotchas-training-validation",
+    "gotchas-vin-offline",
+    "gotchas-frames-geometry",
+    "gotchas-evl-obb",
+    "gotchas-config-pydantic",
+    "gotchas-litkg",
+    "questions-advisor-deferred",
+    "questions-target-matching",
+    "questions-qh-offline-rl",
+    "questions-storage-scale",
+    "questions-representation-ablation",
+    "questions-recently-locked",
+    "project-goal-core-claim",
+    "project-current-thesis-spine",
+    "project-ranked-priorities",
+    "project-current-issues",
+    "project-near-term-next-steps",
+    "project-deferred-extensions",
+    "project-pointers",
+    "project-litkg-infrastructure",
+}
+STATE_REFERENCE_EXCLUDED_PREFIXES = (
+    ".agents/archive/",
+    ".agents/memory/history/",
+    ".agents/memory/transcripts/",
+    ".omx/",
+    "graphify-out/",
+)
+STATE_REFERENCE_EXCLUDED_PATHS = {
+    ".agents/baselines/scaffold_wp0_baseline.json",
+    ".agents/baselines/scaffold_wp0_inventory.csv",
+    ".agents/baselines/scaffold_wp4_state_salvage.csv",
+    "scripts/validate_agent_memory.py",
+    "scripts/validate_scaffold_wp0_baseline.py",
+    "scripts/tests/test_scaffold_wp0_baseline.py",
+    "aria_nbv/tests/agent_memory/test_validate_agent_memory.py",
+}
+RETIRED_STATE_PATTERN = re.compile(
+    r"\.agents/memory/state|DECISIONS\.md|GOTCHAS\.md|OPEN_QUESTIONS\.md|PROJECT_STATE\.md"
+)
 
 REQUIRED_NATIVE_KEYS = {
     "id",
@@ -70,6 +131,21 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
+
+
+def is_forbidden_tracked_runtime_path(path: str) -> bool:
+    """Return whether a tracked path belongs to operator-only runtime state."""
+
+    return path in FORBIDDEN_TRACKED_RUNTIME_PATHS or path.startswith(
+        (
+            ".omx/cache/",
+            ".omx/logs/",
+            ".omx/state/",
+            ".omx/tmp/",
+            ".omx/ultragoal/",
+            ".omx/goals/autoresearch/run/",
+        )
+    )
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -209,9 +285,95 @@ def check_history_records() -> list[str]:
             if not update_text:
                 errors.append(f"{rel}: empty path in `canonical_updates_needed`")
                 continue
+            if update_text in RETIRED_STATE_JOURNALS:
+                # Dated debriefs are historical evidence. Their frontmatter
+                # records the owner that existed when the task ran; it is not
+                # an active promotion route after WP4 retirement.
+                continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists():
                 errors.append(f"{rel}: canonical update path does not exist: {update_text}")
+
+    return errors
+
+
+def check_state_journal_retirement() -> list[str]:
+    """Require a closed salvage ledger and no live journal consumers."""
+
+    errors: list[str] = []
+    for relative_path in RETIRED_STATE_JOURNALS:
+        if (REPO_ROOT / relative_path).exists():
+            errors.append(f"retired state journal still exists: {relative_path}")
+
+    if not STATE_SALVAGE_LEDGER.is_file():
+        return [*errors, "missing WP4 state salvage ledger"]
+
+    with STATE_SALVAGE_LEDGER.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    row_ids = [str(row.get("id") or "").strip() for row in rows]
+    if len(row_ids) != len(set(row_ids)):
+        errors.append("WP4 state salvage ledger contains duplicate row ids")
+    missing = sorted(EXPECTED_STATE_LEDGER_IDS - set(row_ids))
+    extra = sorted(set(row_ids) - EXPECTED_STATE_LEDGER_IDS)
+    if missing:
+        errors.append(f"WP4 state salvage ledger is missing rows: {', '.join(missing)}")
+    if extra:
+        errors.append(f"WP4 state salvage ledger has unexpected rows: {', '.join(extra)}")
+
+    allowed_statuses = {
+        "already_owned",
+        "migrated",
+        "discarded_duplicate",
+        "discarded_historical",
+        "discarded_stale",
+        "discarded_unsupported",
+    }
+    required_fields = (
+        "source_path",
+        "source_lines",
+        "fact_category",
+        "destination_owners",
+        "evidence",
+        "disposition_rationale",
+        "verification",
+        "rollback_commit",
+    )
+    for row in rows:
+        row_id = str(row.get("id") or "<missing-id>").strip()
+        status = str(row.get("status") or "").strip()
+        if status not in allowed_statuses:
+            errors.append(f"{row_id}: unresolved or invalid salvage status: {status or '<empty>'}")
+        for field in required_fields:
+            if not str(row.get(field) or "").strip():
+                errors.append(f"{row_id}: empty salvage field: {field}")
+
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        errors.append("git ls-files failed while scanning retired journal references")
+        return errors
+
+    for relative_path in sorted({line.strip() for line in result.stdout.splitlines() if line.strip()}):
+        if relative_path in STATE_REFERENCE_EXCLUDED_PATHS or relative_path.startswith(
+            STATE_REFERENCE_EXCLUDED_PREFIXES
+        ):
+            continue
+        path = REPO_ROOT / relative_path
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        match = RETIRED_STATE_PATTERN.search(text)
+        if match:
+            line = text.count("\n", 0, match.start()) + 1
+            errors.append(f"active retired-journal reference: {relative_path}:{line}")
 
     return errors
 
@@ -255,7 +417,7 @@ def check_scaffold_alignment() -> list[str]:
 
     tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     for tracked_path in tracked_paths:
-        if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
+        if is_forbidden_tracked_runtime_path(tracked_path):
             errors.append(f"runtime state must not be tracked: {tracked_path}")
 
     errors.extend(check_registered_omx_records())
@@ -264,7 +426,12 @@ def check_scaffold_alignment() -> list[str]:
 
 
 def main() -> int:
-    errors = [*check_codex_notes(), *check_history_records(), *check_scaffold_alignment()]
+    errors = [
+        *check_codex_notes(),
+        *check_history_records(),
+        *check_scaffold_alignment(),
+        *check_state_journal_retirement(),
+    ]
     if not errors:
         print("agent memory validation passed")
         return 0

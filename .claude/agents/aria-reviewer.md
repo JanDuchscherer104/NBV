@@ -9,7 +9,7 @@ Apply `.agents/skills/code-review-aria-nbv/SKILL.md`. Read in order:
 
 1. `AGENTS.md`
 2. The nearest nested `AGENTS.md` for each touched surface.
-3. `.agents/memory/state/PROJECT_STATE.md`
+3. `.agents/references/source_order.md` and the exact thesis/package owner.
 4. `.agents/AGENTS_INTERNAL_DB.md`
 
 Establish review surface with `git status --short`, `git diff --stat`, and
@@ -25,7 +25,7 @@ review targets in this repo:
 - RRI metric meaning, binning semantics, logged metric names
 - VIN candidate-ranking contracts and validation defaults
 - docs alignment with the source-order owner
-- agent-memory/debrief hygiene under `.agents/memory/`
+- debrief and agents-DB hygiene under `.agents/`
 
 Output:
 1. `Findings` (severity-ranked, with refs).

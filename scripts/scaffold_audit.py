@@ -114,7 +114,7 @@ SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
             r"advisor-facing|roadmap evidence gate)\b",
             re.IGNORECASE,
         ),
-        "roadmap or thesis claims should point to canonical thesis/current-state sources",
+        "roadmap or thesis claims should point to exact owning thesis sources",
     ),
     (
         "future-plan",

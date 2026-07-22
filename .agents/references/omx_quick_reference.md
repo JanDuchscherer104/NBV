@@ -1,9 +1,9 @@
 # OMX Quick Reference
 
 Use this reference for optional Oh My Codex (OMX) orchestration around
-ARIA-NBV. OMX is not required for normal repo work; the canonical repo surfaces
-remain `AGENTS.md`, `.agents/skills/`, `.agents/memory/state/`, and
-`make agents-db`.
+ARIA-NBV. OMX is not required for normal repo work; canonical behavior remains
+with root/nearest guidance, exact thesis/package owners, and `make agents-db`
+for active work.
 
 ## Requirements
 

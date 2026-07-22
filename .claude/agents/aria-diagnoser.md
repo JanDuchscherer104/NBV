@@ -29,7 +29,7 @@ If no reproducible loop is possible, do not patch by guesswork. State the
 missing artifact, access, fixture, or metric needed next, and record durable
 debt as a blocked issue via `make agents-db`.
 
-Read `.agents/memory/state/GOTCHAS.md` and
+Read the nearest package guidance/tests and
 `.agents/references/verification_matrix.md` first.
 
 Report:
@@ -37,4 +37,4 @@ Report:
 - confirmed cause, not only the patch
 - regression test or reason no correct seam exists
 - removed debug probes
-- DB or memory updates needed
+- DB or exact source-owner updates needed

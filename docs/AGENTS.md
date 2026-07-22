@@ -5,7 +5,7 @@ Apply this file when working under `docs/`.
 ## Priorities
 - Use `.agents/references/source_order.md` for truth ownership.
 - Current thesis direction lives in `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and `.agents/memory/state/`.
+  `docs/contents/thesis/questions.qmd`, and the active Typst thesis.
 - Current terminology lives in `docs/typst/shared/glossary.typ`; the Quarto
   glossary is generated output.
 - `docs/contents/ideas.qmd` is read-only archive/scratch.
@@ -17,7 +17,8 @@ Apply this file when working under `docs/`.
   competing top-level narratives.
 - Keep `docs/references.bib` as the single bibliography source of truth.
 - Preserve established Quarto and Typst structure unless the task explicitly changes it.
-- Prefer links to canonical state docs in `.agents/memory/state/` over re-explaining the same guidance in multiple places.
+- Link to the exact thesis, bibliography, package, test, or backlog owner instead
+  of re-explaining the same contract in multiple places.
 - Keep internal agent guidance, generated context, and OMX runtime notes out of
   public Quarto navigation. If a generated agent mirror is needed, regenerate
   it under `.agents/generated/`; do not write agent mirrors under

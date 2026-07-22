@@ -5,9 +5,11 @@ Use this reference when a task needs current project truth or sources disagree.
 ## Role Split
 
 - Current thesis direction: `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and `.agents/memory/state/` describe
-  the active thesis plan, locked decisions, open questions, gotchas, and current
-  state.
+  `docs/contents/thesis/questions.qmd`, and the active Typst thesis describe the
+  active plan, research questions, evidence contract, and calibrated claims.
+- Current implementation truth: package code, typed APIs, tests, docstrings,
+  nearest package `AGENTS.md`, and concise subsystem READMEs own executable
+  behavior and local invariants.
 - Current terminology: `docs/typst/shared/glossary.typ` owns terms and symbols;
   `docs/contents/glossary.qmd` is generated public output.
 - Idea archive: `docs/contents/ideas.qmd` is read-only scratch/history, not
@@ -46,15 +48,18 @@ Use this reference when a task needs current project truth or sources disagree.
 
 ## Conflict Rule
 
-When current thesis docs or canonical memory conflict with the seminar paper,
-prefer the current source for direction and keep the seminar paper as historical
-implemented evidence. Do not promote planned work to implemented results.
+When current thesis docs conflict with the seminar paper, prefer the current
+source for direction and keep the seminar paper as historical implemented
+evidence. Do not promote planned work to implemented results.
 
 ## Capture Rule
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
 - Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- Current truth: `.agents/memory/state/`.
+- Current scientific direction and open questions: thesis roadmap/questions and
+  active Typst thesis.
+- Current implementation contract: code, tests, docstrings, and nearest package
+  guidance or README.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.

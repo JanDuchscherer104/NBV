@@ -11,10 +11,12 @@ This file tracks the active engineering and research backlog for ARIA-NBV.
 
 ## Relation to Memory
 
-While `.agents/memory/state/` holds the **durable current truth**, this DB holds the **active maintenance debt**.
+This DB holds **active maintenance debt**. Current scientific direction belongs
+to the thesis roadmap/questions and active Typst thesis; implementation truth
+belongs to code, tests, docstrings, and nearest package guidance.
 Extracted proposal, transcript, or review requirements become agents-DB work
-when they are actionable. They should become canonical state only when they
-change current truth, and otherwise belong in dated memory debriefs.
+when they are actionable. Otherwise they remain dated debrief or transcript
+evidence and must not become a parallel current-state surface.
 
 Active issues and todos must carry compact prose context plus structured
 `references` pointers. Use `repo:` for internal files, `bib:` for papers in

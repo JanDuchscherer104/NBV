@@ -14,7 +14,9 @@ Use this reference when implementing ARIA-NBV knowledge graph ingestion in `.age
 
 Required sources for ARIA-NBV:
 
-- Repo guidance and memory: root/nested `AGENTS.md`, `.agents/AGENTS_INTERNAL_DB.md`, `.agents/memory/state/*.md`, and active `.agents/*.toml` backlog files.
+- Repo guidance and current owners: root/nested `AGENTS.md`,
+  `.agents/AGENTS_INTERNAL_DB.md`, active `.agents/*.toml` backlog files, thesis
+  roadmap/questions, and exact package sources.
 - Python package source: symbols from `aria_nbv/aria_nbv/**/*.py`, including qualified name, kind, signature, docstring summary, file/line span, config fields, imports, and call/reference edges when available.
 - Quarto docs: `docs/**/*.qmd`, with headings, links, code blocks, and cross-links to source symbols where resolvable.
 - Typst docs: `docs/typst/**/*.typ`, including the paper include graph and section headings.
@@ -37,7 +39,7 @@ tex_root = "docs/literature/tex-src"
 pdf_root = "docs/literature/pdf"
 
 [sources.agent_memory]
-include = ["AGENTS.md", ".agents/AGENTS_INTERNAL_DB.md", ".agents/memory/state/*.md", ".agents/*.toml"]
+include = ["AGENTS.md", "**/AGENTS.md", ".agents/AGENTS_INTERNAL_DB.md", ".agents/*.toml", "docs/contents/thesis/*.qmd"]
 required = true
 
 [sources.python]

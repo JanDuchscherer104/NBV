@@ -60,7 +60,6 @@ lit_bib_count="$(count_files '*.bib' "${lit_root}")"
 lit_family_count="$(count_immediate_dirs "${lit_root}/tex-src")"
 py_count="$(count_files '*.py' "${ROOT_DIR}/aria_nbv/aria_nbv")"
 ref_count="$(count_files '*.md' "${ROOT_DIR}/.agents/references")"
-memory_state_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/state")"
 memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")"
 
 {
@@ -71,7 +70,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo
   echo "## Retrieval ladder"
   echo "1. Source order and conflict rule: .agents/references/source_order.md"
-  echo "2. Current thesis direction: docs/contents/thesis/{roadmap,questions}.qmd plus .agents/memory/state/{PROJECT_STATE,DECISIONS,OPEN_QUESTIONS,GOTCHAS}.md"
+  echo "2. Current thesis direction: docs/contents/thesis/{roadmap,questions}.qmd plus docs/typst/thesis/main.typ"
   echo "3. Current terminology: docs/typst/shared/glossary.typ and generated docs/contents/glossary.qmd"
   echo "4. Active thesis seed: docs/typst/thesis/main.typ"
   echo "5. Seminar evidence: docs/typst/seminar_paper/main.typ for historical implemented evidence only"
@@ -89,10 +88,8 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- docs/typst/thesis/main.typ  # active thesis seed"
   echo "- docs/typst/seminar_paper/main.typ  # only for seminar evidence"
   echo "- docs/contents/ideas.qmd  # read-only archive/scratch"
-  echo "- .agents/memory/state/PROJECT_STATE.md"
-  echo "- .agents/memory/state/DECISIONS.md"
-  echo "- .agents/memory/state/OPEN_QUESTIONS.md"
-  echo "- .agents/memory/state/GOTCHAS.md"
+  echo "- aria_nbv/AGENTS.md and nearest package AGENTS.md for implementation contracts"
+  echo "- .agents/AGENTS_INTERNAL_DB.md and .agents/*.toml for active work"
   echo
   echo "## Lightweight refresh"
   echo "- \`make context\` refreshes \`source_index.md\`, \`literature_index.md\`, and \`data_contracts.md\`."
@@ -102,7 +99,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "## Source families"
   echo "| Family | Count | Use when | First reveal |"
   echo "|---|---:|---|---|"
-  echo "| Canonical state | ${memory_state_count} docs | You need current truth, conventions, or decisions | Open the relevant doc in \`.agents/memory/state/\` |"
+  echo "| Current thesis | roadmap/questions plus active Typst thesis | You need direction, claims, or open research questions | Open the exact thesis owner from source order |"
   echo "| Agent history | ${memory_history_count} docs | The task is historical, comparative, or evidence-driven | \`rg -n \"<term>\" .agents/memory/history\` |"
   echo "| Agent references | ${ref_count} docs | You need conventions, templates, or external-doc lookup ids | Open \`python_conventions.md\` or the specific reference doc |"
   echo "| Quarto docs | ${qmd_count} files | You need implementation narrative, roadmap, or explainer docs | \`scripts/nbv_qmd_outline.sh --compact\` |"
@@ -115,7 +112,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "| Topic | Primary paths | Use when |"
   echo "|---|---|---|"
   echo "| Project hub | \`docs/index.qmd\` | You need the docs landing page or high-level navigation. |"
-  echo "| Current thesis | \`docs/contents/thesis/roadmap.qmd\`, \`docs/contents/thesis/questions.qmd\`, \`.agents/memory/state/\` | You need current milestones, direction, or open research questions. |"
+  echo "| Current thesis | \`docs/contents/thesis/roadmap.qmd\`, \`docs/contents/thesis/questions.qmd\`, \`docs/typst/thesis/main.typ\` | You need current milestones, direction, or open research questions. |"
   echo "| Setup and resources | \`docs/contents/setup.qmd\`, \`resources.qmd\` | You need environment/bootstrap help or external resource links. |"
   echo "| Findings and glossary | \`docs/contents/experiments/findings.qmd\`, \`docs/contents/glossary.qmd\`, \`docs/typst/shared/glossary.typ\` | You need prior experiment outcomes or project terminology. |"
   echo "| Idea archive | \`docs/contents/ideas.qmd\` | You need read-only scratch/history, not current direction. |"
@@ -147,7 +144,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- Heavy artifacts: \`context_snapshot.md\`, \`aria_nbv_uml.mmd\`, \`aria_nbv_filtered_uml.mmd\`, \`aria_nbv_class_docstrings.md\`, \`aria_nbv_tree.md\`."
   echo
   echo "## Search recipes (rg)"
-  echo 'rg -n "<term>" .agents/memory/state'
+  echo 'rg -n "<term>" docs/contents/thesis docs/typst/thesis aria_nbv/aria_nbv .agents/*.toml'
   echo 'rg -n "<term>" .agents/memory/history'
   echo 'rg -n "<term>" .agents/references'
   echo 'rg -n "<term>" docs/**/*.qmd'

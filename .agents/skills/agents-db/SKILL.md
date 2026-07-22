@@ -68,8 +68,8 @@ or durable maintenance debt capture.
    maintenance picture.
 4. Keep records compact but auditable with `context` plus stable `references`.
 5. Route extracted requirements to the smallest owner: `.agents/*.toml` for
-   active work, `.agents/memory/state/` for durable current truth, and dated
-   history debriefs for episodic task records.
+   active work, thesis/package/reference owners for durable current facts, and
+   dated history debriefs for episodic task records.
 6. Resolve or retire completed records into `.agents/resolved.toml`; do not
    delete records outright.
 
@@ -94,5 +94,5 @@ or durable maintenance debt capture.
 
 - `make agents-db AGENTS_ARGS='validate'`
 - `make agents-db`
-- `make check-agent-memory` when canonical memory, skills, debriefs, or guidance
+- `make check-agent-memory` when skills, debriefs, guidance, or source owners
   changed

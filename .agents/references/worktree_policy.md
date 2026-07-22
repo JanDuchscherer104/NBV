@@ -2,7 +2,7 @@
 
 Use this reference when working in a Claude Code or Codex git worktree under
 `.claude/worktrees/<name>/` (or any other parallel-session worktree). Worktrees
-fork the working tree and the agent scaffold (`.agents/memory/`,
+fork the working tree and the agent scaffold (`.agents/memory/history/`,
 `.agents/*.toml`, `.codex/`, `.claude/`); without an explicit merge policy
 those forks silently diverge.
 
@@ -11,7 +11,6 @@ those forks silently diverge.
 | Surface | Merge risk | Policy |
 |---|---|---|
 | `.agents/memory/history/YYYY/MM/*.md` | Low — additive, dated | Always commit on the worktree branch. Conflict-free across worktrees because filenames are date+slug. |
-| `.agents/memory/state/*.md` | High — canonical truth | Edit only when the work changed durable truth. Rebase + `make check-agent-memory` before merging. If two worktrees both edited the same state file, reconcile by hand: the canonical record is one consolidated truth, not a per-worktree snapshot. |
 | `.agents/issues.toml`, `.agents/todos.toml`, `.agents/refactors.toml` | Medium — structured, ID-keyed | New records are conflict-free if IDs do not collide; check `grep -E '^id = ' <file>` in `main` before picking a new ID. Edits to existing records (description, context, references) need a merge pass. |
 | `.agents/resolved.toml` | Low — additive | Resolved records move via `make agents-db AGENTS_ARGS='resolve ...'`; do not hand-edit. |
 | `.agents/references/*.md` | Medium | Treat as docs. Conflict by line; rebase before merge. |
@@ -45,8 +44,8 @@ those forks silently diverge.
 
 ## On Conflict
 
-- Prefer the most-recent canonical edit when two worktrees touched the same
-  state file with the same intent.
+- Prefer the most-recent source-backed edit when two worktrees touched the same
+  thesis, package, reference, or backlog owner with the same intent.
 - Do not silently drop the other agent's record; if you cannot reconcile,
   promote the conflict to a debrief and ask the human owner.
 - Never use `git restore` or `git reset --hard` to "resolve" a conflict

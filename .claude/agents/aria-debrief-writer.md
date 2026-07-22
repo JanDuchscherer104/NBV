@@ -14,11 +14,11 @@ Read `.agents/references/agent_memory_templates.md` first. Then:
    - method or commands (what was actually run)
    - findings or outputs (what changed; cite file paths)
    - verification (commands; pass/fail; blockers)
-   - canonical state impact
+   - exact source-owner impact
 3. Set `canonical_updates_needed`:
-   - empty list if the task did not change current truth (say so explicitly)
-   - list affected `.agents/memory/state/*.md` paths if it did, and update them
-     in the same change
+   - empty list if the task did not change a durable owner (say so explicitly)
+   - otherwise list affected package, docs, reference, or agents-DB paths and
+     update them in the same change
 4. Use absolute dates in prose ("2026-05-07", not "Thursday").
 5. Mention staged scope or commit scope when the worktree was dirty.
 6. Run `make check-agent-memory` and report any failures.

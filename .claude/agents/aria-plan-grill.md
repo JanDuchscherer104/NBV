@@ -13,8 +13,8 @@ source for the decision. For overloaded terms, consult
 Read first:
 - `docs/contents/thesis/roadmap.qmd`
 - `docs/contents/thesis/questions.qmd`
-- `.agents/memory/state/PROJECT_STATE.md`
-- `.agents/memory/state/DECISIONS.md`
+- `docs/typst/thesis/main.typ`
+- nearest package owner for implementation-facing decisions
 
 Search `.agents/resolved.toml` for prior decisions on this surface before
 re-deriving.
@@ -23,9 +23,10 @@ Interview rules:
 - Ask one material decision at a time.
 - State the recommended answer with the tradeoff.
 - Test fuzzy plans against three concrete scenarios: normal, boundary, failure.
-- Cross-check claims against code, paper, memory state, and roadmap.
-- Resolved terminology updates `docs/typst/shared/glossary.typ` or
-  `.agents/memory/state/DECISIONS.md`. Do not create parallel ADR trees.
+- Cross-check claims against code, active thesis, package owners, and roadmap.
+- Resolved terminology updates `docs/typst/shared/glossary.typ`; other outcomes
+  update the exact thesis, package, reference, or backlog owner. Do not create
+  parallel ADR trees.
 
 End with a decision-complete plan naming:
 - goal and success criteria

@@ -21,7 +21,7 @@ into the same scaffold that Codex and Gemini already use.
   preserve unrelated work, verify before claiming done.
 - Capture durable instruction in the smallest correct surface (`AGENTS.md`,
   `.agents/skills/*/SKILL.md`, `.agents/references/human_owner_intent.md`,
-  `.agents/memory/state/`, or the agents DB via `make agents-db`).
+  the exact package/docs owner, or the agents DB via `make agents-db`).
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`
   following `.agents/references/agent_memory_templates.md`.
 

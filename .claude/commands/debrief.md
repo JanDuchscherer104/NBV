@@ -13,8 +13,8 @@ Then open the file and fill in:
 - method or commands (what was actually run)
 - findings or outputs (what changed; cite file paths)
 - verification (commands that ran; pass/fail; blockers)
-- canonical state impact (set `canonical_updates_needed` or say "none" explicitly)
+- exact source-owner impact (set `canonical_updates_needed` or say "none" explicitly)
 
-Keep the body short. If the work changed durable truth, list the affected
-`.agents/memory/state/*.md` files in `canonical_updates_needed` and update them
-in the same change.
+Keep the body short. If the work changed a durable owner, list the affected
+package, docs, reference, or agents-DB paths in `canonical_updates_needed` and
+update them in the same change.

@@ -8,7 +8,7 @@ type = "maintenance"
 priority = "high"
 status = "open"
 labels = ["docs", "hygiene"]
-context = ["Root guidance now points to canonical source order instead of restating a ladder: thesis docs and canonical memory own active direction, glossary source owns terminology, proposal Typst owns advisor wording, and the seminar paper is historical implemented evidence.", "The docs guide asks Quarto to stay aligned with the owning source role and keep internal agent guidance/generated context out of public navigation."]
+context = ["Root guidance now points to canonical source order instead of restating a ladder: thesis roadmap/questions own active direction, glossary source owns terminology, proposal Typst owns advisor wording, package owners own implementation contracts, and the seminar paper is historical implemented evidence.", "The docs guide asks Quarto to stay aligned with the owning source role and keep internal agent guidance/generated context out of public navigation."]
 references = ["repo:AGENTS.md#source-order", "repo:docs/AGENTS.md", "repo:.agents/references/source_order.md", "repo:docs/contents/thesis/questions.qmd#rq-kg-writing"]
 
 [[issue]]
@@ -64,7 +64,7 @@ priority = "medium"
 status = "open"
 labels = ["experiments", "thesis", "reproducibility"]
 context = ["Roadmap M7/M8 require final tables, figures, failure cases, configs, docs, and smoke checks to freeze into a reproducible thesis package.", "Without a claim matrix or experiment registry, final paper statements can become detached from run IDs, cache hashes, split manifests, and source artifacts."]
-references = ["repo:docs/contents/thesis/roadmap.qmd#roadmap-m7", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m8", "repo:docs/contents/thesis/questions.qmd#rq-evidence-protocol", "repo:.agents/memory/state/DECISIONS.md"]
+references = ["repo:docs/contents/thesis/roadmap.qmd#roadmap-m7", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m8", "repo:docs/contents/thesis/questions.qmd#rq-evidence-protocol", "repo:docs/typst/thesis/sections/05-experimental-design"]
 
 [[issue]]
 id = "issue-018"
@@ -192,7 +192,7 @@ priority = "high"
 status = "open"
 labels = ["rl", "q-learning", "rollouts", "target", "thesis"]
 context = ["The accepted thesis scope makes ARIA-NBV a target-conditioned, quality-driven NBV system on ASE/EFM with strict M1 contracts and a mandatory multi-step Q_H deliverable.", "Q_H is a candidate-query Transformer over scene, target, history, and candidate tokens; it predicts bounded cumulative root-normalized target gain over finite candidate sets from ASE mesh/oracle counterfactual rollouts and must beat one-step greedy/model scoring under equal acquisition budget after oracle evaluation.", "Bounded oracle lookahead remains the upper bound; random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax traces are mandatory first rollout sources, while Gumbel is preferred later evidence.", "This issue depends on M1 data/oracle correctness, V1 observed-target contracts, mixed observed candidate sets, invalidity masks/reason codes, Zarr-first rollout/Q storage, and LRZ-scale generation."]
-references = ["repo:docs/contents/thesis/questions.qmd#rq4-planning", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m5", "repo:.agents/memory/state/DECISIONS.md", "bib:DoubleDQN-vanHasselt2015", "bib:IQL-kostrikov2021", "bib:GumbelTopK-kool2019", "bib:VIN-NBV-frahm2025"]
+references = ["repo:docs/contents/thesis/questions.qmd#rq2-offline-qh", "repo:docs/contents/thesis/roadmap.qmd#roadmap-m5", "repo:aria_nbv/aria_nbv/rollouts/AGENTS.md", "bib:DoubleDQN-vanHasselt2015", "bib:IQL-kostrikov2021", "bib:GumbelTopK-kool2019", "bib:VIN-NBV-frahm2025"]
 
 [[issue]]
 id = "issue-031"
@@ -232,7 +232,7 @@ references = [
   "repo:docs/contents/theory/rri_theory.qmd",
   "repo:docs/contents/theory/candidate_sampling_target_selection.qmd",
   "repo:docs/contents/theory/rl_planning.qmd",
-  "repo:.agents/memory/state/DECISIONS.md",
+  "repo:aria_nbv/aria_nbv/rollouts/AGENTS.md",
   "repo:aria_nbv/aria_nbv/rollouts/zarr_store.py",
   "repo:aria_nbv/aria_nbv/rollouts/trace.py",
   "repo:aria_nbv/aria_nbv/rollouts/info_cli.py",

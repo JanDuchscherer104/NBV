@@ -10,13 +10,13 @@ changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only H
 [ -n "$changed" ] || exit 0
 
 case "$changed" in
-  *.agents/memory/state/*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*docs/contents/*|*docs/typst/*|*docs/references.bib*|*aria_nbv/aria_nbv/*)
+  *.agents/references/*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*docs/contents/*|*docs/typst/*|*docs/references.bib*|*aria_nbv/aria_nbv/*)
     scripts/kg/auto_refresh.sh
     ;;
 esac
 
 case "$changed" in
-  *graphify-out/*|*.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*.agents/memory/state/*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)
+  *graphify-out/*|*.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)
     # Canonical graph-only commits are terminal: never trigger another refresh.
     non_graph=$(printf '%s\n' "$changed" | sed '/^graphify-out\/graph.json$/d; /^graphify-out\/manifest.json$/d; /^graphify-out\/GRAPH_REPORT.md$/d')
     [ -n "$non_graph" ] || exit 0

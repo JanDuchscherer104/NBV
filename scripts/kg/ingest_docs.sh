@@ -13,10 +13,10 @@ if [[ "$#" -eq 0 ]]; then
   set -- \
     "${PROJECT_ROOT}/AGENTS.md" \
     "${PROJECT_ROOT}/.agents/AGENTS_INTERNAL_DB.md" \
-    "${PROJECT_ROOT}/.agents/memory/state/PROJECT_STATE.md" \
-    "${PROJECT_ROOT}/.agents/memory/state/DECISIONS.md" \
-    "${PROJECT_ROOT}/.agents/memory/state/OPEN_QUESTIONS.md" \
-    "${PROJECT_ROOT}/.agents/memory/state/GOTCHAS.md" \
+    "${PROJECT_ROOT}/.agents/references/source_order.md" \
+    "${PROJECT_ROOT}/docs/contents/thesis/roadmap.qmd" \
+    "${PROJECT_ROOT}/docs/contents/thesis/questions.qmd" \
+    "${PROJECT_ROOT}/aria_nbv/AGENTS.md" \
     "${PROJECT_ROOT}/docs/index.qmd" \
     "${PROJECT_ROOT}/docs/contents/impl/overview.qmd" \
     "${PROJECT_ROOT}/docs/contents/impl/oracle_rri_impl.qmd" \

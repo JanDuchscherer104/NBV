@@ -15,7 +15,7 @@ ARIA differences:
 
 - `plan-grill` owns advisor-facing, thesis-scope, source-order-aware decisions.
 - ARIA terminology lives in `docs/typst/shared/glossary.typ`, not `CONTEXT.md`.
-- Durable decisions live in `.agents/memory/state/DECISIONS.md`, roadmap,
-  questions, or the nearest `AGENTS.md`, not `docs/adr/` by default.
+- Durable decisions live in the roadmap, questions, active Typst thesis,
+  package contracts, or nearest `AGENTS.md`, not `docs/adr/` by default.
 - Public thesis/docs changes hand off to `docs-curator` or `typst-authoring`.
 - OMX owns orchestration; this skill owns ARIA decision evidence.

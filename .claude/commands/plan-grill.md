@@ -11,7 +11,7 @@ For "$ARGUMENTS":
 
 1. Search `.agents/resolved.toml` for prior decisions on this surface.
 2. Ground in the source-order owner (thesis roadmap/questions, glossary,
-   proposal Typst, or canonical memory state).
+   proposal Typst, package contract, exact reference owner, or active backlog).
 3. Ask one material decision at a time. State the recommended answer with the
    tradeoff. Test fuzzy plans against three concrete scenarios (normal,
    boundary, failure).
