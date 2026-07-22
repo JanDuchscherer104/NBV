@@ -7,12 +7,23 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
+import pytest
+import pytorch_lightning as pl
+import torch
 
-def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_path: Path) -> None:
+from aria_nbv.data_handling.qh import QhCorpus
+from aria_nbv.lightning.qh_datamodule import QhDataModule
+from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
+from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
+from tests.data_handling.test_qh import _dataset, _StaticDataset
+
+
+def _run_torchrun(output_dir: Path, scenario: str = "standard") -> list[dict[str, object]]:
     package_root = Path(__file__).resolve().parents[2]
-    torchrun = Path(os.environ.get("VIRTUAL_ENV", "/home/jd/repos/ARIA-NBV/aria_nbv/.venv")) / "bin" / "torchrun"
+    torchrun = Path(sys.executable).with_name("torchrun")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(package_root)
     completed = subprocess.run(
@@ -23,7 +34,9 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
             "--module",
             "tests.lightning.qh_torchrun_worker",
             "--output-dir",
-            str(tmp_path),
+            str(output_dir),
+            "--scenario",
+            scenario,
         ],
         cwd=package_root,
         env=env,
@@ -32,13 +45,90 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
         timeout=90,
         check=False,
     )
-
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    payloads = [json.loads((tmp_path / f"rank-{rank}.json").read_text()) for rank in range(2)]
+    return [json.loads((output_dir / f"rank-{rank}.json").read_text()) for rank in range(2)]
+
+
+def _module() -> QhLightningModule:
+    return QhLightningModule(
+        QhLightningModuleConfig(
+            scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
+            target_sync_interval=3,
+        )
+    )
+
+
+def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_path: Path) -> None:
+    payloads = _run_torchrun(tmp_path)
     assert {payload["world_size"] for payload in payloads} == {2}
     assert {payload["epoch"] for payload in payloads} == {1}
     assert {payload["global_step"] for payload in payloads} == {4}
-    assert {payload["validation_row_count"] for payload in payloads} == {1}
+    assert {payload["validation_row_count"] for payload in payloads} == {3}
+    assert payloads[0]["validation_loss"] == pytest.approx(payloads[1]["validation_loss"])
     assert set(payloads[0]["indices"]).isdisjoint(payloads[1]["indices"])
     assert sorted(payloads[0]["indices"] + payloads[1]["indices"]) == [0, 1, 2, 3]
     assert len(list((tmp_path / "checkpoints").glob("*.ckpt"))) == 2
+
+    source, _ = _dataset()
+    module = _module()
+    module.load_state_dict(torch.load(tmp_path / "rank-0-state.pt", weights_only=True))
+    data = QhDataModule(
+        QhCorpus.admit(
+            train=_StaticDataset((source[0],), "train-scene"),
+            val=_StaticDataset((source[1], source[1], source[1]), "val-scene"),
+        ),
+        batch_size=1,
+        seed=43,
+    )
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        use_distributed_sampler=False,
+    )
+    single_rank_loss = trainer.validate(module, datamodule=data, verbose=False)[0]["val/loss"]
+    assert payloads[0]["validation_loss"] == pytest.approx(single_rank_loss)
+
+
+def test_two_process_global_empty_batch_is_a_complete_noop(tmp_path: Path) -> None:
+    payloads = _run_torchrun(tmp_path, "global-empty")
+
+    assert {payload["global_step"] for payload in payloads} == {0}
+    assert {payload["optimizer_updates"] for payload in payloads} == {0}
+    assert {payload["target_syncs"] for payload in payloads} == {0}
+    assert {payload["training_row_count"] for payload in payloads} == {0}
+
+
+def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_path: Path) -> None:
+    payloads = _run_torchrun(tmp_path, "local-empty")
+
+    assert {payload["global_step"] for payload in payloads} == {1}
+    assert {payload["optimizer_updates"] for payload in payloads} == {1}
+    assert sorted(payload["training_row_count"] for payload in payloads) == [0, 1]
+    rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
+    for name in rank_states[0]:
+        assert torch.equal(rank_states[0][name], rank_states[1][name])
+
+    pl.seed_everything(123, workers=True)
+    source, _ = _dataset()
+    control = _module()
+    data = QhDataModule(
+        QhCorpus.admit(train=_StaticDataset((source[1],), "train-scene")),
+        batch_size=1,
+        seed=43,
+    )
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        use_distributed_sampler=False,
+        deterministic=True,
+    )
+    trainer.fit(control, datamodule=data)
+    for name, expected in control.state_dict().items():
+        assert torch.allclose(rank_states[0][name], expected, atol=1e-6, rtol=1e-6), name

@@ -1,29 +1,31 @@
-"""Actor-only projection over immutable VIN offline stores.
+"""Typed actor-only projection over immutable VIN offline stores.
 
-The module exposes a small map-style interface over source evidence needed by
-``Q_H`` composition. It deliberately reads neither rollout facts nor
-Oracle, GT, candidate-rendering, crop, or selected-depth blocks. Optional EVL
-evidence must be named explicitly in the config and remains absent rather than
-being replaced by synthetic zero arrays.
+The module exposes the canonical :class:`aria_nbv.data_handling.raw.views.VinSnippetView`
+needed by ``Q_H`` composition. It deliberately reads neither rollout facts nor
+Oracle, GT, candidate-rendering, crop, selected-depth, or optional feature bags.
 
 This module is the observation-side adapter used by
-:class:`aria_nbv.lightning.qh_data.QhDataset`. Rollout transitions and target
+:class:`aria_nbv.data_handling.qh.QhDataset`. Rollout transitions and target
 descriptors remain owned by :mod:`aria_nbv.rollouts`; privileged Oracle and GT
-blocks never cross this projection.
+blocks never cross this projection. It owns immutable-source admission, exact
+lineage checks, and worker-local reads, not rollout or model lifecycle.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal
 
 import numpy as np
-from pydantic import Field, field_validator, model_validator
+import torch
+from efm3d.aria.pose import PoseTW
+from pydantic import Field
 
 from ...utils import TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
 from ..identifiers import compact_ase_atek_sample_id
+from ..raw.views import VinSnippetView
 from .format import VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 
@@ -32,37 +34,14 @@ _PROFILE_REQUIRED_BLOCKS = (
     "vin.lengths",
     "vin.t_world_rig",
 )
-_PROFILE_OPTIONAL_BLOCKS = (
-    "vin.trajectory.time_ns",
-    "vin.trajectory.gravity_in_world",
-)
-_ACTOR_VISIBLE_OPTIONAL_BLOCKS = frozenset(
-    {
-        *_PROFILE_OPTIONAL_BLOCKS,
-        "backbone.t_world_voxel",
-        "backbone.voxel_extent",
-        "backbone.occ_pr",
-        "backbone.occ_input",
-        "backbone.free_input",
-        "backbone.counts",
-        "backbone.cent_pr",
-        "backbone.pts_world",
-        "detected.obbs",
-        "detected.obb_probs",
-    }
-)
-ACTOR_VISIBLE_NUMERIC_BLOCKS = frozenset({*_PROFILE_REQUIRED_BLOCKS, *_ACTOR_VISIBLE_OPTIONAL_BLOCKS})
-"""Closed persisted numeric-block allowlist for actor-only projections."""
 
 
 @dataclass(frozen=True, slots=True)
 class VinActorSample:
-    """Frozen actor-visible source evidence and immutable row lineage.
+    """Frozen typed actor evidence and immutable source-row lineage.
 
     Attributes:
-        blocks: Requested actor blocks in deterministic profile/config order.
-        availability: Requested block names paired with their per-row presence.
-            Missing optional blocks have ``False`` availability and no array.
+        snippet: Canonical actor-visible semidense and trajectory evidence.
     """
 
     sample_index: int
@@ -92,25 +71,8 @@ class VinActorSample:
     source_offline_store_manifest_hash: str
     """Stable hash of the complete immutable source manifest."""
 
-    blocks: tuple[tuple[str, np.ndarray], ...]
-    """Read-only actor arrays keyed by persisted block name.
-
-    Arrays retain their on-disk shape and dtype. Core rows are
-    ``vin.points_world`` ``ndarray["P C_p", float32]`` in world metres,
-    ``vin.lengths`` ``ndarray["1", int64]``, and ``vin.t_world_rig``
-    ``ndarray["T 12", float32]`` world-from-rig poses.
-    """
-
-    availability: tuple[tuple[str, bool], ...]
-    """Explicit presence flag for every required or optional requested block."""
-
-    def block(self, name: str) -> np.ndarray | None:
-        """Return one actor block, or ``None`` when it is unavailable or unrequested."""
-
-        for block_name, value in self.blocks:
-            if block_name == name:
-                return value
-        return None
+    snippet: VinSnippetView
+    """Typed points, lengths, and world-from-rig history used by the V0 actor."""
 
 
 class VinActorSourceConfig(TargetConfig["VinActorSource"]):
@@ -124,38 +86,6 @@ class VinActorSourceConfig(TargetConfig["VinActorSource"]):
 
     split: Literal["train", "val", "all"] = "all"
     """Source split exposed through the map-style interface."""
-
-    required_blocks: tuple[str, ...] = ()
-    """Additional actor-safe numeric blocks required in every selected shard."""
-
-    optional_blocks: tuple[str, ...] = _PROFILE_OPTIONAL_BLOCKS
-    """Additional actor-safe numeric blocks exposed when present."""
-
-    @field_validator("required_blocks", "optional_blocks")
-    @classmethod
-    def _validate_actor_blocks(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        """Reject duplicate, implicit-core, and non-actor block declarations."""
-
-        if len(value) != len(set(value)):
-            raise ValueError("Actor block declarations must be unique.")
-        for name in value:
-            if name in _PROFILE_REQUIRED_BLOCKS:
-                raise ValueError(f"{name!r} is implicit in the actor profile and must not be redeclared.")
-            if name not in _ACTOR_VISIBLE_OPTIONAL_BLOCKS:
-                raise ValueError(
-                    f"{name!r} is not an actor-visible VIN block. "
-                    "Oracle, GT, candidate, crop, rollout, and selected-depth blocks are forbidden.",
-                )
-        return value
-
-    @model_validator(mode="after")
-    def _validate_disjoint_blocks(self) -> Self:
-        """Keep required and optional declarations mutually exclusive."""
-
-        overlap = set(self.required_blocks) & set(self.optional_blocks)
-        if overlap:
-            raise ValueError(f"Actor blocks cannot be both required and optional: {sorted(overlap)}.")
-        return self
 
     @property
     def target_type(self) -> type[VinActorSource]:
@@ -188,12 +118,6 @@ class VinActorSource:
         self._records = tuple(reader.get_split_records(config.split))
         self._index_by_sample_index = {record.sample_index: index for index, record in enumerate(self._records)}
         self._shards = {shard.shard_id: shard for shard in reader.manifest.shards}
-        self._requested_blocks = (
-            *_PROFILE_REQUIRED_BLOCKS,
-            *config.required_blocks,
-            *config.optional_blocks,
-        )
-        self._required_blocks = frozenset((*_PROFILE_REQUIRED_BLOCKS, *config.required_blocks))
         self._validate_store(reader)
         self._reader_pid: int | None = None
         self._reader: VinOfflineStoreReader | None = None
@@ -204,33 +128,27 @@ class VinActorSource:
         return len(self._records)
 
     @property
-    def requested_blocks(self) -> tuple[str, ...]:
-        """Return the exact actor-profile block order expected in every sample."""
+    def provenance(self) -> dict[str, object]:
+        """Return the preflighted immutable-source identity without row reads."""
 
-        return self._requested_blocks
+        return {
+            "store_path": str(self.config.store.store_dir),
+            "store_version": self.source_offline_store_version,
+            "manifest_hash": self.source_offline_store_manifest_hash,
+            "split": self.config.split,
+            "row_count": len(self),
+        }
 
     def __getitem__(self, index: int) -> VinActorSample:
-        """Read one row using only configured actor-visible numeric blocks.
-
-        Required and available optional arrays are returned in
-        :attr:`requested_blocks` order with NumPy writeability disabled.
-        Missing optional blocks have an explicit false availability entry and
-        no synthetic payload.
-        """
+        """Read one row as a canonical actor-visible VIN snippet."""
 
         record = self._record(index)
         reader = self._reader_for_process()
-        shard = self._shards[record.shard_id]
-        blocks: list[tuple[str, np.ndarray]] = []
-        availability: list[tuple[str, bool]] = []
-        for name in self._requested_blocks:
-            present = name in shard.blocks
-            availability.append((name, present))
-            if not present:
-                continue
-            value = np.asarray(reader.read_numeric_block(record, name))
-            value.setflags(write=False)
-            blocks.append((name, value))
+        points_world = torch.from_numpy(np.array(reader.read_numeric_block(record, "vin.points_world"), copy=True))
+        lengths = torch.from_numpy(np.array(reader.read_numeric_block(record, "vin.lengths"), copy=True))
+        t_world_rig = PoseTW(
+            torch.from_numpy(np.array(reader.read_numeric_block(record, "vin.t_world_rig"), copy=True))
+        )
         return VinActorSample(
             sample_index=record.sample_index,
             sample_key=record.sample_key,
@@ -241,8 +159,11 @@ class VinActorSource:
             source_shard_row=record.row,
             source_offline_store_version=self.source_offline_store_version,
             source_offline_store_manifest_hash=self.source_offline_store_manifest_hash,
-            blocks=tuple(blocks),
-            availability=tuple(availability),
+            snippet=VinSnippetView(
+                points_world=points_world,
+                lengths=lengths,
+                t_world_rig=t_world_rig,
+            ),
         )
 
     def index_for_sample(self, sample_index: int) -> int:
@@ -281,7 +202,7 @@ class VinActorSource:
 
         The check binds a rollout to the exact immutable manifest, sample,
         shard row, and optional scene/snippet/split facts. Any mismatch fails
-        before :class:`aria_nbv.lightning.qh_data.QhDataset` can create a
+        before :class:`aria_nbv.data_handling.qh.QhDataset` can create a
         training sample.
 
         Args:
@@ -381,19 +302,17 @@ class VinActorSource:
     def _validate_required_blocks(self, record: VinOfflineIndexRecord, shard: VinOfflineShardSpec) -> None:
         """Require actor blocks to exist as numeric arrays in every selected shard."""
 
-        for name in self._requested_blocks:
+        for name in _PROFILE_REQUIRED_BLOCKS:
             block = shard.blocks.get(name)
             if block is None:
-                if name in self._required_blocks:
-                    raise ValueError(
-                        f"Required actor block {name!r} is missing for sample {record.sample_key!r}. "
-                        f"{self._REBUILD_GUIDANCE}",
-                    )
-                continue
+                raise ValueError(
+                    f"Required actor block {name!r} is missing for sample {record.sample_key!r}. "
+                    f"{self._REBUILD_GUIDANCE}",
+                )
             if block.kind != "zarr_array":
                 raise ValueError(
                     f"Actor block {name!r} must be a numeric Zarr array, not {block.kind!r}. {self._REBUILD_GUIDANCE}",
                 )
 
 
-__all__ = ["ACTOR_VISIBLE_NUMERIC_BLOCKS", "VinActorSample", "VinActorSource", "VinActorSourceConfig"]
+__all__ = ["VinActorSample", "VinActorSource", "VinActorSourceConfig"]

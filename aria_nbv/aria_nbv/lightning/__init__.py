@@ -5,7 +5,7 @@ module, trainer, callback, and optimizer surfaces used by the runnable
 one-step CORAL scorer. It owns Lightning lifecycle and optimization wiring;
 actor-visible feature construction belongs to :mod:`aria_nbv.vin`, oracle
 labels belong to :mod:`aria_nbv.rri_metrics`, and the separate finite-horizon
-``Q_H`` stack remains leaf-owned by :mod:`aria_nbv.lightning.qh_data`,
+``Q_H`` stack remains leaf-owned by :mod:`aria_nbv.lightning.qh_datamodule`,
 :mod:`aria_nbv.lightning.qh_module`, and
 :mod:`aria_nbv.lightning.qh_experiment` rather than widening the one-step
 package-root interface.

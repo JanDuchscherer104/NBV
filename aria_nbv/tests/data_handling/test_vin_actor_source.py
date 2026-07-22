@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pickle
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, fields
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
 
-from aria_nbv.data_handling.offline.actor import VinActorSourceConfig
+from aria_nbv.data_handling.offline.actor import VinActorSample, VinActorSourceConfig
 from aria_nbv.data_handling.offline.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
@@ -38,6 +37,16 @@ TRAJECTORY_BLOCKS = (
     "vin.trajectory.time_ns",
     "vin.trajectory.gravity_in_world",
 )
+
+
+def test_actor_sample_owns_one_typed_snippet_instead_of_parallel_block_bags() -> None:
+    """Q_H actor evidence should reuse the canonical typed VIN snippet view."""
+
+    field_names = {field.name for field in fields(VinActorSample)}
+
+    assert "snippet" in field_names
+    assert "blocks" not in field_names
+    assert "availability" not in field_names
 
 
 def _write_actor_store(
@@ -146,29 +155,34 @@ def test_minimal_profile_reads_only_actor_visible_blocks(tmp_path: Path, monkeyp
     assert len(source) == 1
     assert sample.sample_index == 7
     assert sample.sample_key == "scene-a:snippet-000"
-    assert tuple(name for name, _value in sample.blocks) == (*CORE_BLOCKS, *TRAJECTORY_BLOCKS)
-    assert dict(sample.availability) == dict.fromkeys((*CORE_BLOCKS, *TRAJECTORY_BLOCKS), True)
-    assert reads == [*CORE_BLOCKS, *TRAJECTORY_BLOCKS]
-    assert sample.block("vin.points_world").shape == (4, 4)
-    assert sample.block("oracle.rri") is None
+    assert reads == [*CORE_BLOCKS]
+    assert sample.snippet.points_world.shape == (4, 4)
+    assert sample.snippet.lengths.tolist() == [3]
+    assert sample.snippet.t_world_rig.tensor().shape == (2, 12)
     with pytest.raises(FrozenInstanceError):
         sample.sample_key = "mutated"  # type: ignore[misc]
-    with pytest.raises(ValueError, match="read-only"):
-        sample.block("vin.points_world")[0, 0] = -1.0
 
 
-def test_missing_optional_blocks_are_explicitly_unavailable(tmp_path: Path) -> None:
-    """Optional actor evidence is absent, never synthesized as zero arrays."""
+def test_optional_persisted_blocks_do_not_cross_the_typed_actor_seam(tmp_path: Path) -> None:
+    """The V0 actor source reads exactly the typed snippet evidence."""
 
-    store, _ = _write_actor_store(tmp_path / "store", trajectory=False)
+    store, _ = _write_actor_store(tmp_path / "store", trajectory=True, backbone=True, detected_obbs=True)
     sample = VinActorSourceConfig(store=store).setup_target()[0]
 
-    assert sample.block("vin.trajectory.time_ns") is None
-    assert sample.block("vin.trajectory.gravity_in_world") is None
-    assert dict(sample.availability) == {
-        **dict.fromkeys(CORE_BLOCKS, True),
-        **dict.fromkeys(TRAJECTORY_BLOCKS, False),
+    assert {field.name for field in fields(VinActorSample)} == {
+        "sample_index",
+        "sample_key",
+        "scene_id",
+        "snippet_id",
+        "split",
+        "source_shard_id",
+        "source_shard_row",
+        "source_offline_store_version",
+        "source_offline_store_manifest_hash",
+        "snippet",
     }
+    assert not hasattr(sample, "blocks")
+    assert not hasattr(sample, "availability")
 
 
 def test_sparse_sample_index_has_explicit_lookup(tmp_path: Path) -> None:
@@ -180,71 +194,6 @@ def test_sparse_sample_index_has_explicit_lookup(tmp_path: Path) -> None:
     assert source.index_for_sample(7) == 0
     with pytest.raises(KeyError, match="sample_index=0.*Rebuild"):
         source.index_for_sample(0)
-
-
-def test_missing_required_actor_block_fails_during_setup(tmp_path: Path) -> None:
-    """Required ablations fail before DataLoader workers start."""
-
-    store, _ = _write_actor_store(tmp_path / "store", backbone=False)
-    config = VinActorSourceConfig(store=store, required_blocks=("backbone.occ_pr",))
-
-    with pytest.raises(ValueError, match="backbone.occ_pr.*Rebuild"):
-        config.setup_target()
-
-
-def test_explicit_optional_backbone_and_detection_blocks_are_projected(tmp_path: Path) -> None:
-    """Explicit actor-visible ablations remain independent of the base profile."""
-
-    store, _ = _write_actor_store(tmp_path / "store", backbone=True, detected_obbs=True)
-    source = VinActorSourceConfig(
-        store=store,
-        optional_blocks=("backbone.occ_pr", "detected.obbs", "detected.obb_probs"),
-    ).setup_target()
-    sample = source[0]
-
-    assert sample.block("backbone.occ_pr").shape == (1, 2, 2, 2)
-    assert sample.block("detected.obbs").shape == (2, 34)
-    assert sample.block("detected.obb_probs").shape == (2, 3)
-    assert all(dict(sample.availability).values())
-
-
-@pytest.mark.parametrize(
-    "block_name",
-    [
-        "oracle.rri",
-        "gt.obbs",
-        "oracle.depths",
-        "oracle.candidate_pcs",
-        "selected_depth/raster",
-        "target.crop",
-        "candidate.pose",
-    ],
-)
-def test_config_rejects_non_actor_blocks(block_name: str, tmp_path: Path) -> None:
-    """The config allowlist must make privileged reads unrepresentable."""
-
-    store, _ = _write_actor_store(tmp_path / "store")
-    with pytest.raises(ValidationError, match="actor-visible"):
-        VinActorSourceConfig(store=store, optional_blocks=(block_name,))
-
-
-@pytest.mark.parametrize(
-    "block_name",
-    [
-        "backbone.selected_depth",
-        "backbone.oracle_depths",
-        "backbone.gt_mesh",
-    ],
-)
-def test_config_rejects_unknown_backbone_arrays_even_when_persisted(block_name: str, tmp_path: Path) -> None:
-    """Only writer-owned actor-visible backbone names cross the source seam."""
-
-    store, _ = _write_actor_store(tmp_path / "store", extra_numeric_blocks=(block_name,))
-    reader = VinOfflineStoreReader(store)
-    assert block_name in reader.manifest.shards[0].blocks
-
-    with pytest.raises(ValidationError, match="actor-visible"):
-        VinActorSourceConfig(store=store, optional_blocks=(block_name,))
 
 
 @pytest.mark.parametrize(
@@ -310,7 +259,7 @@ def test_pickle_drops_worker_local_reader_and_reopens_lazily(tmp_path: Path) -> 
     restored = pickle.loads(pickle.dumps(source))
 
     assert restored._reader is None
-    assert restored[0].block("vin.lengths").tolist() == [3]
+    assert restored[0].snippet.lengths.tolist() == [3]
 
 
 def test_actor_source_stays_off_the_data_handling_root(tmp_path: Path) -> None:

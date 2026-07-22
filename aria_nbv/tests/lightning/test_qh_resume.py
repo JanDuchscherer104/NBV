@@ -10,16 +10,21 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from aria_nbv.lightning.qh_data import QhDataModule
+from aria_nbv.data_handling.qh import QhCorpus
+from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.lightning.test_qh_data import _dataset, _StaticDataset
+from tests.data_handling.test_qh import _dataset, _StaticDataset
 
 
 def _data() -> QhDataModule:
     source, _ = _dataset()
     samples = (source[0], source[1], source[0], source[1])
-    return QhDataModule(train=_StaticDataset(samples, "train-scene"), batch_size=2, seed=29)
+    return QhDataModule(
+        QhCorpus.admit(train=_StaticDataset(samples, "train-scene")),
+        batch_size=2,
+        seed=29,
+    )
 
 
 def _module() -> QhLightningModule:
@@ -74,6 +79,7 @@ def test_resume_matches_uninterrupted_online_target_and_sync_state(tmp_path: Pat
 
     assert reference_trainer.global_step == resumed_trainer.global_step == 4
     assert reference.optimizer_updates.item() == resumed.optimizer_updates.item() == 4
+    assert reference.target_syncs.item() == resumed.target_syncs.item() == 1
     for name, expected in reference.state_dict().items():
         actual = resumed.state_dict()[name]
         assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5), (
