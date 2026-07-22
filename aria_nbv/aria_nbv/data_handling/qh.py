@@ -372,8 +372,8 @@ class QhDataset(Dataset[QhSample]):
 
         The returned :class:`QhSample` preserves exact candidate-row alignment.
         ``row_train_mask`` is true only when the selected index is in range,
-        its candidate is admitted by ``q_train_mask``, and reward/discount are
-        finite.
+        its candidate is admitted by both the persisted ``q_train_mask`` and
+        the materialized actor hard-action mask, and reward/discount are finite.
         """
 
         current = self.rollout_reader[index]
@@ -386,10 +386,14 @@ class QhDataset(Dataset[QhSample]):
             next_actor = self._compose_actor(next_state)
 
         selected = current.transition.selected_candidate_index
-        selected_index_valid = 0 <= selected < current.supervision.q_train_mask.shape[0]
+        selected_index_valid = (
+            0 <= selected < current.supervision.q_train_mask.shape[0]
+            and selected < current_actor.actor_action_mask.shape[0]
+        )
         row_train = bool(
             selected_index_valid
             and current.supervision.q_train_mask[selected]
+            and current_actor.actor_action_mask[selected]
             and np.isfinite(current.transition.reward)
             and np.isfinite(current.transition.discount)
         )

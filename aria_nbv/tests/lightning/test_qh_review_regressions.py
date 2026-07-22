@@ -9,16 +9,17 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
+import numpy as np
 import pytest
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities.exceptions import MisconfigurationException
 from torch.optim.lr_scheduler import StepLR
 
-from aria_nbv.data_handling.qh import QhBatch, QhCorpus
+from aria_nbv.data_handling.qh import QhBatch, QhCorpus, QhDataset
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule
-from tests.data_handling.test_qh import _dataset, _StaticDataset
+from tests.data_handling.test_qh import _dataset, _Reader, _SparseActorSource, _StaticDataset, _stored_state
 from tests.lightning.test_qh_module import _module
 
 
@@ -154,6 +155,47 @@ def test_globally_empty_batch_does_not_advance_training_clocks() -> None:
     assert clocks.scheduler_after == clocks.scheduler_before
     assert all(torch.equal(value, online_before[name]) for name, value in module.online_scorer.state_dict().items())
     assert all(torch.equal(value, target_before[name]) for name, value in module.target_scorer.state_dict().items())
+
+
+def test_dataset_actor_mask_exclusion_emits_diagnostic_row_without_training_update() -> None:
+    """A selected action rejected by the actor mask must remain loadable but untrained."""
+
+    state = _stored_state(0, width=2, terminal=True)
+    selected = state.transition.selected_candidate_index
+    actor_action_mask = np.array(state.actor.actor_action_mask, copy=True)
+    actor_action_mask[selected] = False
+    state = replace(state, actor=replace(state.actor, actor_action_mask=actor_action_mask))
+    assert state.supervision.q_train_mask[selected]
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=_Reader((state,)),
+        actor_source=_SparseActorSource(),
+    )
+
+    sample = dataset[0]
+    assert not sample.transition.row_train_mask.item()
+    data = QhDataModule(
+        QhCorpus.admit(train=_StaticDataset((sample,), "train-scene")),
+        batch_size=1,
+        seed=0,
+    )
+    module = _module(sync_interval=1)
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        limit_train_batches=1,
+        num_sanity_val_steps=0,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        use_distributed_sampler=False,
+    )
+
+    trainer.fit(module, datamodule=data)
+
+    assert trainer.global_step == 0
+    assert module.optimizer_updates.item() == 0
+    assert module.target_syncs.item() == 0
 
 
 def test_manual_optimization_rejects_gradient_accumulation() -> None:
