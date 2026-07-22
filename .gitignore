@@ -241,9 +241,26 @@ docs/_freeze/**/*.html
 # Graphify
 graphify-out/
 
-# OMX is operator-local. Force-add only accepted records validated by
-# scripts/validate_agent_memory.py.
-.omx/
+# OMX drafts and runtime state are local. The registry admits current planning
+# evidence at native role paths and superseded evidence only in its reserved
+# archive namespace; unregistered visible files fail validation.
+.omx/*
+!.omx/context/
+.omx/context/*
+!.omx/context/*.md
+!.omx/specs/
+.omx/specs/*
+!.omx/specs/**/*.md
+!.omx/plans/
+.omx/plans/*
+!.omx/plans/*.md
+!.omx/plans/*.json
+!.omx/archive/
+.omx/archive/*
+!.omx/archive/accepted-bundles/
+.omx/archive/accepted-bundles/*
+!.omx/archive/accepted-bundles/*/
+!.omx/archive/accepted-bundles/*/**
 
 # OMC local memory/replay state is operator-local unless promoted into .agents.
 .omc/

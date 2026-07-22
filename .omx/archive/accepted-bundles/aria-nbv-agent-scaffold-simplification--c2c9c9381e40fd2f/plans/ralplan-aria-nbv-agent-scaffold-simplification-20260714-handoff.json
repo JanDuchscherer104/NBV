@@ -1,0 +1,206 @@
+{
+  "consensus_gate": {
+    "architect": {
+      "review_path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-4.md",
+      "sequence": 7,
+      "verdict": "APPROVE"
+    },
+    "complete": true,
+    "critic": {
+      "review_path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-review.md",
+      "sequence": 8,
+      "verdict": "APPROVE"
+    },
+    "required_order": [
+      "planner",
+      "architect",
+      "critic"
+    ]
+  },
+  "execution": {
+    "implementation_started": false,
+    "parallel_waves": [
+      [
+        "WP0"
+      ],
+      [
+        "WP1",
+        "WP2",
+        "WP3",
+        "WP4",
+        "WP6"
+      ],
+      [
+        "WP5",
+        "WP7"
+      ],
+      [
+        "WP8"
+      ],
+      [
+        "code-reviewer",
+        "verifier"
+      ]
+    ],
+    "recommended_mode": "$ultragoal + $team",
+    "stop_condition": "Do not execute until the content-addressed handoff is promoted in a clean sibling worktree at the planning baseline.",
+    "workpackages": [
+      "WP0",
+      "WP1",
+      "WP2",
+      "WP3",
+      "WP4",
+      "WP5",
+      "WP6",
+      "WP7",
+      "WP8"
+    ]
+  },
+  "plan_sha256": "637b9cccb5673c5be33f96e185030f916156cf0d49520b0d39ea4a5d18784827",
+  "planning_artifacts": {
+    "artifacts": [
+      {
+        "bytes": 7645,
+        "path": ".omx/context/agent-scaffold-consensus-20260714T081220Z.md",
+        "sha256": "5e73810eb1bb2645ee6169b98b7360926e6a9b32ff5c5c028defeccc80db95da"
+      },
+      {
+        "bytes": 26168,
+        "path": ".omx/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md",
+        "sha256": "2659cbbb48352b505decf0f97b53243acd057509c3ab2086204414486246ba79"
+      },
+      {
+        "bytes": 43679,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md",
+        "sha256": "637b9cccb5673c5be33f96e185030f916156cf0d49520b0d39ea4a5d18784827"
+      },
+      {
+        "bytes": 13176,
+        "path": ".omx/plans/test-spec-aria-nbv-agent-scaffold-simplification-20260714.md",
+        "sha256": "15b1db1fbb968555adc7f10cf0eb710d39d415d1b1ddb0292218f03de7b59608"
+      },
+      {
+        "bytes": 1935,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-1.md",
+        "sha256": "0c5889546e8fde23884d5660b790963c7dc78337679d07e79afa21c8d7c46209"
+      },
+      {
+        "bytes": 858,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-2.md",
+        "sha256": "570602fb164f8d91434e582283fa94b061f803d26e5b90cd9add99b4db3c996a"
+      },
+      {
+        "bytes": 825,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review.md",
+        "sha256": "aaeeb859fd29d0752dc21354a953f574b3f6b8107e6fcc52115348cb11151bb3"
+      },
+      {
+        "bytes": 861,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-1.md",
+        "sha256": "6b7f71c573ec35de99763290e9a03eef4e26b84289340c49fa4986798528a57e"
+      },
+      {
+        "bytes": 703,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-3.md",
+        "sha256": "e1fdbccf7e2dc78d474bf2b1117db0ee2cc66ef71a1cd8aecd0ee4f3d5ab371b"
+      },
+      {
+        "bytes": 350,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-4.md",
+        "sha256": "acd6e971ced85a4694780ae3fd718b910b9a10a877d8599f0b0ccbaf997e0b90"
+      },
+      {
+        "bytes": 547,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-2.md",
+        "sha256": "91d87362358319dd9a220ce377c47ebc8f231c9eae2ac675f0591d1348f164c8"
+      },
+      {
+        "bytes": 749,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-2.md",
+        "sha256": "3eb4a94344dac63491affba8b28672a1085abc12e4b27b310da9fc8d3be91ab9"
+      },
+      {
+        "bytes": 345,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-5.md",
+        "sha256": "afa6b7c9086dc384f2e38951c88bbeba93d75130a98a453e5efd809a830f7217"
+      },
+      {
+        "bytes": 454,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-3.md",
+        "sha256": "b943d58e2cec1ccbb37d8ca919ae4e5ead74beb7ba0e1cd25952ec9ce92974e2"
+      },
+      {
+        "bytes": 422,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-3.md",
+        "sha256": "18a5efaee3804416208dcd3391e9ba6d32613d5a79193180434a53bf016fd53d"
+      },
+      {
+        "bytes": 378,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-4.md",
+        "sha256": "72dd240052a3eb531aaa402308d92f6920c8098a632454b7cd54cc8f2430ccd4"
+      },
+      {
+        "bytes": 647,
+        "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-review.md",
+        "sha256": "9065f5dd78f83eacf66714b3bc5c164b4b4d464b732869834626c60938b27508"
+      }
+    ],
+    "context_path": ".omx/context/agent-scaffold-consensus-20260714T081220Z.md",
+    "decision_record_path": ".omx/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md",
+    "plan_path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md",
+    "test_spec_path": ".omx/plans/test-spec-aria-nbv-agent-scaffold-simplification-20260714.md"
+  },
+  "planning_baseline": "87cf587e9e64d536b78e8a12f5ddff0fc5636676",
+  "ralplan_architect_review": {
+    "completed_before_critic": true,
+    "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-4.md",
+    "sequence": 7,
+    "verdict": "APPROVE"
+  },
+  "ralplan_consensus_gate": {
+    "complete": true,
+    "observed_order": [
+      "architect",
+      "critic"
+    ],
+    "required_order": [
+      "architect",
+      "critic"
+    ]
+  },
+  "ralplan_critic_review": {
+    "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-review.md",
+    "sequence": 8,
+    "verdict": "APPROVE"
+  },
+  "runtime_state_closeout": {
+    "artifact_consensus_complete": true,
+    "clean_complete_recorded": false,
+    "reason": "The OMX state validator requires tracker-backed native lane IDs; collaboration Architect/Critic approvals are durable artifacts but their lane IDs are not exposed to this root agent.",
+    "state": "paused",
+    "state_path": ".omx/state/sessions/omx-1784015709997-zopmby/ralplan-state.json"
+  },
+  "schema_version": 1,
+  "staffing": {
+    "final": [
+      "code-simplifier",
+      "code-reviewer",
+      "verifier"
+    ],
+    "lead": "git-master/integration owner",
+    "wave1": [
+      "executor:WP1",
+      "executor:WP2",
+      "executor:WP3",
+      "executor:WP4",
+      "test-engineer:WP6"
+    ],
+    "wave2": [
+      "writer:WP5",
+      "writer/test-engineer:WP7"
+    ]
+  },
+  "status": "approved",
+  "test_spec_sha256": "15b1db1fbb968555adc7f10cf0eb710d39d415d1b1ddb0292218f03de7b59608",
+  "workflow": "ralplan"
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "task_slug": "aria-nbv-agent-scaffold-refresh",
+  "status": "approved",
+  "baseline_commit": "57457ec31e0d3b56da7cb6ebdbb9fde6166de434",
+  "revision_date": "2026-07-22",
+  "bundle_path_policy": {
+    "current": "native OMX role paths under .omx/context, .omx/specs, and .omx/plans",
+    "superseded": ".omx/archive/accepted-bundles/<bundle-id>/",
+    "synthetic_acceptance_directory": false
+  },
+  "accepted_predecessor": {
+    "handoff_path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-handoff.json",
+    "handoff_sha256": "c2c9c9381e40fd2f63bfe7343cd2f56120437aa3e46f9a740ab79b250446d61e",
+    "plan_sha256": "637b9cccb5673c5be33f96e185030f916156cf0d49520b0d39ea4a5d18784827",
+    "artifact_count": 17,
+    "bundle_id": "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
+  },
+  "planning_artifacts": {
+    "context": {
+      "path": ".omx/context/agent-scaffold-refresh-20260720T110000Z.md",
+      "sha256": "87e6554d1904a76df3c281fece284ccb7529bee001ce33ca0049d704d1cd8501"
+    },
+    "plan": {
+      "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720.md",
+      "sha256": "2f1e5d46cde77efceb1d47dcfb76ad1b570300b52c70e66e5feb53b655150e0c"
+    },
+    "test_spec": {
+      "path": ".omx/plans/test-spec-aria-nbv-agent-scaffold-refresh-20260720.md",
+      "sha256": "cc367f87d0a2b4058266396cd09757ab7b075912c2da0e0b8c3d2539e90aac71"
+    }
+  },
+  "ralplan_architect_review": {
+    "iteration": 15,
+    "verdict": "APPROVE",
+    "approved": true,
+    "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-architect-review-iteration-15.md",
+    "sha256": "76195dd59169a037c771cb85df77eea82cd0a1c3f683c45aa64a5071d02d6f1e",
+    "reviewed_context_sha256": "87e6554d1904a76df3c281fece284ccb7529bee001ce33ca0049d704d1cd8501",
+    "reviewed_plan_sha256": "2f1e5d46cde77efceb1d47dcfb76ad1b570300b52c70e66e5feb53b655150e0c",
+    "reviewed_test_spec_sha256": "cc367f87d0a2b4058266396cd09757ab7b075912c2da0e0b8c3d2539e90aac71"
+  },
+  "ralplan_critic_review": {
+    "iteration": 15,
+    "verdict": "APPROVE",
+    "approved": true,
+    "path": ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-critic-review-iteration-15.md",
+    "sha256": "1e8a4bf15c5d12070722ac3b4203d0addd7cd8c6596a83c09fabf94ea933e14c",
+    "reviewed_context_sha256": "87e6554d1904a76df3c281fece284ccb7529bee001ce33ca0049d704d1cd8501",
+    "reviewed_plan_sha256": "2f1e5d46cde77efceb1d47dcfb76ad1b570300b52c70e66e5feb53b655150e0c",
+    "reviewed_test_spec_sha256": "cc367f87d0a2b4058266396cd09757ab7b075912c2da0e0b8c3d2539e90aac71",
+    "reviewed_architect_sha256": "76195dd59169a037c771cb85df77eea82cd0a1c3f683c45aa64a5071d02d6f1e"
+  },
+  "ralplan_consensus_gate": {
+    "complete": true,
+    "review_order": [
+      "architect",
+      "critic"
+    ],
+    "reason": "The successor context, plan, and test specification received sequential exact-hash Architect and Critic APPROVE verdicts."
+  },
+  "execution_handoff": {
+    "authorization": "WP0 and WP1 bootstrap only",
+    "wp2_plus_authorized": false,
+    "wp2_plus_start_condition": "WP1 has registered this successor as current at native OMX paths, moved the July 14 predecessor to the reserved superseded archive, and passed lifecycle validation.",
+    "progress_owner": "Ultragoal",
+    "backlog_owner": "agents DB",
+    "default_mode": "ultragoal",
+    "parallel_mode": "team",
+    "parallel_workpackages_after_wp1": [
+      "WP2",
+      "WP3"
+    ],
+    "sequential_destructive_workpackages": [
+      "WP4",
+      "WP5",
+      "WP6"
+    ]
+  }
+}

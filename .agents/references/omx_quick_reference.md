@@ -79,6 +79,14 @@ create native `.codex/hooks.json`; keep that runtime file local and merge
 operator hooks deliberately from `.codex/hooks.example.json` if needed. The
 repo plugin must continue to work without OMX.
 
+## Accepted Planning Evidence
+
+OMX runtime state stays local. Accepted planning bundles are governed by
+`.agents/omx_artifacts.toml`: current artifacts remain in native OMX role paths,
+and superseded bundles live only under
+`.omx/archive/accepted-bundles/<bundle-id>/`. Run `make omx-artifacts-check`
+after changing registry members or lifecycle policy.
+
 ## Safety Checks
 
 Before committing scaffold work:

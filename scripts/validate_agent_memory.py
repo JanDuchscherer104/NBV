@@ -54,11 +54,6 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
         "## Python Package",
     ),
 )
-OMX_RECORD_PATHS = {
-    ".omx/plans/": "plan",
-    ".omx/specs/": "spec",
-}
-OMX_RECORD_STATUSES = {"current", "accepted"}
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
@@ -165,34 +160,21 @@ def check_codex_notes() -> list[str]:
     return errors
 
 
-def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
-    errors: list[str] = []
-    for tracked_path in tracked_paths:
-        if not tracked_path.startswith(".omx/"):
-            continue
-
-        expected_kind = next(
-            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
-            None,
-        )
-        if expected_kind is None or not tracked_path.endswith(".md"):
-            errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
-            continue
-
-        path = REPO_ROOT / tracked_path
-        try:
-            frontmatter = parse_frontmatter(path)
-        except ValueError as exc:
-            errors.append(f"{tracked_path}: {exc}")
-            continue
-
-        if frontmatter.get("kind") != expected_kind:
-            errors.append(f"{tracked_path}: `kind` must be `{expected_kind}`")
-        if frontmatter.get("status") not in OMX_RECORD_STATUSES:
-            errors.append(
-                f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}"
-            )
-    return errors
+def check_registered_omx_records() -> list[str]:
+    validator = REPO_ROOT / "scripts" / "scaffold" / "validate_omx_artifacts.py"
+    if not validator.is_file():
+        return ["missing OMX artifact registry validator"]
+    result = subprocess.run(
+        [sys.executable, str(validator), "--check"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    details = [line for line in result.stderr.splitlines() if line.strip()]
+    return ["registered OMX artifact validation failed", *details]
 
 
 def check_history_records() -> list[str]:
@@ -276,7 +258,7 @@ def check_scaffold_alignment() -> list[str]:
         if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
             errors.append(f"runtime state must not be tracked: {tracked_path}")
 
-    errors.extend(check_tracked_omx_records(tracked_paths))
+    errors.extend(check_registered_omx_records())
 
     return errors
 

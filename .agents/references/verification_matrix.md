@@ -15,14 +15,18 @@ compact command index.
   `make check-agent-memory`
   Covers repo-owned scaffold alignment checks, required debrief frontmatter,
   and forbidden tracked runtime state.
+- Registered OMX planning evidence:
+  `make omx-artifacts-check`
+  Runs lifecycle fixtures plus live registry, hash, placement, history, and
+  unregistered-path validation.
 - Agents DB:
   `make agents-db AGENTS_ARGS='validate'`
   `make agents-db`
 - Optional tool boundary smoke:
   `rg -n "alignment_tools_contract|operator-local|evidence producers" AGENTS.md .agents/references .agents/issues.toml .agents/todos.toml .agents/refactors.toml`
 - Forbidden repo-runtime references:
-  keep ignored OMX plans, user-local Codex guidance, and transient pointer
-  markers out of tracked repo guidance.
+  keep unregistered OMX drafts/runtime state, user-local Codex guidance, and
+  transient pointer markers out of tracked repo guidance.
 
 ## Streamlit, Rerun, Offline, And Rollouts
 

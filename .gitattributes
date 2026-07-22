@@ -10,3 +10,4 @@
 .data/aria_download_urls/AriaSyntheticEnvironment_ATEK_download_urls.json filter=lfs diff=lfs merge=lfs -text
 .data/aria_download_urls/ase_mesh_download_urls.json filter=lfs diff=lfs merge=lfs -text
 *.pdf binary
+.omx/archive/accepted-bundles/** -whitespace

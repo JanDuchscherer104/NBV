@@ -1,0 +1,228 @@
+schema_version = 2
+
+[[bundles]]
+id = "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
+task = "aria-nbv-agent-scaffold-simplification"
+handoff_sha256 = "c2c9c9381e40fd2f63bfe7343cd2f56120437aa3e46f9a740ab79b250446d61e"
+status = "superseded"
+classification = "accepted-decision-evidence"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+acceptance = "explicit-user-acceptance"
+superseded_by = "aria-nbv-agent-scaffold-refresh--b77c74dbe884e6f6"
+review_order = ["architect", "critic"]
+
+[[bundles.artifacts]]
+role = "context"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/context/agent-scaffold-consensus-20260714T081220Z.md"
+native_path = ".omx/context/agent-scaffold-consensus-20260714T081220Z.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "5e73810eb1bb2645ee6169b98b7360926e6a9b32ff5c5c028defeccc80db95da"
+bytes = 7645
+
+[[bundles.artifacts]]
+role = "decision_record"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md"
+native_path = ".omx/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "2659cbbb48352b505decf0f97b53243acd057509c3ab2086204414486246ba79"
+bytes = 26168
+
+[[bundles.artifacts]]
+role = "plan"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "637b9cccb5673c5be33f96e185030f916156cf0d49520b0d39ea4a5d18784827"
+bytes = 43679
+
+[[bundles.artifacts]]
+role = "test_spec"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/test-spec-aria-nbv-agent-scaffold-simplification-20260714.md"
+native_path = ".omx/plans/test-spec-aria-nbv-agent-scaffold-simplification-20260714.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "15b1db1fbb968555adc7f10cf0eb710d39d415d1b1ddb0292218f03de7b59608"
+bytes = 13176
+
+[[bundles.artifacts]]
+role = "review_01"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-1.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-1.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "0c5889546e8fde23884d5660b790963c7dc78337679d07e79afa21c8d7c46209"
+bytes = 1935
+
+[[bundles.artifacts]]
+role = "review_02"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-2.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-2.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "570602fb164f8d91434e582283fa94b061f803d26e5b90cd9add99b4db3c996a"
+bytes = 858
+
+[[bundles.artifacts]]
+role = "review_03"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "aaeeb859fd29d0752dc21354a953f574b3f6b8107e6fcc52115348cb11151bb3"
+bytes = 825
+
+[[bundles.artifacts]]
+role = "review_04"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-1.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-1.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "6b7f71c573ec35de99763290e9a03eef4e26b84289340c49fa4986798528a57e"
+bytes = 861
+
+[[bundles.artifacts]]
+role = "review_05"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-3.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-3.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "e1fdbccf7e2dc78d474bf2b1117db0ee2cc66ef71a1cd8aecd0ee4f3d5ab371b"
+bytes = 703
+
+[[bundles.artifacts]]
+role = "review_06"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-4.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-4.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "acd6e971ced85a4694780ae3fd718b910b9a10a877d8599f0b0ccbaf997e0b90"
+bytes = 350
+
+[[bundles.artifacts]]
+role = "review_07"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-2.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-2.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "91d87362358319dd9a220ce377c47ebc8f231c9eae2ac675f0591d1348f164c8"
+bytes = 547
+
+[[bundles.artifacts]]
+role = "review_08"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-2.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-2.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "3eb4a94344dac63491affba8b28672a1085abc12e4b27b310da9fc8d3be91ab9"
+bytes = 749
+
+[[bundles.artifacts]]
+role = "review_09"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-5.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-iterate-5.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "afa6b7c9086dc384f2e38951c88bbeba93d75130a98a453e5efd809a830f7217"
+bytes = 345
+
+[[bundles.artifacts]]
+role = "review_10"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-3.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-3.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "b943d58e2cec1ccbb37d8ca919ae4e5ead74beb7ba0e1cd25952ec9ce92974e2"
+bytes = 454
+
+[[bundles.artifacts]]
+role = "review_11"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-3.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-iterate-3.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "18a5efaee3804416208dcd3391e9ba6d32613d5a79193180434a53bf016fd53d"
+bytes = 422
+
+[[bundles.artifacts]]
+role = "review_12"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-4.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-architect-review-4.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "72dd240052a3eb531aaa402308d92f6920c8098a632454b7cd54cc8f2430ccd4"
+bytes = 378
+
+[[bundles.artifacts]]
+role = "review_13"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-review.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-critic-review.md"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "9065f5dd78f83eacf66714b3bc5c164b4b4d464b732869834626c60938b27508"
+bytes = 647
+
+[[bundles.artifacts]]
+role = "handoff"
+path = ".omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-handoff.json"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714-handoff.json"
+source_commit = "87cf587e9e64d536b78e8a12f5ddff0fc5636676"
+sha256 = "c2c9c9381e40fd2f63bfe7343cd2f56120437aa3e46f9a740ab79b250446d61e"
+bytes = 7160
+
+[[bundles]]
+id = "aria-nbv-agent-scaffold-refresh--b77c74dbe884e6f6"
+task = "aria-nbv-agent-scaffold-refresh"
+handoff_sha256 = "b77c74dbe884e6f6aa98e6cc984f523ea4c85c93bd329bdaa275e60f5becae05"
+status = "current"
+classification = "current-decision-evidence"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+acceptance = "explicit-user-acceptance"
+review_order = ["architect", "critic"]
+
+[[bundles.artifacts]]
+role = "context"
+path = ".omx/context/agent-scaffold-refresh-20260720T110000Z.md"
+native_path = ".omx/context/agent-scaffold-refresh-20260720T110000Z.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "87e6554d1904a76df3c281fece284ccb7529bee001ce33ca0049d704d1cd8501"
+bytes = 7911
+
+[[bundles.artifacts]]
+role = "test_spec"
+path = ".omx/plans/test-spec-aria-nbv-agent-scaffold-refresh-20260720.md"
+native_path = ".omx/plans/test-spec-aria-nbv-agent-scaffold-refresh-20260720.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "cc367f87d0a2b4058266396cd09757ab7b075912c2da0e0b8c3d2539e90aac71"
+bytes = 25355
+
+[[bundles.artifacts]]
+role = "plan"
+path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "2f1e5d46cde77efceb1d47dcfb76ad1b570300b52c70e66e5feb53b655150e0c"
+bytes = 46833
+
+[[bundles.artifacts]]
+role = "architect_review"
+path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-architect-review-iteration-15.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-architect-review-iteration-15.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "76195dd59169a037c771cb85df77eea82cd0a1c3f683c45aa64a5071d02d6f1e"
+bytes = 715
+
+[[bundles.artifacts]]
+role = "critic_review"
+path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-critic-review-iteration-15.md"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-critic-review-iteration-15.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "1e8a4bf15c5d12070722ac3b4203d0addd7cd8c6596a83c09fabf94ea933e14c"
+bytes = 890
+
+[[bundles.artifacts]]
+role = "handoff"
+path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-handoff.json"
+native_path = ".omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720-handoff.json"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+sha256 = "b77c74dbe884e6f6aa98e6cc984f523ea4c85c93bd329bdaa275e60f5becae05"
+bytes = 3567
+
+[[tombstones]]
+original_path = ".omx/plans/measured-autoresearch-sidecar.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+blob_hash = "6f3b2e2ec0036483369fd15fe7221b295b871987"
+classification = "pre-policy-standalone-plan"
+reason = "Superseded by the retained measured-autoresearch skill and tests."
+
+[[tombstones]]
+original_path = ".omx/plans/thesis-method-registry-restoration-ledger.md"
+source_commit = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+blob_hash = "58ee1b55d4ec308510c39dcbbb4b313104192f61"
+classification = "pre-policy-standalone-plan"
+reason = "Completed historical planning evidence retained in Git history."
