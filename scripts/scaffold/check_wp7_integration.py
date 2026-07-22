@@ -39,7 +39,6 @@ ACTIVE_SCAFFOLD_FILES = {
     ".claude/settings.json",
     ".codex/config.example.toml",
     ".codex/hooks.example.json",
-    ".configs/litkg.toml",
     ".gemini/settings.json",
     ".github/workflows/ci.yml",
     ".graphifyignore",
