@@ -1,37 +1,38 @@
 seed = 7
-output_dir = ".logs/qh/smoke"
+out_dir = ".logs/qh/smoke"
 
-[trainer]
+[trainer_config]
 is_debug = true
 use_distributed_sampler = false
 use_wandb = false
 enable_validation = false
+gradient_clip_val = 0
+accumulate_grad_batches = 1
 
-[data]
+[datamodule_config]
 batch_size = 2
 num_workers = 0
-seed = 7
 
-[data.train.rollout]
+[datamodule_config.train.rollout]
 store_dirs = ["/ABS/PATH/TO/ARIA_DSS/caches/oracle/rollouts-v0-smoke.zarr"]
 
-[data.train.actor]
+[datamodule_config.train.actor]
 split = "train"
 
-[data.train.actor.store]
+[datamodule_config.train.actor.store]
 store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin-offline-v7"
 
-[module]
+[module_config]
 huber_delta = 1.0
-target_sync_interval = 100
+target_sync_interval = 1
 
-[module.scorer]
+[module_config.scorer]
 horizon = 2
 candidate_token_dim = 128
 num_heads = 4
 feedforward_multiplier = 2
 dropout = 0.0
 
-[module.optimizer]
+[module_config.optimizer]
 learning_rate = 0.0001
 weight_decay = 0.001

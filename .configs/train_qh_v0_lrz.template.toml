@@ -1,7 +1,7 @@
 seed = 17
-output_dir = "/ABS/PATH/TO/ARIA_DSS/checkpoints/qh/RUN_ID"
+out_dir = "/ABS/PATH/TO/ARIA_DSS/checkpoints/qh/RUN_ID"
 
-[trainer]
+[trainer_config]
 accelerator = "gpu"
 devices = 2
 strategy = "ddp"
@@ -11,44 +11,45 @@ use_distributed_sampler = false
 use_wandb = false
 enable_validation = false
 log_every_n_steps = 10
+gradient_clip_val = 0
+accumulate_grad_batches = 1
 
-[trainer.callbacks]
+[trainer_config.callbacks]
 use_model_checkpoint = true
 checkpoint_dir = "/ABS/PATH/TO/ARIA_DSS/checkpoints/qh/RUN_ID"
 checkpoint_filename = "epoch={epoch}-step={step}-train-loss={train/loss:.4f}"
 checkpoint_save_top_k = 2
 checkpoint_save_last = true
-checkpoint_every_n_train_steps = 1000
+checkpoint_every_n_train_steps = 100
 use_lr_monitor = false
 use_rich_model_summary = false
 
-[data]
+[datamodule_config]
 batch_size = 4
 num_workers = 8
 pin_memory = true
 persistent_workers = true
-seed = 17
 
-[data.train.rollout]
+[datamodule_config.train.rollout]
 store_dirs = ["/ABS/PATH/TO/ARIA_DSS/caches/oracle/rollouts-v0-train.zarr"]
 
-[data.train.actor]
+[datamodule_config.train.actor]
 split = "train"
 
-[data.train.actor.store]
+[datamodule_config.train.actor.store]
 store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin-offline-v7"
 
-[module]
+[module_config]
 huber_delta = 1.0
-target_sync_interval = 1000
+target_sync_interval = 100
 
-[module.scorer]
+[module_config.scorer]
 horizon = 2
 candidate_token_dim = 128
 num_heads = 4
 feedforward_multiplier = 2
 dropout = 0.0
 
-[module.optimizer]
+[module_config.optimizer]
 learning_rate = 0.0001
 weight_decay = 0.001

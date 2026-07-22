@@ -14,7 +14,11 @@ set -euo pipefail
 
 ARIA_DSS="${ARIA_DSS:-/ABS/PATH/TO/ARIA_DSS}"
 ARIA_REPO="${ARIA_REPO:-$HOME/src/ARIA-NBV}"
-LRZ_CONTAINER_IMAGE="${LRZ_CONTAINER_IMAGE:-nvcr.io#nvidia/pytorch:24.10-py3}"
+if [[ -z "${LRZ_CONTAINER_IMAGE:-}" ]] \
+  || [[ -z "${LRZ_CONTAINER_IMAGE//[[:space:]]/}" ]]; then
+  echo "LRZ_CONTAINER_IMAGE must be nonblank." >&2
+  exit 2
+fi
 QH_CONFIG="${QH_CONFIG:-$ARIA_REPO/.configs/train_qh_v0_lrz.template.toml}"
 GPUS_ON_NODE="${SLURM_GPUS_ON_NODE:-}"
 
@@ -28,6 +32,10 @@ if [[ "$GPUS_ON_NODE" != "2" ]]; then
 fi
 if [[ "${SLURM_JOB_NUM_NODES:-1}" != "1" ]]; then
   echo "Q_H training supports exactly one LRZ node." >&2
+  exit 2
+fi
+if [[ "$(grep -Ec '^#SBATCH --gres=gpu:2$' "$0")" != "1" ]]; then
+  echo "Q_H launch contract requires exactly #SBATCH --gres=gpu:2." >&2
   exit 2
 fi
 if [[ "$(grep -Ec '^[[:space:]]*srun[[:space:]]' "$0")" != "1" ]]; then
@@ -49,8 +57,13 @@ if ! grep -Eq '^[[:space:]]+command -v uv >/dev/null' "$0" \
   exit 2
 fi
 
-export ARIA_DSS ARIA_REPO QH_CONFIG GPUS_ON_NODE
-export QH_RESUME="${QH_RESUME:-}"
+export ARIA_DSS ARIA_REPO QH_CONFIG GPUS_ON_NODE LRZ_CONTAINER_IMAGE
+export QH_CKPT_PATH="${QH_CKPT_PATH:-}"
+
+# This template is a one-node throughput/smoke launcher. Scientific claims must
+# use scene-disjoint validation/test corpora and a held-out evaluation config.
+# Checkpoint and target-network sync cadences are bounded in the paired TOML;
+# sync checkpoints to DSS through site-approved job epilogues, not per step.
 
 srun --ntasks=1 --ntasks-per-node=1 \
   --container-image="$LRZ_CONTAINER_IMAGE" \
@@ -62,11 +75,11 @@ srun --ntasks=1 --ntasks-per-node=1 \
     command -v uv >/dev/null
     cd aria_nbv
     test -x .venv/bin/python
-    resume_args=()
-    if [[ -n "$QH_RESUME" ]]; then
-      resume_args=(--resume "$QH_RESUME")
+    checkpoint_args=()
+    if [[ -n "$QH_CKPT_PATH" ]]; then
+      checkpoint_args=(--ckpt-path "$QH_CKPT_PATH")
     fi
     exec uv run --frozen --no-sync torchrun --standalone --nproc_per_node="$GPUS_ON_NODE" \
       --module aria_nbv.lightning.qh_cli \
-      --config-path "$QH_CONFIG" "${resume_args[@]}"
+      --config-path "$QH_CONFIG" "${checkpoint_args[@]}"
   '

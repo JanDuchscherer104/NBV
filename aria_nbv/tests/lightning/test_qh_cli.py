@@ -17,18 +17,19 @@ def test_help_is_available() -> None:
     assert error.value.code == 0
 
 
-def test_cli_loads_toml_and_applies_explicit_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_loads_toml_and_applies_explicit_checkpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "qh.toml"
     resume = tmp_path / "resume.ckpt"
     config_path.write_text(
         """
-[trainer]
+[trainer_config]
 use_distributed_sampler = false
+gradient_clip_val = 0
 use_wandb = false
-[data]
-[data.train.rollout]
+[datamodule_config]
+[datamodule_config.train.rollout]
 store_dirs = ["/tmp/rollouts"]
-[data.train.actor.store]
+[datamodule_config.train.actor.store]
 store_dir = "/tmp/vin"
 """
     )
@@ -37,10 +38,10 @@ store_dir = "/tmp/vin"
     def _run(config: QhExperimentConfig) -> None:
         captured["config"] = config
 
-    monkeypatch.setattr(QhExperimentConfig, "run", _run)
+    monkeypatch.setattr(QhExperimentConfig, "setup_target_and_run", _run)
 
-    qh_cli.main(["--config-path", str(config_path), "--resume", str(resume)])
+    qh_cli.main(["--config-path", str(config_path), "--ckpt-path", str(resume)])
 
     loaded = captured["config"]
     assert isinstance(loaded, QhExperimentConfig)
-    assert loaded.resume_checkpoint == resume
+    assert loaded.ckpt_path == resume

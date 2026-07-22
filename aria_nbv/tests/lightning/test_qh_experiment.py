@@ -2,118 +2,300 @@
 
 # ruff: noqa: S101
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from aria_nbv.data_handling.offline.actor import VinActorSourceConfig
 from aria_nbv.data_handling.offline.store import VinOfflineStoreConfig
+from aria_nbv.data_handling.qh import QhDatasetConfig
+from aria_nbv.lightning import qh_experiment
 from aria_nbv.lightning.lit_trainer_factory import TrainerFactoryConfig
-from aria_nbv.lightning.qh_data import QhDataModuleConfig, QhDatasetConfig
+from aria_nbv.lightning.qh_datamodule import QhDataModuleConfig
 from aria_nbv.lightning.qh_experiment import QhExperimentConfig
 from aria_nbv.lightning.qh_module import QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhRolloutReaderConfig
-from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
+from aria_nbv.utils import Stage
 
 
-def _data(tmp_path: Path) -> QhDataModuleConfig:
-    return QhDataModuleConfig(
-        train=QhDatasetConfig(
-            rollout=QhRolloutReaderConfig(store_dirs=(tmp_path / "rollouts",)),
-            actor=VinActorSourceConfig(store=VinOfflineStoreConfig(store_dir=tmp_path / "vin"), split="train"),
+def _data(tmp_path: Path, *, val: bool = False, test: bool = False) -> QhDataModuleConfig:
+    def dataset(split: str) -> QhDatasetConfig:
+        return QhDatasetConfig(
+            rollout=QhRolloutReaderConfig(store_dirs=(tmp_path / f"rollouts-{split}",)),
+            actor=VinActorSourceConfig(store=VinOfflineStoreConfig(store_dir=tmp_path / "vin"), split=split),
         )
+
+    return QhDataModuleConfig(
+        train=dataset("train"),
+        val=dataset("val") if val else None,
+        test=dataset("val") if test else None,
     )
 
 
-def test_experiment_rejects_lightning_sampler_replacement(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="QhDataModule owns all samplers"):
-        QhExperimentConfig(data=_data(tmp_path), trainer=TrainerFactoryConfig(use_distributed_sampler=True))
+def _trainer(**kwargs: object) -> TrainerFactoryConfig:
+    return TrainerFactoryConfig(
+        use_distributed_sampler=False,
+        gradient_clip_val=None,
+        accumulate_grad_batches=1,
+        use_wandb=False,
+        **kwargs,
+    )
 
 
-def test_run_forwards_full_resume_checkpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+class _Data:
+    training_horizon = 2
+    batch_size = 4
+    training_padding_rows = 2
+    training_padding_fraction = 1 / 6
+
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.corpus = SimpleNamespace(
+            train=object(),
+            val=object(),
+            test=object(),
+            provenance={"train": {"manifest": "abc"}, "val": None, "test": None},
+        )
+
+    def setup(self, stage: str) -> None:
+        self.events.append(f"data.setup:{stage}")
+
+    def prepare_training_sampler(self, *, num_replicas: int, rank: int) -> None:
+        self.events.append(f"sampler:{num_replicas}:{rank}")
+
+
+def test_default_trainer_is_safe_for_manual_optimization(tmp_path: Path) -> None:
+    config = QhExperimentConfig(datamodule_config=_data(tmp_path))
+
+    assert config.trainer_config.use_distributed_sampler is False
+    assert config.trainer_config.gradient_clip_val is None
+    assert config.trainer_config.accumulate_grad_batches == 1
+
+
+@pytest.mark.parametrize("seed", [-1, 2**32])
+def test_seed_rejects_values_outside_unsigned_32_bit_range(tmp_path: Path, seed: int) -> None:
+    with pytest.raises(ValidationError) as error:
+        QhExperimentConfig(datamodule_config=_data(tmp_path), seed=seed)
+
+    assert error.value.errors()[0]["loc"] == ("seed",)
+
+
+@pytest.mark.parametrize("seed", [0, 2**32 - 1])
+def test_seed_accepts_unsigned_32_bit_boundaries(tmp_path: Path, seed: int) -> None:
+    assert QhExperimentConfig(datamodule_config=_data(tmp_path), seed=seed).seed == seed
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_experiment_propagates_shared_optimizer_finiteness(tmp_path: Path, value: float) -> None:
+    with pytest.raises(ValidationError) as error:
+        QhExperimentConfig.model_validate(
+            {
+                "datamodule_config": _data(tmp_path),
+                "module_config": {"optimizer": {"learning_rate": value}},
+            }
+        )
+
+    assert error.value.errors()[0]["loc"] == ("module_config", "optimizer", "learning_rate")
+
+
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"use_distributed_sampler": True}, "owns samplers"),
+        ({"gradient_clip_val": 1.0}, "None or zero"),
+        ({"accumulate_grad_batches": 2}, "accumulate_grad_batches=1"),
+    ],
+)
+def test_experiment_rejects_conflicting_trainer_ownership(
+    tmp_path: Path,
+    override: dict[str, object],
+    message: str,
+) -> None:
+    values = {
+        "use_distributed_sampler": False,
+        "gradient_clip_val": None,
+        "accumulate_grad_batches": 1,
+        **override,
+    }
+    with pytest.raises(ValueError, match=message):
+        QhExperimentConfig(datamodule_config=_data(tmp_path), trainer_config=TrainerFactoryConfig(**values))
+
+
+@pytest.mark.parametrize(
+    ("stage", "method", "setup_name"),
+    [(Stage.TRAIN, "fit", "fit"), (Stage.VAL, "validate", "validate"), (Stage.TEST, "test", "test")],
+)
+def test_stage_dispatch_forwards_checkpoint_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: Stage,
+    method: str,
+    setup_name: str,
+) -> None:
     checkpoint = tmp_path / "resume.ckpt"
-    config = QhExperimentConfig(data=_data(tmp_path), resume_checkpoint=checkpoint)
-    calls: dict[str, object] = {}
+    trainer_config = _trainer(enable_validation=stage is Stage.VAL)
+    config = QhExperimentConfig(
+        stage=stage,
+        ckpt_path=checkpoint,
+        datamodule_config=_data(tmp_path, val=True, test=True),
+        trainer_config=trainer_config,
+    )
+    calls: list[tuple[str, object]] = []
 
     class _Trainer:
         def fit(self, module, *, datamodule, ckpt_path):
-            calls.update(module=module, datamodule=datamodule, ckpt_path=ckpt_path)
+            calls.append(("fit", ckpt_path))
 
-    module = object()
-    data = object()
-    monkeypatch.setattr(QhExperimentConfig, "setup_target", lambda self: (_Trainer(), module, data))
+        def validate(self, module, *, datamodule, ckpt_path):
+            calls.append(("validate", ckpt_path))
 
-    config.run()
+        def test(self, module, *, datamodule, ckpt_path):
+            calls.append(("test", ckpt_path))
 
-    assert calls == {"module": module, "datamodule": data, "ckpt_path": str(checkpoint.resolve())}
+    data = _Data([])
+    monkeypatch.setattr(QhExperimentConfig, "setup_target", lambda self, setup_stage: (_Trainer(), object(), data))
+
+    returned = config.setup_target_and_run()
+
+    assert isinstance(returned, _Trainer)
+    assert calls == [(method, str(checkpoint.resolve()))]
+    assert setup_name
 
 
-def test_strict_toml_rejects_unknown_keys(tmp_path: Path) -> None:
+def test_removed_field_names_are_rejected(tmp_path: Path) -> None:
+    for field in ("output_dir", "resume_checkpoint", "trainer", "data", "module"):
+        with pytest.raises(ValueError, match=field):
+            QhExperimentConfig.model_validate({"datamodule_config": _data(tmp_path), field: None})
+    assert not hasattr(QhExperimentConfig, "run")
+
+
+def test_strict_toml_rejects_unknown_nested_keys(tmp_path: Path) -> None:
     config_path = tmp_path / "bad.toml"
     config_path.write_text(
         """
-unknown = true
-[data]
-[data.train.rollout]
+[trainer_config]
+use_distributed_sampler = false
+gradient_clip_val = 0
+unknown_nested = true
+[datamodule_config]
+[datamodule_config.train.rollout]
 store_dirs = ["/tmp/rollouts"]
-[data.train.actor.store]
+[datamodule_config.train.actor.store]
 store_dir = "/tmp/vin"
 """
     )
 
-    with pytest.raises(ValueError, match="unknown"):
+    with pytest.raises(ValueError, match="unknown_nested"):
         QhExperimentConfig.from_toml(config_path)
 
 
-@pytest.mark.parametrize("corpus_horizon", [2, 3])
-def test_setup_target_admits_matching_horizon_before_trainer_construction(
+def test_setup_admits_and_writes_manifest_before_module_and_trainer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    corpus_horizon: int,
 ) -> None:
     events: list[str] = []
-
-    class _Data:
-        training_horizon = corpus_horizon
-
-        def setup(self, stage: str) -> None:
-            events.append(f"data.setup:{stage}")
-
-    data = _Data()
-    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self: data)
+    data = _Data(events)
+    config = QhExperimentConfig(out_dir=tmp_path / "run", datamodule_config=_data(tmp_path))
+    monkeypatch.setenv("LRZ_CONTAINER_IMAGE", "registry.example/aria@sha256:exact")
+    monkeypatch.setenv("WORLD_SIZE", "3")
+    monkeypatch.setenv("SLURM_JOB_ID", "48151623")
+    monkeypatch.setattr(
+        qh_experiment.pl, "seed_everything", lambda seed, *, workers: events.append(f"seed:{seed}:{workers}")
+    )
+    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self, *, seed: data)
     monkeypatch.setattr(QhLightningModuleConfig, "setup_target", lambda self: events.append("module") or object())
     monkeypatch.setattr(TrainerFactoryConfig, "setup_target", lambda self: events.append("trainer") or object())
-    config = QhExperimentConfig(
-        data=_data(tmp_path),
-        module=QhLightningModuleConfig(scorer=MultiStepCandidateScorerConfig(horizon=corpus_horizon)),
-    )
+    original_write = qh_experiment._atomic_write_json
+
+    def record_write(path: Path, payload: dict[str, object]) -> None:
+        events.append("manifest")
+        original_write(path, payload)
+
+    monkeypatch.setattr(qh_experiment, "_atomic_write_json", record_write)
 
     config.setup_target()
 
-    assert events == ["data.setup:fit", "module", "trainer"]
+    assert events == ["seed:0:False", "data.setup:fit", "sampler:3:0", "manifest", "module", "trainer"]
+    manifest = json.loads((tmp_path / "run" / "run_manifest.json").read_text())
+    assert manifest["config_hash"]
+    assert manifest["corpus"] == data.corpus.provenance
+    assert manifest["run"]["launched_world_size"] == 3
+    assert manifest["run"]["effective_emitted_batch_size"] == 12
+    assert manifest["run"]["training_padding_rows"] == 2
+    assert manifest["run"]["training_padding_fraction"] == pytest.approx(1 / 6)
+    assert manifest["run"]["container_image"] == "registry.example/aria@sha256:exact"
+    assert manifest["run"]["launcher_kind"] == "slurm-torchrun"
+    assert manifest["run"]["slurm_job_id"] == "48151623"
 
 
-def test_setup_target_rejects_horizon_mismatch_before_module_or_trainer_construction(
+def test_manifest_write_failure_prevents_module_and_trainer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
+    config = QhExperimentConfig(out_dir=tmp_path / "run", datamodule_config=_data(tmp_path))
+    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self, *, seed: _Data(events))
+    monkeypatch.setattr(qh_experiment, "_atomic_write_json", lambda *args: (_ for _ in ()).throw(OSError("full")))
+    monkeypatch.setattr(QhLightningModuleConfig, "setup_target", lambda self: events.append("module"))
+    monkeypatch.setattr(TrainerFactoryConfig, "setup_target", lambda self: events.append("trainer"))
 
-    class _Data:
-        training_horizon = 3
-
-        def setup(self, stage: str) -> None:
-            events.append(f"data.setup:{stage}")
-
-    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self: _Data())
-    monkeypatch.setattr(QhLightningModuleConfig, "setup_target", lambda self: events.append("module") or object())
-    monkeypatch.setattr(TrainerFactoryConfig, "setup_target", lambda self: events.append("trainer") or object())
-    config = QhExperimentConfig(
-        data=_data(tmp_path),
-        module=QhLightningModuleConfig(scorer=MultiStepCandidateScorerConfig(horizon=2)),
-    )
-
-    with pytest.raises(ValueError, match="scorer horizon 2.*training rollout corpus maximum 3"):
+    with pytest.raises(OSError, match="full"):
         config.setup_target()
 
-    assert events == ["data.setup:fit"]
+    assert events == ["data.setup:fit", "sampler:1:0"]
+
+
+def test_nonzero_launcher_rank_skips_manifest_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    config = QhExperimentConfig(out_dir=tmp_path / "run", datamodule_config=_data(tmp_path))
+    monkeypatch.setenv("RANK", "1")
+    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self, *, seed: _Data(events))
+    monkeypatch.setattr(qh_experiment, "_atomic_write_json", lambda *args: events.append("manifest"))
+    monkeypatch.setattr(QhLightningModuleConfig, "setup_target", lambda self: object())
+    monkeypatch.setattr(TrainerFactoryConfig, "setup_target", lambda self: object())
+
+    config.setup_target()
+
+    assert events == ["data.setup:fit", "sampler:1:1"]
+
+
+@pytest.mark.parametrize(("stage", "attr"), [(Stage.VAL, "val"), (Stage.TEST, "test")])
+def test_missing_requested_eval_stage_fails_before_module_or_trainer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: Stage,
+    attr: str,
+) -> None:
+    events: list[str] = []
+    data = _Data(events)
+    setattr(data.corpus, attr, None)
+    config = QhExperimentConfig(
+        stage=stage,
+        datamodule_config=_data(tmp_path),
+        trainer_config=_trainer(enable_validation=stage is Stage.VAL),
+    )
+    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self, *, seed: data)
+    monkeypatch.setattr(QhLightningModuleConfig, "setup_target", lambda self: events.append("module"))
+    monkeypatch.setattr(TrainerFactoryConfig, "setup_target", lambda self: events.append("trainer"))
+
+    with pytest.raises(ValueError, match=f"requires a configured {stage}"):
+        config.setup_target()
+
+    assert events == []
+
+
+def test_validation_override_rejects_disabled_validation_before_data_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    config = QhExperimentConfig(datamodule_config=_data(tmp_path, val=True), trainer_config=_trainer())
+    monkeypatch.setattr(QhDataModuleConfig, "setup_target", lambda self, *, seed: events.append("data"))
+
+    with pytest.raises(ValueError, match="enable_validation=true"):
+        config.setup_target(Stage.VAL)
+
+    assert events == []
