@@ -136,6 +136,11 @@ def main() -> None:
         assert any("AGENTS.md:1:path match" in line for line in route)
         assert any("docs/page.qmd:1:path match" in line for line in route)
 
+        (root / "docs/page.qmd").unlink()
+        allowed, explanation = query.explain("page.qmd", root)
+        assert not allowed
+        assert not any("docs/page.qmd:1:path match" in line for line in explanation)
+
         (root / "docs/page.qmd").write_text("# Thesis\n", encoding="utf-8")
         graph["edges"][0]["bridge_partition_revisions"]["thesis"] = "wrong"
         (root / "graphify-out/graph.json").write_text(

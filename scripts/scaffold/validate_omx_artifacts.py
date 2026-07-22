@@ -1296,9 +1296,34 @@ def _protected_snapshot(root: Path) -> dict[str, str]:
 
 
 def _verified_omx_install(executable: str) -> bool:
-    """Verify the reviewed OMX version and its published package integrity."""
+    """Verify the executed OMX entry point against the reviewed npm payload."""
+    resolved = shutil.which(executable)
+    if resolved is None:
+        return False
+    entrypoint = Path(resolved).resolve()
+    package_root: Path | None = None
+    metadata: dict[str, Any] = {}
+    for candidate in entrypoint.parents:
+        try:
+            candidate_metadata = json.loads(
+                (candidate / "package.json").read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            continue
+        if candidate_metadata.get("name") == "oh-my-codex":
+            package_root = candidate
+            metadata = candidate_metadata
+            break
+    if package_root is None or metadata.get("version") != OMX_PINNED_VERSION:
+        return False
+    try:
+        relative_entrypoint = entrypoint.relative_to(package_root).as_posix()
+    except ValueError:
+        return False
+    if relative_entrypoint != "dist/cli/omx.js":
+        return False
     result = subprocess.run(
-        [executable, "--version"], check=False, capture_output=True, text=True
+        [str(entrypoint), "--version"], check=False, capture_output=True, text=True
     )
     output = f"{result.stdout}\n{result.stderr}"
     version_matches = (
@@ -1313,20 +1338,45 @@ def _verified_omx_install(executable: str) -> bool:
     npm = shutil.which("npm")
     if npm is None:
         return False
-    integrity = subprocess.run(
-        [
-            npm,
-            "view",
-            f"oh-my-codex@{OMX_PINNED_VERSION}",
-            "dist.integrity",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return (
-        integrity.returncode == 0 and integrity.stdout.strip() == OMX_PINNED_INTEGRITY
-    )
+    with tempfile.TemporaryDirectory(prefix="omx-integrity-") as raw_temp:
+        packed = subprocess.run(
+            [
+                npm,
+                "pack",
+                f"oh-my-codex@{OMX_PINNED_VERSION}",
+                "--json",
+                "--pack-destination",
+                raw_temp,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        try:
+            package = json.loads(packed.stdout)[0]
+            archive = Path(raw_temp) / package["filename"]
+        except (IndexError, KeyError, json.JSONDecodeError):
+            return False
+        if packed.returncode != 0 or package.get("integrity") != OMX_PINNED_INTEGRITY:
+            return False
+        try:
+            with tarfile.open(archive, "r:gz") as payload:
+                for member in payload.getmembers():
+                    if not member.isfile() or not member.name.startswith("package/"):
+                        continue
+                    relative = member.name.removeprefix("package/")
+                    installed = package_root / relative
+                    source = payload.extractfile(member)
+                    if source is None or not installed.is_file():
+                        return False
+                    if (
+                        hashlib.sha256(source.read()).digest()
+                        != hashlib.sha256(installed.read_bytes()).digest()
+                    ):
+                        return False
+        except (OSError, tarfile.TarError):
+            return False
+    return True
 
 
 def run_native_operation(command: list[str], root: Path = REPO_ROOT) -> int:

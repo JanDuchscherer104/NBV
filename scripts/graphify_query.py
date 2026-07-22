@@ -25,14 +25,14 @@ def exact_source_fallback(query: str, root: Path = ROOT, limit: int = 20) -> lis
     matches: list[str] = []
     for source in collect_sources(root):
         path = root / source["path"]
-        if needle in source["path"].casefold():
-            matches.append(f"{source['path']}:1:path match")
-            if len(matches) >= limit:
-                return matches
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeError):
             continue
+        if needle in source["path"].casefold():
+            matches.append(f"{source['path']}:1:path match")
+            if len(matches) >= limit:
+                return matches
         for line_number, line in enumerate(lines, start=1):
             if needle in line.casefold():
                 matches.append(f"{source['path']}:{line_number}:{line.strip()}")
