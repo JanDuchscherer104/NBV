@@ -1,6 +1,6 @@
 ---
 name: lrz-ai-systems
-description: "Use when working with LRZ AI Systems remote compute for ARIA-NBV: SSH/login.ai.lrz.de, DSS storage, Slurm GPU/CPU allocations, Enroot/Pyxis containers, dataset/cache/training batch jobs, or debugging remote job failures."
+description: Use for ARIA-NBV work on LRZ SSH, DSS, Slurm, Pyxis containers, remote data jobs, training, or job failures.
 metadata:
   mode: maintenance
   not_when:
@@ -9,8 +9,8 @@ metadata:
     - "credential, quota, or production action that lacks user authority"
   handoff_to:
     - "dataset-cache-ops for ASE shards, offline stores, and data smoke contracts"
-    - "counterfactual-rollout-planner for rollout/Q_H workload semantics"
-    - "diagnose-aria for concrete failed job logs or suspicious remote output"
+    - "nearest rollout package owner for rollout or Q_H workload semantics"
+    - "specialized diagnostic capability for failed jobs or suspicious output"
     - "agents-db for durable blocked access, quota, or remote-run debt"
   evidence_required:
     - "target LRZ partition, DSS/container path policy, and intended workload class"
@@ -38,6 +38,8 @@ metadata:
     - ".agents/skills/lrz-ai-systems/references/containers-pyxis.md"
     - ".agents/skills/lrz-ai-systems/references/efm3d-aria-workloads.md"
     - ".agents/skills/lrz-ai-systems/templates/sbatch_single_gpu_aria.sh"
+  literature_refs:
+    - "docs/contents/thesis/roadmap.qmd"
   verification:
     - "shellcheck or dry-run checks for changed scripts where available"
     - "make check-agent-memory for LRZ guidance changes"

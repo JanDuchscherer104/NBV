@@ -1,33 +1,29 @@
 ---
 name: aria-litkg-memory
-description: Use for KG-backed ARIA-NBV retrieval, task routing, claim checks, current-truth checks, backlog lookup, and consolidation proposals.
+description: Use for temporary WP6-bound ARIA-NBV KG retrieval, routing, claim checks, backlog lookup, and consolidation proposals.
 metadata:
   mode: router
   not_when:
-    - "local file discovery alone is enough"
-    - "litkg-rs implementation, KG config, or backend contracts are changing"
-    - "a concrete failure loop owns the task"
+    - "deterministic local discovery is sufficient"
+    - "litkg-rs implementation, KG config, or backend behavior changes"
   handoff_to:
-    - "aria-nbv-context for local-only discovery"
-    - "semantic-scholar-litkg for litkg-rs, KG config, or backend edits"
-    - "diagnose-aria for KG ingestion failures"
+    - "aria-nbv-context for local-only discovery or KG fallback"
+    - "semantic-scholar-litkg for LitKG implementation or config edits"
+    - "specialized diagnostic capability for KG ingestion failures"
   evidence_required:
-    - "litkg command output or cited KG result"
+    - "LitKG command output with source locator"
     - "canonical source inspection before promoting retrieved truth"
-    - "claim-check command for advisor-facing claims"
+    - "claim-check output for advisor-facing claims"
   applies_to:
     - "**"
   triggers:
-    - "kg-route"
-    - "claim check"
-    - "source-backed"
-    - "consolidate memory"
+    - "KG route or search"
+    - "LitKG claim check"
+    - "KG-backed consolidation"
   must_read:
-    - "AGENTS.md"
     - ".agents/references/source_order.md"
     - ".agents/references/litkg_quick_reference.md"
   canonical_sources:
-    - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
     - ".agents/references/litkg_quick_reference.md#probation-lane"
     - ".agents/references/litkg_quick_reference.md#fallback"
@@ -42,54 +38,22 @@ metadata:
     - "mcp__code_index.search_code_advanced"
     - "mcp__MCP_DOCKER.list_papers"
   verification:
-    - "make kg-capabilities KG_FORMAT=json"
+    - "make kg-status"
     - "make kg-route KG_TASK=\"<task>\" KG_FORMAT=json"
-    - "make kg-claim-check KG_CLAIM=\"<claim>\""
+    - "make kg-claim-check KG_CLAIM=\"<claim>\" KG_FORMAT=json"
 ---
 
-# ARIA litkg Memory
+# ARIA LitKG Memory
 
-Use this skill when litkg should act as a probationary source-backed router,
-claim-check layer, or research-memory retrieval surface for work that crosses
-source families.
+LitKG remains a temporary probationary evidence router through WP5; WP6 owns
+its capability disposition. Follow the exact commands, health checks, fallback,
+and claim rules in `litkg_quick_reference.md`.
 
-## Protocol
+Use search for retrieval, route for a context pack, and claim-check for
+advisor-facing synthesis. Inspect cited canonical sources before treating a
+result as current truth. If health or retrieval fails, fall back immediately to
+`aria-nbv-context` plus targeted source reads; record debt only when it blocks
+the task or reveals durable scaffold drift.
 
-1. Read `AGENTS.md`, `.agents/references/source_order.md`, and
-   `.agents/references/litkg_quick_reference.md`.
-2. Use the exact command shapes, health checks, fallback policy, and mandatory
-   claim-check rules from `.agents/references/litkg_quick_reference.md`.
-3. Use `kg-search` for source-backed retrieval, `kg-route` for a context pack,
-   and `kg-claim-check` for advisor-facing proposal, roadmap,
-   research-question, or literature-synthesis claims.
-4. When KG output looks degraded or empty, run `make kg-status`; if unavailable,
-   fall back to `aria-nbv-context` plus targeted reads and record the outage
-   only when it blocks the task or exposes durable scaffold debt.
-5. Inspect cited canonical sources before treating retrieved statements as
-   current truth.
-6. Use `make kg-consolidate` for proposal-style memory/backlog updates; do not
-   silently promote episodic notes.
-
-## Source Authority
-
-Until litkg retrieval exposes explicit authority/freshness metadata everywhere,
-rank sources with `.agents/references/source_order.md` and inspect cited
-canonical sources before treating retrieved statements as current truth.
-
-## Fallback
-
-If litkg is stale, unavailable, or too noisy for a localized task, fall back to
-`aria-nbv-context` plus targeted file reads. Record KG debt only when the failure
-blocks the task or exposes durable scaffold drift.
-
-## Verification
-
-- `make kg-status` first as a fast 0/1 probe; if non-zero, fall back to
-  `aria-nbv-context` plus targeted reads and record the KG outage in the
-  debrief instead of waiting for the heavier commands below.
-- `make kg-capabilities KG_FORMAT=json`
-- `make kg-search KG_QUERY="<terms>" KG_FORMAT=json` for retrieval verification.
-- `make kg-route KG_TASK="<task>" KG_FORMAT=json` for context-pack verification.
-- `make kg-claim-check KG_CLAIM="<claim>" KG_FORMAT=json` for advisor-facing
-  claims; expect `verdict` and `confidence` populated.
-- `make check-agent-memory` after non-trivial memory or guidance changes.
+Consolidation output is a proposal. Promote it only through the owning docs,
+package, reference, or agents-DB workflow.

@@ -99,11 +99,10 @@ domain knowledge, exact tool loops, required evidence, and verification choices.
   contracts, or operator commands already owned elsewhere.
 - Do not add speculative abstractions or future-work instructions unless the
   task explicitly owns that future-work surface.
-- Every skill should preserve the `agent-behavior` principles: explicit
-  assumptions, simplest sufficient change, surgical edits, and verifiable
-  completion.
+- Every skill should preserve the root behavior contract: explicit assumptions,
+  simplest sufficient change, surgical edits, and verifiable completion.
 - Do not repeat the full lane-selection policy in every skill. Put routing cues
-  in metadata and keep detailed arbitration in `agent-behavior`.
+  in metadata and keep universal arbitration in root guidance.
 - Before deleting a skill or merging router skills, update
   `scaffold_routing_fixtures.json` and keep `make scaffold-audit` green.
 

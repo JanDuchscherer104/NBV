@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import tempfile
@@ -17,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / ".agents" / "references" / "scaffold_routing_fixtures.json"
+WP5_INVENTORY = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_inventory.json"
+WP5_DISPOSITIONS = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_dispositions.csv"
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -39,6 +42,8 @@ METADATA_KEYS = REQUIRED_METADATA | OPTIONAL_METADATA
 BLOCKED_HANDOFF_PREFIXES = {"omx", "github", "oh-my-codex"}
 DECLARED_CAPABILITY_TOKENS = {"external", "GitHub", "owning", "nearest", "specialized"}
 HOT_PATH_LINE_BUDGET = 150
+PREFERRED_HOT_PATH_LINE_BUDGET = 120
+CLOSED_DISPOSITIONS = {"migrated", "already_owned", "duplicate", "obsolete"}
 CONTEXT7_IDS = ROOT / ".agents" / "references" / "context7_library_ids.md"
 BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
 CONTEXT_MAP = ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
@@ -136,8 +141,10 @@ SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
 )
 SEMANTIC_DRIFT_EXEMPTIONS = {
-    "aria-nbv-mermaid": {"formula-detail"},
+    "aria-docs": {"roadmap-claim"},
+    "aria-litkg-memory": {"roadmap-claim"},
 }
+BROAD_APPLIES_EXEMPTIONS = {"aria-litkg-memory", "aria-nbv-context", "plan-grill"}
 
 
 def slugify_heading(text: str) -> str:
@@ -379,6 +386,75 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
     return skills, errors
 
 
+def audit_wp5_inventory(path: Path, skills: list[Skill]) -> list[str]:
+    """Require the exact eleven-skill transitional WP5 boundary."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{rel(path)}: unreadable WP5 inventory: {exc}"]
+
+    declared = data.get("active_skills")
+    temporary = data.get("temporary_wp6_skills")
+    removed = data.get("removed_or_merged_skills")
+    errors: list[str] = []
+    if not isinstance(declared, list) or not all(isinstance(item, str) for item in declared):
+        return [f"{rel(path)}: active_skills must be a string list"]
+    if len(declared) != 11 or len(set(declared)) != 11:
+        errors.append(f"{rel(path)}: active_skills must contain exactly eleven unique names")
+    actual = {skill.name for skill in skills}
+    expected = set(declared)
+    if actual != expected:
+        errors.append(
+            f"{rel(path)}: active skill mismatch; missing={sorted(expected - actual)} "
+            f"extra={sorted(actual - expected)}"
+        )
+    if set(temporary or []) != {"aria-litkg-memory", "semantic-scholar-litkg"}:
+        errors.append(f"{rel(path)}: temporary_wp6_skills must contain exactly the two LitKG skills")
+    if not isinstance(removed, list) or not removed:
+        errors.append(f"{rel(path)}: removed_or_merged_skills must be a non-empty list")
+    elif actual & set(removed):
+        errors.append(f"{rel(path)}: removed skill remains active: {sorted(actual & set(removed))}")
+    return errors
+
+
+def audit_wp5_dispositions(path: Path, inventory_path: Path = WP5_INVENTORY) -> list[str]:
+    """Reject unresolved or incomplete source-owner disposition rows."""
+    errors: list[str] = []
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+        removed = set(inventory["removed_or_merged_skills"])
+        with path.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    except (OSError, json.JSONDecodeError, KeyError, csv.Error) as exc:
+        return [f"{rel(path)}: unreadable WP5 disposition ledger: {exc}"]
+
+    required = {"skill", "rule_family", "status", "destination_owners", "evidence", "verification", "rationale"}
+    if not rows:
+        return [f"{rel(path)}: disposition ledger must not be empty"]
+    seen: set[str] = set()
+    for index, row in enumerate(rows, start=2):
+        missing = sorted(key for key in required if not (row.get(key) or "").strip())
+        if missing:
+            errors.append(f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}")
+            continue
+        skill = row["skill"].strip()
+        seen.add(skill)
+        if skill not in removed:
+            errors.append(f"{rel(path)}:{index}: disposition names non-removed skill {skill!r}")
+        if row["status"].strip() not in CLOSED_DISPOSITIONS:
+            errors.append(f"{rel(path)}:{index}: unresolved disposition status {row['status']!r}")
+        for owner in row["destination_owners"].split(";"):
+            owner_path = ROOT / owner.strip()
+            if not owner.strip() or not owner_path.exists():
+                errors.append(f"{rel(path)}:{index}: destination owner does not exist: {owner.strip()!r}")
+    if seen != removed:
+        errors.append(
+            f"{rel(path)}: disposition coverage mismatch; missing={sorted(removed - seen)} "
+            f"extra={sorted(seen - removed)}"
+        )
+    return errors
+
+
 def first_handoff_token(entry: Any) -> str | None:
     if not isinstance(entry, str):
         return None
@@ -472,13 +548,22 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                     warnings.append(f"{prefix}: handoff target {token!r} is not a known skill name")
 
         applies_to = skill.metadata.get("applies_to") or []
-        if isinstance(applies_to, list) and "**" in applies_to:
+        if (
+            isinstance(applies_to, list)
+            and "**" in applies_to
+            and skill.name not in BROAD_APPLIES_EXEMPTIONS
+        ):
             warnings.append(f"{prefix}: broad applies_to '**' should stay intentional")
 
         if skill.line_count > HOT_PATH_LINE_BUDGET:
             warnings.append(
                 f"{prefix}: hot path is {skill.line_count} lines "
                 f"(budget {HOT_PATH_LINE_BUDGET}); prune or move detail to references"
+            )
+        elif skill.line_count > PREFERRED_HOT_PATH_LINE_BUDGET:
+            warnings.append(
+                f"{prefix}: hot path is {skill.line_count} lines "
+                f"(preferred {PREFERRED_HOT_PATH_LINE_BUDGET}); keep progressive disclosure tight"
             )
 
         context7_refs = skill.metadata.get("context7_refs") or []
@@ -637,8 +722,6 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
                 )
 
             for skill_name in expected:
-                if skill_name == "agent-behavior":
-                    continue
                 overlap = fixture_tokens & route_tokens_by_skill.get(skill_name, set())
                 if not overlap:
                     errors.append(
@@ -825,7 +908,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "fixtures": [
                 {
                     "id": "missing-task-and-non-goals",
-                    "expected_skills": ["agent-behavior", "aria-nbv-context"],
+                    "expected_skills": ["aria-nbv-context"],
                 }
             ]
         }
@@ -836,7 +919,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "fixture schema omissions were not rejected",
         )
 
-        local_as_kg = routing_fixture_with_expected("local-file-lookup", ["agent-behavior", "aria-litkg-memory"])
+        local_as_kg = routing_fixture_with_expected("local-file-lookup", ["aria-litkg-memory"])
         errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, local_as_kg), skills_by_name)
         expect(
             "local-lookup-not-kg",
@@ -844,14 +927,14 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "local lookup incorrectly passed as KG routing",
         )
 
-        geometry_as_entity = routing_fixture_with_expected(
-            "geometry-frame-implementation", ["agent-behavior", "entity-aware-rri"]
+        docs_as_measurement = routing_fixture_with_expected(
+            "quarto-typst-mermaid-docs", ["measured-autoresearch"]
         )
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, geometry_as_entity), skills_by_name)
+        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, docs_as_measurement), skills_by_name)
         expect(
-            "geometry-not-entity-rri",
-            any("entity-aware-rri" in error and "no routing-cue overlap" in error for error in errors),
-            "geometry contract incorrectly passed as entity-RRI routing",
+            "docs-not-measured-autoresearch",
+            any("measured-autoresearch" in error and "no routing-cue overlap" in error for error in errors),
+            "Quarto/Typst/Mermaid work incorrectly passed as measurement routing",
         )
 
         drift_text = self_test_skill_text(
@@ -941,7 +1024,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 {
                     "id": "browser-overtrigger-probe",
                     "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
-                    "expected_skills": ["agent-behavior", "diagnose-aria"],
+                    "expected_skills": ["rerun-nbv-inspector"],
                     "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
                     "non_goals": ["Do not use browser MCP tools for non-live docs planning."],
                 }
@@ -962,9 +1045,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 {
                     "id": "python-analyzer-overtrigger-probe",
                     "task": "Simplify Python code with analyzer guidance after code-index localization.",
-                    "expected_skills": ["agent-behavior", "simplification"],
-                    "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
-                    "non_goals": ["Do not use Python analyzer tools for pure Typst prose edits."],
+                    "expected_skills": ["aria-nbv-context"],
+                    "forbidden_tool_refs": ["mcp__code_index.search_code_advanced"],
+                    "non_goals": ["Do not use code-index tools after the exact owner is already known."],
                 }
             ]
         }
@@ -974,9 +1057,15 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         )
         expect(
             "python-analyzer-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "analyze_python_file" in error for error in errors),
-            "forbidden Python analyzer activation was not rejected",
+            any("forbidden_tool_ref" in error and "search_code_advanced" in error for error in errors),
+            "forbidden code-index activation was not rejected",
         )
+
+        live_skills, live_load_errors = load_skills(SKILLS_DIR)
+        inventory_errors = live_load_errors + audit_wp5_inventory(WP5_INVENTORY, live_skills)
+        expect("wp5-live-inventory", not inventory_errors, "; ".join(inventory_errors))
+        disposition_errors = audit_wp5_dispositions(WP5_DISPOSITIONS)
+        expect("wp5-closed-dispositions", not disposition_errors, "; ".join(disposition_errors))
 
     return passes, failures
 
@@ -1003,6 +1092,8 @@ def main() -> int:
         return 1 if failures else 0
 
     skills, load_errors = load_skills(SKILLS_DIR)
+    inventory_errors = audit_wp5_inventory(WP5_INVENTORY, skills)
+    disposition_errors = audit_wp5_dispositions(WP5_DISPOSITIONS)
     skill_errors, skill_warnings = audit_skills(skills)
     drift_warnings = audit_semantic_drift(skills)
     fixture_errors, fixture_warnings = audit_routing_fixtures(
@@ -1010,7 +1101,7 @@ def main() -> int:
         {skill.name: skill for skill in skills},
     )
 
-    errors = load_errors + skill_errors + fixture_errors
+    errors = load_errors + inventory_errors + disposition_errors + skill_errors + fixture_errors
     warnings = skill_warnings + drift_warnings + fixture_warnings
     payload = {
         "skills": len(skills),

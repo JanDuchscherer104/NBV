@@ -24,7 +24,8 @@ Start here, then read only the references needed for the current task.
   `slurm-job-patterns.md`.
 - Failed jobs, pending reasons, missing logs, container launch failures, or
   suspicious remote output: `troubleshooting-slurm.md`, then hand off to
-  `diagnose-aria` if the failure is concrete and code/data-facing.
+  the selected diagnostic capability if the failure is concrete and
+  code/data-facing.
 - Missing quota, project membership, MCML QOS, or DSS allocation:
   `service-desk-templates.md`, then hand off to `agents-db` only for durable
   blocked access or quota debt.

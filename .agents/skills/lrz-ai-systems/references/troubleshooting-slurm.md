@@ -33,7 +33,7 @@ loops around Slurm commands.
 
 ## Escalation
 
-Hand off to `diagnose-aria` when the failure includes ARIA code errors, data
+Hand off to the selected diagnostic capability when the failure includes ARIA code errors, data
 contract errors, suspicious metrics, or reproducible logs beyond cluster setup.
 Hand off to `agents-db` only for durable blocked access, quota, or project/QOS
 debt.

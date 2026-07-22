@@ -35,7 +35,7 @@ compact command index.
 - Streamlit smoke and panel tests:
   `cd aria_nbv && uv run pytest tests/test_streamlit_entry.py tests/app`
 - Live UI symptoms:
-  use `diagnose-aria` interactive app inspection when browser tools are
+  use the selected diagnostic workflow's interactive app inspection when browser tools are
   available.
 - Rerun launch helper tests:
   `cd aria_nbv && uv run pytest tests/app/test_rerun_launch.py`

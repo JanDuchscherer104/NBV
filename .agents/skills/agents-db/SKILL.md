@@ -8,9 +8,9 @@ metadata:
     - "ordinary KG retrieval or claim checking without backlog edits"
     - "tiny cleanup that does not change active debt"
   handoff_to:
-    - "docs-curator for public docs or thesis narrative"
+    - "aria-docs for public docs or thesis narrative"
     - "aria-litkg-memory for KG-backed consolidation proposals"
-    - "simplification for behavior-preserving pruning"
+    - "external codebase-design capability for behavior-preserving pruning"
   evidence_required:
     - "existing record search before adding duplicates"
     - "compact context plus stable references for each changed record"
@@ -40,6 +40,8 @@ metadata:
     - ".agents/todos.toml"
     - ".agents/refactors.toml"
     - ".agents/resolved.toml"
+  literature_refs:
+    - "docs/contents/thesis/questions.qmd"
   verification:
     - "make agents-db AGENTS_ARGS='validate'"
     - "make agents-db"

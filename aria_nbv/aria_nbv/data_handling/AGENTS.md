@@ -31,6 +31,13 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
   labeler import in `offline/writer.py` is temporary and owned by RWP03B.
 - When offline-store payload, metadata, or split semantics change, update the public surface, docs, and targeted tests together.
 - When the on-disk dataset format changes, bump `OFFLINE_DATASET_VERSION`, update tests, and fail fast for older stores.
+- Zarr API, chunk, codec, sharding, store, and concurrency choices belong to the
+  owning writer/reader plus `aria_nbv/pyproject.toml`. Confirm non-trivial
+  Zarr-Python behavior against official documentation and prove changes with a
+  writer-reader round trip; operating an unchanged store remains a data task.
+- VIN offline storage remains distinct from rollout replay storage. Never add
+  rollout transitions or `q_h/` arrays to the immutable VIN store to avoid a
+  standalone rollout artifact.
 
 ## Verification
 - Run `ruff format` and `ruff check` on touched data-handling files.

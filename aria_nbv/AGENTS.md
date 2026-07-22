@@ -25,6 +25,20 @@ Apply this file when working under `aria_nbv/`.
 - Follow EFM3D / ATEK coordinate conventions and document tensor shapes plus coordinate frames where they are not obvious.
 - Never let package behavior fail silently; raise actionable errors or log explicit failure context.
 
+## Geometry Contracts
+- Name transforms by direction and keep `PoseTW` / `CameraTW` semantics
+  explicit; candidate poses are world-from-camera unless the owning API states
+  otherwise.
+- Record frame, transform direction, tensor shape, image ordering, and units at
+  every public geometry boundary. PyTorch3D camera `image_size` is `(H, W)`;
+  presentation APIs may use `(W, H)` only through an explicit adapter.
+- CW90 and similar presentation corrections operate on copied display data.
+  They do not alter training inputs, rendering cameras, persisted poses, or
+  oracle labels.
+- Geometry changes must be proved by the narrowest rendering, pose-generation,
+  projection, or backprojection test before visual diagnostics are used as
+  supporting evidence.
+
 ## Progressive Disclosure
 - Stay at this file for shared Python, config-as-factory, and verification rules across `aria_nbv/`.
 - Open one deeper module guide only after the touched contract is clear:

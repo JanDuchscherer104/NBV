@@ -40,6 +40,17 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   with source-row lineage.
 - Invalid candidates and invalid targets are hard-mask/reason-code cases, not
   low-RRI labels. `q_train_mask` must require explicit target-RRI supervision.
+- Rollout comparisons declare horizon, retained chain/beam width, candidate and
+  acquisition budgets, stochastic temperature/seed, and selected-action
+  provenance. Score validity before selection and materialize expensive
+  counterfactual modalities only for selected actions or retained chains.
+- Learned rollout claims require oracle re-evaluation under matched support and
+  budget. Persist actor-visible, privileged, and oracle-only evidence roles
+  separately; missing target supervision never falls back to scene RRI.
+- Rollout Zarr API, codec, chunk, and sharding changes are storage-contract
+  changes: verify the standalone writer/reader round trip and its manifest,
+  while keeping exact library behavior grounded in the pinned dependency and
+  official Zarr-Python documentation.
 - Keep `read_model.py` presentation-free. Streamlit and Rerun own their chart,
   entity, color, transform, command, and failure-policy DTOs locally.
 - The package root is an exact eight-symbol allowlist. Import codecs,

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "boundary": "WP5",
+  "active_skills": [
+    "agents-db",
+    "aria-docs",
+    "aria-litkg-memory",
+    "aria-nbv-context",
+    "dataset-cache-ops",
+    "lrz-ai-systems",
+    "measured-autoresearch",
+    "plan-grill",
+    "python-docstrings",
+    "rerun-nbv-inspector",
+    "semantic-scholar-litkg"
+  ],
+  "temporary_wp6_skills": [
+    "aria-litkg-memory",
+    "semantic-scholar-litkg"
+  ],
+  "removed_or_merged_skills": [
+    "agent-behavior",
+    "aria-nbv-mermaid",
+    "code-review-aria-nbv",
+    "counterfactual-rollout-planner",
+    "diagnose-aria",
+    "docs-curator",
+    "entity-aware-rri",
+    "nbv-geometry-contracts",
+    "simplification",
+    "typst-authoring",
+    "zarr-python"
+  ]
+}

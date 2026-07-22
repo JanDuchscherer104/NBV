@@ -11,12 +11,14 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   current thesis priority.
 
 ## Routing
-- Non-trivial coding, docs, scaffold, research, or memory edits: apply
-  `agent-behavior` first.
+- For non-trivial work, state assumptions, inspect the nearest owner, keep the
+  diff request-traceable, preserve unrelated changes, and verify the touched
+  surface before completion.
 - Package work under `aria_nbv/`: read `aria_nbv/AGENTS.md`, then one nested
   guide only when that module contract is touched.
 - Docs, bibliography, Typst, or Quarto work: read `docs/AGENTS.md`.
-- Mermaid `.mmd` or thesis diagram work: use `aria-nbv-mermaid`; math notation
+- Quarto, Typst, Mermaid `.mmd`, thesis prose, citation, or diagram work: use
+  `aria-docs`; math notation
   must come from `docs/typst/shared`; validate with
   `tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
   when available and do not use online renderers unless explicitly permitted.
@@ -27,10 +29,11 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   use `semantic-scholar-litkg`; keep repo-independent implementation in
   `.agents/external/litkg-rs`.
 - Vague, high-impact, or advisor-facing plans: use `plan-grill`.
-- Bugs, regressions, suspicious metrics, or failing docs/data/KG checks: use
-  `diagnose-aria`.
+- Bugs, regressions, suspicious metrics, or failing checks: use the selected
+  diagnostic workflow after localizing the owning source and reproducer.
 - Backlog or memory changes: use the `agents-db` skill.
-- Cleanup, pruning, or simplification: use the `simplification` skill.
+- Cleanup, pruning, or simplification: use the selected generic codebase-design
+  workflow under this repository's ownership and verification rules.
 - LRZ AI Systems, Slurm, DSS, Pyxis, or remote compute work: use `lrz-ai-systems`.
 
 ## Non-Negotiables

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Code Review ARIA-NBV"
-  short_description: "ARIA review sidecar and feedback triage"
-  default_prompt: "Use $code-review-aria-nbv to review ARIA-NBV diffs or follow up external/GitHub review feedback with local domain routing, severity-ranked file/line findings, and OMX code-review harness compatibility."

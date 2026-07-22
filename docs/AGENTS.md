@@ -35,6 +35,9 @@ Apply this file when working under `docs/`.
   `.agents/references/source_order.md` instead of scanning broad doc trees.
 - Run `make kg-claim-check KG_CLAIM="..."` for advisor-facing proposal,
   roadmap, research-question, or literature-synthesis claims.
+- Use `aria-docs` for repeatable Quarto, Typst, citation, scientific-figure,
+  Mermaid, and render-inspection workflows; this file and the touched document
+  remain the durable owners of public narrative and notation.
 
 ## Commands
 - Context refresh: `make context`
@@ -54,7 +57,7 @@ Apply this file when working under `docs/`.
 
 ## Diagram Rules
 - Validate Mermaid before committing diagram edits.
-- For Mermaid source files, use the `aria-nbv-mermaid` skill and run
+- For Mermaid source files, use the `aria-docs` skill and run
   `python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>`.
 - Prefer local rendering with `tools/mermaid/scripts/render_mermaid.sh` when
   global `mmdc` is available; do not use online renderers for unpublished

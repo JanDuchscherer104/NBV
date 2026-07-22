@@ -25,6 +25,12 @@ Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
 - Plotting helpers are secondary surfaces; core metric functions own the semantics.
 - Operational provenance, invalidity, path, entropy, and order checks belong in `aria_nbv.rollouts.audits`.
 - Tensor return kernels are authoritative; scalar/table adapters delegate to them.
+- Target-specific RRI keeps actor-visible target instructions, oracle-only GT
+  crops/labels, and evaluation evidence distinct. Unsupported targets retain an
+  explicit invalid reason; they are neither valid low-RRI rows nor scene-RRI
+  fallback labels.
+- When target semantics change, inspect target selection, crop support,
+  target/scene diagnostics, and the actor/oracle visibility boundary together.
 
 ## Verification
 - Run `ruff format` and `ruff check` on touched metrics files.

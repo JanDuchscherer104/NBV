@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agent Behavior"
-  short_description: "Karpathy-style ARIA-NBV behavior guardrails"
-  default_prompt: "Use $agent-behavior before non-trivial ARIA-NBV work to state assumptions, inspect the owner, keep scope small, and verify the result."

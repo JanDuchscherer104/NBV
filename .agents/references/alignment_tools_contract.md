@@ -51,9 +51,9 @@ OMX workflows consume ARIA-NBV guidance as sidecar context and evidence:
   surfaces, evidence requirements, and the command index in
   `.agents/references/verification_matrix.md`.
 - `$code-review`: use the ARIA code-review skill plus nearest owner guidance;
-  findings that need reproduction hand off to `diagnose-aria` or the relevant
+  findings that need reproduction hand off to the selected diagnostic capability or the relevant
   domain sidecar.
-- `$ultraqa`: use `diagnose-aria`, domain sidecars, Streamlit/Rerun/offline
+- `$ultraqa`: use the selected diagnostic capability, retained operational sidecars, Streamlit/Rerun/offline
   checks, and KG/docs commands as evidence producers. Results become durable
   only through the owning code, docs, reference, or backlog surface.
 - Optional browser, MCP, KG, graph, memory, and autoresearch tools provide

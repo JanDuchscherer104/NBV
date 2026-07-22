@@ -105,7 +105,7 @@ Rules:
 - Avoid raw TeX in node labels unless it has been locally proven to render in
   the target renderer.
 - Do not rely on `\n` for line breaks. If line breaks or math-heavy labels are
-  required, use the `aria-nbv-mermaid` skill, the symbol map, local lint, and a
+  required, use the `aria-docs` skill, the symbol map, local lint, and a
   local render.
 - Do not put HTML labels in Mermaid Gantt labels; past renders printed HTML
   tags literally there.

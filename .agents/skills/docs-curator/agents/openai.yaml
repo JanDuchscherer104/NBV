@@ -1,4 +1,0 @@
-interface:
-  display_name: "Docs Curator"
-  short_description: "Curate public docs, paper, slides, and bibliography"
-  default_prompt: "Use $docs-curator for ARIA-NBV README, Quarto, Typst, bibliography, public navigation, docs source-order alignment, and public/internal docs boundary work."

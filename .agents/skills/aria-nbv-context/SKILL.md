@@ -9,7 +9,7 @@ metadata:
     - "a concrete failure command or traceback owns the task"
   handoff_to:
     - "aria-litkg-memory for KG-backed retrieval, routing, or claim checks"
-    - "diagnose-aria for concrete failures"
+    - "specialized diagnostic capability for concrete failures"
     - "nearest AGENTS.md or narrow skill after localization"
   evidence_required:
     - "localized owning files or source family"

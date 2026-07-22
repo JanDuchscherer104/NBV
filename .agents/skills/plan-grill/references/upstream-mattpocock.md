@@ -17,5 +17,5 @@ ARIA differences:
 - ARIA terminology lives in `docs/typst/shared/glossary.typ`, not `CONTEXT.md`.
 - Durable decisions live in the roadmap, questions, active Typst thesis,
   package contracts, or nearest `AGENTS.md`, not `docs/adr/` by default.
-- Public thesis/docs changes hand off to `docs-curator` or `typst-authoring`.
+- Public thesis/docs changes hand off to `aria-docs`.
 - OMX owns orchestration; this skill owns ARIA decision evidence.
