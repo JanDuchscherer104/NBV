@@ -1,0 +1,50 @@
+schema_version = 1
+
+[[case]]
+id = "domain-owner"
+matt_skills = ["domain-modeling", "grill-with-docs"]
+aria_owner = "docs/typst/shared/glossary.typ and accepted ARIA decisions"
+forbidden_outputs = ["CONTEXT.md", "CONTEXT-MAP.md", "docs/adr/"]
+required_behavior = "Translate terminology and decisions to existing ARIA owners."
+
+[[case]]
+id = "ticket-owner"
+matt_skills = ["ask-matt"]
+aria_owner = ".agents backlog TOMLs through agents-db"
+forbidden_outputs = ["issues/", ".scratch/"]
+required_behavior = "Do not create an unapproved ticket hierarchy."
+
+[[case]]
+id = "teaching-workspace"
+matt_skills = ["teach"]
+aria_owner = "user-selected teaching workspace"
+forbidden_outputs = ["MISSION.md", "lessons/", "learning-records/"]
+required_behavior = "Write teaching artifacts only after the workspace is explicit."
+
+[[case]]
+id = "merge-safety"
+matt_skills = ["resolving-merge-conflicts"]
+aria_owner = "root AGENTS.md git safety"
+forbidden_outputs = ["forced conflict resolution", "automatic rebase continuation"]
+required_behavior = "Permit abort or escalation when intent cannot be preserved safely."
+
+[[case]]
+id = "dirty-worktree"
+matt_skills = ["resolving-merge-conflicts", "tdd"]
+aria_owner = "root AGENTS.md worktree preservation"
+forbidden_outputs = ["git reset --hard", "git restore"]
+required_behavior = "Preserve unrelated user and agent changes."
+
+[[case]]
+id = "runtime-writes"
+matt_skills = ["ask-matt", "handoff"]
+aria_owner = "operator-local Codex configuration"
+forbidden_outputs = [".codex/config.toml mutation outside managed command", ".omx/state mutation"]
+required_behavior = "No hidden writes to runtime state or operator configuration."
+
+[[case]]
+id = "durable-planning"
+matt_skills = ["handoff", "grill-with-docs"]
+aria_owner = "accepted OMX bundle registry"
+forbidden_outputs = ["unregistered durable plan", "unregistered durable handoff"]
+required_behavior = "Use accepted OMX owners for durable plans and handoffs."

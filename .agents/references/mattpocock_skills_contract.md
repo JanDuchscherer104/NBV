@@ -1,58 +1,63 @@
 # Matt Pocock Skills Contract
 
-This contract adapts `mattpocock/skills` to ARIA-NBV without making Matt's
-repo layout a second source of project truth.
+ARIA uses a pinned external Matt skill collection for generic engineering
+discipline without vendoring it or giving it ownership of project truth.
 
-## Boundary
+## Pin And Activation
 
-- Install/update Matt skills outside this repo with
-  `npx skills@latest add mattpocock/skills`.
-- Keep ARIA-owned skills under `.agents/skills/*`.
-- Keep the tracked ARIA activation policy in
-  `.agents/references/mattpocock_skills_manifest.toml`.
-- Treat `.codex/config.toml` as untracked operator-local runtime state. It may
-  mirror the manifest when a runtime supports project-specific skill enablement,
-  but it is not the canonical policy.
+- Upstream commit: `ed37663cc5fbef691ddfecd080dff42f7e7e350d`.
+- Installer: `skills@1.5.20` at the npm integrity recorded in
+  `mattpocock_skills_manifest.toml`; `latest` is forbidden.
+- The project allowlist is exactly the twelve manifest entries. Every other
+  skill discovered in that pinned checkout is disabled for this project.
+- Matt skill bodies remain operator-local under the global Codex skill root.
+  Do not copy them into `.agents/skills`, `.codex/skills`, or another tracked
+  repository path.
+- `.codex/config.toml` is ignored operator-local state. Generate its managed
+  Matt block with `matt_skills_policy.py render-config`; do not commit trust
+  settings, absolute operator paths, or runtime state.
 
-## Source Mapping
+ARIA, plugin, system, and unrelated user skills are outside Matt isolation.
+Path-specific `[[skills.config]]` entries affect only the validated Matt paths.
+Duplicate IDs, duplicate paths, symlink escapes, or an existing target path
+collision fail closed instead of relying on discovery precedence.
 
-| Matt assumption | ARIA-NBV owner |
-|---|---|
-| `CONTEXT.md` domain language | `docs/typst/shared/glossary.typ`, generated `docs/contents/glossary.qmd`, and `.agents/references/source_order.md` |
-| `docs/adr/` decisions | `.agents/memory/state/DECISIONS.md`, `docs/contents/thesis/roadmap.qmd`, `docs/contents/thesis/questions.qmd`, and the nearest `AGENTS.md` |
-| Issue tracker setup | `.agents/issues.toml`, `.agents/todos.toml`, `.agents/refactors.toml`, and `.agents/resolved.toml` through `agents-db` |
-| Code standards | root or nearest `AGENTS.md`, `.agents/references/python_conventions.md`, `.agents/references/verification_matrix.md`, and package tests |
-| Research notes | `aria-litkg-memory`, `semantic-scholar-litkg`, `docs-curator`, Quarto literature pages, and `docs/references.bib` |
+## Closure And Prompt Budget
 
-Do not create Matt-native truth surfaces for ARIA-NBV unless a future explicit
-decision demotes the current ARIA owner. In particular, do not let raw
-`setup-matt-pocock-skills` create first-class `CONTEXT.md`, `docs/adr/`, or
-`docs/agents/` surfaces for this repo.
+For each selected skill, start from its `SKILL.md`, recursively follow
+repository-relative Markdown links outside fenced examples, sort the resulting
+repo-relative paths, and hash concatenated `path + NUL + raw bytes` records with
+SHA-256. Invocation metadata is pinned separately. Missing, escaping,
+ambiguous, added, removed, or changed closure members invalidate the install.
 
-## Activation Rules
+Only six selected skills permit model invocation at the pinned commit. Their
+descriptions total 1008 bytes, below the WP0-derived ceiling of 1511 bytes.
+Verify the visible set with exactly `codex debug prompt-input`; explicit-only
+skills must not consume model-visible description budget.
 
-- Model-invoked defaults: `codebase-design`, `tdd`.
-- Explicit-only defaults: `improve-codebase-architecture`,
-  `writing-great-skills`, `handoff`, `teach`.
-- Keep `prototype` reference-only unless the local runtime can force
-  explicit-only use.
-- Keep overlapping generic skills reference-only: `code-review`,
-  `diagnosing-bugs`, `research`, `domain-modeling`, `grill-me`,
-  `grill-with-docs`, `grilling`, `to-prd`, `to-issues`, `triage`,
-  `implement`, and `setup-matt-pocock-skills`.
-- Skip deprecated, in-progress, personal, and misc Matt skills unless a future
-  task names one explicitly.
+## ARIA Overrides
 
-## Integration Rules
+Repository owners and invariants override external conventions:
 
-- Matt skills provide generic engineering discipline; ARIA local skills provide
-  source-order, domain semantics, evidence, and verification.
-- Do not add Matt skill names or paths to ARIA skill
-  `metadata.canonical_sources`.
-- Do not add Matt skill names to machine-facing `metadata.handoff_to`.
-- Use short repo-local reference files under individual ARIA skills only where
-  an upstream Matt skill reduces duplicated generic prose.
-- If a Matt skill proposes an output path, translate it through the source
-  mapping above before writing anything.
-- If routing is ambiguous, ARIA source order wins and the local ARIA skill
-  remains authoritative.
+- no Matt-created root `CONTEXT.md`, `CONTEXT-MAP.md`, or generic `docs/adr/`;
+- no unapproved issue, ticket, PRD, or scratch hierarchy;
+- teaching output only in a user-selected teaching workspace;
+- dirty worktrees are preserved, and merge/rebase conflicts may be aborted or
+  escalated when safe resolution is not established;
+- no hidden writes to `.omx`, Codex runtime state, or operator configuration;
+- durable plans and handoffs use accepted OMX owners.
+
+The executable conflict fixtures in `scripts/tests/fixtures/matt_policy/`
+define these cases. Rollback removes only the managed project activation block;
+it does not delete the global Matt installation or alter other configuration.
+
+## Commands
+
+```bash
+python3 scripts/scaffold/bootstrap_matt_skills.py
+python3 scripts/scaffold/matt_skills_policy.py validate \
+  --source-checkout /path/to/pinned/mattpocock-skills \
+  --skills-root "$HOME/.agents/skills" \
+  --project-config .codex/config.toml
+python3 scripts/scaffold/matt_skills_policy.py rollback
+```

@@ -1,360 +1,189 @@
-# ARIA-NBV policy for mattpocock/skills.
-#
-# This manifest is the tracked repo policy. Runtime installation still happens
-# outside the repo with the upstream installer; do not vendor the upstream skill
-# tree under .agents/skills.
+schema_version = 2
 
 [source]
 repo = "mattpocock/skills"
 url = "https://github.com/mattpocock/skills.git"
-reviewed_ref = "896f14d9c25659f03b24e08e4efc3ee69bbade08"
-reviewed_at = "2026-07-08"
+commit = "ed37663cc5fbef691ddfecd080dff42f7e7e350d"
 license = "MIT"
-install_command = "npx skills@latest add mattpocock/skills"
-default_policy = "disabled_unless_selected"
-contract = ".agents/references/mattpocock_skills_contract.md"
-runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
 
-[postures]
-model = ["codebase-design", "tdd"]
-explicit = ["improve-codebase-architecture", "writing-great-skills", "handoff", "teach"]
-reference = [
+[installer]
+package = "skills"
+version = "1.5.20"
+npm_integrity = "sha512-lPl5KzMfTW+qwHFwc8t6R+wAqmdmSHw1+HWbGdJ/FZYbWLdB34bAZNFWiencM5DVoRaKAgXArmfTWMlNAbl9Gg=="
+
+[policy]
+default = "disabled_unless_selected"
+contract = ".agents/references/mattpocock_skills_contract.md"
+portable_config = ".codex/config.example.toml"
+runtime_config = ".codex/config.toml"
+allowlist = [
   "ask-matt",
-  "code-review",
+  "codebase-design",
   "diagnosing-bugs",
   "domain-modeling",
-  "grill-me",
   "grill-with-docs",
   "grilling",
-  "implement",
-  "prototype",
-  "research",
+  "handoff",
+  "improve-codebase-architecture",
   "resolving-merge-conflicts",
-  "setup-matt-pocock-skills",
-  "to-issues",
-  "to-prd",
-  "triage",
-  "writing-beats",
-  "writing-fragments",
-  "writing-shape",
+  "tdd",
+  "teach",
+  "writing-great-skills",
 ]
-skip = [
-  "claude-handoff",
-  "design-an-interface",
-  "edit-article",
-  "git-guardrails-claude-code",
-  "loop-me",
-  "migrate-to-shoehorn",
-  "obsidian-vault",
-  "qa",
-  "request-refactor-plan",
-  "scaffold-exercises",
-  "setup-pre-commit",
-  "ubiquitous-language",
-  "wayfinder",
-  "wizard",
+
+[budget]
+baseline_description_bytes = 3778
+maximum_fraction = 0.4
+maximum_description_bytes = 1511
+selected_description_bytes = 1008
+model_visible_allowlist = [
+  "codebase-design",
+  "diagnosing-bugs",
+  "domain-modeling",
+  "grilling",
+  "resolving-merge-conflicts",
+  "tdd",
 ]
 
 [[skill]]
 name = "ask-matt"
-bucket = "engineering"
 upstream_path = "skills/engineering/ask-matt/SKILL.md"
-posture = "reference"
-aria_owner = "agent-behavior"
-reason = "Upstream router only; ARIA root routing and OMX own workflow selection."
-
-[[skill]]
-name = "code-review"
-bucket = "engineering"
-upstream_path = "skills/engineering/code-review/SKILL.md"
-posture = "reference"
-aria_owner = "code-review-aria-nbv"
-reason = "Borrow Standards/Spec vocabulary; ARIA owns severity, domain invariants, PR/worktree review, and verification."
+closure_files = ["skills/engineering/ask-matt/SKILL.md"]
+closure_sha256 = "48805e5d7bf1ffe591cd2414b44972491e37eae3d0f42d2b157ba70b82936af7"
+metadata_path = "skills/engineering/ask-matt/agents/openai.yaml"
+metadata_sha256 = "bdffbc5a0a99ed1b6ef3253d251d755fd18162b9845972e380007f844b09b05c"
+model_visible = false
+description_bytes = 83
 
 [[skill]]
 name = "codebase-design"
-bucket = "engineering"
 upstream_path = "skills/engineering/codebase-design/SKILL.md"
-posture = "model"
-aria_owner = "agent-behavior"
-reason = "Low-collision generic vocabulary for module, interface, depth, seam, adapter, leverage, and locality."
+closure_files = [
+  "skills/engineering/codebase-design/DEEPENING.md",
+  "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+  "skills/engineering/codebase-design/SKILL.md",
+]
+closure_sha256 = "12f1d16a7289968f4cd9e590b96a1cbeae8cbccffb00b30e8ed51e54d09598ea"
+metadata_path = "skills/engineering/codebase-design/agents/openai.yaml"
+metadata_sha256 = "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f"
+model_visible = true
+description_bytes = 265
 
 [[skill]]
 name = "diagnosing-bugs"
-bucket = "engineering"
 upstream_path = "skills/engineering/diagnosing-bugs/SKILL.md"
-posture = "reference"
-aria_owner = "diagnose-aria"
-reason = "Borrow the tight feedback-loop discipline; ARIA owns symptom surfaces, commands, and regression checks."
+closure_files = ["skills/engineering/diagnosing-bugs/SKILL.md"]
+closure_sha256 = "f1003d325211cf80d8844f7d148d30ff17ab1e398659b616e9391b382e265bca"
+metadata_path = "skills/engineering/diagnosing-bugs/agents/openai.yaml"
+metadata_sha256 = "3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b"
+model_visible = true
+description_bytes = 156
 
 [[skill]]
 name = "domain-modeling"
-bucket = "engineering"
 upstream_path = "skills/engineering/domain-modeling/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "Use as terminology-sharpening inspiration only; ARIA terms and decisions have different source owners."
+closure_files = [
+  "skills/engineering/domain-modeling/ADR-FORMAT.md",
+  "skills/engineering/domain-modeling/CONTEXT-FORMAT.md",
+  "skills/engineering/domain-modeling/SKILL.md",
+]
+closure_sha256 = "e7b0f09b48730f234afa27990a9a9b5dad269077eef0bd64954c65c066af4102"
+metadata_path = "skills/engineering/domain-modeling/agents/openai.yaml"
+metadata_sha256 = "f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b"
+model_visible = true
+description_bytes = 216
 
 [[skill]]
 name = "grill-with-docs"
-bucket = "engineering"
 upstream_path = "skills/engineering/grill-with-docs/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "Generic grilling plus domain-doc assumptions collide with ARIA source order unless adapted."
-
-[[skill]]
-name = "implement"
-bucket = "engineering"
-upstream_path = "skills/engineering/implement/SKILL.md"
-posture = "reference"
-aria_owner = "agent-behavior"
-reason = "OMX and ARIA root guidance own implementation lane selection."
-
-[[skill]]
-name = "improve-codebase-architecture"
-bucket = "engineering"
-upstream_path = "skills/engineering/improve-codebase-architecture/SKILL.md"
-posture = "explicit"
-aria_owner = "simplification"
-reason = "Useful operator command for architecture scans; candidates must route back through ARIA owners."
-
-[[skill]]
-name = "prototype"
-bucket = "engineering"
-upstream_path = "skills/engineering/prototype/SKILL.md"
-posture = "reference"
-aria_owner = "agent-behavior"
-reason = "Install only if the runtime can force explicit-only use; upstream model invocation is too broad for default ARIA routing."
-
-[[skill]]
-name = "research"
-bucket = "engineering"
-upstream_path = "skills/engineering/research/SKILL.md"
-posture = "reference"
-aria_owner = "aria-litkg-memory"
-reason = "Borrow primary-source discipline only; ARIA KG, literature, and claim-check owners stay local."
-
-[[skill]]
-name = "resolving-merge-conflicts"
-bucket = "engineering"
-upstream_path = "skills/engineering/resolving-merge-conflicts/SKILL.md"
-posture = "reference"
-aria_owner = "agent-behavior"
-reason = "Enable explicitly for actual merge/rebase conflicts if needed; not part of default thesis routing."
-
-[[skill]]
-name = "setup-matt-pocock-skills"
-bucket = "engineering"
-upstream_path = "skills/engineering/setup-matt-pocock-skills/SKILL.md"
-posture = "reference"
-aria_owner = "mattpocock_skills_contract.md"
-reason = "Raw setup creates Matt-native truth surfaces; use the ARIA adapter contract instead."
-
-[[skill]]
-name = "tdd"
-bucket = "engineering"
-upstream_path = "skills/engineering/tdd/SKILL.md"
-posture = "model"
-aria_owner = "agent-behavior"
-reason = "Generic red-green-refactor loop with low routing collision; ARIA still owns package tests and seams."
-
-[[skill]]
-name = "to-issues"
-bucket = "engineering"
-upstream_path = "skills/engineering/to-issues/SKILL.md"
-posture = "reference"
-aria_owner = "agents-db"
-reason = "Issue slicing may inspire work breakdowns, but ARIA active work remains TOML-backed."
-
-[[skill]]
-name = "to-prd"
-bucket = "engineering"
-upstream_path = "skills/engineering/to-prd/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "ARIA roadmap/questions and OMX plans own PRD-like surfaces."
-
-[[skill]]
-name = "triage"
-bucket = "engineering"
-upstream_path = "skills/engineering/triage/SKILL.md"
-posture = "reference"
-aria_owner = "agents-db"
-reason = "ARIA backlog triage stays in .agents/*.toml through agents-db."
-
-[[skill]]
-name = "grill-me"
-bucket = "productivity"
-upstream_path = "skills/productivity/grill-me/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "Use as interview inspiration only; ARIA thesis/source-order grilling stays local."
+closure_files = ["skills/engineering/grill-with-docs/SKILL.md"]
+closure_sha256 = "473213ce8b35c27cbf40d74856c0eaf1b731d4da01ef0d730132bf725d46f603"
+metadata_path = "skills/engineering/grill-with-docs/agents/openai.yaml"
+metadata_sha256 = "94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9"
+model_visible = false
+description_bytes = 106
 
 [[skill]]
 name = "grilling"
-bucket = "productivity"
 upstream_path = "skills/productivity/grilling/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "Reusable generic loop behind Matt grilling; ARIA uses plan-grill for advisor-facing decisions."
+closure_files = ["skills/productivity/grilling/SKILL.md"]
+closure_sha256 = "fac10d32171d3a0896611098463f4e11e49700e942b49eb5aff953ee8bfd2225"
+metadata_path = "skills/productivity/grilling/agents/openai.yaml"
+metadata_sha256 = "cf29b9a8dbf35a58a908a6ca4f64dcd86c2b2130291eee0a78b9f706b138825b"
+model_visible = true
+description_bytes = 152
 
 [[skill]]
 name = "handoff"
-bucket = "productivity"
 upstream_path = "skills/productivity/handoff/SKILL.md"
-posture = "explicit"
-aria_owner = "agent-behavior"
-reason = "Safe compact handoff command when explicitly requested; do not replace OMX/runtime state."
+closure_files = ["skills/productivity/handoff/SKILL.md"]
+closure_sha256 = "a9874254cd90681b3187becc2a0c31f864f672200d09a7beb8e0409dda5da4ac"
+metadata_path = "skills/productivity/handoff/agents/openai.yaml"
+metadata_sha256 = "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28"
+model_visible = false
+description_bytes = 86
+
+[[skill]]
+name = "improve-codebase-architecture"
+upstream_path = "skills/engineering/improve-codebase-architecture/SKILL.md"
+closure_files = [
+  "skills/engineering/improve-codebase-architecture/HTML-REPORT.md",
+  "skills/engineering/improve-codebase-architecture/SKILL.md",
+]
+closure_sha256 = "415eb4e98819762dcb648dc8423b86c496c7f0dc5f8248dc2a14b41287c75a68"
+metadata_path = "skills/engineering/improve-codebase-architecture/agents/openai.yaml"
+metadata_sha256 = "c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1"
+model_visible = false
+description_bytes = 125
+
+[[skill]]
+name = "resolving-merge-conflicts"
+upstream_path = "skills/engineering/resolving-merge-conflicts/SKILL.md"
+closure_files = ["skills/engineering/resolving-merge-conflicts/SKILL.md"]
+closure_sha256 = "ea9bd98142bc13c56b3426bb172a83ade2badb79b28f090838b689beea16ed0c"
+metadata_path = "skills/engineering/resolving-merge-conflicts/agents/openai.yaml"
+metadata_sha256 = "a1f4f96838f2ed6282eb28abbbf99029cb8fadce552baf53da90a025b8bffddf"
+model_visible = true
+description_bytes = 70
+
+[[skill]]
+name = "tdd"
+upstream_path = "skills/engineering/tdd/SKILL.md"
+closure_files = [
+  "skills/engineering/tdd/SKILL.md",
+  "skills/engineering/tdd/mocking.md",
+  "skills/engineering/tdd/tests.md",
+]
+closure_sha256 = "e6953dce10712bceb5390f896fd66eb0ce8d8f9d01377df3278e2ecffd35f385"
+metadata_path = "skills/engineering/tdd/agents/openai.yaml"
+metadata_sha256 = "ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b"
+model_visible = true
+description_bytes = 149
 
 [[skill]]
 name = "teach"
-bucket = "productivity"
 upstream_path = "skills/productivity/teach/SKILL.md"
-posture = "explicit"
-aria_owner = "agent-behavior"
-reason = "Optional user-invoked learning workspace; no ARIA truth ownership."
+closure_files = [
+  "skills/productivity/teach/LEARNING-RECORD-FORMAT.md",
+  "skills/productivity/teach/MISSION-FORMAT.md",
+  "skills/productivity/teach/RESOURCES-FORMAT.md",
+  "skills/productivity/teach/SKILL.md",
+]
+closure_sha256 = "335bf0adf5d2a5baf4688b50a7d9a021e479bad92b22434b08951f1b843a85e5"
+metadata_path = "skills/productivity/teach/agents/openai.yaml"
+metadata_sha256 = "5856f3ae8aec742f1499c640aecdd5f1d6af5fa210a7c6ec794de8263a6f733f"
+model_visible = false
+description_bytes = 61
 
 [[skill]]
 name = "writing-great-skills"
-bucket = "productivity"
 upstream_path = "skills/productivity/writing-great-skills/SKILL.md"
-posture = "explicit"
-aria_owner = "skill_style_guide.md"
-reason = "Use for skill-pruning craft; ARIA skill style guide remains the local rule owner."
-
-[[skill]]
-name = "design-an-interface"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/design-an-interface/SKILL.md"
-posture = "skip"
-aria_owner = "codebase-design"
-reason = "Deprecated upstream; use codebase-design vocabulary instead."
-
-[[skill]]
-name = "qa"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/qa/SKILL.md"
-posture = "skip"
-aria_owner = "code-review-aria-nbv"
-reason = "Deprecated upstream and collides with ARIA review/verification routing."
-
-[[skill]]
-name = "request-refactor-plan"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/request-refactor-plan/SKILL.md"
-posture = "skip"
-aria_owner = "simplification"
-reason = "Deprecated upstream; ARIA uses plan-grill/simplification for refactor decisions."
-
-[[skill]]
-name = "ubiquitous-language"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/ubiquitous-language/SKILL.md"
-posture = "skip"
-aria_owner = "docs/typst/shared/glossary.typ"
-reason = "Deprecated upstream; ARIA glossary remains the terminology owner."
-
-[[skill]]
-name = "claude-handoff"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/claude-handoff/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "In-progress upstream and Claude-specific."
-
-[[skill]]
-name = "loop-me"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/loop-me/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "In-progress upstream; not part of ARIA default routing."
-
-[[skill]]
-name = "wayfinder"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/wayfinder/SKILL.md"
-posture = "skip"
-aria_owner = "aria-nbv-context"
-reason = "In-progress upstream; ARIA already has deterministic local discovery."
-
-[[skill]]
-name = "wizard"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/wizard/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "In-progress upstream; use only if a future task explicitly names it."
-
-[[skill]]
-name = "writing-beats"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/writing-beats/SKILL.md"
-posture = "reference"
-aria_owner = "typst-authoring"
-reason = "Use as reference-only narrative rhythm mechanics inside typst-authoring; do not activate raw upstream skill."
-
-[[skill]]
-name = "writing-fragments"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/writing-fragments/SKILL.md"
-posture = "reference"
-aria_owner = "typst-authoring"
-reason = "Use as reference-only scratch-fragment capture mechanics inside typst-authoring; scratch files are not thesis truth."
-
-[[skill]]
-name = "writing-shape"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/writing-shape/SKILL.md"
-posture = "reference"
-aria_owner = "typst-authoring"
-reason = "Use as reference-only paragraph-shaping mechanics inside typst-authoring; final prose still follows ARIA claim and notation gates."
-
-[[skill]]
-name = "git-guardrails-claude-code"
-bucket = "misc"
-upstream_path = "skills/misc/git-guardrails-claude-code/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Misc upstream and Claude-specific; ARIA root guidance owns git safety."
-
-[[skill]]
-name = "migrate-to-shoehorn"
-bucket = "misc"
-upstream_path = "skills/misc/migrate-to-shoehorn/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Misc upstream and unrelated to ARIA-NBV."
-
-[[skill]]
-name = "scaffold-exercises"
-bucket = "misc"
-upstream_path = "skills/misc/scaffold-exercises/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Misc upstream and unrelated to ARIA-NBV thesis/scaffold operations."
-
-[[skill]]
-name = "setup-pre-commit"
-bucket = "misc"
-upstream_path = "skills/misc/setup-pre-commit/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Misc upstream; ARIA hook/setup decisions stay local."
-
-[[skill]]
-name = "edit-article"
-bucket = "personal"
-upstream_path = "skills/personal/edit-article/SKILL.md"
-posture = "skip"
-aria_owner = "docs-curator"
-reason = "Personal upstream workflow; ARIA docs/thesis prose routing stays local."
-
-[[skill]]
-name = "obsidian-vault"
-bucket = "personal"
-upstream_path = "skills/personal/obsidian-vault/SKILL.md"
-posture = "skip"
-aria_owner = "docs-curator"
-reason = "Personal upstream workflow and not an ARIA source owner."
+closure_files = [
+  "skills/productivity/writing-great-skills/GLOSSARY.md",
+  "skills/productivity/writing-great-skills/SKILL.md",
+]
+closure_sha256 = "95d838abfe3db8ab6a09e73baed7e4d29c25847c6fd92fb81a8745d5f2ab689a"
+metadata_path = "skills/productivity/writing-great-skills/agents/openai.yaml"
+metadata_sha256 = "b3c555d2654ec61aed78f8435f583c6a0cd6bf980d71317724682ad20075c33d"
+model_visible = false
+description_bytes = 110

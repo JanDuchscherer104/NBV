@@ -1,18 +1,18 @@
-# Optional local Codex/OMX template for ARIA-NBV.
+# Portable ARIA-NBV Codex configuration example.
 #
-# Copy this to .codex/config.toml only in your local checkout. Do not commit the
-# runtime copy. Run `omx setup` after installing oh-my-codex if you want OMX to
-# manage additional local runtime settings.
-
-[projects."/absolute/path/to/ARIA-NBV"]
-trust_level = "trusted"
-
-# Keep repo-specific MCP/runtime configuration operator-local. The checked-in
-# .codex-plugin already declares the portable MemPalace plugin surface.
+# Copy this file to the ignored `.codex/config.toml` only for operator-local
+# settings. Trust configuration belongs in the user's Codex config, not here.
 #
-# Matt Pocock skills are installed outside this repo, for example:
-#   npx skills@latest add mattpocock/skills
-# Keep the canonical ARIA-NBV activation policy in
-# .agents/references/mattpocock_skills_manifest.toml. If a local runtime
-# supports project-specific skill enablement, mirror only that tracked allowlist
-# in the untracked .codex/config.toml.
+# Matt skills are globally installed from the pinned checkout by:
+#   python3 scripts/scaffold/bootstrap_matt_skills.py
+# The bootstrap renders a managed `[[skills.config]]` block with absolute local
+# paths: exactly 12 pinned Matt skills enabled and every other skill from that
+# checkout disabled. Generate or refresh only that block with:
+#   python3 scripts/scaffold/matt_skills_policy.py render-config \
+#     --source-checkout /path/to/pinned/mattpocock-skills \
+#     --skills-root /absolute/path/to/.agents/skills
+# Remove project activation without deleting global skills with:
+#   python3 scripts/scaffold/matt_skills_policy.py rollback
+#
+# Do not hand-write a partial Matt list, use `latest`, commit absolute paths, or
+# run the upstream `setup-matt-pocock-skills` skill in this repository.

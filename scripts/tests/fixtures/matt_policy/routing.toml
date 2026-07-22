@@ -1,0 +1,73 @@
+schema_version = 1
+
+[[case]]
+skill = "ask-matt"
+model_visible = false
+positive = "Explicitly ask which Matt workflow fits."
+adjacent_negative = "Ordinary ARIA task routing stays with root guidance."
+
+[[case]]
+skill = "codebase-design"
+model_visible = true
+positive = "Design a deep module interface or choose a seam."
+adjacent_negative = "Implement a fully scoped local edit without redesign."
+
+[[case]]
+skill = "diagnosing-bugs"
+model_visible = true
+positive = "Diagnose a hard bug or performance regression."
+adjacent_negative = "Apply an already diagnosed fix."
+
+[[case]]
+skill = "domain-modeling"
+model_visible = true
+positive = "Sharpen domain terminology or an architectural decision."
+adjacent_negative = "Read existing project terminology without changing it."
+
+[[case]]
+skill = "grill-with-docs"
+model_visible = false
+positive = "Explicitly request a grilling session that records decisions."
+adjacent_negative = "Request direct implementation of an approved plan."
+
+[[case]]
+skill = "grilling"
+model_visible = true
+positive = "Stress-test a plan one decision at a time."
+adjacent_negative = "Review a completed diff against fixed criteria."
+
+[[case]]
+skill = "handoff"
+model_visible = false
+positive = "Explicitly request a compact handoff for another session."
+adjacent_negative = "Continue work in the current session."
+
+[[case]]
+skill = "improve-codebase-architecture"
+model_visible = false
+positive = "Explicitly request an architecture-deepening scan."
+adjacent_negative = "Perform a narrow behavior-preserving cleanup."
+
+[[case]]
+skill = "resolving-merge-conflicts"
+model_visible = true
+positive = "Resolve an in-progress merge or rebase conflict."
+adjacent_negative = "Prepare a normal commit in a clean index."
+
+[[case]]
+skill = "tdd"
+model_visible = true
+positive = "Build behavior test-first through a public seam."
+adjacent_negative = "Run existing regression tests for a docs-only edit."
+
+[[case]]
+skill = "teach"
+model_visible = false
+positive = "Explicitly select a teaching workspace and learning goal."
+adjacent_negative = "Explain one concept without creating workspace artifacts."
+
+[[case]]
+skill = "writing-great-skills"
+model_visible = false
+positive = "Explicitly request skill-writing guidance."
+adjacent_negative = "Edit an ARIA skill under its local owner without generic guidance."
