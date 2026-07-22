@@ -130,13 +130,11 @@ def main() -> None:
         assert any("docs/page.qmd:1" in result for result in results)
         allowed, explanation = query.explain("page.qmd", root)
         assert not allowed
-        assert any(
-            "exact source owner: docs/page.qmd:L1" in line for line in explanation
-        )
+        assert any("docs/page.qmd:1:path match" in line for line in explanation)
         allowed, route = query.path_between("AGENTS.md", "page.qmd", root)
         assert not allowed
-        assert any("exact source owner: AGENTS.md:L1" in line for line in route)
-        assert any("exact source owner: docs/page.qmd:L1" in line for line in route)
+        assert any("AGENTS.md:1:path match" in line for line in route)
+        assert any("docs/page.qmd:1:path match" in line for line in route)
 
         (root / "docs/page.qmd").write_text("# Thesis\n", encoding="utf-8")
         graph["edges"][0]["bridge_partition_revisions"]["thesis"] = "wrong"

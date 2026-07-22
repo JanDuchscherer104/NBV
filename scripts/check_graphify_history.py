@@ -150,18 +150,22 @@ def _parent(root: Path, commit: str) -> str | None:
     return parents[0] if parents else None
 
 
-def _touched_partitions(root: Path, commit: str, config: dict) -> set[str]:
+def _touched_partitions(root: Path, commit: str) -> set[str]:
     """Classify additions/modifications/deletions/renames against both manifest states."""
     parent = _parent(root, commit)
     before_selected = (
         _selected_literature_dirs_at(root, parent) if parent is not None else set()
     )
     after_selected = _selected_literature_dirs_at(root, commit)
+    before_config = (
+        _config_at(root, parent) if parent is not None else _config_at(root, commit)
+    )
+    after_config = _config_at(root, commit)
     touched: set[str] = set()
     for _, old_path, new_path in _commit_changes(root, commit):
-        for path, selected in (
-            (old_path, before_selected),
-            (new_path, after_selected),
+        for path, selected, config in (
+            (old_path, before_selected, before_config),
+            (new_path, after_selected, after_config),
         ):
             if path is None:
                 continue
@@ -177,7 +181,6 @@ def _touched_partitions(root: Path, commit: str, config: dict) -> set[str]:
 
 def validate_authoring_history(root: Path, revisions: list[str]) -> list[str]:
     """Validate immediate graph-only children for a linear authoring range."""
-    config = load_config(root)
     errors: list[str] = []
     pending: tuple[str, set[str], str] | None = None
     for commit in revisions:
@@ -188,7 +191,7 @@ def validate_authoring_history(root: Path, revisions: list[str]) -> list[str]:
             for path in paths
             if path.startswith("graphify-out/") and path not in CANONICAL
         }
-        touched = _touched_partitions(root, commit, config)
+        touched = _touched_partitions(root, commit)
         corpus = bool(touched)
         if noncanonical_graph:
             errors.append(

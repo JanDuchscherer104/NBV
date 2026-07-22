@@ -149,9 +149,9 @@ def main() -> None:
                     check=True,
                 )
             literature_commit = _commit(root, f"{operation} selected literature")
-            assert history._touched_partitions(
-                root, literature_commit, contract.load_config(root)
-            ) == {"literature"}
+            assert history._touched_partitions(root, literature_commit) == {
+                "literature"
+            }
             graph_commit = _graph_commit(
                 root, literature_commit, partitions=("literature",)
             )

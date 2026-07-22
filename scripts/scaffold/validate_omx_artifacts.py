@@ -1295,17 +1295,37 @@ def _protected_snapshot(root: Path) -> dict[str, str]:
     return snapshot
 
 
-def _verified_omx_version(executable: str) -> bool:
+def _verified_omx_install(executable: str) -> bool:
+    """Verify the reviewed OMX version and its published package integrity."""
     result = subprocess.run(
         [executable, "--version"], check=False, capture_output=True, text=True
     )
     output = f"{result.stdout}\n{result.stderr}"
-    return (
+    version_matches = (
         result.returncode == 0
         and re.search(
             rf"(?<![0-9.])v?{re.escape(OMX_PINNED_VERSION)}(?![0-9.])", output
         )
         is not None
+    )
+    if not version_matches:
+        return False
+    npm = shutil.which("npm")
+    if npm is None:
+        return False
+    integrity = subprocess.run(
+        [
+            npm,
+            "view",
+            f"oh-my-codex@{OMX_PINNED_VERSION}",
+            "dist.integrity",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return (
+        integrity.returncode == 0 and integrity.stdout.strip() == OMX_PINNED_INTEGRITY
     )
 
 
@@ -1323,9 +1343,10 @@ def run_native_operation(command: list[str], root: Path = REPO_ROOT) -> int:
     if not allowed:
         print("native OMX operation is outside the reviewed allowlist", file=sys.stderr)
         return 2
-    if not _verified_omx_version(command[0]):
+    if not _verified_omx_install(command[0]):
         print(
-            f"native OMX operation requires oh-my-codex {OMX_PINNED_VERSION}",
+            "native OMX operation requires reviewed oh-my-codex "
+            f"{OMX_PINNED_VERSION} integrity",
             file=sys.stderr,
         )
         return 2

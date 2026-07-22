@@ -57,6 +57,9 @@ def main() -> None:
         "Matt description",
     )
     for path in (
+        ".gitattributes",
+        ".graphify.toml",
+        ".pre-commit-config.yaml",
         ".agents/references/future_contract.md",
         ".agents/skills/future-skill/SKILL.md",
         ".codex/skills/graphify/future.py",
@@ -64,6 +67,9 @@ def main() -> None:
     ):
         assert wp7.is_active_scaffold_source(path)
     assert not wp7.is_active_scaffold_source("scripts/tests/test_future.py")
+    assert all(
+        not path.startswith(".omx/") for path in metrics["active_scaffold_source_paths"]
+    )
     rejected(
         metrics,
         "canonical_graph_bytes",

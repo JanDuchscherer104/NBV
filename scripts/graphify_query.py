@@ -25,6 +25,10 @@ def exact_source_fallback(query: str, root: Path = ROOT, limit: int = 20) -> lis
     matches: list[str] = []
     for source in collect_sources(root):
         path = root / source["path"]
+        if needle in source["path"].casefold():
+            matches.append(f"{source['path']}:1:path match")
+            if len(matches) >= limit:
+                return matches
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeError):
@@ -44,12 +48,6 @@ def _fallback_for_terms(*terms: str, root: Path = ROOT) -> list[str]:
             if match not in matches:
                 matches.append(match)
     return matches
-
-
-def _exact_node_owner(node: dict) -> str:
-    return (
-        f"exact source owner: {node['source_file']}:{node.get('source_location', 'L1')}"
-    )
 
 
 def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
@@ -102,7 +100,7 @@ def explain(term: str, root: Path = ROOT) -> tuple[bool, list[str]]:
     if node["partition"] not in state.fresh:
         return False, [
             f"explain rejected: {node['partition']} partition is stale",
-            _exact_node_owner(node),
+            *_fallback_for_terms(term, root=root),
         ]
     return True, [
         f"{node['label']} — {node['source_file']}:{node.get('source_location', 'L1')}"
@@ -125,8 +123,7 @@ def path_between(start: str, end: str, root: Path = ROOT) -> tuple[bool, list[st
         return False, [
             "path rejected: stale partition(s): "
             + ", ".join(sorted(required - state.fresh)),
-            _exact_node_owner(source),
-            _exact_node_owner(target),
+            *_fallback_for_terms(start, end, root=root),
         ]
     adjacency: dict[str, list[tuple[str, dict]]] = {}
     for edge in graph.get("edges", []):
@@ -152,8 +149,7 @@ def path_between(start: str, end: str, root: Path = ROOT) -> tuple[bool, list[st
                 queue.append((neighbor, [*route, neighbor]))
     return False, [
         "no fresh path found; inspect exact source owners",
-        _exact_node_owner(source),
-        _exact_node_owner(target),
+        *_fallback_for_terms(start, end, root=root),
     ]
 
 

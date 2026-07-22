@@ -6,7 +6,6 @@ from __future__ import annotations
 import fnmatch
 import json
 from pathlib import Path
-from pathlib import PurePosixPath
 import subprocess
 import sys
 import tomllib
@@ -22,47 +21,8 @@ CANONICAL_GRAPH = (
     ROOT / "graphify-out/GRAPH_REPORT.md",
 )
 MAX_GRAPH_BYTES = 35 * 1024 * 1024
-ACTIVE_SCAFFOLD_DIRS = (
-    ".agents/baselines/",
-    ".agents/memory/index/",
-    ".agents/references/",
-    ".agents/skills/",
-    ".claude/agents/",
-    ".claude/commands/",
-    ".codex-plugin/",
-    ".codex/skills/graphify/",
-    "scripts/git_hooks/",
-    "scripts/scaffold/",
-)
-ACTIVE_SCAFFOLD_FILES = {
-    ".agents/AGENTS_INTERNAL_DB.md",
-    ".claude/settings.json",
-    ".codex/config.example.toml",
-    ".codex/hooks.example.json",
-    ".gemini/settings.json",
-    ".github/workflows/ci.yml",
-    ".graphifyignore",
-    "CLAUDE.md",
-    "Makefile",
-    "scripts/agents_db.py",
-    "scripts/check_graphify_freshness.py",
-    "scripts/check_graphify_history.py",
-    "scripts/check_graphify_integration.py",
-    "scripts/codex_transcript_extract.py",
-    "scripts/debrief_nudge.sh",
-    "scripts/graphify_contract.py",
-    "scripts/graphify_merge_driver.py",
-    "scripts/graphify_query.py",
-    "scripts/graphify_refresh.py",
-    "scripts/nbv_qmd_outline.sh",
-    "scripts/nbv_typst_includes.py",
-    "scripts/new_debrief.py",
-    "scripts/quarto_generate_agent_docs.py",
-    "scripts/scaffold_audit.py",
-    "scripts/sync_claude_skills.sh",
-    "scripts/validate_agent_memory.py",
-    "scripts/validate_scaffold_wp0_baseline.py",
-}
+GRAPHIFY_CONFIG = ROOT / ".graphify.toml"
+LOC_EXCLUDE_PREFIXES = (".omx/",)
 
 
 def tracked_files() -> list[str]:
@@ -82,14 +42,14 @@ def tracked_files() -> list[str]:
 
 
 def is_active_scaffold_source(path: str) -> bool:
-    """Return whether a tracked path belongs to a complete active scaffold root."""
-    pure = PurePosixPath(path)
-    return (
-        path == "AGENTS.md"
-        or path.endswith("/AGENTS.md")
-        or path in ACTIVE_SCAFFOLD_FILES
-        or (pure.parent == PurePosixPath(".agents") and pure.suffix == ".toml")
-        or path.startswith(ACTIVE_SCAFFOLD_DIRS)
+    """Return whether Graphify's canonical corpus assigns a path to scaffold."""
+    config = tomllib.loads(GRAPHIFY_CONFIG.read_text(encoding="utf-8"))
+    corpus = config["corpus"]
+    if any(fnmatch.fnmatch(path, pattern) for pattern in corpus["exclude_patterns"]):
+        return False
+    return any(
+        fnmatch.fnmatch(path, pattern)
+        for pattern in config["partition"]["scaffold"]["patterns"]
     )
 
 
@@ -124,7 +84,11 @@ def measure() -> dict[str, object]:
     skills = json.loads(WP6_SKILLS.read_text(encoding="utf-8"))["active_skills"]
     matt = tomllib.loads(MATT_MANIFEST.read_text(encoding="utf-8"))
     tracked = tracked_files()
-    scaffold = [path for path in tracked if is_active_scaffold_source(path)]
+    scaffold = [
+        path
+        for path in tracked
+        if is_active_scaffold_source(path) and not path.startswith(LOC_EXCLUDE_PREFIXES)
+    ]
     live_skills = sorted(
         path.split("/")[-2]
         for path in tracked
@@ -154,6 +118,7 @@ def measure() -> dict[str, object]:
         "baseline_scaffold_source_loc": baseline["measurements"][
             "active_scaffold_source"
         ]["physical_lines"],
+        "active_scaffold_source_paths": scaffold,
         "active_scaffold_source_files": len(scaffold),
         "active_scaffold_source_loc": sum(
             len((ROOT / path).read_bytes().splitlines()) for path in scaffold

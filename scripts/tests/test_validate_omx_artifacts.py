@@ -695,9 +695,19 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
         fake_omx.chmod(0o755)
+        fake_npm = fake_bin / "npm"
+        fake_npm.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"${OMX_TEST_INTEGRITY:-"
+            + validator.OMX_PINNED_INTEGRITY
+            + '}"\n',
+            encoding="utf-8",
+        )
+        fake_npm.chmod(0o755)
         old_path = os.environ.get("PATH", "")
         old_mutate = os.environ.get("OMX_TEST_MUTATE")
         old_version = os.environ.get("OMX_TEST_VERSION")
+        old_integrity = os.environ.get("OMX_TEST_INTEGRITY")
 
         def restore_environment() -> None:
             os.environ["PATH"] = old_path
@@ -709,6 +719,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 os.environ.pop("OMX_TEST_VERSION", None)
             else:
                 os.environ["OMX_TEST_VERSION"] = old_version
+            if old_integrity is None:
+                os.environ.pop("OMX_TEST_INTEGRITY", None)
+            else:
+                os.environ["OMX_TEST_INTEGRITY"] = old_integrity
 
         self.addCleanup(restore_environment)
         os.environ["PATH"] = f"{fake_bin}{os.pathsep}{old_path}"
@@ -722,6 +736,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             validator.run_native_operation(["omx", "cleanup"], self.root), 2
         )
         os.environ.pop("OMX_TEST_VERSION")
+        os.environ["OMX_TEST_INTEGRITY"] = "sha512-wrong"
+        self.assertEqual(
+            validator.run_native_operation(["omx", "cleanup"], self.root), 2
+        )
+        os.environ.pop("OMX_TEST_INTEGRITY")
         os.environ["OMX_TEST_MUTATE"] = "1"
         self.assertEqual(
             validator.run_native_operation(["omx", "cleanup"], self.root), 1
