@@ -95,3 +95,4 @@ beam_width = 2
 stochastic_branch_factors = [1, 2]
 stochastic_branch_probabilities = [0.75, 0.25]
 seed = 0
+# ``v1`` names this rollout-build profile; persisted target protocol remains ``v0_gt_input``.

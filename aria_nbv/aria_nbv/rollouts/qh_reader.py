@@ -5,7 +5,7 @@ immutable store contracts once; worker processes then reopen Zarr handles and
 perform only bounded row or contiguous candidate slices. Mesh-rendered depth and
 candidate diagnostics remain audit-only and are never part of this interface.
 The training-facing tensor conversion and batching seam is
-:mod:`aria_nbv.lightning.qh_data`; this module owns only validated NumPy DTOs
+:mod:`aria_nbv.data_handling.qh`; this module owns only validated NumPy DTOs
 and worker-local Zarr access.
 """
 
@@ -73,6 +73,9 @@ class QhActorState:
 
     actor_action_mask: np.ndarray
     """``ndarray["N_q", bool]`` hard action-admission mask for selection."""
+
+    root_pose_world: np.ndarray
+    """``ndarray["12", float32]`` persisted world-from-rollout-root pose."""
 
     target_row_id: int
     """Dense row id of the persisted V0 target descriptor."""
@@ -326,6 +329,7 @@ class QhRolloutReaderConfig(TargetConfig["QhRolloutReader"]):
 @dataclass(frozen=True, slots=True)
 class _StoreMetadata:
     path: Path
+    manifest_hash: str
     state_count: int
     dictionaries: dict[str, tuple[str, ...]]
     compatibility: tuple[tuple[str, object], ...]
@@ -402,6 +406,27 @@ class QhRolloutReader:
         """
 
         return int(dict(self._stores[0].compatibility)["q_h_horizon"])
+
+    @property
+    def provenance(self) -> dict[str, object]:
+        """Return preflighted corpus identity without reopening Zarr stores.
+
+        The result contains only store-level facts already decoded during
+        construction. It is JSON serializable and never materializes a rollout
+        state, candidate matrix, or actor observation.
+        """
+
+        return {
+            "stores": [
+                {
+                    "path": str(store.path),
+                    "manifest_sha256": store.manifest_hash,
+                    "state_count": store.state_count,
+                }
+                for store in self._stores
+            ],
+            "compatibility": dict(self._stores[0].compatibility),
+        }
 
     def __getstate__(self) -> dict[str, Any]:
         """Drop process-owned Zarr handles before worker pickling."""
@@ -585,6 +610,7 @@ def _preflight_store(path: Path) -> _StoreMetadata:
     )
     return _StoreMetadata(
         path=path,
+        manifest_hash=str(root.attrs["manifest_sha256"]),
         state_count=state_count,
         dictionaries=dictionaries,
         compatibility=compatibility,
@@ -819,6 +845,9 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
     horizon = int(rollout["horizon"][rollout_row_id])
     if step_index < 0 or step_index >= horizon:
         raise ValueError(f"Q_H step_index={step_index} is outside horizon={horizon} at state row {row}.")
+    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_row_id], dtype=np.float32)
+    if root_pose_world.shape != (12,) or not np.isfinite(root_pose_world).all():
+        raise ValueError(f"Q_H state row {row} has an invalid persisted rollout root pose.")
 
     target_row_id = int(q_h["target_row_id"][row])
     source_row_id = int(q_h["source_row_id"][row])
@@ -894,6 +923,7 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
         candidate_pose_relative_root=_readonly(candidates["pose_relative_root"]),
         candidate_position_id=_readonly(candidates["position_id"]),
         actor_action_mask=_readonly(candidates["actor_action_mask"]),
+        root_pose_world=_readonly(root_pose_world),
         target_row_id=target_row_id,
         target_center_world=_readonly(target_values["target_center_world"]),
         target_extents=_readonly(target_values["target_extents"]),

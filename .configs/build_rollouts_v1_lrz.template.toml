@@ -184,3 +184,4 @@ branch_factor = 2
 beam_width = 2
 selection_temperature = 1.0
 seed = 0
+# ``v1`` names this rollout-build profile; persisted target protocol remains ``v0_gt_input``.

@@ -13,7 +13,7 @@ import zarr
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.lightning.qh_data import QhDataset
+from aria_nbv.data_handling.qh import QhDataset
 from aria_nbv.rollouts.qh_reader import QhRolloutReader, QhRolloutReaderConfig, QhStateLocator
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
@@ -86,6 +86,11 @@ def test_qh_reader_prefix_indexing_and_eager_parity(tmp_path) -> None:
         row = state.locator.state_row
         width = state.actor.candidate_row_id.shape[0]
         assert np.array_equal(state.actor.candidate_row_id, eager["candidate_row_id"][row, :width])
+        rollout_row_id = state.lineage.rollout_row_id
+        assert np.array_equal(
+            state.actor.root_pose_world,
+            RolloutZarrStoreReader((first, second)[index // 2]).array("rollouts/root_pose_world")[rollout_row_id],
+        )
         assert np.array_equal(state.actor.actor_action_mask, eager["valid_action_mask"][row, :width])
         assert np.array_equal(state.supervision.q_train_mask, eager["q_train_mask"][row, :width])
         assert np.array_equal(
@@ -127,6 +132,19 @@ def test_qh_reader_transition_history_and_terminal_contract(tmp_path) -> None:
     assert terminal.lineage.source_row_id == current.lineage.source_row_id
     assert terminal.lineage.target_protocol_version == "v0_gt_input"
     assert terminal.lineage.target_source == "gt_obbs_oracle"
+
+
+def test_qh_reader_provenance_uses_only_preflighted_metadata(tmp_path, monkeypatch) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+    monkeypatch.setattr(reader, "_root", lambda *_args: pytest.fail("provenance reopened Zarr"))
+
+    provenance = reader.provenance
+
+    assert provenance["stores"][0]["path"] == str(store)
+    assert provenance["stores"][0]["manifest_sha256"]
+    assert provenance["compatibility"]["schema_version"]
+    assert provenance["compatibility"]["target_protocol_version"] == "v0_gt_input"
 
 
 def test_qh_reader_uses_no_eager_or_oracle_audit_read_path(tmp_path, monkeypatch) -> None:
@@ -247,6 +265,17 @@ def test_qh_reader_rejects_corrupt_v0_descriptor_when_row_is_read(tmp_path) -> N
     reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
 
     with pytest.raises(ValueError, match="incomplete canonical V0 descriptor"):
+        reader[0]
+
+
+def test_qh_reader_rejects_corrupt_persisted_rollout_root(tmp_path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["rollouts/root_pose_world"][0, 0] = np.nan
+
+    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+
+    with pytest.raises(ValueError, match="rollout root pose"):
         reader[0]
 
 
