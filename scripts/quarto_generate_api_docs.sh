@@ -10,6 +10,11 @@ TMP_LOG="$(mktemp)"
 TMP_CONFIG=""
 QUARTODOC_ARGS=()
 
+# PEP 660 editable finders may point the shared environment at a different
+# checkout. Put this worktree's package root on Python's startup path; adding
+# Quartodoc's source_dir later is too late to override an installed finder.
+export PYTHONPATH="${REPO_ROOT}/aria_nbv${PYTHONPATH:+:${PYTHONPATH}}"
+
 cd "${DOCS_DIR}"
 mkdir -p reference
 
