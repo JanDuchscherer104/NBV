@@ -369,7 +369,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = _stored_rollouts_app(tmp_path).run()
 
     assert not app.exception
-    assert [header.value for header in app.header] == ["Stored Rollout Zarr"]
+    assert [header.value for header in app.header] == ["Rollout Supervision"]
     assert all("\\n+" not in markdown.value for markdown in app.markdown)
     assert "Trust & Topology" in [subheader.value for subheader in app.subheader]
     assert _metric_values(app)["Validation"] == "OK"
@@ -430,6 +430,8 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Download target protocol CSV",
         "Download mask combinations CSV",
         "Download candidate provenance flow CSV",
+        "Download selected-action policy/rank flow CSV",
+        "Download exact selected-step evidence CSV",
     }
     assert {item.label for item in app.multiselect} >= {"Flow policies", "Flow rollout depths"}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
@@ -901,30 +903,32 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
-    """Candidate Sankey should keep repeated labels separate by persisted stage identity."""
+    """Candidate Sankey should present one informative proposal-signature stage."""
 
     flow = pd.DataFrame(
         [
             {
-                "source_id": "root:filtered_candidates",
-                "source_label": "filtered candidates",
+                "source_id": "root:scoped_candidates",
+                "source_label": "All candidates in active scope (5; valid + invalid)",
                 "source_stage": "root",
-                "target_id": "mixture:forward",
-                "target_label": "forward",
-                "target_stage": "mixture",
+                "target_id": "proposal:forward|forward_local|forward_rig",
+                "target_label": "forward · center=forward_local · view=forward_rig",
+                "target_stage": "proposal",
                 "count": 5,
                 "root_denominator": 5,
+                "store_candidate_count": 5,
                 "fraction_of_root": 1.0,
             },
             {
-                "source_id": "mixture:forward",
-                "source_label": "forward",
-                "source_stage": "mixture",
-                "target_id": "position:forward",
-                "target_label": "forward",
-                "target_stage": "position",
+                "source_id": "proposal:forward|forward_local|forward_rig",
+                "source_label": "forward · center=forward_local · view=forward_rig",
+                "source_stage": "proposal",
+                "target_id": "actor_validity:actor_valid",
+                "target_label": "actor_valid",
+                "target_stage": "actor_validity",
                 "count": 5,
                 "root_denominator": 5,
+                "store_candidate_count": 5,
                 "fraction_of_root": 1.0,
             },
         ]
@@ -935,8 +939,46 @@ def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> No
 
     assert figure.layout.title.text == "Candidate provenance and support flow"
     assert list(sankey.link.value) == [5, 5]
-    assert list(sankey.node.label).count("forward") == 2
-    assert list(sankey.node.customdata) == ["root", "mixture", "position"]
+    assert list(sankey.node.label).count("forward · center=forward_local · view=forward_rig") == 1
+    assert list(sankey.node.customdata) == ["root", "proposal", "actor_validity"]
+
+
+def test_selected_action_flow_groups_policy_temperature_and_exact_rri_ranks() -> None:
+    """Selected-action flow should expose policy mechanics without hiding exact low ranks."""
+
+    ranks = pd.DataFrame(
+        [
+            {
+                "policy": "temperature_softmax",
+                "temperature": 1.0,
+                "selected_candidate_row_id": 10,
+                "target_rri_rank": 3,
+            },
+            {
+                "policy": "oracle_greedy",
+                "temperature": np.nan,
+                "selected_candidate_row_id": 11,
+                "target_rri_rank": 1,
+            },
+            {
+                "policy": "temperature_softmax",
+                "temperature": 1.0,
+                "selected_candidate_row_id": 12,
+                "target_rri_rank": None,
+            },
+        ]
+    )
+
+    flow = stored_rollouts_page._selected_action_flow_rows(ranks)
+    figure = stored_rollouts_page._selected_action_flow_figure(flow)
+    sankey = figure.data[0]
+
+    assert figure.layout.title.text == "Selected-action policy and target-RRI rank flow"
+    assert sum(row["count"] for row in flow if row["source_stage"] == "selected_root") == 3
+    assert sum(row["count"] for row in flow if row["target_stage"] == "target_rri_rank") == 3
+    assert {row["root_denominator"] for row in flow} == {3}
+    assert "temperature_softmax (τ=1)" in set(sankey.node.label)
+    assert {"1", "3", "unavailable"} <= set(sankey.node.label)
 
 
 def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(

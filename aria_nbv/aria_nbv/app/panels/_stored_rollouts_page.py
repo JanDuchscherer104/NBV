@@ -10,8 +10,10 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+from collections import Counter
 from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
 
@@ -217,7 +219,7 @@ def _cached_projection(
     if projection == "candidate_flow":
         return candidate_flow_rows(reader, policies=policies, step_indices=step_indices)
     if projection == "ranks":
-        return selected_candidate_rank_rows(reader)
+        return selected_candidate_rank_rows(reader, policies=policies, step_indices=step_indices)
     if projection == "targets":
         return target_audit_rows(reader)
     if projection == "masks":
@@ -301,8 +303,11 @@ def _clear_stored_rollout_caches() -> None:
 def render_stored_rollouts_page() -> None:
     """Render the five-workspace stored-rollout inspection workflow."""
 
-    st.header("Stored Rollout Zarr")
-    st.caption("Trust the artifact first, compare only matched evidence, then inspect one failure or rollout in depth.")
+    st.header("Rollout Supervision")
+    st.caption(
+        "Inspect persisted rollout Zarr artifacts: trust the artifact first, compare only matched evidence, "
+        "then inspect one failure or rollout in depth."
+    )
     _render_role_legend()
 
     paths = PathConfig()
@@ -1046,6 +1051,8 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
 def _render_candidate_provenance_flow(store_path: str) -> None:
     """Render the lightweight complete-population candidate provenance flow."""
 
+    _, validation, _ = _cached_store_bundle(store_path)
+    store_candidate_count = int(validation.num_candidates)
     steps = pd.DataFrame(_cached_projection(store_path, "steps"))
     policy_options = sorted(str(value) for value in steps.get("policy", pd.Series(dtype=str)).dropna().unique())
     depth_options = sorted(int(value) for value in steps.get("step_index", pd.Series(dtype=int)).dropna().unique())
@@ -1061,22 +1068,29 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
         )
     )
     if flow.empty:
-        st.info("No candidate rows match the active policy and rollout-depth filters.")
+        st.info(
+            "No candidate rows match the active policy and rollout-depth filters. "
+            f"The unfiltered store contains {store_candidate_count:,} candidate rows."
+        )
         return
     denominator = int(flow["root_denominator"].iloc[0])
+    projected_store_count = int(flow["store_candidate_count"].iloc[0])
+    if projected_store_count != store_candidate_count:
+        raise ValueError("Candidate-flow projection disagrees with validated store candidate count.")
     st.caption(
-        f"Filtered root population: {denominator:,} candidate rows. This is candidate provenance and support, not a stored rollout search tree."
+        f"Active-scope root: {denominator:,} of {store_candidate_count:,} persisted candidate rows, including both "
+        "actor-valid and actor-invalid candidates. Policy/depth filters define the scope; validity never filters the root."
     )
     _render_plot(
         _candidate_flow_figure(flow),
         ScientificExplanation(
-            question="How does persisted candidate-generation provenance flow into actor-valid support and selected outcomes?",
-            population="Every candidate row matching the visible policy/depth filters, aggregated through mixture, position, orientation, actor validity, and selection outcome.",
+            question="How does persisted candidate-generation provenance flow into actor-valid support and terminal outcomes?",
+            population="Every candidate row matching the visible policy/depth filters, including actor-valid and actor-invalid rows, aggregated through proposal signature, actor validity, and outcome.",
             metric="Candidate count and fraction of the filtered root population; no reward or geometric units.",
             denominator_masks="The filtered complete candidate population is the root denominator. Actor validity is a hard action constraint; selected actor-invalid rows remain explicit selection_contract_violation evidence.",
-            comparability="Candidate mixture, family vocabulary, orientation strategy, budget, and active policy/depth filters must match.",
-            expected_pattern="Intended mixture, position, and orientation support survives actor validation, and selected rows remain a subset of actor-valid support.",
-            failure_interpretation="Unknown provenance indicates missing persisted labels; disappearing families indicate support loss; selection_contract_violation is a hard invariant failure.",
+            comparability="Candidate proposal signatures, budgets, and active policy/depth filters must match.",
+            expected_pattern="Intended center/view proposal signatures retain actor-valid support, while invalid rows terminate at explicit reasons and selected rows remain actor-valid.",
+            failure_interpretation="Unknown provenance indicates missing persisted labels; concentrated invalid reasons indicate support loss; selection_contract_violation is a hard invariant failure.",
             evidence_role="provenance",
             source_fields=(
                 "inspection.candidate_flow_rows",
@@ -1085,17 +1099,191 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
                 "candidates/strategy_id",
                 "candidates/actor_action_mask",
                 "candidates/selected_mask",
+                "candidates/primary_invalid_reason",
             ),
         ),
     )
     st.dataframe(flow, hide_index=True, width="stretch")
     _download_frame("Download candidate provenance flow CSV", "candidate-provenance-flow.csv", flow)
 
+    ranks = pd.DataFrame(
+        _cached_projection(
+            store_path,
+            "ranks",
+            policies=tuple(selected_policies),
+            step_indices=tuple(selected_depths),
+        )
+    )
+    _render_selected_action_policy_flow(ranks)
+
 
 def _candidate_flow_figure(flow: pd.DataFrame) -> go.Figure:
     """Build one stage-stable Sankey from normalized candidate-flow links."""
 
-    stage_order = ("root", "mixture", "position", "orientation", "actor_validity", "selection_outcome")
+    return _sankey_figure(
+        flow,
+        stage_order=("root", "proposal", "actor_validity", "candidate_outcome"),
+        title="Candidate provenance and support flow",
+    )
+
+
+def _render_selected_action_policy_flow(ranks: pd.DataFrame) -> None:
+    """Render policy mechanics and target-RRI rank for selected rollout steps."""
+
+    st.markdown("#### Selected-action policy and rank")
+    if ranks.empty or "selected_candidate_row_id" not in ranks:
+        st.info("No selected rollout steps match the active policy and rollout-depth filters.")
+        return
+    selected_ranks = ranks[pd.to_numeric(ranks["selected_candidate_row_id"], errors="coerce").fillna(-1) >= 0].copy()
+    if selected_ranks.empty:
+        st.info("No selected rollout steps match the active policy and rollout-depth filters.")
+        return
+    st.caption(
+        "Temperature-softmax is the primary behavior-policy view for training-data diversity; random-valid and "
+        "oracle policies remain baseline and upper-bound evidence. Target-RRI rank is an oracle diagnostic and is "
+        "kept distinct from the persisted selection-score rank."
+    )
+    selection_flow = pd.DataFrame(_selected_action_flow_rows(selected_ranks))
+    if not selection_flow.empty:
+        _render_plot(
+            _selected_action_flow_figure(selection_flow),
+            ScientificExplanation(
+                question="Which candidate/action policy selected each persisted action, and where did that action rank by target RRI?",
+                population="One persisted selected rollout step matching the active policy/depth filters.",
+                metric="Selected-step count and target-RRI competition rank among finite actor-valid candidates.",
+                denominator_masks="The root denominator is selected rollout steps. Target-RRI rank excludes actor-invalid and non-finite alternatives; unavailable ranks remain explicit.",
+                comparability="Compare policies only under matched roots, targets, candidate proposals, acquisition budgets, and score semantics.",
+                expected_pattern="Temperature-softmax covers more than rank one without collapsing to uniformly poor target-RRI ranks; greedy policies concentrate near the top.",
+                failure_interpretation="Unavailable ranks indicate missing oracle diagnostics; high-rank concentration can indicate excessive temperature or score/RRI mismatch.",
+                evidence_role="oracle/evaluation",
+                source_fields=(
+                    "inspection.selected_candidate_rank_rows",
+                    "rollouts/policy_id",
+                    "rollouts/temperature",
+                    "candidates/selection_probabilities",
+                    "candidates/selection_logits",
+                    "candidates/target_rri",
+                ),
+            ),
+        )
+        st.dataframe(selection_flow, hide_index=True, width="stretch")
+        _download_frame(
+            "Download selected-action policy/rank flow CSV",
+            "selected-action-policy-rank-flow.csv",
+            selection_flow,
+        )
+
+    exact_columns = [
+        column
+        for column in (
+            "rollout_row_id",
+            "step_row_id",
+            "step_index",
+            "selected_candidate_row_id",
+            "policy",
+            "temperature",
+            "score_source",
+            "selected_probability",
+            "selection_entropy",
+            "selection_score_rank",
+            "selection_score_rank_denominator",
+            "target_rri_rank",
+            "rank_denominator",
+            "target_rri_rank_label",
+            "selected_target_rri",
+            "selected_target_root_gain",
+        )
+        if column in selected_ranks
+    ]
+    exact_table = selected_ranks[exact_columns].rename(
+        columns={"target_rri_rank_label": "target-RRI rank / finite actor-valid candidates"}
+    )
+    st.dataframe(exact_table, hide_index=True, width="stretch")
+    _download_frame(
+        "Download exact selected-step evidence CSV",
+        "selected-step-selection-evidence.csv",
+        selected_ranks,
+    )
+
+
+def _selected_action_flow_rows(ranks: pd.DataFrame) -> list[dict[str, object]]:
+    """Aggregate selected-step policy and target-RRI ranks for a Sankey."""
+
+    if ranks.empty or "selected_candidate_row_id" not in ranks:
+        return []
+    selected = ranks[pd.to_numeric(ranks["selected_candidate_row_id"], errors="coerce").fillna(-1) >= 0]
+    denominator = len(selected)
+    if denominator <= 0:
+        return []
+    counts: Counter[tuple[str, str, str, str, str, str]] = Counter()
+    root = ("selected_root:steps", f"Selected rollout steps ({denominator:,})", "selected_root")
+    for _, row in selected.iterrows():
+        policy = str(row.get("policy") or "unknown")
+        temperature = pd.to_numeric(pd.Series([row.get("temperature")]), errors="coerce").iloc[0]
+        policy_label = policy
+        if policy == "temperature_softmax" and pd.notna(temperature):
+            policy_label = f"{policy} (τ={float(temperature):g})"
+        actor_valid = bool(row.get("selected_actor_valid", True))
+        rank_label = (
+            "selection_contract_violation" if not actor_valid else _target_rri_rank_bucket(row.get("target_rri_rank"))
+        )
+        nodes = (
+            root,
+            (f"candidate_action_policy:{policy_label}", policy_label, "candidate_action_policy"),
+            (f"target_rri_rank:{rank_label}", rank_label, "target_rri_rank"),
+        )
+        for source_node, target_node in pairwise(nodes):
+            counts[(*source_node, *target_node)] += 1
+
+    stage_order = {stage: index for index, stage in enumerate(("selected_root", "candidate_action_policy"))}
+    output: list[dict[str, object]] = []
+    for transition, count in sorted(
+        counts.items(),
+        key=lambda item: (stage_order[item[0][2]], item[0][0], item[0][3]),
+    ):
+        source_id, source_label, source_stage, target_id, target_label, target_stage = transition
+        output.append(
+            {
+                "source_id": source_id,
+                "source_label": source_label,
+                "source_stage": source_stage,
+                "target_id": target_id,
+                "target_label": target_label,
+                "target_stage": target_stage,
+                "transition": f"{source_stage} -> {target_stage}",
+                "count": int(count),
+                "root_denominator": denominator,
+                "fraction_of_root": float(count) / float(denominator),
+            }
+        )
+    return output
+
+
+def _target_rri_rank_bucket(value: object) -> str:
+    """Return the compact displayed bucket for one exact target-RRI rank."""
+
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        return "unavailable"
+    if rank <= 0:
+        return "unavailable"
+    return str(rank) if rank <= 10 else ">10"
+
+
+def _selected_action_flow_figure(flow: pd.DataFrame | list[dict[str, object]]) -> go.Figure:
+    """Build the selected-step policy-to-target-RRI-rank Sankey."""
+
+    return _sankey_figure(
+        pd.DataFrame(flow),
+        stage_order=("selected_root", "candidate_action_policy", "target_rri_rank"),
+        title="Selected-action policy and target-RRI rank flow",
+    )
+
+
+def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: str) -> go.Figure:
+    """Build one stage-stable Sankey from normalized count-conserving links."""
+
     nodes: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for stage in stage_order:
@@ -1131,7 +1319,7 @@ def _candidate_flow_figure(flow: pd.DataFrame) -> go.Figure:
             },
         )
     )
-    figure.update_layout(title="Candidate provenance and support flow")
+    figure.update_layout(title=title)
     return figure
 
 

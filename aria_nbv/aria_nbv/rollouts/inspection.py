@@ -478,8 +478,9 @@ def candidate_flow_rows(
     """Return a count-conserving categorical candidate-provenance flow.
 
     The projection reads only rollout policy, candidate depth, provenance,
-    actor-validity, and selected-status arrays. It deliberately excludes
-    geometry, rewards, oracle labels, training masks, motion, and dense depth.
+    actor-validity, invalid-reason, and selected-status arrays. It deliberately
+    excludes geometry, rewards, oracle labels, training masks, motion, and
+    dense depth.
 
     Args:
         reader: Read-only rollout-store adapter.
@@ -488,9 +489,10 @@ def candidate_flow_rows(
             aggregation.
 
     Returns:
-        Consecutive stage links over the complete filtered candidate
-        population. Every count and fraction uses the filtered population as
-        its root denominator. A selected actor-invalid row terminates at
+        Consecutive links from the complete filtered candidate population to a
+        combined proposal signature, actor validity, and terminal outcome.
+        Every count and fraction uses the filtered population as its root
+        denominator. A selected actor-invalid row terminates at
         ``selection_contract_violation``.
     """
 
@@ -511,8 +513,20 @@ def candidate_flow_rows(
     strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
     actor_action = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
     selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    primary_invalid_reason = np.asarray(
+        reader.array("candidates/primary_invalid_reason"),
+        dtype=np.int64,
+    ).reshape(-1)
     candidate_count = int(candidate_rollout_ids.size)
-    arrays = (candidate_steps, mixture_ids, position_ids, strategy_ids, actor_action, selected)
+    arrays = (
+        candidate_steps,
+        mixture_ids,
+        position_ids,
+        strategy_ids,
+        actor_action,
+        selected,
+        primary_invalid_reason,
+    )
     if any(array.size != candidate_count for array in arrays):
         raise ValueError("Candidate flow arrays must have one aligned value per candidate row.")
 
@@ -526,37 +540,38 @@ def candidate_flow_rows(
         if step_filter is not None and int(candidate_steps[index]) not in step_filter:
             include[index] = False
 
+    denominator = int(include.sum())
     component_names = _component_names(reader.manifest())
     transition_counts: Counter[tuple[str, str, str, str, str, str]] = Counter()
-    root = ("root:filtered_candidates", "filtered candidates", "root")
+    root = (
+        "root:scoped_candidates",
+        f"All candidates in active scope ({denominator:,}; valid + invalid)",
+        "root",
+    )
     for index in np.flatnonzero(include).tolist():
         mixture = _decoded_id(int(mixture_ids[index]), names=component_names, prefix="mixture")
         position = decode_position_id(int(position_ids[index])) if int(position_ids[index]) >= 0 else "unknown"
         strategy = decode_strategy_id(int(strategy_ids[index]))
         validity = "actor_valid" if bool(actor_action[index]) else "actor_invalid"
-        outcome = (
-            "selection_contract_violation"
-            if bool(selected[index]) and not bool(actor_action[index])
-            else "selected"
-            if bool(selected[index])
-            else "unselected"
-        )
+        proposal_key = f"{int(mixture_ids[index])}:{int(position_ids[index])}:{int(strategy_ids[index])}"
+        proposal_label = f"{mixture} · center={position} · view={strategy}"
+        if bool(selected[index]) and not bool(actor_action[index]):
+            outcome = "selection_contract_violation"
+        elif bool(actor_action[index]):
+            outcome = "selected" if bool(selected[index]) else "unselected"
+        else:
+            outcome = f"invalid: {decode_invalid_reason(primary_invalid_reason[index])}"
         nodes = (
             root,
-            (f"mixture:{mixture}", mixture, "mixture"),
-            (f"position:{position}", position, "position"),
-            (f"orientation:{strategy}", strategy, "orientation"),
+            (f"proposal:{proposal_key}", proposal_label, "proposal"),
             (f"actor_validity:{validity}", validity, "actor_validity"),
-            (f"selection_outcome:{outcome}", outcome, "selection_outcome"),
+            (f"candidate_outcome:{outcome}", outcome, "candidate_outcome"),
         )
         for source_node, target_node in pairwise(nodes):
             transition_counts[(*source_node, *target_node)] += 1
 
-    denominator = int(include.sum())
     rows: list[dict[str, object]] = []
-    stage_order = {
-        stage: index for index, stage in enumerate(("root", "mixture", "position", "orientation", "actor_validity"))
-    }
+    stage_order = {stage: index for index, stage in enumerate(("root", "proposal", "actor_validity"))}
     for transition, count in sorted(
         transition_counts.items(),
         key=lambda item: (stage_order[item[0][2]], item[0][0], item[0][3]),
@@ -573,6 +588,7 @@ def candidate_flow_rows(
                 "transition": f"{source_stage} -> {target_stage}",
                 "count": int(count),
                 "root_denominator": denominator,
+                "store_candidate_count": candidate_count,
                 "fraction_of_root": _safe_fraction(int(count), denominator),
             }
         )
@@ -989,61 +1005,191 @@ def paired_policy_comparison_rows(
     return output
 
 
-def selected_candidate_rank_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
-    """Rank each selected candidate against finite actor-valid alternatives.
+def selected_candidate_rank_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    policies: Iterable[str] | None = None,
+    step_indices: Iterable[int] | None = None,
+) -> list[dict[str, object]]:
+    """Rank selected actions by policy score and oracle target diagnostics.
 
-    Rank and regret use ``target_root_gain`` only where the oracle label is
-    finite. A negative finite reward remains a valid supervised outcome and is
-    never conflated with an invalid or missing candidate label.
+    Root-gain rank/regret preserve the historical projection contract.
+    ``selection_score_rank`` uses the persisted logits that actually governed
+    selection, while ``target_rri_rank`` is a separate oracle diagnostic. All
+    ranks use competition ranking over finite actor-valid alternatives, so
+    ties share a rank and invalid or missing labels are never assigned a low
+    score.
 
     Args:
         reader: Read-only rollout-store adapter.
+        policies: Optional decoded candidate/action-policy allowlist.
+        step_indices: Optional rollout-depth allowlist.
 
     Returns:
-        One row per rollout step with selected rank, regret to the best valid
-        alternative, and the finite valid-candidate reward band.
+        One row per selected rollout step with policy mechanics, exact ranks,
+        regret to the best valid alternative, and finite reward bands.
     """
 
+    policy_filter = None if policies is None else {str(value) for value in policies}
+    step_filter = None if step_indices is None else {int(value) for value in step_indices}
+
+    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    source_ids = np.asarray(reader.array("rollouts/source_row_id"), dtype=np.int64).reshape(-1)
+    target_ids = np.asarray(reader.array("rollouts/target_row_id"), dtype=np.int64).reshape(-1)
+    policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
+    temperatures = np.asarray(reader.array("rollouts/temperature"), dtype=np.float64).reshape(-1)
+    policy_names = _read_string_array(reader, "dictionaries/policy")
+    rollout_arrays = (source_ids, target_ids, policy_ids, temperatures)
+    if (
+        any(values.size != rollout_ids.size for values in rollout_arrays)
+        or np.unique(rollout_ids).size != rollout_ids.size
+    ):
+        raise ValueError("Selected-action ranks require unique, aligned rollout rows.")
+    rollout_context = {
+        int(rollout_id): (
+            int(source_id),
+            int(target_id),
+            _decoded_id(int(policy_id), names=dict(enumerate(policy_names)), prefix="policy"),
+            _finite_or_none(temperature),
+        )
+        for rollout_id, source_id, target_id, policy_id, temperature in zip(
+            rollout_ids,
+            source_ids,
+            target_ids,
+            policy_ids,
+            temperatures,
+            strict=True,
+        )
+    }
+
+    step_row_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
+    step_rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
+    step_depths = np.asarray(reader.array("steps/step_index"), dtype=np.int64).reshape(-1)
+    selected_candidate_ids = np.asarray(reader.array("steps/selected_candidate_row_id"), dtype=np.int64).reshape(-1)
+    step_arrays = (step_rollout_ids, step_depths, selected_candidate_ids)
+    if (
+        any(values.size != step_row_ids.size for values in step_arrays)
+        or np.unique(step_row_ids).size != step_row_ids.size
+    ):
+        raise ValueError("Selected-action ranks require unique, aligned step rows.")
+
+    candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
+    candidate_step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
+    actor_action = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    target_root_gain = np.asarray(reader.array("candidates/target_root_gain"), dtype=np.float64).reshape(-1)
+    target_rri = np.asarray(reader.array("candidates/target_rri"), dtype=np.float64).reshape(-1)
+    selection_logits = np.asarray(reader.array("candidates/selection_logits"), dtype=np.float64).reshape(-1)
+    selection_probabilities = np.asarray(
+        reader.array("candidates/selection_probabilities"),
+        dtype=np.float64,
+    ).reshape(-1)
+    score_source_ids = np.asarray(reader.array("candidates/score_source_id"), dtype=np.int64).reshape(-1)
+    score_source_names = _read_string_array(reader, "dictionaries/score_source")
+    score_sources = dict(enumerate(score_source_names))
+    candidate_arrays = (
+        candidate_step_ids,
+        actor_action,
+        target_root_gain,
+        target_rri,
+        selection_logits,
+        selection_probabilities,
+        score_source_ids,
+    )
+    if any(values.size != candidate_ids.size for values in candidate_arrays):
+        raise ValueError("Selected-action ranks require aligned candidate rows.")
+    candidate_positions_by_step: dict[int, list[int]] = {}
+    for candidate_position, step_row_id in enumerate(candidate_step_ids.tolist()):
+        candidate_positions_by_step.setdefault(int(step_row_id), []).append(candidate_position)
+
     rows: list[dict[str, object]] = []
-    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
-    for rollout_position in range(rollout_count):
-        rollout = rollout_at(reader, rollout_position)
-        for step in rollout_steps(reader, rollout):
-            selected = step.selected_local_index
-            finite_valid = step.actor_action_mask & np.isfinite(step.target_root_gain)
-            values = np.asarray(step.target_root_gain[finite_valid], dtype=np.float64)
-            selected_value = None if selected < 0 else _finite_or_none(step.target_root_gain[selected])
-            selected_actor_valid = bool(selected >= 0 and step.actor_action_mask[selected])
-            selected_rank = None
-            regret = None
-            if selected_value is not None and selected_actor_valid and values.size:
-                selected_rank = 1 + int(np.count_nonzero(values > float(selected_value)))
-                regret = float(np.max(values) - float(selected_value))
-            rows.append(
-                {
-                    "rollout_row_id": rollout.rollout_row_id,
-                    "step_row_id": step.step_row_id,
-                    "step_index": step.step_index,
-                    "source_row_id": rollout.source_row_id,
-                    "target_row_id": rollout.target_row_id,
-                    "policy": rollout.policy,
-                    "selected_candidate_row_id": step.selected_candidate_row_id,
-                    "selected_actor_valid": selected_actor_valid,
-                    "selected_label_available": selected_value is not None,
-                    "selected_target_root_gain": selected_value,
-                    "selected_reward_negative": selected_value is not None and selected_value < 0.0,
-                    "selected_rank": selected_rank,
-                    "regret_to_best": regret,
-                    "valid_candidate_count": int(step.actor_action_mask.sum()),
-                    "finite_valid_label_count": int(values.size),
-                    "best_valid_target_root_gain": None if values.size == 0 else float(np.max(values)),
-                    "valid_target_root_gain_q25": None if values.size == 0 else float(np.percentile(values, 25)),
-                    "valid_target_root_gain_median": None if values.size == 0 else float(np.median(values)),
-                    "valid_target_root_gain_q75": None if values.size == 0 else float(np.percentile(values, 75)),
-                    "worst_valid_target_root_gain": None if values.size == 0 else float(np.min(values)),
-                    "units": "dimensionless root-normalized target gain",
-                }
-            )
+    for step_row_id, rollout_row_id, step_index, selected_candidate_id in zip(
+        step_row_ids,
+        step_rollout_ids,
+        step_depths,
+        selected_candidate_ids,
+        strict=True,
+    ):
+        try:
+            source_row_id, target_row_id, policy, temperature = rollout_context[int(rollout_row_id)]
+        except KeyError as exc:
+            raise ValueError(f"Step {int(step_row_id)} references unknown rollout {int(rollout_row_id)}.") from exc
+        if policy_filter is not None and policy not in policy_filter:
+            continue
+        if step_filter is not None and int(step_index) not in step_filter:
+            continue
+        positions = np.asarray(candidate_positions_by_step.get(int(step_row_id), []), dtype=np.int64)
+        step_candidate_ids = candidate_ids[positions]
+        selected_matches = np.flatnonzero(step_candidate_ids == int(selected_candidate_id))
+        if selected_matches.size > 1:
+            raise ValueError(f"Step {int(step_row_id)} has duplicate selected candidate row ids.")
+        selected = int(selected_matches[0]) if selected_matches.size else -1
+        step_actor_action = actor_action[positions]
+        selected_actor_valid = bool(selected >= 0 and step_actor_action[selected])
+        root_gain_rank, root_gain_count, selected_value, values = _selected_competition_rank(
+            target_root_gain[positions],
+            valid_mask=step_actor_action,
+            selected_index=selected,
+        )
+        target_rri_rank, target_rri_count, selected_target_rri, _target_rri_values = _selected_competition_rank(
+            target_rri[positions],
+            valid_mask=step_actor_action,
+            selected_index=selected,
+        )
+        selection_score_rank, selection_score_count, _selected_logit, _selection_values = _selected_competition_rank(
+            selection_logits[positions],
+            valid_mask=step_actor_action,
+            selected_index=selected,
+        )
+        regret = None if selected_value is None or not values.size else float(np.max(values) - selected_value)
+        selected_row = int(positions[selected]) if selected >= 0 else -1
+        score_source = (
+            _decoded_id(int(score_source_ids[selected_row]), names=score_sources, prefix="score_source")
+            if selected_row >= 0
+            else "unknown"
+        )
+        entropy = candidate_policy_entropy(
+            torch.from_numpy(selection_probabilities[positions]),
+            torch.from_numpy(step_actor_action),
+        )
+        rows.append(
+            {
+                "rollout_row_id": int(rollout_row_id),
+                "step_row_id": int(step_row_id),
+                "step_index": int(step_index),
+                "source_row_id": source_row_id,
+                "target_row_id": target_row_id,
+                "policy": policy,
+                "temperature": temperature,
+                "score_source": score_source,
+                "selected_candidate_row_id": int(selected_candidate_id),
+                "selected_actor_valid": selected_actor_valid,
+                "selected_label_available": selected_value is not None,
+                "selected_target_root_gain": selected_value,
+                "selected_target_rri": selected_target_rri,
+                "selected_probability": (
+                    None if selected < 0 else _finite_or_none(selection_probabilities[selected_row])
+                ),
+                "selection_entropy": _finite_or_none(entropy.item()),
+                "selected_reward_negative": selected_value is not None and selected_value < 0.0,
+                "selected_rank": root_gain_rank,
+                "selection_score_rank": selection_score_rank,
+                "selection_score_rank_denominator": selection_score_count,
+                "target_rri_rank": target_rri_rank,
+                "rank_denominator": target_rri_count,
+                "target_rri_rank_label": (
+                    "unavailable" if target_rri_rank is None else f"{target_rri_rank} / {target_rri_count}"
+                ),
+                "regret_to_best": regret,
+                "valid_candidate_count": int(step_actor_action.sum()),
+                "finite_valid_label_count": root_gain_count,
+                "best_valid_target_root_gain": None if values.size == 0 else float(np.max(values)),
+                "valid_target_root_gain_q25": None if values.size == 0 else float(np.percentile(values, 25)),
+                "valid_target_root_gain_median": None if values.size == 0 else float(np.median(values)),
+                "valid_target_root_gain_q75": None if values.size == 0 else float(np.percentile(values, 75)),
+                "worst_valid_target_root_gain": None if values.size == 0 else float(np.min(values)),
+                "units": "dimensionless root-normalized target gain",
+            }
+        )
     return rows
 
 
@@ -2555,6 +2701,32 @@ def _finite_or_none(value: object) -> float | None:
     except (TypeError, ValueError):
         return None
     return value_float if np.isfinite(value_float) else None
+
+
+def _selected_competition_rank(
+    values: np.ndarray,
+    *,
+    valid_mask: np.ndarray,
+    selected_index: int,
+) -> tuple[int | None, int, float | None, np.ndarray]:
+    """Rank one selected value over finite actor-valid alternatives.
+
+    Equal values share the same one-based competition rank. The returned
+    denominator contains only finite rows admitted by ``valid_mask``; an
+    invalid, absent, or non-finite selection has no rank.
+    """
+
+    flattened = np.asarray(values, dtype=np.float64).reshape(-1)
+    valid = np.asarray(valid_mask, dtype=np.bool_).reshape(-1)
+    if flattened.shape != valid.shape:
+        raise ValueError("Rank values and validity mask must have identical one-dimensional shapes.")
+    finite_valid = valid & np.isfinite(flattened)
+    alternatives = flattened[finite_valid]
+    if selected_index < 0 or selected_index >= flattened.size or not bool(finite_valid[selected_index]):
+        return None, int(alternatives.size), None, alternatives
+    selected_value = float(flattened[selected_index])
+    rank = 1 + int(np.count_nonzero(alternatives > selected_value))
+    return rank, int(alternatives.size), selected_value, alternatives
 
 
 def _safe_fraction(numerator: int, denominator: int) -> float | None:

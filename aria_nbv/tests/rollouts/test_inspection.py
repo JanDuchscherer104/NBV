@@ -399,6 +399,7 @@ class _NarrowCandidateFlowReader:
             "candidates/strategy_id": np.asarray([0, 1, -1, 0, 1, 1], dtype=np.int32),
             "candidates/actor_action_mask": np.asarray([True, True, False, True, False, True]),
             "candidates/selected_mask": np.asarray([True, False, True, False, False, True]),
+            "candidates/primary_invalid_reason": np.asarray([0, 0, 1, 0, 6, 0], dtype=np.uint16),
         }
 
     def array(self, path: str) -> np.ndarray:
@@ -429,11 +430,24 @@ def test_candidate_flow_rows_are_narrow_conservative_and_preserve_violations() -
 
     assert rows == candidate_flow_rows(_NarrowCandidateFlowReader())
     assert {row["root_denominator"] for row in rows} == {6}
+    assert {row["store_candidate_count"] for row in rows} == {6}
     assert all(row["fraction_of_root"] == pytest.approx(row["count"] / 6.0) for row in rows)
     assert sum(row["count"] for row in rows if row["source_stage"] == "root") == 6
-    assert sum(row["count"] for row in rows if row["target_stage"] == "selection_outcome") == 6
+    assert sum(row["count"] for row in rows if row["target_stage"] == "candidate_outcome") == 6
+    assert {row["source_stage"] for row in rows} | {row["target_stage"] for row in rows} == {
+        "root",
+        "proposal",
+        "actor_validity",
+        "candidate_outcome",
+    }
+    assert not any(row["source_stage"] in {"mixture", "position", "orientation"} for row in rows)
+    proposal_labels = {
+        str(row["target_label"]) for row in rows if row["source_stage"] == "root" and row["target_stage"] == "proposal"
+    }
+    assert proposal_labels
+    assert all("center=" in label and "view=" in label for label in proposal_labels)
     assert any(row["target_label"] == "selection_contract_violation" and row["count"] == 1 for row in rows)
-    assert any(row["target_label"] == "unknown" for row in rows)
+    assert any(row["target_label"] == "invalid: PATH_SEGMENT_COLLISION" and row["count"] == 1 for row in rows)
     assert not any("oracle" in str(value) or "q_train" in str(value) for row in rows for value in row.values())
     assert set(reader.requested) == {
         "rollouts/rollout_row_id",
@@ -446,6 +460,7 @@ def test_candidate_flow_rows_are_narrow_conservative_and_preserve_violations() -
         "candidates/strategy_id",
         "candidates/actor_action_mask",
         "candidates/selected_mask",
+        "candidates/primary_invalid_reason",
     }
 
     incoming: dict[str, int] = {}
@@ -467,6 +482,7 @@ def test_candidate_flow_rows_apply_policy_and_depth_filters_to_the_root_denomina
     )
 
     assert {row["root_denominator"] for row in rows} == {2}
+    assert {row["store_candidate_count"] for row in rows} == {6}
     assert sum(row["count"] for row in rows if row["source_stage"] == "root") == 2
     assert not any(row["target_label"] == "selection_contract_violation" for row in rows)
 
@@ -702,16 +718,86 @@ def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invali
     alternative_row = int(next(row for row in valid_rows.tolist() if row != selected_row))
     root["candidates/target_root_gain"][selected_row] = np.asarray(-0.25, dtype=np.float32)
     root["candidates/target_root_gain"][alternative_row] = np.asarray(0.75, dtype=np.float32)
+    root["candidates/target_rri"][selected_row] = np.asarray(-0.5, dtype=np.float32)
+    root["candidates/target_rri"][alternative_row] = np.asarray(0.5, dtype=np.float32)
 
     row = selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))[0]
 
     assert row["selected_actor_valid"] is True
     assert row["selected_reward_negative"] is True
     assert row["selected_rank"] > 1
+    assert row["target_rri_rank"] > 1
     assert float(row["best_valid_target_root_gain"]) >= 0.75
     assert row["regret_to_best"] == pytest.approx(
         float(row["best_valid_target_root_gain"]) - float(row["selected_target_root_gain"])
     )
+
+
+def test_selected_candidate_rank_rows_expose_softmax_policy_and_exact_rri_rank(tmp_path) -> None:
+    """Selected-step evidence should distinguish policy mechanics from target-RRI rank."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=8, seed=61),
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    softmax = next(row for row in selected_candidate_rank_rows(reader) if row["policy"] == "temperature_softmax")
+    root = zarr.open_group(result.store_dir, mode="a")
+    step_ids = np.asarray(root["candidates/step_row_id"], dtype=np.int64)
+    actor_valid = np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_)
+    selected = np.asarray(root["candidates/selected_mask"], dtype=np.bool_)
+    step_rows = np.flatnonzero((step_ids == int(softmax["step_row_id"])) & actor_valid)
+    selected_row = int(np.flatnonzero((step_ids == int(softmax["step_row_id"])) & selected)[0])
+    alternatives = [int(row) for row in step_rows.tolist() if int(row) != selected_row]
+    assert len(alternatives) >= 3
+
+    root["candidates/target_rri"][step_rows] = np.asarray(0.0, dtype=np.float32)
+    root["candidates/selection_logits"][step_rows] = np.asarray(-1.0, dtype=np.float32)
+    root["candidates/target_rri"][selected_row] = np.asarray(1.0, dtype=np.float32)
+    root["candidates/selection_logits"][selected_row] = np.asarray(1.0, dtype=np.float32)
+    for value, row in zip((3.0, 2.0), alternatives[:2], strict=True):
+        root["candidates/target_rri"][row] = np.asarray(value, dtype=np.float32)
+        root["candidates/selection_logits"][row] = np.asarray(value, dtype=np.float32)
+    root["candidates/target_rri"][alternatives[2]] = np.asarray(1.0, dtype=np.float32)
+    root["candidates/selection_logits"][alternatives[2]] = np.asarray(1.0, dtype=np.float32)
+
+    ranked = next(
+        row
+        for row in selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))
+        if row["step_row_id"] == softmax["step_row_id"]
+    )
+
+    assert ranked["temperature"] == pytest.approx(1.0)
+    assert ranked["score_source"] == "target_root_gain"
+    assert ranked["selected_probability"] is not None
+    assert ranked["selection_entropy"] is not None
+    assert ranked["selection_score_rank"] == 3
+    assert ranked["target_rri_rank"] == 3
+    assert ranked["rank_denominator"] == len(step_rows)
+    assert ranked["target_rri_rank_label"] == f"3 / {len(step_rows)}"
+
+
+def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailable(tmp_path) -> None:
+    """Invalid shells and missing selected RRI must not receive synthetic ranks."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=62)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    step_row_id = int(np.asarray(root["steps/step_row_id"], dtype=np.int64)[0])
+    step_rows = np.flatnonzero(np.asarray(root["candidates/step_row_id"], dtype=np.int64) == step_row_id)
+    root["candidates/actor_action_mask"][step_rows] = np.asarray(False, dtype=np.bool_)
+    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
+    root["candidates/target_rri"][selected_row] = np.asarray(np.nan, dtype=np.float32)
+
+    row = selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))[0]
+
+    assert row["selected_actor_valid"] is False
+    assert row["target_rri_rank"] is None
+    assert row["selection_score_rank"] is None
+    assert row["rank_denominator"] == 0
+    assert row["target_rri_rank_label"] == "unavailable"
 
 
 def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path) -> None:
