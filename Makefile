@@ -5,7 +5,7 @@
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary kg-up kg-down kg-status kg-capabilities kg-ollama-check kg-search kg-route kg-claim-check kg-consolidate kg-show-paper kg-sync kg-materialize kg-index-code kg-ingest-docs kg-load-bundle kg-mcp-install kg-doctor kg-enrich kg-ingest-papers kg-export-neo4j kg-semantic-enrich kg-refresh-light kg-refresh-code kg-refresh-lit kg-refresh-semantic kg-refresh-full
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -203,10 +203,18 @@ migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into 
 codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
 
-scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
+scaffold-wp0-baseline: ## 🧭 Validate the immutable WP0 scaffold baseline and closed inventory
+	@python3 scripts/validate_scaffold_wp0_baseline.py
+
+scaffold-wp0-baseline-self-test: ## 🧭 Run WP0 baseline negative-path fixtures
+	@python3 scripts/tests/test_scaffold_wp0_baseline.py
+
+scaffold-wp0-check: scaffold-wp0-baseline scaffold-wp0-baseline-self-test ## 🧭 Run the WP0 baseline gate
+
+scaffold-audit: scaffold-wp0-baseline _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
 
-scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
+scaffold-audit-self-test: scaffold-wp0-baseline-self-test _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
@@ -881,7 +889,7 @@ package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check scaffold-wp0-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

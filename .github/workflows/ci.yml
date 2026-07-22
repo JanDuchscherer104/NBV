@@ -24,7 +24,9 @@ on:
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_integration.py"
       - "scripts/tests/test_post_commit_graph_dispatch.sh"
+      - "scripts/tests/test_scaffold_wp0_baseline.py"
       - "scripts/validate_agent_memory.py"
+      - "scripts/validate_scaffold_wp0_baseline.py"
       - "scripts/validate_qmd_frontmatter.py"
   push:
     branches:
@@ -51,7 +53,9 @@ on:
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_integration.py"
       - "scripts/tests/test_post_commit_graph_dispatch.sh"
+      - "scripts/tests/test_scaffold_wp0_baseline.py"
       - "scripts/validate_agent_memory.py"
+      - "scripts/validate_scaffold_wp0_baseline.py"
       - "scripts/validate_qmd_frontmatter.py"
   workflow_dispatch:
 
@@ -70,6 +74,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Initialize EFM3D submodule
         run: git submodule update --init external/efm3d
