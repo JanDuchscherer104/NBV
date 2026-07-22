@@ -102,14 +102,14 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 ## Graphify
 
 Graphify is the default ARIA-NBV navigation graph when
-`graphify-out/graph.json` exists. The graph is generated local state and should
-remain untracked unless a later artifact or LFS policy changes that.
+`graphify-out/graph.json` exists. The canonical tracked artifacts are
+`graph.json`, `manifest.json`, and `GRAPH_REPORT.md`; HTML, wiki, caches, query
+memory, and interpreter state remain ignored operator output.
 
-The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
-package code, docs, and important `.agents/` references/memory/backlog. It
-excludes runtime state, external repos, generated docs/sites, caches, large
-media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
-`.agents/skills/`, `aria_nbv/scripts/`, and `aria_nbv/tests/`.
+The repo-owned `.graphifyignore` and
+`.agents/references/graphify_contract.md` define the partitioned code,
+scaffold, thesis, and literature corpus. Exact source owners remain
+authoritative; Graphify is source-derived navigation evidence.
 
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,
@@ -122,14 +122,12 @@ Rules:
   dirty graph files are not a reason to skip Graphify. Only skip Graphify if
   the task is about stale or incorrect graph output, or the user explicitly says
   not to use it.
-- If `graphify-out/wiki/index.md` exists, use it for broad navigation before
-  raw source browsing. Read `graphify-out/GRAPH_REPORT.md` for broad
-  architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `python3 scripts/graphify_refresh.py` with the
-  changed paths in `GRAPHIFY_CHANGED`, or run `graphify update .` followed by
-  the freshness check. Documentation, paper, and diagram changes set
-  `graphify-out/needs_update`; refresh them with the Graphify extraction
-  workflow, whose completion records the current policy digest, before treating
-  semantic links as current.
+- Read `graphify-out/GRAPH_REPORT.md` for broad architecture review when
+  query/path/explain do not surface enough context. A wiki may be generated
+  only as ignored on-demand output and is never canonical evidence.
+- A source commit `S` touching the graph corpus must be followed immediately by
+  a graph-only child `G`. Run `make graphify-refresh`, commit only the three
+  canonical artifacts, then prove the pair with `make graphify-ci`. The
+  post-commit hook performs structural refresh only and never stages or commits.
 - Graphify is navigation only. Authority-sensitive claims always resolve to
   exact bibliography, literature, thesis, package, test, or backlog owners.

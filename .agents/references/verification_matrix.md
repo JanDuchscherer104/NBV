@@ -11,6 +11,10 @@ compact command index.
 - Scaffold audit:
   `make scaffold-audit`
   `make scaffold-audit-self-test`
+- Final scaffold budgets and tracked-output policy:
+  `make wp7-integration-check`
+- Pinned Matt closure, isolation, routing, rollback, and prompt budget:
+  `make matt-policy-self-test`
 - Agent memory:
   `make check-agent-memory`
   Covers repo-owned scaffold alignment checks, required debrief frontmatter,
@@ -54,7 +58,7 @@ compact command index.
 ## Exact-Source And Optional Tooling
 
 - Graphify integration and corpus policy:
-  `make graphify-integration-self-test`
+  `make graphify-ci`
 - Local Graphify navigation freshness:
   `python3 scripts/check_graphify_freshness.py`
 - Advisor-facing claim checks:

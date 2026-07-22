@@ -23,9 +23,13 @@ Use this reference when a task needs current project truth or sources disagree.
   for historical evidence, not for current thesis priority.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
+- Approved future work and superseded decision provenance:
+  `.agents/omx_artifacts.toml` plus its registered current and archived bundles.
+  Accepted OMX evidence never overrides current source or scientific owners.
 - Source-derived navigation: Graphify when fresh; exact owners, targeted `rg`,
   contract inspection, document outlines/includes, and bounded directory trees
-  remain the no-tool fallback.
+  remain the no-tool fallback. Corpus-changing source commits require the
+  immediate graph-only child enforced by `make graphify-ci`.
 - Operator aids and long conventions: `.agents/references/`.
 - Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
   read-first, evidence, and verification loops only. They must point to

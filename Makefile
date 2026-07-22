@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree context-contracts context-qmd-outline context-typst-outline context-typst-includes context-dir-tree uml qmd-frontmatter-check
-.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test scaffold-audit scaffold-audit-self-test wp6-direct-source-check check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test scaffold-audit scaffold-audit-self-test matt-policy-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -146,8 +146,17 @@ scaffold-audit: scaffold-wp0-baseline _check_python ## 🧭 Validate agent skill
 scaffold-audit-self-test: scaffold-wp0-baseline-self-test _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 
+matt-policy-self-test: _check_python ## 🧭 Verify pinned Matt closure, isolation, routing, rollback, and prompt budget
+	@$(PYTHON_INTERPRETER) scripts/tests/test_matt_skills_policy.py
+
 wp6-direct-source-check: ## 🧭 Verify retired routes, preserved literature, exact-source fallback, claims, and scoped UML
 	@PYTHON_INTERPRETER="$(PYTHON_INTERPRETER)" ./scripts/tests/test_wp6_direct_source.sh
+
+wp7-integration-self-test: _check_python ## 🧭 Run negative probes for final WP7 budgets
+	@$(PYTHON_INTERPRETER) scripts/tests/test_wp7_integration.py
+
+wp7-integration-check: wp7-integration-self-test _check_python ## 🧭 Prove final skill, LOC, prompt, graph, agent, and wiki budgets
+	@$(PYTHON_INTERPRETER) scripts/scaffold/check_wp7_integration.py
 
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
@@ -202,7 +211,7 @@ install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/
 	@git config merge.graphify.name "ARIA-NBV canonical Graphify merge"
 	@git config merge.graphify.driver "$(PYTHON_INTERPRETER) $(CURDIR)/scripts/graphify_merge_driver.py %O %A %B"
 
-install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Claude, Codex, Gemini, and git
+install-hooks: install-git-hooks ## 🪝 Activate portable Claude, Codex, Gemini, and git hooks
 	@if [ ! -f .codex/hooks.json ]; then \
 		cp .codex/hooks.example.json .codex/hooks.json && \
 			echo "$(GREEN)copied .codex/hooks.example.json -> .codex/hooks.json$(NC)"; \
@@ -492,7 +501,9 @@ package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check scaffold-wp0-check omx-artifacts-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+scaffold-final: scaffold-wp0-check omx-artifacts-check matt-policy-self-test scaffold-audit scaffold-audit-self-test wp6-direct-source-check wp7-integration-check check-agent-memory graphify-ci ## Run the integrated WP0-WP7 scaffold contract
+
+ci: agents-db-validate qmd-frontmatter-check scaffold-final api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help
