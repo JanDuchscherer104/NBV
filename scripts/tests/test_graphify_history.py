@@ -72,9 +72,28 @@ def _graph_commit(
 def main() -> None:
     temporary, root, _ = _repo()
     with temporary:
+        squash_anchor = _graph_commit(root, _git(root, "rev-parse", "HEAD"))
         authoring_range, errors = history.activation_authoring_range(root, "0" * 40)
-        assert authoring_range is None
+        assert authoring_range == f"{squash_anchor}..HEAD"
         assert not errors
+
+        source = root / "aria_nbv/aria_nbv/model.py"
+        source.write_text("VALUE = 2\n", encoding="utf-8")
+        source_commit = _commit(root, "post-squash source")
+        (root / "notes.txt").write_text("delay\n", encoding="utf-8")
+        delayed = _commit(root, "post-squash delay")
+        graph_commit = _graph_commit(root, source_commit)
+        authoring_range, errors = history.activation_authoring_range(root, "0" * 40)
+        assert authoring_range == f"{squash_anchor}..HEAD"
+        assert not errors
+        revisions = _git(
+            root, "rev-list", "--reverse", "--first-parent", authoring_range
+        ).splitlines()
+        assert revisions == [source_commit, delayed, graph_commit]
+        assert any(
+            "lacks immediate" in error
+            for error in history.validate_authoring_history(root, revisions)
+        )
 
     temporary, root, base = _repo()
     with temporary:

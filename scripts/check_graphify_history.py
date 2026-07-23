@@ -267,6 +267,20 @@ def activation_authoring_range(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     ).returncode:
+        revisions = _git(root, "rev-list", "--reverse", "--first-parent", "HEAD")
+        for commit in revisions.splitlines():
+            if all(
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{commit}:{path}"],
+                    cwd=root,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ).returncode
+                == 0
+                for path in CANONICAL
+            ):
+                return f"{commit}..HEAD", []
         return None, []
     errors: list[str] = []
     if _commit_paths(root, activation) != CANONICAL:
