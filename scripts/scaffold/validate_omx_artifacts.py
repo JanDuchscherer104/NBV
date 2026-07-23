@@ -1295,6 +1295,38 @@ def _seed_registry(
             successor = by_id.get(str(bundle.get("superseded_by", "")))
             if successor is None or successor.get("status") != "current":
                 errors.append(f"seed bundle {bundle_id}: successor is not current")
+            elif successor.get("task") == task:
+                pass
+            elif (
+                bundle_id == LEGACY_PREDECESSOR_ID
+                and successor.get("task") == "aria-nbv-agent-scaffold-refresh"
+            ):
+                pass
+            else:
+                errors.append(f"seed bundle {bundle_id}: successor task differs")
+    tombstone_paths: set[str] = set()
+    for offset, tombstone in enumerate(registry["tombstones"]):
+        errors.extend(
+            _exact_keys(tombstone, TOMBSTONE_KEYS, f"seed tombstones[{offset}]")
+        )
+        if not isinstance(tombstone, dict):
+            continue
+        original_path = str(tombstone.get("original_path", ""))
+        if original_path in tombstone_paths:
+            errors.append(f"duplicate seed legacy tombstone: {original_path}")
+        tombstone_paths.add(original_path)
+        if not re.fullmatch(r"[0-9a-f]{40}", str(tombstone.get("blob_hash", ""))):
+            errors.append(f"seed tombstones[{offset}].blob_hash must be a Git SHA-1")
+        if commit_error := _commit_error(root, str(tombstone.get("source_commit", ""))):
+            errors.append(f"seed tombstone {original_path}: {commit_error}")
+        else:
+            blob = _git(
+                root, "rev-parse", f"{tombstone['source_commit']}:{original_path}"
+            )
+            if blob.returncode or blob.stdout.strip() != tombstone.get("blob_hash"):
+                errors.append(
+                    f"seed tombstone {original_path}: source blob hash differs"
+                )
     if errors:
         raise ValueError("invalid seed registry: " + "\n".join(errors))
     return registry
@@ -1982,7 +2014,6 @@ def main() -> int:
     if args.verify_seed:
         try:
             payloads = verify_seed(args.verify_seed, args.repo_root)
-            _seed_registry(payloads)
         except (OSError, ValueError, tarfile.TarError) as exc:
             print(f"seed verification failed: {exc}", file=sys.stderr)
             return 1

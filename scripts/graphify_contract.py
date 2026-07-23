@@ -696,6 +696,15 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
         errors.append("graph does not contain exactly four canonical partitions")
     if not nodes:
         errors.append("graph contains no canonical nodes")
+    for source_path, source_digest in source_digests.items():
+        node = nodes.get(_file_node_id(str(source_path)))
+        if node is None:
+            errors.append(f"graph lacks canonical source node: {source_path}")
+        elif (
+            node.get("source_file") != source_path
+            or node.get("source_digest") != source_digest
+        ):
+            errors.append(f"graph source node digest differs: {source_path}")
     if graph.get("corpus_tree_sha256") != manifest.get("corpus_tree_sha256"):
         errors.append("graph and manifest corpus tree digests differ")
     for node_id, node in nodes.items():

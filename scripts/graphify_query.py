@@ -37,9 +37,10 @@ STOP_TERMS = {
 def _meaningful_terms(query: str) -> list[str]:
     return list(
         dict.fromkeys(
-            term
-            for term in re.findall(r"[A-Za-z0-9_.-]+", query.casefold())
-            if len(term) > 2 and term not in STOP_TERMS
+            normalized
+            for term in re.findall(r"[A-Za-z0-9_.-]+", query)
+            if ((normalized := term.casefold()) not in STOP_TERMS)
+            and (len(normalized) > 2 or any(character.isdigit() for character in term))
         )
     )
 

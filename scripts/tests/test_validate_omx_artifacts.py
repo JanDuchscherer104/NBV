@@ -754,50 +754,67 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 validator._index_path(self.root).read_bytes(), index_before
             )
 
-    def test_seed_verification_rejects_forged_acceptance(self) -> None:
+    def test_seed_verification_rejects_invalid_registry_invariants(self) -> None:
         self.promote("bundle-a")
-        payloads = self.registered_bytes()
+        original_payloads = self.registered_bytes()
+
+        def write_seed(registry: dict, suffix: str) -> Path:
+            payloads = dict(original_payloads)
+            payloads[validator.REGISTRY_REL.as_posix()] = validator.render_registry(
+                registry
+            ).encode()
+            role_by_path = {validator.REGISTRY_REL.as_posix(): "registry"}
+            role_by_path.update(
+                {
+                    artifact["path"]: artifact["role"]
+                    for bundle in registry["bundles"]
+                    for artifact in bundle["artifacts"]
+                }
+            )
+            files = [
+                {
+                    "path": path,
+                    "role": role_by_path[path],
+                    "bytes": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                }
+                for path, content in sorted(payloads.items())
+            ]
+            manifest = (
+                json.dumps(
+                    {"schema_version": validator.SEED_SCHEMA_VERSION, "files": files},
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode()
+            seed = self.root.parent / f"{self.root.name}-{suffix}.tar"
+            with tarfile.open(seed, "w", format=tarfile.PAX_FORMAT) as archive:
+                validator._tar_add_bytes(archive, validator.SEED_MANIFEST, manifest)
+                for path, content in sorted(payloads.items()):
+                    validator._tar_add_bytes(archive, path, content)
+            verified_name = seed.with_name(f"{validator.sha256(seed)}.tar")
+            seed.rename(verified_name)
+            self.addCleanup(verified_name.unlink)
+            return verified_name
+
         registry = validator.load_registry(self.registry_path)
         registry["bundles"][0]["acceptance"] = "forged"
-        payloads[validator.REGISTRY_REL.as_posix()] = validator.render_registry(
-            registry
-        ).encode()
-        role_by_path = {validator.REGISTRY_REL.as_posix(): "registry"}
-        role_by_path.update(
+        with self.assertRaisesRegex(ValueError, "missing explicit user acceptance"):
+            validator.verify_seed(write_seed(registry, "acceptance"), self.root)
+
+        registry = validator.load_registry(self.registry_path)
+        registry["tombstones"].append(
             {
-                artifact["path"]: artifact["role"]
-                for bundle in registry["bundles"]
-                for artifact in bundle["artifacts"]
+                "original_path": "README.md",
+                "source_commit": self.source_commit,
+                "blob_hash": "invalid",
+                "classification": "legacy",
+                "reason": "fixture",
             }
         )
-        files = [
-            {
-                "path": path,
-                "role": role_by_path[path],
-                "bytes": len(content),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            }
-            for path, content in sorted(payloads.items())
-        ]
-        manifest = (
-            json.dumps(
-                {"schema_version": validator.SEED_SCHEMA_VERSION, "files": files},
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
-        ).encode()
-        seed = self.root.parent / f"{self.root.name}-forged.tar"
-        with tarfile.open(seed, "w", format=tarfile.PAX_FORMAT) as archive:
-            validator._tar_add_bytes(archive, validator.SEED_MANIFEST, manifest)
-            for path, content in sorted(payloads.items()):
-                validator._tar_add_bytes(archive, path, content)
-        digest = validator.sha256(seed)
-        verified_name = seed.with_name(f"{digest}.tar")
-        seed.rename(verified_name)
-        self.addCleanup(verified_name.unlink)
-        with self.assertRaisesRegex(ValueError, "missing explicit user acceptance"):
-            validator.verify_seed(verified_name, self.root)
+        with self.assertRaisesRegex(ValueError, "blob_hash must be a Git SHA-1"):
+            validator.verify_seed(write_seed(registry, "tombstone"), self.root)
 
     def test_seed_restore_collision_preserves_sentinel(self) -> None:
         self.promote("bundle-a")

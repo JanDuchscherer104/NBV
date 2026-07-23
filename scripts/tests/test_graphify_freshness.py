@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -49,26 +50,22 @@ def _write_fixture(root: Path) -> tuple[dict, dict]:
             "revision": f"revision-{name}",
         }
     scaffold = next(source for source in sources if source["path"] == "AGENTS.md")
-    scaffold_node = {
-        "id": "scaffold",
-        "label": "AGENTS.md",
-        "source_file": "AGENTS.md",
-        "partition": "scaffold",
-        "role": "guide",
-        "partition_revision": "revision-scaffold",
-    }
-    thesis_node = {
-        "id": "thesis",
-        "label": "page.qmd",
-        "source_file": "docs/page.qmd",
-        "partition": "thesis",
-        "role": "guide",
-        "partition_revision": "revision-thesis",
-    }
+    nodes = [
+        {
+            "id": contract._file_node_id(source["path"]),
+            "label": Path(source["path"]).name,
+            "source_file": source["path"],
+            "source_digest": source["sha256"],
+            "partition": source["partition"],
+            "role": source["role"],
+            "partition_revision": f"revision-{source['partition']}",
+        }
+        for source in sources
+    ]
     edge = {
         "id": "bridge",
-        "source": "scaffold",
-        "target": "thesis",
+        "source": contract._file_node_id("AGENTS.md"),
+        "target": contract._file_node_id("docs/page.qmd"),
         "origin": "INFERRED",
         "confidence_score": 0.9,
         "source_locators": [
@@ -83,7 +80,7 @@ def _write_fixture(root: Path) -> tuple[dict, dict]:
     graph = {
         "corpus_tree_sha256": tree,
         "partitions": partitions,
-        "nodes": [scaffold_node, thesis_node],
+        "nodes": nodes,
         "edges": [edge],
     }
     manifest = {
@@ -102,7 +99,7 @@ def _write_fixture(root: Path) -> tuple[dict, dict]:
 def main() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        graph, _ = _write_fixture(root)
+        graph, manifest = _write_fixture(root)
         state = freshness.partition_freshness(root)
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert not state.bridge_errors
@@ -115,7 +112,7 @@ def main() -> None:
         )
         state = freshness.partition_freshness(root)
         assert set(state.stale) == set(contract.PARTITION_ORDER)
-        assert all(
+        assert any(
             "graph contains no canonical nodes" in reason
             for reasons in state.stale.values()
             for reason in reasons
@@ -124,6 +121,31 @@ def main() -> None:
             json.dumps(graph), encoding="utf-8"
         )
 
+        partial_graph = copy.deepcopy(graph)
+        removed_id = contract._file_node_id(manifest["sources"][0]["path"])
+        partial_graph["nodes"] = [
+            node for node in partial_graph["nodes"] if node["id"] != removed_id
+        ]
+        partial_graph["edges"] = [
+            edge
+            for edge in partial_graph["edges"]
+            if removed_id not in {edge["source"], edge["target"]}
+        ]
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(partial_graph), encoding="utf-8"
+        )
+        state = freshness.partition_freshness(root)
+        assert set(state.stale) == set(contract.PARTITION_ORDER)
+        assert any(
+            "graph lacks canonical source node" in reason
+            for reasons in state.stale.values()
+            for reason in reasons
+        )
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(graph), encoding="utf-8"
+        )
+
+        assert query._meaningful_terms("do V0 V1") == ["v0", "v1"]
         ranked = query._matching_nodes(
             {
                 "nodes": [
