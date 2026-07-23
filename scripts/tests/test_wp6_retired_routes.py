@@ -41,7 +41,8 @@ ACTIVE_SCAN_ROOTS = [
     "scripts",
 ]
 FORBIDDEN = re.compile(
-    r"litkg|aria-litkg|semantic-scholar-litkg|code-review-aria-nbv|diagnose-aria|"
+    r"litkg|aria-litkg|semantic-scholar-litkg|code-review-aria-nbv|"
+    r"ARIA code-review skill|diagnose-aria|"
     r"entity-aware-rri|nbv-geometry-contracts|counterfactual-rollout-planner|"
     r"make\s+kg-|scripts/kg/|\.agents/kg|"
     r"context-heavy|context-(?:index|package|modules|classes|functions|match|literature-index|uml|docstrings|tree)|"
