@@ -180,7 +180,7 @@ graphify-integration-self-test: _check_python ## 🕸️ Verify corpus, provenan
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_history.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
+graphify-ci: graphify-skill-self-test graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
