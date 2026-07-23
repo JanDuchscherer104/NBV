@@ -26,7 +26,7 @@ from ..data_handling.qh import (
     QhStageDataset,
     collate_qh_samples,
 )
-from ..utils import TargetConfig
+from ..utils import Stage, TargetConfig
 
 
 class QhDataModuleConfig(TargetConfig["QhDataModule"]):
@@ -144,11 +144,13 @@ class QhDataModule(pl.LightningDataModule):
 
         return () if self._train_sampler is None else self._train_sampler.duplicated_dataset_indices
 
-    def setup(self, stage: str | None = None) -> None:
-        """Validate the Lightning stage; corpus admission is already complete."""
+    def setup(self, stage: Stage | str | None = None) -> None:
+        """Normalize the Lightning callback stage; corpus admission is already complete."""
 
-        if stage not in {None, "fit", "validate", "val", "test", "predict"}:
-            raise ValueError(f"Unknown Lightning stage {stage!r}.")
+        if stage == "predict":
+            return
+        if stage is not None:
+            Stage.from_str(stage)
 
     def train_dataloader(self) -> DataLoader[QhBatch]:
         """Build the seeded, rank-partitioned training loader."""

@@ -33,7 +33,7 @@ from ...configs import PathConfig
 from ...pose_generation.types import CandidateSamplingResult
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
-from ...utils import BaseConfig, Console, TargetConfig, Verbosity
+from ...utils import BaseConfig, Console, Stage, TargetConfig, Verbosity
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.types import EvlBackboneOutput
 from ..identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
@@ -123,8 +123,8 @@ class VinOfflineSample:
     sample_index: int = -1
     """Global zero-based sample index from ``sample_index.jsonl``."""
 
-    split: str = "all"
-    """Split membership from ``sample_index.jsonl``."""
+    split: Stage = Stage.TRAIN
+    """Lifecycle stage decoded from ``sample_index.jsonl``."""
 
     source_shard_id: str | None = None
     """VIN offline shard id that stores this immutable source row."""
@@ -179,8 +179,8 @@ class VinOfflineDatasetConfig(TargetConfig["VinOfflineDataset"]):
     store: VinOfflineStoreConfig = Field(default_factory=VinOfflineStoreConfig)
     """Immutable VIN offline dataset location."""
 
-    split: Literal["all", "train", "val"] = "all"
-    """Subset of samples to expose."""
+    split: Stage | None = None
+    """Lifecycle stage to expose; ``None`` selects every stored row."""
 
     limit: int | None = None
     """Optional cap on the number of exposed samples."""
@@ -228,6 +228,15 @@ class VinOfflineDatasetConfig(TargetConfig["VinOfflineDataset"]):
     """Verbosity level for dataset diagnostics."""
 
     _validate_map_location = field_validator("map_location", mode="before")(BaseConfig._resolve_device)
+
+    @field_validator("split", mode="before")
+    @classmethod
+    def _normalize_split(cls, value: Stage | str | None) -> Stage | None:
+        """Normalize external split text before it enters the dataset interface."""
+
+        if value is None or value == "all":
+            return None
+        return Stage.from_str(value)
 
 
 class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
@@ -788,7 +797,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             vin_snippet=vin_snippet,
             oracle=oracle,
             sample_index=int(record.sample_index),
-            split=record.split,
+            split=Stage.from_str(record.split),
             source_shard_id=record.shard_id,
             source_shard_row=int(record.row),
             candidates=self._build_candidates(record),

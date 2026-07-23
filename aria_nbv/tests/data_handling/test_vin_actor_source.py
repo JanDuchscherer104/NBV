@@ -22,6 +22,7 @@ from aria_nbv.data_handling.offline.store import (
     VinOfflineStoreConfig,
     VinOfflineStoreReader,
 )
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 if TYPE_CHECKING:
@@ -47,6 +48,13 @@ def test_actor_sample_owns_one_typed_snippet_instead_of_parallel_block_bags() ->
     assert "snippet" in field_names
     assert "blocks" not in field_names
     assert "availability" not in field_names
+
+
+def test_actor_source_normalizes_external_split_text_to_stage() -> None:
+    """Actor source configuration exposes lifecycle stages, not split literals."""
+
+    assert VinActorSourceConfig(split="valid").split is Stage.VAL
+    assert VinActorSourceConfig(split="all").split is None
 
 
 def _write_actor_store(

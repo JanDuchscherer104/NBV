@@ -21,7 +21,7 @@ import zarr
 from pydantic import Field, field_validator
 
 from ...configs import PathConfig
-from ...utils import BaseConfig
+from ...utils import BaseConfig, Stage
 from ...utils.config_paths import resolve_cache_artifact_dir
 from .format import (
     VinOfflineBlockSpec,
@@ -270,19 +270,21 @@ class VinOfflineStoreReader:
         self._opened: dict[str, OpenedShard] = {}
         self._split_cache: dict[str, np.ndarray] = {}
 
-    def get_split_records(self, split: str) -> list[VinOfflineIndexRecord]:
+    def get_split_records(self, split: Stage | None) -> list[VinOfflineIndexRecord]:
         """Return index records for the requested split.
 
         Args:
-            split: Split name such as ``"all"``, ``"train"``, or ``"val"``.
+            split: Lifecycle stage to select, or ``None`` for every stored row.
 
         Returns:
             Ordered index records for the split.
         """
 
-        if split not in self._split_cache:
-            self._split_cache[split] = self.config.read_split_indices(split)
-        return [self._records_by_sample_index[int(idx)] for idx in self._split_cache[split]]
+        if split is None:
+            return list(self.sample_index)
+        if split.value not in self._split_cache:
+            self._split_cache[split.value] = self.config.read_split_indices(split.value)
+        return [self._records_by_sample_index[int(idx)] for idx in self._split_cache[split.value]]
 
     def _open_shard(self, shard_id: str) -> OpenedShard:
         """Open one shard and cache its Zarr-backed blocks.

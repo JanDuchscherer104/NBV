@@ -25,7 +25,7 @@ from torch.nn import functional
 from torch.optim import Optimizer
 
 from ..data_handling.qh import QhActorInputs, QhBatch
-from ..utils import TargetConfig
+from ..utils import Stage, TargetConfig
 from ..vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
 from .optimizers import AdamWConfig
 
@@ -220,19 +220,19 @@ class QhLightningModule(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         """Log exact all-rank training sums over emitted sampler rows."""
 
-        self._log_aggregate("train", self.training_loss_sum, self.training_row_count, distributed=True)
+        self._log_aggregate(Stage.TRAIN, self.training_loss_sum, self.training_row_count, distributed=True)
 
     def validation_step(self, batch: QhBatch, batch_idx: int) -> Tensor:
         """Accumulate local exact-eval sums without per-batch collectives."""
 
         del batch_idx
-        return self._evaluation_step(batch, "validation")
+        return self._evaluation_step(batch, Stage.VAL)
 
     def test_step(self, batch: QhBatch, batch_idx: int) -> Tensor:
         """Accumulate held-out loss with the validation lifecycle contract."""
 
         del batch_idx
-        return self._evaluation_step(batch, "test")
+        return self._evaluation_step(batch, Stage.TEST)
 
     def on_validation_epoch_start(self) -> None:
         """Reset rank-local exact-eval accumulators."""
@@ -243,7 +243,7 @@ class QhLightningModule(pl.LightningModule):
     def on_validation_epoch_end(self) -> None:
         """Log the exact loss accumulated by the replicated evaluation loader."""
 
-        self._log_aggregate("val", self.validation_loss_sum, self.validation_row_count, distributed=False)
+        self._log_aggregate(Stage.VAL, self.validation_loss_sum, self.validation_row_count, distributed=False)
 
     def on_test_epoch_start(self) -> None:
         """Reset rank-local exact held-out accumulators."""
@@ -254,7 +254,7 @@ class QhLightningModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         """Log exact held-out metrics from the replicated evaluation loader."""
 
-        self._log_aggregate("test", self.test_loss_sum, self.test_row_count, distributed=False)
+        self._log_aggregate(Stage.TEST, self.test_loss_sum, self.test_row_count, distributed=False)
 
     def compute_fitted_q_loss(
         self,
@@ -337,20 +337,20 @@ class QhLightningModule(pl.LightningModule):
             self._freeze_target()
             self.target_syncs.add_(1)
 
-    def _evaluation_step(self, batch: QhBatch, stage: str) -> Tensor:
+    def _evaluation_step(self, batch: QhBatch, stage: Stage) -> Tensor:
         losses, targets, admitted, predictions, bootstrap, no_valid_next = self._fitted_q_components(batch)
         loss_sum = losses.detach().double().sum()
         row_count = admitted.sum()
-        if stage == "validation":
+        if stage is Stage.VAL:
             self.validation_loss_sum.add_(loss_sum)
             self.validation_row_count.add_(row_count)
-        elif stage == "test":
+        elif stage is Stage.TEST:
             self.test_loss_sum.add_(loss_sum)
             self.test_row_count.add_(row_count)
         else:
             raise ValueError(f"Unknown Q_H evaluation stage {stage!r}.")
         self._log_step_diagnostics(
-            "val" if stage == "validation" else stage,
+            stage,
             batch=batch,
             losses=losses,
             predictions=predictions,
@@ -363,7 +363,7 @@ class QhLightningModule(pl.LightningModule):
 
     def _log_step_diagnostics(
         self,
-        stage: str,
+        stage: Stage,
         *,
         batch: QhBatch,
         losses: Tensor,
@@ -411,11 +411,11 @@ class QhLightningModule(pl.LightningModule):
             "target_age": (self.optimizer_updates % self.config.target_sync_interval).float(),
             "target_syncs": self.target_syncs.float(),
         }
-        is_training = stage == "train"
+        is_training = stage is Stage.TRAIN
         for name, value in metrics.items():
             reduce_fx = "sum" if name in {"support_actions", "nonfinite_count"} else "mean"
             self.log(
-                f"{stage}/{name}",
+                f"{stage.value}/{name}",
                 value,
                 on_step=is_training,
                 on_epoch=not is_training,
@@ -424,7 +424,7 @@ class QhLightningModule(pl.LightningModule):
                 reduce_fx=reduce_fx,
             )
 
-    def _log_aggregate(self, stage: str, loss_sum: Tensor, row_count: Tensor, *, distributed: bool) -> None:
+    def _log_aggregate(self, stage: Stage, loss_sum: Tensor, row_count: Tensor, *, distributed: bool) -> None:
         total_loss = loss_sum.detach().clone()
         total_count = row_count.detach().clone()
         if distributed and self._distributed():
@@ -432,8 +432,8 @@ class QhLightningModule(pl.LightningModule):
             torch.distributed.all_reduce(total_count, op=torch.distributed.ReduceOp.SUM)
         if int(total_count.item()) == 0:
             return
-        self.log(f"{stage}/loss", (total_loss / total_count).float(), sync_dist=False)
-        self.log(f"{stage}/admitted_rows", total_count.float(), sync_dist=False)
+        self.log(f"{stage.value}/loss", (total_loss / total_count).float(), sync_dist=False)
+        self.log(f"{stage.value}/admitted_rows", total_count.float(), sync_dist=False)
 
     def _step_learning_rate_schedulers(self) -> None:
         if not self.trainer.lr_scheduler_configs:

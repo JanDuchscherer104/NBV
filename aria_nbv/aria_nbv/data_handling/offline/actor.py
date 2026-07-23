@@ -20,9 +20,9 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 import torch
 from efm3d.aria.pose import PoseTW
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from ...utils import TargetConfig
+from ...utils import Stage, TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
 from ..identifiers import compact_ase_atek_sample_id
 from ..raw.views import VinSnippetView
@@ -56,8 +56,7 @@ class VinActorSample:
     snippet_id: str
     """ATEK snippet identifier retained for join audits."""
 
-    # TODO: always make fuse of utils.schemas.Stage!
-    split: str
+    split: Stage
     """Immutable source split recorded by the sample index."""
 
     source_shard_id: str
@@ -85,9 +84,17 @@ class VinActorSourceConfig(TargetConfig["VinActorSource"]):
     store: VinOfflineStoreConfig = Field(default_factory=VinOfflineStoreConfig)
     """Immutable VIN source-store location and filenames."""
 
-    # TODO: always make fuse of utils.schemas.Stage!
-    split: Literal["train", "val", "all"] = "all"
-    """Source split exposed through the map-style interface."""
+    split: Stage | None = None
+    """Lifecycle stage exposed through the map-style interface; ``None`` selects all rows."""
+
+    @field_validator("split", mode="before")
+    @classmethod
+    def _normalize_split(cls, value: Stage | str | None) -> Stage | None:
+        """Normalize external store split text at the source-configuration seam."""
+
+        if value is None or value == "all":
+            return None
+        return Stage.from_str(value)
 
     @property
     def target_type(self) -> type[VinActorSource]:
@@ -156,7 +163,7 @@ class VinActorSource:
             sample_key=record.sample_key,
             scene_id=record.scene_id,
             snippet_id=record.snippet_id,
-            split=record.split,
+            split=Stage.from_str(record.split),
             source_shard_id=record.shard_id,
             source_shard_row=record.row,
             source_offline_store_version=self.source_offline_store_version,
@@ -198,7 +205,7 @@ class VinActorSource:
         source_offline_store_manifest_hash: str,
         scene_id: str | None = None,
         snippet_id: str | None = None,
-        split: str | None = None,
+        split: Stage | None = None,
     ) -> None:
         """Validate one rollout-to-source join without reading actor arrays.
 
@@ -246,7 +253,7 @@ class VinActorSource:
             actual["snippet_id"] = compact_ase_atek_sample_id(record.snippet_id)
             expected["snippet_id"] = compact_ase_atek_sample_id(snippet_id)
         if split is not None:
-            actual["split"] = record.split
+            actual["split"] = Stage.from_str(record.split)
             expected["split"] = split
         mismatches = [
             f"{name}: expected={expected[name]!r}, actual={actual[name]!r}"

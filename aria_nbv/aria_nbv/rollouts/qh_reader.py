@@ -24,7 +24,7 @@ from pydantic import Field, field_validator
 from zarr.storage import LocalStore
 
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol, validate_target_protocol_admission
-from ..utils import TargetConfig
+from ..utils import Stage, TargetConfig
 from .manifest import (
     ROLLOUT_MANIFEST_FILENAME,
     ROLLOUT_MANIFEST_VERSION,
@@ -186,7 +186,7 @@ class QhLineage:
     snippet_id: str
     """ATEK snippet id of the source observation."""
 
-    split: str
+    split: Stage
     """Immutable VIN source split recorded for the observation row."""
 
     source_cache_version: str
@@ -292,7 +292,7 @@ class QhSourceLineage:
     snippet_id: str
     """ATEK snippet id of the source observation."""
 
-    split: str
+    split: Stage
     """Immutable VIN source split."""
 
     source_cache_version: str
@@ -639,7 +639,7 @@ def _read_source_lineage(
             source_shard_row=int(sources["source_shard_row"][row]),
             scene_id=_decode_id(root, dictionaries, "scene", "sources/scene_id", row),
             snippet_id=_decode_id(root, dictionaries, "snippet", "sources/snippet_id", row),
-            split=_decode_id(root, dictionaries, "split", "sources/split_id", row),
+            split=Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", row)),
             source_cache_version=_decode_id(
                 root,
                 dictionaries,
@@ -960,7 +960,7 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
         source_shard_row=int(sources["source_shard_row"][source_row]),
         scene_id=_decode_id(root, dictionaries, "scene", "sources/scene_id", source_row),
         snippet_id=_decode_id(root, dictionaries, "snippet", "sources/snippet_id", source_row),
-        split=_decode_id(root, dictionaries, "split", "sources/split_id", source_row),
+        split=Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", source_row)),
         source_cache_version=_decode_id(root, dictionaries, "config", "sources/source_cache_version_id", source_row),
         source_offline_store_manifest_hash=_decode_id(
             root,

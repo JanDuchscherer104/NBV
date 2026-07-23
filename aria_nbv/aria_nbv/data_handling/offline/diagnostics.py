@@ -828,7 +828,7 @@ def _batch_shape_preview(store: VinOfflineStoreConfig) -> dict[str, str]:
 
     dataset = VinOfflineDatasetConfig(
         store=store,
-        split="all",
+        split=None,
         limit=1,
         load_candidates=False,
         load_depths=False,

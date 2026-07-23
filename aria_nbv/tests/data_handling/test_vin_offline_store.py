@@ -1193,7 +1193,7 @@ def test_vin_offline_store_reads_indexed_record_blocks(
 
     store_cfg = _write_test_store(tmp_path, include_diagnostic_payloads=True)
     reader = VinOfflineStoreReader(store_cfg)
-    record = reader.get_split_records("all")[1]
+    record = reader.get_split_records(None)[1]
     payload = reader.read_optional_record(record, "oracle.depths_payload")
     assert payload is not None  # noqa: S101
     decoded = CandidateDepths.from_serializable(payload, device=torch.device("cpu"))
@@ -1233,7 +1233,7 @@ def test_vin_offline_store_rejects_unsupported_record_block_kind(tmp_path: Path)
     manifest.write(store_cfg.manifest_path)
 
     reader = VinOfflineStoreReader(store_cfg)
-    record = reader.get_split_records("all")[1]
+    record = reader.get_split_records(None)[1]
     with pytest.raises(ValueError, match="Unsupported VIN offline block kind"):
         reader.read_optional_record(record, "oracle.depths_payload")
 

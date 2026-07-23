@@ -46,6 +46,7 @@ from aria_nbv.rollouts.qh_reader import (
 from aria_nbv.rollouts.qh_reader import (
     QhTransition as StoredTransition,
 )
+from aria_nbv.utils import Stage
 
 
 def _lineage(step: int, *, protocol: str = "v0_gt_input", scene: str = "scene-a") -> StoredLineage:
@@ -57,7 +58,7 @@ def _lineage(step: int, *, protocol: str = "v0_gt_input", scene: str = "scene-a"
         source_shard_row=3,
         scene_id=scene,
         snippet_id="snippet-a",
-        split="train",
+        split=Stage.TRAIN,
         source_cache_version="7",
         source_offline_store_manifest_hash="source-hash",
         split_manifest_hash="split-hash",
@@ -142,7 +143,7 @@ class _Reader:
                     source_shard_row=lineage.source_shard_row,
                     scene_id=lineage.scene_id,
                     snippet_id=lineage.snippet_id,
-                    split=lineage.split,
+                    split=Stage.from_str(lineage.split),
                     source_cache_version=lineage.source_cache_version,
                     source_offline_store_manifest_hash=lineage.source_offline_store_manifest_hash,
                     split_manifest_hash=lineage.split_manifest_hash,
@@ -176,7 +177,7 @@ class _SparseActorSource:
             sample_key="scene-a:snippet-a",
             scene_id="scene-a",
             snippet_id="snippet-a",
-            split="train",
+            split=Stage.TRAIN,
             source_shard_id="shard-sparse",
             source_shard_row=3,
             source_offline_store_version="7",
