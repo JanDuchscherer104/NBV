@@ -106,6 +106,48 @@ def main() -> None:
         state = freshness.partition_freshness(root)
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert not state.bridge_errors
+
+        empty_graph = dict(graph)
+        empty_graph["nodes"] = []
+        empty_graph["edges"] = []
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(empty_graph), encoding="utf-8"
+        )
+        state = freshness.partition_freshness(root)
+        assert set(state.stale) == set(contract.PARTITION_ORDER)
+        assert all(
+            "graph contains no canonical nodes" in reason
+            for reasons in state.stale.values()
+            for reason in reasons
+        )
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(graph), encoding="utf-8"
+        )
+
+        ranked = query._matching_nodes(
+            {
+                "nodes": [
+                    {
+                        "id": "a-docs-noise",
+                        "label": "overview",
+                        "source_file": "docs/overview.qmd",
+                        "partition": "thesis",
+                        "role": "guide",
+                    },
+                    {
+                        "id": "z-relevant",
+                        "label": "macros",
+                        "source_file": "docs/typst/shared/macros.typ",
+                        "partition": "thesis",
+                        "role": "guide",
+                    },
+                ]
+            },
+            "do macros",
+            {"thesis"},
+        )
+        assert [node["id"] for node in ranked] == ["z-relevant"]
+
         allowed, no_evidence, excluded = query.search(
             "unfindable evidence phrase", root
         )

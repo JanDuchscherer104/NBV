@@ -82,11 +82,7 @@ def _fallback_for_terms(*terms: str, root: Path = ROOT) -> list[str]:
 
 
 def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
-    terms = [
-        term
-        for term in re.findall(r"[A-Za-z0-9_.-]+", query.casefold())
-        if len(term) > 1
-    ]
+    terms = _meaningful_terms(query)
     ranked = []
     role_rank = {"production": 0, "test": 1, "config": 2, "guide": 3}
     for node in graph.get("nodes", []):

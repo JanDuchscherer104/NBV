@@ -7,8 +7,10 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -740,7 +742,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             first = validator.export_seed(output, self.root)
             second = validator.export_seed(output, self.root)
             self.assertEqual(first, second)
-            self.assertEqual(set(validator.verify_seed(first)), set(expected))
+            self.assertEqual(
+                set(validator.verify_seed(first, self.root)), set(expected)
+            )
             for relative in sorted(expected, reverse=True):
                 (self.root / relative).unlink()
             index_before = validator._index_path(self.root).read_bytes()
@@ -749,6 +753,51 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             self.assertNotEqual(
                 validator._index_path(self.root).read_bytes(), index_before
             )
+
+    def test_seed_verification_rejects_forged_acceptance(self) -> None:
+        self.promote("bundle-a")
+        payloads = self.registered_bytes()
+        registry = validator.load_registry(self.registry_path)
+        registry["bundles"][0]["acceptance"] = "forged"
+        payloads[validator.REGISTRY_REL.as_posix()] = validator.render_registry(
+            registry
+        ).encode()
+        role_by_path = {validator.REGISTRY_REL.as_posix(): "registry"}
+        role_by_path.update(
+            {
+                artifact["path"]: artifact["role"]
+                for bundle in registry["bundles"]
+                for artifact in bundle["artifacts"]
+            }
+        )
+        files = [
+            {
+                "path": path,
+                "role": role_by_path[path],
+                "bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+            for path, content in sorted(payloads.items())
+        ]
+        manifest = (
+            json.dumps(
+                {"schema_version": validator.SEED_SCHEMA_VERSION, "files": files},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode()
+        seed = self.root.parent / f"{self.root.name}-forged.tar"
+        with tarfile.open(seed, "w", format=tarfile.PAX_FORMAT) as archive:
+            validator._tar_add_bytes(archive, validator.SEED_MANIFEST, manifest)
+            for path, content in sorted(payloads.items()):
+                validator._tar_add_bytes(archive, path, content)
+        digest = validator.sha256(seed)
+        verified_name = seed.with_name(f"{digest}.tar")
+        seed.rename(verified_name)
+        self.addCleanup(verified_name.unlink)
+        with self.assertRaisesRegex(ValueError, "missing explicit user acceptance"):
+            validator.verify_seed(verified_name, self.root)
 
     def test_seed_restore_collision_preserves_sentinel(self) -> None:
         self.promote("bundle-a")
@@ -807,6 +856,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             "  mkdir -p .omx/archive/accepted-bundles/native-created\n"
             '  ln -s "${OMX_TEST_OUTSIDE:?}" '
             ".omx/archive/accepted-bundles/native-created/link\n"
+            'elif [ "${OMX_TEST_MUTATE:-0}" = unsafe-root ]; then\n'
+            "  rm -rf .omx/archive/accepted-bundles\n"
+            '  ln -s "${OMX_TEST_OUTSIDE:?}" .omx/archive/accepted-bundles\n'
             "fi\n",
             encoding="utf-8",
         )
@@ -859,6 +911,20 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             (self.root / ".omx/archive/accepted-bundles/native-created").exists()
         )
         self.assertEqual(outside.read_text(encoding="utf-8"), "keep\n")
+        self.assertEqual(self.registered_bytes(), expected)
+        outside_directory = self.root.parent / f"{self.root.name}-outside"
+        outside_directory.mkdir()
+        outside_sentinel = outside_directory / "sentinel.txt"
+        outside_sentinel.write_text("keep\n", encoding="utf-8")
+        self.addCleanup(shutil.rmtree, outside_directory)
+        os.environ["OMX_TEST_MUTATE"] = "unsafe-root"
+        os.environ["OMX_TEST_OUTSIDE"] = str(outside_directory)
+        with mock.patch.object(validator, "_verified_omx_install", return_value=True):
+            self.assertEqual(
+                validator.run_native_operation(["omx", "cleanup"], self.root), 1
+            )
+        self.assertFalse((self.root / ".omx/archive/accepted-bundles").is_symlink())
+        self.assertEqual(outside_sentinel.read_text(encoding="utf-8"), "keep\n")
         self.assertEqual(self.registered_bytes(), expected)
 
     def test_recovery_journal_is_linked_worktree_specific(self) -> None:
@@ -1021,7 +1087,9 @@ class OmxArtifactNativeAcceptanceTests(unittest.TestCase):
                             )
 
             seed = validator.export_seed(external, repository)
-            self.assertEqual(set(validator.verify_seed(seed)), set(expected))
+            self.assertEqual(
+                set(validator.verify_seed(seed, repository)), set(expected)
+            )
             for relative in expected:
                 if relative.startswith(".omx/"):
                     (repository / relative).unlink()

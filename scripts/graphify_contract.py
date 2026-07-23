@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 from pathlib import Path, PurePosixPath
+import posixpath
 import re
 import subprocess
 import tempfile
@@ -342,7 +343,9 @@ def _reference_edges(
                 relative = (PurePosixPath(source["path"]).parent / reference).as_posix()
                 candidates: list[str] = []
                 for candidate in (reference.lstrip("/"), relative):
-                    normalized = PurePosixPath(candidate).as_posix()
+                    normalized = posixpath.normpath(candidate)
+                    if normalized == ".." or normalized.startswith(("../", "/")):
+                        continue
                     if normalized in by_path and normalized not in candidates:
                         candidates.append(normalized)
                 if not candidates and "/" not in reference:
@@ -691,6 +694,8 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
     }
     if set(graph.get("partitions", {})) != set(PARTITION_ORDER):
         errors.append("graph does not contain exactly four canonical partitions")
+    if not nodes:
+        errors.append("graph contains no canonical nodes")
     if graph.get("corpus_tree_sha256") != manifest.get("corpus_tree_sha256"):
         errors.append("graph and manifest corpus tree digests differ")
     for node_id, node in nodes.items():

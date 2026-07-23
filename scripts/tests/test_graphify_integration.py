@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 import sys
+import tempfile
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -122,6 +124,39 @@ def main() -> None:
     ] = "0" * 64
     invalidated = contract._preserved_semantic_edges(graph, changed_sources, nodes)
     assert inferred["id"] not in {edge["id"] for edge in invalidated}
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        source_paths = {
+            "docs/typst/thesis/main.typ": '#include "../shared/macros.typ"\n',
+            "docs/typst/shared/macros.typ": "#let thesis-title = [ARIA-NBV]\n",
+        }
+        sources = []
+        nodes = {}
+        for source_path, content in source_paths.items():
+            path = root / source_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            source = {
+                "path": source_path,
+                "sha256": digest,
+                "partition": "thesis",
+                "role": "guide",
+            }
+            sources.append(source)
+            node_id = contract._file_node_id(source_path)
+            nodes[node_id] = {
+                "id": node_id,
+                "source_file": source_path,
+                "source_digest": digest,
+                "partition": "thesis",
+            }
+        reference_edges = contract._reference_edges(root, sources, nodes)
+        assert len(reference_edges) == 1
+        assert reference_edges[0]["target"] == contract._file_node_id(
+            "docs/typst/shared/macros.typ"
+        )
 
     invalid = copy.deepcopy(graph)
     bad = copy.deepcopy(inferred)

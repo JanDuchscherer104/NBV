@@ -17,6 +17,7 @@ from graphify_contract import (
     load_canonical,
     load_config,
     source_manifest_digest,
+    validate_graph,
 )
 
 
@@ -39,6 +40,14 @@ def partition_freshness(root: Path = ROOT) -> Freshness:
         return Freshness(
             frozenset(),
             {name: (str(exc),) for name in PARTITION_ORDER},
+            (),
+        )
+    graph_errors = validate_graph(graph, manifest)
+    if graph_errors:
+        reasons = tuple(f"invalid canonical graph: {error}" for error in graph_errors)
+        return Freshness(
+            frozenset(),
+            {name: reasons for name in PARTITION_ORDER},
             (),
         )
     stale: dict[str, tuple[str, ...]] = {}

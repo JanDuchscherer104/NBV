@@ -1082,13 +1082,13 @@ def export_seed(output_dir: Path, root: Path = REPO_ROOT) -> Path:
         else:
             os.replace(temporary, target)
             _fsync_dir(output)
-        verify_seed(target)
+        verify_seed(target, root)
         return target
     finally:
         Path(temporary).unlink(missing_ok=True)
 
 
-def verify_seed(seed_path: Path) -> dict[str, bytes]:
+def verify_seed(seed_path: Path, root: Path = REPO_ROOT) -> dict[str, bytes]:
     expected_name = re.fullmatch(r"([0-9a-f]{64})\.tar", seed_path.name)
     if expected_name is None or sha256(seed_path) != expected_name.group(1):
         raise ValueError("seed filename/content digest mismatch")
@@ -1155,6 +1155,7 @@ def verify_seed(seed_path: Path) -> dict[str, bytes]:
         observed = declared.get(path, {})
         if any(observed.get(key) != value for key, value in expected.items()):
             raise ValueError(f"seed manifest metadata differs from registry: {path}")
+    _seed_registry(extracted, root)
     return extracted
 
 
@@ -1180,6 +1181,9 @@ def _seed_registry(
         for bundle in registry.get("bundles", [])
         if isinstance(bundle, dict)
     }
+    bundle_ids: set[str] = set()
+    current_tasks: set[str] = set()
+    registered_paths: set[str] = set()
     for offset, bundle in enumerate(registry.get("bundles", [])):
         if not isinstance(bundle, dict):
             errors.append(f"seed bundle {offset} must be a table")
@@ -1199,9 +1203,23 @@ def _seed_registry(
             or bundle_id != canonical_bundle_id(task, handoff_hash)
         ):
             errors.append(f"seed bundle identity is invalid: {bundle_id}")
+        if bundle_id in bundle_ids:
+            errors.append(f"duplicate seed bundle id: {bundle_id}")
+        bundle_ids.add(bundle_id)
+        if bundle.get("acceptance") != "explicit-user-acceptance":
+            errors.append(f"seed bundle {bundle_id}: missing explicit user acceptance")
+        if bundle.get("review_order") != ["architect", "critic"]:
+            errors.append(
+                f"seed bundle {bundle_id}: review order must be Architect then Critic"
+            )
+        if status == "current":
+            if task in current_tasks:
+                errors.append(f"duplicate current seed task: {task}")
+            current_tasks.add(task)
         if commit_error := _commit_error(root, str(bundle.get("source_commit", ""))):
             errors.append(f"seed bundle {bundle_id}: {commit_error}")
         role_map: dict[str, dict[str, Any]] = {}
+        native_paths: set[str] = set()
         for index, artifact in enumerate(bundle.get("artifacts", [])):
             errors.extend(
                 _validate_artifact_shape(
@@ -1215,7 +1233,17 @@ def _seed_registry(
             role = str(artifact.get("role", ""))
             path = str(artifact.get("path", ""))
             native_path = str(artifact.get("native_path", ""))
+            if role in role_map:
+                errors.append(f"seed bundle {bundle_id}: duplicate role {role}")
             role_map[role] = artifact
+            if native_path in native_paths:
+                errors.append(
+                    f"seed bundle {bundle_id}: duplicate native path {native_path}"
+                )
+            native_paths.add(native_path)
+            if path in registered_paths:
+                errors.append(f"duplicate seed artifact path: {path}")
+            registered_paths.add(path)
             try:
                 expected_path = _canonical_path(bundle_id, status, native_path)
             except (TypeError, ValueError):
@@ -1227,6 +1255,26 @@ def _seed_registry(
                 content
             ) != artifact.get("sha256"):
                 errors.append(f"seed bundle {bundle_id}: payload mismatch: {path}")
+            try:
+                text = content.decode("utf-8")
+                redaction_errors = _redaction_errors(path, text)
+                if redaction_errors and not _legacy_redaction_allowed(
+                    path, str(artifact.get("sha256", ""))
+                ):
+                    errors.extend(redaction_errors)
+            except UnicodeDecodeError:
+                errors.append(f"seed bundle {bundle_id}: artifact is not UTF-8: {path}")
+        if "handoff" not in role_map:
+            errors.append(f"seed bundle {bundle_id}: handoff role is required")
+        elif role_map["handoff"].get("sha256") != handoff_hash:
+            errors.append(
+                f"seed bundle {bundle_id}: handoff hash differs from bundle identity"
+            )
+        if status == "current" and set(role_map) != set(CURRENT_REQUIRED_ROLES):
+            errors.append(
+                f"seed bundle {bundle_id}: current roles must be exactly "
+                f"{list(CURRENT_REQUIRED_ROLES)}"
+            )
         handoff_artifact = role_map.get("handoff", {})
         handoff_content = payloads.get(str(handoff_artifact.get("path", "")))
         if handoff_content is not None:
@@ -1255,7 +1303,7 @@ def _seed_registry(
 def restore_seed(seed_path: Path, root: Path = REPO_ROOT) -> int:
     try:
         recover_incomplete_transaction(root)
-        payloads = verify_seed(seed_path)
+        payloads = verify_seed(seed_path, root)
         registry = _seed_registry(payloads, root)
         targets: list[Path] = []
         for relative in sorted(payloads):
@@ -1319,6 +1367,8 @@ def _registered_snapshot(root: Path) -> dict[str, str]:
 def _protected_snapshot(root: Path) -> dict[str, str]:
     snapshot = _registered_snapshot(root)
     archive_root = root / ARCHIVE_PREFIX
+    if archive_root.is_symlink():
+        raise ValueError(f"unsafe accepted archive root: {ARCHIVE_PREFIX}")
     if archive_root.exists():
         for path in archive_root.rglob("*"):
             relative = path.relative_to(root).as_posix()
@@ -1332,6 +1382,8 @@ def _protected_snapshot(root: Path) -> dict[str, str]:
 def _archive_entry_paths(root: Path) -> set[str]:
     """Return archive entries without following directory symlinks."""
     archive_root = root / ARCHIVE_PREFIX
+    if archive_root.is_symlink():
+        raise ValueError(f"unsafe accepted archive root: {ARCHIVE_PREFIX}")
     if not archive_root.is_dir():
         return set()
     entries: set[str] = set()
@@ -1349,6 +1401,12 @@ def _archive_entry_paths(root: Path) -> set[str]:
 
 def _remove_new_archive_entries(root: Path, before: set[str]) -> None:
     """Remove archive entries created after ``before`` without following links."""
+    archive_root = root / ARCHIVE_PREFIX
+    if archive_root.is_symlink() or (
+        archive_root.exists() and not archive_root.is_dir()
+    ):
+        archive_root.unlink()
+        return
     created = _archive_entry_paths(root) - before
     for relative in sorted(created, key=lambda value: value.count("/"), reverse=True):
         target = root / relative
@@ -1923,7 +1981,7 @@ def main() -> int:
         return 0
     if args.verify_seed:
         try:
-            payloads = verify_seed(args.verify_seed)
+            payloads = verify_seed(args.verify_seed, args.repo_root)
             _seed_registry(payloads)
         except (OSError, ValueError, tarfile.TarError) as exc:
             print(f"seed verification failed: {exc}", file=sys.stderr)
