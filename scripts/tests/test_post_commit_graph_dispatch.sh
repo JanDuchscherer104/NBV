@@ -11,6 +11,9 @@ git -C "$TMP" config user.email graphify-test@example.invalid
 git -C "$TMP" config user.name graphify-test
 mkdir -p "$TMP/scripts/git_hooks" "$TMP/scripts" "$TMP/aria_nbv/aria_nbv" "$TMP/graphify-out"
 cp "$ROOT/scripts/git_hooks/post-commit" "$TMP/scripts/git_hooks/post-commit"
+cp "$ROOT/scripts/graphify_contract.py" "$TMP/scripts/graphify_contract.py"
+cp "$ROOT/.graphify.toml" "$TMP/.graphify.toml"
+cp "$ROOT/.graphifyignore" "$TMP/.graphifyignore"
 
 cat >"$TMP/scripts/graphify_refresh.py" <<'EOF'
 from pathlib import Path
@@ -30,6 +33,16 @@ git -C "$TMP" commit -qm code-change
 )
 
 test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 1
+
+mkdir -p "$TMP/.agents/skills/demo"
+printf '%s\n' '---' 'name: demo' 'description: fixture' '---' >"$TMP/.agents/skills/demo/SKILL.md"
+git -C "$TMP" add .
+git -C "$TMP" commit -qm skill-change
+(
+  cd "$TMP"
+  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
+)
+test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 2
 
 printf '{}\n' >"$TMP/graphify-out/graph.json"
 git -C "$TMP" add -f graphify-out/graph.json
