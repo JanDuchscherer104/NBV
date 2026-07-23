@@ -56,6 +56,7 @@ class VinActorSample:
     snippet_id: str
     """ATEK snippet identifier retained for join audits."""
 
+    # TODO: always make fuse of utils.schemas.Stage!
     split: str
     """Immutable source split recorded by the sample index."""
 
@@ -84,6 +85,7 @@ class VinActorSourceConfig(TargetConfig["VinActorSource"]):
     store: VinOfflineStoreConfig = Field(default_factory=VinOfflineStoreConfig)
     """Immutable VIN source-store location and filenames."""
 
+    # TODO: always make fuse of utils.schemas.Stage!
     split: Literal["train", "val", "all"] = "all"
     """Source split exposed through the map-style interface."""
 

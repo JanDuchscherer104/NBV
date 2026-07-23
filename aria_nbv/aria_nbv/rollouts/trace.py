@@ -379,7 +379,7 @@ def _primary_candidate_invalid_reason(*, bitset: torch.Tensor, valid_mask: torch
     return primary
 
 
-def _termination_reason(result: CounterfactualRolloutResult, trajectory: CounterfactualTrajectory) -> str:
+def termination_reason(result: CounterfactualRolloutResult, trajectory: CounterfactualTrajectory) -> str:
     if trajectory.terminated_early:
         return "terminated_early"
     if len(trajectory.steps) >= int(result.horizon):
@@ -387,7 +387,7 @@ def _termination_reason(result: CounterfactualRolloutResult, trajectory: Counter
     return "incomplete_rollout"
 
 
-def _policy_name(policy: str | CounterfactualSelectionPolicy) -> str:
+def policy_name(policy: str | CounterfactualSelectionPolicy) -> str:
     return policy.value if isinstance(policy, CounterfactualSelectionPolicy) else str(policy)
 
 
@@ -398,4 +398,6 @@ __all__ = [
     "RolloutLineage",
     "SourceLineage",
     "TargetLineage",
+    "termination_reason",
+    "policy_name",
 ]
