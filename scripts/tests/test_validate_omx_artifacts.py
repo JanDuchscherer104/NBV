@@ -979,7 +979,10 @@ class OmxArtifactNativeAcceptanceTests(unittest.TestCase):
                 ],
                 ["omx", "cancel"],
             )
-            with mock.patch.dict(os.environ, isolated_environment, clear=False):
+            with (
+                mock.patch.dict(os.environ, isolated_environment, clear=False),
+                mock.patch.object(tempfile, "tempdir", None),
+            ):
                 self.assertTrue(validator._verified_omx_install("omx"))
                 with mock.patch.object(
                     validator, "_verified_omx_install", return_value=True
