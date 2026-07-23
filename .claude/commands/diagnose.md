@@ -1,9 +1,9 @@
 ---
-description: Apply the diagnose-aria skill — feedback-loop-first bug investigation.
+description: Run a feedback-loop-first ARIA-NBV bug investigation.
 argument-hint: "<symptom or failing command>"
 ---
 
-Apply `.agents/skills/diagnose-aria/SKILL.md`. Before patching:
+Before patching:
 
 1. Search `.agents/resolved.toml` for similar prior work — do not redo settled
    diagnoses.

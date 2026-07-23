@@ -469,6 +469,30 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             [],
         )
 
+    def test_payload_history_rejects_side_branch_bundle_deletion(self) -> None:
+        branch = self.git("branch", "--show-current").stdout.strip()
+        base = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "-qb", "accepted-side", base)
+        self.promote("bundle-a")
+        self.commit_registry("register side bundle")
+        registry = validator.load_registry(self.registry_path)
+        for artifact in registry["bundles"][0]["artifacts"]:
+            (self.root / artifact["path"]).unlink()
+        registry["bundles"] = []
+        self.registry_path.write_text(
+            validator.render_registry(registry), encoding="utf-8"
+        )
+        self.commit_registry("delete side bundle")
+        self.git("checkout", "-q", branch)
+        self.git("merge", "--no-ff", "-qm", "merge deleted side", "accepted-side")
+        current = validator.load_registry(self.registry_path)
+        self.assertTrue(
+            any(
+                "accepted bundle deleted" in error
+                for error in validator.validate_payload_history(current, self.root)
+            )
+        )
+
     def test_supersession_archives_predecessor_and_keeps_successor_native(self) -> None:
         predecessor_id = self.promote("bundle-a", "shared-task")
         predecessor = validator.load_registry(self.registry_path)["bundles"][0]

@@ -41,7 +41,9 @@ ACTIVE_SCAN_ROOTS = [
     "scripts",
 ]
 FORBIDDEN = re.compile(
-    r"litkg|aria-litkg|semantic-scholar-litkg|make\s+kg-|scripts/kg/|\.agents/kg|"
+    r"litkg|aria-litkg|semantic-scholar-litkg|code-review-aria-nbv|diagnose-aria|"
+    r"entity-aware-rri|nbv-geometry-contracts|counterfactual-rollout-planner|"
+    r"make\s+kg-|scripts/kg/|\.agents/kg|"
     r"context-heavy|context-(?:index|package|modules|classes|functions|match|literature-index|uml|docstrings|tree)|"
     r"make\s+context(?:\s|$)|context_map\.md|docs/_generated/context/(?:source_index|literature_index|data_contracts|context_snapshot)",
     re.IGNORECASE,
@@ -82,7 +84,10 @@ def main() -> int:
         except UnicodeDecodeError:
             continue
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if rel == "scripts/validate_agent_memory.py" and HISTORICAL_LEDGER_LITERAL.match(line):
+            if (
+                rel == "scripts/validate_agent_memory.py"
+                and HISTORICAL_LEDGER_LITERAL.match(line)
+            ):
                 continue
             if FORBIDDEN.search(line):
                 findings.append(f"{rel}:{line_no}:{line.strip()}")

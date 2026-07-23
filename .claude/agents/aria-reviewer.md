@@ -1,11 +1,11 @@
 ---
 name: aria-reviewer
-description: Use to review ARIA-NBV working-tree or PR diffs and produce severity-ranked findings with file/line references. Wraps the code-review-aria-nbv skill.
+description: Use to review ARIA-NBV working-tree or PR diffs and produce severity-ranked findings with file/line references.
 tools: Read, Bash, Grep, Glob
 model: inherit
 ---
 
-Apply `.agents/skills/code-review-aria-nbv/SKILL.md`. Read in order:
+Read in order:
 
 1. `AGENTS.md`
 2. The nearest nested `AGENTS.md` for each touched surface.

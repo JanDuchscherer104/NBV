@@ -691,7 +691,6 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
     history = _git(root, "rev-list", "--reverse", "--parents", "HEAD")
     if history.returncode:
         return [f"git rev-list failed: {history.stderr.strip()}"]
-    expected = {bundle["id"]: bundle for bundle in registry.get("bundles", [])}
     registry_cache: dict[str, dict[str, Any] | None] = {}
 
     def registry_at(commit: str) -> dict[str, Any] | None:
@@ -716,20 +715,16 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
             for parent_registry in parent_registries
         ]
         if historical is None:
-            if any(bundle_ids & expected.keys() for bundle_ids in parent_bundle_ids):
+            if any(parent_bundle_ids):
                 errors.append(
                     f"{commit}: registry deleted after accepted bundles existed"
                 )
             continue
         historical_by_id = {item["id"]: item for item in historical.get("bundles", [])}
         for bundle_ids in parent_bundle_ids:
-            for bundle_id in sorted(
-                bundle_ids & expected.keys() - historical_by_id.keys()
-            ):
+            for bundle_id in sorted(bundle_ids - historical_by_id.keys()):
                 errors.append(f"{commit}: accepted bundle deleted: {bundle_id}")
         for bundle_id, bundle in historical_by_id.items():
-            if bundle_id not in expected:
-                continue
             first_seen = not any(
                 bundle_id in bundle_ids for bundle_ids in parent_bundle_ids
             )
@@ -741,19 +736,11 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
                 errors.append(
                     f"{commit}: first-seen bundle must be current: {bundle_id}"
                 )
-            expected_artifacts = {
-                item["native_path"]: item for item in expected[bundle_id]["artifacts"]
-            }
             for artifact in bundle.get("artifacts", []):
-                stable = expected_artifacts.get(artifact.get("native_path"))
-                if stable is None:
-                    errors.append(f"{commit}: artifact membership drift: {bundle_id}")
-                    continue
                 blob = _git(root, "show", f"{commit}:{artifact.get('path', '')}")
-                if (
-                    blob.returncode
-                    or _bytes_sha256(blob.stdout.encode()) != stable["sha256"]
-                ):
+                if blob.returncode or _bytes_sha256(
+                    blob.stdout.encode()
+                ) != artifact.get("sha256"):
                     errors.append(
                         f"{commit}: committed payload mutation or missing path: {artifact.get('path')}"
                     )
@@ -1267,6 +1254,10 @@ def _seed_registry(
                     f"seed bundle {bundle_id}: duplicate native path {native_path}"
                 )
             native_paths.add(native_path)
+            if not native_path.startswith(CURRENT_PREFIXES):
+                errors.append(
+                    f"seed bundle {bundle_id}: invalid native role path {native_path}"
+                )
             if path in registered_paths:
                 errors.append(f"duplicate seed artifact path: {path}")
             registered_paths.add(path)

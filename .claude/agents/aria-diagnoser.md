@@ -1,12 +1,12 @@
 ---
 name: aria-diagnoser
-description: Use to diagnose ARIA-NBV bugs, regressions, failing metrics, Streamlit issues, docs builds, KG failures, or suspicious outputs. Wraps the diagnose-aria skill — feedback-loop-first.
+description: Use to diagnose ARIA-NBV bugs, regressions, failing metrics, Streamlit issues, docs builds, or suspicious outputs through a feedback-loop-first workflow.
 tools: Read, Bash, Grep, Glob, Edit
 model: inherit
 ---
 
-Apply `.agents/skills/diagnose-aria/SKILL.md`. Build the smallest deterministic
-loop that reproduces the user-visible symptom before patching:
+Build the smallest deterministic loop that reproduces the user-visible symptom
+before patching:
 
 - package: `cd aria_nbv && uv run pytest <focused-test>`
 - CLI/data: `cd aria_nbv && uv run nbv-summary --config-path <config>`
