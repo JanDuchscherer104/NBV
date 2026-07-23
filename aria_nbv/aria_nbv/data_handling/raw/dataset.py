@@ -27,18 +27,14 @@ from typing import Any, ClassVar, Literal
 import torch
 import trimesh
 from atek.data_loaders.atek_wds_dataloader import load_atek_wds_dataset
-from efm3d.aria.aria_constants import (
-    ARIA_POINTS_VOL_MAX,
-    ARIA_POINTS_VOL_MIN,
-    ARIA_POINTS_WORLD,
-)
+from efm3d.aria.aria_constants import ARIA_POINTS_VOL_MAX, ARIA_POINTS_VOL_MIN, ARIA_POINTS_WORLD
 from efm3d.dataset.efm_model_adaptor import EfmModelAdaptor, pipelinefilter
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from torch.utils.data import IterableDataset
 
 from ...configs import PathConfig
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
-from ..identifiers import _ase_atek_identifier_variants, compact_ase_atek_sample_id
+from ..identifiers import ase_atek_identifier_variants, compact_ase_atek_sample_id
 from ..mesh_cache import MeshProcessSpec, load_or_process_mesh
 from .views import EfmSnippetView
 
@@ -82,8 +78,8 @@ def _normalize_shard_stem(snippet_id: str) -> str:
 
 def _matches_snippet_token(prefix: str, token: str) -> bool:
     """Return whether a shard member prefix matches the requested token."""
-    prefixes = _ase_atek_identifier_variants(prefix)
-    tokens = _ase_atek_identifier_variants(token)
+    prefixes = ase_atek_identifier_variants(prefix)
+    tokens = ase_atek_identifier_variants(token)
     return any(
         candidate == requested or candidate.endswith(requested) for candidate in prefixes for requested in tokens
     )

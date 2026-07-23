@@ -45,7 +45,7 @@ def compact_ase_atek_identifiers(value: Any) -> Any:
     return value
 
 
-def _ase_atek_identifier_variants(identifier: str) -> set[str]:
+def ase_atek_identifier_variants(identifier: str) -> set[str]:
     """Return raw and compact variants for matching one ASE-ATEK identifier."""
 
     value = str(identifier)
@@ -60,4 +60,5 @@ __all__ = [
     "compact_ase_atek_identifiers",
     "compact_ase_atek_sample_id",
     "raw_ase_atek_sample_id",
+    "ase_atek_identifier_variants",
 ]
