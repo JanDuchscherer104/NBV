@@ -70,6 +70,12 @@ def _graph_commit(
 
 
 def main() -> None:
+    temporary, root, _ = _repo()
+    with temporary:
+        authoring_range, errors = history.activation_authoring_range(root, "0" * 40)
+        assert authoring_range is None
+        assert not errors
+
     temporary, root, base = _repo()
     with temporary:
         source = root / "aria_nbv/aria_nbv/model.py"

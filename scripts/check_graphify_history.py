@@ -256,6 +256,27 @@ def validate_final_tree(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def activation_authoring_range(
+    root: Path, activation: str
+) -> tuple[str | None, list[str]]:
+    """Return the post-activation range, or final-tree mode for squash products."""
+    if subprocess.run(
+        ["git", "merge-base", "--is-ancestor", activation, "HEAD"],
+        cwd=root,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode:
+        return None, []
+    errors: list[str] = []
+    if _commit_paths(root, activation) != CANONICAL:
+        errors.append(
+            "Graphify activation commit must be the immutable canonical "
+            "graph-only boundary"
+        )
+    return f"{activation}..HEAD", errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--authoring-range")
@@ -266,22 +287,10 @@ def main() -> int:
     authoring_range = args.authoring_range
     if args.activation_range:
         activation = load_config()["history"]["activation_commit"]
-        if subprocess.run(
-            ["git", "merge-base", "--is-ancestor", activation, "HEAD"],
-            cwd=ROOT,
-            check=False,
-        ).returncode:
-            errors.append(
-                f"Graphify activation commit is not an ancestor: {activation}"
-            )
-        else:
-            boundary_paths = _commit_paths(ROOT, activation)
-            if boundary_paths != CANONICAL:
-                errors.append(
-                    "Graphify activation commit must be the immutable canonical "
-                    "graph-only boundary"
-                )
-            authoring_range = f"{activation}..HEAD"
+        authoring_range, activation_errors = activation_authoring_range(
+            ROOT, activation
+        )
+        errors.extend(activation_errors)
     if authoring_range:
         revisions = _git(
             ROOT, "rev-list", "--reverse", "--first-parent", authoring_range
