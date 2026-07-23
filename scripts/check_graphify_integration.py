@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import csv
+import fnmatch
 import os
 import re
-import shlex
 import subprocess
 import sys
+import tomllib
 
 from graphify_contract import (
     ContractError,
@@ -18,6 +20,7 @@ from graphify_contract import (
     load_config,
     validate_graph,
 )
+from graphify_refresh import graphify_command
 
 MAX_CANONICAL_BYTES = 35 * 1024 * 1024
 CANONICAL = {
@@ -25,40 +28,34 @@ CANONICAL = {
     "graphify-out/manifest.json",
     "graphify-out/GRAPH_REPORT.md",
 }
-SCAFFOLD_IMPLEMENTATIONS = {
-    ".codex/config.example.toml",
-    ".codex/hooks.example.json",
-    ".gemini/settings.json",
+CLOSED_INVENTORY_STATUSES = {"migrate", "promote", "retain"}
+LINE_ANCHOR = re.compile(r":\d+(?:-\d+)?$")
+CI_GRAPHIFY_OWNER_PATHS = {
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".codex-plugin/**",
+    ".configs/**",
+    ".gemini/**",
+    ".github/workflows/**",
+    ".gitattributes",
+    ".gitignore",
+    ".graphify.toml",
+    ".graphifyignore",
+    ".omx/**",
     ".pre-commit-config.yaml",
-    "scripts/agents_db.py",
-    "scripts/codex_transcript_extract.py",
-    "scripts/debrief_nudge.sh",
-    "scripts/new_debrief.py",
-    "scripts/quarto_generate_agent_docs.py",
-    "scripts/scaffold_audit.py",
-    "scripts/sync_claude_skills.sh",
-    "scripts/validate_agent_memory.py",
-    "scripts/validate_scaffold_wp0_baseline.py",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "Makefile",
+    "aria_nbv/**",
+    "docs/**",
+    "graphify-out/**",
+    "scripts/**",
 }
-SCAFFOLD_PREFIXES = (
-    ".claude/",
-    ".codex-plugin/",
-    ".github/workflows/",
-    "aria_nbv/tests/agent_memory/",
-    "scripts/scaffold/",
-    "scripts/tests/fixtures/",
-)
-SCAFFOLD_TEST_PREFIXES = (
-    "scripts/tests/test_matt_",
-    "scripts/tests/test_scaffold_",
-    "scripts/tests/test_validate_omx_",
-    "scripts/tests/test_wp6_",
-    "scripts/tests/test_wp7_",
-)
 
 
 def _graphify_version() -> str:
-    executable = shlex.split(os.environ.get("GRAPHIFY_BIN", "graphify"))
+    executable = graphify_command()
     command = subprocess.run(
         [*executable, "--version"], text=True, capture_output=True, check=False
     )
@@ -107,6 +104,89 @@ def _validate_tracked_outputs(config: dict) -> None:
         raise ContractError("tracked wiki/cache/render output is forbidden")
 
 
+def _tracked_paths() -> set[str]:
+    return set(
+        subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    )
+
+
+def _closed_inventory_paths(tracked: set[str], config: dict) -> set[str]:
+    inventory = ROOT / ".agents/baselines/scaffold_wp0_inventory.csv"
+    with inventory.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    candidates: set[str] = set()
+    for row in rows:
+        if row.get("status") not in CLOSED_INVENTORY_STATUSES:
+            continue
+        for token in row["paths"].split(";"):
+            path = LINE_ANCHOR.sub("", token.strip())
+            if any(character in path for character in "*?["):
+                candidates.update(
+                    candidate
+                    for candidate in tracked
+                    if fnmatch.fnmatchcase(candidate, path)
+                )
+            elif path in tracked:
+                candidates.add(path)
+            if row["status"] == "retain" and path.startswith(
+                ".agents/skills/aria-nbv-context/scripts/"
+            ):
+                retained_reader = f"scripts/{path.rsplit('/', 1)[-1]}"
+                if retained_reader in tracked:
+                    candidates.add(retained_reader)
+    extensions = set(config["corpus"]["text_extensions"])
+    extensionless = {
+        ".gitattributes",
+        ".gitignore",
+        ".graphifyignore",
+        "Makefile",
+        "scripts/git_hooks/post-commit",
+    }
+    return {
+        path
+        for path in candidates
+        if path in extensionless or os.path.splitext(path)[1].lower() in extensions
+    }
+
+
+def _registered_omx_paths(tracked: set[str]) -> set[str]:
+    registry = tomllib.loads(
+        (ROOT / ".agents/omx_artifacts.toml").read_text(encoding="utf-8")
+    )
+    return {
+        path
+        for bundle in registry.get("bundles", [])
+        for artifact in bundle.get("artifacts", [])
+        for key in ("path", "native_path")
+        if isinstance((path := artifact.get(key)), str) and path in tracked
+    }
+
+
+def _workflow_paths(event: str) -> set[str]:
+    lines = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines()
+    event_header = f"  {event}:"
+    start = lines.index(event_header)
+    paths_start = lines.index("    paths:", start)
+    paths: set[str] = set()
+    for line in lines[paths_start + 1 :]:
+        if line.startswith("  ") and not line.startswith("      "):
+            break
+        match = re.fullmatch(r'\s{6}- "([^"]+)"', line)
+        if match:
+            paths.add(match.group(1))
+    return paths
+
+
+def _validate_ci_triggers() -> None:
+    for event in ("pull_request", "push"):
+        missing = CI_GRAPHIFY_OWNER_PATHS - _workflow_paths(event)
+        if missing:
+            raise ContractError(
+                f"{event} paths omit Graphify/gate owners: "
+                + ", ".join(sorted(missing))
+            )
+
+
 def _validate_corpus(config: dict) -> None:
     sources = collect_sources(ROOT, config)
     partitions = {name: [] for name in PARTITION_ORDER}
@@ -122,21 +202,19 @@ def _validate_corpus(config: dict) -> None:
         )
     paths = {item["path"] for item in sources}
     scaffold_paths = {item["path"] for item in partitions["scaffold"]}
-    tracked = set(
-        subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
-    )
-    active_scaffold = SCAFFOLD_IMPLEMENTATIONS & tracked
-    active_scaffold.update(
-        path
-        for path in tracked
-        if path.startswith((*SCAFFOLD_PREFIXES, *SCAFFOLD_TEST_PREFIXES))
-        and not path.startswith(".claude/skills/")
-    )
-    missing_scaffold = active_scaffold - scaffold_paths
-    if missing_scaffold:
+    tracked = _tracked_paths()
+    inventory_paths = _closed_inventory_paths(tracked, config)
+    missing_inventory = inventory_paths - paths
+    if missing_inventory:
         raise ContractError(
-            "active scaffold sources are absent from the scaffold partition: "
-            + ", ".join(sorted(missing_scaffold))
+            "closed inventory sources are absent from the Graphify corpus: "
+            + ", ".join(sorted(missing_inventory))
+        )
+    missing_registry = _registered_omx_paths(tracked) - scaffold_paths
+    if missing_registry:
+        raise ContractError(
+            "registered OMX sources are absent from the scaffold partition: "
+            + ", ".join(sorted(missing_registry))
         )
     forbidden = {
         path
@@ -191,6 +269,7 @@ def run_check() -> tuple[int, int, int]:
     _validate_pin(config)
     _validate_tracked_outputs(config)
     _validate_corpus(config)
+    _validate_ci_triggers()
     _validate_hook_and_merge()
     _validate_query_routing()
     graph, manifest = load_canonical()

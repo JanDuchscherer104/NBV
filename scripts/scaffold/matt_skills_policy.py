@@ -7,6 +7,7 @@ import argparse
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -20,6 +21,7 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / ".agents/references/mattpocock_skills_manifest.toml"
 BASELINE_PATH = ROOT / ".agents/baselines/scaffold_wp0_baseline.json"
+WP6_SKILLS_PATH = ROOT / ".agents/baselines/scaffold_wp6_skill_inventory.json"
 CONFIG_START = "# BEGIN ARIA-NBV MANAGED MATT SKILLS"
 CONFIG_END = "# END ARIA-NBV MANAGED MATT SKILLS"
 FRONTMATTER = re.compile(r"\A---\r?\n(?P<body>.*?)\r?\n---(?:\r?\n|\Z)", re.DOTALL)
@@ -314,6 +316,19 @@ def validate_manifest(manifest: dict[str, Any], checkout: Path) -> list[str]:
         errors.append(
             f"model-visible Matt descriptions exceed budget: {visible_bytes} > {maximum}"
         )
+    aria_bytes = budget.get("aria_description_bytes")
+    integrated_bytes = budget.get("integrated_description_bytes")
+    if (
+        not isinstance(aria_bytes, int)
+        or not isinstance(integrated_bytes, int)
+        or integrated_bytes != aria_bytes + visible_bytes
+    ):
+        errors.append("integrated description arithmetic is inconsistent")
+    elif isinstance(maximum, int) and integrated_bytes > maximum:
+        errors.append(
+            f"integrated model-visible descriptions exceed budget: "
+            f"{integrated_bytes} > {maximum}"
+        )
     return errors
 
 
@@ -464,12 +479,16 @@ def validate_project_config(
 
 def prompt_skill_entries(payload: list[dict[str, Any]]) -> list[tuple[str, str, str]]:
     """Extract model-visible skill names and descriptions from prompt-input JSON."""
+    if not isinstance(payload, list) or not payload:
+        raise PolicyError("Codex prompt-input payload must be a non-empty JSON list")
     text = "\n".join(
         content.get("text", "")
         for message in payload
         for content in message.get("content", [])
         if content.get("type") == "input_text"
     )
+    if not text:
+        raise PolicyError("Codex prompt-input payload has no input_text content")
     roots = {
         match.group("alias"): match.group("path")
         for match in re.finditer(
@@ -477,7 +496,7 @@ def prompt_skill_entries(payload: list[dict[str, Any]]) -> list[tuple[str, str, 
         )
     }
     pattern = re.compile(
-        r"^- (?P<name>[^:]+): (?P<description>.*?) "
+        r"^- (?P<name>[^\n:]+): (?P<description>.*?) "
         r"\(file: (?P<path>[^)]+/SKILL\.md)\)$",
         re.MULTILINE,
     )
@@ -491,6 +510,8 @@ def prompt_skill_entries(payload: list[dict[str, Any]]) -> list[tuple[str, str, 
             else raw_path
         )
         entries.append((match.group("name"), match.group("description"), path))
+    if not entries:
+        raise PolicyError("Codex prompt-input contains no parseable skill entries")
     return entries
 
 
@@ -499,34 +520,234 @@ def validate_prompt_input(
     payload: list[dict[str, Any]],
     skills_root: Path,
     matt_catalog: set[str],
+    aria_skills_root: Path = ROOT / ".agents/skills",
+    expected_aria_names: set[str] | None = None,
 ) -> list[str]:
-    """Validate model-visible selected Matt entries and their byte budget."""
+    """Validate one integrated ARIA and Matt model-visible prompt inventory."""
     errors: list[str] = []
-    entries = prompt_skill_entries(payload)
-    matt_entries = [
-        (name, description)
+    if expected_aria_names is None:
+        expected_aria_names = set(
+            json.loads(WP6_SKILLS_PATH.read_text(encoding="utf-8"))["active_skills"]
+        )
+    try:
+        entries = prompt_skill_entries(payload)
+    except (AttributeError, PolicyError, TypeError) as exc:
+        return [str(exc)]
+    aria_root = aria_skills_root.resolve()
+    matt_root = skills_root.resolve()
+    aria_entries = [
+        (Path(path).resolve().parent.name, description, Path(path).resolve())
         for name, description, path in entries
-        if Path(path).resolve().is_relative_to(skills_root.resolve())
-        and name in matt_catalog
+        if Path(path).resolve().is_relative_to(aria_root)
+        and Path(path).resolve().parent.name in expected_aria_names
     ]
-    expected_names = manifest["budget"]["model_visible_allowlist"]
-    observed_names = sorted(name for name, _ in matt_entries)
+    matt_entries = [
+        (name, description, Path(path).resolve())
+        for name, description, path in entries
+        if Path(path).resolve().is_relative_to(matt_root) and name in matt_catalog
+    ]
+    expected_matt_names = set(manifest["budget"]["model_visible_allowlist"])
+    if expected_aria_names & expected_matt_names:
+        errors.append(
+            "ARIA and Matt model-visible skill names collide: "
+            f"{sorted(expected_aria_names & expected_matt_names)}"
+        )
+    expected_names = sorted(expected_aria_names | expected_matt_names)
+    selected_entries = aria_entries + matt_entries
+    observed_names = sorted(name for name, _, _ in selected_entries)
     if observed_names != expected_names:
         errors.append(
-            "model-visible selected Matt skills differ: "
+            "integrated model-visible skills differ: "
             f"expected={expected_names}, observed={observed_names}"
         )
-    observed_bytes = sum(
-        len(description.encode("utf-8")) for _, description in matt_entries
+
+    duplicate_names = sorted(
+        name for name in set(observed_names) if observed_names.count(name) != 1
     )
-    if observed_bytes != manifest["budget"]["selected_description_bytes"]:
+    duplicate_paths = sorted(
+        str(path)
+        for path in {path for _, _, path in selected_entries}
+        if sum(entry_path == path for _, _, entry_path in selected_entries) != 1
+    )
+    if duplicate_names or duplicate_paths:
+        errors.append(
+            "integrated prompt contains skill collisions: "
+            f"names={duplicate_names}, paths={duplicate_paths}"
+        )
+
+    source_descriptions: dict[str, str] = {}
+    for name in sorted(expected_aria_names):
+        skill_path = aria_root / name / "SKILL.md"
+        try:
+            description = _frontmatter(skill_path).get("description")
+        except (OSError, PolicyError, UnicodeError) as exc:
+            errors.append(f"cannot read ARIA prompt source for {name}: {exc}")
+            continue
+        if not isinstance(description, str):
+            errors.append(f"ARIA prompt source has no description: {name}")
+            continue
+        source_descriptions[name] = description
+    for name in sorted(expected_matt_names):
+        skill_path = matt_root / name / "SKILL.md"
+        try:
+            description = _frontmatter(skill_path).get("description")
+        except (OSError, PolicyError, UnicodeError) as exc:
+            errors.append(f"cannot read Matt prompt source for {name}: {exc}")
+            continue
+        if not isinstance(description, str):
+            errors.append(f"Matt prompt source has no description: {name}")
+            continue
+        source_descriptions[name] = description
+
+    for name, description, path in selected_entries:
+        owner = aria_root if name in expected_aria_names else matt_root
+        expected_path = owner / name / "SKILL.md"
+        if path != expected_path:
+            errors.append(
+                f"model-visible skill path mismatch for {name}: "
+                f"expected={expected_path}, observed={path}"
+            )
+        expected_description = source_descriptions.get(name)
+        if expected_description is not None and description != expected_description:
+            errors.append(
+                f"model-visible skill description is truncated or changed: {name}"
+            )
+
+    observed_matt_bytes = sum(
+        len(description.encode("utf-8"))
+        for name, description, _ in matt_entries
+        if name in expected_matt_names
+    )
+    if observed_matt_bytes != manifest["budget"]["selected_description_bytes"]:
         errors.append(
             "model-visible selected Matt description bytes differ: "
+            f"observed={observed_matt_bytes}"
+        )
+    observed_bytes = sum(
+        len(description.encode("utf-8")) for _, description, _ in selected_entries
+    )
+    source_bytes = sum(
+        len(description.encode("utf-8")) for description in source_descriptions.values()
+    )
+    source_aria_bytes = sum(
+        len(source_descriptions[name].encode("utf-8"))
+        for name in expected_aria_names
+        if name in source_descriptions
+    )
+    if source_aria_bytes != manifest["budget"]["aria_description_bytes"]:
+        errors.append(
+            "ARIA source description bytes differ from the integrated budget: "
+            f"observed={source_aria_bytes}"
+        )
+    if observed_bytes != source_bytes:
+        errors.append(
+            "integrated prompt bytes differ from the source arithmetic cross-check: "
+            f"prompt={observed_bytes}, source={source_bytes}"
+        )
+    if observed_bytes != manifest["budget"]["integrated_description_bytes"]:
+        errors.append(
+            "integrated prompt description bytes differ from the manifest: "
             f"observed={observed_bytes}"
         )
     if observed_bytes > manifest["budget"]["maximum_description_bytes"]:
-        errors.append("model-visible selected Matt descriptions exceed the WP0 budget")
+        errors.append(
+            "integrated model-visible skill descriptions exceed the WP0 budget: "
+            f"{observed_bytes} > {manifest['budget']['maximum_description_bytes']}"
+        )
     return errors
+
+
+def validate_codex_prompt_surface() -> list[str]:
+    """Require the supported model-visible prompt inspection command."""
+    try:
+        result = subprocess.run(
+            ["codex", "debug", "prompt-input", "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        return [f"Codex prompt-input surface is unavailable: {exc}"]
+    help_text = result.stdout
+    required = (
+        "Render the model-visible prompt input list as JSON",
+        "Usage: codex debug prompt-input [OPTIONS] [PROMPT]",
+    )
+    if result.returncode != 0 or any(marker not in help_text for marker in required):
+        return ["Codex prompt-input surface is unavailable or mismatched"]
+    return []
+
+
+def run_clean_home_prompt_input(
+    repo: Path,
+    home: Path,
+    codex_home: Path,
+    project_config: str,
+) -> list[dict[str, Any]]:
+    """Run one supported prompt-input capture with isolated controlled homes."""
+    if home.exists():
+        unexpected = {path.name for path in home.iterdir()} - {".agents"}
+        agents_children = (
+            {path.name for path in (home / ".agents").iterdir()}
+            if (home / ".agents").is_dir()
+            else set()
+        )
+        if unexpected or agents_children - {"skills"}:
+            raise PolicyError(
+                f"clean-home prompt capture found unmanaged HOME state: {home}"
+            )
+    home.mkdir(parents=True, exist_ok=True)
+    if codex_home.exists() and any(codex_home.iterdir()):
+        raise PolicyError(
+            f"clean-home prompt capture requires empty CODEX_HOME: {codex_home}"
+        )
+    codex_home.mkdir(parents=True, exist_ok=True)
+    binary_errors = validate_codex_binary()
+    if binary_errors:
+        raise PolicyError(binary_errors[0])
+    surface_errors = validate_codex_prompt_surface()
+    if surface_errors:
+        raise PolicyError(surface_errors[0])
+    config = (
+        project_config.rstrip()
+        + f'\n\n[projects.{json.dumps(str(repo.resolve()))}]\ntrust_level = "trusted"\n'
+    )
+    (codex_home / "config.toml").write_text(config, encoding="utf-8")
+    env = os.environ.copy()
+    env.update(
+        {
+            "HOME": str(home),
+            "CODEX_HOME": str(codex_home),
+            "LC_ALL": "C.UTF-8",
+        }
+    )
+    try:
+        result = subprocess.run(
+            ["codex", "debug", "prompt-input", ""],
+            cwd=repo,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        raise PolicyError(f"Codex prompt-input execution failed: {exc}") from exc
+    if result.returncode != 0:
+        raise PolicyError(
+            "Codex prompt-input execution failed: "
+            f"exit={result.returncode}, stderr={result.stderr.strip()}"
+        )
+    if re.search(r"\b(?:collision|truncat(?:ed|ion))\b", result.stderr, re.IGNORECASE):
+        raise PolicyError(
+            f"Codex prompt-input reported collision/truncation: {result.stderr.strip()}"
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise PolicyError("Codex prompt-input did not emit JSON") from exc
+    if not isinstance(payload, list):
+        raise PolicyError("Codex prompt-input JSON has an unsupported top-level shape")
+    return payload
 
 
 def validate_codex_binary(baseline_path: Path = BASELINE_PATH) -> list[str]:
@@ -534,11 +755,14 @@ def validate_codex_binary(baseline_path: Path = BASELINE_PATH) -> list[str]:
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))[
         "codex_environment"
     ]
-    errors: list[str] = []
-    version = subprocess.check_output(["codex", "--version"], text=True).strip()
     executable = shutil.which("codex")
     if executable is None:
         return ["codex executable is unavailable"]
+    errors: list[str] = []
+    try:
+        version = subprocess.check_output(["codex", "--version"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return [f"cannot inspect Codex executable: {exc}"]
     digest = file_digest(Path(executable).resolve())
     if version != baseline["codex_version"]:
         errors.append(
@@ -615,6 +839,7 @@ def main() -> int:
             errors.append("--prompt-input requires --skills-root")
         else:
             errors.extend(validate_codex_binary())
+            errors.extend(validate_codex_prompt_surface())
             payload = json.loads(args.prompt_input.read_text(encoding="utf-8"))
             errors.extend(
                 validate_prompt_input(

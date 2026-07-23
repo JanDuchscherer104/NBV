@@ -30,10 +30,15 @@ repo-relative paths, and hash concatenated `path + NUL + raw bytes` records with
 SHA-256. Invocation metadata is pinned separately. Missing, escaping,
 ambiguous, added, removed, or changed closure members invalidate the install.
 
-Only six selected skills permit model invocation at the pinned commit. Their
-descriptions total 1008 bytes, below the WP0-derived ceiling of 1511 bytes.
-Verify the visible set with exactly `codex debug prompt-input`; explicit-only
-skills must not consume model-visible description budget.
+Only six selected Matt skills permit model invocation at the pinned commit.
+Their descriptions total 1008 bytes. In one clean-home integrated
+`codex debug prompt-input` run, those six must appear together with all nine
+model-visible ARIA skills: exactly fifteen unique, complete entries totaling
+1509 bytes, below the WP0-derived ceiling of 1511 bytes. Missing, duplicate,
+colliding, truncated, or path-mismatched entries fail closed. Frontmatter
+arithmetic (501 ARIA bytes plus 1008 Matt bytes) is only a cross-check of the
+CLI-rendered prompt evidence; explicit-only Matt skills consume no
+model-visible description budget.
 
 ## ARIA Overrides
 

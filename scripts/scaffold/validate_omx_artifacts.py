@@ -46,6 +46,9 @@ SEED_MANIFEST = "seed-manifest.json"
 OMX_PINNED_VERSION = "0.20.3"
 OMX_PINNED_INTEGRITY = "sha512-7wlSTA1Nc9c31WX9w8THYPwlaleWV1dk/0WXqRgxpph34EI4oJM+Z4Egv04Nn8wN2SLI9K2LMfeOpNKI+06LGg=="
 LEGACY_PREDECESSOR_ID = "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f"
+LEGACY_BOOTSTRAP_RECORD_SHA256 = (
+    "54d4e7dfb5a63d1f3409082bd6e39b139f6118d4b087c71cc5cba6c95bd915b4"
+)
 LEGACY_REDACTION_ALLOWLIST = {
     ".omx/archive/accepted-bundles/"
     "aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/"
@@ -583,12 +586,34 @@ def _immutable_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _bundle_record_sha256(bundle: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        bundle, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode()
+    return _bytes_sha256(encoded)
+
+
+def _is_legacy_bootstrap_record(bundle: dict[str, Any]) -> bool:
+    return (
+        bundle.get("id") == LEGACY_PREDECESSOR_ID
+        and bundle.get("status") == "superseded"
+        and _bundle_record_sha256(bundle) == LEGACY_BOOTSTRAP_RECORD_SHA256
+    )
+
+
 def validate_history(
     current: dict[str, Any], previous: dict[str, Any], label: str
 ) -> list[str]:
     errors: list[str] = []
     old_by_id = {item["id"]: item for item in previous.get("bundles", [])}
     new_by_id = {item["id"]: item for item in current.get("bundles", [])}
+    for bundle_id, new in new_by_id.items():
+        if (
+            bundle_id not in old_by_id
+            and new.get("status") == "superseded"
+            and not _is_legacy_bootstrap_record(new)
+        ):
+            errors.append(f"{label}: first-seen bundle must be current: {bundle_id}")
     for bundle_id, old in old_by_id.items():
         new = new_by_id.get(bundle_id)
         if new is None:
@@ -680,7 +705,16 @@ def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
         for bundle_id, bundle in historical_by_id.items():
             if bundle_id not in expected:
                 continue
+            first_seen = bundle_id not in seen
             seen.add(bundle_id)
+            if (
+                first_seen
+                and bundle.get("status") == "superseded"
+                and not _is_legacy_bootstrap_record(bundle)
+            ):
+                errors.append(
+                    f"{commit}: first-seen bundle must be current: {bundle_id}"
+                )
             expected_artifacts = {
                 item["native_path"]: item for item in expected[bundle_id]["artifacts"]
             }

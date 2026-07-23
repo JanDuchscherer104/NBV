@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -21,36 +22,91 @@ CANONICAL_GRAPH = (
     ROOT / "graphify-out/GRAPH_REPORT.md",
 )
 MAX_GRAPH_BYTES = 35 * 1024 * 1024
-GRAPHIFY_CONFIG = ROOT / ".graphify.toml"
-LOC_EXCLUDE_PREFIXES = (".omx/",)
+BASELINE_COMMIT = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
+OUTLINE_SCRIPT_NAMES = {
+    "nbv_qmd_outline.py",
+    "nbv_qmd_outline.sh",
+    "nbv_typst_includes.py",
+}
 
 
-def tracked_files() -> list[str]:
-    """Return regular tracked worktree files, excluding submodules and symlinks."""
+def git_tree(ref: str) -> dict[str, tuple[str, str]]:
+    """Return ``path -> (mode, object id)`` for one committed Git tree."""
     output = subprocess.check_output(
-        ["git", "ls-files", "--stage", "-z"], cwd=ROOT
-    ).decode()
-    files: list[str] = []
-    for record in output.split("\0"):
+        ["git", "ls-tree", "-rz", "--full-tree", ref], cwd=ROOT
+    )
+    tree: dict[str, tuple[str, str]] = {}
+    for record in output.split(b"\0"):
         if not record:
             continue
-        metadata, path = record.split("\t", 1)
-        mode = metadata.split(" ", 1)[0]
-        if mode in {"100644", "100755"}:
-            files.append(path)
-    return sorted(files)
+        metadata, encoded_path = record.split(b"\t", 1)
+        mode, object_type, object_id = metadata.decode().split()
+        path = encoded_path.decode("utf-8", errors="surrogateescape")
+        tree[path] = (mode, object_id if object_type == "blob" else "")
+    return tree
+
+
+def git_blob(object_id: str) -> bytes:
+    """Read a blob by object id without consulting the worktree."""
+    return subprocess.check_output(["git", "cat-file", "blob", object_id], cwd=ROOT)
+
+
+def _matches(path: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
+
+
+def accounting_path_sets(
+    tree: dict[str, tuple[str, str]], rules: dict[str, object]
+) -> tuple[list[str], list[str]]:
+    """Resolve exact included and explicitly excluded paths under frozen rules."""
+    regular = sorted(
+        path for path, (mode, _) in tree.items() if mode in {"100644", "100755"}
+    )
+    include_globs = rules["include_globs"]
+    exclude_globs = rules["exclude_globs"]
+    assert isinstance(include_globs, list) and isinstance(exclude_globs, list)
+    included = [
+        path
+        for path in regular
+        if _matches(path, include_globs) and not _matches(path, exclude_globs)
+    ]
+    excluded = [path for path in regular if _matches(path, exclude_globs)]
+    return included, excluded
 
 
 def is_active_scaffold_source(path: str) -> bool:
-    """Return whether Graphify's canonical corpus assigns a path to scaffold."""
-    config = tomllib.loads(GRAPHIFY_CONFIG.read_text(encoding="utf-8"))
-    corpus = config["corpus"]
-    if any(fnmatch.fnmatch(path, pattern) for pattern in corpus["exclude_patterns"]):
-        return False
-    return any(
-        fnmatch.fnmatch(path, pattern)
-        for pattern in config["partition"]["scaffold"]["patterns"]
+    """Return whether a path is included by the immutable WP0 accounting rules."""
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    rules = baseline["counting_rules"]["active_scaffold_source_loc"]
+    return _matches(path, rules["include_globs"]) and not _matches(
+        path, rules["exclude_globs"]
     )
+
+
+def outline_scripts(tree: dict[str, tuple[str, str]]) -> list[str]:
+    """Return retained root and ARIA context-owner outline scripts."""
+    return sorted(
+        path
+        for path, (mode, _) in tree.items()
+        if mode in {"100644", "100755"}
+        and Path(path).name in OUTLINE_SCRIPT_NAMES
+        and (
+            path.startswith("scripts/")
+            or path.startswith(".agents/skills/aria-nbv-context/scripts/")
+        )
+    )
+
+
+def path_set_digest(paths: list[str]) -> str:
+    """Hash an ordered path set with the WP0 ``path + NUL`` encoding."""
+    return hashlib.sha256(
+        b"".join(path.encode("utf-8") + b"\0" for path in paths)
+    ).hexdigest()
+
+
+def tree_loc(tree: dict[str, tuple[str, str]], paths: list[str]) -> int:
+    """Count physical lines for committed blobs in ``paths``."""
+    return sum(len(git_blob(tree[path][1]).splitlines()) for path in paths)
 
 
 def frontmatter_fields(path: Path) -> tuple[str, bool]:
@@ -83,12 +139,15 @@ def measure() -> dict[str, object]:
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     skills = json.loads(WP6_SKILLS.read_text(encoding="utf-8"))["active_skills"]
     matt = tomllib.loads(MATT_MANIFEST.read_text(encoding="utf-8"))
-    tracked = tracked_files()
-    scaffold = [
-        path
-        for path in tracked
-        if is_active_scaffold_source(path) and not path.startswith(LOC_EXCLUDE_PREFIXES)
-    ]
+    baseline_ref = baseline["source_state"]["commit"]
+    baseline_tree = git_tree(baseline_ref)
+    head_tree = git_tree("HEAD")
+    rules = baseline["counting_rules"]["active_scaffold_source_loc"]
+    baseline_included, baseline_excluded = accounting_path_sets(baseline_tree, rules)
+    head_included, head_excluded = accounting_path_sets(head_tree, rules)
+    tracked = sorted(
+        path for path, (mode, _) in head_tree.items() if mode in {"100644", "100755"}
+    )
     live_skills = sorted(
         path.split("/")[-2]
         for path in tracked
@@ -111,6 +170,7 @@ def measure() -> dict[str, object]:
     ]
     maximum_description_bytes = baseline_description_bytes * 2 // 5
     return {
+        "baseline_commit": baseline_ref,
         "baseline_skill_count": baseline["measurements"]["aria_skill_count"],
         "active_skill_count": len(live_skills),
         "active_skills": live_skills,
@@ -118,11 +178,24 @@ def measure() -> dict[str, object]:
         "baseline_scaffold_source_loc": baseline["measurements"][
             "active_scaffold_source"
         ]["physical_lines"],
-        "active_scaffold_source_paths": scaffold,
-        "active_scaffold_source_files": len(scaffold),
-        "active_scaffold_source_loc": sum(
-            len((ROOT / path).read_bytes().splitlines()) for path in scaffold
+        "declared_baseline_scaffold_source_files": baseline["measurements"][
+            "active_scaffold_source"
+        ]["file_count"],
+        "measured_baseline_scaffold_source_loc": tree_loc(
+            baseline_tree, baseline_included
         ),
+        "baseline_scaffold_source_paths": baseline_included,
+        "baseline_scaffold_excluded_paths": baseline_excluded,
+        "baseline_scaffold_source_paths_sha256": path_set_digest(baseline_included),
+        "declared_baseline_scaffold_source_paths_sha256": baseline["measurements"][
+            "active_scaffold_source"
+        ]["resolved_paths_sha256"],
+        "active_scaffold_source_paths": head_included,
+        "active_scaffold_excluded_paths": head_excluded,
+        "active_scaffold_source_files": len(head_included),
+        "active_scaffold_source_loc": tree_loc(head_tree, head_included),
+        "baseline_outline_scripts": outline_scripts(baseline_tree),
+        "active_outline_scripts": outline_scripts(head_tree),
         "matt_skill_count": len(matt["skill"]),
         "matt_allowlist_count": len(matt["policy"]["allowlist"]),
         "baseline_description_bytes": baseline_description_bytes,
@@ -145,6 +218,9 @@ def measure() -> dict[str, object]:
         "declared_matt_model_visible_description_bytes": matt["budget"][
             "selected_description_bytes"
         ],
+        "declared_integrated_description_bytes": matt["budget"][
+            "integrated_description_bytes"
+        ],
         "canonical_graph_bytes": sum(path.stat().st_size for path in CANONICAL_GRAPH),
         "maximum_canonical_graph_bytes": MAX_GRAPH_BYTES,
         "tracked_generated_codex_agents": [
@@ -159,6 +235,8 @@ def measure() -> dict[str, object]:
 def validate(metrics: dict[str, object]) -> list[str]:
     """Return violations of the approved WP7 quantitative contract."""
     errors: list[str] = []
+    if metrics["baseline_commit"] != BASELINE_COMMIT:
+        errors.append(f"WP0 baseline commit must be exactly {BASELINE_COMMIT}")
     if metrics["baseline_skill_count"] != 21:
         errors.append("immutable baseline must contain exactly 21 ARIA skills")
     if metrics["active_skill_count"] != 9:
@@ -169,10 +247,46 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append("final ARIA skill names differ from the closed WP6 inventory")
     if metrics["matt_skill_count"] != 12 or metrics["matt_allowlist_count"] != 12:
         errors.append("final Matt policy must retain exactly 12 allowlisted skills")
+    if (
+        metrics["measured_baseline_scaffold_source_loc"]
+        != metrics["baseline_scaffold_source_loc"]
+        or len(metrics["baseline_scaffold_source_paths"])
+        != metrics["declared_baseline_scaffold_source_files"]
+        or metrics["baseline_scaffold_source_paths_sha256"]
+        != metrics["declared_baseline_scaffold_source_paths_sha256"]
+    ):
+        errors.append("frozen baseline scaffold path set or LOC does not reproduce")
     if metrics["active_scaffold_source_loc"] >= metrics["baseline_scaffold_source_loc"]:
         errors.append(
             "active scaffold source LOC is not strictly below the WP0 baseline"
         )
+    if not set(metrics["baseline_outline_scripts"]) <= set(
+        metrics["active_outline_scripts"]
+    ):
+        errors.append("retained WP0 outline scripts are missing at HEAD")
+    for label, paths in (
+        ("baseline included", metrics["baseline_scaffold_source_paths"]),
+        ("HEAD included", metrics["active_scaffold_source_paths"]),
+    ):
+        excluded_key = (
+            "baseline_scaffold_excluded_paths"
+            if label.startswith("baseline")
+            else "active_scaffold_excluded_paths"
+        )
+        excluded_paths = metrics[excluded_key]
+        if (
+            paths != sorted(set(paths))
+            or excluded_paths != sorted(set(excluded_paths))
+            or set(paths) & set(excluded_paths)
+        ):
+            errors.append(f"{label} scaffold path set is not exact and disjoint")
+        if any(
+            path.startswith(("scripts/tests/", "graphify-out/", ".omx/"))
+            for path in paths
+        ):
+            errors.append(
+                f"{label} scaffold paths contain tests, graph output, or OMX evidence"
+            )
     if (
         metrics["baseline_description_bytes"]
         != metrics["declared_baseline_description_bytes"]
@@ -187,6 +301,11 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append(
             "model-visible Matt description measurement differs from the manifest"
         )
+    if (
+        metrics["model_visible_description_bytes"]
+        != metrics["declared_integrated_description_bytes"]
+    ):
+        errors.append("integrated description arithmetic differs from the manifest")
     if (
         metrics["model_visible_description_bytes"]
         > metrics["maximum_description_bytes"]
@@ -214,7 +333,7 @@ def main() -> int:
         f"skills={metrics['baseline_skill_count']}->{metrics['active_skill_count']}, "
         f"scaffold_loc={metrics['active_scaffold_source_loc']}"
         f"<{metrics['baseline_scaffold_source_loc']}, "
-        f"description_bytes={metrics['aria_model_visible_description_bytes']}+"
+        f"description_crosscheck={metrics['aria_model_visible_description_bytes']}+"
         f"{metrics['matt_model_visible_description_bytes']}="
         f"{metrics['model_visible_description_bytes']}"
         f"<={metrics['maximum_description_bytes']}, "

@@ -5,20 +5,24 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
+
+from graphify_contract import ContractError
+from graphify_refresh import ensure_graphify_pin, graphify_command
 
 
 def main() -> int:
     if len(sys.argv) != 4:
         print("usage: graphify_merge_driver.py BASE CURRENT OTHER", file=sys.stderr)
         return 2
-    executable = shutil.which("graphify")
-    if executable is None:
-        print("graphify merge driver requires pinned graphifyy", file=sys.stderr)
+    command = graphify_command()
+    try:
+        ensure_graphify_pin(command)
+    except ContractError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
-    result = subprocess.run([executable, "merge-driver", *sys.argv[1:]], check=False)
+    result = subprocess.run([*command, "merge-driver", *sys.argv[1:]], check=False)
     if result.returncode:
         return result.returncode
     current = Path(sys.argv[2])
@@ -27,7 +31,8 @@ def main() -> int:
         graph["nodes"] = sorted(graph.get("nodes", []), key=lambda item: item["id"])
         graph["edges"] = sorted(graph.get("edges", []), key=lambda item: item["id"])
         current.write_text(
-            json.dumps(graph, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+            json.dumps(graph, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            + "\n",
             encoding="utf-8",
         )
     except (OSError, ValueError, KeyError) as exc:

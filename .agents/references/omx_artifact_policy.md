@@ -21,10 +21,14 @@ exception: its exact handoff-bound 17-artifact manifest plus handoff is retained
 under the reserved archive and linked to the approved successor task.
 
 Registered bytes, membership, source commits, tombstones, and supersession links
-are append-only. Ordinary public documentation URLs are allowed; credentials,
-private keys, machine-local paths, and runtime identifiers are rejected. The
-byte-identical legacy predecessor has one path-and-SHA-256 redaction exception
-for its already-approved machine-path content; there is no bundle-wide bypass.
+are append-only. A bundle must first appear as `current`; a first-seen
+`superseded` row is rejected unless its complete canonical record is the exact
+immutable July 2026 bootstrap predecessor already tracked. The exception is
+bound by the full-record SHA-256, not merely by bundle ID. Ordinary public
+documentation URLs are allowed; credentials, private keys, machine-local paths,
+and runtime identifiers are rejected. The byte-identical legacy predecessor has
+one path-and-SHA-256 redaction exception for its already-approved machine-path
+content; there is no bundle-wide bypass.
 
 Promotion, supersession, seed restoration, and reviewed native OMX operations
 use a worktree-specific recovery directory resolved by
@@ -64,6 +68,24 @@ registered files, and restores any attempted mutation. The review pin is
 `oh-my-codex@0.20.3` with integrity
 `sha512-7wlSTA1Nc9c31WX9w8THYPwlaleWV1dk/0WXqRgxpph34EI4oJM+Z4Egv04Nn8wN2SLI9K2LMfeOpNKI+06LGg==`;
 version or integrity drift requires a new isolation review.
+
+The executable native acceptance test clones the repository into a disposable
+repository, redirects home, Codex/XDG state, and temporary storage into the same
+disposable root, verifies the reviewed OMX installation once, then runs the
+actual `cleanup --dry-run`, `cleanup`, `ultragoal create-goals`, and `cancel`
+commands through the protected wrapper. It asserts byte identity for the exact
+approved successor and archived bootstrap predecessor after every command. The
+same test exports a seed outside the disposable repository, purges only copied
+registered OMX payloads, restores them, and proves that an outside sentinel is
+unchanged. Run it explicitly with:
+
+```text
+ARIA_OMX_NATIVE_ACCEPTANCE=1 python3 scripts/tests/test_validate_omx_artifacts.py
+```
+
+Focused fixtures inject faults after every promotion payload/registry phase,
+supersession archive/successor/registry phase, and seed-restore
+payload/index phase, and require complete rollback before retry.
 
 Run `make omx-artifacts-check` before committing lifecycle changes. Every
 tracked or otherwise visible `.omx` file must resolve through the registry;

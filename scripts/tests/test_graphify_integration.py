@@ -12,6 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 import graphify_contract as contract  # noqa: E402
+import check_graphify_integration as integration  # noqa: E402
 
 
 def main() -> None:
@@ -52,6 +53,26 @@ def main() -> None:
     )
     assert contract.classify_path("graphify-out/wiki/index.md", config) is None
     assert contract.classify_path(".omx/state/runtime.json", config) is None
+    assert (
+        contract.classify_path(".omx/specs/scaffold/decision-record.md", config)
+        == "scaffold"
+    )
+    assert contract.classify_path("scripts/nbv_qmd_outline.sh", config) == "scaffold"
+    assert contract.classify_path("scripts/nbv_typst_includes.py", config) == "scaffold"
+
+    for event in ("pull_request", "push"):
+        assert integration.CI_GRAPHIFY_OWNER_PATHS <= integration._workflow_paths(event)
+
+    tracked = integration._tracked_paths()
+    expected_inventory = integration._closed_inventory_paths(tracked, config)
+    all_sources = {source["path"] for source in contract.collect_sources()}
+    scaffold_sources = {
+        source["path"]
+        for source in contract.collect_sources()
+        if source["partition"] == "scaffold"
+    }
+    assert expected_inventory <= all_sources
+    assert integration._registered_omx_paths(tracked) <= scaffold_sources
 
     selected = {"arXiv-selected"}
     assert (

@@ -109,7 +109,9 @@ memory, and interpreter state remain ignored operator output.
 The repo-owned `.graphifyignore` and
 `.agents/references/graphify_contract.md` define the partitioned code,
 scaffold, thesis, and literature corpus. Exact source owners remain
-authoritative; Graphify is source-derived navigation evidence.
+authoritative; Graphify is source-derived navigation evidence. Scaffold
+coverage is checked against the closed WP0 inventory and OMX artifact registry,
+including registered context, plans, specs, and retained narrow source readers.
 
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,

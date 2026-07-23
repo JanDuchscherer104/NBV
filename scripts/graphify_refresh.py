@@ -36,12 +36,15 @@ def _changed_paths() -> list[Path]:
     ]
 
 
-def _graphify_command() -> list[str]:
+def graphify_command() -> list[str]:
     configured = os.environ.get("GRAPHIFY_BIN")
     if configured:
         return shlex.split(configured)
+    module = [sys.executable, "-m", "graphify"]
+    if "0.9.22" in _graphify_version(module):
+        return module
     executable = shutil.which("graphify")
-    return [executable] if executable else [sys.executable, "-m", "graphify"]
+    return [executable] if executable else module
 
 
 def _graphify_version(command: list[str]) -> str:
@@ -51,7 +54,7 @@ def _graphify_version(command: list[str]) -> str:
     return result.stdout + result.stderr
 
 
-def _ensure_pin(command: list[str]) -> None:
+def ensure_graphify_pin(command: list[str]) -> None:
     if "0.9.22" not in _graphify_version(command):
         raise ContractError(
             "Graphify 0.9.22 is required; set GRAPHIFY_BIN to the pinned executable"
@@ -107,8 +110,8 @@ def _compare_generated(generated: dict[str, bytes]) -> list[str]:
 
 
 def run(*, check: bool, mode: str) -> list[str]:
-    command = _graphify_command()
-    _ensure_pin(command)
+    command = graphify_command()
+    ensure_graphify_pin(command)
     old_graph = None
     try:
         old_graph, _ = load_canonical()

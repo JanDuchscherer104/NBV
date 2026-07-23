@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,18 +60,44 @@ def _install_copy(checkout: Path, skills_root: Path) -> None:
 def _prompt_input(
     repo: Path, home: Path, codex_home: Path, project_config: Path
 ) -> list[dict]:
-    codex_home.mkdir(parents=True)
-    (codex_home / "config.toml").write_text(
-        project_config.read_text(encoding="utf-8")
-        + f'\n[projects.{json.dumps(str(repo))}]\ntrust_level = "trusted"\n',
-        encoding="utf-8",
+    return policy.run_clean_home_prompt_input(
+        repo,
+        home,
+        codex_home,
+        project_config.read_text(encoding="utf-8"),
     )
-    env = os.environ.copy()
-    env.update({"HOME": str(home), "CODEX_HOME": str(codex_home), "LC_ALL": "C.UTF-8"})
-    raw = subprocess.check_output(
-        ["codex", "debug", "prompt-input", ""], cwd=repo, env=env
+
+
+def _prompt_fixture(
+    manifest: dict, skills_root: Path
+) -> tuple[list[dict], set[str], set[str]]:
+    aria_names = set(
+        json.loads(policy.WP6_SKILLS_PATH.read_text(encoding="utf-8"))["active_skills"]
     )
-    return json.loads(raw)
+    matt_names = set(manifest["budget"]["model_visible_allowlist"])
+    lines = [
+        "### Skill roots",
+        f"- `r0` = `{ROOT / '.agents/skills'}`",
+        f"- `r1` = `{skills_root}`",
+        "### Available skills",
+    ]
+    for name in sorted(aria_names):
+        description = policy._frontmatter(ROOT / ".agents/skills" / name / "SKILL.md")[
+            "description"
+        ]
+        lines.append(f"- {name}: {description} (file: r0/{name}/SKILL.md)")
+    for name in sorted(matt_names):
+        description = policy._frontmatter(skills_root / name / "SKILL.md")[
+            "description"
+        ]
+        lines.append(f"- {name}: {description} (file: r1/{name}/SKILL.md)")
+    payload = [
+        {
+            "role": "developer",
+            "content": [{"type": "input_text", "text": "\n".join(lines)}],
+        }
+    ]
+    return payload, aria_names, matt_names
 
 
 def main() -> None:
@@ -80,6 +107,23 @@ def main() -> None:
         checkout = _checkout(manifest, temporary)
         assert not policy.validate_manifest(manifest, checkout)
         assert not policy.validate_codex_binary()
+        assert not policy.validate_codex_prompt_surface()
+        with mock.patch.object(
+            policy.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                ["codex"], returncode=0, stdout="legacy help", stderr=""
+            ),
+        ):
+            assert policy.validate_codex_prompt_surface() == [
+                "Codex prompt-input surface is unavailable or mismatched"
+            ]
+        with mock.patch.object(
+            policy.subprocess, "run", side_effect=FileNotFoundError("missing")
+        ):
+            assert policy.validate_codex_prompt_surface() == [
+                "Codex prompt-input surface is unavailable: missing"
+            ]
         bootstrap._check_installer(manifest)
 
         wrong_integrity = copy.deepcopy(manifest)
@@ -87,6 +131,12 @@ def main() -> None:
         assert any(
             "integrity differs" in error
             for error in policy.validate_manifest(wrong_integrity, checkout)
+        )
+        wrong_integrated_budget = copy.deepcopy(manifest)
+        wrong_integrated_budget["budget"]["integrated_description_bytes"] += 1
+        assert any(
+            "integrated description arithmetic" in error
+            for error in policy.validate_manifest(wrong_integrated_budget, checkout)
         )
 
         vector = temporary / "vector"
@@ -178,15 +228,103 @@ def main() -> None:
         )
         policy.update_project_config(config, block)
 
-        repo = temporary / "repo"
-        subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
+        fixture, aria_names, matt_names = _prompt_fixture(manifest, skills_root)
+        matt_catalog = set(policy.discover_catalog(checkout))
+        assert not policy.validate_prompt_input(
+            manifest, fixture, skills_root, matt_catalog
+        )
+        fixture_text = fixture[0]["content"][0]["text"]
+        duplicate_fixture = copy.deepcopy(fixture)
+        duplicate_fixture[0]["content"][0]["text"] = (
+            fixture_text
+            + "\n"
+            + next(
+                line
+                for line in fixture_text.splitlines()
+                if line.startswith("- codebase-design:")
+            )
+        )
+        assert any(
+            "collisions" in error
+            for error in policy.validate_prompt_input(
+                manifest, duplicate_fixture, skills_root, matt_catalog
+            )
+        )
+        omitted_fixture = copy.deepcopy(fixture)
+        omitted_fixture[0]["content"][0]["text"] = "\n".join(
+            line for line in fixture_text.splitlines() if not line.startswith("- tdd:")
+        )
+        assert any(
+            "integrated model-visible skills differ" in error
+            for error in policy.validate_prompt_input(
+                manifest, omitted_fixture, skills_root, matt_catalog
+            )
+        )
+        truncated_fixture = copy.deepcopy(fixture)
+        truncated_fixture[0]["content"][0]["text"] = fixture_text.replace(
+            policy._frontmatter(skills_root / "tdd/SKILL.md")["description"],
+            policy._frontmatter(skills_root / "tdd/SKILL.md")["description"][:-1],
+        )
+        assert any(
+            "truncated or changed" in error
+            for error in policy.validate_prompt_input(
+                manifest, truncated_fixture, skills_root, matt_catalog
+            )
+        )
+        tiny_budget = copy.deepcopy(manifest)
+        tiny_budget["budget"]["maximum_description_bytes"] = 1
+        assert any(
+            "exceed the WP0 budget" in error
+            for error in policy.validate_prompt_input(
+                tiny_budget, fixture, skills_root, matt_catalog
+            )
+        )
+        assert policy.validate_prompt_input(
+            manifest, [], skills_root, matt_catalog
+        ) == ["Codex prompt-input payload must be a non-empty JSON list"]
+
+        clean_home = temporary / "clean-home"
+        prompt_skills_root = clean_home / ".agents/skills"
+        prompt_skills_root.mkdir(parents=True)
+        _install_copy(checkout, prompt_skills_root)
+        for name in aria_names:
+            shutil.copytree(
+                ROOT / ".agents/skills" / name,
+                prompt_skills_root / name,
+            )
+        integrated_config = temporary / "integrated-config.toml"
+        integrated_config.write_text(
+            policy.render_config_block(manifest, checkout, prompt_skills_root),
+            encoding="utf-8",
+        )
         payload = _prompt_input(
-            repo, temporary / "home", temporary / "codex-home", config
+            ROOT,
+            clean_home,
+            temporary / "clean-codex-home",
+            integrated_config,
         )
         prompt_errors = policy.validate_prompt_input(
-            manifest, payload, skills_root, set(policy.discover_catalog(checkout))
+            manifest,
+            payload,
+            prompt_skills_root,
+            matt_catalog,
+            aria_skills_root=prompt_skills_root,
         )
         assert not prompt_errors, prompt_errors
+        prompt_entries = policy.prompt_skill_entries(payload)
+        integrated = [
+            (Path(path).resolve().parent.name, description, path)
+            for name, description, path in prompt_entries
+            if Path(path).resolve().is_relative_to(prompt_skills_root.resolve())
+            and Path(path).resolve().parent.name in aria_names | matt_names
+        ]
+        assert len(integrated) == len(aria_names) + len(matt_names) == 15
+        assert len({name for name, _, _ in integrated}) == 15
+        assert (
+            sum(len(description.encode("utf-8")) for _, description, _ in integrated)
+            == 1509
+            <= manifest["budget"]["maximum_description_bytes"]
+        )
 
         policy.update_project_config(config, None)
         assert config.read_text(encoding="utf-8") == preserved_config

@@ -18,27 +18,58 @@ from graphify_contract import (
     load_canonical,
 )
 
+STOP_TERMS = {
+    "a",
+    "an",
+    "and",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
+}
+
+
+def _meaningful_terms(query: str) -> list[str]:
+    return list(
+        dict.fromkeys(
+            term
+            for term in re.findall(r"[A-Za-z0-9_.-]+", query.casefold())
+            if len(term) > 2 and term not in STOP_TERMS
+        )
+    )
+
 
 def exact_source_fallback(query: str, root: Path = ROOT, limit: int = 20) -> list[str]:
-    """Return literal, line-addressed matches from canonical corpus sources."""
-    needle = query.casefold()
-    matches: list[str] = []
+    """Return ranked literal-term matches from canonical corpus sources."""
+    terms = _meaningful_terms(query)
+    if not terms:
+        return []
+    ranked: list[tuple[int, int, str]] = []
     for source in collect_sources(root):
         path = root / source["path"]
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeError):
             continue
-        if needle in source["path"].casefold():
-            matches.append(f"{source['path']}:1:path match")
-            if len(matches) >= limit:
-                return matches
+        path_score = sum(term in source["path"].casefold() for term in terms)
+        if path_score:
+            ranked.append((-path_score, 0, f"{source['path']}:1:path match"))
         for line_number, line in enumerate(lines, start=1):
-            if needle in line.casefold():
-                matches.append(f"{source['path']}:{line_number}:{line.strip()}")
-                if len(matches) >= limit:
-                    return matches
-    return matches
+            score = sum(term in line.casefold() for term in terms)
+            if score:
+                ranked.append(
+                    (
+                        -score,
+                        1,
+                        f"{source['path']}:{line_number}:{line.strip()}",
+                    )
+                )
+    return [item[2] for item in sorted(ranked)[:limit]]
 
 
 def _fallback_for_terms(*terms: str, root: Path = ROOT) -> list[str]:
@@ -71,20 +102,21 @@ def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
     ]
 
 
-def search(query: str, root: Path = ROOT) -> tuple[list[str], list[str]]:
+def search(query: str, root: Path = ROOT) -> tuple[bool, list[str], list[str]]:
     state = partition_freshness(root)
     try:
         graph, _ = load_canonical(root / "graphify-out")
     except ContractError:
-        return exact_source_fallback(query, root), list(PARTITION_ORDER)
+        return False, exact_source_fallback(query, root), list(PARTITION_ORDER)
     nodes = _matching_nodes(graph, query, set(state.fresh))
     results = [
         f"{node['partition']}:{node['role']}:{node['source_file']}:{node.get('source_location', 'L1')}"
         for node in nodes[:20]
     ]
-    if not results:
-        results = exact_source_fallback(query, root)
-    return results, sorted(state.stale)
+    if results:
+        return True, results, sorted(state.stale)
+    results = exact_source_fallback(query, root)
+    return not state.stale and bool(results), results, sorted(state.stale)
 
 
 def explain(term: str, root: Path = ROOT) -> tuple[bool, list[str]]:
@@ -166,10 +198,9 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.operation in {"query", "search"}:
-            lines, stale = search(args.query)
+            allowed, lines, stale = search(args.query)
             if stale:
                 print("excluded stale partitions: " + ", ".join(stale), file=sys.stderr)
-            allowed = True
         elif args.operation == "explain":
             allowed, lines = explain(args.term)
         else:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -105,6 +106,12 @@ def main() -> None:
         state = freshness.partition_freshness(root)
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert not state.bridge_errors
+        allowed, no_evidence, excluded = query.search(
+            "unfindable evidence phrase", root
+        )
+        assert not allowed
+        assert not no_evidence
+        assert not excluded
 
         roles = {
             source["role"]
@@ -125,7 +132,8 @@ def main() -> None:
         )
         assert not allowed and "stale" in reason
 
-        results, excluded = query.search("Changed thesis", root)
+        allowed, results, excluded = query.search("Changed thesis", root)
+        assert not allowed
         assert excluded == ["thesis"]
         assert any("docs/page.qmd:1" in result for result in results)
         allowed, explanation = query.explain("page.qmd", root)
@@ -151,9 +159,11 @@ def main() -> None:
         assert state.bridge_errors == ("bridge: endpoint revision mismatch",)
 
         (root / "graphify-out/graph.json").unlink()
-        fallback, excluded = query.search("Package guide", root)
+        allowed, fallback, excluded = query.search("Package source guide", root)
+        assert not allowed
         assert excluded == list(contract.PARTITION_ORDER)
         assert any("aria_nbv/README.md:1" in result for result in fallback)
+        assert not query.exact_source_fallback("no exact evidence anywhere", root)
         allowed, fallback = query.explain("Package guide", root)
         assert not allowed
         assert any("aria_nbv/README.md:1" in result for result in fallback)
@@ -173,6 +183,30 @@ def main() -> None:
         assert not refresh._pending_partitions(
             [Path("docs/literature/tex-src/arXiv-unselected/main.tex")], root
         )
+
+        stale_global = root / "bin/graphify"
+        stale_global.parent.mkdir()
+        stale_global.write_text(
+            "#!/bin/sh\nprintf 'graphify 0.9.9\\n'\n", encoding="utf-8"
+        )
+        stale_global.chmod(0o755)
+        old_path = os.environ.get("PATH", "")
+        old_override = os.environ.pop("GRAPHIFY_BIN", None)
+        try:
+            os.environ["PATH"] = f"{stale_global.parent}:{old_path}"
+            assert refresh.graphify_command() == [
+                sys.executable,
+                "-m",
+                "graphify",
+            ]
+            os.environ["GRAPHIFY_BIN"] = f"{stale_global} --explicit"
+            assert refresh.graphify_command() == [str(stale_global), "--explicit"]
+        finally:
+            os.environ["PATH"] = old_path
+            if old_override is None:
+                os.environ.pop("GRAPHIFY_BIN", None)
+            else:
+                os.environ["GRAPHIFY_BIN"] = old_override
 
 
 if __name__ == "__main__":
