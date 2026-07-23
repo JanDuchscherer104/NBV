@@ -9,37 +9,44 @@ cd "$REPO" || exit 0
 changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null || true)
 [ -n "$changed" ] || exit 0
 
-case "$changed" in
-  *graphify-out/*|*.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)
-    # Canonical graph-only commits are terminal: never trigger another refresh.
-    non_graph=$(printf '%s\n' "$changed" | sed '/^graphify-out\/graph.json$/d; /^graphify-out\/manifest.json$/d; /^graphify-out\/GRAPH_REPORT.md$/d')
-    [ -n "$non_graph" ] || exit 0
-    # Upstream-aligned safety: do not mutate Graphify during sequencer states.
-    for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD REBASE_HEAD; do
-      [ ! -e "$(git rev-parse --git-path "$marker" 2>/dev/null)" ] || exit 0
-    done
-    export GRAPHIFY_CHANGED="$changed"
-    PYTHON=${PYTHON_INTERPRETER:-}
-    if [ -z "$PYTHON" ] && [ -f graphify-out/.graphify_python ]; then
-      PYTHON=$(tr -d '[:space:]' < graphify-out/.graphify_python)
-    fi
-    if [ -z "$PYTHON" ]; then
-      GRAPHIFY_BIN=$(command -v graphify 2>/dev/null || true)
-      if [ -n "$GRAPHIFY_BIN" ]; then
-        PYTHON=$(head -n 1 "$GRAPHIFY_BIN" | sed 's/^#!//')
-      fi
-    fi
-    if [ -z "$PYTHON" ] || [ ! -x "$PYTHON" ]; then
-      PYTHON=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
-    fi
-    [ -n "$PYTHON" ] || exit 0
-    if [ "${GRAPHIFY_SYNC_HOOK:-0}" = "1" ]; then
-      "$PYTHON" scripts/graphify_refresh.py --mode structural || exit $?
-    else
-      log="${HOME}/.cache/aria-nbv/graphify-refresh.log"
-      mkdir -p "$(dirname "$log")"
-      export GRAPHIFY_REFRESH_LOG="$log" GRAPHIFY_REFRESH_PYTHON="$PYTHON"
-      "$PYTHON" -c 'import os, subprocess
+# Canonical graph-only commits are terminal: never trigger another refresh.
+non_graph=$(printf '%s\n' "$changed" | sed '/^graphify-out\/graph.json$/d; /^graphify-out\/manifest.json$/d; /^graphify-out\/GRAPH_REPORT.md$/d')
+[ -n "$non_graph" ] || exit 0
+
+PYTHON=${PYTHON_INTERPRETER:-}
+if [ -z "$PYTHON" ] && [ -f graphify-out/.graphify_python ]; then
+  PYTHON=$(tr -d '[:space:]' < graphify-out/.graphify_python)
+fi
+if [ -z "$PYTHON" ]; then
+  GRAPHIFY_BIN=$(command -v graphify 2>/dev/null || true)
+  if [ -n "$GRAPHIFY_BIN" ]; then
+    PYTHON=$(head -n 1 "$GRAPHIFY_BIN" | sed 's/^#!//')
+  fi
+fi
+if [ -z "$PYTHON" ] || [ ! -x "$PYTHON" ]; then
+  PYTHON=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+fi
+[ -n "$PYTHON" ] || exit 0
+
+relevant=$(printf '%s\n' "$non_graph" | "$PYTHON" -c 'import sys
+sys.path.insert(0, "scripts")
+from graphify_contract import classify_path, load_config
+config = load_config()
+print("1" if any(classify_path(line.strip(), config) for line in sys.stdin if line.strip()) else "0")' 2>/dev/null || true)
+[ "$relevant" = "1" ] || exit 0
+
+# Upstream-aligned safety: do not mutate Graphify during sequencer states.
+for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD REBASE_HEAD; do
+  [ ! -e "$(git rev-parse --git-path "$marker" 2>/dev/null)" ] || exit 0
+done
+export GRAPHIFY_CHANGED="$changed"
+if [ "${GRAPHIFY_SYNC_HOOK:-0}" = "1" ]; then
+  "$PYTHON" scripts/graphify_refresh.py --mode structural || exit $?
+else
+  log="${HOME}/.cache/aria-nbv/graphify-refresh.log"
+  mkdir -p "$(dirname "$log")"
+  export GRAPHIFY_REFRESH_LOG="$log" GRAPHIFY_REFRESH_PYTHON="$PYTHON"
+  "$PYTHON" -c 'import os, subprocess
 log = open(os.environ["GRAPHIFY_REFRESH_LOG"], "a", buffering=1, encoding="utf-8")
 command = [os.environ["GRAPHIFY_REFRESH_PYTHON"], "scripts/graphify_refresh.py", "--mode", "structural"]
 options = dict(stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, close_fds=True)
@@ -47,8 +54,6 @@ if os.name == "nt":
     subprocess.Popen(command, creationflags=0x00000008 | 0x00000200, **options)
 else:
     subprocess.Popen(command, start_new_session=True, **options)'
-    fi
-    ;;
-esac
+fi
 
 exit 0

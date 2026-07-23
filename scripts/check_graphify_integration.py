@@ -15,6 +15,7 @@ from graphify_contract import (
     ContractError,
     PARTITION_ORDER,
     ROOT,
+    classify_path,
     collect_sources,
     load_canonical,
     load_config,
@@ -230,12 +231,27 @@ def _validate_corpus(config: dict) -> None:
 
 def _validate_hook_and_merge() -> None:
     hook = (ROOT / "scripts/git_hooks/post-commit").read_text(encoding="utf-8")
-    required = ("GRAPHIFY_CHANGED", "graphify_refresh.py", "start_new_session=True")
+    required = (
+        "GRAPHIFY_CHANGED",
+        "classify_path",
+        "graphify_refresh.py",
+        "start_new_session=True",
+    )
     if any(value not in hook for value in required):
         raise ContractError("post-commit lacks asynchronous Graphify dispatch contract")
     forbidden = ("git add", "git commit", "--mode sync", "save-result", "reflect")
     if any(value in hook for value in forbidden):
         raise ContractError("post-commit performs forbidden mutation/semantic work")
+    config = load_config()
+    for path in (
+        ".agents/skills/demo/SKILL.md",
+        ".omx/plans/example.md",
+        "AGENTS.md",
+        ".graphify.toml",
+        "scripts/graphify_contract.py",
+    ):
+        if classify_path(path, config) is None:
+            raise ContractError(f"Graphify hook corpus fixture is unclassified: {path}")
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
     if "graphify-out/graph.json merge=graphify" not in attributes:
         raise ContractError("Graphify merge driver is not assigned in .gitattributes")
