@@ -84,6 +84,33 @@ class QhLightningModule(pl.LightningModule):
     official [LightningModule API](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html).
     """
 
+    optimizer_updates: Tensor
+    """``Tensor["", int64]`` persistent count of completed optimizer updates.
+
+    Restored from checkpoints and used to schedule hard target-network copies.
+    """
+
+    target_syncs: Tensor
+    """``Tensor["", int64]`` persistent count of completed hard target copies."""
+
+    training_loss_sum: Tensor
+    """``Tensor["", float64]`` non-persistent local sum of train Huber losses for the current epoch."""
+
+    training_row_count: Tensor
+    """``Tensor["", int64]`` non-persistent local count of admitted train rows for the current epoch."""
+
+    validation_loss_sum: Tensor
+    """``Tensor["", float64]`` non-persistent local sum of validation Huber losses for the current epoch."""
+
+    validation_row_count: Tensor
+    """``Tensor["", int64]`` non-persistent local count of admitted validation rows for the current epoch."""
+
+    test_loss_sum: Tensor
+    """``Tensor["", float64]`` non-persistent local sum of test Huber losses for the current epoch."""
+
+    test_row_count: Tensor
+    """``Tensor["", int64]`` non-persistent local count of admitted test rows for the current epoch."""
+
     def __init__(
         self,
         config: QhLightningModuleConfig,
