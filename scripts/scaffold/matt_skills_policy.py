@@ -536,7 +536,7 @@ def validate_prompt_input(
     aria_root = aria_skills_root.resolve()
     matt_root = skills_root.resolve()
     aria_entries = [
-        (Path(path).resolve().parent.name, description, Path(path).resolve())
+        (name, description, Path(path).resolve())
         for name, description, path in entries
         if Path(path).resolve().is_relative_to(aria_root)
         and Path(path).resolve().parent.name in expected_aria_names

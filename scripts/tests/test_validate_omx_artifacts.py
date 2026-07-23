@@ -803,12 +803,17 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             "printf 'runtime\\n' > .omx/runtime/native.txt\n"
             'if [ "${OMX_TEST_MUTATE:-0}" = 1 ]; then\n'
             "  printf '\\n# damage\\n' >> .agents/omx_artifacts.toml\n"
+            'elif [ "${OMX_TEST_MUTATE:-0}" = unsafe ]; then\n'
+            "  mkdir -p .omx/archive/accepted-bundles/native-created\n"
+            '  ln -s "${OMX_TEST_OUTSIDE:?}" '
+            ".omx/archive/accepted-bundles/native-created/link\n"
             "fi\n",
             encoding="utf-8",
         )
         fake_omx.chmod(0o755)
         old_path = os.environ.get("PATH", "")
         old_mutate = os.environ.get("OMX_TEST_MUTATE")
+        old_outside = os.environ.get("OMX_TEST_OUTSIDE")
         old_version = os.environ.get("OMX_TEST_VERSION")
 
         def restore_environment() -> None:
@@ -817,6 +822,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 os.environ.pop("OMX_TEST_MUTATE", None)
             else:
                 os.environ["OMX_TEST_MUTATE"] = old_mutate
+            if old_outside is None:
+                os.environ.pop("OMX_TEST_OUTSIDE", None)
+            else:
+                os.environ["OMX_TEST_OUTSIDE"] = old_outside
             if old_version is None:
                 os.environ.pop("OMX_TEST_VERSION", None)
             else:
@@ -836,6 +845,20 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             self.assertEqual(
                 validator.run_native_operation(["omx", "cleanup"], self.root), 1
             )
+        self.assertEqual(self.registered_bytes(), expected)
+        outside = self.root.parent / f"{self.root.name}-outside.txt"
+        outside.write_text("keep\n", encoding="utf-8")
+        self.addCleanup(outside.unlink)
+        os.environ["OMX_TEST_MUTATE"] = "unsafe"
+        os.environ["OMX_TEST_OUTSIDE"] = str(outside)
+        with mock.patch.object(validator, "_verified_omx_install", return_value=True):
+            self.assertEqual(
+                validator.run_native_operation(["omx", "cleanup"], self.root), 1
+            )
+        self.assertFalse(
+            (self.root / ".omx/archive/accepted-bundles/native-created").exists()
+        )
+        self.assertEqual(outside.read_text(encoding="utf-8"), "keep\n")
         self.assertEqual(self.registered_bytes(), expected)
 
     def test_recovery_journal_is_linked_worktree_specific(self) -> None:

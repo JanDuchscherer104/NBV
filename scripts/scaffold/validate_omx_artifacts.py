@@ -1329,6 +1329,38 @@ def _protected_snapshot(root: Path) -> dict[str, str]:
     return snapshot
 
 
+def _archive_entry_paths(root: Path) -> set[str]:
+    """Return archive entries without following directory symlinks."""
+    archive_root = root / ARCHIVE_PREFIX
+    if not archive_root.is_dir():
+        return set()
+    entries: set[str] = set()
+    pending = [archive_root]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as children:
+            for child in children:
+                path = Path(child.path)
+                entries.add(path.relative_to(root).as_posix())
+                if child.is_dir(follow_symlinks=False):
+                    pending.append(path)
+    return entries
+
+
+def _remove_new_archive_entries(root: Path, before: set[str]) -> None:
+    """Remove archive entries created after ``before`` without following links."""
+    created = _archive_entry_paths(root) - before
+    for relative in sorted(created, key=lambda value: value.count("/"), reverse=True):
+        target = root / relative
+        try:
+            if target.is_dir() and not target.is_symlink():
+                target.rmdir()
+            else:
+                target.unlink()
+        except FileNotFoundError:
+            continue
+
+
 def _verified_omx_install(executable: str) -> bool:
     """Verify the executed OMX entry point against the reviewed npm payload."""
     resolved = shutil.which(executable)
@@ -1434,25 +1466,23 @@ def run_native_operation(command: list[str], root: Path = REPO_ROOT) -> int:
             file=sys.stderr,
         )
         return 2
+    archive_entries_before: set[str] | None = None
     try:
         recover_incomplete_transaction(root)
         before = _protected_snapshot(root)
+        archive_entries_before = _archive_entry_paths(root)
         protected_paths = [root / path for path in before]
         recovery = _begin_transaction(root, "native-operation", protected_paths)
         result = subprocess.run(command, cwd=root, check=False)
         after = _protected_snapshot(root)
     except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        if archive_entries_before is not None:
+            _remove_new_archive_entries(root, archive_entries_before)
         return _rollback_transaction(
             root, ValueError(f"native OMX operation damaged registered evidence: {exc}")
         )
     if after != before:
-        for relative in sorted(set(after) - set(before), reverse=True):
-            target, error = _safe_relative(root, relative)
-            if error or target is None or not relative.startswith(f"{ARCHIVE_PREFIX}/"):
-                continue
-            if target.is_file() and not target.is_symlink():
-                target.unlink()
-                _remove_empty_parents(target, root)
+        _remove_new_archive_entries(root, archive_entries_before)
         return _rollback_transaction(
             root, ValueError("native OMX operation changed registered evidence")
         )

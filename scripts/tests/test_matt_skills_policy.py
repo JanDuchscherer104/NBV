@@ -260,6 +260,16 @@ def main() -> None:
                 manifest, omitted_fixture, skills_root, matt_catalog
             )
         )
+        renamed_aria_fixture = copy.deepcopy(fixture)
+        renamed_aria_fixture[0]["content"][0]["text"] = fixture_text.replace(
+            "- aria-nbv-context:", "- forged-aria-context:", 1
+        )
+        assert any(
+            "integrated model-visible skills differ" in error
+            for error in policy.validate_prompt_input(
+                manifest, renamed_aria_fixture, skills_root, matt_catalog
+            )
+        )
         truncated_fixture = copy.deepcopy(fixture)
         truncated_fixture[0]["content"][0]["text"] = fixture_text.replace(
             policy._frontmatter(skills_root / "tdd/SKILL.md")["description"],
