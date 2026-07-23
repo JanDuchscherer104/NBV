@@ -452,6 +452,23 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             )
         )
 
+    def test_payload_history_accepts_merge_with_registry_free_sibling(self) -> None:
+        branch = self.git("branch", "--show-current").stdout.strip()
+        base = self.git("rev-parse", "HEAD").stdout.strip()
+        self.promote("bundle-a")
+        self.commit_registry("register bundle")
+        registry = validator.load_registry(self.registry_path)
+        self.git("checkout", "-qb", "sibling", base)
+        self.write("README.md", "sibling fixture\n")
+        self.git("add", "README.md")
+        self.git("commit", "-qm", "sibling without registry")
+        self.git("checkout", "-q", branch)
+        self.git("merge", "--no-ff", "-qm", "merge sibling", "sibling")
+        self.assertEqual(
+            validator.validate_payload_history(registry, self.root),
+            [],
+        )
+
     def test_supersession_archives_predecessor_and_keeps_successor_native(self) -> None:
         predecessor_id = self.promote("bundle-a", "shared-task")
         predecessor = validator.load_registry(self.registry_path)["bundles"][0]

@@ -688,25 +688,51 @@ def historical_registries(
 def validate_payload_history(registry: dict[str, Any], root: Path) -> list[str]:
     """Reject any committed mutation after a bundle first appears in the registry."""
     errors: list[str] = []
-    history = _git(root, "rev-list", "--reverse", "HEAD")
+    history = _git(root, "rev-list", "--reverse", "--parents", "HEAD")
     if history.returncode:
         return [f"git rev-list failed: {history.stderr.strip()}"]
-    seen: set[str] = set()
     expected = {bundle["id"]: bundle for bundle in registry.get("bundles", [])}
-    for commit in history.stdout.splitlines():
-        historical = _registry_at(root, commit)
+    registry_cache: dict[str, dict[str, Any] | None] = {}
+
+    def registry_at(commit: str) -> dict[str, Any] | None:
+        if commit not in registry_cache:
+            registry_cache[commit] = _registry_at(root, commit)
+        return registry_cache[commit]
+
+    for row in history.stdout.splitlines():
+        commit, *parents = row.split()
+        historical = registry_at(commit)
+        parent_registries = [
+            parent_registry
+            for parent in parents
+            if (parent_registry := registry_at(parent)) is not None
+        ]
+        parent_bundle_ids = [
+            {
+                item["id"]
+                for item in parent_registry.get("bundles", [])
+                if isinstance(item, dict)
+            }
+            for parent_registry in parent_registries
+        ]
         if historical is None:
-            if seen:
+            if any(bundle_ids & expected.keys() for bundle_ids in parent_bundle_ids):
                 errors.append(
                     f"{commit}: registry deleted after accepted bundles existed"
                 )
             continue
         historical_by_id = {item["id"]: item for item in historical.get("bundles", [])}
+        for bundle_ids in parent_bundle_ids:
+            for bundle_id in sorted(
+                bundle_ids & expected.keys() - historical_by_id.keys()
+            ):
+                errors.append(f"{commit}: accepted bundle deleted: {bundle_id}")
         for bundle_id, bundle in historical_by_id.items():
             if bundle_id not in expected:
                 continue
-            first_seen = bundle_id not in seen
-            seen.add(bundle_id)
+            first_seen = not any(
+                bundle_id in bundle_ids for bundle_ids in parent_bundle_ids
+            )
             if (
                 first_seen
                 and bundle.get("status") == "superseded"
