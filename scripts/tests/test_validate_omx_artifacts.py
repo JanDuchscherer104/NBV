@@ -329,6 +329,27 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         self.assertTrue(any("unregistered" in error for error in errors))
 
+    def test_live_registry_rejects_duplicate_artifact_paths_across_bundles(
+        self,
+    ) -> None:
+        self.promote("bundle-a")
+        registry = validator.load_registry(self.registry_path)
+        duplicate = json.loads(json.dumps(registry["bundles"][0]))
+        duplicate["task"] = "duplicate-path-probe"
+        duplicate["id"] = validator.canonical_bundle_id(
+            duplicate["task"], duplicate["handoff_sha256"]
+        )
+        registry["bundles"].append(duplicate)
+
+        errors = validator.validate_registry(registry, self.root, check_git=False)
+
+        self.assertIn(
+            "bundle "
+            f"{duplicate['id']}: duplicate artifact path "
+            f"{duplicate['artifacts'][0]['path']}",
+            errors,
+        )
+
     def test_tracked_file_symlink_is_rejected_without_following_target(self) -> None:
         path = self.root / ".omx/tracked-file-link"
         path.parent.mkdir(parents=True)
@@ -930,6 +951,16 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "blob_hash must be a Git SHA-1"):
             validator.verify_seed(write_seed(registry, "tombstone"), self.root)
+
+        registry = validator.load_registry(self.registry_path)
+        duplicate = json.loads(json.dumps(registry["bundles"][0]))
+        duplicate["task"] = "duplicate-path-probe"
+        duplicate["id"] = validator.canonical_bundle_id(
+            duplicate["task"], duplicate["handoff_sha256"]
+        )
+        registry["bundles"].append(duplicate)
+        with self.assertRaisesRegex(ValueError, "duplicate artifact path"):
+            validator.verify_seed(write_seed(registry, "duplicate-path"), self.root)
 
     def test_seed_restore_collision_preserves_sentinel(self) -> None:
         self.promote("bundle-a")

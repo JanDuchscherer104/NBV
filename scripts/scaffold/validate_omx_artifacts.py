@@ -275,6 +275,35 @@ def _validate_artifact_shape(
     return errors
 
 
+def _validate_artifact_path_invariants(
+    *,
+    bundle_label: str,
+    bundle_id: str,
+    status: str,
+    role: str,
+    path: str,
+    native_path: str,
+    registered_paths: set[str],
+    native_paths: set[str],
+) -> list[str]:
+    errors: list[str] = []
+    if native_path in native_paths:
+        errors.append(f"{bundle_label}: duplicate native path {native_path}")
+    native_paths.add(native_path)
+    if not native_path.startswith(CURRENT_PREFIXES):
+        errors.append(f"{bundle_label}: invalid native role path {native_path}")
+    if path in registered_paths:
+        errors.append(f"{bundle_label}: duplicate artifact path {path}")
+    registered_paths.add(path)
+    try:
+        expected_path = _canonical_path(bundle_id, status, native_path)
+    except (ValueError, TypeError):
+        expected_path = ""
+    if path != expected_path:
+        errors.append(f"{bundle_label}: invalid {status} placement for {role}")
+    return errors
+
+
 def _validate_handoff_data(
     handoff: Any,
     *,
@@ -480,28 +509,22 @@ def validate_registry(
             if role in role_map:
                 errors.append(f"bundle {bundle_id}: duplicate role {role}")
             role_map[role] = artifact
-            if native_path in native_paths:
-                errors.append(
-                    f"bundle {bundle_id}: duplicate native path {native_path}"
+            errors.extend(
+                _validate_artifact_path_invariants(
+                    bundle_label=f"bundle {bundle_id}",
+                    bundle_id=bundle_id,
+                    status=status,
+                    role=role,
+                    path=path,
+                    native_path=native_path,
+                    registered_paths=registered_paths,
+                    native_paths=native_paths,
                 )
-            native_paths.add(native_path)
-            if not native_path.startswith(CURRENT_PREFIXES):
-                errors.append(
-                    f"bundle {bundle_id}: invalid native role path {native_path}"
-                )
-            try:
-                expected_path = _canonical_path(bundle_id, status, native_path)
-            except (ValueError, TypeError):
-                expected_path = ""
-            if path != expected_path:
-                errors.append(
-                    f"bundle {bundle_id}: invalid {status} placement for {role}"
-                )
+            )
             resolved, path_error = _safe_relative(root, path)
             if path_error:
                 errors.append(f"bundle {bundle_id}: {path_error}")
                 continue
-            registered_paths.add(path)
             if resolved is None or not resolved.is_file():
                 errors.append(f"bundle {bundle_id}: missing artifact {path}")
                 continue
@@ -1283,24 +1306,18 @@ def _seed_registry(
             if role in role_map:
                 errors.append(f"seed bundle {bundle_id}: duplicate role {role}")
             role_map[role] = artifact
-            if native_path in native_paths:
-                errors.append(
-                    f"seed bundle {bundle_id}: duplicate native path {native_path}"
+            errors.extend(
+                _validate_artifact_path_invariants(
+                    bundle_label=f"seed bundle {bundle_id}",
+                    bundle_id=bundle_id,
+                    status=status,
+                    role=role,
+                    path=path,
+                    native_path=native_path,
+                    registered_paths=registered_paths,
+                    native_paths=native_paths,
                 )
-            native_paths.add(native_path)
-            if not native_path.startswith(CURRENT_PREFIXES):
-                errors.append(
-                    f"seed bundle {bundle_id}: invalid native role path {native_path}"
-                )
-            if path in registered_paths:
-                errors.append(f"duplicate seed artifact path: {path}")
-            registered_paths.add(path)
-            try:
-                expected_path = _canonical_path(bundle_id, status, native_path)
-            except (TypeError, ValueError):
-                expected_path = ""
-            if path != expected_path:
-                errors.append(f"seed bundle {bundle_id}: invalid placement for {role}")
+            )
             content = payloads.get(path, b"")
             if len(content) != artifact.get("bytes") or _bytes_sha256(
                 content
