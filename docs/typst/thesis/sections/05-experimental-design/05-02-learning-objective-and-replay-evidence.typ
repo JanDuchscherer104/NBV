@@ -4,58 +4,62 @@
 #import "../../draft_markers.typ": thesis_status
 #import "@preview/booktabs:0.0.4": *
 
-== Replay Eligibility and Learning Gate
+== Replay Eligibility and Variable-Horizon Learning Gate
 
-The factual rollout tables determine which records may supervise each learning problem. `valid_action_mask` defines actor-selectable actions. The stricter `q_train_mask` additionally requires a valid target/GT label state and finite target-root-gain and diagnostic target-RRI labels. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
+The factual rollout tables determine which records may supervise each learning problem. `valid_action_mask` defines actions selectable under the admitted V0 geometry contract. The stricter `q_train_mask` additionally requires a valid target/GT label state and finite target-root-gain and diagnostic target-RRI labels. Padding, actor validity, one-step training eligibility, transition eligibility, modality presence, source role, and horizon availability remain separate masks. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
 
-All eligible candidate rows can support one-step supervision. Finite-horizon temporal-difference supervision is narrower: the factual selected action must have a stored reward, terminal flag, and discount. A nonterminal transition additionally requires a valid successor step identifier whose state exposes a reproducible candidate table and hard mask; a terminal transition instead carries no successor id and has zero bootstrap discount. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions. The replay pipeline in @fig:qh-rollout-replay-doubleq visualizes this distinction.
+All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and a valid successor step whose candidate table exposes at least one finite one-step root-gain label. General horizon-recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, requested residual horizon, and—when nonterminal—a reproducible successor state and hard mask. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
 #figure(
   table(
-    columns: (0.82fr, 1.10fr, 1.36fr),
+    columns: (0.78fr, 1.10fr, 1.42fr),
     toprule(),
-    table.header([*Data product*], [*Purpose*], [*Minimum evidence*]),
+    table.header([*Learning surface*], [*Purpose*], [*Minimum factual evidence*]),
     midrule(),
-    [target tasks], [define supervised entities],
-    [GT pool, sampled tasks, class/scene coverage, and oracle failures],
-    [candidate shells], [define finite action support],
-    [family counts, valid fraction, invalid reasons, and selected-family coverage],
-    [`q_train_mask`], [admit one-step labels],
-    [actor-selectable rows with valid target state and finite target labels],
-    [selected transitions], [admit TD linkage],
-    [reward, terminal flag, discount, and—when nonterminal—successor id and mask],
+    [dense $h=1$], [immediate candidate value],
+    [actor-selectable row with finite one-step root-gain label],
+    [exact $h=2$], [base-case finite-support value],
+    [selected reward plus successor table with at least one finite one-step root-gain label],
+    [recursive $h>1$], [variable-horizon fitted value],
+    [selected transition, successor actor state and mask, lower-horizon target support, terminal and discount],
+    [behavior return], [policy-conditioned Monte-Carlo control],
+    [complete retained reward prefix and behavior-policy identity],
     bottomrule(),
   ),
-  caption: [Required support evidence. Each narrower learning surface inherits the validity requirements above it.],
+  caption: [Required replay evidence by learning target. Dense immediate labels, exact H=2 targets, recursive optimal-continuation targets, and behavior-policy returns are distinct supervision surfaces.],
 ) <tab:thesis-support-coverage>
 
 #figure(
   table(
-    columns: (0.74fr, 1.16fr, 1.24fr),
+    columns: (0.72fr, 1.18fr, 1.25fr),
     toprule(),
     table.header([*Gate*], [*Available evidence*], [*Required before inference*]),
     midrule(),
-    [Oracle data], [target labels, masks, lineage, and replay validation],
-    [held-out coverage and matched endpoint evaluation],
+    [Oracle data], [target labels, masks, lineage, replay validation, and selected-depth persistence],
+    [held-out coverage, source-role audit, and matched endpoint evaluation],
     [Myopic control], [scene-level VIN substrate],
-    [actor-visible target-conditioned scorer and frozen checkpoint],
-    [#symb.rl.qh], [selected-transition tensors and TD linkage],
-    [implemented learner, frozen checkpoint, and oracle-rescored policy],
+    [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
+    [H=2 tracer], [V0 `S0-pose` scorer and selected-transition training seam],
+    [exact-Q2 control, state-protocol freeze, compatible checkpoint, and oracle-rescored policy],
+    [Variable-horizon $Q$], [selected transitions and explicit horizon-query contract],
+    [dense Q1, certified Q2 recursion, supported horizons through $H$, horizon-balanced training, and per-horizon validation],
+    [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
+    [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
     [Policy claim], [train-only feasibility pilots],
     [completed held-out paired comparison under equal budget], bottomrule(),
   ),
-  caption: [Learning-readiness gates. Data-contract evidence does not substitute for an implemented and evaluated policy.],
+  caption: [Learning-readiness gates. A runnable H=2 tracer does not establish a task-sufficient state or a variable-horizon policy.],
 ) <tab:thesis-learning-readiness>
 
 #thesis_status(
-  implementation: "planned",
+  implementation: "partial",
   evidence: "pending",
-  citation: [@DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
-  gate: [finite-horizon reader, learner, checkpoint, and held-out oracle re-evaluation],
-)[The replay tensors required for a masked Double-Q learner exist; the learner and policy evidence do not.]
+  citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  gate: [explicit horizon-query reader, dense Q1, exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
+)[A masked selected-transition Double-Q learner and H=2 V0 pose-history scorer are implemented in development. One shared scorer optimized for variable residual horizons, a task-sufficient dynamic state, and policy evidence remain unimplemented.]
 
-The intended finite-candidate value model decodes actions only over valid candidate tokens:
+The finite-candidate value model decodes actions only over valid candidate rows:
 
 $
   #eqs.rl.qh_candidate_token
@@ -65,28 +69,98 @@ $
   #eqs.rl.qh_masked_argmax
 $
 
-The planned first backup is fitted masked Double-Q @DoubleDQN-vanHasselt2015. Here $d_t=1$ at horizon termination, budget termination, or when no valid successor action exists. The boundary value $Q_(0,e)=0$ makes a one-step target non-bootstrapping by definition:
+The masked argmax is already the discrete decision rule. A separate actor network and online data collection are not required to train or execute this finite-candidate policy. Batch fitted Q iteration explicitly learns a greedy Q function from a fixed collection of transitions by repeatedly solving supervised regression problems @FittedQIteration-ernst2005.
+
+=== Primary variable-horizon target
+
+The primary model is one conditional scorer $Q_theta(s_t,e,i,h)$ for every requested residual horizon $h$ admitted by $1 <= h <= b_t <= H$. The boundary target is
 
 $
-  #eqs.rl.qh_doubleq_index
+  y_t^((1,e)) = r_t^e
 $
 
-$
-  #eqs.rl.qh_doubleq_target
-$
-
-For an implemented learner, the replay dataset $cal(D)$ contains selected-action transition rows with state, action, immediate target reward, successor state, validity masks, and terminal flags:
+and the recursive target is
 
 $
-  #eqs.rl.qh_loss
+  y_t^((h,e))
+  =
+  cases(
+    r_t^e & "if " h=1 " or " d_t=1,
+    r_t^e + gamma op("max", limits: #true)_(j : m_(t+1,j)=1)
+      Q_(bar(theta))(s_(t+1),e,j,h-1) & "if " h>1 " and " d_t=0
+  )
 $
 
-#figure(
-  image(
-    "../../figures/qh_learning_evidence_loop.pdf",
-    width: 100%,
-  ),
-  caption: [Factual replay lineage and planned masked Double-Q computation. Panel A contains only implemented evidence: every candidate row admitted by its row-wise `q_train_mask` entry may carry a one-step oracle label, whereas TD admission additionally requires that the selected candidate entry is train-valid and that factual transition fields identify either a valid successor or a terminal transition. Panel B states the proposed masked backup mathematically and is not evidence that a learner, residual head, or policy evaluation already exists.],
-) <fig:qh-rollout-replay-doubleq>
+The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining recursion is $Q_h leftarrow Q_(h-1)$ rather than $Q_h leftarrow Q_h$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
-The repository currently implements the replay and mask contract but not the finite-horizon learner. Consequently, rollout audits may establish data readiness and oracle headroom, whereas #symb.rl.qh policy performance remains outside the supported evidence until a learner and matched held-out evaluation exist.
+For the first implementation, the clearest schedule is staged backward induction with one shared horizon-conditioned network:
+
+1. fit $Q_1$ from dense one-step labels for every candidate admitted by `q_train_mask`;
+2. freeze or snapshot the lower-horizon target path;
+3. fit $Q_2$ from selected transitions and validate it against the exact dense-successor target;
+4. continue through $Q_H$, always requesting $h-1$ from the successor target path;
+5. optionally fine-tune all horizons jointly after the staged model passes per-horizon regression and ranking gates.
+
+This schedule preserves one inference interface and shared encoders while making the target lineage explicit. Separate per-horizon networks or heads are retained as a control for interference, not as the thesis-core architecture.
+
+For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
+
+$
+  y_t^((2,e), "exact")
+  =
+  r_t^e
+  +
+  gamma
+  op("max", limits: #true)_(j : m_(t+1,j)^"train"=1)
+  r_(t+1,j)^e
+$
+
+This target uses no learned successor value or target network. Agreement between fitted $Q_2$ and this exact control is a required base-case test before interpreting longer-horizon results. It is not the endpoint of the method because the minimal thesis goal is one scorer spanning all supported horizons.
+
+=== Double-Q and behavior-return controls
+
+Double Q changes how a noisy learned successor maximum is estimated; it does not change the definition of the horizon-conditioned scorer. The online path selects
+
+$
+  j^star
+  =
+  op("argmax", limits: #true)_(j : m_(t+1,j)=1)
+  Q_theta(s_(t+1),e,j,h-1)
+$
+
+and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. It remains an ablation against the simpler frozen lower-horizon maximum. It is relevant in an offline setting only because a learned maximum is present, not because online learning is planned.
+
+A retained chain also yields the truncated Monte-Carlo target
+
+$
+  G_(t,e)^((h),mu)
+  =
+  sum_(k=0)^(h-1) gamma^k r_(t+k)^e
+$
+
+for its behavior policy $mu$. Regression to this fixed target is a useful policy-conditioned control, but it estimates $Q^mu$, not the greedy finite-support value $Q^star$, unless $mu$ is explicitly the target continuation policy. Behavior returns from random-valid, greedy, softmax, and oracle-lookahead chains must therefore remain identified rather than pooled as if they represented one optimal value function.
+
+Double Q addresses one maximization bias. It does not create missing successor transitions, make unsupported actions reliable, or repair state aliasing. CQL and BCQ motivate explicit offline-support diagnostics because a greedy learned policy can select actions whose multi-step consequences are weakly represented in the behavior data @CQL-kumar2020 @BCQ-fujimoto2019. Conservative regularization is introduced only if those diagnostics reveal systematic unsupported-action overestimation.
+
+=== Horizon-balanced replay and evaluation
+
+Dense $h=1$ rows vastly outnumber selected-action targets for $h>1$. An unweighted row mean would therefore optimize the myopic task while reporting a nominal variable-horizon loss. The training manifest must freeze either:
+
+- a horizon-stratified sampler;
+- per-horizon loss weights $w_h$;
+- or a fixed number of admitted targets per horizon and scene.
+
+Every run reports, separately for each $h$:
+
+- admitted states, selected actions, behavior policies, candidate families, scenes, and targets;
+- value loss and signed target error;
+- candidate ranking and top-action regret where oracle comparison is available;
+- bootstrap, terminal, and no-valid-successor fractions;
+- online/target disagreement for Double-Q runs;
+- endpoint performance of the masked policy requested at the remaining budget.
+
+A single scalar validation loss is insufficient for model selection unless its horizon aggregation is frozen in advance. Cross-stage corpus admission must also require the same maximum horizon, reward and return semantics, discount, state/source protocol, candidate/reason vocabulary, and horizon-weighting rule.
+
+The optimality claim remains bounded. $Q_theta(s,e,i,h)$ can approximate the best continuation only within the sampled finite candidate generator, hard-validity regime, represented actor state, and offline transition support. The same checkpoint cannot silently mix an `S0-pose` state with `CF-GT`, sensor-like, or V1 dynamic states. Longer requested horizons increase—not decrease—the need for selected-observation geometry and a sufficiently Markov scene state.
+
+The development H=2 tracer may establish optimization and systems readiness only. Confirmatory interpretation requires a canonical V0 corpus, dense-Q1 and exact-Q2 controls, supported targets for every claimed horizon, cross-stage learning-contract equality, checkpoint compatibility, a frozen actor-state protocol, horizon-specific support diagnostics, and matched held-out endpoint oracle re-evaluation. A dynamic-state claim additionally requires selected-observation fusion and no-future-observation leakage tests.
