@@ -38,7 +38,7 @@ The public documentation is published at
   and [RRI theory](docs/contents/theory/rri_theory.qmd): current theory owners.
 - [Thesis Typst source](docs/typst/thesis/main.typ): active master's-thesis
   seed and compile entry point.
-- [Advisor meeting 2026-05-22](docs/typst/thesis/advisor_meeting_2026_05_22.typ):
+- [Advisor meeting 2026-05-22](docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ):
   historical advisor-alignment deck; use it as provenance, not as the current
   thesis source of truth.
 - [API Reference](docs/reference/index.qmd): generated `aria_nbv`

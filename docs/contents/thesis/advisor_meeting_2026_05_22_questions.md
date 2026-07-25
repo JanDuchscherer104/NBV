@@ -8,7 +8,7 @@ owner: jan
 
 # Advisor Meeting Questions - 2026-05-22
 
-Deck: `docs/typst/thesis/advisor_meeting_2026_05_22.typ`
+Deck: `docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ`
 
 Meeting goal: align the thesis scope, research questions, and the next rollout / \(Q_H\) implementation gates before broad rollout data is generated.
 
