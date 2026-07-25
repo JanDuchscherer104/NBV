@@ -179,8 +179,15 @@ def _validate_hook_and_merge() -> None:
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
     if "graphify-out/graph.json merge=graphify" not in attributes:
         raise ContractError("Graphify merge driver is not assigned in .gitattributes")
-    if not (ROOT / "scripts/graphify_merge_driver.py").is_file():
-        raise ContractError("Graphify merge driver wrapper is absent")
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    if "graphify-setup:" not in makefile or "merge-driver %O %A %B" not in makefile:
+        raise ContractError(
+            "graphify-setup does not configure the upstream merge driver"
+        )
+    if "graphify_merge_driver.py" in makefile:
+        raise ContractError("graphify-setup still routes through the obsolete wrapper")
+    if (ROOT / "scripts/graphify_merge_driver.py").exists():
+        raise ContractError("obsolete Graphify merge driver wrapper remains")
 
 
 def _validate_query_routing() -> None:

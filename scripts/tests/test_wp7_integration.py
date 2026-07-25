@@ -59,7 +59,6 @@ def main() -> None:
         ".graphifyignore",
         "scripts/check_graphify_history.py",
         "scripts/graphify_contract.py",
-        "scripts/graphify_merge_driver.py",
         "scripts/git_hooks/post-commit",
         "scripts/nbv_typst_includes.py",
         "scripts/scaffold/bootstrap_matt_skills.py",
