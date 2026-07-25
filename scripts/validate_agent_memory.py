@@ -119,7 +119,8 @@ STATE_REFERENCE_EXCLUDED_PATHS = {
     "aria_nbv/tests/agent_memory/test_validate_agent_memory.py",
 }
 RETIRED_STATE_PATTERN = re.compile(
-    r"\.agents/memory/state|DECISIONS\.md|GOTCHAS\.md|OPEN_QUESTIONS\.md|PROJECT_STATE\.md"
+    r"\.agents/memory/state|"
+    r"\b(?:DECISIONS|GOTCHAS|OPEN_QUESTIONS|PROJECT_STATE)(?:\.md)?\b"
 )
 
 REQUIRED_NATIVE_KEYS = {

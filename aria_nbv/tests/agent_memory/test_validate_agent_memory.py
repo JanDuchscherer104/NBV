@@ -52,3 +52,16 @@ def test_unrelated_paths_are_outside_the_runtime_policy() -> None:
 
 def test_state_journal_retirement_gate_is_closed() -> None:
     assert validator.check_state_journal_retirement() == []
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "sources: [roadmap; DECISIONS]",
+        "owner: GOTCHAS",
+        "see OPEN_QUESTIONS",
+        "derived from PROJECT_STATE",
+    ],
+)
+def test_retired_state_pattern_rejects_bare_journal_names(reference: str) -> None:
+    assert validator.RETIRED_STATE_PATTERN.search(reference)

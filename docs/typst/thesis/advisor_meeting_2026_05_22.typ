@@ -874,7 +874,7 @@
           #necessary_todo(
             [LRZ/Zarr preflight, stale-schema checks, and file-count/chunk budget before broad generation.],
             gate: [M1/M2 scale readiness],
-            sources: [roadmap; DECISIONS],
+            sources: [roadmap; todo-089],
           )
           #v(0.22em)
           #necessary_todo(
