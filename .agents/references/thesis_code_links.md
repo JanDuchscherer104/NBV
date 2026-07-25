@@ -18,6 +18,10 @@ agent-facing notes to source code.
 
 ## Policy
 
+- Exact `repo:.agents/{issues,todos,refactors}.toml#<record-id>` values in a
+  draft marker's existing `source` field are navigation only. The agents DB
+  remains authoritative for the record's status, scope, acceptance criteria,
+  and verification; this reference defines no domain truth.
 - Implementation links are navigational aids, not substitutes for citations,
   equations, source-backed prose, or experiment manifests.
 - Use final-visible `#gh` sparingly in the thesis body and appendix for code

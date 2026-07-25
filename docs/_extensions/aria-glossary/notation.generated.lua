@@ -116,10 +116,28 @@ return {
       description = "Candidate-view point contribution used in oracle or counterfactual updates.",
       thesis_list = true,
     },
+    ["oracle.reference_geometry"] = {
+      tex = "\\mathcal{M}",
+      typst = "#symb.oracle.reference_geometry",
+      description = "Generic reference geometry used by reconstruction-quality metrics.",
+      thesis_list = true,
+    },
+    ["oracle.reference_samples"] = {
+      tex = "\\mathcal{S}",
+      typst = "#symb.oracle.reference_samples",
+      description = "Declared sample set drawn from the generic reference geometry for completeness and recall.",
+      thesis_list = true,
+    },
     ["oracle.rri"] = {
       tex = "\\mathrm{RRI}",
       typst = "#symb.oracle.rri",
       description = "Relative Reconstruction Improvement score for a candidate view.",
+      thesis_list = true,
+    },
+    ["oracle.tolerance"] = {
+      tex = "\\tau",
+      typst = "#symb.oracle.tolerance",
+      description = "Declared distance tolerance for thresholded reconstruction diagnostics.",
       thesis_list = true,
     },
     ["rl.G"] = {
@@ -460,10 +478,34 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["metrics.closest_point_witness"] = {
+      tex = "\\boldsymbol{w}(\\boldsymbol{p})=\\operatorname*{argmin}_{\\boldsymbol{x}\\in\\mathcal{M}}\\lVert\\boldsymbol{p}-\\boldsymbol{x}\\rVert_2",
+      typst = "#eqs.metrics.closest_point_witness",
+      description = "Closest-point witness attaining the query-to-reference-geometry distance.",
+      thesis_list = false,
+    },
+    ["metrics.directed_reconstruction_errors"] = {
+      tex = "d_{\\mathrm{acc}}(\\mathcal{P}\\to\\mathcal{M})=\\frac{1}{|\\mathcal{P}|}\\sum_{\\boldsymbol{p}\\in\\mathcal{P}}d(\\boldsymbol{p},\\mathcal{M}),\\quad d_{\\mathrm{comp}}(\\mathcal{M}\\to\\mathcal{P})=\\frac{1}{|\\mathcal{S}|}\\sum_{\\boldsymbol{s}\\in\\mathcal{S}}d(\\boldsymbol{s},\\mathcal{P})",
+      typst = "#eqs.metrics.directed_reconstruction_errors",
+      description = "Unsquared directed accuracy and completeness errors.",
+      thesis_list = false,
+    },
+    ["metrics.point_to_reference_distance"] = {
+      tex = "d(\\boldsymbol{x},\\mathcal{M})=\\min_{\\boldsymbol{y}\\in\\mathcal{M}}\\lVert\\boldsymbol{x}-\\boldsymbol{y}\\rVert_2",
+      typst = "#eqs.metrics.point_to_reference_distance",
+      description = "Unsquared Euclidean distance from a query point to the reference geometry.",
+      thesis_list = false,
+    },
     ["metrics.spearman"] = {
       tex = "\\rho=\\operatorname{corr}(\\operatorname{rank}(\\hat{r}_i),\\operatorname{rank}(r_i))",
       typst = "#eqs.metrics.spearman",
       description = "",
+      thesis_list = false,
+    },
+    ["metrics.threshold_reconstruction_diagnostics"] = {
+      tex = "\\mathrm{precision}_{\\tau}=\\frac{1}{|\\mathcal{P}|}\\sum_{\\boldsymbol{p}\\in\\mathcal{P}}\\mathbb{1}[d(\\boldsymbol{p},\\mathcal{M})<\\tau],\\quad \\mathrm{recall}_{\\tau}=\\frac{1}{|\\mathcal{S}|}\\sum_{\\boldsymbol{s}\\in\\mathcal{S}}\\mathbb{1}[d(\\boldsymbol{s},\\mathcal{P})<\\tau],\\quad F_{\\tau}=\\frac{2\\,\\mathrm{precision}_{\\tau}\\,\\mathrm{recall}_{\\tau}}{\\mathrm{precision}_{\\tau}+\\mathrm{recall}_{\\tau}}",
+      typst = "#eqs.metrics.threshold_reconstruction_diagnostics",
+      description = "Threshold precision, recall, and their harmonic-mean F-score.",
       thesis_list = false,
     },
     ["metrics.topk_acc"] = {

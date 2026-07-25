@@ -1,6 +1,35 @@
 #import "../symbols.typ": symb
 
 #let metrics = (
+    point_to_reference_distance: $
+      d(bold(x), #symb.oracle.reference_geometry) =
+      min_(bold(y) in #symb.oracle.reference_geometry) norm(bold(x) - bold(y))_2
+    $,
+    directed_reconstruction_errors: $
+      d_"acc"(#symb.oracle.points arrow.r #symb.oracle.reference_geometry) =
+      (1)/(abs(#symb.oracle.points)) sum_(bold(p) in #symb.oracle.points)
+      d(bold(p), #symb.oracle.reference_geometry),
+      quad
+      d_"comp"(#symb.oracle.reference_geometry arrow.r #symb.oracle.points) =
+      (1)/(abs(#symb.oracle.reference_samples)) sum_(bold(s) in #symb.oracle.reference_samples)
+      d(bold(s), #symb.oracle.points)
+    $,
+    threshold_reconstruction_diagnostics: $
+      "precision"_tau =
+      (1)/(abs(#symb.oracle.points)) sum_(bold(p) in #symb.oracle.points)
+      bb(1)[d(bold(p), #symb.oracle.reference_geometry) < #symb.oracle.tolerance],
+      quad
+      "recall"_tau =
+      (1)/(abs(#symb.oracle.reference_samples)) sum_(bold(s) in #symb.oracle.reference_samples)
+      bb(1)[d(bold(s), #symb.oracle.points) < #symb.oracle.tolerance],
+      quad
+      F_tau = (2 "precision"_tau "recall"_tau) / ("precision"_tau + "recall"_tau)
+    $,
+    closest_point_witness: $
+      bold(w)(bold(p)) =
+      op("argmin", limits: #true)_(bold(x) in #symb.oracle.reference_geometry)
+      norm(bold(p) - bold(x))_2
+    $,
     spearman: $
       rho = "corr"("rank"(#(symb.vin.rri_hat) _i), "rank"(#(symb.vin.rri) _i))
     $,

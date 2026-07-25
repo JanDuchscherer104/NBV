@@ -2,51 +2,27 @@
 
 == Reconstruction Quality Metrics <sec:thesis-reconstruction-metrics>
 
-Let $cal(P)$ be samples from a reconstructed surface, $cal(M)$ a reference mesh, and $cal(S)$ a declared sample of that mesh. The distance from a point to target geometry $cal(A)$ is
+Let #symb.oracle.points be samples from a reconstructed surface, #symb.oracle.reference_geometry a reference mesh, and #symb.oracle.reference_samples a declared sample of that mesh. The distance from a point to the reference geometry is
 
-$
-  d(bold(x), cal(A)) = min_(bold(y) in cal(A)) norm(bold(x) - bold(y))_2.
-$
+#block[#align(center)[#eqs.metrics.point_to_reference_distance]]
 
 It induces two directed errors,
 
-$
-  d_"acc"(cal(P) arrow.r cal(M)) =
-  (1)/(abs(cal(P))) sum_(bold(p) in cal(P)) d(bold(p), cal(M)),
-  quad
-  d_"comp"(cal(M) arrow.r cal(P)) =
-  (1)/(abs(cal(S))) sum_(bold(s) in cal(S)) d(bold(s), cal(P)).
-$
+#block[#align(center)[#eqs.metrics.directed_reconstruction_errors]]
 
 Accuracy exposes unsupported or extraneous reconstructed geometry; completeness reverses the comparison and exposes missing geometry. Neither direction alone characterizes both failure modes.
 
 A symmetric score can sum or average the two directed terms. This is often called a Chamfer-style distance, but the name does not make different formulations interchangeable: the value depends on the sampling distributions, whether the target is represented by points or triangles, and the chosen reductions. The directed terms should therefore remain available when diagnosing a symmetric aggregate.
 
-At a declared tolerance $tau$, thresholded diagnostics summarize the same directional errors:
+At a declared tolerance #symb.oracle.tolerance, thresholded diagnostics summarize the same directional errors:
 
-$
-  "precision"_tau =
-  (1)/(abs(cal(P)))
-  sum_(bold(p) in cal(P)) bb(1)[d(bold(p), cal(M)) < tau],
-$
+#block[#align(center)[#eqs.metrics.threshold_reconstruction_diagnostics]]
 
-$
-  "recall"_tau =
-  (1)/(abs(cal(S)))
-  sum_(bold(s) in cal(S)) bb(1)[d(bold(s), cal(P)) < tau],
-  quad
-  F_tau = (2 "precision"_tau "recall"_tau)/("precision"_tau + "recall"_tau),
-$
+Threshold precision diagnoses reconstructed support near the reference, threshold recall diagnoses recovered reference support, and the F-score is their harmonic mean. These quantities depend on #symb.oracle.tolerance and the sampling protocol, so they are best retained as threshold-specific diagnostics rather than treated as substitutes for continuous distance.
 
-Precision diagnoses reconstructed support near the reference, recall diagnoses recovered reference support, and the F-score is their harmonic mean. These quantities depend on $tau$ and the sampling protocol, so they are best retained as threshold-specific diagnostics rather than treated as substitutes for continuous distance.
+The minimizing surface point is a closest-point _witness_. For a query point,
 
-The minimizing surface point is a closest-point _witness_. For query $bold(p)$,
-
-$
-  bold(w)(bold(p)) =
-  op("argmin", limits: #true)_(bold(x) in cal(M))
-  norm(bold(p) - bold(x))_2.
-$
+#block[#align(center)[#eqs.metrics.closest_point_witness]]
 
 For a triangular mesh, the witness is the orthogonal projection when it lies inside the closest triangle and otherwise lies on its nearest edge or vertex. Witnesses make individual correspondences, outliers, and spatially concentrated errors inspectable instead of collapsing them immediately into one scalar.
 

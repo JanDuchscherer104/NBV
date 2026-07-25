@@ -4,6 +4,11 @@
     points_t: $cal(P)_t$,
     // Candidate point set.
     points_q: $cal(P)_q$,
+    // Generic reconstruction-metric reference geometry and declared samples.
+    reference_geometry: $cal(M)$,
+    reference_samples: $cal(S)$,
+    // Distance tolerance for thresholded reconstruction diagnostics.
+    tolerance: $tau$,
     // Tensor encoding of a point set.
     points_tensor: $bold(P)$,
     // Candidate pose set.
