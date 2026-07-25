@@ -4,7 +4,7 @@ Deterministic source-derived navigation index. Exact sources remain authoritativ
 
 - Schema: `aria-graph-v2`
 - Graphify: `graphifyy==0.9.22`
-- Corpus tree: `24fd8a7e45efc2a5c723d7eb59a2a355cb337c773eb960e64626029a9387bd03`
+- Corpus tree: `150aeccba7b351a4bc40ac9901610da27d38eead5ed10144dd2fa0972561740d`
 - Nodes: 8008
 - Edges: 20931
 
@@ -13,8 +13,8 @@ Deterministic source-derived navigation index. Exact sources remain authoritativ
 | Partition | Sources | Semantic complete | Revision |
 | --- | ---: | :---: | --- |
 | literature | 386 | yes | `74094645af5916dc2aef9c6992ab5301ab588e3b8e073b7c6f80996b00d7e408` |
-| scaffold | 205 | yes | `1136c1d46b86e263c914f21168b2f56eeb58086857b2abe3a9343a0c0410cda1` |
-| thesis | 225 | yes | `f4341d3cfbbfd96277febb8e302dc4b468832ef683a92974040447b06ad8b09d` |
+| scaffold | 205 | yes | `5697c62bde5143aef485d8f590d65c0153ea01ef6e4838f76172f04cfab934bc` |
+| thesis | 225 | yes | `da961ca4c85aa8ff927d699eb7071d3cbd1df3f83c82a9ad9e1d16e80e3a7356` |
 | code | 405 | yes | `8d64642204535e0b286d915da6cd187d5146f2c0c3fdc5b156a375411f64448d` |
 
 ## Provenance
