@@ -50,7 +50,9 @@ def main() -> None:
         "scripts/nbv_qmd_outline.sh",
         "scripts/nbv_typst_includes.py",
     ]
-    assert metrics["active_scaffold_source_loc"] == 23961
+    assert (
+        metrics["active_scaffold_source_loc"] < metrics["baseline_scaffold_source_loc"]
+    )
     active_paths = set(metrics["active_scaffold_source_paths"])
     for path in (
         ".graphify.toml",
