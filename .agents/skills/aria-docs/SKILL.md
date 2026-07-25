@@ -1,6 +1,6 @@
 ---
 name: aria-docs
-description: Use for ARIA-NBV Quarto, Typst thesis or slides, citations, scientific figures, tables, shared notation, or Mermaid diagrams.
+description: ARIA-NBV Quarto, Typst, thesis, slides, figures, or Mermaid work.
 metadata:
   mode: implementation
   not_when:

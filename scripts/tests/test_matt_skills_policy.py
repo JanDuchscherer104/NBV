@@ -337,11 +337,11 @@ def main() -> None:
         ]
         assert len(integrated) == len(aria_names) + len(matt_names) == 15
         assert len({name for name, _, _ in integrated}) == 15
-        assert (
-            sum(len(description.encode("utf-8")) for _, description, _ in integrated)
-            == 1509
-            <= manifest["budget"]["maximum_description_bytes"]
+        integrated_bytes = sum(
+            len(description.encode("utf-8")) for _, description, _ in integrated
         )
+        assert integrated_bytes == manifest["budget"]["integrated_description_bytes"]
+        assert integrated_bytes <= manifest["budget"]["maximum_description_bytes"]
 
         policy.update_project_config(config, None)
         assert config.read_text(encoding="utf-8") == preserved_config
