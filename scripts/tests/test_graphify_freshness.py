@@ -18,7 +18,6 @@ sys.path.insert(0, str(SCRIPTS))
 
 import check_graphify_freshness as freshness  # noqa: E402
 import graphify_contract as contract  # noqa: E402
-import graphify_query as query  # noqa: E402
 import graphify_refresh as refresh  # noqa: E402
 
 
@@ -309,9 +308,6 @@ def main() -> None:
             )
             state = freshness.partition_freshness(root)
             assert set(state.stale) == set(contract.PARTITION_ORDER)
-            allowed, route = query.path_between("AGENTS.md", "page.qmd", root)
-            assert not allowed
-            assert not any("(scaffold)" in item or "(thesis)" in item for item in route)
         (root / "graphify-out/graph.json").write_text(
             json.dumps(graph), encoding="utf-8"
         )
@@ -448,38 +444,6 @@ def main() -> None:
             json.dumps(graph), encoding="utf-8"
         )
 
-        assert query._meaningful_terms("do V0 V1") == ["v0", "v1"]
-        ranked = query._matching_nodes(
-            {
-                "nodes": [
-                    {
-                        "id": "a-docs-noise",
-                        "label": "overview",
-                        "source_file": "docs/overview.qmd",
-                        "partition": "thesis",
-                        "role": "guide",
-                    },
-                    {
-                        "id": "z-relevant",
-                        "label": "macros",
-                        "source_file": "docs/typst/shared/macros.typ",
-                        "partition": "thesis",
-                        "role": "guide",
-                    },
-                ]
-            },
-            "do macros",
-            {"thesis"},
-        )
-        assert [node["id"] for node in ranked] == ["z-relevant"]
-
-        allowed, no_evidence, excluded = query.search(
-            "unfindable evidence phrase", root
-        )
-        assert not allowed
-        assert not no_evidence
-        assert not excluded
-
         roles = {
             source["role"]
             for source in contract.collect_sources(root)
@@ -499,23 +463,7 @@ def main() -> None:
         )
         assert not allowed and "stale" in reason
 
-        allowed, results, excluded = query.search("Changed thesis", root)
-        assert not allowed
-        assert excluded == ["thesis"]
-        assert any("docs/page.qmd:1" in result for result in results)
-        allowed, explanation = query.explain("page.qmd", root)
-        assert not allowed
-        assert any("docs/page.qmd:1:path match" in line for line in explanation)
-        allowed, route = query.path_between("AGENTS.md", "page.qmd", root)
-        assert not allowed
-        assert any("AGENTS.md:1:path match" in line for line in route)
-        assert any("docs/page.qmd:1:path match" in line for line in route)
-
         (root / "docs/page.qmd").unlink()
-        allowed, explanation = query.explain("page.qmd", root)
-        assert not allowed
-        assert not any("docs/page.qmd:1:path match" in line for line in explanation)
-
         (root / "docs/page.qmd").write_text("# Thesis\n", encoding="utf-8")
         graph["edges"][0]["bridge_partition_revisions"]["thesis"] = "wrong"
         (root / "graphify-out/graph.json").write_text(
@@ -528,20 +476,6 @@ def main() -> None:
             for reasons in state.stale.values()
             for reason in reasons
         )
-
-        (root / "graphify-out/graph.json").unlink()
-        allowed, fallback, excluded = query.search("Package source guide", root)
-        assert not allowed
-        assert excluded == list(contract.PARTITION_ORDER)
-        assert any("aria_nbv/README.md:1" in result for result in fallback)
-        assert not query.exact_source_fallback("no exact evidence anywhere", root)
-        allowed, fallback = query.explain("Package guide", root)
-        assert not allowed
-        assert any("aria_nbv/README.md:1" in result for result in fallback)
-        allowed, fallback = query.path_between("Package guide", "Thesis", root)
-        assert not allowed
-        assert any("aria_nbv/README.md:1" in result for result in fallback)
-        assert any("docs/page.qmd:1" in result for result in fallback)
 
         selected_manifest = root / "docs/literature/sources.jsonl"
         selected_manifest.write_text('{"tex_dir":"arXiv-selected"}\n', encoding="utf-8")

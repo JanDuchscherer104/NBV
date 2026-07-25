@@ -28,7 +28,7 @@ metadata:
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
-    - "scripts/graphify_query.py"
+    - ".agents/references/graphify_contract.md"
   literature_refs:
     - "docs/contents/literature/index.qmd"
     - "docs/literature/sources.jsonl"

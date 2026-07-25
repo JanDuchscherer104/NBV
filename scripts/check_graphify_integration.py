@@ -265,20 +265,22 @@ def _validate_query_routing() -> None:
     contract = (ROOT / ".agents/references/graphify_contract.md").read_text(
         encoding="utf-8"
     )
+    context_skill = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
+        encoding="utf-8"
+    )
     required = (
-        'scripts/graphify_query.py query "<question>"',
-        'scripts/graphify_query.py path "<A>" "<B>"',
-        'scripts/graphify_query.py explain "<concept>"',
+        'graphify query "<question>"',
+        'graphify path "<A>" "<B>"',
+        'graphify explain "<concept>"',
     )
     if any(value not in guidance for value in required):
-        raise ContractError("AGENTS.md bypasses the stale-aware Graphify query wrapper")
-    if (
-        "Route `query`, `path`, and `explain` through `scripts/graphify_query.py`"
-        not in contract
-    ):
-        raise ContractError(
-            "Graphify contract does not route navigation through its wrapper"
-        )
+        raise ContractError("AGENTS.md does not route through upstream Graphify CLI")
+    if "pinned upstream public CLI directly" not in contract:
+        raise ContractError("Graphify contract does not own upstream CLI routing")
+    if "scripts/graphify_query.py" in context_skill:
+        raise ContractError("context skill still routes through the obsolete wrapper")
+    if (ROOT / "scripts/graphify_query.py").exists():
+        raise ContractError("obsolete local Graphify query implementation remains")
 
 
 def run_check() -> tuple[int, int, int]:

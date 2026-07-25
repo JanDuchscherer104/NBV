@@ -127,10 +127,10 @@ including registered context, plans, specs, and retained narrow source readers.
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,
   first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
-  succeeds, use `python3 scripts/graphify_query.py query "<question>"`;
-  otherwise the same wrapper falls back to exact source owners. Use
-  `python3 scripts/graphify_query.py path "<A>" "<B>"` for relationships and
-  `python3 scripts/graphify_query.py explain "<concept>"` for focused concepts.
+  succeeds, use the pinned upstream CLI directly: `graphify query "<question>"`,
+  `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"`. When freshness
+  fails or navigation lacks evidence, inspect exact source owners with targeted
+  `rg` and narrow reads.
 - Dirty `graphify-out/` files are expected after hooks or incremental updates;
   dirty graph files are not a reason to skip Graphify. Only skip Graphify if
   the task is about stale or incorrect graph output, or the user explicitly says

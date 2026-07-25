@@ -22,11 +22,11 @@ partitions. Neither mode calls an LLM. The post-commit hook dispatches the
 structural mode asynchronously for code and leaves semantic partitions stale
 for explicit sync.
 
-Route `query`, `path`, and `explain` through `scripts/graphify_query.py`. Query
-may omit stale partitions and must name them; path, explain, and cross-partition
-traversal fail closed when required partitions or bridge revisions are stale.
-All three operations fall back to exact tracked source owners when graph
-evidence is unavailable or rejected.
+After `python3 scripts/check_graphify_freshness.py --quiet` succeeds, use the
+pinned upstream public CLI directly: `graphify query`, `graphify path`, and
+`graphify explain`. If freshness fails or navigation is insufficient, inspect
+exact tracked source owners with targeted `rg` and narrow reads; the repository
+does not maintain a second query implementation.
 
 Authoring history uses `S -> G`: a corpus-changing source commit is followed
 immediately by a graph-only commit that records the source tree digest. Mixed
