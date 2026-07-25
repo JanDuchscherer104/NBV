@@ -14,40 +14,20 @@ format:
 bibliography: references.bib
 ---
 
-# Abstract
-
-Next-Best-View (NBV) planning addresses the fundamental challenge of autonomous viewpoint selection in active 3D reconstruction, aiming to maximize the acquisition quality while minimizing the acquisition cost (i.e. number of views, traversed distance, capture time).
-
-Classical NBV methods rely on hand-crafted criteria, limited action spaces, or per-scene optimized representations. While learning-based NBV methods like GenNBV [@GenNBV-chen2024] have improved generalization by leveraging reinforcement learning, they still optimize for geometric coverage as a proxy for reconstruction quality. Since coverage maximization does not necessarily correlate with improved reconstruction quality, these methods can struggle in complex scenes with occlusions and fine details. Directly optimizing reconstruction quality, as pioneered by VIN-NBV [@VIN-NBV-frahm2025], has shown significant improvements by predicting Relative Reconstruction Improvement (RRI) to quantify the fitness of candidate viewpoints. However, even VIN-NBV's generalization capabilities are limited to simpler object-centric NBV scenarios because it does not leverage pre-trained foundation models with rich 3D spatial understanding.
-
-This project aims to develop an NBV system that integrates VIN-NBV's key insight to directly optimize reconstruction quality rather than proxies like coverage, leveraging a pre-trained _egocentric foundation model_ as backbone to provide strong priors for 3D spatial reasoning in complex indoor scenes. We adapt the [EVL (_Egocentric Voxel Lifting_)](contents/literature/efm3d.qmd) 3D EFM [@EFM3D-straub2024] which is pre-trained on the [Aria Synthetic Environments (ASE)](contents/ase_dataset.qmd) dataset - a large-scale synthetic egocentric dataset with 100k indoor scenes, to provide rich 3D feature volumes that capture scene geometry, semantics, and free-space priors. On top of this frozen backbone, we train a lightweight RRI prediction head that introspects both the current scene representation and candidate viewpoints to express the fitness of given candidate views.
-
-# Project Vision and Goals
-
-## Done
-
-- Develop an oracle RRI computation pipeline using ASE visibility data,
-  semi-dense point clouds, GT meshes, and the generated
-  [`rri_metrics` API contracts](reference/index.qmd).
-- Directly optimize reconstruction quality rather than surrogate coverage metrics, following RRI-based policies as per VIN-NBV.
-- Develop computational tools to efficiently simulate candidate viewpoints and their expected observations utilizing [`PyTorch3d`](https://pytorch3d.org/), [EFM3D](https://github.com/facebookresearch/efm3d) and [ATEK](https://github.com/facebookresearch/ATEK).
-
-## WIP
-
-- Train an RRI predictor head on top of a frozen EFM backbone that introspects the current reconstruction and a candidate pose via imitation learning on oracle RRIs.
-- Leverage EVL's 3D foundation features—voxel occupancy, centerness, semantic channels, and OBB priors—as state embeddings for RRI estimation and NBV decision making.
-- Entity-aware reconstruction tracking through EVL's OBB detection capabilities.
-
 # Documentation Navigation
 
-The current thesis direction is owned by the thesis roadmap, research questions,
-and canonical project memory. The seminar paper records historical implemented
-evidence from the earlier project phase and should not override the current
-thesis contract.
+The [active Typst thesis](typst/thesis/main.pdf) and its
+[source](typst/thesis/main.typ) own the scientific narrative. Executable
+contracts are owned by the
+[package code](https://github.com/JanDuchscherer104/ARIA-NBV/tree/main/aria_nbv/aria_nbv)
+and [tests](https://github.com/JanDuchscherer104/ARIA-NBV/tree/main/aria_nbv/tests).
+Measurements and provenance are owned by validated rollout manifests and report
+bundles, with their document interface indexed by the
+[reproducibility appendix](typst/thesis/appendix/index.typ).
 
 ## Thesis and Seminar Paper
 
-- [Thesis](typst/thesis/main.pdf), [Typst Source](typst/thesis/main.typ): Current thesis direction and canonical research + development memory.
+- [Thesis](typst/thesis/main.pdf), [Typst Source](typst/thesis/main.typ): Scientific narrative and interpretation of directly cited evidence.
 - [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Historical implemented evidence from the earlier project phase: Single-step RRI based scene scorer.
 
 ## Project Slides
@@ -62,10 +42,11 @@ thesis contract.
 
 - [Setup Instructions](contents/setup.qmd): Environment setup and dependencies
 
-## Thesis State
+## Thesis Navigation
 
-- **[Project Roadmap](contents/thesis/roadmap.qmd)**: Milestones and timeline
-- **[Research Questions](contents/thesis/questions.qmd)**: Open problems and directions
+- **[Thesis Roadmap Index](contents/thesis/roadmap.qmd)**: Navigation to canonical thesis sections and evidence ordering
+- **[Research Question Index](contents/thesis/questions.qmd)**: Navigation to active questions
+- **[Historical M1 Index](contents/thesis/m1_contract_report.qmd)**: Navigation to historical M1 evidence
 
 ## Theory & Background
 

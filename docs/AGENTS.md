@@ -4,25 +4,29 @@ Apply this file when working under `docs/`.
 
 ## Priorities
 - Use `.agents/references/source_order.md` for truth ownership.
-- Current thesis direction lives in `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and the active Typst thesis.
+- `docs/typst/thesis/main.typ` and its included sections solely own scientific
+  narrative and interpretation. Code/tests own executable behavior, immutable
+  manifests and evidence bundles own measurements and validity, and exact
+  external papers own literature claims. Quarto thesis pages are navigation only.
 - Current terminology lives in `docs/typst/shared/glossary.typ`; the Quarto
   glossary is generated output.
 - `docs/contents/ideas.qmd` is read-only archive/scratch.
-- `docs/typst/thesis/main.typ` and its included sections own the active
-  master's-thesis seed. Archived proposal/advisor Typst sources under
+- The active Typst thesis owns the master's-thesis research questions,
+  priorities, interpretation, and calibrated claim wording, citing the direct
+  sources that authorize each claim.
+  Archived proposal/advisor Typst sources under
   `.agents/archive/docs/typst/thesis/` are provenance only.
 - `docs/typst/seminar_paper/main.typ` is historical implemented evidence.
-- Keep Quarto docs aligned to the correct source role instead of introducing
-  competing top-level narratives.
+- Keep Quarto docs aligned as navigation/reference surfaces instead of
+  introducing competing scientific narratives.
 - Keep `docs/references.bib` as the single bibliography source of truth.
 - Preserve established Quarto and Typst structure unless the task explicitly changes it.
 - Link to the exact thesis, bibliography, package, test, or backlog owner instead
   of re-explaining the same contract in multiple places.
-- Keep internal agent guidance, generated context, and OMX runtime notes out of
-  public Quarto navigation. If a generated agent mirror is needed, regenerate
-  it under `.agents/generated/`; do not write agent mirrors under
-  `docs/contents/**`.
+- Keep debriefs, transcripts, OMX artifacts, Graphify output, internal agent
+  guidance, and generated context as supporting records and out of public Quarto
+  navigation. If a generated agent mirror is needed, regenerate it under
+  `.agents/generated/`; do not write agent mirrors under `docs/contents/**`.
 
 ## Default Workflow
 - Use `scripts/nbv_qmd_outline.sh --compact` to localize the exact Quarto page before opening it.
@@ -37,8 +41,8 @@ Apply this file when working under `docs/`.
   literature-synthesis claims, follow
   `.agents/references/direct_source_claim_checklist.md`.
 - Use `aria-docs` for repeatable Quarto, Typst, citation, scientific-figure,
-  Mermaid, and render-inspection workflows; this file and the touched document
-  remain the durable owners of public narrative and notation.
+  Mermaid, and render-inspection workflows; the active Typst thesis owns the
+  scientific narrative, while touched Quarto pages own navigation/reference.
 
 ## Commands
 - Contract inspection: `make context-contracts`
@@ -86,10 +90,10 @@ Apply this file when working under `docs/`.
   `audience: public | advisor | developer | agent`,
   `status: current | planned | scratch | deprecated`, and
   `owner: paper | docs | code | agent | generated | jan`.
-- Current thesis pages live under `docs/contents/thesis/`; past seminar
-  material belongs under `docs/contents/seminar/`; raw scratch or stale history
-  belongs under `.agents/archive/docs/`. Only curated public archive summaries
-  may live under `docs/contents/archive/`.
+- Quarto thesis indexes live under `docs/contents/thesis/`; past seminar material
+  belongs under `docs/contents/seminar/`; raw scratch or stale history belongs
+  under `.agents/archive/docs/`. Only curated public archive summaries may live
+  under `docs/contents/archive/`.
 - Active tasks belong in `.agents/*.toml`, not public TODO pages.
 - For larger doc changes, run `make qmd-frontmatter-check`, `quarto render`,
   and `quarto check` before finishing.

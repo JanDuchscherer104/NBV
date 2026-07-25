@@ -6,30 +6,21 @@ status: current
 owner: jan
 ---
 
-# Classical Methods: Geometric Heuristics
-Hand-crafted criteria include:
+This page is navigation only. NBV narrative and interpretation live in
+[01 Introduction](../../typst/thesis/sections/01-introduction.typ) and
+[02-01 Related Work](../../typst/thesis/sections/02-foundations/02-01-related-work.typ),
+which cite the exact papers authoritative for literature claims.
 
-- **Volumetric uncertainty** (unseen voxels)
-- **Information gain** (entropy reduction)
-- **Surface coverage** [@VIN-NBV-frahm2025]
+# Classical Methods: Geometric Heuristics
+
+Narrative destination: [02-01 Related Work](../../typst/thesis/sections/02-foundations/02-01-related-work.typ).
 
 # Coverage-Based Learning: GenNBV
-[**GenNBV (literature-review)**](../literature/gen_nbv.qmd) [@GenNBV-chen2024] introduced learning-based NBV with:
 
-- RL-based training with continuous 5DoF actions
-- Coverage-focused rewards for geometric completeness
-
-**Limitation**: Still optimizes geometric coverage, not reconstruction quality. Primitive non-pre-trained architecture.
+Narrative destinations: [01 Introduction](../../typst/thesis/sections/01-introduction.typ) and
+[02-01 Related Work](../../typst/thesis/sections/02-foundations/02-01-related-work.typ).
 
 # Direct Quality Optimization: VIN-NBV
 
-[**VIN-NBV (literature-review)**](../literature/vin_nbv.qmd) [@VIN-NBV-frahm2025] directly optimizes **Relative Reconstruction Improvement (RRI)**:
-
-$$\text{RRI}(v) = \frac{\text{Quality}(R_{t+1}) - \text{Quality}(R_t)}{\text{Quality}(R_{\text{complete}})}$$
-
-- Predicts actual reconstruction quality improvement
-- Trained via imitation learning on oracle RRI values using CORAL loss
-- Uses surface metrics (Chamfer distance, F-score) as quality measures
-- Demonstrates ≈30% improvement over coverage-based methods
-
-**Limitation**: Custom CNN backbone limits generalization to complex scenes, doesn't leverage ego-centric priors / modalities. Greedy selection of randomly sampled views based on predicted RRI.
+Narrative destinations: [01 Introduction](../../typst/thesis/sections/01-introduction.typ) and
+[02-01 Related Work](../../typst/thesis/sections/02-foundations/02-01-related-work.typ).

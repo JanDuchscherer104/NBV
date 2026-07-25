@@ -79,13 +79,13 @@ website:
     left:
       - text: Setup
         href: contents/setup.qmd
-      - text: Thesis State
+      - text: Thesis Navigation
         menu:
-          - text: Roadmap
+          - text: Thesis Roadmap Index
             href: contents/thesis/roadmap.qmd
-          - text: Research Questions
+          - text: Research Question Index
             href: contents/thesis/questions.qmd
-          - text: M1 Contract Report
+          - text: Historical M1 Index
             href: contents/thesis/m1_contract_report.qmd
       - text: Aria NBV API
         file: reference/index.qmd
@@ -134,11 +134,14 @@ website:
             - section: "Rollout, Value, And RL"
               contents:
                 - contents/literature/rl_planning.qmd
-        - section: "Thesis State"
+        - section: "Thesis Navigation"
           contents:
-            - contents/thesis/questions.qmd
-            - contents/thesis/roadmap.qmd
-            - contents/thesis/m1_contract_report.qmd
+            - text: "Thesis Roadmap Index"
+              file: contents/thesis/roadmap.qmd
+            - text: "Research Question Index"
+              file: contents/thesis/questions.qmd
+            - text: "Historical M1 Index"
+              file: contents/thesis/m1_contract_report.qmd
         - section: "Resources"
           contents:
             - contents/setup.qmd

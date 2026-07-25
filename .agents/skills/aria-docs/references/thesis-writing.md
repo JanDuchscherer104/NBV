@@ -5,16 +5,22 @@ captions that make scientific claims, or advisor-facing revisions.
 
 ## Document Roles
 
-- The active thesis is rooted at `docs/typst/thesis/main.typ`.
-- The roadmap and research questions under `docs/contents/thesis/` own current
-  scope and priorities.
+- The active thesis rooted at `docs/typst/thesis/main.typ` is the sole owner of
+  scientific narrative and interpretation: research questions, priorities,
+  interpretation, and calibrated claim wording.
+- The roadmap, research-question, and M1 pages under `docs/contents/thesis/` are
+  navigation/reference indexes only.
 - The seminar paper records historical implemented evidence; it does not define
   the current thesis target.
 - Archived proposal and advisor sources are provenance, not competing current
   owners.
+- Code/tests own executable behavior; immutable manifests and evidence bundles
+  own empirical measurements and validity; exact external papers own literature
+  claims. The thesis cites and interprets these direct sources.
 
 Preserve these roles. Do not copy an older claim into the thesis without
-checking current code, tests, roadmap, and evidence.
+checking current code/tests, empirical artifacts, exact papers, and the active
+Typst thesis.
 
 ## Claim Discipline
 
@@ -24,8 +30,8 @@ hypothesis/future work. If it has no clear role, remove or rewrite it.
 
 - Literature claims require a resolved key in `docs/references.bib` and an
   exact primary-source locator.
-- Implementation claims resolve to current code, tests, configs, or measured
-  artifacts.
+- Implementation claims resolve to current code, tests, and configs.
+- Empirical claims resolve to immutable manifests and evidence bundles.
 - Empirical claims name the split, metric, direction, aggregation, and
   uncertainty or limitation needed to interpret them.
 - Planned target-conditioned scoring, finite-horizon value learning, and

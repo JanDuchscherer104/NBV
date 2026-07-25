@@ -1,7 +1,7 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status, research_todo, decision_todo
+#import "../../draft_markers.typ": decision_todo, research_todo, thesis_status
 
 == Target-Conditioned Finite-Horizon Value Model
 
@@ -44,7 +44,7 @@ $
 The notation $Q_H$ names the family supported up to a configured maximum $H$; one model query is
 
 $
-  Q_theta(s_t, e, i, h) = Q_(h,e)^theta(s_t, i),
+  Q_theta (s_t, e, i, h) = Q_(h,e)^theta(s_t, i),
   quad 1 <= h <= b_t <= H
 $
 
@@ -56,7 +56,7 @@ $
   u_(t,e,h,i)
   =
   op("CrossAttn")_theta(
-    x_(t,e,i) + op("Emb")_h(h),
+    x_(t,e,i) + op("Emb")_h (h),
     {h_e^"tgt", Phi_t^"scene", bold(H)_t, b_t}
   )
 $
@@ -111,7 +111,7 @@ $
   j^star
   =
   op("argmax", limits: #true)_(j : m_(t+1,j)=1)
-  Q_theta(s_(t+1),e,j,h-1)
+  Q_theta(s_(t+1), e, j, h-1)
 $
 
 and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the variable-horizon architecture. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.

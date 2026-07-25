@@ -9,263 +9,40 @@ format: html
 
 # Finite-Candidate Rollout And Q_H Contract {#rl-planning-theory}
 
-This page owns ARIA-NBV's formal finite-candidate rollout and $Q_H$ contract.
-The source-backed RL rationale lives in
-[RL Sources For Rollout And Q_H](../literature/rl_planning.qmd). The target
-selection, finite candidate sampler, candidate mixture, and rollout branch
-sampling details are specified in
-[Candidate Sampling And Target Selection](candidate_sampling_target_selection.qmd).
-
-ARIA-NBV should formulate its first non-myopic experiment as finite-horizon planning over discrete candidate views, not as full continuous reinforcement learning. At time $t$, the {{< gls rollout-state >}} contains actor-visible reconstruction state, target descriptor, candidate table, validity masks, selected-view history, and budget state. Oracle labels, GT meshes, all-candidate GT renders, and GT OBB crops define supervision and evaluation; they are not actor-visible inputs before action selection.
-
-The canonical data product is an $H>1$ rollout trace. H=1 target-label and
-myopic-training datasets are derived views over materialized rollout states,
-not separate thesis-scale artifacts. H=1-only generation remains a smoke or
-preflight mode for validating target, candidate, mask, and label contracts
-before longer traces are generated.
+This page is navigation only. The Typst narrative destinations are
+[04-05 Finite-Candidate Value Model](../../typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ),
+[05-02 Learning Objective And Replay Evidence](../../typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ),
+[05-03 Policy Comparison And Failure Interpretation](../../typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ),
+and the deferred-scope record in
+[06 Draft Open Work](../../typst/thesis/sections/06-draft-open-work.typ).
 
 ## State and Action Space Contract {#state-and-action-space-contract}
 
-The state contract separates what ARIA-NBV can observe from what the ASE mesh oracle may use to create labels. The notation uses explicit variants instead of a generic egocentric/counterfactual alias:
-
-$$
-s_t^{\mathrm{hist}},\quad
-s_t^{\mathrm{off}},\quad
-s_t^{\mathrm{cf0}},\quad
-s_t^{\mathrm{cf+}},\quad
-s_t^{\mathrm{oracle}}.
-$$
-
-| State variant | Role | Modalities and boundary |
-|---|---|---|
-| {{< gls historic-snippet-state >}} $s_t^{\mathrm{hist}}$ | Raw actor-visible state from the logged ASE/Project Aria trajectory. | Camera streams, calibration, timestamps, trajectory/gravity, semidense points with uncertainty/support, EVL/EFM evidence, and detected or predicted OBBs. No GT mesh or GT OBB is an actor input. |
-| {{< gls persisted-offline-state >}} $s_t^{\mathrm{off}}$ | Compact immutable state used by the current VIN offline sample store. | `VinSnippetView`, candidate poses/cameras/counts, oracle metrics as labels, optional depths, compact OBBs, trajectory metadata, and selected EVL numeric fields. It is a training/diagnostic payload, not the full raw snippet. |
-| {{< gls minimal-counterfactual-state >}} $s_t^{\mathrm{cf0}}$ | Main thesis-core actor input for target-conditioned rollouts and $Q_H$. | Frozen root EVL context, fused point proxy $P_t$, sparse ray-aware occupied/free/unknown memory $M_t^{\mathrm{ray}}$, selected-view history, actor-visible target descriptor $z_e$, budget, candidate table, validity masks/reason codes, current-state candidate-to-state query features, and selected/parent rendered depth at the canonical store resolution. EVL is not recomputed after synthetic observations. |
-| {{< gls geometry-rich-counterfactual-state >}} $s_t^{\mathrm{cf+}}$ | Explicit ablation state. | $s_t^{\mathrm{cf0}}$ plus richer selected prior synthetic observations: full-resolution rendered depth, valid mask, backprojected point cloud, and derived local normals/support summaries. Unselected-candidate GT renders remain hidden. |
-| {{< gls oracle-rollout-state >}} $s_t^{\mathrm{oracle}}$ | Privileged label/evaluation state. | GT mesh and target crops, all-candidate renders/points/normals/mesh-face visibility, RRI/CD metrics, oracle scores, and GT OBBs. This state supports oracle labels, upper bounds, and diagnostics only. |
-
-The finite {{< gls finite-candidate-action-set >}} is an index set over the candidate table:
-
-$$
-Q_t=\{q_{t,i}\}_{i=1}^{N_t},\qquad
-a_t\in\mathcal{A}(s_t)=\{i\in\{1,\ldots,N_t\}:m_{t,i}=1\},\qquad
-q_t=q_{t,a_t}.
-$$
-
-Validity is a hard feasibility mask. Collision, no-depth, outside-bounds, unsupported-target, and outside-EVL-extent cases stay in masks and reason codes; they are not converted into low RRI labels.
+See [04-05](../../typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ)
+for the finite candidate table, masked action interface, and $Q_H$ model contract.
 
 ## Transition, Reward, and Return {#transition-reward-return-contract}
 
-The {{< gls counterfactual-transition >}} updates the actor-visible state only after selecting an admissible candidate index. In the ASE mesh-supervised loop, the oracle may render the selected pose to perform the transition:
-
-$$
-o_{t+1}^{\mathrm{sel}}=\mathcal{G}(M_{\mathrm{GT}},q_{t,a_t}),
-\qquad
-P_{t+1}=P_t\cup P(o_{t+1}^{\mathrm{sel}},q_{t,a_t}).
-$$
-
-The selected rendered depth $D_{a_t}$ becomes part of the parent observation for
-successor states and all descendants:
-
-$$
-o_{t+\tau}
-\supset
-\{D_{a_0},\ldots,D_{a_{t+\tau-1}}\}.
-$$
-
-Training-core rollout stores persist selected/parent rendered depth at a
-canonical configured resolution with pose, intrinsics, renderer, near/far, and
-resolution lineage. Full-resolution selected depth is an audit/profile option.
-All-candidate GT renders, GT target crops, root-normalized target gains, and
-all-candidate target-RRI diagnostics remain oracle-only before selection.
-
-The immediate learning reward is target point-mesh error reduction normalized
-by the rollout-root target error:
-
-$$
-r_{t,\mathrm{root}}^e=
-\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_0^e+\epsilon}.
-$$
-
-The finite-horizon return used by rollout ranking and $Q_H$ training is:
-
-$$
-G_t^{(H)}
-=
-\sum_{k=0}^{H-1}\gamma^k r_{t+k,\mathrm{root}}^e.
-$$
-
-Keep $\gamma$ symbolic in notation. The first thesis result should report
-cumulative root-normalized target gain under equal acquisition budget, with
-state-relative target RRI retained as a diagnostic; log-improvement rewards
-remain follow-up ablations:
-
-$$
-r_t^{\log,e}
-=
-\log(d(P_t^e,M_e)+\epsilon)
--
-\log(d(P_{t+1}^e,M_e)+\epsilon).
-$$
+See [04-05](../../typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ)
+for the finite-horizon value definition and
+[05-02](../../typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ)
+for replay eligibility and learning targets.
 
 ## Planning Baselines {#planning-baselines}
 
-The one-step greedy baseline is the depth-one selector:
-
-$$
-\operatorname{ArgTop1}_1(s_t)
-=
-\arg\max_{i \in \mathcal{A}(s_t)}
-r(s_t,q_{t,i}),
-$$
-
-where $r$ is the trusted oracle RRI during the first planning experiment.
-
-A bounded non-myopic oracle rollout first restricts the search tree to the $K$ strongest valid branches,
-
-$$
-\operatorname{ArgTopK}(s_t) \subset \mathcal{A}(s_t),
-$$
-
-then computes a finite-horizon value over that pruned branch set:
-
-$$
-V_h(s_t)
-=
-\max_{i \in \operatorname{ArgTopK}(s_t)}
-\left[
-  r(s_t,q_{t,i}) + V_{h-1}(T(s_t,i))
-\right].
-$$
-
-The selected action at horizon $h$ is:
-
-$$
-\operatorname{ArgTop1}_h(s_t)
-=
-\arg\max_{i \in \operatorname{ArgTopK}(s_t)}
-\left[
-  r(s_t,q_{t,i}) + V_{h-1}(T(s_t,i))
-\right].
-$$
-
-The experimental ladder is $\operatorname{ArgTopK}\rightarrow\operatorname{ArgTop1}_1\rightarrow\operatorname{ArgTop1}_2\rightarrow\cdots\rightarrow\operatorname{ArgTop1}_H$. The scientific question is whether the first action chosen by an $h$-step oracle rollout improves root-normalized target gain over depth-one greedy under the same candidate budget, horizon, and acquisition cost.
+See [05-03](../../typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ)
+for the matched policy-comparison protocol and baseline roles.
 
 ## Q_H Training Contract {#q-h-training-contract}
 
-The main learned planner is the {{< gls finite-horizon-q-function >}}:
-
-$$
-Q_H(s_t^{\mathrm{cf0}},a_t,z_e)
-\approx
-\mathbb{E}\!\left[
-  G_t^{(H)}
-  \mid
-  s_t=s_t^{\mathrm{cf0}},a_t,z_e
-\right].
-$$
-
-The first-path architecture is a candidate-to-state query Transformer: each candidate token reads fixed actor-visible target, ray-aware map, selected-history, budget, and local-EVL tokens, then emits one scalar value per candidate. Candidate-candidate self-attention is an ablation for interaction or policy context, not the default physical value estimator. Invalid candidates are masked before any argmax, softmax, loss target, or selected action.
-
-A replay row for $Q_H$ training should contain at least:
-
-| Field group | Required contents |
-|---|---|
-| identity and split | scene/snippet identifiers, target identifier, split, rollout seed, rollout policy, horizon, and step index |
-| actor input | $s_t^{\mathrm{cf0}}$ feature references, $z_e$, selected-view history, budget state, ray-aware candidate-query features, and optional visibility-gated feature-bank references |
-| candidate table | candidate poses/actions, per-candidate validity mask, invalid reason codes, and candidate provenance |
-| selected transition | selected valid action, selected-view synthetic depth/observation reference, $P_t$ and $P_{t+1}$ references or hashes, and next-state feature references |
-| labels | $r_{t,\mathrm{root}}^e$, $G_t^{(H)}$ or bootstrapped target, terminal/horizon flag, oracle provenance, diagnostic target RRI, and any diagnostic scene-level RRI |
-
-The training-core store keeps scalar target distances, support counts,
-root-normalized target gain, state-relative target RRI diagnostics, selected
-parent depth, masks, and provenance. Fixed target-eval crop point payloads are
-sampled/audit retention because they are oracle-only recomputation evidence,
-not actor inputs. Scene-level RRI is reported as a diagnostic bridge to the
-seminar scene-RRI pipeline, not as a $Q_H$ reward.
-
-A masked DQN-style target is:
-
-$$
-y_t^{\mathrm{DQN}}
-=
-r_t^e
-+
-\gamma(1-d_t)
-\max_{j:m_{t+1,j}=1}
-Q_{\bar{\theta}}\!\left(
-  s_{t+1}^{\mathrm{cf0}},
-  a_{t+1,j},
-  z_e
-\right).
-$$
-
-The default first-path backup should be Double DQN, with online-network selection and target-network evaluation:
-
-$$
-j^*
-=
-\arg\max_{j:m_{t+1,j}=1}
-Q_{\theta}\!\left(
-  s_{t+1}^{\mathrm{cf0}},
-  a_{t+1,j},
-  z_e
-\right),
-$$
-
-$$
-y_t^{\mathrm{DoubleDQN}}
-=
-r_t^e
-+
-\gamma(1-d_t)
-Q_{\bar{\theta}}\!\left(
-  s_{t+1}^{\mathrm{cf0}},
-  a_{t+1,j^*},
-  z_e
-\right).
-$$
-
-IQL-style value fitting is a later ablation after masked fitted Double-Q is stable. If adopted, it must preserve offline support by fitting values only from dataset actions:
-
-$$
-L_V(\psi)
-=
-\mathbb{E}_{(s,a)\sim\mathcal{D}}
-\left[
-  L_2^\tau
-  \left(
-    Q_{\hat{\theta}}(s,a,z_e)-V_\psi(s,z_e)
-  \right)
-\right],
-$$
-
-$$
-L_Q(\theta)
-=
-\mathbb{E}_{(s,a,s')\sim\mathcal{D}}
-\left[
-  \left(
-    r_t^e
-    +
-    \gamma V_\psi(s',z_e)
-    -
-    Q_\theta(s,a,z_e)
-  \right)^2
-\right].
-$$
+See [04-05](../../typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ)
+for the model family and
+[05-02](../../typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ)
+for the training and evidence gates.
 
 ## Acceptance Checks {#implementation-acceptance-checks}
 
-Implementation work should satisfy these checks before claiming thesis-grade $Q_H$ progress:
-
-| Check | Required evidence |
-|---|---|
-| no privileged actor leakage | $s_t^{\mathrm{cf0}}$ and $z_e$ contain actor-visible observed/predicted target descriptors, never GT target crops or all-candidate GT renders |
-| invalidity is separate | invalid candidates carry masks and reason codes and are absent from action selection and bootstrap maximization |
-| replayability | rollout traces reproduce selected actions, rewards, transitions, and candidate masks from stored torch/numpy/random seeds, fixed shard row order, sampled outcomes, and lineage |
-| baseline parity | random-valid, one-step oracle greedy, bounded oracle lookahead, and learned $Q_H$ use equal acquisition budget and comparable candidate budget |
-| oracle evaluation | learned selected actions are re-evaluated by the oracle, not accepted only from predicted values |
-| support reporting | reports separate scenes, snippets, targets, trajectories, rollout seeds, transitions, invalid gaps, low-valid-root gates, and scene-level held-out splits |
-
-The first rollout sources before $Q_H$ are random-valid, oracle-greedy/lookahead, and oracle-scored temperature-softmax traces. Gumbel-Top-k branching and IQL/actor-critic variants are evidence-gated follow-ups; the paper-specific justification for those choices is on the [literature page](../literature/rl_planning.qmd).
+See [05-02](../../typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ)
+and [05-03](../../typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ)
+for interpretation of cited acceptance evidence. Later online or expanded RL scope remains deferred
+in [06 Draft Open Work](../../typst/thesis/sections/06-draft-open-work.typ).

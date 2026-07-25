@@ -44,7 +44,15 @@ $
   Phi_t^"scene" = (Phi_0^"static", M_t^"dynamic")
 $
 
-where $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target is external task context in $Q(s_t,e,a)$ and is represented by a separate `TargetState`; it is not duplicated inside target-independent scene memory.
+The target-conditioned decision state folds the task descriptor into the state seen by the value function,
+
+$
+  s_t^e = (Phi_t^"scene", z_e, bold(H)_t, b_t),
+  quad
+  Q_h(s_t^e, i) equiv Q_(h,e)(s_t, i).
+$
+
+Here $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target descriptor $z_e$ is therefore part of the decision state but remains a separate `TargetState` DTO so it is not duplicated inside target-independent scene memory. The indexed form $Q_(h,e)(s_t,i)$ used elsewhere is the curried form of the same target-conditioned value function.
 
 The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory is demonstrated to be a sufficient statistic for it. Raw selected depth is an observation consumed by the memory update; it need not remain a direct scorer input once its surface, free-space, support, source, and recency information have been fused.
 
@@ -53,11 +61,20 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
     columns: (0.72fr, 0.94fr, 1.55fr),
     toprule(),
     table.header([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
-    midrule(),
-    [`S0-pose`], [selected poses only], [Implemented horizon-two tracer baseline; predicts return from root evidence and pose history, not a complete reconstruction state.],
-    [`S1-points`], [causally fused selected surface points], [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
-    [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
-    [`CF-GT` / `CF-sensor` / V1], [source tag on selected observations], [Orthogonal information protocol: privileged GT depth, declared sensor-like simulation, or actor-visible observation.],
+    midrule(), [`S0-pose`], [selected poses only],
+    [Implemented horizon-two tracer baseline; predicts return from root evidence and pose history, not a complete reconstruction state.],
+    [`S1-points`],
+    [causally fused selected surface points],
+
+    [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
+    [`S2-ray`],
+    [surface, free, unknown, support, recency],
+
+    [Canonical planned dynamic state for candidate-frustum and target-support queries.],
+    [`CF-GT` / `CF-sensor` / V1],
+    [source tag on selected observations],
+
+    [Orthogonal information protocol: privileged GT depth, declared sensor-like simulation, or actor-visible observation.],
     bottomrule(),
   )),
   caption: [Counterfactual state and source protocols. Scene carrier, information source, interaction architecture, and learning objective are orthogonal experimental choices.],
@@ -95,16 +112,51 @@ The coverage limitation motivates a layered interface rather than repeated infer
     toprule(),
     table.header([*Carrier*], [*Status*], [*Inductive benefit*], [*Cost and promotion gate*]),
     midrule(),
-    [Root semidense moments], [implemented tracer], [Cheap root-level context for contract and optimization tests.], [No spatial support or causal update; never interpret as task-sufficient state.],
-    [Persisted EVL and snippet evidence], [available root carrier], [Aria-native local features, OBB hypotheses, calibrated cameras, and explicit extent.], [Not consumed by the tracer; limited spatial support and requires coverage metadata.],
-    [Semidense or fused point memory], [first dynamic control], [Observed surfaces follow trajectory and selected-view extent.], [No free/unknown state; test density and visibility sensitivity.],
-    [Sparse ray-aware memory], [planned primary extension], [Separates surface, free, unknown, support, uncertainty, and causal updates.], [Requires deterministic fusion and counterfactual-source masks.],
-    [Target-centred EVL re-lifting], [adaptation ablation], [Reuses logged frame features when the target lies outside the root field.], [Domain shift in the 3D neck; compare against simple logged-feature pooling.],
-    [DINO-on-point], [appearance ablation], [Extends logged appearance to observed points beyond the EVL grid.], [Needs visibility gating, compression, and missing-descriptor masks.],
-    [TSDF/SDF or sparse encoder], [geometry/encoder ablation], [Compact metric geometry or learned coordinate-bearing tokens.], [Must preserve observation weights and unknown-space semantics.],
-    [Object-aware 3DGS], [renderable-memory ablation], [Candidate rendering, soft target membership, and primitive uncertainty.], [Per-scene optimization and mask supervision change the state contract.],
-    [SceneScript], [global-context control], [Broad ASE-aligned layout and object hypotheses from semidense input.], [Not an ATEK drop-in and does not provide causal free/unknown updates.],
-    bottomrule(),
+    [Root semidense moments],
+    [implemented tracer],
+    [Cheap root-level context for contract and optimization tests.],
+
+    [No spatial support or causal update; never interpret as task-sufficient state.],
+    [Persisted EVL and snippet evidence],
+    [available root carrier],
+    [Aria-native local features, OBB hypotheses, calibrated cameras, and explicit extent.],
+
+    [Not consumed by the tracer; limited spatial support and requires coverage metadata.],
+    [Semidense or fused point memory],
+    [first dynamic control],
+    [Observed surfaces follow trajectory and selected-view extent.],
+
+    [No free/unknown state; test density and visibility sensitivity.],
+    [Sparse ray-aware memory],
+    [planned primary extension],
+    [Separates surface, free, unknown, support, uncertainty, and causal updates.],
+
+    [Requires deterministic fusion and counterfactual-source masks.],
+    [Target-centred EVL re-lifting],
+    [adaptation ablation],
+    [Reuses logged frame features when the target lies outside the root field.],
+
+    [Domain shift in the 3D neck; compare against simple logged-feature pooling.],
+    [DINO-on-point],
+    [appearance ablation],
+    [Extends logged appearance to observed points beyond the EVL grid.],
+
+    [Needs visibility gating, compression, and missing-descriptor masks.],
+    [TSDF/SDF or sparse encoder],
+    [geometry/encoder ablation],
+    [Compact metric geometry or learned coordinate-bearing tokens.],
+
+    [Must preserve observation weights and unknown-space semantics.],
+    [Object-aware 3DGS],
+    [renderable-memory ablation],
+    [Candidate rendering, soft target membership, and primitive uncertainty.],
+
+    [Per-scene optimization and mask supervision change the state contract.],
+    [SceneScript],
+    [global-context control],
+    [Broad ASE-aligned layout and object hypotheses from semidense input.],
+
+    [Not an ATEK drop-in and does not provide causal free/unknown updates.], bottomrule(),
   )),
   caption: [Ranked scene-carrier design space. Status describes the role in the thesis method, not empirical superiority.],
 ) <tab:thesis-scene-representation-design-space>

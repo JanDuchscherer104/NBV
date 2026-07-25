@@ -6,4 +6,6 @@ ARIA-NBV combines @aria-synthetic-environments trajectories and GT geometry, loc
 
 #include "02-02-geometric-learning.typ"
 
+#include "02-03-reconstruction-metrics.typ"
+
 The resulting foundation is narrow: active perception motivates action-conditioned sensing, VIN-NBV supplies the quality-driven one-step precedent, ASE and EFM3D define the logged egocentric evidence boundary, and finite-action learning supplies mask and support controls. Coverage and uncertainty remain diagnostics rather than substitutes for target-specific reconstruction quality.

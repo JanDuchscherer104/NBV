@@ -17,18 +17,17 @@ when the user asks for the lighter `elaborate` modifier.
 
 Prefer sources in this order, and state when a conclusion is an inference:
 
-1. ARIA-NBV source order owner:
-   `.agents/references/source_order.md`, thesis roadmap/questions, canonical
-   memory, shared glossary/notation, and nearest `AGENTS.md`.
-2. Repo-local theory and literature: `docs/contents/theory/`,
-   `docs/contents/literature/`, `docs/references.bib`, local paper notes, and
-   `literature/tex-src/` when present.
-3. Implementation evidence: current code, generated API docs, tests, configs,
-   and existing artifacts.
-4. External primary sources: papers, arXiv, DOI pages, official dataset/tool
+1. Use `.agents/references/source_order.md` to select the owner for each claim.
+2. Executable behavior: current code, tests, configs, and generated API docs.
+3. Empirical measurements and validity: immutable manifests and evidence bundles.
+4. Literature claims: exact external papers; use bibliography entries, local
+   notes, and literature indexes only to locate them.
+5. Scientific narrative: the active Typst thesis owns research questions,
+   priorities, interpretation, and calibrated wording while citing items 2-4.
+6. External operational sources: official dataset/tool
    docs, official API docs, and Context7-resolved library docs when current API
    behavior matters.
-5. Wikipedia or broad web summaries: orientation only. Never use these as
+7. Wikipedia or broad web summaries: orientation only. Never use these as
    proposal-critical or advisor-facing evidence for core technical claims.
 
 For advisor-facing proposal, roadmap, research-question, or literature
@@ -40,11 +39,10 @@ before treating the claim as supported.
 Label claim strength in theory-rich answers when ambiguity matters:
 
 - `definition`: follows from a stated definition or glossary entry.
-- `implementation fact`: verified from current code, config, docs, tests, or
-  artifacts.
+- `implementation fact`: verified from current code, config, or tests.
+- `empirical result`: verified from an immutable manifest or evidence bundle.
 - `literature claim`: backed by a cited paper or official external source.
-- `project decision`: backed by the exact owning source, roadmap/questions, or
-  source order.
+- `project decision`: backed by the active Typst thesis and its cited sources.
 - `hypothesis`: plausible but not yet supported by ARIA-NBV evidence.
 - `inference`: derived from sources, but not directly stated by them.
 

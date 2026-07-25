@@ -4,20 +4,28 @@ Use this reference when a task needs current project truth or sources disagree.
 
 ## Role Split
 
-- Current thesis direction: `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and the active Typst thesis describe the
-  active plan, research questions, evidence contract, and calibrated claims.
+- Scientific narrative and interpretation: `docs/typst/thesis/main.typ` and its
+  included sections solely own research questions, priorities, interpretation,
+  and calibrated claim wording. They cite, but do not replace, direct evidence
+  authorities.
+- Quarto thesis navigation: `docs/contents/thesis/roadmap.qmd`,
+  `docs/contents/thesis/questions.qmd`, and
+  `docs/contents/thesis/m1_contract_report.qmd` are indexes/reference pages, not
+  scientific owners.
 - Current implementation truth: package code, typed APIs, tests, docstrings,
   nearest package `AGENTS.md`, and concise subsystem READMEs own executable
   behavior and local invariants.
+- Empirical truth: immutable manifests and evidence bundles own recorded
+  measurements, provenance, split membership, and validity status.
+- Literature truth: each exact external paper owns the literature claim
+  attributed to it; bibliography entries and local notes locate rather than
+  supersede that source.
 - Current terminology: `docs/typst/shared/glossary.typ` owns terms and symbols;
   `docs/contents/glossary.qmd` is generated public output.
 - Idea archive: `docs/contents/ideas.qmd` is read-only scratch/history, not
   current direction.
-- Active thesis seed: `docs/typst/thesis/main.typ` and its included sections
-  own thesis-facing Typst prose once thesis work is in scope. Archived
-  proposal/advisor Typst sources under `.agents/archive/docs/typst/thesis/`
-  are provenance only.
+- Archived proposal/advisor Typst sources under
+  `.agents/archive/docs/typst/thesis/` are provenance only.
 - Seminar evidence: `docs/typst/seminar_paper/main.typ` and included sections
   describe the older implemented substrate and past seminar writeup. Use them
   for historical evidence, not for current thesis priority.
@@ -26,6 +34,8 @@ Use this reference when a task needs current project truth or sources disagree.
 - Approved future work and superseded decision provenance:
   `.agents/omx_artifacts.toml` plus its registered current and archived bundles.
   Accepted OMX evidence never overrides current source or scientific owners.
+- Debriefs and transcripts preserve supporting execution context; they do not
+  supersede direct behavior, empirical, literature, or narrative owners.
 - Source-derived navigation: Graphify when fresh; exact owners, targeted `rg`,
   contract inspection, document outlines/includes, and bounded directory trees
   remain the no-tool fallback. Corpus-changing source commits require the
@@ -51,20 +61,23 @@ Use this reference when a task needs current project truth or sources disagree.
 
 ## Conflict Rule
 
-When current thesis docs conflict with the seminar paper, prefer the current
-source for direction and keep the seminar paper as historical implemented
-evidence. Do not promote planned work to implemented results.
+When sources disagree, resolve each part by role: code/tests for executable
+behavior, immutable manifests/evidence bundles for measurements and validity,
+exact external papers for literature claims, and the active Typst thesis for
+research questions, priorities, interpretation, and calibrated wording. Quarto
+stubs do not arbitrate conflicts. Keep the seminar paper as historical narrative
+and do not promote planned work to implemented results.
 
 ## Capture Rule
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
 - Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- Current scientific direction and open questions: thesis roadmap/questions and
-  active Typst thesis.
+- Current scientific direction and open questions: active Typst thesis.
 - Current implementation contract: code, tests, docstrings, and nearest package
   guidance or README.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
-- Public narrative: Quarto or Typst docs.
+- Public scientific narrative: active Typst thesis.
+- Public navigation/reference: Quarto docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
 - Optional tool boundary: `.agents/references/alignment_tools_contract.md`.

@@ -6,9 +6,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 ## Source Order
 - Use `.agents/references/source_order.md` for current truth and conflict
   resolution.
-- Current thesis direction is owned by the thesis roadmap/questions and active
-  Typst thesis. The seminar paper is historical implemented evidence, not
-  current thesis priority.
+- The active Typst thesis is the sole owner of scientific narrative and
+  interpretation: research questions, priorities, interpretation, and
+  calibrated claim wording. It cites the direct evidence authorities named in
+  `.agents/references/source_order.md`; Quarto thesis pages are navigation only.
 
 ## Routing
 - For non-trivial work, state assumptions, inspect the nearest owner, keep the
@@ -45,8 +46,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   every registered payload at its exact pre-purge SHA-256.
 - Keep public docs aligned with current thesis direction, current code, and
   historical evidence only when cited.
-- Internal agent memory, generated context, and OMX runtime state are not public
-  documentation surfaces.
+- Debriefs, transcripts, OMX artifacts, Graphify output, internal agent memory,
+  and generated context are supporting records, not primary evidence
+  authorities or public documentation surfaces.
 - Do not treat V0 GT actor-visible target runs as main V1 performance.
 - Invalidity is a hard mask/reason contract, not low RRI.
 - Generic Gymnasium/SB3 or external online-simulator work is stretch or M6
@@ -67,12 +69,13 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.
 - Repeatable workflow: update or add a compact `.agents/skills/*/SKILL.md`.
 - Human-owner preference: update `.agents/references/human_owner_intent.md`.
-- Current scientific direction: update the thesis roadmap/questions or active
-  Typst thesis; implementation truth stays with code, tests, and nearest package
-  guidance.
+- Current scientific direction: update the active Typst thesis; Quarto thesis
+  pages only index or reference it. Implementation truth stays with code, tests,
+  and nearest package guidance.
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
-- Public narrative: update Quarto or Typst docs.
+- Public scientific narrative: update the active Typst thesis; keep Quarto as
+  navigation/reference.
 
 ## Commands
 - Python: `aria_nbv/.venv/bin/python`
@@ -101,6 +104,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Native debriefs must follow `.agents/references/agent_memory_templates.md` and
   include `canonical_updates_needed` even when the list is empty; non-empty
   entries name the exact package, docs, reference, or backlog owners updated.
+- Debriefs and transcripts preserve supporting context; direct sources own the
+  behavior, measurements, validity, and literature claims they summarize.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except
   the intentionally vendored `.codex/skills/graphify/**` project skill.
@@ -137,5 +142,6 @@ Rules:
   a graph-only child `G`. Run `make graphify-refresh`, commit only the three
   canonical artifacts, then prove the pair with `make graphify-ci`. The
   post-commit hook performs structural refresh only and never stages or commits.
-- Graphify is navigation only. Authority-sensitive claims always resolve to
-  exact bibliography, literature, thesis, package, test, or backlog owners.
+- Graphify is source-derived navigation. Claims resolve to owning code/tests,
+  immutable manifests or evidence bundles, and exact external papers; the
+  Typst thesis cites those sources and owns their scientific interpretation.

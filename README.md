@@ -10,8 +10,8 @@ The public documentation is published at
 
 ## Current Focus
 
-- Keep the roadmap and research questions aligned around target-conditioned,
-  RRI-based multi-step NBV.
+- Keep the active Typst thesis focused on target-conditioned, RRI-based
+  multi-step NBV and keep Quarto indexes synchronized to it.
 - Validate ASE offline-store, pose-frame, candidate-label, invalidity-mask, and
   oracle-RRI contracts before scale-up.
 - Use one-step VIN-style scoring as the myopic baseline, then measure bounded
@@ -24,20 +24,21 @@ The public documentation is published at
 - [Published documentation](https://janduchscherer104.github.io/ARIA-NBV/):
   rendered Quarto site.
 - [Quarto home](docs/index.qmd) and [Quarto navigation](docs/_quarto.yml):
-  public docs entry point and sidebar/navbar source.
-- [Roadmap](docs/contents/thesis/roadmap.qmd) and
-  [research questions](docs/contents/thesis/questions.qmd): current
-  advisor-facing thesis contract.
-- [M1 contract report](docs/contents/thesis/m1_contract_report.qmd):
-  data/cache/oracle correctness gate and evidence ledger.
+  public navigation/reference entry point and sidebar/navbar source.
+- [Thesis Roadmap Index](docs/contents/thesis/roadmap.qmd) and
+  [Research Question Index](docs/contents/thesis/questions.qmd): Quarto indexes
+  into the active Typst thesis.
+- [Historical M1 Index](docs/contents/thesis/m1_contract_report.qmd): navigation
+  to the historical data/cache/oracle evidence ledger.
 - [Literature index](docs/contents/literature/index.qmd): thesis-oriented
   adoption map for NBV, ARIA/EFM3D, rollout/value learning, 3DGS, and semantic
   scene references.
 - [Finite-candidate rollout and `Q_H` contract](docs/contents/theory/rl_planning.qmd),
   [candidate sampling and target selection](docs/contents/theory/candidate_sampling_target_selection.qmd),
-  and [RRI theory](docs/contents/theory/rri_theory.qmd): current theory owners.
-- [Thesis Typst source](docs/typst/thesis/main.typ): active master's-thesis
-  seed and compile entry point.
+  and [RRI theory](docs/contents/theory/rri_theory.qmd): reference pages.
+- [Thesis Typst source](docs/typst/thesis/main.typ): sole scientific narrative
+  and interpretation owner, citing direct implementation, empirical, and
+  literature authorities; active master's-thesis compile entry point.
 - [Advisor meeting 2026-05-22](docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ):
   historical advisor-alignment deck; use it as provenance, not as the current
   thesis source of truth.

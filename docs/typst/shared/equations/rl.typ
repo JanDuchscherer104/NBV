@@ -129,7 +129,7 @@
   replay_transition: $
     (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
     =
-    op("Step")(
+    cal(T)_"replay"(
       x_t,
       bold(H)_t,
       b_t,

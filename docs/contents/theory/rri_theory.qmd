@@ -9,151 +9,30 @@ format: html
 
 # Relative Reconstruction Improvement (RRI) Theory {#rri-theory}
 
-{{< glsfull relative-reconstruction-improvement >}} measures how much a new
-view reduces reconstruction error relative to the error available at a rollout
-root or state. ARIA-NBV now uses a **target-first** RRI contract for thesis
-training and evaluation. The older seminar paper's scene-level oracle RRI
-pipeline remains historical implemented evidence for rendering, unprojection,
-fusion, and point-mesh scoring, but it is no longer the optimized rollout or
-$Q_H$ objective.
-
-Let $D(\mathcal P,\mathcal M)$ be the point-mesh reconstruction error used by
-the oracle. In implementation this is a bidirectional point-mesh distance with
-point-to-mesh and mesh-to-point terms:
-
-$$
-D(\mathcal P,\mathcal M)
-=
-D_{\mathcal P\to\mathcal M}(\mathcal P,\mathcal M)
-+
-D_{\mathcal M\to\mathcal P}(\mathcal M,\mathcal P).
-$$
-
-Surface metric details live in
-[Surface Reconstruction Metrics](surface_metrics.qmd).
+This page is navigation only. Metric narrative and interpretation are in
+[02-03 Reconstruction Quality Metrics](../../typst/thesis/sections/02-foundations/02-03-reconstruction-metrics.typ),
+and target-task and RRI-label narrative is in
+[03-02 Target Task And RRI Labels](../../typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ).
 
 ## Delta From The Seminar Scene RRI {#delta-from-seminar-scene-rri}
 
-The seminar implementation scored a one-step scene candidate $q$ as:
-
-$$
-\mathrm{RRI}_{\mathrm{scene}}(q)
-=
-\frac{
-D(\mathcal P_t,\mathcal M_{\mathrm{GT}})
--
-D(\mathcal P_t\cup\mathcal P_q,\mathcal M_{\mathrm{GT}})
-}{
-D(\mathcal P_t,\mathcal M_{\mathrm{GT}})+\varepsilon
-}.
-$$
-
-That scene-level objective was useful for proving the offline oracle substrate,
-but it has two limitations for the thesis-scale target rollout setting.
-First, the original root point cloud was semi-dense SLAM/MPS geometry while
-candidate additions were dense rendered geometry, which biases the first
-counterfactual step relative to later dense-fused steps. Second, whole-scene
-RRI can prefer large easy background surfaces even when the task is to improve
-a selected target.
-
-The thesis contract separates actor-visible state from oracle evaluation
-geometry. Actor inputs may use MPS semi-dense points, EVL evidence, detected or
-predicted OBBs, and selected-view history. Oracle labels use homogeneous
-evaluation geometry: observed-prefix ASE GT RGB ray-depth for the root, rendered
-candidate depth for counterfactual views, the same canonical fusion path, and a
-matched target crop for target-specific scoring.
+See [03-02](../../typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ)
+for the active target-specific label contract and its relation to earlier scene-level evidence.
 
 ## Target-Specific Error And Gain {#target-specific-error-gain}
 
-Let $e$ be the selected actor-visible target after OBS-SEL and GT-EVAL matching.
-Let $C_e(\mathcal P)$ crop an accumulated point set to the matched target
-evaluation region, and let $\mathcal M_e^{\mathrm{GT}}$ be the oracle-only
-target surface. The target error at rollout step $t$ is:
-
-$$
-\Delta_t^e
-=
-D(C_e(\mathcal P_t^{\mathrm{eval}}),\mathcal M_e^{\mathrm{GT}}).
-$$
-
-For a valid candidate or selected action that updates the accumulated
-evaluation points to $\mathcal P_{t+1}^{\mathrm{eval}}$, the default immediate
-rollout and $Q_H$ reward is root-normalized target gain:
-
-$$
-r_{t,\mathrm{root}}^e
-=
-\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_0^e+\varepsilon}.
-$$
-
-With undiscounted accumulation, this reward telescopes to endpoint target gain:
-
-$$
-\sum_{t=0}^{H-1}r_{t,\mathrm{root}}^e
-=
-\frac{\Delta_0^e-\Delta_H^e}{\Delta_0^e+\varepsilon}.
-$$
-
-This is the main reason root-normalized gain is the rollout and $Q_H$ training
-target: every step is measured against the same rollout root, so cumulative
-reward and endpoint quality gain agree under equal acquisition budget.
-
-The state-relative one-step target RRI remains useful for diagnostics and
-VIN-compatible one-step labels:
-
-$$
-\mathrm{RRI}_{t,\mathrm{state}}^e
-=
-\frac{\Delta_t^e-\Delta_{t+1}^e}{\Delta_t^e+\varepsilon}.
-$$
-
-It is not the default multi-step training reward because its denominator
-changes with the rollout state, so cumulative values no longer equal endpoint
-gain.
+See [02-03](../../typst/thesis/sections/02-foundations/02-03-reconstruction-metrics.typ)
+for reconstruction-error definitions and
+[03-02](../../typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ)
+for target-specific gain and label provenance.
 
 ## Scene RRI Role {#scene-rri-role}
 
-Scene-level RRI remains a diagnostic bridge to the seminar pipeline:
-
-$$
-J_{\mathrm{scene}}^{(H)}
-=
-\frac{
-\Delta_0^{\mathrm{scene}}-\Delta_H^{\mathrm{scene}}
-}{
-\Delta_0^{\mathrm{scene}}+\varepsilon
-}.
-$$
-
-It should be reported to expose tradeoffs and failure modes: a target-first
-policy might improve the selected target while doing little for the whole
-scene, or it might reveal a crop-local artifact. Scene RRI is therefore
-reported alongside target gain, acquisition cost, valid-action support, and
-invalidity rates. It is not silently scalarized into the $Q_H$ reward.
+See [03-02](../../typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ)
+for the active role of scene-level diagnostics.
 
 ## NBV Objective {#nbv-objective}
 
-At a rollout state $s_t$, ARIA-NBV acts over a finite valid candidate set:
-
-$$
-\mathcal A(s_t)=\{i:m_{t,i}=1\},
-\qquad
-q_t=q_{t,a_t}.
-$$
-
-The target-first finite-horizon objective is:
-
-$$
-\tau^*
-=
-\arg\max_{\tau=(a_0,\ldots,a_{H-1})}
-\sum_{t=0}^{H-1}\gamma^t r_{t,\mathrm{root}}^e,
-\qquad
-a_t\in\mathcal A(s_t).
-$$
-
-Invalid candidates are constraints represented by masks and reason codes. They
-are not assigned low RRI. All learned selected actions used for thesis claims
-must be evaluated by the oracle, and all reports must distinguish target
-endpoint gain, cumulative target root gain, diagnostic state-relative target
-RRI, diagnostic scene RRI, and acquisition cost.
+See [03-02](../../typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ)
+for interpretation of the target-task objective, hard-validity boundary, and
+RRI-label evidence; code/tests and immutable evidence artifacts remain authoritative.

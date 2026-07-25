@@ -22,13 +22,24 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
     columns: (0.72fr, 1.45fr, 1.05fr),
     toprule(),
     table.header([*Carrier*], [*Persisted content*], [*Learning role*]),
-    midrule(),
-    [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance], [privileged V0 task instruction; learned actors need observed or predicted equivalents],
-    [Candidate], [stable row identities, world/root-relative pose, masks, reasons, sampler provenance, support fields], [finite action row; privileged diagnostics remain source-gated],
-    [Selected chain], [selected row, shell index, step order, policy, seed, successor link, terminal state], [history and temporal-difference linkage],
-    [Selected observation], [selected depth, valid mask, calibration, pose and source], [later dynamic-state input only under `CF-GT`, `CF-sensor`, or V1; never an all-candidate student input],
-    [Oracle labels], [target RRI, target root gain, errors, optional crops and candidate renders], [supervision, evaluation, and audit only],
-    bottomrule(),
+    midrule(), [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance],
+    [privileged V0 task instruction; learned actors need observed or predicted equivalents],
+    [Candidate],
+    [stable row identities, world/root-relative pose, masks, reasons, sampler provenance, support fields],
+
+    [finite action row; privileged diagnostics remain source-gated],
+    [Selected chain],
+    [selected row, shell index, step order, policy, seed, successor link, terminal state],
+
+    [history and temporal-difference linkage],
+    [Selected observation],
+    [selected depth, valid mask, calibration, pose and source],
+
+    [later dynamic-state input only under `CF-GT`, `CF-sensor`, or V1; never an all-candidate student input],
+    [Oracle labels],
+    [target RRI, target root gain, errors, optional crops and candidate renders],
+
+    [supervision, evaluation, and audit only], bottomrule(),
   )),
   caption: [Implemented replay carriers and admissible learning roles.],
 ) <tab:thesis-descriptor-schema>
@@ -51,21 +62,37 @@ $
 
 This equation is an information contract rather than one flat tensor. The corresponding DTO roles are:
 
+The role names below are conceptual interfaces, not claims that same-named Python classes already exist. The implemented persistence boundary is anchored by #gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", body: [`RolloutZarrStoreReader.q_h_view`], line: 517), while the currently blocked model boundary is #gh-wip("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py", body: [`MultiStepCandidateScorer`], line: 51). These draft links disappear as links in the submission profile.
+
 #figure(
   text(size: 8.1pt, table(
     columns: (0.92fr, 1.35fr, 1.05fr),
     toprule(),
     table.header([*DTO role*], [*Canonical content*], [*Visibility*]),
-    midrule(),
-    [`StaticSceneContext`], [root semidense evidence, supported EVL tokens, root frame and EVL extent], [actor input; immutable within one rollout],
-    [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
-    [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [V0 instruction or V1 actor-visible target],
-    [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
-    [`ValueQuery`], [requested residual horizon $h$ and its availability mask], [model-visible query; not scene evidence],
-    [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
-    [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
-    [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
-    bottomrule(),
+    midrule(), [Static scene context], [root semidense evidence, supported EVL tokens, root frame and EVL extent],
+    [actor input; immutable within one rollout],
+    [Dynamic scene state],
+    [selected geometry, free/unknown support, recency, source masks and ordered history],
+
+    [actor input; causal update only],
+    [Target state],
+    [protocol-specific descriptor, target-local support and field-availability masks],
+
+    [V0 instruction or V1 actor-visible target],
+    [Candidate table],
+    [row identity, local pose, target relation, actor validity and padding mask],
+
+    [actor input; row-aligned], [Value query], [requested residual horizon $h$ and its availability mask],
+    [model-visible query; not scene evidence],
+    [Candidate supervision],
+    [one-step root gain, diagnostic target RRI and `q_train_mask`],
+
+    [supervision only],
+    [Selected transition],
+    [factual action index and row id, reward, discount, terminal and successor identity],
+
+    [training linkage only], [Audit lineage], [source/store/config hashes, policy, seed and reason vocabulary],
+    [CPU audit data; not a learned feature], bottomrule(),
   )),
   caption: [Canonical DTO ownership. Model inputs, horizon queries, supervision, transition linkage, and provenance are distinct types even when collated in one training batch.],
 ) <tab:thesis-qh-dto-contract>
@@ -108,15 +135,21 @@ $
   #eqs.spatial.candidate_reference_transform
 $
 
+The world poses $bold(T)_(w,r_t)$ and $bold(T)_(w,c_(t,i))$ locate the current reference and candidate camera. Their product $bold(T)_(w,r_t)^(-1) bold(T)_(w,c_(t,i))$ expresses candidate $i$ in the current reference frame; $bold(delta)_(r_t,i)^p$ and $bold(R)_(r_t,i)$ are its relative translation and rotation.
+
 $
   #eqs.spatial.candidate_pose_features
 $
+
+The pose vector is a menu of candidate descriptors rather than a fixed mandatory encoding. It collects relative translation, one continuous rotation encoding, metric range, planar bearing, height change, and camera-up or frustum orientation. The six-dimensional rotation representation is the baseline candidate because it is continuous for neural regression; axis--angle, quaternion, Fourier, or equivariant alternatives remain matched ablations and must not be concatenated silently with the baseline.
 
 The target relation is encoded separately so candidate self-motion cannot be confused with target conditioning:
 
 $
   #eqs.spatial.candidate_target_relation
 $
+
+Here $bold(delta)_(e|i)^p$ is the target displacement in the candidate frame, its norm is candidate--target range, $cos theta_(t,e,i)^"opt"$ measures optical-axis alignment, $beta_(t,e,i)^"elev"$ is relative elevation, and $lambda_(t,e,i)^"obb"$ denotes the declared target-box/frustum relation vector for the experiment. These channels are also descriptor candidates: each must be enabled, removed, or replaced in a named ablation. Vector or 3D visualizations of the displacement, optical axis, frustum, and target box are diagnostic explanations of those channels, not additional model inputs.
 
 Continuous rotation features, metric range, bearing, elevation, height, and frustum variables preserve physical task structure. Query-local relative positional encoding is a later ablation for candidate--target, candidate--history, or candidate--candidate interactions:
 

@@ -3,6 +3,6 @@
 // glossary.generated.typ. Add `typst_macro: Name` to an entry's custom metadata
 // to expose #Name and #Name_full here.
 //
-// TODO: deprecate this file!
+// Retain this compatibility facade until all legacy term macros are migrated.
 
 #import "glossary.generated.typ": *
