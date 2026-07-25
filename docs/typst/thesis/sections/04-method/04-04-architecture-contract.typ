@@ -10,9 +10,9 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019],
-  source: "aria_nbv/aria_nbv/vin/types/prediction.py; aria_nbv/aria_nbv/vin/modules/heads.py; aria_nbv/tests/lightning/test_vin_batch_collate.py; aria_nbv/tests/rollouts/test_zarr_store.py",
-  gate: [end-to-end finite-horizon permutation, mask, duplicate, and frame tests],
-)[Replay and current VIN data surfaces cover part of the contract. The unimplemented finite-horizon model must pass the complete suite before architectural comparisons are interpretable.]
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/tests/vin/test_target_finite_horizon.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  gate: [end-to-end permutation, mask, duplicate, frame, source, and horizon tests for every admitted state protocol],
+)[The H=2 tracer covers candidate-row equivariance, local-frame geometry, invalid-row isolation, and deterministic selection. Dynamic selected-observation state, source-dropout, and general-horizon acceptance tests remain pending.]
 
 Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned inputs by $Pi$ must permute outputs by the same amount:
 
@@ -20,47 +20,49 @@ $
   #eqs.rl.candidate_row_equivariance
 $
 
-The current VIN path uses row-wise maps, shared-token queries, and symmetric normalization without candidate-index embeddings. Existing tests verify row-aligned collation and metric alignment, not an end-to-end finite-horizon equivariance claim.
-
 Equivariance alone does not guarantee invalid-row isolation. Holding valid rows and the mask fixed while changing only invalid-row contents must satisfy
 
 $
   #eqs.rl.candidate_mask_isolation
 $
 
-The valid-action mask gates selection, softmax, and successor maximization. The narrower training mask also requires a finite oracle target. Padding, invalid rows, and their undefined labels must not alter valid outputs or gradients. Duplicate-row and valid-count tests are required because attention normalization or per-set centering can otherwise change the absolute value of an unchanged physical candidate.
+Mask ownership depends on the interaction. In the canonical candidate-to-state model, candidates are queries and scene, target, history, time, horizon, and budget are keys and values. The action mask therefore sanitizes candidate queries, gates output selection, and gates supervised losses; it is not a key-padding mask for the shared state tokens. Candidate masks become attention-key masks only in later candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding masks, action-validity masks, training masks, and modality-presence masks must remain separate.
+
+Duplicate-row and valid-count tests are required because candidate-set pooling or per-set normalization can otherwise change the absolute value of an unchanged physical candidate. A duplicate row may duplicate an output, but it must not silently change another row's value unless the tested architecture explicitly models candidate-set context.
 
 Coordinate handling is deliberately weaker than exact $op("SE")(3)$ equivariance. World poses remain available for reproducibility, while model inputs use root-, target-, or candidate-relative geometry. Gravity, scale, height, yaw, camera direction, target orientation, motion limits, and frustum geometry remain physical variables. A global origin convention must not become a shortcut @GeometricDeepLearning-bronstein2021.
 
-Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, rendered depth, and target crops may supervise or audit a model but may not enter its actor graph unless the experiment is explicitly privileged. Source-dropout tests must show that removing an unavailable optional carrier changes only its masked branch.
+Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, current candidate renders, and target crops may supervise or audit a model but may not enter its actor graph. Previously selected GT depth may enter only a `CF-GT` state branch. Source-dropout tests must show that removing an unavailable optional carrier changes only its masked branch.
 
-=== Conservative architecture ladder
+=== Orthogonal architecture ladder
 
 #thesis_status(
-  implementation: "planned",
+  implementation: "partial",
   evidence: "pending",
   citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023],
-  source: "docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex; docs/literature/tex-src/arXiv-Set-Transformer/03_main.tex, Sec. Set Transformer, lines 2--51; docs/literature/tex-src/arXiv-QCNet/main.tex, Sec. Query-Centric Scene Encoder, lines 159--161; docs/literature/tex-src/arXiv-SE3-Transformer/EA4PC.tex, Sec. Introduction, lines 119--143; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [promote a level only after all lower controls pass the same oracle-evaluated protocol],
-)[The ladder orders hypotheses; it does not assign equal status to every model family. Candidate-to-state attention is the canonical planned core.]
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [promote a level only after lower interaction controls pass on the same scene carrier and state protocol],
+)[The development tracer implements candidate-to-state cross-attention over an `S0-pose` carrier. Scene-carrier upgrades from @tab:thesis-scene-representation-design-space are orthogonal to the interaction ladder below.]
+
+The canonical A1 query contains only candidate-local information: local pose, candidate--target relation, and candidate-local support reads. Target, scene, ordered history, current step, requested residual horizon, and budget are supplied once as shared state tokens. Candidate provenance and generator-family identity are audit-only by default; using them as learned features requires a named ablation because they may encode generator shortcuts.
 
 #figure(
   text(size: 8.2pt, table(
     columns: (0.45fr, 1.02fr, 1.63fr),
     toprule(),
-    table.header([*Level*], [*Model*], [*Scientific role*]),
+    table.header([*Level*], [*Interaction model*], [*Scientific role*]),
     midrule(),
-    [A0], [Independent masked MLP], [Locks reader, target/candidate descriptors, masks, and one-step or finite-horizon label learnability.],
-    [A1], [Candidate-to-state cross-attention], [Canonical planned model: each candidate independently queries shared target, scene, history, budget, step, and horizon tokens.],
-    [A2], [DeepSets context], [Tests whether unordered summaries of valid candidates add information without pairwise attention.],
-    [A3], [Masked Set Transformer], [Tests candidate-candidate interaction while preserving row equivariance and mask isolation.],
+    [A0], [Independent masked MLP], [Locks target/candidate descriptors, masks, and label learnability for a fixed scene carrier.],
+    [A1], [Candidate-to-state cross-attention], [Each candidate independently queries shared target, scene, history, budget, step, and requested-horizon tokens.],
+    [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
+    [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
     [A4], [Query-local relation bias], [Tests QCNet-style target, history, and candidate relations without importing its forecasting decoder.],
-    [A5], [Directional/support memory], [Tests target-local view novelty, target-frustum support, overlap, and uncertainty as features.],
-    [A6], [Uncentred residual $Q_H$], [Tests finite-horizon recovery over a calibrated myopic control in continuous return units.],
-    [A7+], [Point, sparse, recurrent, or exact-equivariant encoder], [Escalates only if compact scene descriptors demonstrably bottleneck ranking or recovery.],
+    [A5], [Temporal/recurrent state read], [Tests whether ordered long-horizon history remains informative after explicit dynamic scene memory.],
+    [A6], [Residual value head], [Tests finite-horizon recovery over a calibrated continuous one-step root-gain control.],
+    [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
     bottomrule(),
   )),
-  caption: [Architecture ladder for attributable geometric-learning claims.],
+  caption: [Interaction-architecture ladder. Scene carrier, target/source protocol, and learning target are frozen independently for each comparison.],
 ) <tab:geometric-learning-ladder>
 
-Candidate-to-candidate attention is therefore not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to support encoders or candidate graphs after local-frame scalar controls. This order favors reusable scene and target encodings: target-independent scene tokens are computed once, target tokens once per target, and candidate queries independently per candidate before optional set interaction.
+Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings: static scene tokens are computed once per root, target tokens once per target, and candidate queries independently per candidate before optional set interaction.
