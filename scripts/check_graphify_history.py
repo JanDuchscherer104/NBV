@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from typing import Any
 
 from graphify_contract import (
     ContractError,
@@ -65,7 +66,7 @@ def _commit_changes(
     while index < len(fields) and fields[index]:
         status = fields[index].decode("ascii")
         index += 1
-        old_path = fields[index].decode("utf-8", errors="surrogateescape")
+        old_path: str | None = fields[index].decode("utf-8", errors="surrogateescape")
         index += 1
         if status.startswith(("R", "C")):
             new_path = fields[index].decode("utf-8", errors="surrogateescape")
@@ -79,7 +80,7 @@ def _commit_changes(
     return changes
 
 
-def _manifest_at(root: Path, commit: str) -> dict:
+def _manifest_at(root: Path, commit: str) -> dict[str, Any]:
     try:
         raw = subprocess.check_output(
             ["git", "show", f"{commit}:graphify-out/manifest.json"], cwd=root
@@ -92,7 +93,7 @@ def _manifest_at(root: Path, commit: str) -> dict:
     return value
 
 
-def _config_at(root: Path, commit: str) -> dict:
+def _config_at(root: Path, commit: str) -> dict[str, Any]:
     try:
         raw = subprocess.check_output(
             ["git", "show", f"{commit}:.graphify.toml"],

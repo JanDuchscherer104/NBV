@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from typing import Any
 
 from graphify_contract import (
     ContractError,
@@ -66,7 +67,7 @@ def _graphify_version() -> str:
     return match.group(1)
 
 
-def _validate_pin(config: dict) -> None:
+def _validate_pin(config: dict[str, Any]) -> None:
     version_file = (
         (ROOT / ".codex/skills/graphify/.graphify_version")
         .read_text(encoding="utf-8")
@@ -79,7 +80,7 @@ def _validate_pin(config: dict) -> None:
         raise ContractError(f"Graphify {version_file} is required; found {found}")
 
 
-def _validate_tracked_outputs(config: dict) -> None:
+def _validate_tracked_outputs(config: dict[str, Any]) -> None:
     expected = set(config["canonical_artifacts"])
     if expected != CANONICAL:
         raise ContractError("canonical Graphify artifact allowlist drifted")
@@ -111,7 +112,7 @@ def _tracked_paths() -> set[str]:
     )
 
 
-def _closed_inventory_paths(tracked: set[str], config: dict) -> set[str]:
+def _closed_inventory_paths(tracked: set[str], config: dict[str, Any]) -> set[str]:
     inventory = ROOT / ".agents/baselines/scaffold_wp0_inventory.csv"
     with inventory.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -188,9 +189,9 @@ def _validate_ci_triggers() -> None:
             )
 
 
-def _validate_corpus(config: dict) -> None:
+def _validate_corpus(config: dict[str, Any]) -> None:
     sources = collect_sources(ROOT, config)
-    partitions = {name: [] for name in PARTITION_ORDER}
+    partitions: dict[str, list[dict[str, Any]]] = {name: [] for name in PARTITION_ORDER}
     for source in sources:
         partitions[source["partition"]].append(source)
     missing = [name for name, values in partitions.items() if not values]

@@ -113,7 +113,10 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
 
 def _load_active() -> dict[str, list[dict[str, Any]]]:
-    return {kind: list(_load_toml(path).get(kind, [])) for kind, path in ACTIVE_FILES.items()}
+    return {
+        kind: list(_load_toml(path).get(kind, []))
+        for kind, path in ACTIVE_FILES.items()
+    }
 
 
 def _load_resolved() -> dict[str, list[dict[str, Any]]]:
@@ -142,7 +145,15 @@ def _format_value(value: Any) -> str:
 def _field_order(kind: str, record: dict[str, Any]) -> list[str]:
     common = ["id", "title", "description"]
     if kind == "issue":
-        ordered = [*common, "type", "priority", "status", "labels", "context", "references"]
+        ordered = [
+            *common,
+            "type",
+            "priority",
+            "status",
+            "labels",
+            "context",
+            "references",
+        ]
     else:
         ordered = [
             *common,
@@ -239,7 +250,9 @@ def _validate_record(
 
     for field in LIST_FIELDS & record.keys():
         value = record[field]
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
             errors.append(f"{record_id}: `{field}` must be a string list")
             continue
         if field in NON_EMPTY_LIST_FIELDS and not value:
@@ -276,8 +289,12 @@ def validate(*, quiet: bool = False) -> int:
     for kind in ("issue", "todo", "refactor"):
         for record in active[kind]:
             errors.extend(_validate_record(kind, record, active_issue_ids, seen_ids))
-    active_ids = {str(record.get("id")) for records in active.values() for record in records}
-    resolved_ids = {str(record.get("id")) for records in resolved.values() for record in records}
+    active_ids = {
+        str(record.get("id")) for records in active.values() for record in records
+    }
+    resolved_ids = {
+        str(record.get("id")) for records in resolved.values() for record in records
+    }
     for record_id in sorted(active_ids & resolved_ids):
         errors.append(f"{record_id}: active id reuses a resolved record id")
 
@@ -311,7 +328,9 @@ def list_ranked() -> int:
             loc = ""
             if kind != "issue":
                 loc = f" loc≈{record['loc_expected']}"
-            print(f"- {record['id']} [{record['priority']}/{record['status']}]{loc}: {record['title']}")
+            print(
+                f"- {record['id']} [{record['priority']}/{record['status']}]{loc}: {record['title']}"
+            )
             print(f"  {record['description']}")
     return 0
 
@@ -366,8 +385,16 @@ def search(query: str, *, scope: str = "all") -> int:
                     return True
         return False
 
-    active = _load_active() if scope in {"all", "active"} else {"issue": [], "todo": [], "refactor": []}
-    resolved = _load_resolved() if scope in {"all", "resolved"} else {"issue": [], "todo": [], "refactor": []}
+    active = (
+        _load_active()
+        if scope in {"all", "active"}
+        else {"issue": [], "todo": [], "refactor": []}
+    )
+    resolved = (
+        _load_resolved()
+        if scope in {"all", "resolved"}
+        else {"issue": [], "todo": [], "refactor": []}
+    )
 
     hits = 0
     for label, store in (("Active", active), ("Resolved", resolved)):
@@ -380,9 +407,13 @@ def search(query: str, *, scope: str = "all") -> int:
                 hits += 1
                 priority = record.get("priority", "?")
                 status = record.get("status", "?")
-                print(f"- {record['id']} [{priority}/{status}]: {record.get('title', '')}")
+                print(
+                    f"- {record['id']} [{priority}/{status}]: {record.get('title', '')}"
+                )
                 if label == "Resolved" and record.get("resolution_note"):
-                    print(f"  resolved {record.get('resolved_at', '?')}: {record['resolution_note']}")
+                    print(
+                        f"  resolved {record.get('resolved_at', '?')}: {record['resolution_note']}"
+                    )
     if hits == 0:
         print(f"agents-db search: no matches for {query!r}")
     return 0
@@ -406,7 +437,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Restrict search to active, resolved, or both (default: all).",
     )
 
-    resolve_parser = subparsers.add_parser("resolve", help="Move a record to resolved.toml.")
+    resolve_parser = subparsers.add_parser(
+        "resolve", help="Move a record to resolved.toml."
+    )
     resolve_parser.add_argument("kind", choices=sorted(ACTIVE_FILES))
     resolve_parser.add_argument("record_id")
     resolve_parser.add_argument("--note", required=True)

@@ -14,7 +14,7 @@ import re
 import subprocess
 import tempfile
 import tomllib
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -386,6 +386,11 @@ def _preserved_semantic_edges(
             continue
         if edge.get("source") not in nodes or edge.get("target") not in nodes:
             continue
+        if edge.get("endpoint_provenance") != {
+            "source": _endpoint_provenance(nodes[edge["source"]]),
+            "target": _endpoint_provenance(nodes[edge["target"]]),
+        }:
+            continue
         locators = edge.get("source_locators")
         if not isinstance(locators, list) or not locators:
             continue
@@ -422,7 +427,9 @@ def _semantic_digest(edges: Iterable[dict[str, Any]], partition: str) -> str:
             )
         }
         records.append(record)
-    return _sha256_bytes(_stable_json(sorted(records, key=lambda item: item["id"])))
+    return _sha256_bytes(
+        _stable_json(sorted(records, key=lambda item: cast(str, item["id"])))
+    )
 
 
 def _partition_revision(
@@ -452,9 +459,17 @@ def build_canonical(
     root: Path = ROOT,
     graphify_command: list[str] | None = None,
     old_graph: dict[str, Any] | None = None,
+    semantic_incomplete: set[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     """Build canonical graph, manifest, and report without provider or time data."""
     config = load_config(root)
+    semantic_incomplete = semantic_incomplete or set()
+    invalid_incomplete = semantic_incomplete - set(PARTITION_ORDER)
+    if invalid_incomplete:
+        raise ContractError(
+            "unknown semantically incomplete partition(s): "
+            + ", ".join(sorted(invalid_incomplete))
+        )
     config_sha256 = config_digest(config, root)
     sources = collect_sources(root, config)
     if not sources:
@@ -565,7 +580,7 @@ def build_canonical(
             "source_manifest_sha256": manifest_sha256,
             "accepted_semantic_records_sha256": semantic_sha256,
             "semantic_mode": semantic_mode,
-            "semantic_complete": True,
+            "semantic_complete": name not in semantic_incomplete,
             "revision": _partition_revision(
                 manifest_digest=manifest_sha256,
                 config_sha256=config_sha256,
@@ -620,6 +635,11 @@ def build_canonical(
             "source_tree_sha256": source_tree_sha256,
         },
     }
+    validation_errors = validate_graph(graph, manifest)
+    if validation_errors:
+        raise ContractError(
+            "generated canonical graph is invalid: " + "; ".join(validation_errors)
+        )
     report_lines = [
         "# ARIA-NBV Graph Report",
         "",
@@ -682,6 +702,12 @@ def write_canonical(
 def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     """Return canonical schema and source-provenance violations."""
     errors: list[str] = []
+    graph_partitions = graph.get("partitions", {})
+    manifest_partitions = manifest.get("partitions", {})
+    graphify = graph.get("graphify")
+    manifest_graphify = manifest.get("graphify")
+    config_sha256 = graph.get("extraction_config_sha256")
+    schema_version = graph.get("schema_version")
     nodes = {
         node.get("id"): node
         for node in graph.get("nodes", [])
@@ -692,8 +718,59 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
         for source in manifest.get("sources", [])
         if isinstance(source, dict)
     }
-    if set(graph.get("partitions", {})) != set(PARTITION_ORDER):
+    if set(graph_partitions) != set(PARTITION_ORDER):
         errors.append("graph does not contain exactly four canonical partitions")
+    if graph_partitions != manifest_partitions:
+        errors.append("graph and manifest partition records differ")
+    if not isinstance(schema_version, str) or not schema_version:
+        errors.append("graph lacks schema version")
+    if schema_version != manifest.get("schema_version"):
+        errors.append("graph and manifest schema versions differ")
+    for partition in PARTITION_ORDER:
+        record = graph_partitions.get(partition, {})
+        if not isinstance(record, dict) or not record.get("revision"):
+            errors.append(f"partition lacks immutable revision: {partition}")
+            continue
+        manifest_digest = record.get("source_manifest_sha256")
+        semantic_mode = record.get("semantic_mode")
+        accepted_semantic_digest = record.get("accepted_semantic_records_sha256")
+        graphify_version = (
+            graphify.get("version") if isinstance(graphify, dict) else None
+        )
+        if not (
+            isinstance(manifest_digest, str)
+            and manifest_digest
+            and isinstance(config_sha256, str)
+            and config_sha256
+            and isinstance(schema_version, str)
+            and schema_version
+            and isinstance(semantic_mode, str)
+            and semantic_mode
+            and isinstance(accepted_semantic_digest, str)
+            and accepted_semantic_digest
+            and isinstance(graphify_version, str)
+            and graphify_version
+        ):
+            errors.append(f"partition lacks revision provenance: {partition}")
+            continue
+        expected_revision = _partition_revision(
+            manifest_digest=manifest_digest,
+            config_sha256=config_sha256,
+            schema_version=schema_version,
+            semantic_mode=semantic_mode,
+            accepted_semantic_digest=accepted_semantic_digest,
+            graphify_version=graphify_version,
+        )
+        if record.get("revision") != expected_revision:
+            errors.append(f"partition revision is not reproducible: {partition}")
+    if not isinstance(config_sha256, str) or not config_sha256:
+        errors.append("graph lacks extraction configuration digest")
+    if config_sha256 != manifest.get("extraction_config_sha256"):
+        errors.append("graph and manifest extraction configuration digests differ")
+    if not isinstance(graphify, dict) or not graphify.get("version"):
+        errors.append("graph lacks Graphify version provenance")
+    if graphify != manifest_graphify:
+        errors.append("graph and manifest Graphify provenance differs")
     if not nodes:
         errors.append("graph contains no canonical nodes")
     for source_path, source_digest in source_digests.items():
@@ -710,22 +787,63 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
     for node_id, node in nodes.items():
         if not node_id or node.get("partition") not in PARTITION_ORDER:
             errors.append(f"node has invalid partition or id: {node_id!r}")
-        partition = node.get("partition")
-        if node.get("partition_revision") != graph.get("partitions", {}).get(
-            partition, {}
+        node_partition = node.get("partition")
+        if node.get("partition_revision") != graph_partitions.get(
+            node_partition, {}
         ).get("revision"):
             errors.append(f"node has stale partition revision: {node_id}")
+    edge_ids: set[str] = set()
     for edge in graph.get("edges", []):
         if not isinstance(edge, dict):
             errors.append("edge is not an object")
             continue
+        edge_id = edge.get("id")
+        if not isinstance(edge_id, str) or not edge_id:
+            errors.append("edge lacks canonical id")
+        elif edge_id in edge_ids:
+            errors.append(f"duplicate edge id: {edge_id}")
+        else:
+            edge_ids.add(edge_id)
         if edge.get("origin") not in ORIGINS:
             errors.append(f"edge has invalid origin: {edge.get('id')}")
         confidence = edge.get("confidence_score")
         if not isinstance(confidence, (int, float)) or not math.isfinite(confidence):
             errors.append(f"edge has invalid confidence score: {edge.get('id')}")
-        if edge.get("source") not in nodes or edge.get("target") not in nodes:
+        source = nodes.get(edge.get("source"))
+        target = nodes.get(edge.get("target"))
+        if source is None or target is None:
             errors.append(f"edge has missing endpoint: {edge.get('id')}")
+            continue
+        expected_endpoint_provenance = {
+            "source": _endpoint_provenance(source),
+            "target": _endpoint_provenance(target),
+        }
+        if edge.get("endpoint_provenance") != expected_endpoint_provenance:
+            errors.append(f"edge endpoint provenance differs: {edge.get('id')}")
+        source_partition = source["partition"]
+        target_partition = target["partition"]
+        source_revision = graph_partitions.get(source_partition, {}).get("revision")
+        target_revision = graph_partitions.get(target_partition, {}).get("revision")
+        if edge.get("partition") != source_partition:
+            errors.append(f"edge source partition differs: {edge.get('id')}")
+        if edge.get("partition_revision") != source_revision:
+            errors.append(f"edge has stale partition revision: {edge.get('id')}")
+        if edge.get("extraction_config_sha256") != config_sha256:
+            errors.append(f"edge extraction configuration differs: {edge.get('id')}")
+        graphify_version = (
+            graphify.get("version") if isinstance(graphify, dict) else None
+        )
+        if edge.get("graphify_version") != graphify_version:
+            errors.append(f"edge Graphify version differs: {edge.get('id')}")
+        expected_bridge_revisions = {
+            source_partition: source_revision,
+            target_partition: target_revision,
+        }
+        if source_partition != target_partition:
+            if edge.get("bridge_partition_revisions") != expected_bridge_revisions:
+                errors.append(f"bridge endpoint revisions differ: {edge.get('id')}")
+        elif "bridge_partition_revisions" in edge:
+            errors.append(f"non-bridge edge has bridge revisions: {edge.get('id')}")
         locators = edge.get("source_locators")
         if not isinstance(locators, list) or not locators:
             errors.append(f"edge lacks exact source locators: {edge.get('id')}")

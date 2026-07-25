@@ -45,6 +45,8 @@ FORBIDDEN = re.compile(
     r"ARIA code-review skill|diagnose-aria|"
     r"entity-aware-rri|nbv-geometry-contracts|counterfactual-rollout-planner|"
     r"make\s+kg-|scripts/kg/|\.agents/kg|"
+    r"\bKG\s+(?:command|route|search|claim[- ]check)\b|"
+    r"(?:implementation|coding),\s*docs,\s*KG\b|"
     r"context-heavy|context-(?:index|package|modules|classes|functions|match|literature-index|uml|docstrings|tree)|"
     r"make\s+context(?:\s|$)|context_map\.md|docs/_generated/context/(?:source_index|literature_index|data_contracts|context_snapshot)",
     re.IGNORECASE,
@@ -58,6 +60,12 @@ ALLOW_PATHS = {
 HISTORICAL_LEDGER_LITERAL = re.compile(
     r'^\s*"(?:decisions-litkg|gotchas-litkg|project-litkg-infrastructure)",?\s*$'
 )
+ROUTE_FIXTURES = {
+    "focused pytest, CLI smoke, KG command, render": True,
+    "implementation, docs, KG, or diagnostic workflow": True,
+    "focused pytest, CLI smoke, Graphify query, exact-source inspection, render": False,
+    "implementation, docs, exact-source, or diagnostic workflow": False,
+}
 
 
 def tracked_files() -> list[Path]:
@@ -72,8 +80,12 @@ def tracked_files() -> list[Path]:
 
 
 def main() -> int:
-    for path in ABSENT_PATHS:
-        assert not (ROOT / path).exists(), f"retired path remains: {path}"
+    for text, expected_forbidden in ROUTE_FIXTURES.items():
+        assert bool(FORBIDDEN.search(text)) is expected_forbidden, (
+            f"retired-route fixture mismatch: {text}"
+        )
+    for absent_path in ABSENT_PATHS:
+        assert not (ROOT / absent_path).exists(), f"retired path remains: {absent_path}"
     assert "litkg-rs" not in (ROOT / ".gitmodules").read_text(encoding="utf-8").lower()
     findings: list[str] = []
     for path in tracked_files():

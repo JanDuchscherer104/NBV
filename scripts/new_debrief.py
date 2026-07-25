@@ -76,7 +76,10 @@ def main() -> int:
 
     file_path, body = render(date.today(), args.title)
     if file_path.exists() and not args.force:
-        print(f"debrief already exists: {file_path.relative_to(REPO_ROOT)}", file=sys.stderr)
+        print(
+            f"debrief already exists: {file_path.relative_to(REPO_ROOT)}",
+            file=sys.stderr,
+        )
         print("re-run with --force to overwrite", file=sys.stderr)
         return 1
     file_path.write_text(body, encoding="utf-8")

@@ -18,7 +18,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
-ALIGNMENT_CONTRACT = REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
+ALIGNMENT_CONTRACT = (
+    REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
+)
 ALIGNMENT_LINK_TARGETS = (
     (
         REPO_ROOT / "AGENTS.md",
@@ -61,7 +63,9 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/hooks.json",
 }
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
-STATE_SALVAGE_LEDGER = REPO_ROOT / ".agents" / "baselines" / "scaffold_wp4_state_salvage.csv"
+STATE_SALVAGE_LEDGER = (
+    REPO_ROOT / ".agents" / "baselines" / "scaffold_wp4_state_salvage.csv"
+)
 RETIRED_STATE_JOURNALS = (
     ".agents/memory/state/DECISIONS.md",
     ".agents/memory/state/GOTCHAS.md",
@@ -194,7 +198,9 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         if list_match and current_key is not None:
             current_value = data.get(current_key)
             if not isinstance(current_value, list):
-                raise ValueError(f"`{current_key}` must be a list when using list items")
+                raise ValueError(
+                    f"`{current_key}` must be a list when using list items"
+                )
             current_value.append(list_match.group(1).strip().strip("\"'"))
             continue
 
@@ -211,7 +217,15 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
 
 def check_codex_notes() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", ".codex"],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ".codex",
+        ],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -231,9 +245,9 @@ def check_codex_notes() -> list[str]:
     if not notes:
         return []
 
-    errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
-        f"  - {note}" for note in notes
-    ]
+    errors = [
+        "legacy `.codex/*.md` notes are not allowed outside approved project skills:"
+    ] + [f"  - {note}" for note in notes]
     return errors
 
 
@@ -257,7 +271,9 @@ def check_registered_omx_records() -> list[str]:
 def check_history_records() -> list[str]:
     errors: list[str] = []
     if not HISTORY_ROOT.exists():
-        return [f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"]
+        return [
+            f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"
+        ]
 
     for path in sorted(HISTORY_ROOT.rglob("*.md")):
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -273,7 +289,9 @@ def check_history_records() -> list[str]:
 
         missing_keys = sorted(REQUIRED_NATIVE_KEYS - frontmatter.keys())
         if missing_keys:
-            errors.append(f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}")
+            errors.append(
+                f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}"
+            )
             continue
 
         canonical_updates = frontmatter.get("canonical_updates_needed")
@@ -293,7 +311,9 @@ def check_history_records() -> list[str]:
                 continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists():
-                errors.append(f"{rel}: canonical update path does not exist: {update_text}")
+                errors.append(
+                    f"{rel}: canonical update path does not exist: {update_text}"
+                )
 
     return errors
 
@@ -319,7 +339,9 @@ def check_state_journal_retirement() -> list[str]:
     if missing:
         errors.append(f"WP4 state salvage ledger is missing rows: {', '.join(missing)}")
     if extra:
-        errors.append(f"WP4 state salvage ledger has unexpected rows: {', '.join(extra)}")
+        errors.append(
+            f"WP4 state salvage ledger has unexpected rows: {', '.join(extra)}"
+        )
 
     allowed_statuses = {
         "already_owned",
@@ -343,7 +365,9 @@ def check_state_journal_retirement() -> list[str]:
         row_id = str(row.get("id") or "<missing-id>").strip()
         status = str(row.get("status") or "").strip()
         if status not in allowed_statuses:
-            errors.append(f"{row_id}: unresolved or invalid salvage status: {status or '<empty>'}")
+            errors.append(
+                f"{row_id}: unresolved or invalid salvage status: {status or '<empty>'}"
+            )
         for field in required_fields:
             if not str(row.get(field) or "").strip():
                 errors.append(f"{row_id}: empty salvage field: {field}")
@@ -359,7 +383,9 @@ def check_state_journal_retirement() -> list[str]:
         errors.append("git ls-files failed while scanning retired journal references")
         return errors
 
-    for relative_path in sorted({line.strip() for line in result.stdout.splitlines() if line.strip()}):
+    for relative_path in sorted(
+        {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    ):
         if relative_path in STATE_REFERENCE_EXCLUDED_PATHS or relative_path.startswith(
             STATE_REFERENCE_EXCLUDED_PREFIXES
         ):
@@ -383,7 +409,9 @@ def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
 
     if not ALIGNMENT_CONTRACT.exists():
-        errors.append(f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}")
+        errors.append(
+            f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}"
+        )
 
     for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -401,7 +429,9 @@ def check_scaffold_alignment() -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         if expected_snippet not in text:
-            errors.append(f"{rel}: missing scaffold ownership snippet: {expected_snippet}")
+            errors.append(
+                f"{rel}: missing scaffold ownership snippet: {expected_snippet}"
+            )
 
     result = subprocess.run(
         ["git", "ls-files"],
@@ -413,10 +443,14 @@ def check_scaffold_alignment() -> list[str]:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         suffix = f": {stderr}" if stderr else ""
-        errors.append(f"git ls-files failed while checking tracked runtime state{suffix}")
+        errors.append(
+            f"git ls-files failed while checking tracked runtime state{suffix}"
+        )
         return errors
 
-    tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    tracked_paths = [
+        line.strip() for line in result.stdout.splitlines() if line.strip()
+    ]
     for tracked_path in tracked_paths:
         if is_forbidden_tracked_runtime_path(tracked_path):
             errors.append(f"runtime state must not be tracked: {tracked_path}")

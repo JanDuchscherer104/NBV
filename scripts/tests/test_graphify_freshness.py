@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from typing import Any, Callable
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -21,7 +22,7 @@ import graphify_query as query  # noqa: E402
 import graphify_refresh as refresh  # noqa: E402
 
 
-def _write_fixture(root: Path) -> tuple[dict, dict]:
+def _write_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     shutil.copy(contract.ROOT / ".graphify.toml", root / ".graphify.toml")
     shutil.copy(contract.ROOT / ".graphifyignore", root / ".graphifyignore")
     files = {
@@ -41,13 +42,31 @@ def _write_fixture(root: Path) -> tuple[dict, dict]:
     subprocess.run(["git", "add", "."], cwd=root, check=True)
     config = contract.load_config(root)
     sources = contract.collect_sources(root, config)
+    config_sha256 = contract.config_digest(config, root)
+    graphify = {
+        "package": config["graphify_package"],
+        "version": config["graphify_version"],
+        "upstream_commit": config["graphify_upstream_commit"],
+    }
     partitions = {}
     for name in contract.PARTITION_ORDER:
         selected = [source for source in sources if source["partition"] == name]
+        source_digest = contract.source_manifest_digest(selected)
+        semantic_digest = contract._semantic_digest([], name)
+        semantic_mode = config["partition"][name]["semantic_mode"]
         partitions[name] = {
-            "source_manifest_sha256": contract.source_manifest_digest(selected),
+            "source_manifest_sha256": source_digest,
+            "accepted_semantic_records_sha256": semantic_digest,
+            "semantic_mode": semantic_mode,
             "semantic_complete": True,
-            "revision": f"revision-{name}",
+            "revision": contract._partition_revision(
+                manifest_digest=source_digest,
+                config_sha256=config_sha256,
+                schema_version=config["schema_version"],
+                semantic_mode=semantic_mode,
+                accepted_semantic_digest=semantic_digest,
+                graphify_version=config["graphify_version"],
+            ),
         }
     scaffold = next(source for source in sources if source["path"] == "AGENTS.md")
     nodes = [
@@ -58,33 +77,49 @@ def _write_fixture(root: Path) -> tuple[dict, dict]:
             "source_digest": source["sha256"],
             "partition": source["partition"],
             "role": source["role"],
-            "partition_revision": f"revision-{source['partition']}",
+            "partition_revision": partitions[source["partition"]]["revision"],
         }
         for source in sources
     ]
+    nodes_by_id = {node["id"]: node for node in nodes}
+    source_id = contract._file_node_id("AGENTS.md")
+    target_id = contract._file_node_id("docs/page.qmd")
     edge = {
         "id": "bridge",
-        "source": contract._file_node_id("AGENTS.md"),
-        "target": contract._file_node_id("docs/page.qmd"),
+        "source": source_id,
+        "target": target_id,
         "origin": "INFERRED",
         "confidence_score": 0.9,
         "source_locators": [
             {"path": "AGENTS.md", "locator": "L1", "sha256": scaffold["sha256"]}
         ],
         "bridge_partition_revisions": {
-            "scaffold": "revision-scaffold",
-            "thesis": "revision-thesis",
+            "scaffold": partitions["scaffold"]["revision"],
+            "thesis": partitions["thesis"]["revision"],
         },
+        "endpoint_provenance": {
+            "source": contract._endpoint_provenance(nodes_by_id[source_id]),
+            "target": contract._endpoint_provenance(nodes_by_id[target_id]),
+        },
+        "partition": "scaffold",
+        "partition_revision": partitions["scaffold"]["revision"],
+        "extraction_config_sha256": config_sha256,
+        "graphify_version": config["graphify_version"],
     }
     tree = contract.corpus_tree_digest(sources)
     graph = {
+        "schema_version": config["schema_version"],
         "corpus_tree_sha256": tree,
+        "extraction_config_sha256": config_sha256,
+        "graphify": graphify,
         "partitions": partitions,
         "nodes": nodes,
         "edges": [edge],
     }
     manifest = {
-        "extraction_config_sha256": contract.config_digest(config, root),
+        "schema_version": config["schema_version"],
+        "extraction_config_sha256": config_sha256,
+        "graphify": graphify,
         "corpus_tree_sha256": tree,
         "partitions": partitions,
         "sources": sources,
@@ -103,6 +138,125 @@ def main() -> None:
         state = freshness.partition_freshness(root)
         assert state.fresh == frozenset(contract.PARTITION_ORDER)
         assert not state.bridge_errors
+
+        original_upstream_extract = contract._upstream_extract
+        try:
+
+            def fake_upstream_extract(
+                root: Path,
+                graphify_command: list[str],
+                temporary_root: Path,
+            ) -> dict[str, Any]:
+                return {"nodes": [], "edges": []}
+
+            contract._upstream_extract = fake_upstream_extract
+            rebuilt, rebuilt_manifest, _ = contract.build_canonical(
+                root=root,
+                semantic_incomplete={"literature"},
+            )
+            assert not rebuilt["partitions"]["literature"]["semantic_complete"]
+            assert rebuilt["partitions"]["code"]["semantic_complete"]
+            assert not contract.validate_graph(rebuilt, rebuilt_manifest)
+        finally:
+            contract._upstream_extract = original_upstream_extract
+
+        malformed_edges: dict[str, Callable[[dict[str, Any]], object]] = {
+            "missing endpoint": lambda edge: edge.pop("source"),
+            "endpoint provenance": lambda edge: edge["endpoint_provenance"][
+                "target"
+            ].__setitem__("source_digest", "0" * 64),
+            "partition revision": lambda edge: edge.__setitem__(
+                "partition_revision", "wrong"
+            ),
+            "extraction configuration": lambda edge: edge.__setitem__(
+                "extraction_config_sha256", "wrong"
+            ),
+            "Graphify version": lambda edge: edge.__setitem__(
+                "graphify_version", "0.9.9"
+            ),
+            "bridge endpoint revisions": lambda edge: edge[
+                "bridge_partition_revisions"
+            ].pop("thesis"),
+        }
+        for expected_error, mutate in malformed_edges.items():
+            malformed = copy.deepcopy(graph)
+            mutate(malformed["edges"][0])
+            assert any(
+                expected_error in error
+                for error in contract.validate_graph(malformed, manifest)
+            )
+            (root / "graphify-out/graph.json").write_text(
+                json.dumps(malformed), encoding="utf-8"
+            )
+            state = freshness.partition_freshness(root)
+            assert set(state.stale) == set(contract.PARTITION_ORDER)
+            allowed, route = query.path_between("AGENTS.md", "page.qmd", root)
+            assert not allowed
+            assert not any("(scaffold)" in item or "(thesis)" in item for item in route)
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(graph), encoding="utf-8"
+        )
+
+        wrong_version_graph = copy.deepcopy(graph)
+        wrong_version_manifest = copy.deepcopy(manifest)
+        wrong_version_graph["graphify"]["version"] = "0.9.9"
+        wrong_version_manifest["graphify"]["version"] = "0.9.9"
+        wrong_version_graph["edges"][0]["graphify_version"] = "0.9.9"
+        wrong_revisions = {}
+        for name, record in wrong_version_graph["partitions"].items():
+            revision = contract._partition_revision(
+                manifest_digest=record["source_manifest_sha256"],
+                config_sha256=graph["extraction_config_sha256"],
+                schema_version=graph["schema_version"],
+                semantic_mode=record["semantic_mode"],
+                accepted_semantic_digest=record["accepted_semantic_records_sha256"],
+                graphify_version="0.9.9",
+            )
+            record["revision"] = revision
+            wrong_version_manifest["partitions"][name]["revision"] = revision
+            wrong_revisions[name] = revision
+        for node in wrong_version_graph["nodes"]:
+            node["partition_revision"] = wrong_revisions[node["partition"]]
+        wrong_version_graph["edges"][0]["partition_revision"] = wrong_revisions[
+            "scaffold"
+        ]
+        wrong_version_graph["edges"][0]["bridge_partition_revisions"] = {
+            "scaffold": wrong_revisions["scaffold"],
+            "thesis": wrong_revisions["thesis"],
+        }
+        assert not contract.validate_graph(wrong_version_graph, wrong_version_manifest)
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(wrong_version_graph), encoding="utf-8"
+        )
+        (root / "graphify-out/manifest.json").write_text(
+            json.dumps(wrong_version_manifest), encoding="utf-8"
+        )
+        state = freshness.partition_freshness(root)
+        assert set(state.stale) == set(contract.PARTITION_ORDER)
+        assert all(
+            "Graphify version changed" in reasons for reasons in state.stale.values()
+        )
+        (root / "graphify-out/graph.json").write_text(
+            json.dumps(graph), encoding="utf-8"
+        )
+        (root / "graphify-out/manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+
+        wrong_revision_graph = copy.deepcopy(graph)
+        wrong_revision_manifest = copy.deepcopy(manifest)
+        wrong_revision = "f" * 64
+        wrong_revision_graph["partitions"]["scaffold"]["revision"] = wrong_revision
+        wrong_revision_manifest["partitions"]["scaffold"]["revision"] = wrong_revision
+        for node in wrong_revision_graph["nodes"]:
+            if node["partition"] == "scaffold":
+                node["partition_revision"] = wrong_revision
+        wrong_revision_graph["edges"][0]["partition_revision"] = wrong_revision
+        wrong_revision_graph["edges"][0]["bridge_partition_revisions"]["scaffold"] = (
+            wrong_revision
+        )
+        errors = contract.validate_graph(wrong_revision_graph, wrong_revision_manifest)
+        assert "partition revision is not reproducible: scaffold" in errors
 
         empty_graph = dict(graph)
         empty_graph["nodes"] = []
@@ -219,8 +373,12 @@ def main() -> None:
             json.dumps(graph), encoding="utf-8"
         )
         state = freshness.partition_freshness(root)
-        assert state.fresh == frozenset(contract.PARTITION_ORDER)
-        assert state.bridge_errors == ("bridge: endpoint revision mismatch",)
+        assert set(state.stale) == set(contract.PARTITION_ORDER)
+        assert any(
+            "bridge endpoint revisions differ" in reason
+            for reasons in state.stale.values()
+            for reason in reasons
+        )
 
         (root / "graphify-out/graph.json").unlink()
         allowed, fallback, excluded = query.search("Package source guide", root)
@@ -248,6 +406,51 @@ def main() -> None:
             [Path("docs/literature/tex-src/arXiv-unselected/main.tex")], root
         )
 
+        calls: list[tuple[bool, str, set[str]]] = []
+        original_changed_paths = refresh._changed_paths
+        original_pending_partitions = refresh._pending_partitions
+        original_write_pending = refresh._write_pending
+        original_pending = refresh._pending
+        original_run = refresh.run
+        original_argv = sys.argv
+        try:
+            pending_partitions = {"code", "literature"}
+
+            def fake_pending_partitions(
+                changed: list[Path], root: Path = contract.ROOT
+            ) -> set[str]:
+                return pending_partitions
+
+            def fake_run(
+                *,
+                check: bool,
+                mode: str,
+                semantic_incomplete: set[str] | None = None,
+            ) -> list[str]:
+                calls.append((check, mode, semantic_incomplete or set()))
+                return []
+
+            refresh._changed_paths = lambda: [Path("code.py"), Path("paper.tex")]
+            refresh._pending_partitions = fake_pending_partitions
+            refresh._write_pending = lambda partitions: None
+            refresh._pending = lambda: {"literature"}
+            refresh.run = fake_run
+            sys.argv = ["graphify_refresh.py", "--mode", "structural"]
+            assert refresh.main() == 0
+            assert calls == [(False, "structural", {"literature"})]
+
+            calls.clear()
+            pending_partitions = {"literature"}
+            assert refresh.main() == 0
+            assert not calls
+        finally:
+            refresh._changed_paths = original_changed_paths
+            refresh._pending_partitions = original_pending_partitions
+            refresh._write_pending = original_write_pending
+            refresh._pending = original_pending
+            refresh.run = original_run
+            sys.argv = original_argv
+
         stale_global = root / "bin/graphify"
         stale_global.parent.mkdir()
         stale_global.write_text(
@@ -256,16 +459,28 @@ def main() -> None:
         stale_global.chmod(0o755)
         old_path = os.environ.get("PATH", "")
         old_override = os.environ.pop("GRAPHIFY_BIN", None)
+        original_version = refresh._graphify_version
         try:
             os.environ["PATH"] = f"{stale_global.parent}:{old_path}"
+            refresh._graphify_version = lambda command: "graphify 0.9.22"
             assert refresh.graphify_command() == [
                 sys.executable,
                 "-m",
                 "graphify",
             ]
+            refresh._graphify_version = lambda command: "graphify 0.9.9"
+            assert refresh.graphify_command() == [str(stale_global)]
+            refresh._graphify_version = lambda command: "graphify 0.9.220"
+            try:
+                refresh.ensure_graphify_pin([str(stale_global)])
+            except contract.ContractError:
+                pass
+            else:
+                raise AssertionError("Graphify version matching must be exact")
             os.environ["GRAPHIFY_BIN"] = f"{stale_global} --explicit"
             assert refresh.graphify_command() == [str(stale_global), "--explicit"]
         finally:
+            refresh._graphify_version = original_version
             os.environ["PATH"] = old_path
             if old_override is None:
                 os.environ.pop("GRAPHIFY_BIN", None)

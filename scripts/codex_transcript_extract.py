@@ -340,7 +340,7 @@ def record_plan_answers(
         return
 
     for question_id, answer_payload in answers.items():
-        answer_list = []
+        answer_list: list[Any] = []
         if isinstance(answer_payload, dict):
             answer_list = answer_payload.get("answers") or []
         if not answer_list:

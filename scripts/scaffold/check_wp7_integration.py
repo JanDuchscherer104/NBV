@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from typing import cast
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -235,6 +236,18 @@ def measure() -> dict[str, object]:
 def validate(metrics: dict[str, object]) -> list[str]:
     """Return violations of the approved WP7 quantitative contract."""
     errors: list[str] = []
+    baseline_paths = cast(list[str], metrics["baseline_scaffold_source_paths"])
+    active_paths = cast(list[str], metrics["active_scaffold_source_paths"])
+    baseline_excluded_paths = cast(
+        list[str], metrics["baseline_scaffold_excluded_paths"]
+    )
+    active_excluded_paths = cast(list[str], metrics["active_scaffold_excluded_paths"])
+    baseline_loc = cast(int, metrics["baseline_scaffold_source_loc"])
+    active_loc = cast(int, metrics["active_scaffold_source_loc"])
+    model_visible_bytes = cast(int, metrics["model_visible_description_bytes"])
+    maximum_description_bytes = cast(int, metrics["maximum_description_bytes"])
+    canonical_graph_bytes = cast(int, metrics["canonical_graph_bytes"])
+    maximum_canonical_graph_bytes = cast(int, metrics["maximum_canonical_graph_bytes"])
     if metrics["baseline_commit"] != BASELINE_COMMIT:
         errors.append(f"WP0 baseline commit must be exactly {BASELINE_COMMIT}")
     if metrics["baseline_skill_count"] != 21:
@@ -250,30 +263,28 @@ def validate(metrics: dict[str, object]) -> list[str]:
     if (
         metrics["measured_baseline_scaffold_source_loc"]
         != metrics["baseline_scaffold_source_loc"]
-        or len(metrics["baseline_scaffold_source_paths"])
-        != metrics["declared_baseline_scaffold_source_files"]
+        or len(baseline_paths) != metrics["declared_baseline_scaffold_source_files"]
         or metrics["baseline_scaffold_source_paths_sha256"]
         != metrics["declared_baseline_scaffold_source_paths_sha256"]
     ):
         errors.append("frozen baseline scaffold path set or LOC does not reproduce")
-    if metrics["active_scaffold_source_loc"] >= metrics["baseline_scaffold_source_loc"]:
+    if active_loc >= baseline_loc:
         errors.append(
             "active scaffold source LOC is not strictly below the WP0 baseline"
         )
-    if not set(metrics["baseline_outline_scripts"]) <= set(
-        metrics["active_outline_scripts"]
+    if not set(cast(list[str], metrics["baseline_outline_scripts"])) <= set(
+        cast(list[str], metrics["active_outline_scripts"])
     ):
         errors.append("retained WP0 outline scripts are missing at HEAD")
     for label, paths in (
-        ("baseline included", metrics["baseline_scaffold_source_paths"]),
-        ("HEAD included", metrics["active_scaffold_source_paths"]),
+        ("baseline included", baseline_paths),
+        ("HEAD included", active_paths),
     ):
-        excluded_key = (
-            "baseline_scaffold_excluded_paths"
+        excluded_paths = (
+            baseline_excluded_paths
             if label.startswith("baseline")
-            else "active_scaffold_excluded_paths"
+            else active_excluded_paths
         )
-        excluded_paths = metrics[excluded_key]
         if (
             paths != sorted(set(paths))
             or excluded_paths != sorted(set(excluded_paths))
@@ -306,12 +317,9 @@ def validate(metrics: dict[str, object]) -> list[str]:
         != metrics["declared_integrated_description_bytes"]
     ):
         errors.append("integrated description arithmetic differs from the manifest")
-    if (
-        metrics["model_visible_description_bytes"]
-        > metrics["maximum_description_bytes"]
-    ):
+    if model_visible_bytes > maximum_description_bytes:
         errors.append("model-visible skill descriptions exceed the 40 percent budget")
-    if metrics["canonical_graph_bytes"] > metrics["maximum_canonical_graph_bytes"]:
+    if canonical_graph_bytes > maximum_canonical_graph_bytes:
         errors.append("canonical Graphify output exceeds 35 MB")
     if metrics["tracked_generated_codex_agents"]:
         errors.append("generated .codex/agents files must not be tracked")

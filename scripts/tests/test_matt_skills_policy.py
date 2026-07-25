@@ -13,6 +13,8 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from types import ModuleType
+from typing import Any, cast
 from unittest import mock
 
 
@@ -20,9 +22,11 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY_SCRIPT = ROOT / "scripts/scaffold/matt_skills_policy.py"
 BOOTSTRAP_SCRIPT = ROOT / "scripts/scaffold/bootstrap_matt_skills.py"
 FIXTURES = ROOT / "scripts/tests/fixtures/matt_policy"
+JsonDict = dict[str, Any]
+PromptInput = list[JsonDict]
 
 
-def _load(name: str, path: Path):
+def _load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -35,7 +39,7 @@ policy = _load("matt_skills_policy", POLICY_SCRIPT)
 bootstrap = _load("bootstrap_matt_skills", BOOTSTRAP_SCRIPT)
 
 
-def _checkout(manifest: dict, temporary: Path) -> Path:
+def _checkout(manifest: JsonDict, temporary: Path) -> Path:
     provided = os.environ.get("MATT_SKILLS_CHECKOUT")
     if provided:
         return Path(provided)
@@ -59,18 +63,21 @@ def _install_copy(checkout: Path, skills_root: Path) -> None:
 
 def _prompt_input(
     repo: Path, home: Path, codex_home: Path, project_config: Path
-) -> list[dict]:
-    return policy.run_clean_home_prompt_input(
-        repo,
-        home,
-        codex_home,
-        project_config.read_text(encoding="utf-8"),
+) -> PromptInput:
+    return cast(
+        PromptInput,
+        policy.run_clean_home_prompt_input(
+            repo,
+            home,
+            codex_home,
+            project_config.read_text(encoding="utf-8"),
+        ),
     )
 
 
 def _prompt_fixture(
-    manifest: dict, skills_root: Path
-) -> tuple[list[dict], set[str], set[str]]:
+    manifest: JsonDict, skills_root: Path
+) -> tuple[PromptInput, set[str], set[str]]:
     aria_names = set(
         json.loads(policy.WP6_SKILLS_PATH.read_text(encoding="utf-8"))["active_skills"]
     )
@@ -91,7 +98,7 @@ def _prompt_fixture(
             "description"
         ]
         lines.append(f"- {name}: {description} (file: r1/{name}/SKILL.md)")
-    payload = [
+    payload: PromptInput = [
         {
             "role": "developer",
             "content": [{"type": "input_text", "text": "\n".join(lines)}],

@@ -37,6 +37,12 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Do not use `git restore` or `git reset --hard` unless explicitly requested.
 - Assume the worktree can be dirty; never revert unrelated user or agent
   changes.
+- Treat `omx uninstall --scope project --keep-config --purge` as destructive.
+  Execute it only when explicitly authorized and only through the pinned native
+  acceptance fixture in a disposable clone with isolated HOME/Codex/XDG/temp
+  state, a verified external seed, and a sentinel outside the enclosing
+  temporary parent. The fixture must prove complete `.omx` removal and restore
+  every registered payload at its exact pre-purge SHA-256.
 - Keep public docs aligned with current thesis direction, current code, and
   historical evidence only when cited.
 - Internal agent memory, generated context, and OMX runtime state are not public

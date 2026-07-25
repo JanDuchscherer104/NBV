@@ -58,8 +58,13 @@ pre-existing payload destination; the registry may remain after upstream purge
 only when it is byte-identical to the verified seed. Restore validates all paths
 and checksums before writing, stages only seed-declared paths, and journals the
 original index. The supported purge contract is explicit backup, verification,
-authorized upstream purge, and restore; it does not claim an upstream purge
-interlock.
+separately authorized execution of exactly
+`omx uninstall --scope project --keep-config --purge`, proof that the entire
+repository `.omx` tree is absent, and exact-hash restore. It does not claim an
+upstream purge interlock. The purge may run only in a disposable clone with
+HOME, Codex, XDG, and temporary state redirected beneath its enclosing
+temporary parent. A sentinel must live outside that parent and remain
+byte-identical throughout the purge and restore.
 
 The native-operation wrapper accepts only the reviewed `cleanup --dry-run`,
 `cleanup`, `ultragoal create-goals --force --brief ... --json`, and `cancel`
@@ -71,17 +76,24 @@ version or integrity drift requires a new isolation review.
 
 The executable native acceptance test clones the repository into a disposable
 repository, redirects home, Codex/XDG state, and temporary storage into the same
-disposable root, verifies the reviewed OMX installation once, then runs the
+disposable parent, verifies the reviewed OMX installation once, then runs the
 actual `cleanup --dry-run`, `cleanup`, `ultragoal create-goals`, and `cancel`
 commands through the protected wrapper. It asserts byte identity for the exact
 approved successor and archived bootstrap predecessor after every command. The
-same test exports a seed outside the disposable repository, purges only copied
-registered OMX payloads, restores them, and proves that an outside sentinel is
-unchanged. Run it explicitly with:
+same test exports and verifies a content-addressed seed, executes the exact
+project purge command above, proves the complete repository `.omx` tree was
+removed, restores only the verified seed membership, and checks every restored
+payload against its pre-purge SHA-256. Its sentinel is outside the enclosing
+temporary parent and must remain byte-identical. Run the pinned gate with:
 
 ```text
-ARIA_OMX_NATIVE_ACCEPTANCE=1 python3 scripts/tests/test_validate_omx_artifacts.py
+make omx-native-acceptance
 ```
+
+CI installs `oh-my-codex@0.20.3` and runs this target as a required root
+verification step. The validator independently compares the installed package
+and executable with the reviewed npm tarball and pinned integrity before any
+native lifecycle command runs.
 
 Focused fixtures inject faults after every promotion payload/registry phase,
 supersession archive/successor/registry phase, and seed-restore

@@ -44,8 +44,8 @@ metadata:
 # Aria NBV Context
 
 Use this skill as the local discovery layer. It should identify the smallest
-relevant set of files, then hand off to a narrower implementation, docs, KG, or
-diagnostic workflow.
+relevant set of files, then hand off to a narrower implementation, docs,
+exact-source, or diagnostic workflow.
 
 ## Workflow
 

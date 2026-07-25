@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -55,7 +56,8 @@ def _graphify_version(command: list[str]) -> str:
 
 
 def ensure_graphify_pin(command: list[str]) -> None:
-    if "0.9.22" not in _graphify_version(command):
+    version = _graphify_version(command)
+    if not re.search(r"(?<![0-9.])0\.9\.22(?![0-9.])", version):
         raise ContractError(
             "Graphify 0.9.22 is required; set GRAPHIFY_BIN to the pinned executable"
         )
@@ -93,6 +95,15 @@ def _write_pending(partitions: set[str]) -> None:
     PENDING.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _pending() -> set[str]:
+    try:
+        value = json.loads(PENDING.read_text(encoding="utf-8"))
+        partitions = set(value.get("partitions", []))
+    except (OSError, ValueError, AttributeError, TypeError):
+        return set()
+    return partitions & set(load_config()["partition"])
+
+
 def _compare_generated(generated: dict[str, bytes]) -> list[str]:
     differences: list[str] = []
     for name, expected in generated.items():
@@ -109,7 +120,9 @@ def _compare_generated(generated: dict[str, bytes]) -> list[str]:
     return differences
 
 
-def run(*, check: bool, mode: str) -> list[str]:
+def run(
+    *, check: bool, mode: str, semantic_incomplete: set[str] | None = None
+) -> list[str]:
     command = graphify_command()
     ensure_graphify_pin(command)
     old_graph = None
@@ -118,7 +131,9 @@ def run(*, check: bool, mode: str) -> list[str]:
     except ContractError:
         pass
     graph, manifest, report = build_canonical(
-        graphify_command=command, old_graph=old_graph
+        graphify_command=command,
+        old_graph=old_graph,
+        semantic_incomplete=semantic_incomplete if mode == "structural" else set(),
     )
     generated = canonical_bytes(graph, manifest, report)
     if check:
@@ -139,11 +154,14 @@ def main() -> int:
     semantic = touched - {"code"}
     if args.mode == "structural" and semantic:
         _write_pending(semantic)
-        return 0
     if args.mode == "structural" and touched and "code" not in touched:
         return 0
     try:
-        differences = run(check=args.check, mode=args.mode)
+        differences = run(
+            check=args.check,
+            mode=args.mode,
+            semantic_incomplete=_pending(),
+        )
     except ContractError as exc:
         print(str(exc), file=sys.stderr)
         return 1

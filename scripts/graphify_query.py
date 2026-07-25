@@ -8,6 +8,7 @@ from collections import deque
 from pathlib import Path
 import re
 import sys
+from typing import Any
 
 from check_graphify_freshness import partition_freshness
 from graphify_contract import (
@@ -82,7 +83,9 @@ def _fallback_for_terms(*terms: str, root: Path = ROOT) -> list[str]:
     return matches
 
 
-def _matching_nodes(graph: dict, query: str, fresh: set[str]) -> list[dict]:
+def _matching_nodes(
+    graph: dict[str, Any], query: str, fresh: set[str]
+) -> list[dict[str, Any]]:
     terms = _meaningful_terms(query)
     ranked = []
     role_rank = {"production": 0, "test": 1, "config": 2, "guide": 3}
@@ -154,7 +157,7 @@ def path_between(start: str, end: str, root: Path = ROOT) -> tuple[bool, list[st
             + ", ".join(sorted(required - state.fresh)),
             *_fallback_for_terms(start, end, root=root),
         ]
-    adjacency: dict[str, list[tuple[str, dict]]] = {}
+    adjacency: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for edge in graph.get("edges", []):
         if edge.get("bridge_partition_revisions") and any(
             error.startswith(str(edge.get("id"))) for error in state.bridge_errors

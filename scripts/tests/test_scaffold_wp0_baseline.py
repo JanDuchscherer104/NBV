@@ -7,6 +7,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from typing import cast
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "validate_scaffold_wp0_baseline.py"
@@ -71,12 +72,15 @@ def main() -> None:
     )
 
     def inventory_errors(candidate_rows: list[dict[str, str]]) -> list[str]:
-        return baseline_validator.validate_inventory(
-            candidate_rows,
-            baseline["source_state"]["commit"],
-            expected_skills,
-            tree,
-            active_paths,
+        return cast(
+            list[str],
+            baseline_validator.validate_inventory(
+                candidate_rows,
+                baseline["source_state"]["commit"],
+                expected_skills,
+                tree,
+                active_paths,
+            ),
         )
 
     open_rows = copy.deepcopy(rows)
@@ -89,13 +93,17 @@ def main() -> None:
     errors = inventory_errors(wrong_rollback)
     assert any("rollback commit differs" in error for error in errors)
 
-    omitted = [row for row in copy.deepcopy(rows) if row["id"] != "hook-gemini-settings"]
+    omitted = [
+        row for row in copy.deepcopy(rows) if row["id"] != "hook-gemini-settings"
+    ]
     errors = inventory_errors(omitted)
     assert any("hook inventory mismatch" in error for error in errors)
 
     omitted_context_consumer = copy.deepcopy(rows)
     guidance_consumers = next(
-        row for row in omitted_context_consumer if row["id"] == "context-consumer-guidance"
+        row
+        for row in omitted_context_consumer
+        if row["id"] == "context-consumer-guidance"
     )
     guidance_consumers["paths"] = ";".join(
         path

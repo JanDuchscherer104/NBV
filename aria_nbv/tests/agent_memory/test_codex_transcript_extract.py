@@ -14,7 +14,7 @@ sys.modules[SPEC.name] = extractor
 SPEC.loader.exec_module(extractor)
 
 
-def write_jsonl(path: Path, rows: list[dict]) -> None:
+def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 

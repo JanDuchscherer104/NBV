@@ -44,16 +44,19 @@ def partition_freshness(root: Path = ROOT) -> Freshness:
         )
     graph_errors = validate_graph(graph, manifest)
     if graph_errors:
-        reasons = tuple(f"invalid canonical graph: {error}" for error in graph_errors)
+        graph_reasons = tuple(
+            f"invalid canonical graph: {error}" for error in graph_errors
+        )
         return Freshness(
             frozenset(),
-            {name: reasons for name in PARTITION_ORDER},
+            {name: graph_reasons for name in PARTITION_ORDER},
             (),
         )
     stale: dict[str, tuple[str, ...]] = {}
     fresh: set[str] = set()
     current_config = config_digest(config, root)
     recorded_config = manifest.get("extraction_config_sha256")
+    recorded_graphify = manifest.get("graphify", {})
     recorded_partitions = manifest.get("partitions", {})
     for name in PARTITION_ORDER:
         reasons: list[str] = []
@@ -62,6 +65,8 @@ def partition_freshness(root: Path = ROOT) -> Freshness:
         recorded = recorded_partitions.get(name, {})
         if current_config != recorded_config:
             reasons.append("extraction configuration changed")
+        if recorded_graphify.get("version") != config.get("graphify_version"):
+            reasons.append("Graphify version changed")
         if current_manifest != recorded.get("source_manifest_sha256"):
             reasons.append("source manifest changed")
         if not recorded.get("semantic_complete"):

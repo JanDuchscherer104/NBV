@@ -391,7 +391,7 @@ def validate_registry(
     registered_paths: set[str] = set()
     by_id: dict[str, dict[str, Any]] = {}
     for offset, bundle in enumerate(bundles):
-        status = bundle.get("status") if isinstance(bundle, dict) else None
+        status = str(bundle.get("status", "")) if isinstance(bundle, dict) else ""
         expected_keys = BUNDLE_KEYS.get(status, set())
         errors.extend(
             _exact_keys(bundle, expected_keys, f"bundles[{offset}]")
@@ -1768,7 +1768,7 @@ def promote(
             print(f"- {error}", file=sys.stderr)
         return 1
     registry_path = root / REGISTRY_REL
-    registry = (
+    registry: dict[str, Any] = (
         load_registry(registry_path)
         if registry_path.exists()
         else {"schema_version": SCHEMA_VERSION, "bundles": [], "tombstones": []}

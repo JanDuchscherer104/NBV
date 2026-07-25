@@ -32,7 +32,7 @@ metadata:
   literature_refs:
     - "docs/contents/literature/index.qmd"
   verification:
-    - "python3 -m unittest .agents/skills/measured-autoresearch/tests/test_experiment.py"
+    - "make measured-autoresearch-self-test"
     - "python3 <skill>/scripts/experiment.py validate --mission-root <mission>"
 ---
 

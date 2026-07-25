@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any
+from typing import Any, Literal, TypedDict, cast, overload
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +45,9 @@ REQUIRED_CATEGORIES = {
     "state-journal",
 }
 FRONTMATTER_VALUE = re.compile(r"^(name|description):\s*(.*)$", re.MULTILINE)
-LINE_ANCHOR = re.compile(r"^(?P<path>.+):(?P<start>[1-9][0-9]*)(?:-(?P<end>[1-9][0-9]*))?$")
+LINE_ANCHOR = re.compile(
+    r"^(?P<path>.+):(?P<start>[1-9][0-9]*)(?:-(?P<end>[1-9][0-9]*))?$"
+)
 PLACEHOLDER_VALUE = re.compile(
     r"(?:^|\b)(?:n/?a|none|placeholder|tbd|todo|unknown|unassigned)(?:\b|$)",
     re.IGNORECASE,
@@ -73,8 +75,25 @@ CONTEXT_CONSUMER_PATTERNS = (
 FAILURE_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
 
+class SourceRecord(TypedDict):
+    path: str
+    physical_lines: int
+    sha256: str
+
+
+@overload
+def _git(*args: str, text: Literal[False] = False) -> bytes: ...
+
+
+@overload
+def _git(*args: str, text: Literal[True]) -> str: ...
+
+
 def _git(*args: str, text: bool = False) -> bytes | str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=text)
+    return cast(
+        bytes | str,
+        subprocess.check_output(["git", *args], cwd=ROOT, text=text),
+    )
 
 
 def _tree(commit: str) -> dict[str, tuple[str, str]]:
@@ -102,9 +121,7 @@ def _matches(path: str, patterns: list[str]) -> bool:
 
 
 def _regular_paths(tree: dict[str, tuple[str, str]]) -> set[str]:
-    return {
-        path for path, (mode, _) in tree.items() if mode in {"100644", "100755"}
-    }
+    return {path for path, (mode, _) in tree.items() if mode in {"100644", "100755"}}
 
 
 def _inventory_tokens(rows: list[dict[str, str]], categories: set[str]) -> list[str]:
@@ -131,7 +148,9 @@ def _expanded_inventory_paths(
     for token in _inventory_tokens(rows, categories):
         path = _token_path(token)
         if any(character in path for character in "*?["):
-            paths.update(candidate for candidate in tree if fnmatch.fnmatchcase(candidate, path))
+            paths.update(
+                candidate for candidate in tree if fnmatch.fnmatchcase(candidate, path)
+            )
         else:
             paths.add(path)
     return paths
@@ -148,9 +167,7 @@ def derive_required_inventory_surfaces(
         if path in {"AGENTS.md", "CLAUDE.md", "docs/AGENTS.md"}
         or (path.startswith("aria_nbv/") and path.endswith("/AGENTS.md"))
     }
-    references = {
-        path for path in regular if path.startswith(".agents/references/")
-    }
+    references = {path for path in regular if path.startswith(".agents/references/")}
     skills = {
         path
         for path in regular
@@ -199,7 +216,10 @@ def derive_required_inventory_surfaces(
     context_consumers = {
         path
         for path in active_scaffold_paths - context_producer_only
-        if any(pattern.search(_blob(tree[path][1])) for pattern in CONTEXT_CONSUMER_PATTERNS)
+        if any(
+            pattern.search(_blob(tree[path][1]))
+            for pattern in CONTEXT_CONSUMER_PATTERNS
+        )
     }
     litkg = {
         path
@@ -220,8 +240,7 @@ def derive_required_inventory_surfaces(
     graphify = {
         path
         for path in regular
-        if path in active_scaffold_paths
-        or path.startswith("scripts/tests/")
+        if path in active_scaffold_paths or path.startswith("scripts/tests/")
         if path in {"Makefile", ".gitignore", ".graphifyignore"}
         or path.startswith(".codex/skills/graphify/")
         or "graphify" in Path(path).name
@@ -253,7 +272,9 @@ def validate_counting_rules(
     )
     missing_globs = REQUIRED_LOC_INCLUDE_GLOBS - include_globs
     if missing_globs:
-        errors.append(f"active scaffold LOC include globs are missing: {sorted(missing_globs)}")
+        errors.append(
+            f"active scaffold LOC include globs are missing: {sorted(missing_globs)}"
+        )
     required = set(IMPORTANT_LOC_OWNERS)
     required.update(
         path
@@ -289,10 +310,14 @@ def validate_failure_allowlist(baseline: dict[str, Any]) -> list[str]:
     for index, failure in enumerate(failures, start=1):
         missing = required - set(failure)
         if missing:
-            errors.append(f"baseline failure {index} is missing fields: {sorted(missing)}")
+            errors.append(
+                f"baseline failure {index} is missing fields: {sorted(missing)}"
+            )
             continue
         if failure["exit_code"] <= 0:
-            errors.append(f"baseline failure {index} does not record a failing exit code")
+            errors.append(
+                f"baseline failure {index} does not record a failing exit code"
+            )
         if not FAILURE_DIGEST.fullmatch(failure["output_sha256"]):
             errors.append(f"baseline failure {index} has an invalid output digest")
         if not str(failure["command"]).strip():
@@ -340,7 +365,11 @@ def validate_inventory_paths(
             match = LINE_ANCHOR.fullmatch(token)
             path = match.group("path") if match else token
             if any(character in path for character in "*?["):
-                matches = [candidate for candidate in tree if fnmatch.fnmatchcase(candidate, path)]
+                matches = [
+                    candidate
+                    for candidate in tree
+                    if fnmatch.fnmatchcase(candidate, path)
+                ]
                 if not matches:
                     errors.append(
                         f"inventory line {line_number} path glob has no baseline matches: {token}"
@@ -406,7 +435,7 @@ def compute_repository_baseline(baseline: dict[str, Any]) -> dict[str, Any]:
     commit = baseline["source_state"]["commit"]
     tree = _tree(commit)
     paths = sorted(_active_scaffold_paths(baseline, tree))
-    source_records = []
+    source_records: list[SourceRecord] = []
     for path in paths:
         data = _blob(tree[path][1])
         source_records.append(
@@ -572,9 +601,9 @@ def validate_inventory(
     }
     for family, categories in family_categories.items():
         observed = _expanded_inventory_paths(rows, categories, tree)
-        missing = required[family] - observed
-        if missing:
-            errors.append(f"{family} inventory is missing: {sorted(missing)}")
+        missing_paths = required[family] - observed
+        if missing_paths:
+            errors.append(f"{family} inventory is missing: {sorted(missing_paths)}")
 
     overlap_requirements = {
         ".agents/skills/aria-nbv-context/scripts/nbv_context_index.sh": {

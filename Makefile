@@ -2,7 +2,7 @@
 .PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree context-contracts context-qmd-outline context-typst-outline context-typst-includes context-dir-tree uml qmd-frontmatter-check
-.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test scaffold-audit scaffold-audit-self-test matt-policy-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -140,6 +140,9 @@ omx-artifacts-self-test: ## 🧭 Run OMX planning-artifact lifecycle fixtures
 omx-artifacts-check: omx-artifacts-self-test ## 🧭 Validate registered current and superseded OMX evidence
 	@python3 scripts/scaffold/validate_omx_artifacts.py --check
 
+omx-native-acceptance: ## 🧭 Run pinned OMX purge/restore acceptance in a disposable clone
+	@ARIA_OMX_NATIVE_ACCEPTANCE=1 python3 scripts/tests/test_validate_omx_artifacts.py
+
 scaffold-audit: scaffold-wp0-baseline _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
 
@@ -148,6 +151,9 @@ scaffold-audit-self-test: scaffold-wp0-baseline-self-test _check_python ## 🧭 
 
 matt-policy-self-test: _check_python ## 🧭 Verify pinned Matt closure, isolation, routing, rollback, and prompt budget
 	@$(PYTHON_INTERPRETER) scripts/tests/test_matt_skills_policy.py
+
+measured-autoresearch-self-test: _check_python ## 🧪 Verify the retained measured-autoresearch helper
+	@$(PYTHON_INTERPRETER) .agents/skills/measured-autoresearch/tests/test_experiment.py
 
 wp6-direct-source-check: ## 🧭 Verify retired routes, preserved literature, exact-source fallback, claims, and scoped UML
 	@PYTHON_INTERPRETER="$(PYTHON_INTERPRETER)" ./scripts/tests/test_wp6_direct_source.sh
@@ -501,7 +507,7 @@ package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-scaffold-final: scaffold-wp0-check omx-artifacts-check matt-policy-self-test scaffold-audit scaffold-audit-self-test wp6-direct-source-check wp7-integration-check check-agent-memory graphify-ci ## Run the integrated WP0-WP7 scaffold contract
+scaffold-final: scaffold-wp0-check omx-artifacts-check matt-policy-self-test measured-autoresearch-self-test scaffold-audit scaffold-audit-self-test wp6-direct-source-check wp7-integration-check check-agent-memory graphify-ci ## Run the integrated WP0-WP7 scaffold contract
 
 ci: agents-db-validate qmd-frontmatter-check scaffold-final api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 

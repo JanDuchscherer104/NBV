@@ -48,7 +48,9 @@ def parse_paths(root_arg: str, output_arg: str) -> tuple[Path, Path]:
     try:
         output.relative_to(ROOT)
     except ValueError as exc:
-        raise ValueError("UML_OUT must be an ignored path inside the repository") from exc
+        raise ValueError(
+            "UML_OUT must be an ignored path inside the repository"
+        ) from exc
     if output == root or root in output.parents:
         raise ValueError("UML_OUT must not be inside UML_ROOT")
     tracked = subprocess.run(
@@ -87,7 +89,11 @@ def main() -> int:
         return 2
 
     dependency = subprocess.run(
-        [str(python), "-c", "import importlib.util; raise SystemExit(importlib.util.find_spec('syrenka') is None)"],
+        [
+            str(python),
+            "-c",
+            "import importlib.util; raise SystemExit(importlib.util.find_spec('syrenka') is None)",
+        ],
         cwd=ROOT,
         check=False,
     )
@@ -96,7 +102,9 @@ def main() -> int:
         return 2
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(prefix="uml-", suffix=".mmd", dir=output.parent)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix="uml-", suffix=".mmd", dir=output.parent
+    )
     os.close(fd)
     temporary = Path(temporary_name)
     try:

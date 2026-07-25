@@ -21,7 +21,14 @@ def run(
     python: Path | None = None,
     pythonpath: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    command = [sys.executable, str(RUNNER), "--root", str(root), "--output", str(output)]
+    command = [
+        sys.executable,
+        str(RUNNER),
+        "--root",
+        str(root),
+        "--output",
+        str(output),
+    ]
     if python is not None:
         command.extend(["--python", str(python)])
     env = None
@@ -79,7 +86,9 @@ def main() -> int:
                 run(PACKAGE / "utils", ROOT / "tracked-output.mmd"),
                 run(PACKAGE / "utils", tmp_path / "outside.mmd"),
             ]
-            assert all(item.returncode == 2 for item in rejected), [item.stderr for item in rejected]
+            assert all(item.returncode == 2 for item in rejected), [
+                item.stderr for item in rejected
+            ]
         finally:
             symlink.unlink(missing_ok=True)
 

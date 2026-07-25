@@ -13,6 +13,9 @@ changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only H
 non_graph=$(printf '%s\n' "$changed" | sed '/^graphify-out\/graph.json$/d; /^graphify-out\/manifest.json$/d; /^graphify-out\/GRAPH_REPORT.md$/d')
 [ -n "$non_graph" ] || exit 0
 
+log="${GRAPHIFY_REFRESH_LOG:-${HOME}/.cache/aria-nbv/graphify-refresh.log}"
+mkdir -p "$(dirname "$log")" 2>/dev/null || true
+
 PYTHON=${PYTHON_INTERPRETER:-}
 if [ -z "$PYTHON" ] && [ -f graphify-out/.graphify_python ]; then
   PYTHON=$(tr -d '[:space:]' < graphify-out/.graphify_python)
@@ -26,13 +29,20 @@ fi
 if [ -z "$PYTHON" ] || [ ! -x "$PYTHON" ]; then
   PYTHON=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
 fi
-[ -n "$PYTHON" ] || exit 0
+if [ -z "$PYTHON" ]; then
+  printf '%s\n' 'Graphify preflight failed: no Python interpreter; refresh not dispatched.' >>"$log" 2>/dev/null || true
+  exit 0
+fi
 
-relevant=$(printf '%s\n' "$non_graph" | "$PYTHON" -c 'import sys
+if ! relevant=$(printf '%s\n' "$non_graph" | "$PYTHON" -c 'import sys
 sys.path.insert(0, "scripts")
-from graphify_contract import classify_path, load_config
+from graphify_contract import classify_path, load_config, selected_literature_dirs
 config = load_config()
-print("1" if any(classify_path(line.strip(), config) for line in sys.stdin if line.strip()) else "0")' 2>/dev/null || true)
+selected = selected_literature_dirs()
+print("1" if any(classify_path(line.strip(), config, selected_literature_dirs=selected) for line in sys.stdin if line.strip()) else "0")' 2>>"$log"); then
+  printf '%s\n' 'Graphify preflight failed: corpus classification error; refresh not dispatched.' >>"$log" 2>/dev/null || true
+  exit 0
+fi
 [ "$relevant" = "1" ] || exit 0
 
 # Upstream-aligned safety: do not mutate Graphify during sequencer states.
@@ -43,8 +53,6 @@ export GRAPHIFY_CHANGED="$changed"
 if [ "${GRAPHIFY_SYNC_HOOK:-0}" = "1" ]; then
   "$PYTHON" scripts/graphify_refresh.py --mode structural || exit $?
 else
-  log="${HOME}/.cache/aria-nbv/graphify-refresh.log"
-  mkdir -p "$(dirname "$log")"
   export GRAPHIFY_REFRESH_LOG="$log" GRAPHIFY_REFRESH_PYTHON="$PYTHON"
   "$PYTHON" -c 'import os, subprocess
 log = open(os.environ["GRAPHIFY_REFRESH_LOG"], "a", buffering=1, encoding="utf-8")

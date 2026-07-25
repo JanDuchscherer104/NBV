@@ -5,14 +5,22 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib
 import json
 import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
-import yaml
+
+class YamlModule(Protocol):
+    YAMLError: type[Exception]
+
+    def safe_load(self, stream: str) -> object: ...
+
+
+yaml = cast(YamlModule, importlib.import_module("yaml"))
 
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
@@ -20,8 +28,12 @@ SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / ".agents" / "references" / "scaffold_routing_fixtures.json"
 WP5_INVENTORY = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_inventory.json"
 WP6_INVENTORY = ROOT / ".agents" / "baselines" / "scaffold_wp6_skill_inventory.json"
-WP5_DISPOSITIONS = ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_dispositions.csv"
-WP6_CAPABILITIES = ROOT / ".agents" / "baselines" / "scaffold_wp6_capability_dispositions.csv"
+WP5_DISPOSITIONS = (
+    ROOT / ".agents" / "baselines" / "scaffold_wp5_skill_dispositions.csv"
+)
+WP6_CAPABILITIES = (
+    ROOT / ".agents" / "baselines" / "scaffold_wp6_capability_dispositions.csv"
+)
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -232,7 +244,9 @@ def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         return set(), [f"{rel(path)}: cannot read bibliography: {exc}"]
-    keys = {match.group(1).strip() for match in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", text)}
+    keys = {
+        match.group(1).strip() for match in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", text)
+    }
     if not keys:
         return keys, [f"{rel(path)}: no BibTeX keys found"]
     return keys, []
@@ -240,7 +254,11 @@ def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
 
 def repo_path_exists(ref: str) -> bool:
     path_text, _, anchor = ref.partition("#")
-    if not path_text or path_text.startswith("/") or path_text.startswith("docs/_generated/"):
+    if (
+        not path_text
+        or path_text.startswith("/")
+        or path_text.startswith("docs/_generated/")
+    ):
         return False
     path = ROOT / path_text
     resolved = path.resolve()
@@ -263,7 +281,10 @@ class Skill:
 
 
 def skill_route_tokens(skill: Skill) -> set[str]:
-    text = " ".join([skill.name, skill.description] + metadata_strings(skill.metadata, {"triggers", "applies_to"}))
+    text = " ".join(
+        [skill.name, skill.description]
+        + metadata_strings(skill.metadata, {"triggers", "applies_to"})
+    )
     return tokens(text)
 
 
@@ -376,10 +397,14 @@ def audit_wp6_inventory(path: Path, skills: list[Skill]) -> list[str]:
     declared = data.get("active_skills")
     removed = data.get("removed_wp6_skills")
     errors: list[str] = []
-    if not isinstance(declared, list) or not all(isinstance(item, str) for item in declared):
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) for item in declared
+    ):
         return [f"{rel(path)}: active_skills must be a string list"]
     if len(declared) != 9 or len(set(declared)) != 9:
-        errors.append(f"{rel(path)}: active_skills must contain exactly nine unique names")
+        errors.append(
+            f"{rel(path)}: active_skills must contain exactly nine unique names"
+        )
     actual = {skill.name for skill in skills}
     expected = set(declared)
     if actual != expected:
@@ -388,9 +413,13 @@ def audit_wp6_inventory(path: Path, skills: list[Skill]) -> list[str]:
             f"extra={sorted(actual - expected)}"
         )
     if set(removed or []) != {"aria-litkg-memory", "semantic-scholar-litkg"}:
-        errors.append(f"{rel(path)}: removed_wp6_skills must contain exactly the two retired skills")
+        errors.append(
+            f"{rel(path)}: removed_wp6_skills must contain exactly the two retired skills"
+        )
     elif actual & set(removed):
-        errors.append(f"{rel(path)}: removed skill remains active: {sorted(actual & set(removed))}")
+        errors.append(
+            f"{rel(path)}: removed skill remains active: {sorted(actual & set(removed))}"
+        )
     return errors
 
 
@@ -423,18 +452,26 @@ def audit_wp6_capabilities(path: Path) -> list[str]:
     errors: list[str] = []
     seen: set[str] = set()
     for index, row in enumerate(rows, start=2):
-        missing = sorted(field for field in required_fields if not (row.get(field) or "").strip())
+        missing = sorted(
+            field for field in required_fields if not (row.get(field) or "").strip()
+        )
         if missing:
-            errors.append(f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}")
+            errors.append(
+                f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}"
+            )
             continue
         family = row["capability_family"].strip()
         if family in seen:
-            errors.append(f"{rel(path)}:{index}: duplicate capability family {family!r}")
+            errors.append(
+                f"{rel(path)}:{index}: duplicate capability family {family!r}"
+            )
         seen.add(family)
         if row["status"].strip() not in {"replaced", "preserved", "retired"}:
             errors.append(f"{rel(path)}:{index}: unresolved status {row['status']!r}")
         if not re.fullmatch(r"[0-9a-f]{40}", row["rollback_commit"].strip()):
-            errors.append(f"{rel(path)}:{index}: rollback_commit must be a full Git hash")
+            errors.append(
+                f"{rel(path)}:{index}: rollback_commit must be a full Git hash"
+            )
     if seen != required_families:
         errors.append(
             f"{rel(path)}: capability coverage mismatch; missing={sorted(required_families - seen)} "
@@ -443,7 +480,9 @@ def audit_wp6_capabilities(path: Path) -> list[str]:
     return errors
 
 
-def audit_wp5_dispositions(path: Path, inventory_path: Path = WP5_INVENTORY) -> list[str]:
+def audit_wp5_dispositions(
+    path: Path, inventory_path: Path = WP5_INVENTORY
+) -> list[str]:
     """Reject unresolved or incomplete source-owner disposition rows."""
     errors: list[str] = []
     try:
@@ -454,25 +493,41 @@ def audit_wp5_dispositions(path: Path, inventory_path: Path = WP5_INVENTORY) -> 
     except (OSError, json.JSONDecodeError, KeyError, csv.Error) as exc:
         return [f"{rel(path)}: unreadable WP5 disposition ledger: {exc}"]
 
-    required = {"skill", "rule_family", "status", "destination_owners", "evidence", "verification", "rationale"}
+    required = {
+        "skill",
+        "rule_family",
+        "status",
+        "destination_owners",
+        "evidence",
+        "verification",
+        "rationale",
+    }
     if not rows:
         return [f"{rel(path)}: disposition ledger must not be empty"]
     seen: set[str] = set()
     for index, row in enumerate(rows, start=2):
         missing = sorted(key for key in required if not (row.get(key) or "").strip())
         if missing:
-            errors.append(f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}")
+            errors.append(
+                f"{rel(path)}:{index}: empty required fields: {', '.join(missing)}"
+            )
             continue
         skill = row["skill"].strip()
         seen.add(skill)
         if skill not in removed:
-            errors.append(f"{rel(path)}:{index}: disposition names non-removed skill {skill!r}")
+            errors.append(
+                f"{rel(path)}:{index}: disposition names non-removed skill {skill!r}"
+            )
         if row["status"].strip() not in CLOSED_DISPOSITIONS:
-            errors.append(f"{rel(path)}:{index}: unresolved disposition status {row['status']!r}")
+            errors.append(
+                f"{rel(path)}:{index}: unresolved disposition status {row['status']!r}"
+            )
         for owner in row["destination_owners"].split(";"):
             owner_path = ROOT / owner.strip()
             if not owner.strip() or not owner_path.exists():
-                errors.append(f"{rel(path)}:{index}: destination owner does not exist: {owner.strip()!r}")
+                errors.append(
+                    f"{rel(path)}:{index}: destination owner does not exist: {owner.strip()!r}"
+                )
     if seen != removed:
         errors.append(
             f"{rel(path)}: disposition coverage mismatch; missing={sorted(removed - seen)} "
@@ -512,7 +567,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
 
         unknown_metadata = sorted(set(skill.metadata) - METADATA_KEYS)
         if unknown_metadata:
-            errors.append(f"{prefix}: unknown metadata fields: {', '.join(unknown_metadata)}")
+            errors.append(
+                f"{prefix}: unknown metadata fields: {', '.join(unknown_metadata)}"
+            )
 
         mode = skill.metadata.get("mode")
         if mode not in ALLOWED_MODES:
@@ -527,7 +584,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             elif isinstance(value, list):
                 for item in value:
                     if not isinstance(item, str) or not item.strip():
-                        errors.append(f"{prefix}: metadata.{field} entries must be non-empty strings")
+                        errors.append(
+                            f"{prefix}: metadata.{field} entries must be non-empty strings"
+                        )
 
         canonical_sources = skill.metadata.get("canonical_sources") or []
         if isinstance(canonical_sources, list):
@@ -535,24 +594,34 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 errors.append(f"{prefix}: metadata.canonical_sources must not be empty")
             for source in canonical_sources:
                 if not isinstance(source, str) or not source.strip():
-                    errors.append(f"{prefix}: metadata.canonical_sources entries must be non-empty strings")
+                    errors.append(
+                        f"{prefix}: metadata.canonical_sources entries must be non-empty strings"
+                    )
                     continue
                 source_path, _, anchor = source.partition("#")
                 path = ROOT / source_path
                 if not source_path or source_path.startswith("/"):
-                    errors.append(f"{prefix}: canonical source {source!r} must be a relative repo path")
+                    errors.append(
+                        f"{prefix}: canonical source {source!r} must be a relative repo path"
+                    )
                     continue
                 resolved_path = path.resolve()
                 if not is_relative_to(resolved_path, ROOT_RESOLVED):
-                    errors.append(f"{prefix}: canonical source {source_path!r} escapes the repo root")
+                    errors.append(
+                        f"{prefix}: canonical source {source_path!r} escapes the repo root"
+                    )
                     continue
                 if not resolved_path.exists():
-                    errors.append(f"{prefix}: canonical source {source_path!r} does not exist")
+                    errors.append(
+                        f"{prefix}: canonical source {source_path!r} does not exist"
+                    )
                     continue
                 if anchor and resolved_path.suffix in {".md", ".qmd"}:
                     anchors = markdown_anchors(resolved_path)
                     if anchor not in anchors:
-                        errors.append(f"{prefix}: canonical source anchor {source!r} was not found")
+                        errors.append(
+                            f"{prefix}: canonical source anchor {source!r} was not found"
+                        )
 
         handoffs = skill.metadata.get("handoff_to") or []
         if isinstance(handoffs, list):
@@ -568,8 +637,12 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                             f"{prefix}: unresolved handoff namespace in {handoff!r}; "
                             "use a local skill name or declared capability wording"
                         )
-                elif token not in known_names and token not in DECLARED_CAPABILITY_TOKENS:
-                    warnings.append(f"{prefix}: handoff target {token!r} is not a known skill name")
+                elif (
+                    token not in known_names and token not in DECLARED_CAPABILITY_TOKENS
+                ):
+                    warnings.append(
+                        f"{prefix}: handoff target {token!r} is not a known skill name"
+                    )
 
         applies_to = skill.metadata.get("applies_to") or []
         if (
@@ -596,7 +669,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 if not isinstance(ref, str) or not ref.strip():
                     continue
                 if not ref.startswith("/"):
-                    errors.append(f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID")
+                    errors.append(
+                        f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID"
+                    )
                 elif ref not in context7_ids:
                     errors.append(
                         f"{prefix}: metadata.context7_refs entry {ref!r} is not listed in {rel(CONTEXT7_IDS)}"
@@ -639,7 +714,10 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
 
         trigger_text = " ".join(
             [skill.description]
-            + metadata_strings(skill.metadata, {"triggers", "evidence_required", "handoff_to", "must_read"})
+            + metadata_strings(
+                skill.metadata,
+                {"triggers", "evidence_required", "handoff_to", "must_read"},
+            )
         )
         if CONTEXT7_TRIGGER_RE.search(trigger_text) and not context7_refs:
             warnings.append(
@@ -674,7 +752,9 @@ def audit_semantic_drift(skills: list[Skill]) -> list[str]:
     return warnings
 
 
-def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tuple[list[str], list[str]]:
+def audit_routing_fixtures(
+    path: Path, skills_by_name: dict[str, Skill]
+) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     if not path.is_file():
@@ -699,15 +779,21 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
         "non_goals",
     }
     known_names = set(skills_by_name)
-    route_tokens_by_skill = {name: skill_route_tokens(skill) for name, skill in skills_by_name.items()}
-    boundary_tokens_by_skill = {name: skill_boundary_tokens(skill) for name, skill in skills_by_name.items()}
+    route_tokens_by_skill = {
+        name: skill_route_tokens(skill) for name, skill in skills_by_name.items()
+    }
+    boundary_tokens_by_skill = {
+        name: skill_boundary_tokens(skill) for name, skill in skills_by_name.items()
+    }
     for index, fixture in enumerate(fixtures, start=1):
         if not isinstance(fixture, dict):
             errors.append(f"{rel(path)} fixture #{index}: must be an object")
             continue
         extra_keys = sorted(set(fixture) - allowed_fixture_keys)
         if extra_keys:
-            errors.append(f"{rel(path)} fixture #{index}: unknown keys: {', '.join(extra_keys)}")
+            errors.append(
+                f"{rel(path)} fixture #{index}: unknown keys: {', '.join(extra_keys)}"
+            )
         fixture_id = fixture.get("id")
         if not isinstance(fixture_id, str) or not fixture_id:
             errors.append(f"{rel(path)} fixture #{index}: missing id")
@@ -727,7 +813,9 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
         expected_tool_refs = fixture.get("expected_tool_refs", [])
         forbidden_tool_refs = fixture.get("forbidden_tool_refs", [])
         if not isinstance(expected, list) or not expected:
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: expected_skills must be a non-empty list")
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: expected_skills must be a non-empty list"
+            )
         elif not all(isinstance(skill, str) and skill.strip() for skill in expected):
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: expected_skills entries must be non-empty strings"
@@ -755,11 +843,17 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
 
             expected_skill_tool_refs: set[str] = set()
             for skill_name in expected:
-                expected_skill_tool_refs.update(skills_by_name[skill_name].metadata.get("tool_refs") or [])
+                expected_skill_tool_refs.update(
+                    skills_by_name[skill_name].metadata.get("tool_refs") or []
+                )
 
             if not isinstance(expected_tool_refs, list):
-                errors.append(f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs must be a list")
-            elif not all(isinstance(item, str) and item.strip() for item in expected_tool_refs):
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs must be a list"
+                )
+            elif not all(
+                isinstance(item, str) and item.strip() for item in expected_tool_refs
+            ):
                 errors.append(
                     f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs entries must be non-empty strings"
                 )
@@ -777,8 +871,12 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
                         )
 
             if not isinstance(forbidden_tool_refs, list):
-                errors.append(f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs must be a list")
-            elif not all(isinstance(item, str) and item.strip() for item in forbidden_tool_refs):
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs must be a list"
+                )
+            elif not all(
+                isinstance(item, str) and item.strip() for item in forbidden_tool_refs
+            ):
                 errors.append(
                     f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs entries must be non-empty strings"
                 )
@@ -797,9 +895,13 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
 
         non_goals = fixture.get("non_goals")
         if not isinstance(non_goals, list) or not non_goals:
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: non_goals must be a non-empty list")
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: non_goals must be a non-empty list"
+            )
         elif not all(isinstance(item, str) and item.strip() for item in non_goals):
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: non_goals entries must be non-empty strings")
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: non_goals entries must be non-empty strings"
+            )
         else:
             expected_set = set(expected) if isinstance(expected, list) else set()
             boundary_tokens = set()
@@ -872,8 +974,13 @@ def self_test_fixture_path(root: Path, data: dict[str, Any]) -> Path:
     return path
 
 
-def routing_fixture_with_expected(fixture_id: str, expected: list[str]) -> dict[str, Any]:
-    data = json.loads(ROUTING_FIXTURES.read_text(encoding="utf-8"))
+def routing_fixture_with_expected(
+    fixture_id: str, expected: list[str]
+) -> dict[str, Any]:
+    data = cast(
+        dict[str, Any],
+        json.loads(ROUTING_FIXTURES.read_text(encoding="utf-8")),
+    )
     for fixture in data["fixtures"]:
         if fixture["id"] == fixture_id:
             fixture["expected_skills"] = expected
@@ -906,7 +1013,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "canonical-source-escape",
-            not load_errors and any("escapes the repo root" in error for error in errors),
+            not load_errors
+            and any("escapes the repo root" in error for error in errors),
             "escaped canonical source was not rejected",
         )
 
@@ -920,7 +1028,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "missing-canonical-anchor",
-            not load_errors and any("canonical source anchor" in error for error in errors),
+            not load_errors
+            and any("canonical source anchor" in error for error in errors),
             "missing markdown anchor was not rejected",
         )
 
@@ -936,28 +1045,43 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 }
             ]
         }
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, missing_fixture), skills_by_name)
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, missing_fixture), skills_by_name
+        )
         expect(
             "fixture-missing-task-non-goals",
-            any("missing task" in error for error in errors) and any("non_goals must be" in error for error in errors),
+            any("missing task" in error for error in errors)
+            and any("non_goals must be" in error for error in errors),
             "fixture schema omissions were not rejected",
         )
 
-        local_as_docs = routing_fixture_with_expected("local-file-lookup", ["aria-docs"])
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, local_as_docs), skills_by_name)
+        local_as_docs = routing_fixture_with_expected(
+            "local-file-lookup", ["aria-docs"]
+        )
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, local_as_docs), skills_by_name
+        )
         expect(
             "local-lookup-not-docs",
-            any("aria-docs" in error and "no routing-cue overlap" in error for error in errors),
+            any(
+                "aria-docs" in error and "no routing-cue overlap" in error
+                for error in errors
+            ),
             "local lookup incorrectly passed as docs routing",
         )
 
         docs_as_measurement = routing_fixture_with_expected(
             "quarto-typst-mermaid-docs", ["measured-autoresearch"]
         )
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, docs_as_measurement), skills_by_name)
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, docs_as_measurement), skills_by_name
+        )
         expect(
             "docs-not-measured-autoresearch",
-            any("measured-autoresearch" in error and "no routing-cue overlap" in error for error in errors),
+            any(
+                "measured-autoresearch" in error and "no routing-cue overlap" in error
+                for error in errors
+            ),
             "Quarto/Typst/Mermaid work incorrectly passed as measurement routing",
         )
 
@@ -994,7 +1118,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "unknown-context7-ref",
-            not load_errors and any("metadata.context7_refs" in error for error in errors),
+            not load_errors
+            and any("metadata.context7_refs" in error for error in errors),
             "unknown Context7 ID was not rejected",
         )
 
@@ -1004,12 +1129,15 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "Use this test body for literature ref validation.",
             '  literature_refs:\n    - "DefinitelyMissingBibKey2026"',
         )
-        write_self_test_skill(tmp_root, "missing-literature-skill", missing_literature_text)
+        write_self_test_skill(
+            tmp_root, "missing-literature-skill", missing_literature_text
+        )
         skills, load_errors = load_skills(tmp_root / "skills")
         errors, _ = audit_skills(skills)
         expect(
             "missing-literature-ref",
-            not load_errors and any("metadata.literature_refs" in error for error in errors),
+            not load_errors
+            and any("metadata.literature_refs" in error for error in errors),
             "missing literature ref was not rejected",
         )
 
@@ -1039,7 +1167,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         _, warnings = audit_skills(skills)
         expect(
             "unknown-tool-ref-warned",
-            not load_errors and any("audit-owned tool registry" in warning for warning in warnings),
+            not load_errors
+            and any("audit-owned tool registry" in warning for warning in warnings),
             "unknown canonical-looking tool ref was not warned",
         )
 
@@ -1050,7 +1179,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                     "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
                     "expected_skills": ["rerun-nbv-inspector"],
                     "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
-                    "non_goals": ["Do not use browser MCP tools for non-live docs planning."],
+                    "non_goals": [
+                        "Do not use browser MCP tools for non-live docs planning."
+                    ],
                 }
             ]
         }
@@ -1060,7 +1191,10 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         )
         expect(
             "browser-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "browser_run_code" in error for error in errors),
+            any(
+                "forbidden_tool_ref" in error and "browser_run_code" in error
+                for error in errors
+            ),
             "forbidden browser tool activation was not rejected",
         )
 
@@ -1071,7 +1205,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                     "task": "Simplify Python code with analyzer guidance after code-index localization.",
                     "expected_skills": ["aria-nbv-context"],
                     "forbidden_tool_refs": ["mcp__code_index.search_code_advanced"],
-                    "non_goals": ["Do not use code-index tools after the exact owner is already known."],
+                    "non_goals": [
+                        "Do not use code-index tools after the exact owner is already known."
+                    ],
                 }
             ]
         }
@@ -1081,24 +1217,39 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         )
         expect(
             "python-analyzer-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "search_code_advanced" in error for error in errors),
+            any(
+                "forbidden_tool_ref" in error and "search_code_advanced" in error
+                for error in errors
+            ),
             "forbidden code-index activation was not rejected",
         )
 
         live_skills, live_load_errors = load_skills(SKILLS_DIR)
-        inventory_errors = live_load_errors + audit_wp6_inventory(WP6_INVENTORY, live_skills)
+        inventory_errors = live_load_errors + audit_wp6_inventory(
+            WP6_INVENTORY, live_skills
+        )
         expect("wp6-live-inventory", not inventory_errors, "; ".join(inventory_errors))
         disposition_errors = audit_wp5_dispositions(WP5_DISPOSITIONS)
-        expect("wp5-closed-dispositions", not disposition_errors, "; ".join(disposition_errors))
+        expect(
+            "wp5-closed-dispositions",
+            not disposition_errors,
+            "; ".join(disposition_errors),
+        )
         capability_errors = audit_wp6_capabilities(WP6_CAPABILITIES)
-        expect("wp6-closed-capabilities", not capability_errors, "; ".join(capability_errors))
+        expect(
+            "wp6-closed-capabilities",
+            not capability_errors,
+            "; ".join(capability_errors),
+        )
 
     return passes, failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="emit machine-readable audit output")
+    parser.add_argument(
+        "--json", action="store_true", help="emit machine-readable audit output"
+    )
     parser.add_argument(
         "--self-test",
         action="store_true",
@@ -1108,11 +1259,13 @@ def main() -> int:
 
     if args.self_test:
         passes, failures = run_self_tests()
-        payload = {"passed": passes, "failures": failures}
+        self_test_payload = {"passed": passes, "failures": failures}
         if args.json:
-            print(json.dumps(payload, indent=2, sort_keys=True))
+            print(json.dumps(self_test_payload, indent=2, sort_keys=True))
         else:
-            print(f"scaffold-audit self-test: passed={len(passes)} failures={len(failures)}")
+            print(
+                f"scaffold-audit self-test: passed={len(passes)} failures={len(failures)}"
+            )
             for failure in failures:
                 print(f"- {failure}")
         return 1 if failures else 0
@@ -1146,7 +1299,9 @@ def main() -> int:
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(f"scaffold-audit: skills={len(skills)} errors={len(errors)} warnings={len(warnings)}")
+        print(
+            f"scaffold-audit: skills={len(skills)} errors={len(errors)} warnings={len(warnings)}"
+        )
         if errors:
             print("\nErrors:")
             for error in errors:

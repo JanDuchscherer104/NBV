@@ -57,8 +57,15 @@ def main() -> int:
     assert typst, "typst is required to verify touched-surface render evidence"
     with tempfile.TemporaryDirectory(prefix="wp6-claim-") as tmp:
         rendered = Path(tmp) / "touched.pdf"
-        render_command = [typst, "compile", str(FIXTURE_ROOT / "touched.typ"), str(rendered)]
-        subprocess.run(render_command, cwd=ROOT, check=True, capture_output=True, text=True)
+        render_command = [
+            typst,
+            "compile",
+            str(FIXTURE_ROOT / "touched.typ"),
+            str(rendered),
+        ]
+        subprocess.run(
+            render_command, cwd=ROOT, check=True, capture_output=True, text=True
+        )
         render_digest = digest(rendered)
 
         evidence = []
@@ -83,7 +90,9 @@ def main() -> int:
                 "wording_verdict": "calibrated" if reason == "pass" else "rejected",
                 "expected_reason": row["expected_reason"],
                 "actual_reason": reason,
-                "touched_output_paths": ["scripts/tests/fixtures/wp6_direct_source/touched.typ"],
+                "touched_output_paths": [
+                    "scripts/tests/fixtures/wp6_direct_source/touched.typ"
+                ],
                 "render_command": " ".join(render_command),
                 "render_digest": render_digest,
             }
@@ -92,7 +101,9 @@ def main() -> int:
             evidence.append(record)
 
         evidence_path = Path(tmp) / "evidence.json"
-        evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8")
+        evidence_path.write_text(
+            json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8"
+        )
         assert len(json.loads(evidence_path.read_text(encoding="utf-8"))) == 4
 
     print("WP6 direct-source claim fixtures: PASS (4 cases)")

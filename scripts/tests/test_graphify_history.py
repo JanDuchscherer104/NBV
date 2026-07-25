@@ -27,7 +27,7 @@ def _commit(root: Path, message: str) -> str:
     return _git(root, "rev-parse", "HEAD")
 
 
-def _repo() -> tuple[tempfile.TemporaryDirectory, Path, str]:
+def _repo() -> tuple[tempfile.TemporaryDirectory[str], Path, str]:
     temporary = tempfile.TemporaryDirectory()
     root = Path(temporary.name)
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)

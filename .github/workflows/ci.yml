@@ -79,6 +79,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node.js for pinned OMX acceptance
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pinned OMX
+        run: npm install --global --no-audit --no-fund oh-my-codex@0.20.3
+
       - name: Install validation dependencies
         run: |
           python -m pip install --upgrade pip PyYAML uv
@@ -92,6 +100,9 @@ jobs:
 
       - name: Set up Typst
         uses: typst-community/setup-typst@v5.1.0
+
+      - name: Run pinned native OMX acceptance
+        run: make omx-native-acceptance
 
       - name: Run root CI contract
         env:
