@@ -21,6 +21,18 @@
       "non_goals": ["Do not route Python API docstrings through the thesis and public-docs workflow."]
     },
     {
+      "id": "typst-notation-glossary",
+      "task": "Add a recurring Typst symbol, equation, or Glossarium term and keep shared notation, generated glossary artifacts, and the rendered thesis synchronized.",
+      "expected_skills": ["aria-docs"],
+      "non_goals": ["Do not create a document-local notation alias for a recurring project concept."]
+    },
+    {
+      "id": "typst-slides-scientific-visual",
+      "task": "Build a Typst thesis slide or scientific figure with reproducible source, frame and units, fixed view metadata, Booktabs conventions, and rendered-page inspection.",
+      "expected_skills": ["aria-docs"],
+      "non_goals": ["Do not use Mermaid for quantitative geometry or real 3D evidence."]
+    },
+    {
       "id": "python-docstring-contract",
       "task": "Write a Python docstring for a public API shape, unit, coordinate frame, config field, or lifecycle contract.",
       "expected_skills": ["python-docstrings"],

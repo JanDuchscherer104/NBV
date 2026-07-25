@@ -1,6 +1,6 @@
 ---
 name: aria-docs
-description: ARIA-NBV thesis, Typst, Quarto, citation, figure, or Mermaid work.
+description: Use for ARIA-NBV Quarto, Typst thesis or slides, citations, scientific figures, tables, shared notation, or Mermaid diagrams.
 metadata:
   mode: implementation
   not_when:
@@ -10,17 +10,22 @@ metadata:
   handoff_to:
     - "plan-grill for unresolved thesis scope or claim boundaries"
     - "python-docstrings for Python API documentation"
+    - "rerun-nbv-inspector for Rerun recording, camera/frustum, frame, or blueprint implementation"
     - "specialized diagnostic capability for persistent build or render failures"
   evidence_required:
     - "nearest docs owner, target imports, and adjacent narrative"
+    - "shared notation and glossary owners for new symbols, equations, or durable terms"
     - "citation source and calibrated wording for research claims"
-    - "compile plus rendered-page inspection for non-trivial visual or math edits"
+    - "reproducible source, frame, units, view, and provenance for scientific figures"
+    - "compile plus rendered-page inspection for non-trivial prose, visual, math, or slide edits"
   applies_to:
     - "docs/**"
     - "tools/mermaid/**"
   triggers:
     - "Quarto documentation"
-    - "Typst thesis"
+    - "Typst thesis or slides"
+    - "shared notation or Glossarium"
+    - "scientific figure or table"
     - "citation or scientific figure"
     - "Mermaid diagram"
   must_read:
@@ -32,6 +37,10 @@ metadata:
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
     - "docs/references.bib"
+    - ".agents/skills/aria-docs/references/typst.md"
+    - ".agents/skills/aria-docs/references/thesis-writing.md"
+    - ".agents/skills/aria-docs/references/visuals.md"
+    - ".agents/skills/aria-docs/references/mermaid.md"
     - "tools/mermaid/references/aria_mermaid_style.md"
     - "tools/mermaid/references/aria_symbol_map.yaml"
     - ".agents/references/thesis_code_links.md"
@@ -47,27 +56,38 @@ metadata:
     - "mcp__code_index.search_code_advanced"
   verification:
     - "make qmd-frontmatter-check for Quarto ownership changes"
-    - "focused Typst or Quarto compile and rendered-page inspection"
+    - "focused Typst or Quarto compile plus rendered-page inspection"
     - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd> for Mermaid edits"
 ---
 
 # ARIA Docs
 
-Choose the Quarto, Typst, or Mermaid branch in `references/workflow.md`, read
-only its listed owners, and keep durable scientific truth in the touched docs,
-shared notation, bibliography, package, test, or thesis source.
+Choose one branch in `references/workflow.md`. Read only that branch's owners
+and reference file; do not load the full documentation stack by default.
 
-## Rules
+## Branches
 
-- Preserve the public/internal boundary and existing document structure.
-- Reuse `docs/typst/shared` before introducing recurring notation or terms.
-- Resolve citations through `docs/references.bib`; apply the direct-source
-  claim checklist and calibrate advisor-facing wording before publication.
-- Keep reproducible figure source, frame/units/view metadata, and provenance.
-- Keep `.mmd` as source, use the curated symbol map, lint locally, and render
-  locally when `mmdc` is available.
-- Compile the narrowest owning document and inspect affected pages for math,
-  figures, tables, captions, references, and layout.
+| Task | Read after `workflow.md` |
+| --- | --- |
+| Quarto page, navigation, or public boundary | Target page and `docs/AGENTS.md` |
+| Typst syntax, notation, glossary, equation, or compile loop | `references/typst.md` |
+| Thesis/proposal prose, section, claim, or citation | `references/thesis-writing.md` |
+| Figure, table, caption, scientific visualization, or slide | `references/visuals.md` |
+| Mermaid source or export | `references/mermaid.md` |
 
-Complete when the owning source is updated, required local checks pass, and
-render evidence or an exact environment blocker is recorded.
+## Invariants
+
+- Exact document, bibliography, shared notation, package, code, and test
+  sources remain authoritative; this skill owns workflow and authoring policy.
+- Reuse `docs/typst/shared` before creating document-local terms, symbols, or
+  equations. Glossarium owns prose terms; shared symbol/equation facades own
+  mathematical notation.
+- Preserve the public/internal boundary and the active-versus-historical
+  document roles in `docs/AGENTS.md`.
+- Claims use calibrated language and exact source evidence. Figures preserve
+  construction provenance and geometry/view metadata.
+- A successful compile is not visual QA. Inspect affected rendered pages for
+  legibility, clipping, math attachment, references, captions, and layout.
+
+Stop when the owning source is updated, the narrow checks pass, and render
+evidence or an exact environment blocker is recorded.

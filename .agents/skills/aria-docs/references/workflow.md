@@ -1,6 +1,7 @@
 # ARIA Docs Workflow
 
-Use one branch and read only the files it names.
+Use one branch and read only the files it names. Start from the target document
+and its imports; use outlines to localize large sources before opening them.
 
 ## Quarto
 
@@ -9,13 +10,25 @@ Read `docs/AGENTS.md`, the target page, and its navigation owner. Use
 `make qmd-frontmatter-check`; render the touched page or site when layout,
 cross-references, execution, or navigation changes.
 
-## Typst And Thesis Prose
+## Typst, Notation, And Glossary
 
-Read `docs/AGENTS.md`, target imports and adjacent sections, then
-`docs/typst/shared` for notation or durable terms. Keep final thesis prose in
-paragraphs, match claim strength to evidence, and classify implementation links
-with `.agents/references/thesis_code_links.md`. Compile the focused document
-with `--root .`, render affected pages when needed, and inspect them visually.
+Read `references/typst.md`. Use:
+
+```bash
+make context-typst-outline \
+  TYPST_OUTLINE_ARGS='--paper docs/typst/thesis/main.typ --mode outline'
+make context-typst-includes \
+  TYPST_INCLUDES_ARGS='--paper docs/typst/thesis/main.typ --mode includes'
+```
+
+Inspect the target imports and `docs/typst/shared` before changing recurring
+terms, symbols, equations, or document-wide style.
+
+## Thesis Or Proposal Prose
+
+Read `references/thesis-writing.md`, the target section, and adjacent sections.
+Use `.agents/references/direct_source_claim_checklist.md` for advisor-facing
+claims and `.agents/references/thesis_code_links.md` for implementation links.
 
 ## Citations And Scientific Figures
 
@@ -25,17 +38,15 @@ and retain an exact locator. Follow
 `.agents/references/direct_source_claim_checklist.md`, calibrate wording, and
 record touched-surface render evidence. Figures retain reproducible source plus
 units, coordinate frame, fixed view/projection, export settings, and provenance.
+Read `references/visuals.md` for figures, tables, captions, and slides.
 
 ## Mermaid
 
-Read `tools/mermaid/references/aria_mermaid_style.md` and
-`tools/mermaid/references/aria_symbol_map.yaml`; inspect shared Typst notation
-before math labels. Start from a local template when useful. Run:
+Read `references/mermaid.md`. It routes to the symbol map, style guide,
+templates, linter, and local renderer without loading unrelated Typst guidance.
 
-```bash
-python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>
-tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg>
-```
+## Completion
 
-The render step is conditional on a global `mmdc`. Keep unpublished thesis
-figures local and never use an online renderer without explicit permission.
+Run the narrowest owning compile or render. For non-trivial prose, equations,
+figures, tables, or slides, export the affected pages to PNG and inspect them.
+Report exact commands, outputs, warnings, and any skipped check.
