@@ -34,9 +34,7 @@ Three boundaries are invariant. Invalidity is a hard mask with versioned reason 
 
 ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$ and requested residual horizon $h$:
 
-$
-  #eqs.scene.actor_state_read
-$
+#block[#align(center)[#eqs.scene.actor_state_read]]
 
 For architectural and DTO purposes, the scene state is decomposed as
 

@@ -56,9 +56,7 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
 
 The intended input for target $e$ at step $t$ is
 
-$
-  #eqs.model.qh_input_contract
-$
+#block[#align(center)[#eqs.model.qh_input_contract]]
 
 This equation is an information contract rather than one flat tensor. The corresponding DTO roles are:
 
@@ -105,15 +103,11 @@ Padding masks, modality-presence masks, source-role masks, action masks, trainin
 
 The target descriptor separates identity, geometry, observed support, confidence, and source:
 
-$
-  #eqs.entity.target_descriptor
-$
+#block[#align(center)[#eqs.entity.target_descriptor]]
 
 The learned token combines that descriptor with target-local scene support:
 
-$
-  #eqs.model.qh_target_token
-$
+#block[#align(center)[#eqs.model.qh_target_token]]
 
 In the current V0 data, target geometry is GT-derived and several generic descriptor fields are unmeasured placeholders. The model contract should therefore use protocol-specific variants such as `V0GtTargetState` and `V1ObservedTargetState`, or carry an explicit availability mask per optional field. The same numerical zero cannot simultaneously mean absent support and measured zero support.
 
@@ -131,35 +125,25 @@ Target-independent static scene encodings may be reused across several target ta
 
 Canonical rigid transforms remain in the store. The reader or tensor adapter derives a candidate pose relative to the current decision reference rather than learning the arbitrary world origin:
 
-$
-  #eqs.spatial.candidate_reference_transform
-$
+#block[#align(center)[#eqs.spatial.candidate_reference_transform]]
 
 The world poses $bold(T)_(w,r_t)$ and $bold(T)_(w,c_(t,i))$ locate the current reference and candidate camera. Their product $bold(T)_(w,r_t)^(-1) bold(T)_(w,c_(t,i))$ expresses candidate $i$ in the current reference frame; $bold(delta)_(r_t,i)^p$ and $bold(R)_(r_t,i)$ are its relative translation and rotation.
 
-$
-  #eqs.spatial.candidate_pose_features
-$
+#block[#align(center)[#eqs.spatial.candidate_pose_features]]
 
 The pose vector is a menu of candidate descriptors rather than a fixed mandatory encoding. It collects relative translation, one continuous rotation encoding, metric range, planar bearing, height change, and camera-up or frustum orientation. The six-dimensional rotation representation is the baseline candidate because it is continuous for neural regression; axis--angle, quaternion, Fourier, or equivariant alternatives remain matched ablations and must not be concatenated silently with the baseline.
 
 The target relation is encoded separately so candidate self-motion cannot be confused with target conditioning:
 
-$
-  #eqs.spatial.candidate_target_relation
-$
+#block[#align(center)[#eqs.spatial.candidate_target_relation]]
 
 Here $bold(delta)_(e|i)^p$ is the target displacement in the candidate frame, its norm is candidate--target range, $cos theta_(t,e,i)^"opt"$ measures optical-axis alignment, $beta_(t,e,i)^"elev"$ is relative elevation, and $lambda_(t,e,i)^"obb"$ denotes the declared target-box/frustum relation vector for the experiment. These channels are also descriptor candidates: each must be enabled, removed, or replaced in a named ablation. Vector or 3D visualizations of the displacement, optical axis, frustum, and target box are diagnostic explanations of those channels, not additional model inputs.
 
 Continuous rotation features, metric range, bearing, elevation, height, and frustum variables preserve physical task structure. Query-local relative positional encoding is a later ablation for candidate--target, candidate--history, or candidate--candidate interactions:
 
-$
-  #eqs.spatial.candidate_query_local_frame
-$
+#block[#align(center)[#eqs.spatial.candidate_query_local_frame]]
 
-$
-  #eqs.spatial.candidate_query_rpe
-$
+#block[#align(center)[#eqs.spatial.candidate_query_rpe]]
 
 This adopts QCNet's query-centric geometric discipline, not its trajectory decoder or streaming claim @zhou2023query. World-frame copies remain audit facts; the learned interface should expose one authoritative local transform rather than recomputing the same relation through multiple fields.
 
@@ -177,9 +161,7 @@ The canonical candidate row is a local query, not a duplicate of the full state.
 
 Viewing history is not reducible to camera distance. For a target-local point or cell, selected camera directions define a signed first moment together with the second-moment memory
 
-$
-  #eqs.spatial.direction_memory_moment
-$
+#block[#align(center)[#eqs.spatial.direction_memory_moment]]
 
 The signed first moment distinguishes opposite approach directions, whereas the second moment records concentration along viewing axes. Their query-relative projections form directional features without committing to a full spherical-harmonic field. Low-order spherical harmonics are promoted only if these moments improve over ordered pose history and still leave systematic directional errors.
 

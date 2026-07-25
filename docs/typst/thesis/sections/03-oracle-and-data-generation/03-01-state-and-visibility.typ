@@ -20,9 +20,7 @@ The visibility boundary is protocol-relative and temporal. A dense render for an
 
 The target is treated as external task context, so the value is conceptually $Q(s_t,e,a)$ rather than a target-independent state value. The logged historic state contains the recorded trajectory evidence,
 
-$
-  #eqs.rl.s_hist
-$
+#block[#align(center)[#eqs.rl.s_hist]]
 
 Each component of this tuple has a distinct information role:
 
@@ -40,9 +38,7 @@ The remaining tuple elements are decision context rather than ASE/EFM sensing mo
 
 The counterfactual actor state retains the immutable logged substrate and adds only information causally available after selected actions,
 
-$
-  #eqs.rl.s_cf0
-$
+#block[#align(center)[#eqs.rl.s_cf0]]
 
 For the canonical model, this compact tuple is read together with the explicit ordered selected-view history:
 
@@ -54,9 +50,7 @@ In #symb.rl.s_cf0, the root EVL field remains fixed, whereas the accumulated poi
 
 The richer geometry-updated state makes the selected observation channels explicit:
 
-$
-  #eqs.rl.s_cf_geom
-$
+#block[#align(center)[#eqs.rl.s_cf_geom]]
 
 In the current `CF-GT` protocol, selected #symb.obs.depth is rendered from #symb.ase.mesh and paired with a validity mask and candidate-camera calibration. Backprojection yields selected-view surface points #symb.obs.points_cf; the corresponding camera-to-surface rays delimit observed free space, and #symb.obs.face_normal records local surface orientation. These quantities form a geometry-only successor observation. They do not contain the RGB or greyscale images required by EFM3D's 2D feature encoder and therefore cannot support a fresh EVL field at the selected pose @EFM3D-straub2024.
 
@@ -68,13 +62,9 @@ The counterfactual state is thus an *information state* for decision making, not
 
 The oracle state adds complete or counterfactual quantities outside the actor input graph:
 
-$
-  #eqs.rl.s_oracle
-$
+#block[#align(center)[#eqs.rl.s_oracle]]
 
-$
-  #eqs.rl.nbv_process_tuple
-$
+#block[#align(center)[#eqs.rl.nbv_process_tuple]]
 
 ASE provides per-frame metric @ground-truth:short depth aligned with RGB, per-pixel instance identifiers, class mappings, and the scene trajectory; the EFM3D release adds ASE OBB metadata and validation meshes for object-detection and surface-reconstruction supervision @ProjectAria-ASE-2025 @EFM3D-straub2024. EFM3D uses the depth channel to supervise occupancy at sampled free, surface, and behind-surface points, while visible OBBs supervise centerness, class, and box geometry @EFM3D-straub2024. These uses establish label provenance, not actor observability.
 

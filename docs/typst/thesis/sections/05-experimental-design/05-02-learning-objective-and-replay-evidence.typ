@@ -61,13 +61,9 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 
-$
-  #eqs.rl.qh_candidate_token
-$
+#block[#align(center)[#eqs.rl.qh_candidate_token]]
 
-$
-  #eqs.rl.qh_masked_argmax
-$
+#block[#align(center)[#eqs.rl.qh_masked_argmax]]
 
 The masked argmax is already the discrete decision rule. A separate actor network and online data collection are not required to train or execute this finite-candidate policy. Batch fitted Q iteration explicitly learns a greedy Q function from a fixed collection of transitions by repeatedly solving supervised regression problems @FittedQIteration-ernst2005.
 

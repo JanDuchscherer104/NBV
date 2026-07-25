@@ -12,15 +12,11 @@ The first required structure is candidate-row permutation equivariance. Reorderi
 
 For any permutation matrix $Pi$ acting on candidate rows, the value model should satisfy
 
-$
-  #eqs.rl.candidate_row_equivariance
-$
+#block[#align(center)[#eqs.rl.candidate_row_equivariance]]
 
 where $bold(X)_t = {bold(x)_(t,i)}_(i=1)^(N_q)$ stores per-candidate actor-visible descriptors and $bold(m)_t$ stores validity. Invalid and padded rows are outside the admissible action set, not low-utility examples. Selection is therefore
 
-$
-  #eqs.rl.masked_candidate_selection
-$
+#block[#align(center)[#eqs.rl.masked_candidate_selection]]
 
 The second required structure is frame discipline. Candidate, target, current-camera, and history poses use reference- or query-local relative features such as $bold(T)^r_(c_q)$ and continuous rotation encodings @zhou2019continuity @zhou2023query. This prevents an arbitrary world origin or row order from becoming a shortcut while preserving gravity alignment and camera-frustum geometry. It is a controlled coordinate choice, not a claim of full global $op("SE")(3)$ invariance.
 
@@ -70,7 +66,7 @@ The hard mask remains the deployment safety constraint. A soft feasibility score
 
 #research_todo(
   [Compare hard masking against a calibrated feasibility-times-value ranking only after feasibility calibration is measured. The hard mask remains the safety constraint in every comparison.],
-  source: [invalid-row supervision hypothesis],
+  source: [invalid-row supervision hypothesis; repo:.agents/todos.toml\#todo-048],
   gate: [feasibility calibration and policy ablation],
 )
 

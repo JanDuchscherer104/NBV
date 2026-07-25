@@ -31,15 +31,11 @@ The target-conditioned tracer emits one continuous value per candidate row. Cand
 
 For target $e$, the return over exactly the requested residual horizon $h$ is
 
-$
-  #eqs.rl.finite_horizon_return
-$
+#block[#align(center)[#eqs.rl.finite_horizon_return]]
 
 and the learned quantity is
 
-$
-  #eqs.rl.q_h
-$
+#block[#align(center)[#eqs.rl.q_h]]
 
 The notation $Q_H$ names the family supported up to a configured maximum $H$; one model query is
 
@@ -141,9 +137,7 @@ Because dense one-step rows vastly outnumber selected transitions at longer hori
 
 The hypothesis separates calibrated immediate utility from downstream effects:
 
-$
-  #eqs.rl.qh_residual_decomposition
-$
+#block[#align(center)[#eqs.rl.qh_residual_decomposition]]
 
 The base $b_(psi,i)$ must predict continuous one-step target root gain
 
@@ -155,27 +149,23 @@ in the same additive units as the finite-horizon return. Historical state-relati
 
 It is not exactly mean-centred within each candidate table because duplicate or unrelated rows would then change absolute value targets. Magnitude regularization may be tested without redefining the value field:
 
-$
-  #eqs.rl.qh_uncentered_residual
-$
+#block[#align(center)[#eqs.rl.qh_uncentered_residual]]
 
 CORAL remains a motivated one-step ranking and calibration interface,
 
-$
-  #eqs.rl.qh_coral_interface
-$
+#block[#align(center)[#eqs.rl.qh_coral_interface]]
 
 but additive finite-horizon returns are learned in continuous root-gain units. The direct variable-horizon model, exact H=2 control, Double-Q ablation, Monte-Carlo control, and residual learner form separate comparisons rather than one implicit architecture.
 
 #research_todo(
   [Compare staged and joint shared-parameter variable-horizon fitted Q against separate per-horizon heads; include dense Q1, exact Q2, Double Q, behavior-return regression, and the uncentred residual after positive oracle-lookahead headroom is established.],
-  source: [variable-horizon learning-target contract],
+  source: [variable-horizon learning-target contract; repo:.agents/todos.toml\#todo-052],
   gate: [A0/A1 learning, per-horizon support report, and headroom report],
 )
 
 #decision_todo(
   [Freeze the maximum horizon, horizon-sampling or loss-weighting rule, lower-horizon target-update schedule, and target-network rule in the resolved training manifest. For the residual ablation, also record whether the one-step base is frozen, slow-fine-tuned, or jointly trained.],
-  source: [variable-horizon fitted-value hypothesis],
+  source: [variable-horizon fitted-value hypothesis; repo:.agents/todos.toml\#todo-037],
   gate: [model-selection protocol freeze],
 )
 
