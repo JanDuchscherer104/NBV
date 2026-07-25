@@ -125,6 +125,16 @@ def main() -> None:
     invalidated = contract._preserved_semantic_edges(graph, changed_sources, nodes)
     assert inferred["id"] not in {edge["id"] for edge in invalidated}
 
+    missing_digest_graph = copy.deepcopy(graph)
+    missing_digest_edge = next(
+        edge for edge in missing_digest_graph["edges"] if edge["id"] == inferred["id"]
+    )
+    missing_digest_edge["source_locators"][0].pop("sha256")
+    invalidated = contract._preserved_semantic_edges(
+        missing_digest_graph, manifest["sources"], nodes
+    )
+    assert inferred["id"] not in {edge["id"] for edge in invalidated}
+
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         source_paths = {
@@ -161,12 +171,10 @@ def main() -> None:
     invalid = copy.deepcopy(graph)
     bad = copy.deepcopy(inferred)
     bad["id"] = "bad-query-edge"
-    bad["source_locators"] = [
-        {"path": "graphify-out/query.json", "locator": "L1", "sha256": "0" * 64}
-    ]
+    bad["source_locators"] = [{"path": "graphify-out/query.json", "locator": "L1"}]
     invalid["edges"].append(bad)
     errors = contract.validate_graph(invalid, manifest)
-    assert any("source digest" in error or "non-corpus" in error for error in errors)
+    assert any("exact manifest provenance" in error for error in errors)
 
 
 if __name__ == "__main__":

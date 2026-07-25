@@ -22,6 +22,8 @@ CONFIG_PATH = ROOT / ".graphify.toml"
 OUT = ROOT / "graphify-out"
 PARTITION_ORDER = ("literature", "scaffold", "thesis", "code")
 ORIGINS = {"EXTRACTED", "INFERRED", "AMBIGUOUS"}
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+SOURCE_LOCATOR_PATTERN = re.compile(r"L[1-9][0-9]*")
 REFERENCE_PATTERNS = (
     re.compile(r"\[[^]]*\]\(([^)#?]+)"),
     re.compile(r"#(?:include|import)\s+\"([^\"]+)\""),
@@ -235,6 +237,23 @@ def _source_locator(source: dict[str, str], line: int | None = None) -> dict[str
     return {"path": source["path"], "locator": locator, "sha256": source["sha256"]}
 
 
+def _valid_source_locator(locator: object, source_digests: dict[str, str]) -> bool:
+    if not isinstance(locator, dict):
+        return False
+    path = locator.get("path")
+    location = locator.get("locator")
+    digest = locator.get("sha256")
+    return (
+        isinstance(path, str)
+        and path in source_digests
+        and isinstance(location, str)
+        and SOURCE_LOCATOR_PATTERN.fullmatch(location) is not None
+        and isinstance(digest, str)
+        and SHA256_PATTERN.fullmatch(digest) is not None
+        and digest == source_digests[path]
+    )
+
+
 def _read_graph(path: Path) -> dict[str, Any] | None:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -395,9 +414,7 @@ def _preserved_semantic_edges(
         if not isinstance(locators, list) or not locators:
             continue
         if any(
-            not isinstance(locator, dict)
-            or source_digests.get(str(locator.get("path"))) != locator.get("sha256")
-            for locator in locators
+            not _valid_source_locator(locator, source_digests) for locator in locators
         ):
             continue
         candidate = dict(edge)
@@ -635,7 +652,7 @@ def build_canonical(
             "source_tree_sha256": source_tree_sha256,
         },
     }
-    validation_errors = validate_graph(graph, manifest)
+    validation_errors = validate_graph(graph, manifest, root=root)
     if validation_errors:
         raise ContractError(
             "generated canonical graph is invalid: " + "; ".join(validation_errors)
@@ -699,9 +716,16 @@ def write_canonical(
         temporary.replace(out / name)
 
 
-def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
+def validate_graph(
+    graph: dict[str, Any],
+    manifest: dict[str, Any],
+    *,
+    root: Path = ROOT,
+) -> list[str]:
     """Return canonical schema and source-provenance violations."""
     errors: list[str] = []
+    config = load_config(root)
+    selected = selected_literature_dirs(root)
     graph_partitions = graph.get("partitions", {})
     manifest_partitions = manifest.get("partitions", {})
     graphify = graph.get("graphify")
@@ -713,11 +737,43 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
         for node in graph.get("nodes", [])
         if isinstance(node, dict)
     }
-    source_digests = {
-        source.get("path"): source.get("sha256")
-        for source in manifest.get("sources", [])
-        if isinstance(source, dict)
-    }
+    manifest_sources = manifest.get("sources")
+    source_digests: dict[str, str] = {}
+    if not isinstance(manifest_sources, list):
+        errors.append("manifest sources are not a list")
+        manifest_sources = []
+    for source in manifest_sources:
+        if not isinstance(source, dict):
+            errors.append("manifest source is not an object")
+            continue
+        source_path = source.get("path")
+        source_digest = source.get("sha256")
+        source_partition = source.get("partition")
+        if (
+            not isinstance(source_path, str)
+            or not source_path
+            or not isinstance(source_digest, str)
+            or SHA256_PATTERN.fullmatch(source_digest) is None
+        ):
+            errors.append("manifest source lacks exact path or sha256")
+            continue
+        if source_path in source_digests:
+            errors.append(f"duplicate manifest source path: {source_path}")
+            continue
+        try:
+            classified_partition = classify_path(
+                source_path,
+                config,
+                selected_literature_dirs=selected,
+            )
+        except ContractError:
+            classified_partition = None
+        if classified_partition is None or source_partition != classified_partition:
+            errors.append(
+                f"manifest source is unknown or outside corpus: {source_path}"
+            )
+            continue
+        source_digests[source_path] = source_digest
     if set(graph_partitions) != set(PARTITION_ORDER):
         errors.append("graph does not contain exactly four canonical partitions")
     if graph_partitions != manifest_partitions:
@@ -849,10 +905,11 @@ def validate_graph(graph: dict[str, Any], manifest: dict[str, Any]) -> list[str]
             errors.append(f"edge lacks exact source locators: {edge.get('id')}")
             continue
         for locator in locators:
-            if not isinstance(locator, dict) or source_digests.get(
-                locator.get("path")
-            ) != locator.get("sha256"):
-                errors.append(f"edge source digest is not current: {edge.get('id')}")
+            if not _valid_source_locator(locator, source_digests):
+                errors.append(
+                    f"edge source locator is not exact manifest provenance: "
+                    f"{edge.get('id')}"
+                )
         if edge.get("origin") in {"INFERRED", "AMBIGUOUS"} and any(
             str(locator.get("path", "")).startswith(
                 ("graphify-out/", ".omx/state/", ".agents/memory/transcripts/")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -49,6 +50,24 @@ def main() -> None:
         "scripts/nbv_qmd_outline.sh",
         "scripts/nbv_typst_includes.py",
     ]
+    assert metrics["active_scaffold_source_loc"] == 23961
+    active_paths = set(metrics["active_scaffold_source_paths"])
+    for path in (
+        ".graphify.toml",
+        ".graphifyignore",
+        "scripts/check_graphify_history.py",
+        "scripts/graphify_contract.py",
+        "scripts/graphify_merge_driver.py",
+        "scripts/graphify_query.py",
+        "scripts/git_hooks/post-commit",
+        "scripts/nbv_typst_includes.py",
+        "scripts/scaffold/bootstrap_matt_skills.py",
+        "scripts/scaffold/check_wp7_integration.py",
+        "scripts/scaffold/matt_skills_policy.py",
+        "scripts/scaffold/run_scoped_uml.py",
+        "scripts/scaffold/validate_omx_artifacts.py",
+    ):
+        assert path in active_paths
     for prefix in ("scripts/tests/", "graphify-out/", ".omx/"):
         assert any(
             path.startswith(prefix)
@@ -72,6 +91,18 @@ def main() -> None:
     )
     rejected(
         metrics,
+        "missing_required_loc_include_globs",
+        ["scripts/scaffold/**"],
+        "required source families",
+    )
+    rejected(
+        metrics,
+        "active_source_coverage_gaps",
+        ["scripts/scaffold/future_gate.py"],
+        "evade LOC accounting",
+    )
+    rejected(
+        metrics,
         "model_visible_description_bytes",
         metrics["maximum_description_bytes"] + 1,
         "40 percent",
@@ -89,12 +120,16 @@ def main() -> None:
         "Matt description",
     )
     synthetic_tree = {
-        ".omx/accepted/evidence.md": ("100644", "a"),
-        "graphify-out/graph.json": ("100644", "b"),
-        "owned/source.py": ("100644", "c"),
-        "scripts/tests/test_owned.py": ("100644", "d"),
-        "unowned/readme.md": ("100644", "e"),
-        "vendor/submodule": ("160000", "f"),
+        ".omx/archive/accepted-bundles/task--0123456789abcdef/evidence.md": (
+            "100644",
+            "a",
+        ),
+        ".omx/plans/current-evidence.md": ("100644", "b"),
+        "graphify-out/graph.json": ("100644", "c"),
+        "owned/source.py": ("100644", "d"),
+        "scripts/tests/test_owned.py": ("100644", "e"),
+        "unowned/readme.md": ("100644", "f"),
+        "vendor/submodule": ("160000", "g"),
     }
     synthetic_rules = {
         "include_globs": ["owned/**", "scripts/**", "graphify-out/**", ".omx/**"],
@@ -103,19 +138,59 @@ def main() -> None:
     included, excluded = wp7.accounting_path_sets(synthetic_tree, synthetic_rules)
     assert included == ["owned/source.py"]
     assert excluded == [
-        ".omx/accepted/evidence.md",
+        ".omx/archive/accepted-bundles/task--0123456789abcdef/evidence.md",
+        ".omx/plans/current-evidence.md",
         "graphify-out/graph.json",
         "scripts/tests/test_owned.py",
+    ]
+    future_active_tree = {
+        ".graphify.future.toml": ("100644", "a"),
+        "scripts/check_graphify_future.py": ("100644", "b"),
+        "scripts/git_hooks/pre-commit": ("100755", "c"),
+        "scripts/nbv_future_outline.py": ("100644", "d"),
+        "scripts/scaffold/future_gate.py": ("100644", "e"),
+        "scripts/tests/test_graphify_future.py": ("100644", "f"),
+    }
+    baseline = json.loads(wp7.BASELINE.read_text(encoding="utf-8"))
+    rules = baseline["counting_rules"]["active_scaffold_source_loc"]
+    future_included, future_excluded = wp7.accounting_path_sets(
+        future_active_tree, rules
+    )
+    assert future_included == [
+        ".graphify.future.toml",
+        "scripts/check_graphify_future.py",
+        "scripts/git_hooks/pre-commit",
+        "scripts/nbv_future_outline.py",
+        "scripts/scaffold/future_gate.py",
+    ]
+    assert future_excluded == ["scripts/tests/test_graphify_future.py"]
+    assert not wp7.active_source_coverage_gaps(future_active_tree, rules)
+    weakened_rules = copy.deepcopy(rules)
+    weakened_rules["include_globs"] = [
+        pattern
+        for pattern in weakened_rules["include_globs"]
+        if pattern != "scripts/scaffold/**"
+    ]
+    assert wp7.active_source_coverage_gaps(future_active_tree, weakened_rules) == [
+        "scripts/scaffold/future_gate.py"
     ]
     for path in (
         ".agents/references/future_contract.md",
         ".agents/skills/future-skill/SKILL.md",
         ".codex/skills/graphify/future.py",
+        ".graphify.toml",
+        "scripts/check_graphify_future.py",
+        "scripts/git_hooks/pre-commit",
+        "scripts/nbv_future_outline.py",
+        "scripts/scaffold/future_gate.py",
     ):
         assert wp7.is_active_scaffold_source(path)
     assert not wp7.is_active_scaffold_source("scripts/tests/test_future.py")
     assert not wp7.is_active_scaffold_source("graphify-out/future.json")
-    assert not wp7.is_active_scaffold_source(".omx/accepted/future.md")
+    assert not wp7.is_active_scaffold_source(".omx/plans/future.md")
+    assert not wp7.is_active_scaffold_source(
+        ".omx/archive/accepted-bundles/task--0123456789abcdef/future.md"
+    )
     assert all(
         not path.startswith(("scripts/tests/", "graphify-out/", ".omx/"))
         for path in metrics["active_scaffold_source_paths"]

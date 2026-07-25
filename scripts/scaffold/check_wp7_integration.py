@@ -29,6 +29,14 @@ OUTLINE_SCRIPT_NAMES = {
     "nbv_qmd_outline.sh",
     "nbv_typst_includes.py",
 }
+ACTIVE_SOURCE_FAMILY_GLOBS = {
+    ".graphify*",
+    "scripts/*graphify*.py",
+    "scripts/git_hooks/**",
+    "scripts/nbv_*.py",
+    "scripts/scaffold/**",
+}
+REQUIRED_LOC_INCLUDE_GLOBS = ACTIVE_SOURCE_FAMILY_GLOBS
 
 
 def git_tree(ref: str) -> dict[str, tuple[str, str]]:
@@ -73,6 +81,21 @@ def accounting_path_sets(
     ]
     excluded = [path for path in regular if _matches(path, exclude_globs)]
     return included, excluded
+
+
+def active_source_coverage_gaps(
+    tree: dict[str, tuple[str, str]], rules: dict[str, object]
+) -> list[str]:
+    """Return active scaffold-family sources omitted from LOC accounting."""
+    included, excluded = accounting_path_sets(tree, rules)
+    accounted = set(included) | set(excluded)
+    return sorted(
+        path
+        for path, (mode, _) in tree.items()
+        if mode in {"100644", "100755"}
+        and _matches(path, list(ACTIVE_SOURCE_FAMILY_GLOBS))
+        and path not in accounted
+    )
 
 
 def is_active_scaffold_source(path: str) -> bool:
@@ -144,6 +167,8 @@ def measure() -> dict[str, object]:
     baseline_tree = git_tree(baseline_ref)
     head_tree = git_tree("HEAD")
     rules = baseline["counting_rules"]["active_scaffold_source_loc"]
+    include_globs = rules["include_globs"]
+    assert isinstance(include_globs, list)
     baseline_included, baseline_excluded = accounting_path_sets(baseline_tree, rules)
     head_included, head_excluded = accounting_path_sets(head_tree, rules)
     tracked = sorted(
@@ -195,6 +220,13 @@ def measure() -> dict[str, object]:
         "active_scaffold_excluded_paths": head_excluded,
         "active_scaffold_source_files": len(head_included),
         "active_scaffold_source_loc": tree_loc(head_tree, head_included),
+        "missing_required_loc_include_globs": sorted(
+            REQUIRED_LOC_INCLUDE_GLOBS - set(include_globs)
+        ),
+        "baseline_active_source_coverage_gaps": active_source_coverage_gaps(
+            baseline_tree, rules
+        ),
+        "active_source_coverage_gaps": active_source_coverage_gaps(head_tree, rules),
         "baseline_outline_scripts": outline_scripts(baseline_tree),
         "active_outline_scripts": outline_scripts(head_tree),
         "matt_skill_count": len(matt["skill"]),
@@ -272,6 +304,12 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append(
             "active scaffold source LOC is not strictly below the WP0 baseline"
         )
+    if metrics["missing_required_loc_include_globs"]:
+        errors.append("active scaffold LOC rules are missing required source families")
+    if metrics["baseline_active_source_coverage_gaps"]:
+        errors.append("WP0 active scaffold source paths evade LOC accounting")
+    if metrics["active_source_coverage_gaps"]:
+        errors.append("HEAD active scaffold source paths evade LOC accounting")
     if not set(cast(list[str], metrics["baseline_outline_scripts"])) <= set(
         cast(list[str], metrics["active_outline_scripts"])
     ):

@@ -197,6 +197,36 @@ def main() -> None:
             json.dumps(graph), encoding="utf-8"
         )
 
+        locator_mutations: list[Callable[[dict[str, Any]], object]] = [
+            lambda locator: locator.pop("path"),
+            lambda locator: locator.pop("locator"),
+            lambda locator: locator.pop("sha256"),
+            lambda locator: locator.__setitem__("path", "graphify-out/query.json"),
+            lambda locator: locator.__setitem__("locator", ""),
+            lambda locator: locator.__setitem__("sha256", "not-a-digest"),
+            lambda locator: locator.__setitem__("sha256", "0" * 64),
+        ]
+        for mutate in locator_mutations:
+            malformed = copy.deepcopy(graph)
+            mutate(malformed["edges"][0]["source_locators"][0])
+            errors = contract.validate_graph(malformed, manifest)
+            assert any(
+                "source locator is not exact manifest provenance" in error
+                for error in errors
+            )
+
+        malformed_manifest = copy.deepcopy(manifest)
+        malformed_manifest["sources"].append(
+            {
+                "path": "graphify-out/query.json",
+                "sha256": "0" * 64,
+                "partition": "scaffold",
+                "role": "guide",
+            }
+        )
+        errors = contract.validate_graph(graph, malformed_manifest)
+        assert any("unknown or outside corpus" in error for error in errors)
+
         wrong_version_graph = copy.deepcopy(graph)
         wrong_version_manifest = copy.deepcopy(manifest)
         wrong_version_graph["graphify"]["version"] = "0.9.9"

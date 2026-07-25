@@ -36,6 +36,15 @@ git -C "$TMP" commit -qm code-change
 
 test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 1
 
+mkdir -p "$TMP/external"
+git -C "$TMP" mv aria_nbv/aria_nbv/example.py external/example.py
+git -C "$TMP" commit -qm included-to-excluded-rename
+(
+  cd "$TMP"
+  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
+)
+test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 2
+
 mkdir -p "$TMP/.agents/skills/demo"
 printf '%s\n' '---' 'name: demo' 'description: fixture' '---' >"$TMP/.agents/skills/demo/SKILL.md"
 git -C "$TMP" add .
@@ -44,7 +53,7 @@ git -C "$TMP" commit -qm skill-change
   cd "$TMP"
   PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
 )
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 2
+test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 3
 
 mkdir -p "$TMP/docs/literature/tex-src/arXiv-selected"
 printf 'selected\n' >"$TMP/docs/literature/tex-src/arXiv-selected/main.tex"
@@ -54,7 +63,7 @@ git -C "$TMP" commit -qm selected-literature
   cd "$TMP"
   PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
 )
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 3
+test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 4
 
 mkdir -p "$TMP/docs/literature/tex-src/arXiv-unselected"
 printf 'unselected\n' >"$TMP/docs/literature/tex-src/arXiv-unselected/main.tex"
@@ -64,7 +73,7 @@ git -C "$TMP" commit -qm unselected-literature
   cd "$TMP"
   PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
 )
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 3
+test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 4
 
 printf '{}\n' >"$TMP/graphify-out/graph.json"
 git -C "$TMP" add -f graphify-out/graph.json
