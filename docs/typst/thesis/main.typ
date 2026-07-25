@@ -1,7 +1,7 @@
 #import "template/layout/thesis_template.typ": *
 #import "metadata.typ": *
 #import "../shared/macros.typ": *
-#import "../shared/glossary.typ": *
+#import "glossary-overrides.typ": make-aria-glossary, register-aria-glossary, print-aria-glossary
 #import "../shared/notation.typ": print-thesis-symbols
 #import "experiment_data.typ": thesis-report-settings, load-thesis-report
 #import "@preview/booktabs:0.0.4": *
@@ -17,7 +17,7 @@
 #set text(font: "New Computer Modern")
 
 #show: booktabs-default-table-style
-#show: make-glossary
+#show: make-aria-glossary
 #register-aria-glossary()
 
 #show: thesis.with(
