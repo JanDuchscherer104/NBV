@@ -27,18 +27,20 @@ The rollout store is normalized around replay identity. One source can produce m
     [Sources and targets],
     [Manifest-backed task coverage; not proof of actor-visible target discovery.],
     [Candidates and invalidity],
-    [Full-shell support with hard action, training, and bootstrap masks.],
+    [Full-shell support with separate hard-action, training, padding, and future deployable-feasibility roles.],
     [Retained chains and steps],
     [Recipe-selected evidence; not a persisted exhaustive search tree.],
     [Selected depth],
-    [Chosen-action successor history; not all-candidate or endpoint evidence.],
+    [Chosen-action successor observation with calibration and source role; actor input only under an explicitly admitted later-state protocol.],
     [#symb.rl.qh view],
-    [Derived training cache whose rewards and masks must agree with factual rows.],
+    [Derived training cache whose rewards and masks must agree with factual rows; not a scene-memory representation.],
     bottomrule(),
   ),
   caption: [Interpretation contract for rollout-store audits. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
 ) <tab:current-rollout-store-audit>
 
-Selected-depth persistence stores only the depth raster and calibration for the chosen action at each retained step. It is sufficient to reconstruct selected history without duplicating dense all-candidate renders, but it is not an independently scored endpoint artifact. Likewise, rollout rows summarize final cumulative selected-chain metrics; they do not preserve every rejected branch or a policy-neutral endpoint reconstruction. These limitations must be resolved by matched endpoint re-evaluation before confirmatory policy comparison.
+Selected-depth persistence stores only the depth raster and calibration for the chosen action at each retained step. It is sufficient to reconstruct the selected-observation prefix without duplicating dense all-candidate renders, but persistence does not decide visibility. A `CF-GT` reader may use previously selected GT-mesh depths to build a privileged dynamic state; a deployable reader must instead consume a declared sensor-like or observed source. The current unselected candidate renders remain oracle-only in every student protocol. Selected depth is also not an independently scored endpoint artifact.
 
-Scientific reporting is generated from the same inspection frames used by the diagnostic application. The main text needs target-task coverage, candidate validity and invalid reasons, family survival and selection, selected-history sanity, gain distributions, and runtime/storage summaries. Exact schema columns, compression, chunking, hashes, and cluster invocation belong in the reproducibility appendix and must be read from the resolved manifest and report bundle. Development bandwidth pilots are train-only feasibility checks; their counts and throughput may size later jobs but cannot support held-out reconstruction or policy claims.
+Likewise, rollout rows summarize final cumulative selected-chain metrics; they do not preserve every rejected branch or a policy-neutral endpoint reconstruction. These limitations must be resolved by matched endpoint re-evaluation before confirmatory policy comparison.
+
+Scientific reporting is generated from the same inspection frames used by the diagnostic application. The main text needs target-task coverage, candidate validity and invalid reasons, family survival and selection, selected-history sanity, gain distributions, source-role counts, and runtime/storage summaries. Exact schema columns, compression, chunking, hashes, and cluster invocation belong in the reproducibility appendix and must be read from the resolved manifest and report bundle. Development bandwidth pilots are train-only feasibility checks; their counts and throughput may size later jobs but cannot support held-out reconstruction or policy claims.
