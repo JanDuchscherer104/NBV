@@ -89,7 +89,7 @@ $
   Q_(bar(theta))(s_(t+1), e, j, h-1)
 $
 
-where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule is $Q_h leftarrow Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
+where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule is $Q_h arrow.l Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
 
 The stored evidence gives a particularly strong base case. Every candidate admitted by `q_train_mask` can supervise continuous one-step root-normalized gain. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
 
