@@ -71,21 +71,11 @@ The masked argmax is already the discrete decision rule. A separate actor networ
 
 The primary model is one conditional scorer $Q_theta(s_t,e,i,h)$ for every requested residual horizon $h$ admitted by $1 <= h <= b_t <= H$. The boundary target is
 
-$
-  y_t^((1,e)) = r_t^e
-$
+#block[#align(center)[#eqs.rl.qh_one_step_target]]
 
 and the recursive target is
 
-$
-  y_t^((h,e))
-  =
-  cases(
-    r_t^e & "if " h=1 " or " d_t=1,
-    r_t^e + gamma op("max", limits: #true)_(j : m_(t+1,j)=1)
-      Q_(bar(theta))(s_(t+1),e,j,h-1) & "if " h>1 " and " d_t=0
-  )
-$
+#block[#align(center)[#eqs.rl.qh_recursive_target]]
 
 The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
@@ -101,15 +91,7 @@ This schedule preserves one inference interface and shared encoders while making
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 
-$
-  y_t^((2,e), "exact")
-  =
-  r_t^e
-  +
-  gamma
-  op("max", limits: #true)_(j : m_(t+1,j)^"train"=1)
-  r_(t+1,j)^e
-$
+#block[#align(center)[#eqs.rl.qh_exact_two_step_target]]
 
 This target uses no learned successor value or target network. Agreement between fitted $Q_2$ and this exact control is a required base-case test before interpreting longer-horizon results. It is not the endpoint of the method because the minimal thesis goal is one scorer spanning all supported horizons.
 
@@ -117,22 +99,13 @@ This target uses no learned successor value or target network. Agreement between
 
 Double Q changes how a noisy learned successor maximum is estimated; it does not change the definition of the horizon-conditioned scorer. The online path selects
 
-$
-  j^star
-  =
-  op("argmax", limits: #true)_(j : m_(t+1,j)=1)
-  Q_theta(s_(t+1),e,j,h-1)
-$
+#block[#align(center)[#eqs.rl.qh_doubleq_selector]]
 
 and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. It remains an ablation against the simpler frozen lower-horizon maximum. It is relevant in an offline setting only because a learned maximum is present, not because online learning is planned.
 
 A retained chain also yields the truncated Monte-Carlo target
 
-$
-  G_(t,e)^((h),mu)
-  =
-  sum_(k=0)^(h-1) gamma^k r_(t+k)^e
-$
+#block[#align(center)[#eqs.rl.qh_behavior_return]]
 
 for its behavior policy $mu$. Regression to this fixed target is a useful policy-conditioned control, but it estimates $Q^mu$, not the greedy finite-support value $Q^star$, unless $mu$ is explicitly the target continuation policy. Behavior returns from random-valid, greedy, softmax, and oracle-lookahead chains must therefore remain identified rather than pooled as if they represented one optimal value function.
 

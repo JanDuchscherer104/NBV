@@ -163,6 +163,54 @@
     quad
     Q_(0,e) (s, i) = 0
   $,
+  qh_query: $
+    Q_theta (s_t, e, i, h)
+    =
+    Q_(h,e)^theta (s_t, i),
+    quad
+    1 <= h <= b_t <= H
+  $,
+  qh_horizon_query_token: $
+    u_(t,e,h,i)
+    =
+    op("CrossAttn")_theta (
+      x_(t,e,i) + op("Emb")_h (h),
+      {h_e^"tgt", Phi_t^"scene", bold(H)_t, b_t}
+    )
+  $,
+  qh_one_step_target: $
+    y_t^((1,e)) = r_t^e
+  $,
+  qh_recursive_target: $
+    y_t^((h,e))
+    =
+    cases(
+      r_t^e & "if " h=1 " or " d_t=1,
+      r_t^e + gamma op("max", limits: #true)_(j : m_(t+1,j)=1)
+        Q_(bar(theta)) (s_(t+1), e, j, h-1)
+        & "if " h>1 " and " d_t=0
+    )
+  $,
+  qh_exact_two_step_target: $
+    y_t^((2,e), "exact")
+    =
+    r_t^e
+    +
+    gamma
+    op("max", limits: #true)_(j : m_(t+1,j)^"train"=1)
+    r_(t+1,j)^e
+  $,
+  qh_doubleq_selector: $
+    j^star
+    =
+    op("argmax", limits: #true)_(j : m_(t+1,j)=1)
+    Q_theta (s_(t+1), e, j, h-1)
+  $,
+  qh_behavior_return: $
+    G_(t,e)^((h),mu)
+    =
+    sum_(k=0)^(h-1) gamma^k r_(t+k)^e
+  $,
   qh_residual_decomposition: $
     b_(psi,i)
     =

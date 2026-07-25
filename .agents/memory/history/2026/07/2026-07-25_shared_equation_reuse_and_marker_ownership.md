@@ -30,6 +30,17 @@ section-local symbolic math fragments from 229 to 181, and unowned action
 markers from 7 to 0. Unregistered shared references remained 195. Measured
 non-test LOC decreased from 14461 to 14365. Every frozen hard gate passed.
 
+Iteration 3 centralized seven finite-horizon queries and learning targets used
+by the Method and Experimental Design chapters. Ownership violations decreased
+again from 376 to 364 and section-local symbolic math fragments from 181 to
+169. Unregistered references and unowned markers remained unchanged. Measured
+non-test LOC increased by 7 lines because the named equations and generated
+cross-modal lookup projections replace two independent formula copies. Every
+hard gate passed. Review then rejected an eighth proposed name because its body
+duplicated `rl.target_rri_reward`; the final source reuses that existing owner.
+The post-review evaluator rerun preserved all iteration-3 metrics and reduced
+measured non-test LOC by a further 10 lines.
+
 ## TODO Disposition
 
 | Surface | Disposition |
@@ -45,6 +56,7 @@ non-test LOC decreased from 14461 to 14365. Every frozen hard gate passed.
 ## Verification
 
 - frozen successor evaluator, append, validate, and report
+- generated Typst and Quarto notation lookup projections
 - development Typst compile and PDF text inspection
 - submission status-marker success and actionable-marker expected failure
 - exact agents-DB locator existence checks
