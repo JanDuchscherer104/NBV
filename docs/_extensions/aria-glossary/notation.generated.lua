@@ -611,7 +611,7 @@ return {
       thesis_list = false,
     },
     ["rl.qh_horizon_query_token"] = {
-      tex = "u_{t,e,h,i}=\\operatorname{CrossAttn}_\\theta(x_{t,e,i}+\\operatorname{Emb}_h(h),\\{h_e^{\\mathrm{tgt}},\\Phi_t^{\\mathrm{scene}},H_t,b_t\\})",
+      tex = "u_{t,e,h,i}=\\operatorname{CrossAttn}_\\theta(x_{t,e,i}+\\operatorname{Emb}_h(h),\\{h_e^{\\mathrm{tgt}},\\Phi_t^{\\mathrm{scene}},\\boldsymbol{H}_t,b_t\\})",
       typst = "#eqs.rl.qh_horizon_query_token",
       description = "",
       thesis_list = false,

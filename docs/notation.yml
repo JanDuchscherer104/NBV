@@ -521,7 +521,7 @@ equations:
     tex: 'Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]'
     typst: '#eqs.rl.q_h'
   rl.qh_query: {tex: 'Q_\theta(s_t,e,i,h)=Q_{h,e}^\theta(s_t,i),\ 1\le h\le b_t\le H', typst: '#eqs.rl.qh_query'}
-  rl.qh_horizon_query_token: {tex: 'u_{t,e,h,i}=\operatorname{CrossAttn}_\theta(x_{t,e,i}+\operatorname{Emb}_h(h),\{h_e^{\mathrm{tgt}},\Phi_t^{\mathrm{scene}},H_t,b_t\})', typst: '#eqs.rl.qh_horizon_query_token'}
+  rl.qh_horizon_query_token: {tex: 'u_{t,e,h,i}=\operatorname{CrossAttn}_\theta(x_{t,e,i}+\operatorname{Emb}_h(h),\{h_e^{\mathrm{tgt}},\Phi_t^{\mathrm{scene}},\boldsymbol{H}_t,b_t\})', typst: '#eqs.rl.qh_horizon_query_token'}
   rl.qh_one_step_target: {tex: 'y_t^{(1,e)}=r_t^e', typst: '#eqs.rl.qh_one_step_target'}
   rl.qh_recursive_target: {tex: 'y_t^{(h,e)}=\begin{cases}r_t^e,&h=1\ \mathrm{or}\ d_t=1\\r_t^e+\gamma\max_{j:m_{t+1,j}=1}Q_{\bar\theta}(s_{t+1},e,j,h-1),&h>1\ \mathrm{and}\ d_t=0\end{cases}', typst: '#eqs.rl.qh_recursive_target'}
   rl.qh_exact_two_step_target: {tex: 'y_t^{(2,e),\mathrm{exact}}=r_t^e+\gamma\max_{j:m_{t+1,j}^{\mathrm{train}}=1}r_{t+1,j}^e', typst: '#eqs.rl.qh_exact_two_step_target'}
