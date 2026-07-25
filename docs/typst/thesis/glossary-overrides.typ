@@ -83,5 +83,6 @@
   entry => if entry.key == "finite-horizon-q-function" { qh-entry } else { entry },
 )
 
+#let make-aria-glossary = make-glossary
 #let register-aria-glossary() = register-glossary(aria-glossary-entries)
 #let print-aria-glossary(..args) = print-glossary(aria-glossary-entries, ..args)
