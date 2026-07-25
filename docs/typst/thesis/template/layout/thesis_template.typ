@@ -155,7 +155,7 @@
   body
 
   pagebreak()
-  bibliography("/references.bib", style: "ieee")
+  bibliography(("/references.bib", "/references-qh.bib"), style: "ieee")
 
   if appendix_content != none {
     pagebreak()
