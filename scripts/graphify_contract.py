@@ -674,7 +674,8 @@ def build_canonical(
         "| --- | ---: | :---: | --- |",
     ]
     report_lines.extend(
-        f"| {name} | {partitions[name]['source_count']} | yes | "
+        f"| {name} | {partitions[name]['source_count']} | "
+        f"{'yes' if partitions[name]['semantic_complete'] else 'no'} | "
         f"`{partitions[name]['revision']}` |"
         for name in PARTITION_ORDER
     )
@@ -926,4 +927,22 @@ def load_canonical(out: Path = OUT) -> tuple[dict[str, Any], dict[str, Any]]:
     manifest = _read_graph(out / "manifest.json")
     if graph is None or manifest is None:
         raise ContractError("canonical Graphify graph or manifest is absent/malformed")
+    return graph, manifest
+
+
+def load_validated_canonical(
+    out: Path = OUT, *, root: Path = ROOT
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load canonical artifacts and reject schema or provenance corruption."""
+    graph, manifest = load_canonical(out)
+    try:
+        errors = validate_graph(graph, manifest, root=root)
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ContractError(
+            f"canonical Graphify graph or manifest is schema-invalid: {exc}"
+        ) from exc
+    if errors:
+        raise ContractError(
+            "canonical Graphify graph or manifest is invalid: " + "; ".join(errors)
+        )
     return graph, manifest

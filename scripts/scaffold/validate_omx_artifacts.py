@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -353,14 +354,47 @@ def _validate_handoff_data(
 
 
 def visible_omx_paths(root: Path) -> tuple[set[str], list[str]]:
-    result = _git(
-        root, "ls-files", "--cached", "--others", "--exclude-standard", "--", ".omx"
+    tracked = _git(root, "ls-files", "--stage", "-z", "--", ".omx")
+    if tracked.returncode:
+        return set(), [f"git ls-files failed: {tracked.stderr.strip()}"]
+    visible: set[str] = set()
+    errors: list[str] = []
+    for entry in tracked.stdout.split("\0"):
+        if not entry:
+            continue
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        if not separator or len(fields) != 3:
+            errors.append(f"malformed git ls-files entry: {entry!r}")
+            continue
+        mode = fields[0]
+        visible.add(path)
+        if mode == "120000":
+            errors.append(f"tracked OMX entry is a symlink: {path}")
+            continue
+        if mode not in {"100644", "100755"}:
+            errors.append(
+                f"tracked OMX entry is not a regular file: {path} (Git mode {mode})"
+            )
+            continue
+        try:
+            file_mode = (root / path).lstat().st_mode
+        except FileNotFoundError:
+            errors.append(f"tracked OMX entry is not a regular file: {path} (missing)")
+            continue
+        if stat.S_ISLNK(file_mode):
+            errors.append(f"tracked OMX entry is a symlink: {path}")
+        elif not stat.S_ISREG(file_mode):
+            errors.append(f"tracked OMX entry is not a regular file: {path}")
+
+    untracked = _git(
+        root, "ls-files", "--others", "--exclude-standard", "-z", "--", ".omx"
     )
-    if result.returncode:
-        return set(), [f"git ls-files failed: {result.stderr.strip()}"]
-    return {
-        line for line in result.stdout.splitlines() if line and (root / line).is_file()
-    }, []
+    if untracked.returncode:
+        errors.append(f"git ls-files failed: {untracked.stderr.strip()}")
+    else:
+        visible.update(path for path in untracked.stdout.split("\0") if path)
+    return visible, errors
 
 
 def _validate_registry_shape(registry: Any) -> list[str]:

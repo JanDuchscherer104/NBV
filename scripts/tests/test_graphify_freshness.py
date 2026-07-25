@@ -157,8 +157,127 @@ def main() -> None:
             assert not rebuilt["partitions"]["literature"]["semantic_complete"]
             assert rebuilt["partitions"]["code"]["semantic_complete"]
             assert not contract.validate_graph(rebuilt, rebuilt_manifest)
+            _, _, mixed_report = contract.build_canonical(
+                root=root,
+                semantic_incomplete={"literature", "thesis"},
+            )
+            report_rows = {
+                line.split("|")[1].strip(): line
+                for line in mixed_report.splitlines()
+                if line.startswith("| ")
+                and line.split("|")[1].strip() in contract.PARTITION_ORDER
+            }
+            report_status = {
+                name: row.split("|")[3].strip() for name, row in report_rows.items()
+            }
+            assert report_status == {
+                "literature": "no",
+                "scaffold": "yes",
+                "thesis": "no",
+                "code": "yes",
+            }
         finally:
             contract._upstream_extract = original_upstream_extract
+
+        pending = root / "graphify-out/pending.json"
+        assert refresh._pending(pending) == set()
+        corruption_cases = (
+            b"{",
+            b"\xff",
+            b"[]",
+            b'{"partitions": "thesis"}',
+            b'{"partitions": ["thesis", "thesis"]}',
+            b'{"partitions": ["unknown"]}',
+            b'{"partitions": [], "unexpected": true}',
+        )
+        for corrupted in corruption_cases:
+            pending.write_bytes(corrupted)
+            try:
+                refresh._write_pending({"literature"}, pending)
+            except contract.ContractError:
+                pass
+            else:
+                raise AssertionError("corrupt pending state must fail closed")
+            assert pending.read_bytes() == corrupted
+        pending.unlink()
+        pending.mkdir()
+        try:
+            refresh._pending(pending)
+        except contract.ContractError:
+            pass
+        else:
+            raise AssertionError("unreadable pending state must fail closed")
+        pending.rmdir()
+        refresh._write_pending({"thesis"}, pending)
+        assert refresh._pending(pending) == {"thesis"}
+        valid_pending_bytes = pending.read_bytes()
+        try:
+            refresh._write_pending({"unknown"}, pending)
+        except contract.ContractError:
+            pass
+        else:
+            raise AssertionError("unknown pending partition must fail closed")
+        assert pending.read_bytes() == valid_pending_bytes
+
+        malformed_canonical = root / "graphify-out/graph.json"
+        original_graph_bytes = malformed_canonical.read_bytes()
+        malformed_canonical.write_bytes(b"{")
+        try:
+            contract.load_validated_canonical(root / "graphify-out", root=root)
+        except contract.ContractError:
+            pass
+        else:
+            raise AssertionError("malformed canonical graph must fail closed")
+        assert malformed_canonical.read_bytes() == b"{"
+
+        original_graphify_command = refresh.graphify_command
+        original_ensure_graphify_pin = refresh.ensure_graphify_pin
+        original_load_validated_canonical = refresh._load_validated_canonical
+        try:
+
+            def fake_ensure_graphify_pin(command: list[str]) -> None:
+                return None
+
+            def load_corrupt_fixture() -> tuple[dict[str, Any], dict[str, Any]]:
+                return contract.load_validated_canonical(
+                    malformed_canonical.parent,
+                    root=malformed_canonical.parents[1],
+                )
+
+            refresh.graphify_command = lambda: ["graphify"]
+            refresh.ensure_graphify_pin = fake_ensure_graphify_pin
+            refresh._load_validated_canonical = load_corrupt_fixture
+            try:
+                refresh.run(check=False, mode="structural")
+            except contract.ContractError:
+                pass
+            else:
+                raise AssertionError(
+                    "structural refresh must reject malformed canonical state"
+                )
+            assert malformed_canonical.read_bytes() == b"{"
+        finally:
+            refresh.graphify_command = original_graphify_command
+            refresh.ensure_graphify_pin = original_ensure_graphify_pin
+            refresh._load_validated_canonical = original_load_validated_canonical
+
+        malformed_canonical.write_bytes(original_graph_bytes)
+
+        schema_invalid_graph = copy.deepcopy(graph)
+        schema_invalid_graph["nodes"] = []
+        malformed_canonical.write_text(
+            json.dumps(schema_invalid_graph), encoding="utf-8"
+        )
+        try:
+            contract.load_validated_canonical(root / "graphify-out", root=root)
+        except contract.ContractError:
+            pass
+        else:
+            raise AssertionError("schema-invalid canonical graph must fail closed")
+        assert (
+            json.loads(malformed_canonical.read_text(encoding="utf-8"))["nodes"] == []
+        )
+        malformed_canonical.write_bytes(original_graph_bytes)
 
         malformed_edges: dict[str, Callable[[dict[str, Any]], object]] = {
             "missing endpoint": lambda edge: edge.pop("source"),
@@ -460,10 +579,18 @@ def main() -> None:
                 calls.append((check, mode, semantic_incomplete or set()))
                 return []
 
+            def fake_write_pending(
+                partitions: set[str], path: Path = refresh.PENDING
+            ) -> None:
+                return None
+
+            def fake_pending(path: Path = refresh.PENDING) -> set[str]:
+                return {"literature"}
+
             refresh._changed_paths = lambda: [Path("code.py"), Path("paper.tex")]
             refresh._pending_partitions = fake_pending_partitions
-            refresh._write_pending = lambda partitions: None
-            refresh._pending = lambda: {"literature"}
+            refresh._write_pending = fake_write_pending
+            refresh._pending = fake_pending
             refresh.run = fake_run
             sys.argv = ["graphify_refresh.py", "--mode", "structural"]
             assert refresh.main() == 0

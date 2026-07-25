@@ -329,6 +329,58 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         self.assertTrue(any("unregistered" in error for error in errors))
 
+    def test_tracked_file_symlink_is_rejected_without_following_target(self) -> None:
+        path = self.root / ".omx/tracked-file-link"
+        path.parent.mkdir(parents=True)
+        path.symlink_to(self.root / "README.md")
+        self.git("add", "-f", path.relative_to(self.root).as_posix())
+        errors = validator.validate_registry(
+            validator.load_registry(self.registry_path), self.root
+        )
+        self.assertIn("tracked OMX entry is a symlink: .omx/tracked-file-link", errors)
+
+    def test_tracked_directory_symlink_is_rejected_without_following_target(
+        self,
+    ) -> None:
+        path = self.root / ".omx/tracked-directory-link"
+        path.parent.mkdir(parents=True)
+        path.symlink_to(self.root, target_is_directory=True)
+        self.git("add", "-f", path.relative_to(self.root).as_posix())
+        errors = validator.validate_registry(
+            validator.load_registry(self.registry_path), self.root
+        )
+        self.assertIn(
+            "tracked OMX entry is a symlink: .omx/tracked-directory-link", errors
+        )
+
+    def test_tracked_broken_symlink_is_rejected_without_resolving_target(self) -> None:
+        path = self.root / ".omx/tracked-broken-link"
+        path.parent.mkdir(parents=True)
+        path.symlink_to(self.root / "missing-target")
+        self.git("add", "-f", path.relative_to(self.root).as_posix())
+        errors = validator.validate_registry(
+            validator.load_registry(self.registry_path), self.root
+        )
+        self.assertIn(
+            "tracked OMX entry is a symlink: .omx/tracked-broken-link", errors
+        )
+
+    def test_tracked_non_regular_git_entry_is_rejected(self) -> None:
+        self.git(
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{self.source_commit},.omx/tracked-gitlink",
+        )
+        errors = validator.validate_registry(
+            validator.load_registry(self.registry_path), self.root
+        )
+        self.assertIn(
+            "tracked OMX entry is not a regular file: "
+            ".omx/tracked-gitlink (Git mode 160000)",
+            errors,
+        )
+
     def test_history_rejects_deletion_rewrite_and_reactivation(self) -> None:
         self.promote("bundle-a")
         current = validator.load_registry(self.registry_path)

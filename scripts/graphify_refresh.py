@@ -12,16 +12,20 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
+from typing import Any
 
 from graphify_contract import (
     ContractError,
     OUT,
+    PARTITION_ORDER,
     ROOT,
     build_canonical,
     canonical_bytes,
     classify_path,
     load_config,
     load_canonical,
+    load_validated_canonical,
     selected_literature_dirs,
     write_canonical,
 )
@@ -81,27 +85,60 @@ def _pending_partitions(changed: list[Path], root: Path = ROOT) -> set[str]:
     return selected
 
 
-def _write_pending(partitions: set[str]) -> None:
+def _pending(path: Path = PENDING) -> set[str]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return set()
+    except (OSError, UnicodeError) as exc:
+        raise ContractError(f"cannot read Graphify pending state: {exc}") from exc
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ContractError(f"Graphify pending state is malformed JSON: {exc}") from exc
+    if not isinstance(value, dict) or set(value) != {"partitions"}:
+        raise ContractError(
+            "Graphify pending state must be an object containing only 'partitions'"
+        )
+    partitions = value["partitions"]
+    if (
+        not isinstance(partitions, list)
+        or any(not isinstance(partition, str) for partition in partitions)
+        or len(set(partitions)) != len(partitions)
+    ):
+        raise ContractError(
+            "Graphify pending state 'partitions' must be a list of unique strings"
+        )
+    unknown = set(partitions) - set(PARTITION_ORDER)
+    if unknown:
+        raise ContractError(
+            "Graphify pending state contains unknown partition(s): "
+            + ", ".join(sorted(unknown))
+        )
+    return set(partitions)
+
+
+def _write_pending(partitions: set[str], path: Path = PENDING) -> None:
     if not partitions:
         return
-    OUT.mkdir(exist_ok=True)
-    existing: set[str] = set()
-    try:
-        value = json.loads(PENDING.read_text(encoding="utf-8"))
-        existing = set(value.get("partitions", []))
-    except (OSError, ValueError, AttributeError):
-        pass
+    unknown = partitions - set(PARTITION_ORDER)
+    if unknown:
+        raise ContractError(
+            "cannot write unknown Graphify pending partition(s): "
+            + ", ".join(sorted(unknown))
+        )
+    path.parent.mkdir(exist_ok=True)
+    existing = _pending(path)
     payload = {"partitions": sorted(existing | partitions)}
-    PENDING.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def _pending() -> set[str]:
-    try:
-        value = json.loads(PENDING.read_text(encoding="utf-8"))
-        partitions = set(value.get("partitions", []))
-    except (OSError, ValueError, AttributeError, TypeError):
-        return set()
-    return partitions & set(load_config()["partition"])
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=path.parent,
+        delete=False,
+        encoding="utf-8",
+    ) as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        temporary = Path(handle.name)
+    temporary.replace(path)
 
 
 def _compare_generated(generated: dict[str, bytes]) -> list[str]:
@@ -120,16 +157,23 @@ def _compare_generated(generated: dict[str, bytes]) -> list[str]:
     return differences
 
 
+def _load_validated_canonical() -> tuple[dict[str, Any], dict[str, Any]]:
+    return load_validated_canonical()
+
+
 def run(
     *, check: bool, mode: str, semantic_incomplete: set[str] | None = None
 ) -> list[str]:
     command = graphify_command()
     ensure_graphify_pin(command)
     old_graph = None
-    try:
-        old_graph, _ = load_canonical()
-    except ContractError:
-        pass
+    if mode == "structural":
+        old_graph, _ = _load_validated_canonical()
+    else:
+        try:
+            old_graph, _ = load_canonical()
+        except ContractError:
+            pass
     graph, manifest, report = build_canonical(
         graphify_command=command,
         old_graph=old_graph,
@@ -152,11 +196,11 @@ def main() -> int:
     changed = _changed_paths()
     touched = _pending_partitions(changed)
     semantic = touched - {"code"}
-    if args.mode == "structural" and semantic:
-        _write_pending(semantic)
-    if args.mode == "structural" and touched and "code" not in touched:
-        return 0
     try:
+        if args.mode == "structural" and semantic:
+            _write_pending(semantic)
+        if args.mode == "structural" and touched and "code" not in touched:
+            return 0
         differences = run(
             check=args.check,
             mode=args.mode,
