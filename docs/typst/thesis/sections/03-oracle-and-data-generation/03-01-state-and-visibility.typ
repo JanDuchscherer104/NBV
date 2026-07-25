@@ -28,6 +28,12 @@ $
   #eqs.rl.s_cf0
 $
 
+For the canonical model, this compact tuple is read together with the explicit ordered selected-view history:
+
+$
+  s_t^"actor" = (s_t^"cf0", bold(H)_t)
+$
+
 and the oracle state adds privileged geometry and labels outside the actor input graph:
 
 $
