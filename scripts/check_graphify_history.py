@@ -46,17 +46,18 @@ def _commit_changes(
     root: Path, commit: str
 ) -> list[tuple[str, str | None, str | None]]:
     """Return status plus before/after paths, retaining rename and deletion identity."""
+    parents = _git(root, "show", "-s", "--format=%P", commit).split()
+    diff_target = [parents[0], commit] if len(parents) > 1 else ["--root", commit]
     output = subprocess.check_output(
         [
             "git",
             "diff-tree",
-            "--root",
             "--no-commit-id",
             "--name-status",
             "-M",
             "-r",
             "-z",
-            commit,
+            *diff_target,
         ],
         cwd=root,
     )

@@ -136,6 +136,33 @@ def main() -> None:
 
     temporary, root, _ = _repo()
     with temporary:
+        main_branch = _git(root, "branch", "--show-current")
+        subprocess.run(
+            ["git", "checkout", "-qb", "corpus-change"], cwd=root, check=True
+        )
+        source = root / "aria_nbv/aria_nbv/model.py"
+        source.write_text("VALUE = 2\n", encoding="utf-8")
+        _commit(root, "branch source")
+        subprocess.run(["git", "checkout", "-q", main_branch], cwd=root, check=True)
+        subprocess.run(
+            ["git", "merge", "--no-ff", "-qm", "merge corpus", "corpus-change"],
+            cwd=root,
+            check=True,
+        )
+        merge_commit = _git(root, "rev-parse", "HEAD")
+        assert history._touched_partitions(root, merge_commit) == {"code"}
+        assert any(
+            "lacks immediate" in error
+            for error in history.validate_authoring_history(root, [merge_commit])
+        )
+
+        graph_commit = _graph_commit(root, merge_commit)
+        assert not history.validate_authoring_history(
+            root, [merge_commit, graph_commit]
+        )
+
+    temporary, root, _ = _repo()
+    with temporary:
         source = root / "aria_nbv/aria_nbv/model.py"
         source.write_text("VALUE = 2\n", encoding="utf-8")
         s = _commit(root, "source")
