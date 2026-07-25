@@ -499,6 +499,7 @@ equations:
   rl.s_cf0:
     tex: 's_t^{\mathrm{cf0}}=(V^{\mathrm{root}},\mathcal{P}_t,\mathcal{Q}_t,m_{t,i},\rho_{t,i},e_t,b_t)'
     typst: '#eqs.rl.s_cf0'
+  rl.s_actor: {tex: 's_t^{\mathrm{actor}}=(s_t^{\mathrm{cf0}},\boldsymbol{H}_t)', typst: '#eqs.rl.s_actor'}
   rl.s_cf_geom:
     tex: 's_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})'
     typst: '#eqs.rl.s_cf_geom'
@@ -511,6 +512,7 @@ equations:
   rl.counterfactual_transition:
     tex: '\mathcal{P}_{t+1}=\mathcal{P}_t\cup\mathcal{P}_{q_t}'
     typst: '#eqs.rl.counterfactual_transition'
+  rl.selected_observation: {tex: 'o_{t+1}^{\mathrm{sel}}=(D_{t,a_t},V_{t,a_t},K_{t,a_t},T_{\mathrm{root}\leftarrow\mathrm{cam},t,a_t},\ell_{t,a_t}^{\mathrm{src}})', typst: '#eqs.rl.selected_observation'}
   rl.target_rri_reward:
     tex: 'r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})'
     typst: '#eqs.rl.target_rri_reward'
@@ -520,6 +522,7 @@ equations:
   rl.q_h:
     tex: 'Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]'
     typst: '#eqs.rl.q_h'
+  rl.target_conditioned_state: {tex: 's_t^e=(\Phi_t^{\mathrm{scene}},z_e,\boldsymbol{H}_t,b_t),\quad Q_h(s_t^e,i)\equiv Q_{h,e}(s_t,i)', typst: '#eqs.rl.target_conditioned_state'}
   rl.qh_query: {tex: 'Q_\theta(s_t,e,i,h)=Q_{h,e}^\theta(s_t,i),\ 1\le h\le b_t\le H', typst: '#eqs.rl.qh_query'}
   rl.qh_horizon_query_token: {tex: 'u_{t,e,h,i}=\operatorname{CrossAttn}_\theta(x_{t,e,i}+\operatorname{Emb}_h(h),\{h_e^{\mathrm{tgt}},\Phi_t^{\mathrm{scene}},\boldsymbol{H}_t,b_t\})', typst: '#eqs.rl.qh_horizon_query_token'}
   rl.qh_one_step_target: {tex: 'y_t^{(1,e)}=r_t^e', typst: '#eqs.rl.qh_one_step_target'}
@@ -551,6 +554,7 @@ equations:
   scene.evl_local_support_read:
     tex: '\omega_{t,i}^{\mathrm{EVL}}=\frac{1}{K}\sum_{k=1}^{K}\mathbb{1}[x_{t,i,k}\in\mathcal{V}_0^{\mathrm{EVL}}]'
     typst: '#eqs.scene.evl_local_support_read'
+  scene.scene_memory_decomposition: {tex: '\Phi_t^{\mathrm{scene}}=(\Phi_0^{\mathrm{static}},M_t^{\mathrm{dynamic}})', typst: '#eqs.scene.scene_memory_decomposition'}
   scene.ray_memory_update:
     tex: '\boldsymbol{M}_{t+1}^{\mathrm{ray}}=\operatorname{Fuse}(\boldsymbol{M}_t^{\mathrm{ray}},\mathcal{P}_{t,i}^{\mathrm{cand}},\mathcal{R}_{t,i}^{\mathrm{sel}})'
     typst: '#eqs.scene.ray_memory_update'

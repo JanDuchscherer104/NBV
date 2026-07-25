@@ -42,9 +42,7 @@ The counterfactual actor state retains the immutable logged substrate and adds o
 
 For the canonical model, this compact tuple is read together with the explicit ordered selected-view history:
 
-$
-  s_t^"actor" = (s_t^"cf0", bold(H)_t)
-$
+#block[#align(center)[#eqs.rl.s_actor]]
 
 In #symb.rl.s_cf0, the root EVL field remains fixed, whereas the accumulated point set $cal(P)_t$ may grow with selected observations. The finite candidate table #symb.oracle.candidates_t contains poses and generator provenance, not observations from those poses. #symb.rl.validity_mask defines the admissible action set, #symb.rl.invalid_reason records constraint failures, and the ordered history $bold(H)_t$ retains the selected approach sequence.
 

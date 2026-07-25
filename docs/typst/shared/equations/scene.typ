@@ -1,6 +1,9 @@
 #import "../symbols.typ": symb
 
 #let scene = (
+  scene_memory_decomposition: $
+    Phi_t^"scene" = (Phi_0^"static", M_t^"dynamic")
+  $,
   actor_state_read: $
     bold(h)_(t,e,i)
     =

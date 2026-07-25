@@ -38,17 +38,11 @@ ARIA-NBV does not require one universal reconstruction format. It requires an ac
 
 For architectural and DTO purposes, the scene state is decomposed as
 
-$
-  Phi_t^"scene" = (Phi_0^"static", M_t^"dynamic")
-$
+#block[#align(center)[#eqs.scene.scene_memory_decomposition]]
 
 The target-conditioned decision state folds the task descriptor into the state seen by the value function,
 
-$
-  s_t^e = (Phi_t^"scene", z_e, bold(H)_t, b_t),
-  quad
-  Q_h(s_t^e, i) equiv Q_(h,e)(s_t, i).
-$
+#block[#align(center)[#eqs.rl.target_conditioned_state]]
 
 Here $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target descriptor $z_e$ is therefore part of the decision state but remains a separate `TargetState` DTO so it is not duplicated inside target-independent scene memory. The indexed form $Q_(h,e)(s_t,i)$ used elsewhere is the curried form of the same target-conditioned value function.
 

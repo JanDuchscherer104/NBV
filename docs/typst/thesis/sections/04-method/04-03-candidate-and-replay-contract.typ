@@ -42,9 +42,7 @@ The persisted factual tables retain source and target identity, lineage hashes, 
 
 A selected observation is the typed tuple
 
-$
-  o_(t+1)^"sel" = (D_(t,a_t), V_(t,a_t), K_(t,a_t), T_("root" <- "cam",t,a_t), ell_(t,a_t)^"src")
-$
+#block[#align(center)[#eqs.rl.selected_observation]]
 
 containing depth, valid mask, calibration, root-relative camera pose, and a source role. The source role distinguishes privileged GT-mesh depth, declared sensor-like simulation, and an actor-visible sensor observation. Unselected candidate renders at step $t$ are never elements of the student state.
 

@@ -86,6 +86,9 @@
     )
     in cal(S)^"cf0"
   $,
+  s_actor: $
+    s_t^"actor" = (s_t^"cf0", bold(H)_t)
+  $,
   s_cf_geom: $
     #symb.rl.s_cf_geom
     =
@@ -137,6 +140,17 @@
       xi_t
     )
   $,
+  selected_observation: $
+    o_(t+1)^"sel"
+    =
+    (
+      D_(t,a_t),
+      V_(t,a_t),
+      K_(t,a_t),
+      T_("root" <- "cam",t,a_t),
+      ell_(t,a_t)^"src"
+    )
+  $,
   counterfactual_transition: $
     #(symb.oracle.points) _(t+1) = #(symb.oracle.points) _t union #(symb.oracle.points) _(q_t)
   $,
@@ -162,6 +176,13 @@
     1 <= h <= b_t,
     quad
     Q_(0,e) (s, i) = 0
+  $,
+  target_conditioned_state: $
+    s_t^e
+    =
+    (Phi_t^"scene", z_e, bold(H)_t, b_t),
+    quad
+    Q_h (s_t^e, i) equiv Q_(h,e) (s_t, i)
   $,
   qh_query: $
     Q_theta (s_t, e, i, h)

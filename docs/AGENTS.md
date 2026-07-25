@@ -10,6 +10,10 @@ Apply this file when working under `docs/`.
   external papers own literature claims. Quarto thesis pages are navigation only.
 - Current terminology lives in `docs/typst/shared/glossary.typ`; the Quarto
   glossary is generated output.
+- Reusable symbols and equations live under `docs/typst/shared`; active thesis
+  sections may use ordinary inline bound variables but must reference shared
+  owners for display equations. `scripts/glossary_build.py validate` enforces
+  this boundary.
 - `docs/contents/ideas.qmd` is read-only archive/scratch.
 - The active Typst thesis owns the master's-thesis research questions,
   priorities, interpretation, and calibrated claim wording, citing the direct

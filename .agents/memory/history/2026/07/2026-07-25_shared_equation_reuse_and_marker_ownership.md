@@ -41,6 +41,12 @@ duplicated `rl.target_rri_reward`; the final source reuses that existing owner.
 The post-review evaluator rerun preserved all iteration-3 metrics and reduced
 measured non-test LOC by a further 10 lines.
 
+Iteration 4 moved the final four raw display contracts into the shared `rl` and
+`scene` equation dictionaries. Ownership violations decreased from 364 to 360,
+and active sections now contain no raw display-equation blocks. The existing
+glossary validator now rejects raw display equations and local `symb`/`eqs`
+facades in active sections while leaving ordinary inline bound variables local.
+
 ## TODO Disposition
 
 | Surface | Disposition |
@@ -57,6 +63,7 @@ measured non-test LOC by a further 10 lines.
 
 - frozen successor evaluator, append, validate, and report
 - generated Typst and Quarto notation lookup projections
+- fail-closed raw-display ownership fixture
 - development Typst compile and PDF text inspection
 - submission status-marker success and actionable-marker expected failure
 - exact agents-DB locator existence checks

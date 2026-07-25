@@ -646,6 +646,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.s_actor"] = {
+      tex = "s_t^{\\mathrm{actor}}=(s_t^{\\mathrm{cf0}},\\boldsymbol{H}_t)",
+      typst = "#eqs.rl.s_actor",
+      description = "",
+      thesis_list = false,
+    },
     ["rl.s_cf0"] = {
       tex = "s_t^{\\mathrm{cf0}}=(V^{\\mathrm{root}},\\mathcal{P}_t,\\mathcal{Q}_t,m_{t,i},\\rho_{t,i},e_t,b_t)",
       typst = "#eqs.rl.s_cf0",
@@ -673,6 +679,18 @@ return {
     ["rl.s_oracle"] = {
       tex = "s_t^{\\mathrm{oracle}}=(s_t^{\\mathrm{cf+}},\\mathcal{M}^{\\mathrm{GT}},\\mathcal{M}_e^{\\mathrm{GT}},\\{D_{t,i}^{\\mathrm{GT}},\\mathcal{P}_{t,i}^{\\mathrm{GT}},\\mathrm{RRI}_{t,i}\\}_{i=1}^{N_t})",
       typst = "#eqs.rl.s_oracle",
+      description = "",
+      thesis_list = false,
+    },
+    ["rl.selected_observation"] = {
+      tex = "o_{t+1}^{\\mathrm{sel}}=(D_{t,a_t},V_{t,a_t},K_{t,a_t},T_{\\mathrm{root}\\leftarrow\\mathrm{cam},t,a_t},\\ell_{t,a_t}^{\\mathrm{src}})",
+      typst = "#eqs.rl.selected_observation",
+      description = "",
+      thesis_list = false,
+    },
+    ["rl.target_conditioned_state"] = {
+      tex = "s_t^e=(\\Phi_t^{\\mathrm{scene}},z_e,\\boldsymbol{H}_t,b_t),\\quad Q_h(s_t^e,i)\\equiv Q_{h,e}(s_t,i)",
+      typst = "#eqs.rl.target_conditioned_state",
       description = "",
       thesis_list = false,
     },
@@ -751,6 +769,12 @@ return {
     ["scene.ray_memory_update"] = {
       tex = "\\boldsymbol{M}_{t+1}^{\\mathrm{ray}}=\\operatorname{Fuse}(\\boldsymbol{M}_t^{\\mathrm{ray}},\\mathcal{P}_{t,i}^{\\mathrm{cand}},\\mathcal{R}_{t,i}^{\\mathrm{sel}})",
       typst = "#eqs.scene.ray_memory_update",
+      description = "",
+      thesis_list = false,
+    },
+    ["scene.scene_memory_decomposition"] = {
+      tex = "\\Phi_t^{\\mathrm{scene}}=(\\Phi_0^{\\mathrm{static}},M_t^{\\mathrm{dynamic}})",
+      typst = "#eqs.scene.scene_memory_decomposition",
       description = "",
       thesis_list = false,
     },
