@@ -3,13 +3,9 @@
 
 from __future__ import annotations
 
-import csv
-import fnmatch
-import os
 import re
 import subprocess
 import sys
-import tomllib
 from typing import Any
 
 from graphify_contract import (
@@ -106,64 +102,6 @@ def _validate_tracked_outputs(config: dict[str, Any]) -> None:
         raise ContractError("tracked wiki/cache/render output is forbidden")
 
 
-def _tracked_paths() -> set[str]:
-    return set(
-        subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
-    )
-
-
-def _closed_inventory_paths(tracked: set[str], config: dict[str, Any]) -> set[str]:
-    inventory = ROOT / ".agents/baselines/scaffold_wp0_inventory.csv"
-    with inventory.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    candidates: set[str] = set()
-    for row in rows:
-        if row.get("status") not in CLOSED_INVENTORY_STATUSES:
-            continue
-        for token in row["paths"].split(";"):
-            path = LINE_ANCHOR.sub("", token.strip())
-            if any(character in path for character in "*?["):
-                candidates.update(
-                    candidate
-                    for candidate in tracked
-                    if fnmatch.fnmatchcase(candidate, path)
-                )
-            elif path in tracked:
-                candidates.add(path)
-            if row["status"] == "retain" and path.startswith(
-                ".agents/skills/aria-nbv-context/scripts/"
-            ):
-                retained_reader = f"scripts/{path.rsplit('/', 1)[-1]}"
-                if retained_reader in tracked:
-                    candidates.add(retained_reader)
-    extensions = set(config["corpus"]["text_extensions"])
-    extensionless = {
-        ".gitattributes",
-        ".gitignore",
-        ".graphifyignore",
-        "Makefile",
-        "scripts/git_hooks/post-commit",
-    }
-    return {
-        path
-        for path in candidates
-        if path in extensionless or os.path.splitext(path)[1].lower() in extensions
-    }
-
-
-def _registered_omx_paths(tracked: set[str]) -> set[str]:
-    registry = tomllib.loads(
-        (ROOT / ".agents/omx_artifacts.toml").read_text(encoding="utf-8")
-    )
-    return {
-        path
-        for bundle in registry.get("bundles", [])
-        for artifact in bundle.get("artifacts", [])
-        for key in ("path", "native_path")
-        if isinstance((path := artifact.get(key)), str) and path in tracked
-    }
-
-
 def _workflow_paths(event: str) -> set[str]:
     lines = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines()
     event_header = f"  {event}:"
@@ -197,33 +135,17 @@ def _validate_corpus(config: dict[str, Any]) -> None:
     missing = [name for name, values in partitions.items() if not values]
     if missing:
         raise ContractError("empty Graphify partitions: " + ", ".join(missing))
-    code_roles = {item["role"] for item in partitions["code"]}
-    if not {"production", "test", "config", "guide"} <= code_roles:
-        raise ContractError(
-            "code partition lacks production/test/config/guide role coverage"
-        )
+    if {item["role"] for item in partitions["code"]} != {"production"}:
+        raise ContractError("code partition must contain production sources only")
     paths = {item["path"] for item in sources}
-    scaffold_paths = {item["path"] for item in partitions["scaffold"]}
-    tracked = _tracked_paths()
-    inventory_paths = _closed_inventory_paths(tracked, config)
-    missing_inventory = inventory_paths - paths
-    if missing_inventory:
-        raise ContractError(
-            "closed inventory sources are absent from the Graphify corpus: "
-            + ", ".join(sorted(missing_inventory))
-        )
-    missing_registry = _registered_omx_paths(tracked) - scaffold_paths
-    if missing_registry:
-        raise ContractError(
-            "registered OMX sources are absent from the scaffold partition: "
-            + ", ".join(sorted(missing_registry))
-        )
-    forbidden = {
-        path
-        for path in paths
-        if path.startswith(("graphify-out/", ".omx/state/", "docs/_site/"))
-        or "/wiki/" in path
-    }
+    allowed_roots = (
+        "aria_nbv/aria_nbv/",
+        "docs/typst/thesis/",
+        "docs/typst/shared/",
+        "docs/literature/sources.jsonl",
+        "docs/literature/tex-src/",
+    )
+    forbidden = {path for path in paths if not path.startswith(allowed_roots)}
     if forbidden:
         raise ContractError(
             "forbidden Graphify corpus sources: " + ", ".join(sorted(forbidden))
@@ -244,15 +166,16 @@ def _validate_hook_and_merge() -> None:
     if any(value in hook for value in forbidden):
         raise ContractError("post-commit performs forbidden mutation/semantic work")
     config = load_config()
+    if classify_path("aria_nbv/aria_nbv/model.py", config) != "code":
+        raise ContractError("Graphify hook does not classify production code")
     for path in (
-        ".agents/skills/demo/SKILL.md",
-        ".omx/plans/example.md",
         "AGENTS.md",
-        ".graphify.toml",
+        ".configs/app.yaml",
+        ".omx/plans/example.md",
         "scripts/graphify_contract.py",
     ):
-        if classify_path(path, config) is None:
-            raise ContractError(f"Graphify hook corpus fixture is unclassified: {path}")
+        if classify_path(path, config) is not None:
+            raise ContractError(f"Graphify hook classifies operator surface: {path}")
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
     if "graphify-out/graph.json merge=graphify" not in attributes:
         raise ContractError("Graphify merge driver is not assigned in .gitattributes")

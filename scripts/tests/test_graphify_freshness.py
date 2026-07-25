@@ -25,9 +25,10 @@ def _write_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     shutil.copy(contract.ROOT / ".graphify.toml", root / ".graphify.toml")
     shutil.copy(contract.ROOT / ".graphifyignore", root / ".graphifyignore")
     files = {
-        "AGENTS.md": "See `docs/page.qmd`.\n",
-        "docs/page.qmd": "# Thesis\n",
-        "docs/literature/sources.jsonl": "",
+        "AGENTS.md": "Operator guidance.\n",
+        "docs/typst/thesis/main.typ": '#include "../shared/math.typ"\n',
+        "docs/typst/shared/math.typ": "#let value = 1\n",
+        "docs/literature/sources.jsonl": "{}\n",
         "aria_nbv/aria_nbv/model.py": "VALUE = 1\n",
         "aria_nbv/tests/test_model.py": "def test_value(): pass\n",
         "aria_nbv/pyproject.toml": "[project]\nname='fixture'\n",
@@ -67,7 +68,9 @@ def _write_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
                 graphify_version=config["graphify_version"],
             ),
         }
-    scaffold = next(source for source in sources if source["path"] == "AGENTS.md")
+    thesis = next(
+        source for source in sources if source["path"] == "docs/typst/thesis/main.typ"
+    )
     nodes = [
         {
             "id": contract._file_node_id(source["path"]),
@@ -81,8 +84,8 @@ def _write_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         for source in sources
     ]
     nodes_by_id = {node["id"]: node for node in nodes}
-    source_id = contract._file_node_id("AGENTS.md")
-    target_id = contract._file_node_id("docs/page.qmd")
+    source_id = contract._file_node_id("docs/typst/thesis/main.typ")
+    target_id = contract._file_node_id("docs/literature/sources.jsonl")
     edge = {
         "id": "bridge",
         "source": source_id,
@@ -90,18 +93,22 @@ def _write_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "origin": "INFERRED",
         "confidence_score": 0.9,
         "source_locators": [
-            {"path": "AGENTS.md", "locator": "L1", "sha256": scaffold["sha256"]}
+            {
+                "path": "docs/typst/thesis/main.typ",
+                "locator": "L1",
+                "sha256": thesis["sha256"],
+            }
         ],
         "bridge_partition_revisions": {
-            "scaffold": partitions["scaffold"]["revision"],
             "thesis": partitions["thesis"]["revision"],
+            "literature": partitions["literature"]["revision"],
         },
         "endpoint_provenance": {
             "source": contract._endpoint_provenance(nodes_by_id[source_id]),
             "target": contract._endpoint_provenance(nodes_by_id[target_id]),
         },
-        "partition": "scaffold",
-        "partition_revision": partitions["scaffold"]["revision"],
+        "partition": "thesis",
+        "partition_revision": partitions["thesis"]["revision"],
         "extraction_config_sha256": config_sha256,
         "graphify_version": config["graphify_version"],
     }
@@ -170,10 +177,9 @@ def main() -> None:
                 name: row.split("|")[3].strip() for name, row in report_rows.items()
             }
             assert report_status == {
-                "literature": "no",
-                "scaffold": "yes",
-                "thesis": "no",
                 "code": "yes",
+                "thesis": "no",
+                "literature": "no",
             }
         finally:
             contract._upstream_extract = original_upstream_extract
@@ -335,7 +341,7 @@ def main() -> None:
             {
                 "path": "graphify-out/query.json",
                 "sha256": "0" * 64,
-                "partition": "scaffold",
+                "partition": "code",
                 "role": "guide",
             }
         )
@@ -363,11 +369,11 @@ def main() -> None:
         for node in wrong_version_graph["nodes"]:
             node["partition_revision"] = wrong_revisions[node["partition"]]
         wrong_version_graph["edges"][0]["partition_revision"] = wrong_revisions[
-            "scaffold"
+            "thesis"
         ]
         wrong_version_graph["edges"][0]["bridge_partition_revisions"] = {
-            "scaffold": wrong_revisions["scaffold"],
             "thesis": wrong_revisions["thesis"],
+            "literature": wrong_revisions["literature"],
         }
         assert not contract.validate_graph(wrong_version_graph, wrong_version_manifest)
         (root / "graphify-out/graph.json").write_text(
@@ -391,17 +397,17 @@ def main() -> None:
         wrong_revision_graph = copy.deepcopy(graph)
         wrong_revision_manifest = copy.deepcopy(manifest)
         wrong_revision = "f" * 64
-        wrong_revision_graph["partitions"]["scaffold"]["revision"] = wrong_revision
-        wrong_revision_manifest["partitions"]["scaffold"]["revision"] = wrong_revision
+        wrong_revision_graph["partitions"]["thesis"]["revision"] = wrong_revision
+        wrong_revision_manifest["partitions"]["thesis"]["revision"] = wrong_revision
         for node in wrong_revision_graph["nodes"]:
-            if node["partition"] == "scaffold":
+            if node["partition"] == "thesis":
                 node["partition_revision"] = wrong_revision
         wrong_revision_graph["edges"][0]["partition_revision"] = wrong_revision
-        wrong_revision_graph["edges"][0]["bridge_partition_revisions"]["scaffold"] = (
+        wrong_revision_graph["edges"][0]["bridge_partition_revisions"]["thesis"] = (
             wrong_revision
         )
         errors = contract.validate_graph(wrong_revision_graph, wrong_revision_manifest)
-        assert "partition revision is not reproducible: scaffold" in errors
+        assert "partition revision is not reproducible: thesis" in errors
 
         empty_graph = dict(graph)
         empty_graph["nodes"] = []
@@ -449,9 +455,10 @@ def main() -> None:
             for source in contract.collect_sources(root)
             if source["partition"] == "code"
         }
-        assert roles == {"production", "test", "config", "guide"}
+        assert roles == {"production"}
 
-        (root / "docs/page.qmd").write_text("# Changed thesis\n", encoding="utf-8")
+        thesis_path = root / "docs/typst/thesis/main.typ"
+        thesis_path.write_text("#let changed = true\n", encoding="utf-8")
         state = freshness.partition_freshness(root)
         assert set(state.stale) == {"thesis"}
         allowed, reason = freshness.require_partitions(
@@ -463,8 +470,7 @@ def main() -> None:
         )
         assert not allowed and "stale" in reason
 
-        (root / "docs/page.qmd").unlink()
-        (root / "docs/page.qmd").write_text("# Thesis\n", encoding="utf-8")
+        thesis_path.write_text('#include "../shared/math.typ"\n', encoding="utf-8")
         graph["edges"][0]["bridge_partition_revisions"]["thesis"] = "wrong"
         (root / "graphify-out/graph.json").write_text(
             json.dumps(graph), encoding="utf-8"

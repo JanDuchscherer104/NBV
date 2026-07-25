@@ -28,53 +28,35 @@ def main() -> None:
         == "c5e8ad862072505bcfc45642664c689d64290872"
     )
 
+    assert contract.PARTITION_ORDER == ("code", "thesis", "literature")
     assert contract.classify_path("aria_nbv/aria_nbv/model.py", config) == "code"
-    assert contract.classify_path("aria_nbv/tests/test_model.py", config) == "code"
-    assert contract.classify_path("AGENTS.md", config) == "scaffold"
-    assert contract.classify_path("docs/AGENTS.md", config) == "scaffold"
-    assert (
-        contract.classify_path("scripts/scaffold/validate_omx_artifacts.py", config)
-        == "scaffold"
-    )
-    assert (
-        contract.classify_path("scripts/tests/test_validate_omx_artifacts.py", config)
-        == "scaffold"
-    )
-    assert (
-        contract.classify_path("aria_nbv/tests/agent_memory/test_agents_db.py", config)
-        == "scaffold"
-    )
-    assert (
-        contract.classify_path(".github/workflows/quarto-publish.yml", config)
-        == "scaffold"
-    )
-    assert contract.classify_path("docs/contents/thesis/topic.qmd", config) == "thesis"
-    assert (
-        contract.classify_path("docs/contents/literature/topic.qmd", config)
-        == "literature"
-    )
-    assert contract.classify_path("graphify-out/wiki/index.md", config) is None
-    assert contract.classify_path(".omx/state/runtime.json", config) is None
-    assert (
-        contract.classify_path(".omx/specs/scaffold/decision-record.md", config)
-        == "scaffold"
-    )
-    assert contract.classify_path("scripts/nbv_qmd_outline.sh", config) == "scaffold"
-    assert contract.classify_path("scripts/nbv_typst_includes.py", config) == "scaffold"
+    assert contract.classify_path("docs/typst/thesis/main.typ", config) == "thesis"
+    assert contract.classify_path("docs/typst/shared/math.typ", config) == "thesis"
+    for excluded in (
+        ".configs/app.yaml",
+        ".gitignore",
+        ".agents/skills/demo/SKILL.md",
+        ".omx/plans/example.md",
+        "AGENTS.md",
+        "aria_nbv/aria_nbv/vin/AGENTS.md",
+        "aria_nbv/tests/test_model.py",
+        "docs/typst/thesis/tests/smoke.typ",
+        "scripts/graphify_contract.py",
+    ):
+        assert contract.classify_path(excluded, config) is None
 
     for event in ("pull_request", "push"):
         assert integration.CI_GRAPHIFY_OWNER_PATHS <= integration._workflow_paths(event)
 
-    tracked = integration._tracked_paths()
-    expected_inventory = integration._closed_inventory_paths(tracked, config)
-    all_sources = {source["path"] for source in contract.collect_sources()}
-    scaffold_sources = {
-        source["path"]
-        for source in contract.collect_sources()
-        if source["partition"] == "scaffold"
+    sources = contract.collect_sources()
+    assert {source["partition"] for source in sources} == set(contract.PARTITION_ORDER)
+    assert {source["role"] for source in sources if source["partition"] == "code"} == {
+        "production"
     }
-    assert expected_inventory <= all_sources
-    assert integration._registered_omx_paths(tracked) <= scaffold_sources
+    assert {source["path"].split("/", 1)[0] for source in sources} == {
+        "aria_nbv",
+        "docs",
+    }
 
     selected = {"arXiv-selected"}
     assert (

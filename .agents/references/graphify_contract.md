@@ -1,13 +1,15 @@
 # Graphify Contract
 
 Graphify is a source-derived navigation index, never an authority. Exact code,
-tests, configs, guidance, thesis sources, and literature sources own claims.
+active thesis sources, and selected literature sources own claims.
 
 The repository pins `graphifyy==0.9.22` and upstream capability commit
-`abff1b1ca4052fcf9d955c5f6a034088723f4536`. `.graphify.toml` owns the four
-first-match partitions (`literature`, `scaffold`, `thesis`, `code`), role tags,
-schema version, and canonical artifact allowlist. `.graphifyignore` is the
-matching upstream extraction boundary.
+`abff1b1ca4052fcf9d955c5f6a034088723f4536`. `.graphify.toml` owns the three
+source families (`code`, `thesis`, `literature`), schema version, and canonical
+artifact allowlist. `.graphifyignore` is the matching upstream scan boundary;
+the literature manifest selects the admitted TeX source directories. Config,
+scaffold/operator, test, script, OMX, debrief, and transcript paths are not
+graph sources.
 
 Only `graphify-out/graph.json`, `manifest.json`, and `GRAPH_REPORT.md` are
 tracked. HTML, wiki output, caches, interpreter pointers, query memory,

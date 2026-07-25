@@ -20,7 +20,7 @@ from typing import Any, Iterable, cast
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / ".graphify.toml"
 OUT = ROOT / "graphify-out"
-PARTITION_ORDER = ("literature", "scaffold", "thesis", "code")
+PARTITION_ORDER = ("code", "thesis", "literature")
 ORIGINS = {"EXTRACTED", "INFERRED", "AMBIGUOUS"}
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 SOURCE_LOCATOR_PATTERN = re.compile(r"L[1-9][0-9]*")
@@ -60,7 +60,7 @@ def load_config(root: Path = ROOT) -> dict[str, Any]:
         raise ContractError(f"cannot load .graphify.toml: {exc}") from exc
     if tuple(config.get("partition", {})) != PARTITION_ORDER:
         raise ContractError(
-            "Graphify partitions must be ordered literature, scaffold, thesis, code"
+            "Graphify partitions must be ordered code, thesis, literature"
         )
     if config.get("graphify_version") != "0.9.22":
         raise ContractError(".graphify.toml must pin graphifyy==0.9.22")
@@ -125,17 +125,7 @@ def classify_path(
     corpus = config["corpus"]
     if _matches(path, corpus["exclude_patterns"]):
         return None
-    extensionless_sources = {
-        ".gitattributes",
-        ".gitignore",
-        ".graphifyignore",
-        "Makefile",
-        "scripts/git_hooks/post-commit",
-    }
-    if (
-        Path(path).suffix.lower() not in set(corpus["text_extensions"])
-        and path not in extensionless_sources
-    ):
+    if Path(path).suffix.lower() not in set(corpus["text_extensions"]):
         return None
     matches = [
         name
@@ -157,13 +147,6 @@ def classify_path(
 
 def source_role(path: str, partition: str, config: dict[str, Any]) -> str:
     """Classify code evidence so queries can rank production owners first."""
-    roles = config["roles"]
-    if _matches(path, roles["test_patterns"]):
-        return "test"
-    if _matches(path, roles["config_patterns"]):
-        return "config"
-    if _matches(path, roles["guide_patterns"]):
-        return "guide"
     return "production" if partition == "code" else "guide"
 
 
@@ -776,7 +759,7 @@ def validate_graph(
             continue
         source_digests[source_path] = source_digest
     if set(graph_partitions) != set(PARTITION_ORDER):
-        errors.append("graph does not contain exactly four canonical partitions")
+        errors.append("graph does not contain exactly three canonical partitions")
     if graph_partitions != manifest_partitions:
         errors.append("graph and manifest partition records differ")
     if not isinstance(schema_version, str) or not schema_version:

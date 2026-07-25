@@ -1,88 +1,34 @@
-# ARIA-NBV's extraction boundary. The richer partition and role contract lives
-# in .graphify.toml; this file constrains the upstream Graphify scanner.
+# Upstream scanner boundary. .graphify.toml applies the matching three-family
+# node contract and manifest selection for literature sources.
 *
 **
 
-!.graphify.toml
-!.graphifyignore
-!.gitattributes
-!.gitignore
-!Makefile
-!AGENTS.md
-
 !aria_nbv/
-!aria_nbv/**
-!.configs/
-!.configs/**
+!aria_nbv/aria_nbv/
+!aria_nbv/aria_nbv/**
 
 !docs/
-!docs/**
+!docs/typst/
+!docs/typst/thesis/
+!docs/typst/thesis/**
+!docs/typst/shared/
+!docs/typst/shared/**
+!docs/literature/
+!docs/literature/sources.jsonl
+!docs/literature/tex-src/
+!docs/literature/tex-src/**
 
-!.agents/
-!.agents/**
-!.codex/
-!.codex/skills/
-!.codex/skills/graphify/
-!.codex/skills/graphify/**
-!.omx/
-!.omx/context/
-!.omx/context/**
-!.omx/plans/
-!.omx/plans/**
-!.omx/archive/
-!.omx/archive/accepted-bundles/
-!.omx/archive/accepted-bundles/**
-
-!scripts/
-!scripts/check_graphify_*.py
-!scripts/graphify_*.py
-!scripts/graphify_*.sh
-!scripts/git_hooks/
-!scripts/git_hooks/post-commit
-!scripts/tests/
-!scripts/tests/test_graphify_*.py
-!scripts/tests/test_post_commit_graph_dispatch.sh
-
-!.github/
-!.github/workflows/
-!.github/workflows/ci.yml
-
-# Generated, inactive, binary, cache, and runtime sources remain out even when
-# a parent above is re-included.
-.agents/archive/
-.agents/external/
-.agents/kg/
-.agents/memory/history/
-.agents/memory/transcripts/
-.agents/work/
-.omx/state/
-.omx/ultragoal/
-aria_nbv/.omc/
-aria_nbv/.venv/
-docs/_build/
-docs/_extensions/
-docs/_freeze/
-docs/_generated/
-docs/_inv/
-docs/_site/
-docs/site_libs/
-docs/index_files/
-docs/reference/
-docs/search.json
-docs/**/*_files/
-docs/**/.jupyter_cache/
-docs/literature/pdf/
+**/AGENTS.md
+**/scripts/
+**/tests/
 docs/literature/tex-src/**/*.bib
 docs/literature/tex-src/**/*.bst
 docs/literature/tex-src/**/*.cls
 docs/literature/tex-src/**/*.sty
-external/
-graphify-out/
 
 **/__pycache__/
 **/.pytest_cache/
 **/.ruff_cache/
-**/.mypy_cache/
 **/*.7z
 **/*.avi
 **/*.bin

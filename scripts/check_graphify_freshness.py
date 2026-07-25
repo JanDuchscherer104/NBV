@@ -42,7 +42,7 @@ def partition_freshness(root: Path = ROOT) -> Freshness:
             {name: (str(exc),) for name in PARTITION_ORDER},
             (),
         )
-    graph_errors = validate_graph(graph, manifest)
+    graph_errors = validate_graph(graph, manifest, root=root)
     if graph_errors:
         graph_reasons = tuple(
             f"invalid canonical graph: {error}" for error in graph_errors

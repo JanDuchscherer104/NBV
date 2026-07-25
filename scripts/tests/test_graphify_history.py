@@ -97,6 +97,17 @@ def main() -> None:
 
     temporary, root, base = _repo()
     with temporary:
+        operator = root / "AGENTS.md"
+        operator.write_text("operator only\n", encoding="utf-8")
+        operator_commit = _commit(root, "operator")
+        assert history._touched_partitions(root, operator_commit) == set()
+
+        thesis = root / "docs/typst/thesis/main.typ"
+        thesis.parent.mkdir(parents=True)
+        thesis.write_text("#let thesis = true\n", encoding="utf-8")
+        thesis_commit = _commit(root, "thesis")
+        assert history._touched_partitions(root, thesis_commit) == {"thesis"}
+
         source = root / "aria_nbv/aria_nbv/model.py"
         source.write_text("VALUE = 2\n", encoding="utf-8")
         s = _commit(root, "source")
