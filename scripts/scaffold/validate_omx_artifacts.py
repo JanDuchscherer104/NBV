@@ -173,10 +173,6 @@ def _is_str(value: Any) -> bool:
     return isinstance(value, str) and bool(value)
 
 
-def _is_bool(value: Any) -> bool:
-    return type(value) is bool
-
-
 def canonical_bundle_id(task: str, handoff_sha256: str) -> str:
     return f"{task}--{handoff_sha256[:16]}"
 

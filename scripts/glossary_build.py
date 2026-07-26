@@ -146,12 +146,16 @@ def _load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
                 entry["description"] = description.strip()
             thesis_list = raw_entry.get("thesis_list", False)
             if not isinstance(thesis_list, bool):
-                raise GlossaryError(f"{path}: {group}.{key}.thesis_list must be a boolean")
+                raise GlossaryError(
+                    f"{path}: {group}.{key}.thesis_list must be a boolean"
+                )
             entry["thesis_list"] = thesis_list
             order = raw_entry.get("order")
             if order is not None:
                 if isinstance(order, bool) or not isinstance(order, int):
-                    raise GlossaryError(f"{path}: {group}.{key}.order must be an integer")
+                    raise GlossaryError(
+                        f"{path}: {group}.{key}.order must be an integer"
+                    )
                 entry["order"] = order
             notation[group][key] = entry
     return notation
@@ -474,9 +478,9 @@ def _render_qmd(
         '<a class="glossary-chip glossary-category-chip" href="#glossary-core-math-lookup">'
         "Math lookup</a>",
         *[
-        f'<a class="glossary-chip glossary-category-chip" href="#glossary-category-{_slug(group)}">'
-        f"{_html_text(_category_label(group))} <span>{len(group_terms)}</span></a>"
-        for group, group_terms in grouped.items()
+            f'<a class="glossary-chip glossary-category-chip" href="#glossary-category-{_slug(group)}">'
+            f"{_html_text(_category_label(group))} <span>{len(group_terms)}</span></a>"
+            for group, group_terms in grouped.items()
         ],
     ]
     lines = [
@@ -577,9 +581,7 @@ def _render_core_lookup(
         "<tbody>",
     ]
     for term in core_terms:
-        term_link = (
-            f'<a href="#{_html_attr(term["anchor"])}">{_html_text(_term_title(term))}</a>'
-        )
+        term_link = f'<a href="#{_html_attr(term["anchor"])}">{_html_text(_term_title(term))}</a>'
         symbols = _render_notation_refs(
             _as_list(term, "symbol_refs"), notation["symbols"], "symbol"
         )
@@ -590,7 +592,7 @@ def _render_core_lookup(
         lines += [
             "<tr>",
             f"<td>{term_link}</td>",
-            f'<td>{_html_text(str(term["definition_short"]).strip())}</td>',
+            f"<td>{_html_text(str(term['definition_short']).strip())}</td>",
             f"<td>{symbols or empty}</td>",
             f"<td>{equations or empty}</td>",
             "</tr>",
@@ -611,7 +613,7 @@ def _render_notation_refs(
         items.append(
             '<span class="glossary-notation-item">'
             f'<span class="glossary-notation-math">${tex}$</span>'
-            f'<code>{_html_text(ref)}</code>'
+            f"<code>{_html_text(ref)}</code>"
             "</span>"
         )
     if not items:
