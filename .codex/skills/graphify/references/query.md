@@ -4,7 +4,7 @@ Use the pinned upstream Graphify public CLI only after the repository freshness
 check succeeds:
 
 ```bash
-python3 scripts/check_graphify_freshness.py --quiet
+make graphify-freshness
 graphify query "<question>"
 graphify path "<source>" "<target>"
 graphify explain "<node>"

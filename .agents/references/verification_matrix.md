@@ -60,7 +60,7 @@ compact command index.
 - Graphify integration and corpus policy:
   `make graphify-ci`
 - Local Graphify navigation freshness:
-  `python3 scripts/check_graphify_freshness.py`
+  `make graphify-freshness`
 - Advisor-facing claim checks:
   follow `.agents/references/direct_source_claim_checklist.md`
 - Exact-source fallback:

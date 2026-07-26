@@ -52,7 +52,7 @@ If the user invoked `/graphify --help` or `/graphify -h` (with no other argument
 
 **Fast path — fresh existing graph:** Before doing anything else, check whether
 `graphify-out/graph.json` exists. In ARIA-NBV, also run
-`python3 scripts/check_graphify_freshness.py --quiet`; the graph is eligible for
+`make graphify-freshness`; the graph is eligible for
 the fast path only when that command succeeds. A failed check means the graph's
 commit, corpus policy, or semantic sources are stale, so fall back to the owning
 source files until refresh completes. If the graph is fresh AND the user's
@@ -676,7 +676,7 @@ print(f'This run: {input_tok:,} input tokens, {output_tok:,} output tokens')
 print(f'All time: {cost[\"total_input_tokens\"]:,} input, {cost[\"total_output_tokens\"]:,} output ({len(cost[\"runs\"])} runs)')
 "
 rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json
-GRAPHIFY_SEMANTIC_COMPLETE=1 python3 scripts/graphify_refresh.py
+make graphify-refresh
 ```
 
 Replace INPUT_PATH with the actual path (same value used in Steps 4-5) so the manifest is relativized to the scan root.
