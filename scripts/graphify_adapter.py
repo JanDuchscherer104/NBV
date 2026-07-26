@@ -231,13 +231,15 @@ def _paper_map(
     config: Mapping[str, Any], manifest: Source, sources: list[Source]
 ) -> dict[str, str]:
     contract = _literature_contract(config)
-    tex_paths = {source.path for source in sources if source.path.endswith(".tex")}
+    tex_sources = {
+        source.path: source.text for source in sources if source.path.endswith(".tex")
+    }
     papers: dict[str, str] = {}
     for directory, arxiv in _manifest_rows(manifest.text, manifest.path):
         matches: list[tuple[str, list[str]]] = []
         for root in contract.roots:
             prefix = f"{root}/{directory}/"
-            choices = sorted(path for path in tex_paths if path.startswith(prefix))
+            choices = sorted(path for path in tex_sources if path.startswith(prefix))
             if choices:
                 matches.append((prefix, choices))
         if not matches:
@@ -245,8 +247,19 @@ def _paper_map(
         if len(matches) != 1:
             raise AdapterError(f"ambiguous paper family: {directory}")
         prefix, choices = matches[0]
+        included: set[str] = set()
+        for choice in choices:
+            owner = PurePosixPath(choice)
+            for value in _TEX_INCLUDE.findall(tex_sources[choice]):
+                target = PurePosixPath(posixpath.normpath(str(owner.parent / value)))
+                candidates = (str(target), str(target.with_suffix(".tex")))
+                if match := next(
+                    (item for item in candidates if item in choices), None
+                ):
+                    included.add(match)
+        roots = [choice for choice in choices if choice not in included] or choices
         main = prefix + "main.tex"
-        papers[arxiv] = main if main in choices else choices[0]
+        papers[arxiv] = main if main in roots else roots[0]
     return papers
 
 

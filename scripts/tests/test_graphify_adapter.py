@@ -516,6 +516,20 @@ def test_manifest_uses_main_or_first_tex(repo: Path) -> None:
     }
 
 
+def test_paper_map_uses_include_root_when_no_main(repo: Path) -> None:
+    main = repo / "docs/literature/tex-src/paper-a/main.tex"
+    main.rename(main.with_name("paper.tex"))
+    main.with_name("paper.tex").write_text("\\input{section}\n", encoding="utf-8")
+    config = adapter.load_config(repo)
+    sources = adapter.collect_sources(repo)
+    manifest = next(
+        source for source in sources if source.path == "docs/literature/sources.jsonl"
+    )
+    assert adapter._paper_map(config, manifest, sources) == {
+        "1234.5678": "docs/literature/tex-src/paper-a/paper.tex"
+    }
+
+
 def test_pin_and_command_are_public(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

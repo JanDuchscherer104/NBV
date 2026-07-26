@@ -50,6 +50,7 @@ SOURCES = [
         "text": (
             '#include "shared/symbols.typ"\n'
             '#import "shared/equations/scene.typ": scene\n'
+            'appendix: [#include "plain.typ"]\n'
             '= Main\n#let metadata = "x"\n'
             '#thesis_status(\n  [Body],\n  implementation: "planned",\n'
             '  evidence: "pending",\n'
@@ -57,6 +58,8 @@ SOURCES = [
             '  gate: "G-1",\n)\n'
             "#symb.shape.Nq #eqs.scene.memory @Paper-Key @next-best-view\n"
             "`aria_nbv.vin.Model`\n"
+            '#gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", '
+            "body: [`RolloutZarrStoreReader.q_h_view`], line: 1)\n"
         ),
     },
     {"path": "docs/plain.typ", "text": "Plain Typst source.\n"},
@@ -96,28 +99,34 @@ def test_mapping_determinism_and_supported_constructs(tmp_path: Path) -> None:
     assert "marker_evidence" in main
     assert "marker_source" in main
     assert "marker_gate" in main
-    assert "citation_Paper_Key()" in main
+    assert "from .refs import citation_Paper_Key" in main
     assert "import aria_nbv.rollouts.zarr_store" in main
     assert "from aria_nbv.vin import Model" in main
-    assert "def let_L4" in main
+    assert "RolloutZarrStoreReader.q_h_view()" in main
+    assert "def let_L5" in main
     paper = first.output_paths[1].read_text()
     assert "subsubsection" in paper and "label" in paper
     assert "paper_arxiv__2501_00001" in paper
     plain_path = tmp_path / "first/docs/plain.py"
-    assert plain_path.read_text() == "def source_plain(): pass\n"
-    assert first.line_map[plain_path] == {1: ("docs/plain.typ", 1)}
+    assert plain_path.read_text() == "def source_plain():\n    pass\n"
+    assert first.line_map[plain_path] == {
+        1: ("docs/plain.typ", 1),
+        2: ("docs/plain.typ", 1),
+    }
 
 
 def test_exact_generated_line_mapping(tmp_path: Path) -> None:
     result = materialize([{"path": "chapter.typ", "text": "= Heading\n"}], tmp_path)
     output = tmp_path / "chapter.py"
     assert output.read_text().splitlines() == [
-        "def source_chapter(): pass",
+        "def source_chapter():",
+        "    pass",
         "def heading_1_L1_1_Heading_a3089b7f(): pass",
     ]
     assert result.line_map[output] == {
         1: ("chapter.typ", 1),
         2: ("chapter.typ", 1),
+        3: ("chapter.typ", 1),
     }
 
 
@@ -128,7 +137,10 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
     _materialize(root)
     code = root / "aria_nbv/rollouts/zarr_store.py"
     code.parent.mkdir(parents=True)
-    code.write_text("VALUE = 1\n", encoding="utf-8")
+    code.write_text(
+        "class RolloutZarrStoreReader:\n    def q_h_view(self):\n        pass\n",
+        encoding="utf-8",
+    )
     dotted = root / "aria_nbv/vin.py"
     dotted.write_text("class Model: pass\n", encoding="utf-8")
     out = tmp_path / "extract"
@@ -159,18 +171,8 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
     call_edges = [edge for edge in graph["edges"] if edge["relation"] == "calls"]
     assert len([edge for edge in call_edges if edge["source"] in marker_ids]) == 4
     assert any(
-        "citation_Paper_Key" in labels.get(edge["target"], "") for edge in call_edges
-    )
-    assert any(
         "paper_arxiv__2501_00001" in labels.get(edge["target"], "")
         for edge in call_edges
-    )
-    assert any("symb_shape_Nq" in labels.get(edge["target"], "") for edge in call_edges)
-    assert any(
-        "eqs_scene_memory" in labels.get(edge["target"], "") for edge in call_edges
-    )
-    assert any(
-        "term_next_best_view" in labels.get(edge["target"], "") for edge in call_edges
     )
     imports = [
         edge
@@ -178,15 +180,36 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
         if edge["relation"] in {"imports", "imports_from"}
     ]
     assert any("zarr_store" in edge["target"] for edge in imports)
+    for target in (
+        "citation_Paper_Key",
+        "symb_shape_Nq",
+        "eqs_scene_memory",
+        "term_next_best_view",
+        "Model",
+    ):
+        assert any(target in labels.get(edge["target"], "") for edge in imports)
     assert any(
         edge["source"].endswith("docs_main")
         and edge["target"].endswith("docs_shared_symbols")
         for edge in imports
     )
     assert any(
+        edge["source"].endswith("docs_main") and edge["target"].endswith("docs_plain")
+        for edge in imports
+    )
+    assert any(
         edge["source"].endswith("docs_papers_paper")
         and edge["target"].endswith("docs_papers_section")
         for edge in imports
+    )
+    assert any(
+        "source_main" in labels.get(edge["source"], "")
+        and "q_h_view" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert not any(
+        labels[node_id].startswith(("symb_use_", "eqs_use_", "code_reference_"))
+        for node_id in labels
     )
 
 

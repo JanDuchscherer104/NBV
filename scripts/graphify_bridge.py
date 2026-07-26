@@ -12,7 +12,7 @@ from typing import Any
 _SUPPORTED = {".typ", ".tex", ".bib"}
 _MARKERS = """archive_note conflict_todo decision_todo impl_todo prune_todo
 question_todo research_todo thesis_status validation_todo""".split()
-_TYP_IMPORT = re.compile(r'^\s*#(?:include|import)\s+"([^"]+)"')
+_TYP_IMPORT = re.compile(r'#(?:include|import)\s+"([^"]+)"')
 _HEADING = re.compile(r"^\s*(=+)\s+(.+?)\s*$")
 _LET = re.compile(r"^\s*#let\s+([\w-]+)")
 _LET_DICT = re.compile(r"^\s*#let\s+([\w-]+)\s*=\s*\(\s*$")
@@ -22,6 +22,7 @@ _CITE = re.compile(r"(?<![\w\\])@([A-Za-z0-9][\w:.-]*)")
 _MARKER = re.compile(r"#(" + "|".join(sorted(_MARKERS)) + r")\s*\(")
 _CODE_PATH = re.compile(r"(?<![\w/])(aria_nbv/aria_nbv/[\w./-]+\.py)\b")
 _CODE_DOTTED = re.compile(r"(?<![\w/])(aria_nbv(?:\.[A-Za-z_]\w*)+)\b")
+_GH_WIP = re.compile(r'#gh-wip\("([^"]+)"\s*,\s*body:\s*\[`([^`]+)`\]', re.DOTALL)
 _TEX_IMPORT = re.compile(r"\\(?:input|include)\s*\{([^}]+)\}")
 _TEX_SECTION = re.compile(r"\\(subsubsection|subsection|section)\*?\s*\{([^}]*)\}")
 _TEX_LABEL = re.compile(r"\\label\s*\{([^}]+)\}")
@@ -30,6 +31,7 @@ _BIB_EPRINT = re.compile(r"\beprint\s*=\s*[{\"]([^}\"]+)[}\"]", re.IGNORECASE)
 _TERM_KEY = re.compile(r'^\s*key\s*:\s*"([^"]+)"', re.MULTILINE)
 Events = list[tuple[int, str]]
 PaperNodes = Mapping[PurePosixPath, Iterable[str]]
+ReferenceModules = Mapping[tuple[str, str], PurePosixPath]
 
 
 @dataclass(frozen=True)
@@ -47,9 +49,11 @@ class _Source:
 class _Parser:
     def __init__(self, source: _Source) -> None:
         self.source = source
-        anchor = f"source_{_identifier(source.path.stem)}"
-        self.lines: list[tuple[int, str]] = [(1, f"def {anchor}(): pass")]
-        self.definitions: set[str] = {anchor}
+        self.anchor = f"source_{_identifier(source.path.stem)}"
+        self.lines: list[tuple[int, str]] = []
+        self.definitions: set[str] = set()
+        self.imports: dict[str, int] = {}
+        self.source_calls: list[tuple[int, str]] = []
         self.occurrences: dict[tuple[str, int], int] = {}
 
     def add(self, line: int, *text: str) -> None:
@@ -71,6 +75,21 @@ class _Parser:
         self.add(line, f"def {name}():", *body)
         return name
 
+    def import_once(self, line: int, statement: str) -> None:
+        self.imports.setdefault(statement, line)
+
+    def finish(self) -> Events:
+        self._reserve(self.anchor)
+        anchor_line = min((line for line, _ in self.source_calls), default=1)
+        body = tuple(f"    {call}()" for _, call in self.source_calls) or ("    pass",)
+        imports = [(line, statement) for statement, line in self.imports.items()]
+        return [
+            *imports,
+            (anchor_line, f"def {self.anchor}():"),
+            *((anchor_line, line) for line in body),
+            *self.lines,
+        ]
+
     def occurrence(self, kind: str, line: int, value: str = "") -> str:
         key = (kind, line)
         ordinal = self.occurrences.get(key, 0) + 1
@@ -81,13 +100,21 @@ class _Parser:
 
     def code_refs(self, line: str, number: int) -> None:
         seen: set[str] = set()
+        for path, symbol in _GH_WIP.findall(line):
+            if not path.startswith("aria_nbv/aria_nbv/") or not path.endswith(".py"):
+                continue
+            module = path[len("aria_nbv/") : -3].replace("/", ".")
+            owner, _, member = symbol.partition(".")
+            self.import_once(number, f"from {module} import {owner}")
+            if member:
+                self.source_calls.append((number, f"{owner}.{member}"))
+            seen.add(module)
         for path in _CODE_PATH.findall(line):
             reference = path[len("aria_nbv/") : -3].replace("/", ".")
+            if reference in seen:
+                continue
             seen.add(reference)
-            node = self.occurrence("code_reference", number, reference)
-            alias = node + "_module"
-            self.add(number, f"import {reference} as {alias}")
-            self.function(number, node, (alias,))
+            self.import_once(number, f"import {reference}")
         for reference in _CODE_DOTTED.findall(line):
             if reference in seen:
                 continue
@@ -100,30 +127,32 @@ class _Parser:
                 ),
                 None,
             )
-            node = self.occurrence("code_reference", number, reference)
-            alias = node + "_object"
-            import_line = f"import {reference} as {alias}"
+            import_line = f"import {reference}"
             if symbol is not None:
                 module = ".".join(parts[:symbol])
-                import_line = f"from {module} import {parts[symbol]} as {alias}"
-            self.add(number, import_line)
-            self.function(number, node, (alias,))
+                owner = parts[symbol]
+                import_line = f"from {module} import {owner}"
+                if member := ".".join(parts[symbol + 1 :]):
+                    self.source_calls.append((number, f"{owner}.{member}"))
+            self.import_once(number, import_line)
 
     def typ_events(
         self,
         paths: set[PurePosixPath],
         citations: Mapping[str, PurePosixPath],
         terms: Mapping[str, PurePosixPath],
+        references: ReferenceModules,
         paper_nodes: PaperNodes,
     ) -> Events:
         lines, dictionary = self.source.text.splitlines(), None
         for node in paper_nodes.get(self.source.path, ()):
             self.define(1, node)
         for number, line in enumerate(lines, 1):
-            imported = _TYP_IMPORT.match(line)
-            if imported and not imported.group(1).startswith("@"):
-                target = _resolve(self.source.path, imported.group(1), paths)
-                self.add(number, _import(self.source.path, target))
+            imported = list(_TYP_IMPORT.finditer(line))
+            for match in imported:
+                if not match.group(1).startswith("@"):
+                    target = _resolve(self.source.path, match.group(1), paths)
+                    self.import_once(number, _import(self.source.path, target))
             if heading := _HEADING.match(line):
                 title = re.sub(r"<[^>]+>\s*$", "", heading.group(2)).strip()
                 kind = f"heading_{len(heading.group(1))}"
@@ -145,8 +174,12 @@ class _Parser:
                 self.define(number, f"term_{_identifier(term.group(1))}")
             for root, group, key in _REF.findall(line):
                 name = f"{_identifier(root)}_{_identifier(group)}_{_identifier(key)}"
-                use = self.occurrence(f"{root}_use", number, f"{group}.{key}")
-                self.function(number, use, (name,))
+                target = references.get((root, group))
+                if target is None:
+                    raise ValueError(
+                        f"unresolved {root} reference in {self.source.path}: {group}.{key}"
+                    )
+                self.import_once(number, _import(self.source.path, target, name))
             for match in _MARKER.finditer(line):
                 arguments = _call_text(lines, number - 1, match.start())
                 called = [
@@ -158,21 +191,20 @@ class _Parser:
                 ]
                 name = self.occurrence(f"marker_{match.group(1)}", number)
                 self.function(number, name, called)
-            if not (imported and imported.group(1).startswith("@")):
+            if not any(match.group(1).startswith("@") for match in imported):
                 for key in _CITE.findall(line):
                     term_key = key.partition(":")[0]
                     if term_key in terms:
                         target = terms[term_key]
-                        name, kind = f"term_{_identifier(term_key)}", "term_use"
+                        name = f"term_{_identifier(term_key)}"
                     elif key in citations:
                         target = citations[key]
-                        name, kind = f"citation_{_identifier(key)}", "citation_use"
+                        name = f"citation_{_identifier(key)}"
                     else:
                         continue
-                    self.add(number, _import(self.source.path, target, name))
-                    self.function(number, self.occurrence(kind, number, key), (name,))
+                    self.import_once(number, _import(self.source.path, target, name))
             self.code_refs(line, number)
-        return self.lines
+        return self.finish()
 
     def non_typ_events(
         self,
@@ -193,7 +225,7 @@ class _Parser:
                 for label in _TEX_LABEL.findall(line):
                     self.define(number, self.occurrence("label", number, label))
                 self.code_refs(line, number)
-            return self.lines
+            return self.finish()
         for number, key, arxiv in bib_entries:
             self.define(number, f"citation_{_identifier(key)}")
             if arxiv and arxiv in papers:
@@ -201,7 +233,7 @@ class _Parser:
                 self.add(number, _import(self.source.path, target, paper_node))
                 name = self.occurrence("arxiv_match", number, arxiv)
                 self.function(number, name, (paper_node,))
-        return self.lines
+        return self.finish()
 
 
 def _identifier(value: Any) -> str:
@@ -330,6 +362,20 @@ def _unique_index(
     return result
 
 
+def _reference_modules(
+    sources: Iterable[_Source],
+) -> dict[tuple[str, str], PurePosixPath]:
+    prefixes = {"symbols": "symb", "equations": "eqs"}
+    result: dict[tuple[str, str], PurePosixPath] = {}
+    for source in sources:
+        if prefix := prefixes.get(source.path.parent.name):
+            key = (prefix, source.path.stem)
+            if key in result:
+                raise ValueError(f"duplicate {prefix} module: {source.path.stem}")
+            result[key] = source.path
+    return result
+
+
 def materialize(
     sources: Iterable[Any],
     destination: str | os.PathLike[str],
@@ -378,12 +424,13 @@ def materialize(
         ),
         "glossary",
     )
+    references = _reference_modules(parsed)
     root, result_paths, line_map = Path(destination), [], {}
     for source in sorted(parsed, key=lambda item: str(item.path)):
         suffix = source.path.suffix.lower()
         parser = _Parser(source)
         if suffix == ".typ":
-            events = parser.typ_events(paths, citations, terms, paper_nodes)
+            events = parser.typ_events(paths, citations, terms, references, paper_nodes)
         else:
             events = parser.non_typ_events(
                 paths, paper_nodes, bib_data.get(source.path, []), papers
