@@ -1,44 +1,14 @@
-schema_version = "aria-graph-v2"
-graphify_package = "graphifyy"
 graphify_version = "0.9.22"
 graphify_upstream_commit = "abff1b1ca4052fcf9d955c5f6a034088723f4536"
-canonical_artifacts = [
-  "graphify-out/graph.json",
-  "graphify-out/manifest.json",
-  "graphify-out/GRAPH_REPORT.md",
-]
 
 [history]
 activation_commit = "c5e8ad862072505bcfc45642664c689d64290872"
 
 [partition.code]
-semantic_mode = "structural"
 patterns = ["aria_nbv/aria_nbv/**"]
 
 [partition.thesis]
-semantic_mode = "reviewed-source-reference"
 patterns = ["docs/typst/thesis/**", "docs/typst/shared/**"]
 
 [partition.literature]
-semantic_mode = "reviewed-source-reference"
 patterns = ["docs/literature/sources.jsonl", "docs/literature/tex-src/**"]
-
-[corpus]
-text_extensions = [
-  ".bib", ".cfg", ".css", ".json", ".jsonl", ".md", ".mmd", ".py",
-  ".qmd", ".sh", ".tex", ".toml", ".typ", ".yaml", ".yml",
-]
-exclude_patterns = [
-  "**/__pycache__/**",
-  "**/AGENTS.md",
-  "**/.pytest_cache/**",
-  "**/.ruff_cache/**",
-  "**/scripts/**",
-  "**/tests/**",
-  "docs/literature/pdf/**",
-  "docs/literature/tex-src/**/*.bib",
-  "docs/literature/tex-src/**/*.bst",
-  "docs/literature/tex-src/**/*.cls",
-  "docs/literature/tex-src/**/*.sty",
-  "graphify-out/**",
-]

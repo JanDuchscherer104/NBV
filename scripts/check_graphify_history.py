@@ -1,295 +1,166 @@
 #!/usr/bin/env python3
-"""Validate Graphify S-to-G authoring history and final-tree sync state."""
+"""Validate the repository's source-then-graph (S-to-G) history invariant."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import subprocess
 import sys
-import tomllib
+from pathlib import Path
 from typing import Any
 
-from graphify_contract import (
-    ContractError,
+import tomllib
+from graphify_adapter import (
+    _ARTIFACTS,
+    _MANIFEST,
+    CONFIG,
+    IMPLEMENTATION,
     ROOT,
+    AdapterError,
+    Source,
+    _manifest_rows,
     classify_path,
-    collect_sources,
-    corpus_tree_digest,
-    load_canonical,
+    implementation_digest,
+    is_fresh,
     load_config,
+    source_digest,
 )
 
-CANONICAL = {
-    "graphify-out/graph.json",
-    "graphify-out/manifest.json",
-    "graphify-out/GRAPH_REPORT.md",
-}
+CANONICAL = {f"graphify-out/{name}" for name in _ARTIFACTS}
 
 
 def _git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
 
-def _commit_paths(root: Path, commit: str) -> set[str]:
+def _parents(root: Path, commit: str) -> list[str]:
+    return _git(root, "show", "-s", "--format=%P", commit).split()
+
+
+def _paths(root: Path, commit: str) -> set[str]:
+    parents = _parents(root, commit)
+    target = [parents[0], commit] if parents else ["--root", commit]
+    command = ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-z"]
+    raw = subprocess.check_output([*command, *target], cwd=root).split(b"\0")
+    return {value.decode("utf-8", "surrogateescape") for value in raw if value}
+
+
+def _blob(root: Path, commit: str, path: str) -> bytes:
+    return subprocess.check_output(["git", "show", f"{commit}:{path}"], cwd=root)
+
+
+def _tree_context(root: Path, commit: str) -> tuple[dict[str, Any], set[str]]:
+    config = tomllib.loads(_blob(root, commit, CONFIG.name).decode())
+    manifest = _blob(root, commit, _MANIFEST).decode()
+    selected = {directory for directory, _ in _manifest_rows(manifest)}
+    return config, selected
+
+
+def _contract_at(root: Path, commit: str) -> dict[str, str]:
+    config, selected = _tree_context(root, commit)
+    sources = [
+        Source(path, family, hashlib.sha256(_blob(root, commit, path)).hexdigest(), "")
+        for path in _git(root, "ls-tree", "-r", "--name-only", commit).splitlines()
+        if (family := classify_path(path, config, selected))
+    ]
     return {
-        path
-        for _, old_path, new_path in _commit_changes(root, commit)
-        for path in (old_path, new_path)
-        if path is not None
+        "built_source_commit": commit,
+        "source_digest": source_digest(sources),
+        "config_sha256": hashlib.sha256(_blob(root, commit, CONFIG.name)).hexdigest(),
+        "adapter_sha256": implementation_digest(
+            (path, _blob(root, commit, path)) for path in IMPLEMENTATION
+        ),
     }
 
 
-def _commit_changes(
-    root: Path, commit: str
-) -> list[tuple[str, str | None, str | None]]:
-    """Return status plus before/after paths, retaining rename and deletion identity."""
-    parents = _git(root, "show", "-s", "--format=%P", commit).split()
-    diff_target = [parents[0], commit] if len(parents) > 1 else ["--root", commit]
-    output = subprocess.check_output(
-        [
-            "git",
-            "diff-tree",
-            "--no-commit-id",
-            "--name-status",
-            "-M",
-            "-r",
-            "-z",
-            *diff_target,
-        ],
-        cwd=root,
+def _corpus_commit(root: Path, commit: str) -> bool:
+    paths = _paths(root, commit)
+    if paths & ({CONFIG.name} | set(IMPLEMENTATION)):
+        return True
+    parents = _parents(root, commit)
+    revisions = [parents[0], commit] if parents else [commit]
+    return any(
+        classify_path(path, config, selected)
+        for path in paths
+        for config, selected in map(lambda item: _tree_context(root, item), revisions)
     )
-    fields = output.split(b"\0")
-    changes: list[tuple[str, str | None, str | None]] = []
-    index = 0
-    while index < len(fields) and fields[index]:
-        status = fields[index].decode("ascii")
-        index += 1
-        old_path: str | None = fields[index].decode("utf-8", errors="surrogateescape")
-        index += 1
-        if status.startswith(("R", "C")):
-            new_path = fields[index].decode("utf-8", errors="surrogateescape")
-            index += 1
-        elif status == "D":
-            new_path = None
-        else:
-            new_path = old_path
-            old_path = None if status == "A" else old_path
-        changes.append((status, old_path, new_path))
-    return changes
 
 
-def _manifest_at(root: Path, commit: str) -> dict[str, Any]:
+def _validate_child(root: Path, source: str, graph: str) -> list[str]:
+    paths = _paths(root, graph)
+    errors: list[str] = []
+    if _parents(root, graph) != [source]:
+        errors.append(f"{graph}: not the single-parent child of {source}")
+    if paths != CANONICAL:
+        errors.append(f"{graph}: wrong graph artifact set")
+        return errors
     try:
-        raw = subprocess.check_output(
-            ["git", "show", f"{commit}:graphify-out/manifest.json"], cwd=root
-        )
-        value = json.loads(raw)
-    except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
-        raise ContractError(f"{commit}: canonical manifest is unavailable") from exc
-    if not isinstance(value, dict):
-        raise ContractError(f"{commit}: canonical manifest is not an object")
-    return value
-
-
-def _config_at(root: Path, commit: str) -> dict[str, Any]:
-    try:
-        raw = subprocess.check_output(
-            ["git", "show", f"{commit}:.graphify.toml"],
-            cwd=root,
-            stderr=subprocess.DEVNULL,
-        )
-        value = tomllib.loads(raw.decode("utf-8"))
-    except (
-        subprocess.CalledProcessError,
-        UnicodeError,
-        tomllib.TOMLDecodeError,
-    ) as exc:
-        raise ContractError(
-            f"{commit}: .graphify.toml is unavailable or malformed"
-        ) from exc
-    return value
-
-
-def _selected_literature_dirs_at(root: Path, commit: str) -> set[str]:
-    selected_dirs: set[str] = set()
-    try:
-        manifest_raw = subprocess.check_output(
-            ["git", "show", f"{commit}:docs/literature/sources.jsonl"],
-            cwd=root,
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-        for line in manifest_raw.splitlines():
-            record = json.loads(line)
-            if record.get("tex_dir"):
-                selected_dirs.add(record["tex_dir"])
-    except subprocess.CalledProcessError:
-        return selected_dirs
-    except json.JSONDecodeError as exc:
-        raise ContractError(
-            f"{commit}: literature source manifest is malformed"
-        ) from exc
-    return selected_dirs
-
-
-def _source_tree_digest_at(root: Path, commit: str) -> str:
-    config = _config_at(root, commit)
-    paths = _git(root, "ls-tree", "-r", "--name-only", commit).splitlines()
-    selected_dirs = _selected_literature_dirs_at(root, commit)
-    sources = []
-    for path in paths:
-        partition = classify_path(path, config, selected_literature_dirs=selected_dirs)
-        if partition is None:
-            continue
-        blob = subprocess.check_output(["git", "show", f"{commit}:{path}"], cwd=root)
-        sources.append({"path": path, "sha256": hashlib.sha256(blob).hexdigest()})
-    return corpus_tree_digest(sources)
-
-
-def _parent(root: Path, commit: str) -> str | None:
-    parents = _git(root, "show", "-s", "--format=%P", commit).split()
-    return parents[0] if parents else None
-
-
-def _touched_partitions(root: Path, commit: str) -> set[str]:
-    """Classify additions/modifications/deletions/renames against both manifest states."""
-    parent = _parent(root, commit)
-    before_selected = (
-        _selected_literature_dirs_at(root, parent) if parent is not None else set()
+        manifest = json.loads(_blob(root, graph, "graphify-out/manifest.json"))
+        expected = _contract_at(root, source)
+        if not isinstance(manifest, dict):
+            raise AdapterError(f"{graph}: manifest is not an object")
+    except (AdapterError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        return [*errors, str(exc)]
+    errors.extend(
+        f"{graph}: manifest {key} does not match {source}"
+        for key, value in expected.items()
+        if manifest.get(key) != value
     )
-    after_selected = _selected_literature_dirs_at(root, commit)
-    after_config = _config_at(root, commit)
-    try:
-        before_config = _config_at(root, parent) if parent is not None else after_config
-    except ContractError:
-        # The activation commit introduces the first repository Graphify contract.
-        before_config = after_config
-    touched: set[str] = set()
-    for _, old_path, new_path in _commit_changes(root, commit):
-        for path, selected, config in (
-            (old_path, before_selected, before_config),
-            (new_path, after_selected, after_config),
-        ):
-            if path is None:
-                continue
-            partition = classify_path(
-                path,
-                config,
-                selected_literature_dirs=selected,
-            )
-            if partition is not None:
-                touched.add(partition)
-    return touched
+    return errors
 
 
 def validate_authoring_history(root: Path, revisions: list[str]) -> list[str]:
-    """Validate immediate graph-only children for a linear authoring range."""
     errors: list[str] = []
-    pending: tuple[str, set[str], str] | None = None
-    for commit in revisions:
-        paths = _commit_paths(root, commit)
-        canonical = paths & CANONICAL
-        noncanonical_graph = {
-            path
-            for path in paths
-            if path.startswith("graphify-out/") and path not in CANONICAL
-        }
-        touched = _touched_partitions(root, commit)
-        corpus = bool(touched)
-        if noncanonical_graph:
-            errors.append(
-                f"{commit}: graph-only commit changes noncanonical output: "
-                + ", ".join(sorted(noncanonical_graph))
-            )
-        if canonical and corpus:
-            errors.append(
-                f"{commit}: mixed source and canonical graph authoring commit"
-            )
-            pending = None
+    index = 0
+    while index < len(revisions):
+        commit = revisions[index]
+        paths = _paths(root, commit)
+        graph_paths = {path for path in paths if path.startswith("graphify-out/")}
+        corpus = _corpus_commit(root, commit)
+        if corpus and graph_paths:
+            errors.append(f"{commit}: mixed source+graph commit")
+            index += 1
             continue
-        if pending is not None and not canonical:
-            errors.append(
-                f"{pending[0]}: corpus commit lacks immediate graph-only child "
-                f"before {commit}"
-            )
-            pending = None
         if corpus:
-            pending = (commit, touched, _source_tree_digest_at(root, commit))
+            if index + 1 == len(revisions):
+                errors.append(f"{commit}: missing immediate graph-only child")
+                break
+            errors.extend(_validate_child(root, commit, revisions[index + 1]))
+            index += 2
             continue
-        if canonical:
-            if paths - CANONICAL:
-                errors.append(f"{commit}: graph commit contains non-graph changes")
-                continue
-            if pending is None:
-                continue
-            manifest = _manifest_at(root, commit)
-            source_commit, touched, digest = pending
-            if manifest.get("corpus_tree_sha256") != digest:
-                errors.append(
-                    f"{commit}: corpus tree digest does not match {source_commit}"
-                )
-            refreshed = set(manifest.get("sync", {}).get("refreshed_partitions", []))
-            if not touched <= refreshed:
-                errors.append(
-                    f"{commit}: does not refresh touched partitions: "
-                    + ", ".join(sorted(touched - refreshed))
-                )
-            pending = None
-    if pending is not None:
-        errors.append(f"{pending[0]}: corpus commit lacks immediate graph-only child")
+        if graph_paths:
+            errors.append(f"{commit}: orphan graph-only commit")
+            if paths != CANONICAL:
+                errors.append(f"{commit}: wrong graph artifact set")
+        index += 1
     return errors
 
 
 def validate_final_tree(root: Path = ROOT) -> list[str]:
-    """Validate merge/squash state by final corpus digest, independent of SHA."""
-    try:
-        graph, manifest = load_canonical(root / "graphify-out")
-        current = corpus_tree_digest(collect_sources(root))
-    except ContractError as exc:
-        return [str(exc)]
-    errors: list[str] = []
-    if manifest.get("corpus_tree_sha256") != current:
-        errors.append("canonical manifest does not match the final corpus tree")
-    if graph.get("corpus_tree_sha256") != current:
-        errors.append("canonical graph does not match the final corpus tree")
-    return errors
+    return [] if is_fresh(root) else ["canonical graph is stale or invalid"]
 
 
 def activation_authoring_range(
     root: Path, activation: str
 ) -> tuple[str | None, list[str]]:
-    """Return the post-activation range, or final-tree mode for squash products."""
     if subprocess.run(
         ["git", "merge-base", "--is-ancestor", activation, "HEAD"],
         cwd=root,
-        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        check=False,
     ).returncode:
-        revisions = _git(root, "rev-list", "--reverse", "--first-parent", "HEAD")
-        for commit in revisions.splitlines():
-            if all(
-                subprocess.run(
-                    ["git", "cat-file", "-e", f"{commit}:{path}"],
-                    cwd=root,
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                ).returncode
-                == 0
-                for path in CANONICAL
-            ):
+        history = _git(root, "rev-list", "--reverse", "--first-parent", "HEAD")
+        for commit in history.splitlines():
+            tree = set(_git(root, "ls-tree", "-r", "--name-only", commit).splitlines())
+            if CANONICAL <= tree:
                 return f"{commit}..HEAD", []
         return None, []
-    errors: list[str] = []
-    if _commit_paths(root, activation) != CANONICAL:
-        errors.append(
-            "Graphify activation commit must be the immutable canonical "
-            "graph-only boundary"
-        )
+    errors = (
+        [] if _paths(root, activation) == CANONICAL else ["invalid activation commit"]
+    )
     return f"{activation}..HEAD", errors
 
 
@@ -301,23 +172,24 @@ def main() -> int:
     args = parser.parse_args()
     errors: list[str] = []
     authoring_range = args.authoring_range
-    if args.activation_range:
-        activation = load_config()["history"]["activation_commit"]
-        authoring_range, activation_errors = activation_authoring_range(
-            ROOT, activation
-        )
-        errors.extend(activation_errors)
-    if authoring_range:
-        revisions = _git(
-            ROOT, "rev-list", "--reverse", "--first-parent", authoring_range
-        ).splitlines()
-        errors.extend(validate_authoring_history(ROOT, revisions))
-    if args.final_tree or not authoring_range:
-        errors.extend(validate_final_tree(ROOT))
+    try:
+        if args.activation_range:
+            authoring_range, activation_errors = activation_authoring_range(
+                ROOT, load_config()["history"]["activation_commit"]
+            )
+            errors.extend(activation_errors)
+        if authoring_range:
+            revisions = _git(
+                ROOT, "rev-list", "--reverse", "--first-parent", authoring_range
+            ).splitlines()
+            errors.extend(validate_authoring_history(ROOT, revisions))
+        if args.final_tree or not authoring_range:
+            errors.extend(validate_final_tree(ROOT))
+    except (AdapterError, subprocess.CalledProcessError) as exc:
+        errors.append(str(exc))
     if errors:
         print("Graphify history/final-tree validation failed:")
-        for error in errors:
-            print(f"- {error}")
+        print("\n".join(f"- {error}" for error in errors))
         return 1
     print("Graphify history/final-tree state is synchronized.")
     return 0

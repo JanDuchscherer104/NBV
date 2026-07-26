@@ -9,90 +9,95 @@ trap 'rm -rf "$TMP"' EXIT
 git -C "$TMP" init -q
 git -C "$TMP" config user.email graphify-test@example.invalid
 git -C "$TMP" config user.name graphify-test
-mkdir -p "$TMP/scripts/git_hooks" "$TMP/scripts" "$TMP/aria_nbv/aria_nbv" "$TMP/graphify-out"
-mkdir -p "$TMP/docs/literature"
+mkdir -p "$TMP/scripts/git_hooks" "$TMP/scripts" "$TMP/aria_nbv/aria_nbv"
 cp "$ROOT/scripts/git_hooks/post-commit" "$TMP/scripts/git_hooks/post-commit"
-cp "$ROOT/scripts/graphify_contract.py" "$TMP/scripts/graphify_contract.py"
 cp "$ROOT/.graphify.toml" "$TMP/.graphify.toml"
-cp "$ROOT/.graphifyignore" "$TMP/.graphifyignore"
-printf '%s\n' '{"tex_dir":"arXiv-selected"}' >"$TMP/docs/literature/sources.jsonl"
 
-cat >"$TMP/scripts/graphify_refresh.py" <<'EOF'
+cat >"$TMP/scripts/graphify_adapter.py" <<'EOF'
 from pathlib import Path
 import sys
-Path("dispatch.log").open("a", encoding="utf-8").write("graphify " + " ".join(sys.argv[1:]) + "\n")
-EOF
 
-touch "$TMP/aria_nbv/aria_nbv/example.py"
+
+def load_config():
+    return {}
+
+
+def selected_literature_dirs():
+    return {"paper-a"}
+
+
+def classify_path(path, config, selected):
+    del config
+    if path.startswith("aria_nbv/aria_nbv/") and path.endswith(".py"):
+        return "code"
+    if path.startswith(("docs/typst/thesis/", "docs/typst/shared/")):
+        return "thesis"
+    if path == "docs/literature/sources.jsonl":
+        return "literature"
+    if path.startswith("docs/literature/tex-src/"):
+        parts = path.split("/")
+        return "literature" if len(parts) > 3 and parts[3] in selected else None
+    return None
+
+
+if __name__ == "__main__":
+    assert sys.argv[1:] == ["sync"]
+    Path("dispatch.log").open("a", encoding="utf-8").write("sync\n")
+EOF
+printf '%s\n' '# bridge fixture' >"$TMP/scripts/graphify_bridge.py"
+printf '%s\n' 'VALUE = 1' >"$TMP/aria_nbv/aria_nbv/example.py"
 git -C "$TMP" add .
 git -C "$TMP" commit -qm initial
-printf '# change\n' >>"$TMP/aria_nbv/aria_nbv/example.py"
-git -C "$TMP" add .
-git -C "$TMP" commit -qm code-change
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
 
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 1
+run_hook() {
+  (
+    cd "$TMP"
+    PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" scripts/git_hooks/post-commit
+  )
+}
 
-mkdir -p "$TMP/external"
-git -C "$TMP" mv aria_nbv/aria_nbv/example.py external/example.py
-git -C "$TMP" commit -qm included-to-excluded-rename
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 2
+dispatches() {
+  if [ -f "$TMP/dispatch.log" ]; then
+    wc -l <"$TMP/dispatch.log"
+  else
+    printf '0\n'
+  fi
+}
 
-mkdir -p "$TMP/.agents/skills/demo"
-printf '%s\n' '---' 'name: demo' 'description: fixture' '---' >"$TMP/.agents/skills/demo/SKILL.md"
-git -C "$TMP" add .
-git -C "$TMP" commit -qm skill-change
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 3
+commit_change() {
+  git -C "$TMP" add -A
+  git -C "$TMP" commit -qm "$1"
+  run_hook
+}
 
-mkdir -p "$TMP/docs/literature/tex-src/arXiv-selected"
-printf 'selected\n' >"$TMP/docs/literature/tex-src/arXiv-selected/main.tex"
-git -C "$TMP" add .
-git -C "$TMP" commit -qm selected-literature
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 4
+printf '%s\n' 'VALUE = 2' >"$TMP/aria_nbv/aria_nbv/example.py"
+commit_change corpus-change
+test "$(dispatches)" -eq 1
 
-mkdir -p "$TMP/docs/literature/tex-src/arXiv-unselected"
-printf 'unselected\n' >"$TMP/docs/literature/tex-src/arXiv-unselected/main.tex"
-git -C "$TMP" add .
-git -C "$TMP" commit -qm unselected-literature
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
-test "$(grep -c '^graphify --mode structural$' "$TMP/dispatch.log")" -eq 4
+printf '%s\n' '# config change' >>"$TMP/.graphify.toml"
+commit_change config-change
+test "$(dispatches)" -eq 2
 
+printf '%s\n' '# adapter change' >>"$TMP/scripts/graphify_adapter.py"
+commit_change adapter-change
+test "$(dispatches)" -eq 3
+
+printf '%s\n' '# bridge change' >>"$TMP/scripts/graphify_bridge.py"
+commit_change bridge-change
+test "$(dispatches)" -eq 4
+
+printf '%s\n' 'operator guidance' >"$TMP/AGENTS.md"
+commit_change agents-change
+test "$(dispatches)" -eq 4
+
+mkdir -p "$TMP/.agents"
+printf '%s\n' 'operator state' >"$TMP/.agents/operator.md"
+commit_change operator-change
+test "$(dispatches)" -eq 4
+
+mkdir -p "$TMP/graphify-out"
 printf '{}\n' >"$TMP/graphify-out/graph.json"
 git -C "$TMP" add -f graphify-out/graph.json
 git -C "$TMP" commit -qm graph-only
-before=$(wc -l <"$TMP/dispatch.log")
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" GRAPHIFY_SYNC_HOOK=1 scripts/git_hooks/post-commit
-)
-after=$(wc -l <"$TMP/dispatch.log")
-test "$before" -eq "$after"
-
-printf '[broken\n' >"$TMP/.graphify.toml"
-git -C "$TMP" add .graphify.toml
-git -C "$TMP" commit -qm malformed-graphify-config
-(
-  cd "$TMP"
-  PATH=/usr/bin:/bin PYTHON_INTERPRETER="$PYTHON_BIN" \
-    GRAPHIFY_REFRESH_LOG="$TMP/preflight.log" GRAPHIFY_SYNC_HOOK=1 \
-    scripts/git_hooks/post-commit
-)
-grep -q 'Graphify preflight failed: corpus classification error' "$TMP/preflight.log"
+run_hook
+test "$(dispatches)" -eq 4

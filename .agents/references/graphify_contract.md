@@ -1,34 +1,29 @@
 # Graphify Contract
 
 Graphify is a source-derived navigation index, never an authority. Exact code,
-active thesis sources, and selected literature sources own claims.
+active Typst sources, bibliography entries, and external papers own claims.
 
 The repository pins `graphifyy==0.9.22` and upstream capability commit
-`abff1b1ca4052fcf9d955c5f6a034088723f4536`. `.graphify.toml` owns the three
-source families (`code`, `thesis`, `literature`), schema version, and canonical
-artifact allowlist. `.graphifyignore` is the matching upstream scan boundary;
-the literature manifest selects the admitted TeX source directories. Config,
-scaffold/operator, test, script, OMX, debrief, and transcript paths are not
-graph sources.
+`abff1b1ca4052fcf9d955c5f6a034088723f4536`. `.graphify.toml` is the sole compact
+pin, activation-history, and three-partition admission config. The adapter
+materializes a temporary corpus, selects literature through
+`docs/literature/sources.jsonl`, and converts only explicit Typst, TeX, and Bib
+structure into Python-shaped input for the upstream AST. Direct root
+`graphify update .` is therefore not canonical.
 
-Only `graphify-out/graph.json`, `manifest.json`, and `GRAPH_REPORT.md` are
-tracked. HTML, wiki output, caches, interpreter pointers, query memory,
-reflections, logs, and temporary extraction state remain ignored. Canonical
-edges distinguish `EXTRACTED`, `INFERRED`, and `AMBIGUOUS` origin from numeric
-confidence and carry exact source digests and locators. Inferred edges survive
-structural refresh only while every source digest still matches.
+Native Graphify owns the graph schema, `GRAPH_REPORT.md`, query/path/explain/tree,
+clustering, and merge driver. HTML is generated on demand and remains ignored;
+no wiki is maintained. Canonical nodes and links retain exact authoritative
+source paths and line locators through the adapter.
 
-`python3 scripts/graphify_refresh.py --mode structural` refreshes code without
-semantic extraction. `--mode sync` explicitly refreshes source-reference
-partitions. Neither mode calls an LLM. The post-commit hook dispatches the
-structural mode asynchronously for code and leaves semantic partitions stale
-for explicit sync.
+Run `python scripts/graphify_adapter.py sync` or `make graphify-refresh` to
+synchronize all partitions, and use `sync --check` for deterministic diff
+validation. The post-commit hook synchronously invokes the same adapter for
+config, adapter, bridge, or adapter-classified source changes.
 
-After `python3 scripts/check_graphify_freshness.py --quiet` succeeds, use the
-pinned upstream public CLI directly: `graphify query`, `graphify path`, and
-`graphify explain`. If freshness fails or navigation is insufficient, inspect
-exact tracked source owners with targeted `rg` and narrow reads; the repository
-does not maintain a second query implementation.
+After `python scripts/graphify_adapter.py check` succeeds, use the pinned native
+CLI directly. If navigation is insufficient, inspect exact tracked owners with
+targeted `rg` and narrow reads; the repository does not maintain query wrappers.
 
 Authoring history uses `S -> G`: a corpus-changing source commit is followed
 immediately by a graph-only commit that records the source tree digest. Mixed

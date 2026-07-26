@@ -7,6 +7,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -53,12 +54,23 @@ def main() -> None:
     assert (
         metrics["active_scaffold_source_loc"] < metrics["baseline_scaffold_source_loc"]
     )
-    active_paths = set(metrics["active_scaffold_source_paths"])
+    working_paths = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=wp7.ROOT,
+    ).split(b"\0")
+    active_paths = {
+        path
+        for raw in working_paths
+        if raw
+        and (path := raw.decode("utf-8", errors="surrogateescape"))
+        and (wp7.ROOT / path).is_file()
+        and wp7.is_active_scaffold_source(path)
+    }
     for path in (
         ".graphify.toml",
-        ".graphifyignore",
         "scripts/check_graphify_history.py",
-        "scripts/graphify_contract.py",
+        "scripts/graphify_adapter.py",
+        "scripts/graphify_bridge.py",
         "scripts/git_hooks/post-commit",
         "scripts/nbv_typst_includes.py",
         "scripts/scaffold/bootstrap_matt_skills.py",
@@ -68,6 +80,16 @@ def main() -> None:
         "scripts/scaffold/validate_omx_artifacts.py",
     ):
         assert path in active_paths
+    for path in (
+        ".graphifyignore",
+        "scripts/check_graphify_freshness.py",
+        "scripts/check_graphify_integration.py",
+        "scripts/graphify_contract.py",
+        "scripts/graphify_refresh.py",
+        "scripts/tests/test_graphify_freshness.py",
+        "scripts/tests/test_graphify_integration.py",
+    ):
+        assert not (wp7.ROOT / path).exists()
     for prefix in ("scripts/tests/", "graphify-out/", ".omx/"):
         assert any(
             path.startswith(prefix)

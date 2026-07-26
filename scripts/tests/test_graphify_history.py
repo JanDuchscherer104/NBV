@@ -1,20 +1,43 @@
-#!/usr/bin/env python3
-"""Temporary-repository fixtures for Graphify S-to-G history semantics."""
+"""Deterministic temporary-repository tests for Graphify S-to-G history."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 import check_graphify_history as history  # noqa: E402
-import graphify_contract as contract  # noqa: E402
+import graphify_adapter as adapter  # noqa: E402
+
+CONFIG = """schema_version = "aria-graph-v2"
+graphify_package = "graphifyy"
+graphify_version = "0.9.22"
+graphify_upstream_commit = "test"
+canonical_artifacts = ["graphify-out/graph.json", "graphify-out/manifest.json", "graphify-out/GRAPH_REPORT.md"]
+[history]
+activation_commit = "0000000000000000000000000000000000000000"
+[partition.code]
+semantic_mode = "structural"
+patterns = ["aria_nbv/aria_nbv/**"]
+[partition.thesis]
+semantic_mode = "reviewed-source-reference"
+patterns = ["docs/typst/thesis/**", "docs/typst/shared/**"]
+[partition.literature]
+semantic_mode = "reviewed-source-reference"
+patterns = ["docs/literature/sources.jsonl", "docs/literature/tex-src/**"]
+"""
+
+
+def _write(root: Path, relative: str, text: str) -> None:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def _git(root: Path, *args: str) -> str:
@@ -35,192 +58,209 @@ def _repo() -> tuple[tempfile.TemporaryDirectory[str], Path, str]:
         ["git", "config", "user.email", "graph@example.invalid"], cwd=root, check=True
     )
     subprocess.run(["git", "config", "user.name", "graph-test"], cwd=root, check=True)
-    shutil.copy(contract.ROOT / ".graphify.toml", root / ".graphify.toml")
-    shutil.copy(contract.ROOT / ".graphifyignore", root / ".graphifyignore")
-    path = root / "aria_nbv/aria_nbv/model.py"
-    path.parent.mkdir(parents=True)
-    path.write_text("VALUE = 1\n", encoding="utf-8")
-    base = _commit(root, "base")
-    return temporary, root, base
+    for name in ("graphify_adapter.py", "graphify_bridge.py"):
+        target = root / "scripts" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SCRIPTS / name, target)
+    _write(root, ".graphify.toml", CONFIG)
+    _write(root, "aria_nbv/aria_nbv/model.py", "VALUE = 1\n")
+    _write(root, "docs/typst/thesis/main.typ", "= Thesis\n")
+    _write(
+        root,
+        "docs/literature/sources.jsonl",
+        '{"arxiv_id":"1234.5678","tex_dir":"paper-a"}\n',
+    )
+    _write(root, "docs/literature/tex-src/paper-a/main.tex", "\\section{Paper}\n")
+    return temporary, root, _commit(root, "base")
+
+
+def _artifacts(root: Path, source_commit: str) -> dict[str, bytes]:
+    sources = adapter.collect_sources(root)
+    nodes = [
+        {
+            "id": family,
+            "label": family,
+            "norm_label": family,
+            "source_file": next(
+                source.path for source in sources if source.family == family
+            ),
+            "source_location": "L1",
+        }
+        for family in adapter.FAMILIES
+    ]
+    graph = {
+        "built_at_commit": source_commit,
+        "directed": False,
+        "graph": {},
+        "hyperedges": [],
+        "links": [],
+        "multigraph": False,
+        "nodes": nodes,
+    }
+    manifest = adapter._manifest(root, sources, graph, source_commit)
+    return {
+        "graph.json": adapter._json_bytes(graph),
+        "manifest.json": adapter._json_bytes(manifest),
+        "GRAPH_REPORT.md": f"# Graph Report - ARIA-NBV\n\n- Built from commit: `{source_commit}`\n".encode(),
+    }
 
 
 def _graph_commit(
     root: Path,
     source_commit: str,
     *,
-    digest: str | None = None,
-    partitions: tuple[str, ...] = ("code",),
+    manifest_change: tuple[str, str] | None = None,
+    omit: str | None = None,
+    extra: bool = False,
 ) -> str:
-    touched_digest = digest or history._source_tree_digest_at(root, source_commit)
+    artifacts = _artifacts(root, source_commit)
+    if manifest_change:
+        manifest = json.loads(artifacts["manifest.json"])
+        manifest[manifest_change[0]] = manifest_change[1]
+        artifacts["manifest.json"] = adapter._json_bytes(manifest)
     out = root / "graphify-out"
     out.mkdir(exist_ok=True)
-    manifest = {
-        "corpus_tree_sha256": touched_digest,
-        "sync": {
-            "refreshed_partitions": list(partitions),
-            "source_tree_sha256": touched_digest,
-        },
-    }
-    (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (out / "graph.json").write_text(
-        json.dumps({"corpus_tree_sha256": touched_digest}), encoding="utf-8"
-    )
-    (out / "GRAPH_REPORT.md").write_text("# Graph\n", encoding="utf-8")
+    for name, content in artifacts.items():
+        if name != omit:
+            (out / name).write_bytes(content)
+    if extra:
+        (out / "extra.json").write_text("{}\n", encoding="utf-8")
     return _commit(root, "graph sync")
 
 
-def main() -> None:
+def _change(root: Path, relative: str, text: str) -> str:
+    _write(root, relative, text)
+    return _commit(root, f"change {relative}")
+
+
+def _assert_error(errors: list[str], fragment: str) -> None:
+    assert any(fragment in error for error in errors), errors
+
+
+def test_classification_and_valid_pairs() -> None:
+    cases = (
+        ("aria_nbv/aria_nbv/model.py", "VALUE = 2\n"),
+        ("docs/typst/thesis/main.typ", "= Changed\n"),
+        (
+            "docs/literature/sources.jsonl",
+            '{"arxiv_id":"1234.5678","tex_dir":"paper-a"}\n\n',
+        ),
+        ("docs/literature/tex-src/paper-a/main.tex", "\\section{Changed}\n"),
+        (
+            "scripts/graphify_adapter.py",
+            (SCRIPTS / "graphify_adapter.py").read_text() + "\n# changed\n",
+        ),
+        (".graphify.toml", CONFIG + "\n# changed\n"),
+    )
+    for path, text in cases:
+        temporary, root, _ = _repo()
+        with temporary:
+            source = _change(root, path, text)
+            assert history._corpus_commit(root, source)
+            graph = _graph_commit(root, source)
+            assert not history.validate_authoring_history(root, [source, graph])
+
     temporary, root, _ = _repo()
     with temporary:
-        squash_anchor = _graph_commit(root, _git(root, "rev-parse", "HEAD"))
-        authoring_range, errors = history.activation_authoring_range(root, "0" * 40)
-        assert authoring_range == f"{squash_anchor}..HEAD"
-        assert not errors
+        operator = _change(root, "AGENTS.md", "operator only\n")
+        assert not history._corpus_commit(root, operator)
+        assert not history.validate_authoring_history(root, [operator])
 
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        source_commit = _commit(root, "post-squash source")
-        (root / "notes.txt").write_text("delay\n", encoding="utf-8")
-        delayed = _commit(root, "post-squash delay")
-        graph_commit = _graph_commit(root, source_commit)
+
+def test_pair_failures() -> None:
+    temporary, root, _ = _repo()
+    with temporary:
+        source = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+        _assert_error(
+            history.validate_authoring_history(root, [source]), "missing immediate"
+        )
+
+        _write(root, "graphify-out/manifest.json", "{}\n")
+        mixed = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 3\n")
+        _assert_error(history.validate_authoring_history(root, [mixed]), "mixed source")
+
+    for kwargs in ({"omit": "GRAPH_REPORT.md"}, {"extra": True}):
+        temporary, root, _ = _repo()
+        with temporary:
+            source = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+            graph = _graph_commit(root, source, **kwargs)
+            _assert_error(
+                history.validate_authoring_history(root, [source, graph]),
+                "artifact set",
+            )
+
+    for key in (
+        "built_source_commit",
+        "source_digest",
+        "config_sha256",
+        "adapter_sha256",
+    ):
+        temporary, root, _ = _repo()
+        with temporary:
+            source = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+            graph = _graph_commit(root, source, manifest_change=(key, "wrong"))
+            _assert_error(
+                history.validate_authoring_history(root, [source, graph]), key
+            )
+
+    temporary, root, _ = _repo()
+    with temporary:
+        source = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+        delay = _change(root, "notes.txt", "delay\n")
+        graph = _graph_commit(root, source)
+        errors = history.validate_authoring_history(root, [source, delay, graph])
+        _assert_error(errors, "artifact set")
+        _assert_error(
+            history.validate_authoring_history(root, [source, graph]),
+            "single-parent child",
+        )
+
+
+def test_merge_follow_up_and_final_tree() -> None:
+    temporary, root, _ = _repo()
+    with temporary:
+        branch = _git(root, "branch", "--show-current")
+        subprocess.run(["git", "checkout", "-qb", "corpus"], cwd=root, check=True)
+        _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+        subprocess.run(["git", "checkout", "-q", branch], cwd=root, check=True)
+        _change(root, "notes.txt", "main divergence\n")
+        subprocess.run(
+            ["git", "merge", "--no-ff", "-qm", "merge corpus", "corpus"],
+            cwd=root,
+            check=True,
+        )
+        merge = _git(root, "rev-parse", "HEAD")
+        assert history._corpus_commit(root, merge)
+        _assert_error(
+            history.validate_authoring_history(root, [merge]), "missing immediate"
+        )
+        graph = _graph_commit(root, merge)
+        assert not history.validate_authoring_history(root, [merge, graph])
+        assert not history.validate_final_tree(root)
+        _write(root, "aria_nbv/aria_nbv/model.py", "STALE = True\n")
+        _assert_error(history.validate_final_tree(root), "stale or invalid")
+
+
+def test_activation_range_after_squash() -> None:
+    temporary, root, base = _repo()
+    with temporary:
+        anchor = _graph_commit(root, base)
+        source = _change(root, "aria_nbv/aria_nbv/model.py", "VALUE = 2\n")
+        graph = _graph_commit(root, source)
         authoring_range, errors = history.activation_authoring_range(root, "0" * 40)
-        assert authoring_range == f"{squash_anchor}..HEAD"
+        assert authoring_range == f"{anchor}..HEAD"
         assert not errors
         revisions = _git(
             root, "rev-list", "--reverse", "--first-parent", authoring_range
         ).splitlines()
-        assert revisions == [source_commit, delayed, graph_commit]
-        assert any(
-            "lacks immediate" in error
-            for error in history.validate_authoring_history(root, revisions)
-        )
+        assert revisions == [source, graph]
 
-    temporary, root, base = _repo()
-    with temporary:
-        operator = root / "AGENTS.md"
-        operator.write_text("operator only\n", encoding="utf-8")
-        operator_commit = _commit(root, "operator")
-        assert history._touched_partitions(root, operator_commit) == set()
 
-        thesis = root / "docs/typst/thesis/main.typ"
-        thesis.parent.mkdir(parents=True)
-        thesis.write_text("#let thesis = true\n", encoding="utf-8")
-        thesis_commit = _commit(root, "thesis")
-        assert history._touched_partitions(root, thesis_commit) == {"thesis"}
-
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        s = _commit(root, "source")
-        g = _graph_commit(root, s)
-        assert not history.validate_authoring_history(root, [s, g])
-
-        note = root / "notes.txt"
-        note.write_text("not corpus\n", encoding="utf-8")
-        n = _commit(root, "non corpus")
-        assert not history.validate_authoring_history(root, [s, g, n])
-
-    temporary, root, _ = _repo()
-    with temporary:
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        s = _commit(root, "source")
-        assert any(
-            "lacks immediate" in error
-            for error in history.validate_authoring_history(root, [s])
-        )
-
-        source.write_text("VALUE = 3\n", encoding="utf-8")
-        t = _commit(root, "second source")
-        errors = history.validate_authoring_history(root, [s, t])
-        assert any("lacks immediate" in error for error in errors)
-
-    temporary, root, _ = _repo()
-    with temporary:
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        s = _commit(root, "source")
-        (root / "notes.txt").write_text("delay\n", encoding="utf-8")
-        delayed = _commit(root, "unrelated delay")
-        g = _graph_commit(root, s)
-        errors = history.validate_authoring_history(root, [s, delayed, g])
-        assert any("lacks immediate" in error for error in errors)
-
-    temporary, root, _ = _repo()
-    with temporary:
-        main_branch = _git(root, "branch", "--show-current")
-        subprocess.run(
-            ["git", "checkout", "-qb", "corpus-change"], cwd=root, check=True
-        )
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        _commit(root, "branch source")
-        subprocess.run(["git", "checkout", "-q", main_branch], cwd=root, check=True)
-        subprocess.run(
-            ["git", "merge", "--no-ff", "-qm", "merge corpus", "corpus-change"],
-            cwd=root,
-            check=True,
-        )
-        merge_commit = _git(root, "rev-parse", "HEAD")
-        assert history._touched_partitions(root, merge_commit) == {"code"}
-        assert any(
-            "lacks immediate" in error
-            for error in history.validate_authoring_history(root, [merge_commit])
-        )
-
-        graph_commit = _graph_commit(root, merge_commit)
-        assert not history.validate_authoring_history(
-            root, [merge_commit, graph_commit]
-        )
-
-    temporary, root, _ = _repo()
-    with temporary:
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        s = _commit(root, "source")
-        out = root / "graphify-out"
-        out.mkdir()
-        (out / "manifest.json").write_text("{}", encoding="utf-8")
-        source.write_text("VALUE = 3\n", encoding="utf-8")
-        mixed = _commit(root, "mixed")
-        errors = history.validate_authoring_history(root, [mixed])
-        assert any("mixed source" in error for error in errors)
-
-        _graph_commit(root, s, digest="0" * 64)
-        g = _git(root, "rev-parse", "HEAD")
-        errors = history.validate_authoring_history(root, [s, g])
-        assert any("digest does not match" in error for error in errors)
-
-    for operation in ("modify", "delete", "rename"):
-        temporary, root, _ = _repo()
-        with temporary:
-            manifest = root / "docs/literature/sources.jsonl"
-            manifest.parent.mkdir(parents=True)
-            manifest.write_text('{"tex_dir":"arXiv-selected"}\n', encoding="utf-8")
-            source = root / "docs/literature/tex-src/arXiv-selected/main.tex"
-            source.parent.mkdir(parents=True)
-            source.write_text("selected v1\n", encoding="utf-8")
-            _commit(root, "selected literature base")
-
-            if operation == "modify":
-                source.write_text("selected v2\n", encoding="utf-8")
-            elif operation == "delete":
-                source.unlink()
-            else:
-                subprocess.run(
-                    ["git", "mv", source.name, "renamed.tex"],
-                    cwd=source.parent,
-                    check=True,
-                )
-            literature_commit = _commit(root, f"{operation} selected literature")
-            assert history._touched_partitions(root, literature_commit) == {
-                "literature"
-            }
-            graph_commit = _graph_commit(
-                root, literature_commit, partitions=("literature",)
-            )
-            assert not history.validate_authoring_history(
-                root, [literature_commit, graph_commit]
-            )
+def main() -> None:
+    test_classification_and_valid_pairs()
+    test_pair_failures()
+    test_merge_follow_up_and_final_tree()
+    test_activation_range_after_squash()
 
 
 if __name__ == "__main__":

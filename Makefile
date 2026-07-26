@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
-.PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
+.PHONY: graphify-integration-self-test api-docs-self-test
 .PHONY: context-qmd-tree context-contracts context-qmd-outline context-typst-outline context-typst-includes context-dir-tree uml qmd-frontmatter-check
 .PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills graphify-setup install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
@@ -164,29 +164,24 @@ wp7-integration-self-test: _check_python ## 🧭 Run negative probes for final W
 wp7-integration-check: wp7-integration-self-test _check_python ## 🧭 Prove final skill, LOC, prompt, graph, agent, and wiki budgets
 	@$(PYTHON_INTERPRETER) scripts/scaffold/check_wp7_integration.py
 
-graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
-	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
-
 graphify-refresh: _check_python ## 🕸️ Explicitly synchronize all canonical Graphify partitions
-	@$(PYTHON_INTERPRETER) scripts/graphify_refresh.py --mode sync
+	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py sync
 
 graphify-diff-check: _check_python ## 🕸️ Prove deterministic canonical Graphify regeneration
-	@$(PYTHON_INTERPRETER) scripts/graphify_refresh.py --mode sync --check
+	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py sync --check
 
 graphify-freshness: _check_python ## 🕸️ Validate partition and bridge freshness
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py check
 
 graphify-history: _check_python ## 🕸️ Validate final-tree Graphify synchronization
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_history.py --activation-range --final-tree
 
-graphify-integration-self-test: _check_python ## 🕸️ Verify corpus, provenance, freshness, history, and hook dispatch
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
+graphify-integration-self-test: _check_python ## 🕸️ Verify adapter, bridge, history, and hook dispatch
+	@$(PYTHON_INTERPRETER) -m pytest -q scripts/tests/test_graphify_adapter.py scripts/tests/test_graphify_bridge.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_history.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-skill-self-test graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
+graphify-ci: graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -202,7 +197,7 @@ claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude 
 	@scripts/sync_claude_skills.sh
 
 graphify-setup: _check_python ## 🕸️ Configure the pinned upstream Graphify merge driver
-	@GRAPHIFY_COMMAND="$$(PYTHONPATH=scripts $(PYTHON_INTERPRETER) -c 'import shlex; from graphify_refresh import ensure_graphify_pin, graphify_command; command = graphify_command(); ensure_graphify_pin(command); print(shlex.join(command))')"; \
+	@GRAPHIFY_COMMAND="$$(PYTHONPATH=scripts $(PYTHON_INTERPRETER) -c 'import shlex; from graphify_adapter import ensure_graphify_pin, graphify_command; command = graphify_command(); ensure_graphify_pin(command); print(shlex.join(command))')"; \
 	git config merge.graphify.name "ARIA-NBV canonical Graphify merge"; \
 	git config merge.graphify.driver "$$GRAPHIFY_COMMAND merge-driver %O %A %B"
 

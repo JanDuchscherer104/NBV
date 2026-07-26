@@ -112,36 +112,20 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Graphify is the default ARIA-NBV navigation graph when
-`graphify-out/graph.json` exists. The canonical tracked artifacts are
-`graph.json`, `manifest.json`, and `GRAPH_REPORT.md`; HTML, wiki, caches, query
-memory, and interpreter state remain ignored operator output.
-
-The repo-owned `.graphifyignore` and `.graphify.toml` expose exactly three
-source families: production `aria_nbv/aria_nbv` code, active
-`docs/typst/{thesis,shared}` sources, and literature families selected by
-`docs/literature/sources.jsonl`. Operator/config/scaffold surfaces, tests, and
-scripts stay outside graph nodes. Exact source owners remain authoritative;
-Graphify is source-derived navigation evidence.
+Graphify is source-derived navigation; exact code, active Typst sources,
+bibliography entries, and external papers remain authoritative. The adapter
+admits three explicit source families from `.graphify.toml` and converts only
+explicit Typst, TeX, and Bib structure into input for the pinned upstream AST.
 
 Rules:
 - For architecture, codebase, file-relationship, or project-content questions,
-  first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
-  succeeds, use the pinned upstream CLI directly: `graphify query "<question>"`,
-  `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"`. When freshness
-  fails or navigation lacks evidence, inspect exact source owners with targeted
-  `rg` and narrow reads.
-- Dirty `graphify-out/` files are expected after hooks or incremental updates;
-  dirty graph files are not a reason to skip Graphify. Only skip Graphify if
-  the task is about stale or incorrect graph output, or the user explicitly says
-  not to use it.
-- Read `graphify-out/GRAPH_REPORT.md` for broad architecture review when
-  query/path/explain do not surface enough context. A wiki may be generated
-  only as ignored on-demand output and is never canonical evidence.
-- A source commit `S` touching the graph corpus must be followed immediately by
-  a graph-only child `G`. Run `make graphify-refresh`, commit only the three
-  canonical artifacts, then prove the pair with `make graphify-ci`. The
-  post-commit hook performs structural refresh only and never stages or commits.
-- Graphify is source-derived navigation. Claims resolve to owning code/tests,
-  immutable manifests or evidence bundles, and exact external papers; the
-  Typst thesis cites those sources and owns their scientific interpretation.
+  run `make graphify-freshness`, then use native `graphify query`, `path`,
+  `explain`, or `tree`. Fall back to exact sources when the graph is stale or
+  insufficient.
+- Refresh only through `make graphify-refresh` or
+  `python scripts/graphify_adapter.py sync`; direct root `graphify update .` is
+  not canonical because extraction uses the adapter's temporary corpus.
+- Native Graphify owns graph schema, reports, traversal, clustering, merge, and
+  on-demand ignored HTML. No wiki is maintained.
+- A corpus-changing source commit `S` requires an immediate graph-only child
+  `G`; `make graphify-ci` validates the final tree and authoring history.
