@@ -35,7 +35,9 @@ python3 <skill>/scripts/experiment.py validate --mission-root <mission>
 python3 <skill>/scripts/experiment.py report --mission-root <mission>
 ```
 
-If `summary.json` reports a plateau, search local code and literature owners
-before external primary sources. Record any derived mechanism and falsifiable
-hypothesis in `measurements/inspiration.jsonl`; research never changes the
-frozen evaluator or counts as an experiment row.
+Deliberately alternate research and implementation iterations, especially at a
+plateau or after contradictory evidence. Research inspects local evidence before
+external primary sources, then appends provenance, mechanism, and a falsifiable
+hypothesis to `measurements/inspiration.jsonl`; it mutates no source, evaluator,
+contract, or budget and creates no experiment row. Implementation makes one
+smallest causal change; the unchanged evaluator and helper record keep/discard.

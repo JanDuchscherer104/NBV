@@ -1,6 +1,6 @@
 ---
 name: measured-autoresearch
-description: Frozen-evaluator empirical research inside ARIA-NBV.
+description: Alternate research and measured iterations.
 metadata:
   mode: implementation
   not_when:
@@ -8,8 +8,7 @@ metadata:
     - "no active mission root and lifecycle owner are explicitly identified"
     - "the evaluator, budget, or mutable path set is still changing"
   handoff_to:
-    - "aria-nbv-context for localizing candidate code or evidence"
-    - "aria-nbv-context for source-backed inspiration after a measured plateau"
+    - "aria-nbv-context for localizing candidate code or inspiration evidence"
     - "owning OMX autoresearch workflow for continuation or completion"
   evidence_required:
     - "one explicit active mission root and lifecycle owner"
@@ -22,7 +21,6 @@ metadata:
   triggers:
     - "measured autoresearch experiment"
     - "frozen evaluator candidate"
-    - "empirical keep or discard"
   must_read:
     - ".agents/skills/measured-autoresearch/references/measurement-contract.md"
   canonical_sources:
@@ -38,22 +36,23 @@ metadata:
 
 # Measured Autoresearch
 
-The enclosing OMX workflow owns mission lifecycle, continuation, and terminal
-validation. This sidecar owns only candidate measurement artifacts and the
-helper-computed keep/discard evidence under the explicit active mission root.
+The enclosing OMX workflow owns lifecycle and terminal validation. This sidecar
+owns only inspiration and helper-computed measurement evidence.
 
-## Loop
+## Mixed iteration loop
 
 1. Resolve one mission from explicit handoff/goal evidence; never select by
-   recency or glob historical missions.
-2. Freeze the contract and ownership snapshot before candidate edits.
-3. Measure a reproducible baseline, then one smallest falsifiable candidate.
-4. Append results through `scripts/experiment.py`; never hand-author ledger
-   rows or change the evaluator between candidates.
-5. Keep only a helper-recorded `keep`. For discard, restore only declared
-   mutable paths and record byte/status proof.
-6. Validate and render the measurement report, then return control to the
-   enclosing owner without declaring its workflow complete.
+   recency or glob history. Freeze its contract/ownership, then measure baseline.
+2. **Research/inspiration:** inspect local, then useful external evidence;
+   append source provenance, mechanism, and a falsifiable hypothesis to
+   `inspiration.jsonl`. Mutate no source, evaluator, contract, or budget, and
+   create no experiment row.
+3. **Implementation/measurement:** make one smallest causal change; run the
+   unchanged gates/evaluator and let the helper record `keep` or `discard`.
+   Restore discards only within declared mutable paths with byte/status proof.
+4. Deliberately alternate iteration types, especially at plateau or after
+   contradictory evidence. Research proposes the next measured candidate.
+5. Validate and render after measurement, then return control without claiming
+   lifecycle completion.
 
-Read `references/measurement-contract.md` for exact artifact schema, command
-shapes, ownership proof, plateau inspiration, and stop conditions.
+Read `references/measurement-contract.md` for schemas, commands, and safeguards.
