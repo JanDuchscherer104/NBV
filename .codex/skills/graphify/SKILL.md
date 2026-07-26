@@ -52,16 +52,17 @@ If the user invoked `/graphify --help` or `/graphify -h` (with no other argument
 
 **Fast path — fresh existing graph:** Before doing anything else, check whether
 `graphify-out/graph.json` exists. In ARIA-NBV, also run
-`make graphify-freshness`; the graph is eligible for
-the fast path only when that command succeeds. A failed check means the graph's
-commit, corpus policy, or semantic sources are stale, so fall back to the owning
-source files until refresh completes. If the graph is fresh AND the user's
+`make graphify-freshness`; the graph is eligible for the fast path only when
+that command succeeds. Choose `tree --root .` for hierarchy, `explain` for a
+known symbol, `affected` for callers and impact, `path` for two known entities,
+and `query` for broad discovery. A failed check means the graph's corpus or
+bridge is stale, so fall back to owning sources until refresh completes. If the graph is fresh AND the user's
 request is a natural-language question about the codebase (e.g. "How does X
 work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit
 rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies
 fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For
-/graphify query`.** Run `graphify query "<question>"` immediately. Do not run
-detect. Do not check corpus size. Do not ask the user to narrow.
+/graphify query`.** Run the native command matching the task immediately. Do
+not run detect. Do not check corpus size. Do not ask the user to narrow.
 
 If no path was given, use `.` (current directory). Do not ask the user for a path.
 

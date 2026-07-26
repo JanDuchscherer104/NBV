@@ -25,8 +25,10 @@ metadata:
 
 # ARIA-NBV Context
 
-1. Run `make graphify-freshness`. When fresh, start with native `graphify
-   query`, then use `path`, `explain`, or `tree` only as needed.
+1. Run `make graphify-freshness`. When fresh, choose the native command by task:
+   `tree --root .` for hierarchy, `explain` for a known symbol, `affected` for
+   callers and impact, `path` for two known entities, and `query` for broad
+   discovery.
 2. Confirm the result in exact tracked source. If Graphify is stale or
    insufficient, use targeted `rg` and narrow reads directly.
 3. Open the nearest `AGENTS.md` only after the surface is localized.

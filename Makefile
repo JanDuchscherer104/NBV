@@ -162,7 +162,8 @@ graphify-integration-self-test: _check_python ## 🕸️ Verify adapter, bridge,
 	@$(PYTHON_INTERPRETER) -m pytest -q scripts/tests/test_graphify_adapter.py scripts/tests/test_graphify_bridge.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-integration-self-test graphify-freshness ## 🕸️ Run the pinned Graphify integration gates
+graphify-ci: graphify-integration-self-test graphify-refresh graphify-freshness ## 🕸️ Run the pinned Graphify integration gates
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_retrieval.py
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -187,6 +188,7 @@ install-git-hooks: ## 🪝 Copy repository hooks into the current worktree
 		[ -f "$$hook" ] || continue; \
 		name=$$(basename "$$hook"); \
 		target="$$HOOK_DIR/$$name"; \
+		rm -f "$$target"; \
 		cp "$$hook" "$$target" && chmod +x "$$target" && \
 			echo "$(GREEN)installed $$target$(NC)"; \
 	done
