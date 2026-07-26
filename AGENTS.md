@@ -117,7 +117,11 @@ small adapter selects three source families from `.graphify.toml` and converts
 only Typst, TeX, and Bib constructs that upstream Graphify cannot parse.
 
 Rules:
-- Run `make graphify-freshness` before navigation. Use `graphify tree --root .`
+- Use Graphify when ownership is unknown or the task needs hierarchy,
+  architecture, impact, or cross-modal relationships. Skip it when the prompt
+  already names the exact owner, file, or operational skill.
+- Run `make graphify-freshness` before Graphify navigation. Use
+  `graphify tree --root .`
   for hierarchy, `explain` for a known symbol, `affected` for callers and
   impact, `path` for two known entities, and `query` for broad discovery.
   Confirm consequential claims in exact sources.

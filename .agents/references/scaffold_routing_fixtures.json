@@ -1,12 +1,12 @@
 {
-  "version": 2,
+  "version": 3,
   "purpose": "Positive and adjacent-negative routing fixtures for the ten-skill retained boundary.",
   "fixtures": [
     {
       "id": "generic-non-trivial-preflight",
       "task": "Begin non-trivial ARIA-NBV work by stating assumptions, inspecting the nearest owner, preserving unrelated changes, and defining verification.",
       "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not duplicate specialist or domain truth in the preflight workflow."]
+      "non_goals": ["Do not duplicate specialist or domain truth in the preflight workflow.", "Do not run Graphify when the exact owner is already named."]
     },
     {
       "id": "local-file-lookup",
@@ -78,7 +78,7 @@
       "id": "measured-autoresearch-candidate",
       "task": "Measure one frozen-evaluator autoresearch candidate and record a helper-validated empirical keep or discard decision.",
       "expected_skills": ["measured-autoresearch"],
-      "non_goals": ["Do not activate measured autoresearch for literature-only research without an executable evaluator."]
+      "non_goals": ["Do not activate measured autoresearch for literature-only research without an executable evaluator.", "Do not route a named measured-autoresearch workflow through Graphify first."]
     }
   ]
 }
