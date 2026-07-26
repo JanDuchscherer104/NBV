@@ -13,11 +13,15 @@ The first policy gate is an actor-visible myopic scorer over the same finite can
 
 The second policy gate estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
 
-#block[#align(center)[#eqs.entity.lookahead_headroom]]
+$
+  #eqs.entity.lookahead_headroom
+$
 
 Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for recovery from offline rollout traces:
 
-#block[#align(center)[#eqs.entity.q_recovery]]
+$
+  #eqs.entity.q_recovery
+$
 
 Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
 

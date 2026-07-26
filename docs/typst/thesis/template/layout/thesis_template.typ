@@ -79,6 +79,7 @@
   )
 
   set text(font: fonts.body, size: 12pt, lang: "en")
+  set math.equation(numbering: "(1)")
   show math.equation: set text(weight: 400)
 
   show heading: set block(below: 0.85em, above: 1.75em)

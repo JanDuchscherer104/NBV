@@ -14,7 +14,9 @@
 
 At step $t$, candidate generation returns a finite full-shell table #symb.rl.candidate_table with a hard-valid mask $bold(m)_t$ and versioned invalid-reason bitsets. Scores are stored compactly only for hard-valid rows and are bound back to stable shell indices before selection. The admissible action set is
 
-#block[#align(center)[#eqs.rl.finite_action_set]]
+$
+  #eqs.rl.finite_action_set
+$
 
 Invalid rows remain available for diagnostics and dense replay, but cannot be selected. A row enters the training mask only when it is actor-selectable and has a finite oracle target. Invalid rows have false masks and undefined labels; scene RRI is never substituted for a missing target-specific label. `valid_action_mask`, `q_train_mask`, padding, and any deployable feasibility estimate are distinct fields with distinct owners.
 
@@ -22,7 +24,9 @@ Invalid rows remain available for diagnostics and dense replay, but cannot be se
 
 Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is
 
-#block[#align(center)[#eqs.rl.replay_transition]]
+$
+  #eqs.rl.replay_transition
+$
 
 where $cal(T)_"replay"$ is a deterministic replay-control update map, $x_t$ is the current reference pose, $bold(H)_t$ the selected-pose history, $b_t$ the remaining budget, and $xi_t$ the deterministic generation context. The next candidate table is regenerated around the selected pose under the same target task, history constraints, and versioned generator configuration. This notation deliberately does not call the update an environment or Markov-state transition because no new actor observation is incorporated.
 
@@ -42,17 +46,23 @@ The persisted factual tables retain source and target identity, lineage hashes, 
 
 A selected observation is the typed tuple
 
-#block[#align(center)[#eqs.rl.selected_observation]]
+$
+  #eqs.rl.selected_observation
+$
 
 containing depth, valid mask, calibration, root-relative camera pose, and a source role. The source role distinguishes privileged GT-mesh depth, declared sensor-like simulation, and an actor-visible sensor observation. Unselected candidate renders at step $t$ are never elements of the student state.
 
 The existing geometry-level counterfactual uses a set union of retained points,
 
-#block[#align(center)[#eqs.rl.counterfactual_transition]]
+$
+  #eqs.rl.counterfactual_transition
+$
 
 but a planning memory must additionally preserve whether space is observed occupied, observed free, or still unknown. The proposed sparse update is
 
-#block[#align(center)[#eqs.scene.ray_memory_update]]
+$
+  #eqs.scene.ray_memory_update
+$
 
 Here both evidence terms are indexed by the selected action $a_t$; no unselected candidate render enters the successor state. The update may add selected surface evidence, carve observed free space, update support and uncertainty, and refresh target-local directional memory. It must not attach RGB, DINO, detector, or EVL descriptors to counterfactual geometry unless a corresponding actor-visible observation exists. Counterfactual-only cells instead carry explicit source and missing-modality masks.
 

@@ -16,11 +16,15 @@
 
 Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned inputs by $Pi$ must permute outputs by the same amount:
 
-#block[#align(center)[#eqs.rl.candidate_row_equivariance]]
+$
+  #eqs.rl.candidate_row_equivariance
+$
 
 Equivariance alone does not guarantee invalid-row isolation. Holding valid rows and the mask fixed while changing only invalid-row contents must satisfy
 
-#block[#align(center)[#eqs.rl.candidate_mask_isolation]]
+$
+  #eqs.rl.candidate_mask_isolation
+$
 
 Mask ownership depends on the interaction. In the canonical candidate-to-state model, candidates are queries and scene, target, history, and horizon context are keys and values. The action mask therefore sanitizes candidate queries, gates output selection, and gates supervised losses; it is not a key-padding mask for the shared state tokens. Candidate masks become attention-key masks only in later candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding masks, action-validity masks, training masks, modality-presence masks, and horizon-availability masks must remain separate.
 

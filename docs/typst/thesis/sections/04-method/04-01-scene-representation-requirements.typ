@@ -34,15 +34,21 @@ Three boundaries are invariant. Invalidity is a hard mask with versioned reason 
 
 ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$ and requested residual horizon $h$:
 
-#block[#align(center)[#eqs.scene.actor_state_read]]
+$
+  #eqs.scene.actor_state_read
+$
 
 For architectural and DTO purposes, the scene state is decomposed as
 
-#block[#align(center)[#eqs.scene.scene_memory_decomposition]]
+$
+  #eqs.scene.scene_memory_decomposition
+$
 
 The target-conditioned decision state folds the task descriptor into the state seen by the value function,
 
-#block[#align(center)[#eqs.rl.target_conditioned_state]]
+$
+  #eqs.rl.target_conditioned_state
+$
 
 Here $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target descriptor $z_e$ is therefore part of the decision state but remains a separate `TargetState` DTO so it is not duplicated inside target-independent scene memory. The indexed form $Q_(h,e)(s_t,i)$ used elsewhere is the curried form of the same target-conditioned value function.
 

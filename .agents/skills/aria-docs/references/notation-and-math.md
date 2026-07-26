@@ -62,6 +62,10 @@ Use quoted roman labels for semantic attachments and Typst math symbols rather
 than Unicode lookalikes. Compile and inspect every changed display equation for
 attachment scope, line overflow, font consistency, labels, and references.
 
+Render thesis display equations with native `$ ... $` blocks. Do not wrap
+shared equations in `block` or `align`; native display equations already center
+their body and participate in the thesis equation-numbering counter.
+
 Migrate stale notation when touching advisor-facing equations, but do not mix a
 local edit with a broad compatibility cleanup. Compatibility keys may retain
 old names while rendering current notation; infer semantics from the shared

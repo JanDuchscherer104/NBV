@@ -40,6 +40,9 @@ REQUIRED_FIELDS = {
     "kg_tags",
 }
 RAW_DISPLAY_MATH = re.compile(r"^\s*\$\s*$.*?^\s*\$\s*$", re.MULTILINE | re.DOTALL)
+SHARED_EQUATION_DISPLAY = re.compile(
+    r"^\s*\$\s*\n\s*#eqs(?:\.[A-Za-z_][\w-]*)+\s*\n\s*\$\s*$"
+)
 LOCAL_NOTATION_FACADE = re.compile(r"^\s*#let\s+(?:symb|eqs)\b", re.MULTILINE)
 
 
@@ -784,13 +787,14 @@ def _validate_thesis_notation_ownership() -> None:
     sections = ROOT / "docs" / "typst" / "thesis" / "sections"
     for path in sorted(sections.rglob("*.typ")):
         source = path.read_text(encoding="utf-8")
-        for pattern, label in (
-            (RAW_DISPLAY_MATH, "raw display equation"),
-            (LOCAL_NOTATION_FACADE, "local notation facade"),
-        ):
-            for match in pattern.finditer(source):
-                line = source.count("\n", 0, match.start()) + 1
-                violations.append(f"{path.relative_to(ROOT)}:{line}: {label}")
+        for match in RAW_DISPLAY_MATH.finditer(source):
+            if SHARED_EQUATION_DISPLAY.fullmatch(match.group()):
+                continue
+            line = source.count("\n", 0, match.start()) + 1
+            violations.append(f"{path.relative_to(ROOT)}:{line}: raw display equation")
+        for match in LOCAL_NOTATION_FACADE.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            violations.append(f"{path.relative_to(ROOT)}:{line}: local notation facade")
     if violations:
         raise GlossaryError(
             "active thesis notation must be owned by docs/typst/shared:\n"

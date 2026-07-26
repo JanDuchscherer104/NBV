@@ -8,7 +8,9 @@ An oracle target task fixes the entity identity and @ground-truth:short evaluati
 
 The general descriptor notation remains
 
-#block[#align(center)[#eqs.entity.target_descriptor]]
+$
+  #eqs.entity.target_descriptor
+$
 
 #parbreak()
 The implemented oracle sampler populates only @ground-truth:short identity, class, confidence, pose, extent, and reference-relative geometry. Projected area, semidense support, @egocentric-voxel-lifting:short support, and proposal-match scores are not measured by this path and must not be interpreted from their schema placeholders.
@@ -48,19 +50,27 @@ Candidate generation turns one oracle instruction into a finite action table. Ev
 
 At rollout step $t$, candidate generation constructs a full shell
 
-#block[#align(center)[#eqs.action.candidate_shell]]
+$
+  #eqs.action.candidate_shell
+$
 
 with a fixed provenance component $k(i)$ per row. The core mixture contains forward-local, target-bearing, and lateral-bypass motion; the diversity challenger may additionally allocate mass to local refinement and revisit/backtrack components. The resolved manifest, rather than prose, determines which components and counts apply to a run.
 
 For each row, the raw direction is sampled in the reference rig frame. The realistic profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
 
-#block[#align(center)[#eqs.action.power_spherical_forward]]
+$
+  #eqs.action.power_spherical_forward
+$
 
 The draw is mapped into configured azimuth and elevation caps without rejection. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the cap transform is
 
-#block[#align(center)[#eqs.action.angle_cap_transform]]
+$
+  #eqs.action.angle_cap_transform
+$
 
-#block[#align(center)[#eqs.action.capped_direction]]
+$
+  #eqs.action.capped_direction
+$
 
 The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
 
@@ -74,25 +84,35 @@ The sampler draws a capped direction in the reference rig frame and reinterprets
 
 The three core position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
 
-#block[#align(center)[#eqs.action.family_directions]]
+$
+  #eqs.action.family_directions
+$
 
 Finally, the sampler draws a radius and transforms the reference-frame offset into world coordinates:
 
-#block[#align(center)[#eqs.action.candidate_center_world]]
+$
+  #eqs.action.candidate_center_world
+$
 
 `forward_local` keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
 
-#block[#align(center)[#eqs.action.target_lookat_frame]]
+$
+  #eqs.action.target_lookat_frame
+$
 
 These equations describe the sampler, not an optimal proposal distribution. `forward_local` preserves egocentric continuity, `target_bearing_local` moves along the target ray, and `lateral_target_bypass` introduces side-step views; the optional challenger families test smaller corrections and reversals. Candidate-profile utility must be judged after pruning. A store in which target-aware families rarely survive cannot support a target-conditioned planning claim.
 
 Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
 
-#block[#align(center)[#eqs.action.motion_pruning_limits]]
+$
+  #eqs.action.motion_pruning_limits
+$
 
 The full shell is retained with position, strategy, mixture, sampling probability, rule masks, diagnostics, and invalid-reason bitsets. Panel B of @fig:candidate-generation-geometry makes the distinction concrete for one stored table: invalid rows remain inspectable but sit outside the admissible set. Invalid candidates cannot enter #symb.rl.qh selection, stochastic normalization, or loss targets. Conversely, a feasible row with weak target support or low expected gain remains a valid low-utility example rather than receiving an invalid-reason code. A manifest-defined root-support threshold may reject an entire rollout task when too few actions remain:
 
-#block[#align(center)[#eqs.action.valid_support_threshold]]
+$
+  #eqs.action.valid_support_threshold
+$
 
 This threshold is a data-support guard, not a reward threshold. Preflight reporting must retain rejected-root counts and failure reasons by candidate family.
 
@@ -112,7 +132,9 @@ Bounded oracle lookahead can select a different first action from one-step greed
 
 For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is
 
-#block[#align(center)[#eqs.action.robust_temperature_softmax]]
+$
+  #eqs.action.robust_temperature_softmax
+$
 
 The target source defines the supervised task, the candidate mixture defines learnable action support, validity defines admissibility, and the recipe defines which chains enter replay. Reporting must therefore cover target-task coverage, valid fanout and invalid reasons by family, selected-family diversity, gain distributions, and retention cost before attributing policy behavior to non-myopic planning. The paired train-only pilots are bandwidth and candidate-profile probes; they are non-confirmatory and provide no held-out policy-performance evidence.
 
@@ -128,24 +150,34 @@ Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evalua
   caption: [Point--mesh metric contract and controlled validity fixture. Panel A isolates the exact point-to-triangle primitive. Panel B distinguishes the point-to-face accuracy and face-to-point completeness reductions using computed closest-point witnesses. Panel C holds the planar support and point set fixed while changing only the triangle table; the measured equal-face completeness term changes from $0.03640$ to $0.02284$ $"m"^2$. These values are generated by the repository's PyTorch3D metric on a synthetic fixture and demonstrate a tessellation-sensitivity mechanism; they are not an ASE performance result.],
 ) <fig:target-rri-point-mesh-geometry>
 
-#block[#align(center)[#eqs.entity.target_error]]
+$
+  #eqs.entity.target_error
+$
 
 The implementation crops mesh faces when any vertex lies inside the oriented target OBB and evaluates the configured point--mesh scorer. Geometry-invalid candidates are removed by the hard action mask and retain persisted candidate reason codes. Empty mesh crops, insufficient current support, or unusable renders instead invalidate the separate oracle evaluation: the recipe either skips the affected row or table, or clears `oracle_label_mask` and `q_train_mask`, while reporting the oracle failure independently rather than assigning a candidate reason code. The controlled fixture in @fig:target-rri-point-mesh-geometry demonstrates that the current equal-face completeness reduction is not invariant to non-uniform retessellation, even when the planar support and point set are fixed. Its sensitivity to root and candidate point sampling remains unmeasured. Confirmatory use therefore requires the sensitivity tests and metric-validity gate specified in @sec:thesis-experimental-design; freezing one mesh does not by itself establish a representation-independent oracle.
 
 The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
 
-#block[#align(center)[#eqs.rl.target_rri_reward]]
+$
+  #eqs.rl.target_rri_reward
+$
 
 The finite-horizon return is the discounted sum of those target rewards along a selected counterfactual branch. It is a training target for #symb.rl.qh, not a claim that the deployed system has an online continuous-control policy:
 
-#block[#align(center)[#eqs.rl.finite_horizon_return]]
+$
+  #eqs.rl.finite_horizon_return
+$
 
 Endpoint gain is the primary fixed-budget comparison metric because it measures the target quality after the same number of acquisitions for each policy:
 
-#block[#align(center)[#eqs.entity.endpoint_gain]]
+$
+  #eqs.entity.endpoint_gain
+$
 
 The log-gain variant is retained only as an internal scale-sensitivity ablation:
 
-#block[#align(center)[#eqs.entity.log_gain]]
+$
+  #eqs.entity.log_gain
+$
 
 #symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. Root-normalized gains telescope to endpoint gain when the discount is unity and geometry, horizon, and acquisition budget are matched. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.
