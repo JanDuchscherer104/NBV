@@ -34,6 +34,11 @@ sys.modules[MEMORY_SPEC.name] = MEMORY_MODULE
 MEMORY_SPEC.loader.exec_module(MEMORY_MODULE)
 
 REPO_ROOT = Path(__file__).parents[2]
+LOCAL_TRANSITION_ENV = {
+    "GITHUB_ACTIONS": "",
+    "GITHUB_BASE_REF": "",
+    "OMX_ARTIFACT_PREVIOUS_REF": "",
+}
 
 
 def _fixture(*parts: str) -> str:
@@ -448,9 +453,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                         artifact["bytes"] = len(payload)
                         bundle[bundle_key] = artifact["sha256"]
                 self.commit_registry(bundle, change)
-                with patch.dict(
-                    os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}
-                ):
+                with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
                     errors = MEMORY_MODULE.check_registered_omx_artifacts(
                         repo_root=self.repo, validator_path=SCRIPT
                     )
@@ -467,7 +470,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         successor = self.bundle("task-new", "successor")
         self.commit_supersession(original, successor)
 
-        with patch.dict(os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}):
+        with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
             self.assertEqual(
                 MEMORY_MODULE.check_registered_omx_artifacts(
                     repo_root=self.repo, validator_path=SCRIPT
@@ -554,9 +557,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 self.git("checkout", "-qb", f"feature-{mutation}")
                 successor = self.bundle("task-new", f"successor-{mutation}")
                 self.commit_supersession(original, successor, mutation)
-                with patch.dict(
-                    os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}
-                ):
+                with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
                     errors = MEMORY_MODULE.check_registered_omx_artifacts(
                         repo_root=self.repo, validator_path=SCRIPT
                     )
@@ -570,7 +571,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("checkout", "-qb", "feature-bootstrap")
         bundle = self.bundle()
         self.commit_registry(bundle, "bootstrap registry")
-        with patch.dict(os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}):
+        with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
             self.assertEqual(
                 MEMORY_MODULE.check_registered_omx_artifacts(
                     repo_root=self.repo, validator_path=SCRIPT
@@ -583,7 +584,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.stage_registry(bundle)
         output = StringIO()
         with (
-            patch.dict(os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}),
+            patch.dict(os.environ, LOCAL_TRANSITION_ENV),
             redirect_stdout(output),
         ):
             errors = MEMORY_MODULE.check_registered_omx_artifacts(
