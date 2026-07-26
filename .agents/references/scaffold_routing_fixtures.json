@@ -1,7 +1,13 @@
 {
   "version": 2,
-  "purpose": "Positive and adjacent-negative routing fixtures for the nine-skill WP6 boundary.",
+  "purpose": "Positive and adjacent-negative routing fixtures for the ten-skill retained boundary.",
   "fixtures": [
+    {
+      "id": "generic-non-trivial-preflight",
+      "task": "Begin non-trivial ARIA-NBV work by stating assumptions, inspecting the nearest owner, preserving unrelated changes, and defining verification.",
+      "expected_skills": ["agent-behavior"],
+      "non_goals": ["Do not duplicate specialist or domain truth in the preflight workflow."]
+    },
     {
       "id": "local-file-lookup",
       "task": "Locate an unknown ARIA-NBV file, symbol, document, or source family before reading its owner.",
@@ -48,7 +54,6 @@
       "id": "rerun-inspector-artifact",
       "task": "Create or fix a Rerun inspector candidate frustum, camera depth layer, validity diagnostic, or saved .rrd artifact.",
       "expected_skills": ["rerun-nbv-inspector"],
-      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
       "non_goals": ["Do not use Rerun inspection to repair an invalid offline store."]
     },
     {

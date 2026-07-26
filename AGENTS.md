@@ -12,9 +12,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   `.agents/references/source_order.md`; Quarto thesis pages are navigation only.
 
 ## Routing
-- For non-trivial work, state assumptions, inspect the nearest owner, keep the
-  diff request-traceable, preserve unrelated changes, and verify the touched
-  surface before completion.
+- Non-trivial work: apply `agent-behavior` before the selected specialist or
+  owning workflow.
 - Package work under `aria_nbv/`: read `aria_nbv/AGENTS.md`, then one nested
   guide only when that module contract is touched.
 - Docs, bibliography, Typst, or Quarto work: read `docs/AGENTS.md`.

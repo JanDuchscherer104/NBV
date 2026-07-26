@@ -175,9 +175,9 @@ def measure() -> dict[str, object]:
         path for path, (mode, _) in head_tree.items() if mode in {"100644", "100755"}
     )
     live_skills = sorted(
-        path.split("/")[-2]
-        for path in tracked
-        if fnmatch.fnmatchcase(path, ".agents/skills/*/SKILL.md")
+        path.parent.name
+        for path in (ROOT / ".agents/skills").glob("*/SKILL.md")
+        if path.is_file()
     )
     aria_fields = [
         frontmatter_fields(ROOT / ".agents/skills" / name / "SKILL.md")
@@ -284,10 +284,10 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append(f"WP0 baseline commit must be exactly {BASELINE_COMMIT}")
     if metrics["baseline_skill_count"] != 21:
         errors.append("immutable baseline must contain exactly 21 ARIA skills")
-    if metrics["active_skill_count"] != 9:
-        errors.append("final scaffold must contain exactly 9 ARIA skills")
-    if metrics["aria_model_visible_skill_count"] != 9:
-        errors.append("all 9 retained ARIA skills must be model-visible by default")
+    if metrics["active_skill_count"] != 10:
+        errors.append("final scaffold must contain exactly 10 ARIA skills")
+    if metrics["aria_model_visible_skill_count"] != 10:
+        errors.append("all 10 retained ARIA skills must be model-visible by default")
     if metrics["active_skills"] != metrics["expected_active_skills"]:
         errors.append("final ARIA skill names differ from the closed WP6 inventory")
     if metrics["matt_skill_count"] != 12 or metrics["matt_allowlist_count"] != 12:

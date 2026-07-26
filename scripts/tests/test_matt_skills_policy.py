@@ -335,8 +335,8 @@ def main() -> None:
             if Path(path).resolve().is_relative_to(prompt_skills_root.resolve())
             and Path(path).resolve().parent.name in aria_names | matt_names
         ]
-        assert len(integrated) == len(aria_names) + len(matt_names) == 15
-        assert len({name for name, _, _ in integrated}) == 15
+        assert len(integrated) == len(aria_names) + len(matt_names) == 16
+        assert len({name for name, _, _ in integrated}) == 16
         integrated_bytes = sum(
             len(description.encode("utf-8")) for _, description, _ in integrated
         )

@@ -1,4 +1,4 @@
 interface:
   display_name: "Dataset Cache Ops"
-  short_description: "ASE data, VIN offline stores, and dataset-version updates"
-  default_prompt: "Use $dataset-cache-ops for ARIA-NBV ASE download, ATEK shard, mesh, VIN offline store, dataset-version update, split manifest, and data smoke-check work."
+  short_description: "Reproduce dataset and cache operations"
+  default_prompt: "Use $dataset-cache-ops to operate a dataset cache reproducibly."

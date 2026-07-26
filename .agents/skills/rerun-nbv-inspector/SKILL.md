@@ -1,64 +1,48 @@
 ---
 name: rerun-nbv-inspector
-description: ARIA-NBV Rerun VIN, candidate/frustum, RRI, camera, geometry, or `.rrd` inspection.
+description: Build and smoke-test the read-only Rerun inspector.
 metadata:
   mode: implementation
   not_when:
-    - "generic Streamlit behavior has no Rerun logging path"
-    - "the input store is invalid before Rerun receives it"
-    - "geometry semantics outside the inspector are changing"
+    - "the input store is invalid before inspection"
+    - "package geometry, candidate, label, or storage semantics are changing"
   handoff_to:
-    - "dataset-cache-ops for incompatible or invalid offline stores"
-    - "nearest package owner for pose, camera, projection, or label semantics"
+    - "dataset-cache-ops for invalid or incompatible input stores"
+    - "nearest package owner for geometry, candidate, label, or storage changes"
     - "specialized diagnostic capability for launch failures or suspicious output"
   evidence_required:
-    - "focused inspector test, saved .rrd, or exact store blocker"
-    - "entity path, frame direction, candidate order, and display-only transform evidence"
-    - "official Rerun evidence for SDK behavior changes"
+    - "inspector implementation and focused tests"
+    - "official Rerun SDK evidence for changed SDK behavior"
+    - "saved .rrd smoke artifact or exact input blocker"
   applies_to:
     - "aria_nbv/aria_nbv/rerun_inspector/**"
-    - "aria_nbv/aria_nbv/app/**"
-    - ".configs/rerun_offline.toml"
+    - "aria_nbv/tests/rerun_inspector/**"
   triggers:
-    - "Rerun inspector"
-    - ".rrd artifact"
-    - "candidate frustum visualization"
-    - "Rerun camera or depth logging"
+    - "change the Rerun inspector or its logging"
+    - "produce or inspect an .rrd smoke artifact"
   must_read:
     - "aria_nbv/AGENTS.md"
-    - ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md"
     - ".agents/skills/rerun-nbv-inspector/references/rerun-python-patterns.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#geometry-contracts"
-    - ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md"
-    - ".agents/skills/rerun-nbv-inspector/references/rerun-python-patterns.md"
-    - ".agents/references/external_stack_contracts.md"
-  context7_refs:
-    - "/rerun-io/rerun"
-    - "/websites/streamlit_io"
-    - "/facebookresearch/pytorch3d"
-  literature_refs:
-    - "VIN-NBV-frahm2025"
-    - "EFM3D-straub2024"
-  tool_refs:
-    - "mcp__MCP_DOCKER.get_library_docs"
-    - "mcp__MCP_DOCKER.browser_run_code"
-    - "mcp__code_index.search_code_advanced"
+    - "aria_nbv/aria_nbv/rerun_inspector"
+    - "aria_nbv/tests/rerun_inspector"
   verification:
-    - "cd aria_nbv && uv run pytest tests/rerun_inspector tests/data_handling/test_offline_visual_inventory.py -q"
+    - "focused inspector tests followed by a one-sample saved .rrd smoke"
 ---
 
-# Rerun NBV Inspector
+# Rerun Inspector
 
-1. Read the inspector contract and localize the full logging path.
-2. Keep the inspector read-only: never change stored poses, labels, ordering,
-   masks, or geometry for display.
-3. Declare one scene basis; keep world geometry in world entities and
-   camera-local data under posed camera entities.
-4. Preserve candidate prefix/order across count, validity, RRI, labels, and
-   frusta. Empty/all-invalid cases produce no selected candidate layer.
-5. Treat CW90, thinning, color, and blueprints as deterministic display policy.
-6. Pair metric depth with matching pose/intrinsics for 3D interpretation.
+Keep the inspector read-only. Localize the logging path in package code and
+read the nearest owners for every data, geometry, frame, candidate, validity,
+label, and storage contract it displays. Do not restate or reinterpret those
+contracts in inspector guidance.
 
-Prefer a one-sample saved `.rrd` after focused tests. If the store is blocked,
-report the exact version/error and use fixtures rather than weakening readers.
+For SDK calls, follow the progressive-disclosure reference and verify changed
+behavior against the official Rerun Python documentation for the installed
+version. Keep display transforms, styling, thinning, and blueprints isolated
+from source samples.
+
+Run focused inspector tests, then prefer a deterministic one-sample saved
+`.rrd` smoke. If input validation fails, report the exact owner-backed error;
+do not weaken readers or mutate stored samples.

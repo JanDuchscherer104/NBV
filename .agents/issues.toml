@@ -52,7 +52,7 @@ type = "maintenance"
 priority = "high"
 status = "open"
 labels = ["agent", "skills", "scaffold"]
-context = ["Root guidance now separates local discovery, direct-source claim review, docs curation, and DB maintenance; remaining scaffold debt is repetition across those owners, not missing structure.", "The final nine-skill boundary and shared metadata floor are enforced by scaffold-audit; future tightening should remain source-owner-first and net-negative.", "Typst, thesis, slide, or diagram agents that touch symbols, equations, glossary terms, or notation must load aria-docs and shared Typst sources before writing new math or prose references."]
+context = ["Root guidance now separates local discovery, direct-source claim review, docs curation, and DB maintenance; remaining scaffold debt is repetition across those owners, not missing structure.", "The final ten-skill boundary and shared metadata floor are enforced by scaffold-audit; future tightening should remain source-owner-first and net-negative.", "Typst, thesis, slide, or diagram agents that touch symbols, equations, glossary terms, or notation must load aria-docs and shared Typst sources before writing new math or prose references."]
 references = ["repo:AGENTS.md#routing", "repo:.agents/references/skill_style_guide.md", "repo:.agents/skills/", "repo:.agents/skills/aria-docs/SKILL.md", "repo:docs/typst/shared/symbols.typ", "repo:docs/typst/shared/equations.typ", "repo:docs/notation.yml"]
 
 [[issue]]

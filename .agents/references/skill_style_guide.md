@@ -55,8 +55,9 @@ the activation rule, read-first path, evidence contract, and verification loop.
 Do not put planned but unimplemented research detail in skills. Put it in the
 owning thesis roadmap, research-question page, Quarto theory page, Typst
 section, package `AGENTS.md`, or source code contract instead.
-Use optional `context7_refs`, `literature_refs`, and `tool_refs` only as thin
-routing edges. Context7 refs must already exist in
+`context7_refs`, `literature_refs`, and `tool_refs` are optional explicit
+routing hints. Prose that mentions external APIs, literature, thesis work, or
+tools does not require these fields. When declared, Context7 refs must exist in
 `.agents/references/context7_library_ids.md`; literature refs must resolve to
 BibTeX keys, Quarto/literature paths, or local TeX mirror paths; tool refs use canonical
 `mcp__<server>.<tool_name>` names. Do not point skill metadata at generated

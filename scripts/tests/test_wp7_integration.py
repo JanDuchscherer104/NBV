@@ -95,8 +95,8 @@ def main() -> None:
         ["scripts/nbv_qmd_outline.sh"],
         "generated-navigation outline scripts",
     )
-    rejected(metrics, "active_skill_count", 10, "exactly 9")
-    rejected(metrics, "aria_model_visible_skill_count", 8, "model-visible")
+    rejected(metrics, "active_skill_count", 9, "exactly 10")
+    rejected(metrics, "aria_model_visible_skill_count", 9, "model-visible")
     rejected(metrics, "matt_skill_count", 11, "exactly 12")
     rejected(
         metrics,

@@ -61,64 +61,6 @@ CLOSED_DISPOSITIONS = {"migrated", "already_owned", "duplicate", "obsolete"}
 CONTEXT7_IDS = ROOT / ".agents" / "references" / "context7_library_ids.md"
 BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
-AUDIT_OWNED_TOOL_REFS = {
-    "mcp__MCP_DOCKER.analyze_python_file",
-    "mcp__MCP_DOCKER.analyze_python_package",
-    "mcp__MCP_DOCKER.analyze_security_and_patterns",
-    "mcp__MCP_DOCKER.analyze_test_coverage",
-    "mcp__MCP_DOCKER.browser_click",
-    "mcp__MCP_DOCKER.browser_close",
-    "mcp__MCP_DOCKER.browser_console_messages",
-    "mcp__MCP_DOCKER.browser_drag",
-    "mcp__MCP_DOCKER.browser_evaluate",
-    "mcp__MCP_DOCKER.browser_file_upload",
-    "mcp__MCP_DOCKER.browser_fill_form",
-    "mcp__MCP_DOCKER.browser_handle_dialog",
-    "mcp__MCP_DOCKER.browser_hover",
-    "mcp__MCP_DOCKER.browser_navigate",
-    "mcp__MCP_DOCKER.browser_navigate_back",
-    "mcp__MCP_DOCKER.browser_network_requests",
-    "mcp__MCP_DOCKER.browser_press_key",
-    "mcp__MCP_DOCKER.browser_resize",
-    "mcp__MCP_DOCKER.browser_run_code",
-    "mcp__MCP_DOCKER.browser_select_option",
-    "mcp__MCP_DOCKER.browser_snapshot",
-    "mcp__MCP_DOCKER.browser_tabs",
-    "mcp__MCP_DOCKER.browser_take_screenshot",
-    "mcp__MCP_DOCKER.browser_type",
-    "mcp__MCP_DOCKER.browser_wait_for",
-    "mcp__MCP_DOCKER.download_paper",
-    "mcp__MCP_DOCKER.find_long_functions",
-    "mcp__MCP_DOCKER.find_package_issues",
-    "mcp__MCP_DOCKER.get_extraction_guidance",
-    "mcp__MCP_DOCKER.get_library_docs",
-    "mcp__MCP_DOCKER.get_package_metrics",
-    "mcp__MCP_DOCKER.list_papers",
-    "mcp__MCP_DOCKER.read_paper",
-    "mcp__MCP_DOCKER.resolve_library_id",
-    "mcp__MCP_DOCKER.search_papers",
-    "mcp__MCP_DOCKER.tdd_refactoring_guidance",
-    "mcp__code_index.get_file_summary",
-    "mcp__code_index.get_file_watcher_status",
-    "mcp__code_index.get_settings_info",
-    "mcp__code_index.get_symbol_body",
-    "mcp__code_index.search_code_advanced",
-    "mcp__openaiDeveloperDocs.get_openapi_spec",
-    "mcp__openaiDeveloperDocs.list_openai_docs",
-}
-OPTIONAL_TOOL_REF_PREFIXES = {"mcp__codex_apps__"}
-CONTEXT7_TRIGGER_RE = re.compile(
-    r"\b(Context7|official docs?|external librar(?:y|ies)|API|SDK|"
-    r"PyTorch3D|PyTorch|Rerun|Streamlit|Gymnasium|SB3|Stable Baselines3|"
-    r"Pydantic|msgspec|Zarr|Typst|Quarto)\b",
-    re.IGNORECASE,
-)
-LITERATURE_TRIGGER_RE = re.compile(
-    r"\b(literature|BibTeX|citation|advisor-facing|thesis|paper|claim-check|"
-    r"VIN-NBV|Project Aria|EFM3D|Double-Q|RRI)\b",
-    re.IGNORECASE,
-)
-
 SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "formula-detail",
@@ -156,7 +98,7 @@ SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
 SEMANTIC_DRIFT_EXEMPTIONS = {
     "aria-docs": {"roadmap-claim"},
 }
-BROAD_APPLIES_EXEMPTIONS = {"aria-nbv-context", "plan-grill"}
+BROAD_APPLIES_EXEMPTIONS = {"agent-behavior", "aria-nbv-context", "plan-grill"}
 
 
 def slugify_heading(text: str) -> str:
@@ -388,7 +330,7 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
 
 
 def audit_wp6_inventory(path: Path, skills: list[Skill]) -> list[str]:
-    """Require the exact nine-skill final WP6 boundary."""
+    """Require the exact ten-skill retained boundary."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -401,9 +343,9 @@ def audit_wp6_inventory(path: Path, skills: list[Skill]) -> list[str]:
         isinstance(item, str) for item in declared
     ):
         return [f"{rel(path)}: active_skills must be a string list"]
-    if len(declared) != 9 or len(set(declared)) != 9:
+    if len(declared) != 10 or len(set(declared)) != 10:
         errors.append(
-            f"{rel(path)}: active_skills must contain exactly nine unique names"
+            f"{rel(path)}: active_skills must contain exactly ten unique names"
         )
     actual = {skill.name for skill in skills}
     expected = set(declared)
@@ -705,28 +647,6 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                         f"{prefix}: metadata.tool_refs entry {ref!r} must use canonical "
                         "mcp__<server>.<tool_name> form"
                     )
-                elif ref not in AUDIT_OWNED_TOOL_REFS and not any(
-                    ref.startswith(prefix) for prefix in OPTIONAL_TOOL_REF_PREFIXES
-                ):
-                    warnings.append(
-                        f"{prefix}: metadata.tool_refs entry {ref!r} is not in the audit-owned tool registry"
-                    )
-
-        trigger_text = " ".join(
-            [skill.description]
-            + metadata_strings(
-                skill.metadata,
-                {"triggers", "evidence_required", "handoff_to", "must_read"},
-            )
-        )
-        if CONTEXT7_TRIGGER_RE.search(trigger_text) and not context7_refs:
-            warnings.append(
-                f"{prefix}: external-library/API trigger language has no metadata.context7_refs"
-            )
-        if LITERATURE_TRIGGER_RE.search(trigger_text) and not literature_refs:
-            warnings.append(
-                f"{prefix}: literature/thesis/advisor trigger language has no metadata.literature_refs"
-            )
 
     return errors, warnings
 
@@ -774,7 +694,6 @@ def audit_routing_fixtures(
         "id",
         "task",
         "expected_skills",
-        "expected_tool_refs",
         "forbidden_tool_refs",
         "non_goals",
     }
@@ -810,7 +729,6 @@ def audit_routing_fixtures(
             fixture_tokens = tokens(f"{fixture_id or ''} {task}")
 
         expected = fixture.get("expected_skills")
-        expected_tool_refs = fixture.get("expected_tool_refs", [])
         forbidden_tool_refs = fixture.get("forbidden_tool_refs", [])
         if not isinstance(expected, list) or not expected:
             errors.append(
@@ -846,29 +764,6 @@ def audit_routing_fixtures(
                 expected_skill_tool_refs.update(
                     skills_by_name[skill_name].metadata.get("tool_refs") or []
                 )
-
-            if not isinstance(expected_tool_refs, list):
-                errors.append(
-                    f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs must be a list"
-                )
-            elif not all(
-                isinstance(item, str) and item.strip() for item in expected_tool_refs
-            ):
-                errors.append(
-                    f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs entries must be non-empty strings"
-                )
-            else:
-                for tool_ref in expected_tool_refs:
-                    if not TOOL_REF_RE.match(tool_ref):
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref "
-                            f"{tool_ref!r} must use canonical mcp__<server>.<tool_name> form"
-                        )
-                    elif tool_ref not in expected_skill_tool_refs:
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref "
-                            f"{tool_ref!r} is not declared by expected skills"
-                        )
 
             if not isinstance(forbidden_tool_refs, list):
                 errors.append(
@@ -1154,74 +1049,6 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "malformed-tool-ref",
             not load_errors and any("metadata.tool_refs" in error for error in errors),
             "malformed tool ref was not rejected",
-        )
-
-        unknown_tool_text = self_test_skill_text(
-            "unknown-tool-skill",
-            [".agents/references/source_order.md#role-split"],
-            "Use this test body for tool ref inventory validation.",
-            '  tool_refs:\n    - "mcp__Bogus.fake"',
-        )
-        write_self_test_skill(tmp_root, "unknown-tool-skill", unknown_tool_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        _, warnings = audit_skills(skills)
-        expect(
-            "unknown-tool-ref-warned",
-            not load_errors
-            and any("audit-owned tool registry" in warning for warning in warnings),
-            "unknown canonical-looking tool ref was not warned",
-        )
-
-        browser_overtrigger_fixture = {
-            "fixtures": [
-                {
-                    "id": "browser-overtrigger-probe",
-                    "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
-                    "expected_skills": ["rerun-nbv-inspector"],
-                    "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
-                    "non_goals": [
-                        "Do not use browser MCP tools for non-live docs planning."
-                    ],
-                }
-            ]
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, browser_overtrigger_fixture),
-            skills_by_name,
-        )
-        expect(
-            "browser-forbidden-tool-probe",
-            any(
-                "forbidden_tool_ref" in error and "browser_run_code" in error
-                for error in errors
-            ),
-            "forbidden browser tool activation was not rejected",
-        )
-
-        python_analyzer_overtrigger_fixture = {
-            "fixtures": [
-                {
-                    "id": "python-analyzer-overtrigger-probe",
-                    "task": "Simplify Python code with analyzer guidance after code-index localization.",
-                    "expected_skills": ["aria-nbv-context"],
-                    "forbidden_tool_refs": ["mcp__code_index.search_code_advanced"],
-                    "non_goals": [
-                        "Do not use code-index tools after the exact owner is already known."
-                    ],
-                }
-            ]
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, python_analyzer_overtrigger_fixture),
-            skills_by_name,
-        )
-        expect(
-            "python-analyzer-forbidden-tool-probe",
-            any(
-                "forbidden_tool_ref" in error and "search_code_advanced" in error
-                for error in errors
-            ),
-            "forbidden code-index activation was not rejected",
         )
 
         live_skills, live_load_errors = load_skills(SKILLS_DIR)

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Rerun NBV Inspector"
-  short_description: "Review and build ARIA-NBV Rerun diagnostics"
-  default_prompt: "Use $rerun-nbv-inspector to review ARIA-NBV Rerun offline inspector behavior against current Rerun docs."
+  display_name: "Rerun Inspector"
+  short_description: "Build and smoke-test the read-only inspector"
+  default_prompt: "Use $rerun-nbv-inspector to change and verify read-only Rerun inspection."

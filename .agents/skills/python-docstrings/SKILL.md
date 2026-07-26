@@ -1,61 +1,47 @@
 ---
 name: python-docstrings
-description: Contract-focused ARIA-NBV Python docstrings.
+description: Write contract-first Python docstrings.
 metadata:
   mode: implementation
   not_when:
-    - "Quarto, Typst, or public narrative is the primary output"
-    - "implementation behavior or API design is still changing"
+    - "the implementation or public API is still changing"
+    - "public narrative rather than API documentation is the output"
   handoff_to:
-    - "aria-docs for Quarto, Typst, or thesis documentation"
-    - "nearest package owner for unresolved frame, unit, shape, or lifecycle semantics"
-    - "external codebase-design capability before documenting an unstable API"
+    - "nearest package owner for unresolved behavior, shapes, units, or lifecycle"
+    - "external documentation capability for public docs beyond generated API pages"
   evidence_required:
-    - "stable public contract and nearest package owner"
-    - "implementation and call-site evidence for shapes, units, frames, and lifecycle"
-    - "ruff and targeted docs generation when affected"
+    - "implementation, public call sites, tests, and nearest package guidance"
+    - "format, lint, and Quartodoc evidence appropriate to the change"
   applies_to:
     - "aria_nbv/aria_nbv/**/*.py"
   triggers:
-    - "Python docstring"
-    - "generated API documentation"
-    - "shape, unit, frame, or lifecycle docs"
+    - "write or refactor Python docstrings"
+    - "fix generated Python API documentation"
   must_read:
     - "aria_nbv/AGENTS.md"
-    - ".agents/skills/python-docstrings/references/type-shape-jaxtyping.md"
-    - ".agents/skills/python-docstrings/references/config-datamodel-fields.md"
     - ".agents/skills/python-docstrings/references/quartodoc-contract.md"
   canonical_sources:
-    - "aria_nbv/AGENTS.md#completion-criteria"
-    - ".agents/skills/python-docstrings/references/type-shape-jaxtyping.md"
-    - ".agents/skills/python-docstrings/references/theory-rich-docstrings.md"
-    - ".agents/skills/python-docstrings/references/config-datamodel-fields.md"
-    - ".agents/skills/python-docstrings/references/quartodoc-contract.md"
-    - ".agents/skills/python-docstrings/references/cross-references.md"
-  context7_refs:
-    - "/pytorch/pytorch"
-    - "/pydantic/pydantic"
-  literature_refs:
-    - "docs/typst/thesis/main.typ"
-  tool_refs:
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__code_index.get_symbol_body"
+    - "aria_nbv/AGENTS.md#code-quality"
+    - "docs/AGENTS.md#commands"
+    - "scripts/quarto_generate_api_docs.sh"
   verification:
-    - "ruff format <file> and ruff check <file>"
-    - "./scripts/quarto_generate_api_docs.sh when generated API docs change"
+    - "ruff format and ruff check for touched Python"
+    - "Quartodoc generation for rendered API changes"
 ---
 
 # Python Docstrings
 
-Inspect the implementation, public call sites, nearest package guide, and
-existing sibling style before writing. Document the contract the API actually
-enforces: purpose, parameters, returns, raised errors, shapes, dtypes, units,
-coordinate frames, side effects, lifecycle, and ownership boundary.
+1. Read the implementation, public call sites, tests, nearest package guide,
+   and sibling docstrings.
+2. Document only the enforced contract: purpose, parameters, returns, errors,
+   side effects, lifecycle, and any code-owned type, shape, unit, or frame
+   semantics needed for correct use.
+3. Use a concise summary and Google-style sections. Put field documentation
+   beside public dataclass, config, or model fields when the live renderer
+   exposes them.
+4. Link to the owning code or docs instead of copying equations, scientific
+   rationale, schemas, or project terminology into the docstring.
+5. Follow the Quartodoc reference only when generated API output is affected.
 
-Use the linked references only for the branch that applies. Prefer a concise
-summary plus Google-style sections. Put field docs on config/data-model fields
-where Quartodoc can render them. Keep formulas and scientific rationale in the
-owning theory or thesis source and link there; do not copy them into docstrings.
-
-Complete when the docstring matches code and tests, cross-references resolve,
-and touched Python passes formatting and lint.
+Complete when prose matches live behavior, references resolve, touched Python
+passes format/lint, and affected Quartodoc output generates successfully.

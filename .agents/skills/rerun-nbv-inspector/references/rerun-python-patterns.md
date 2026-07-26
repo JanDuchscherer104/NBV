@@ -1,86 +1,22 @@
-# Rerun Python Patterns For ARIA-NBV
+# Rerun SDK Evidence And Smoke
 
-Use this reference when writing or reviewing Python `rerun-sdk` calls in
-ARIA-NBV.
+Use this branch when implementation depends on Rerun SDK behavior.
 
-## Recording And Sinks
+1. Check the installed `rerun-sdk` version in the package environment.
+2. Consult the matching official Python API documentation and examples at
+   <https://rerun.io/docs/reference/types/archetypes> and
+   <https://rerun.io/docs/getting-started/data-in/python>.
+3. Confirm constructor arguments, transform relations, recording sinks, and
+   blueprint behavior in the installed SDK or a focused test. Do not maintain
+   a static SDK symbol inventory in this skill.
+4. Keep entity paths stable and low-cardinality, initialize one recording, and
+   establish the save/spawn/connect sink before logging.
+5. Use package owners for coordinate frames, camera conventions, depth units,
+   candidate ordering, validity, labels, and storage. Inspector code may only
+   adapt those values for display without mutating source samples.
+6. Run focused fake-SDK/unit tests, then save a deterministic one-sample `.rrd`
+   when compatible data is available. Record the command, SDK version, output
+   path, and any exact blocker.
 
-- Initialize exactly once per inspector run.
-- Open the sink before the first data log: `save`, `spawn`, or `connect_grpc`.
-- Use stable `application_id` and `recording_id` for comparable `.rrd` artifacts.
-- Prefer `--save` for smoke and review artifacts; use `spawn` for interactive
-  debugging and `connect` only when a viewer/server is already running.
-- Keep `.rrd` artifacts outside training stores, usually under `.artifacts/rerun/`.
-
-## Entity Layout
-
-Use stable, low-cardinality paths:
-
-```text
-world
-world/semidense
-world/reference/pose
-world/candidates/valid/candidate_000/camera
-world/candidates/invalid/candidate_001/camera
-world/candidates/valid/candidate_002/center
-world/rollout/step/selected/candidate_002/camera
-world/rollout/step/valid/candidate_003/camera
-world/rollout/selected_path
-world/mesh
-world/gt/obbs
-world/detected/obbs
-world/trajectory/rig
-frames/candidate_depths/<candidate_id>/image
-frames/rgb/<frame_id>/image
-frames/depth/<frame_id>/image
-metadata/sample
-```
-
-Batch repeated point clouds, OBBs, and paths where possible. Candidate cameras
-may use one stable entity per candidate so Rerun can show native camera frusta
-and per-candidate metadata without visible 3D text labels.
-
-## Coordinates And Transforms
-
-- Log `rr.ViewCoordinates.RIGHT_HAND_Z_UP` at `/` or `world` for ARIA world
-  diagnostics unless another basis is explicitly documented.
-- Treat candidate `PoseTW` as `T_world_cam`.
-- Treat reference trajectory `PoseTW` as `T_world_rig`.
-- If logging native transforms, make relation semantics explicit. For a
-  `T_world_child` pose, use the relation that describes parent-from-child, or
-  invert before using child-from-parent.
-- Keep manual frusta in world coordinates when they are already transformed.
-- Keep camera-local depth pointmaps under a posed camera entity; keep world-space
-  semidense/current/fused points under `world`.
-
-## Cameras, RGB, And Depth
-
-- `rr.Pinhole.resolution` is `[width, height]`.
-- PyTorch3D `PerspectiveCameras.image_size` is `(height, width)` in this repo;
-  convert deliberately when building Rerun pinholes.
-- Use `camera_xyz=rr.ViewCoordinates.RDF` for conventional pinhole image
-  entities unless a different basis is tested and documented.
-- Log `Pinhole`, RGB `Image`, and metric `DepthImage(..., meter=1.0)` on the
-  same camera/image entity when depth is meant to be interpreted spatially.
-- If a depth tensor is logged only as a 2D diagnostic image, name it as a debug
-  layer and do not imply it validates 3D projection.
-- Do not log pseudo-colored point maps as raw RGB or metric depth.
-
-## Candidate And RRI Layers
-
-- Preserve candidate ordering across poses, cameras, RRI, validity, labels, and
-  colors.
-- Use `candidate_count` as the valid prefix width exactly; `candidate_count=0`
-  means no candidates.
-- An all-invalid validity mask means no top-oracle candidate.
-- Invalid candidates are constraints, not low-RRI candidates; display them as a
-  separate layer or color override.
-- Store RRI, rank, validity, and candidate id in labels or metadata, not only in
-  color.
-
-## Blueprints
-
-- Use blueprints only for viewer layout and convenience.
-- Do not encode scientific facts in blueprints.
-- Prefer a 3D scene rooted at `world`, optional 2D views for RGB/depth, and a
-  metadata text view for inventory/config details.
+Official SDK evidence owns Rerun behavior; package code and tests own the
+inspector implementation and ARIA-NBV contracts.

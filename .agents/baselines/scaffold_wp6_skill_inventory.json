@@ -2,6 +2,7 @@
   "version": 1,
   "boundary": "WP6",
   "active_skills": [
+    "agent-behavior",
     "agents-db",
     "aria-docs",
     "aria-nbv-context",
