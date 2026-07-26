@@ -10,13 +10,13 @@ The learned object in ARIA-NBV is a typed finite-candidate decision map: given a
 
 The first required structure is candidate-row permutation equivariance. Reordering #symb.rl.candidate_table may reorder per-candidate #symb.rl.qh outputs, but it must not change the value assigned to the same physical candidate. Deep Sets supplies a pooled symmetry baseline, while Set Transformer supplies candidate interaction without assigning semantic meaning to row order @DeepSets-zaheer2017 @SetTransformer-lee2019. Both retain a row-level scoring path because the policy selects a candidate row.
 
-For any permutation matrix $Pi$ acting on candidate rows, the value model should satisfy
+For any permutation matrix $Pi in {0,1}^(N_q times N_q)$ acting on candidate rows, the value model should satisfy
 
 $
   #eqs.rl.candidate_row_equivariance
 $
 
-where $bold(X)_t = {bold(x)_(t,i)}_(i=1)^(N_q)$ stores per-candidate actor-visible descriptors and $bold(m)_t$ stores validity. Invalid and padded rows are outside the admissible action set, not low-utility examples. Selection is therefore
+where $bold(X)_t$ has shape $[B,N_q,d_x]$ and stores one actor-visible descriptor of width $d_x$ per padded candidate row, while $bold(m)_t$ has shape $[B,N_q]$ and stores Boolean validity. The geometric candidate set is unordered; the row axis is only its storage representation, so $Pi$ may reorder rows without changing the physical decision problem. Invalid and padded rows are outside the admissible action set, not low-utility examples. Selection is therefore
 
 $
   #eqs.rl.masked_candidate_selection

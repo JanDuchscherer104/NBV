@@ -50,7 +50,7 @@ $
   #eqs.rl.target_conditioned_state
 $
 
-Here $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target descriptor $z_e$ is therefore part of the decision state but remains a separate `TargetState` DTO so it is not duplicated inside target-independent scene memory. The indexed form $Q_(h,e)(s_t,i)$ used elsewhere is the curried form of the same target-conditioned value function.
+Here $Phi_0^"static"$ is a fixed typed token collection for one rollout root, while $M_t^"dynamic"$ is a causally updated typed token collection whose geometry and support may change only after a selected observation. The target descriptor $z_e$ is therefore part of the decision state but remains a separate `TargetState` DTO so it is not duplicated inside target-independent scene memory. The indexed form $Q_(h,e)(s_t,i)$ used elsewhere is the curried form of the same target-conditioned value function.
 
 The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory is demonstrated to be a sufficient statistic for it. Raw selected depth is an observation consumed by the memory update; it need not remain a direct scorer input once its surface, free-space, support, source, and recency information have been fused.
 

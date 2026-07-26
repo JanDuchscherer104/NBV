@@ -55,7 +55,7 @@ $
   #eqs.rl.qh_horizon_query_token
 $
 
-followed by one shared per-row value head. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Separate $Q_1,dots,Q_H$ networks or heads remain a control for negative transfer between horizons, not the default architecture.
+The query tensor has shape $[B,L,N_q,d]$: $B$ is batch size, $L$ the number of admissible horizon queries, $N_q$ the padded candidate-row capacity, and $d$ the model width. Its keys and values are shared state tokens, so each row is a candidate-specific read of existing evidence rather than a new scene observation. A shared per-row value head maps it to one scalar per $[B,L,N_q]$ position. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Separate $Q_1,dots,Q_H$ networks or heads remain a control for negative transfer between horizons, not the default architecture.
 
 The same state may be scored for one $h$ and return $[B,N_q]$, or for a vector of admissible horizons and return $[B,L,N_q]$. Static scene, target, and candidate encodings are reused across the horizon axis. The horizon queries do not attend to future transitions and require no causal temporal mask: each query receives the same causal state available at step $t$, while the learning target determines how many future rewards it represents.
 

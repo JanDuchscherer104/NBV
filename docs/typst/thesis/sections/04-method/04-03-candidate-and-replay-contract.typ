@@ -50,7 +50,7 @@ $
   #eqs.rl.selected_observation
 $
 
-containing depth, valid mask, calibration, root-relative camera pose, and a source role. The source role distinguishes privileged GT-mesh depth, declared sensor-like simulation, and an actor-visible sensor observation. Unselected candidate renders at step $t$ are never elements of the student state.
+containing a depth raster, a same-shaped Boolean validity raster, camera calibration, a root-from-camera rigid transform, and a member of the finite source-role vocabulary. Geometrically, the transform registers every backprojected valid pixel in the rollout root frame. The source role distinguishes privileged GT-mesh depth, declared sensor-like simulation, and an actor-visible sensor observation. Unselected candidate renders at step $t$ are never elements of the student state.
 
 The existing geometry-level counterfactual uses a set union of retained points,
 
