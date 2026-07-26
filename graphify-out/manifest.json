@@ -1,12 +1,12 @@
 {
   "adapter_schema_version": 1,
   "adapter_sha256": "590144fb50d366aa19faf6669d6433fc76e0bbb0ee79d2634960f1738d9b6552",
-  "built_source_commit": "90d98d4e1c72d6779a78827e1dc5ef6bd12f6dad",
+  "built_source_commit": "0ce5946a109a70f948e2215e4588d1ffb199be70",
   "config_sha256": "a6ce819fea9f0122983d0646fadb137f08c74d01dd10d1234b5e8f887ee951a8",
   "graphify_version": "0.9.22",
-  "link_count": 20214,
-  "node_count": 11112,
-  "source_digest": "8d6ac7417f94965c593ec538f4d9a4351086eaa6965bcaa9170b829266656557",
+  "link_count": 20212,
+  "node_count": 11110,
+  "source_digest": "95cb776df2e6258a980b78f4be380ce72b334dd8851b37b52fad6c43e3867747",
   "sources": [
     {
       "family": "code",
@@ -296,7 +296,7 @@
     {
       "family": "code",
       "path": "aria_nbv/aria_nbv/data_handling/offline/inventory.py",
-      "sha256": "1de871d15bd75612ee69f7b077381bd4fcf1c386049dcbfe44ac7db08d18443e"
+      "sha256": "141c908859ef8f097285a52c38263225498f13ea0df87f08996c2574c9b358a8"
     },
     {
       "family": "code",
