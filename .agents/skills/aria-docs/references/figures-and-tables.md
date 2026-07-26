@@ -56,6 +56,40 @@ area; use an equal-area construction when directional counts or coverage are
 the quantity. Do not invent a smooth field or harmonic basis absent from the
 source data or method.
 
+## Baseline And Refinement
+
+Start data-derived scenario, object, metric, and model figures from the nearest
+owning ARIA plot builder. Locate it with fresh Graphify evidence or targeted
+source search, then record the producing module and symbol, source revision,
+input identifiers, configuration, transformations, exclusions, seed, units,
+uncertainty, camera or view, color limits, and export settings.
+
+Treat the builder output as the scientific baseline:
+
+1. Generate it from frozen real inputs and inspect the unedited output.
+2. Preserve its values, categories, selection, normalization, geometry, and
+   uncertainty semantics.
+3. Refine composition with Typst, CeTZ, Fletcher, or another owned vector layer
+   for notation, labels, arrows, panel layout, and callouts.
+4. Keep the baseline source and the refinement source reproducible together.
+5. Inspect both the standalone asset and its final document context.
+
+A change to data values, filtering, binning, normalization, selected rows,
+camera geometry, uncertainty, or category meaning is a change to the owning
+builder or analysis, not a visual refinement. Make and test that change at its
+source boundary instead of redrawing the evidence in the thesis.
+
+Keep interactive and static outputs distinct. A Plotly or Rerun view used for
+exploration needs a frozen static thesis asset and adjacent interpretation.
+Disclose raster layers inside nominal SVG/PDF output, especially for Plotly
+WebGL, Rerun, PyTorch3D, or other z-buffered scene content; retain editable
+Typst labels and mathematics where practical. Pixel scale is not a DPI claim.
+
+For quantitative plots, distinguish missing, zero, censored, excluded, and
+out-of-range values; state interval type and unit of replication; document log
+transforms, bins, smoothing, normalization, and meaningful diverging centers.
+Use color redundantly with shape, stroke, marker, label, or panel structure.
+
 ## Publication Contract
 
 - A figure should reveal a mechanism, comparison, geometry, relationship, or
@@ -80,3 +114,6 @@ source data or method.
   honestly when a nominal vector file contains rasterized layers.
 
 Inspect both the standalone asset and every affected document page.
+
+External visualization and export practices selectively adapted here are
+recorded in `upstream-scientific-practices.md`.

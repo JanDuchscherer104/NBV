@@ -72,3 +72,7 @@ evidence; they do not create another content owner.
 Follow `references/workflow.md` for authoring, rendering, and visual QA. This
 skill routes workflow only; the listed document, notation, package, and thesis
 sources own their content.
+
+When external guidance is adapted, record its pinned source, local destination,
+and rejected scope in `references/upstream-scientific-practices.md`; do not copy
+an upstream skill into this router.

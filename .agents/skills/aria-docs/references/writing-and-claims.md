@@ -25,6 +25,13 @@ Classify every substantive sentence as a definition, literature claim,
 implementation fact, design decision, empirical result, limitation, or
 hypothesis/future work. Unclassifiable prose is usually filler.
 
+Keep discovery, drafting, verification, and submission approval distinct.
+Search results, generated summaries, another work's bibliography, agent memory,
+and fluent draft prose may locate evidence but do not verify a claim. Verification
+opens the owning source or artifact, checks the exact proposition and locator,
+and records unresolved or conflicting evidence instead of completing plausible
+details.
+
 - Literature claims resolve to an exact primary source and locator; never
   invent a citation key.
 - Implementation claims resolve to current code, tests, and active configs.
@@ -33,8 +40,16 @@ hypothesis/future work. Unclassifiable prose is usually filler.
 - Report measured facts before causal interpretation.
 - Use strong verbs only for direct evidence; calibrate limited evidence as a
   suggestion or hypothesis.
+- Preserve relevant negative, null, failed, blocked, unexpected, and
+  inconclusive outcomes; do not curate only successful evidence.
 - Apply `.agents/references/direct_source_claim_checklist.md` to
   advisor-facing claims.
+
+Before submission-facing prose is accepted, reconcile repeated units,
+denominators, populations, sample counts, labels, methods, configurations, and
+reported results across text, figures, tables, code, and immutable evidence.
+Name legitimate differences in analysis population or aggregation rather than
+silently normalizing them.
 
 Before drafting a major section, reduce it to one to three claim records. Each
 record states the defensible claim, scope, strength (`established`, `supported`,
@@ -90,3 +105,7 @@ Prefer sober mechanisms, quantities, comparisons, and limitations. Reserve
 “significant” for statistical significance; avoid stacked hedges, marketing
 claims, and filler such as “revolutionary”, “holistic”, “seamless”, “pivotal”,
 “delve”, or “it is well known”.
+
+The external practices selectively adapted here, and the generic manuscript
+machinery deliberately rejected for this thesis, are recorded in
+`upstream-scientific-practices.md`.
