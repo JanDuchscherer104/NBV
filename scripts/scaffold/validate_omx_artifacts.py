@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -134,6 +135,15 @@ def _scan(path: Path) -> None:
             raise ValidationError(
                 f"privacy threat ({label}) in registered evidence: {path}"
             )
+
+
+def _json_identity(path: Path, bundle_id: str, task: str, label: str) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise ValidationError(f"invalid {label} JSON for {bundle_id}: {exc}") from exc
+    if payload.get("bundle_id") != bundle_id or payload.get("task") != task:
+        raise ValidationError(f"{label} identity mismatch for {bundle_id}")
 
 
 def _parse_registry(payload: bytes) -> dict[str, Any]:
@@ -302,6 +312,16 @@ def validate_registry(repo: Path, registry_path: Path) -> set[str]:
                 raise ValidationError(f"hash or byte drift: {artifact.path}")
             _scan(disk)
             owned.add(artifact.path)
+        if status == "current":
+            _json_identity(
+                repo / handoffs[0].path, bundle_id, bundle["task"], "handoff"
+            )
+            _json_identity(
+                repo / acceptances[0].path,
+                bundle_id,
+                bundle["task"],
+                "acceptance record",
+            )
     for bundle_id, (bundle, _) in parsed.items():
         successor_id = bundle.get("superseded_by")
         if successor_id:
@@ -312,6 +332,7 @@ def validate_registry(repo: Path, registry_path: Path) -> set[str]:
                 )
             if successor[0]["task"] != bundle["task"]:
                 raise ValidationError(f"successor task mismatch for {bundle_id}")
+            _validate_archive_source(repo, bundle, successor[0])
     return owned
 
 
@@ -385,6 +406,51 @@ def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
     raise ValidationError(
         f"git show failed for {ref}:{REGISTRY}: {shown.stderr.decode().strip()}"
     )
+
+
+def _validate_archive_source(
+    repo: Path, archived: dict[str, Any], successor: dict[str, Any]
+) -> None:
+    bundle_id = archived["id"]
+    if successor.get("predecessor_bundle_id") != bundle_id:
+        raise ValidationError(f"successor predecessor mismatch for {bundle_id}")
+    commit = successor.get("predecessor_registry_commit")
+    if not HEX_40.fullmatch(str(commit or "")):
+        raise ValidationError(f"invalid predecessor registry commit for {bundle_id}")
+    previous = _previous_registry(repo, str(commit))
+    if previous is None:
+        raise ValidationError(f"predecessor registry is missing for {bundle_id}")
+    before = next(
+        (item for item in previous["bundle"] if item.get("id") == bundle_id), None
+    )
+    if before is None or before.get("status") != "current":
+        raise ValidationError(f"predecessor bundle is not current for {bundle_id}")
+    if _membership(before) != _membership(archived):
+        raise ValidationError(f"predecessor artifact metadata drift for {bundle_id}")
+    immutable = (
+        "id",
+        "task",
+        "classification",
+        "baseline_commit",
+        "handoff_sha256",
+        "acceptance_sha256",
+    )
+    if any(before.get(key) != archived.get(key) for key in immutable):
+        raise ValidationError(f"predecessor bundle metadata drift for {bundle_id}")
+    for artifact in before["artifact"]:
+        shown = subprocess.run(
+            ["git", "show", f"{commit}:{artifact['native_path']}"],
+            cwd=repo,
+            check=False,
+            capture_output=True,
+        )
+        if shown.returncode or (
+            hashlib.sha256(shown.stdout).hexdigest(),
+            len(shown.stdout),
+        ) != (artifact["sha256"], artifact["bytes"]):
+            raise ValidationError(
+                f"predecessor artifact byte drift: {artifact['native_path']}"
+            )
 
 
 def validate_tracked(repo: Path, owned: set[str]) -> None:

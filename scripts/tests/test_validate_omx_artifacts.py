@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from copy import deepcopy
+from fnmatch import fnmatchcase
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -30,6 +32,8 @@ assert MEMORY_SPEC and MEMORY_SPEC.loader
 MEMORY_MODULE = importlib.util.module_from_spec(MEMORY_SPEC)
 sys.modules[MEMORY_SPEC.name] = MEMORY_MODULE
 MEMORY_SPEC.loader.exec_module(MEMORY_MODULE)
+
+REPO_ROOT = Path(__file__).parents[2]
 
 
 def _fixture(*parts: str) -> str:
@@ -103,6 +107,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ]
         artifacts = []
         for path, family, role in definitions:
+            identity = (
+                json.dumps({"bundle_id": bundle_id, "task": "task"}) + "\n"
+                if role in {"acceptance-record", "handoff"}
+                else None
+            )
             if family == "review":
                 artifacts.append(
                     self.artifact(
@@ -113,7 +122,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     )
                 )
             else:
-                artifacts.append(self.artifact(path, family, role))
+                artifacts.append(self.artifact(path, family, role, text=identity))
         handoff = next(item for item in artifacts if item["family"] == "handoff")
         acceptance = next(
             item for item in artifacts if item["role"] == "acceptance-record"
@@ -145,6 +154,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "baseline_commit",
                 "handoff_sha256",
                 "acceptance_sha256",
+                "predecessor_bundle_id",
+                "predecessor_registry_commit",
                 "superseded_by",
             ):
                 if key in bundle:
@@ -191,7 +202,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         successor: dict[str, Any],
         mutation: str | None = None,
     ) -> None:
+        predecessor_commit = self.git("rev-parse", "HEAD").stdout.strip()
         archived = self.archived(original, successor["id"])
+        successor["predecessor_bundle_id"] = original["id"]
+        successor["predecessor_registry_commit"] = predecessor_commit
         for artifact in archived["artifact"]:
             source = self.repo / artifact["native_path"]
             destination = self.repo / artifact["path"]
@@ -299,22 +313,21 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 bundle["artifact"][0]["bytes"] = len(payload)
                 self.assert_invalid(bundle, message)
 
-        current = self.bundle("task-new")
         old = self.bundle("task-old")
-        archived = self.archived(old, current["id"])
-        for artifact in archived["artifact"]:
-            destination = self.repo / artifact["path"]
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes((self.repo / artifact["native_path"]).read_bytes())
+        self.commit_registry(old, "accepted base")
+        current = self.bundle("task-new", "successor")
+        self.commit_supersession(old, current)
+        registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
+        archived = next(
+            item for item in registry["bundle"] if item["status"] == "superseded"
+        )
         unsafe = self.repo / archived["artifact"][0]["path"]
         unsafe.write_text("machine /home/example/repo/file\n", encoding="utf-8")
         payload = unsafe.read_bytes()
         archived["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
         archived["artifact"][0]["bytes"] = len(payload)
         with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
-            MODULE.validate_registry(
-                self.repo, self.write_registry([archived, current])
-            )
+            MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
 
     def test_unregistered_tracked_artifact_fails(self) -> None:
         bundle = self.bundle()
@@ -365,6 +378,25 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     bundle["artifact"][0]["bytes"] = len(payload)
                 else:
                     bundle["id"] = "replacement-current"
+                    for role, bundle_key in (
+                        ("handoff", "handoff_sha256"),
+                        ("acceptance-record", "acceptance_sha256"),
+                    ):
+                        artifact = next(
+                            item for item in bundle["artifact"] if item["role"] == role
+                        )
+                        target = self.repo / artifact["path"]
+                        target.write_text(
+                            json.dumps(
+                                {"bundle_id": bundle["id"], "task": bundle["task"]}
+                            )
+                            + "\n",
+                            encoding="utf-8",
+                        )
+                        payload = target.read_bytes()
+                        artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                        artifact["bytes"] = len(payload)
+                        bundle[bundle_key] = artifact["sha256"]
                 self.commit_registry(bundle, change)
                 with patch.dict(
                     os.environ, {"GITHUB_BASE_REF": "", "GITHUB_ACTIONS": ""}
@@ -409,7 +441,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     errors = MEMORY_MODULE.check_registered_omx_artifacts(
                         repo_root=self.repo, validator_path=SCRIPT
                     )
-                self.assertRegex(errors[0], "invalid or non-identical supersession")
+                self.assertRegex(
+                    errors[0],
+                    "invalid or non-identical supersession|predecessor artifact metadata drift",
+                )
 
     def test_production_gate_allows_pr1_bootstrap_without_base_registry(self) -> None:
         self.git("update-ref", "refs/remotes/origin/main", "HEAD")
@@ -466,6 +501,106 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertGreaterEqual(workflow.count(f'- "{path}"'), 2)
         self.assertIn("python scripts/tests/test_validate_omx_artifacts.py", workflow)
+
+    def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
+        registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"
+        registry = MODULE.load_registry(registry_path)
+        MODULE.validate_registry(REPO_ROOT, registry_path)
+        current = next(
+            item for item in registry["bundle"] if item["status"] == "current"
+        )
+        archived = next(
+            item for item in registry["bundle"] if item["status"] == "superseded"
+        )
+        self.assertEqual(current["predecessor_bundle_id"], archived["id"])
+
+        manifest_item = next(
+            item for item in current["artifact"] if item["role"] == "loc-manifest"
+        )
+        manifest = json.loads((REPO_ROOT / manifest_item["path"]).read_text())
+        baseline = manifest["baseline_commit"]
+        tracked = self.git_at(REPO_ROOT, "ls-tree", "-r", "--name-only", baseline)
+        selection = manifest["selection"]
+        active = sorted(
+            path
+            for path in tracked
+            if self.matches(path, selection["active_include"])
+            and not self.matches(path, selection["active_exclude"])
+        )
+        selected = {path: self.category_for(path, selection) for path in active}
+        for rule in selection["supplemental_rules"]:
+            for path in tracked:
+                if any(path.startswith(prefix) for prefix in rule["prefix_any"]):
+                    selected.setdefault(path, rule["category"])
+
+        expected = []
+        for path, category in sorted(
+            selected.items(), key=lambda item: (item[1], item[0])
+        ):
+            payload = subprocess.run(
+                ["git", "show", f"{baseline}:{path}"],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+            expected.append(
+                {
+                    "category": category,
+                    "path": path,
+                    "physical_lines": len(payload.splitlines()),
+                }
+            )
+        self.assertEqual(manifest["rows"], expected)
+        self.assertEqual(manifest["summary"], self.loc_summary(expected, active))
+
+    @staticmethod
+    def git_at(repo: Path, *args: str) -> list[str]:
+        return subprocess.run(
+            ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+        ).stdout.splitlines()
+
+    @staticmethod
+    def matches(path: str, patterns: list[str]) -> bool:
+        return any(fnmatchcase(path, pattern) for pattern in patterns)
+
+    @staticmethod
+    def category_for(path: str, selection: dict[str, Any]) -> str:
+        for rule in selection["category_rules"]:
+            if rule.get("default"):
+                return str(rule["category"])
+            if any(path.startswith(prefix) for prefix in rule.get("prefix_any", [])):
+                return str(rule["category"])
+            if any(value in path for value in rule.get("contains_any", [])):
+                return str(rule["category"])
+        raise AssertionError(f"no category rule for {path}")
+
+    @staticmethod
+    def loc_summary(rows: list[dict[str, Any]], active: list[str]) -> dict[str, Any]:
+        categories: dict[str, Any] = {}
+        for category in ("generated", "production", "test", "upstream"):
+            selected = [row for row in rows if row["category"] == category]
+            categories[category] = {
+                "file_count": len(selected),
+                "physical_lines": sum(row["physical_lines"] for row in selected),
+                "paths_sha256": hashlib.sha256(
+                    "".join(f"{row['path']}\n" for row in selected).encode()
+                ).hexdigest(),
+                "path_lines_sha256": hashlib.sha256(
+                    "".join(
+                        f"{row['path']}\t{row['physical_lines']}\n" for row in selected
+                    ).encode()
+                ).hexdigest(),
+            }
+        active_set = set(active)
+        return {
+            "active_scaffold": {
+                "file_count": len(active),
+                "physical_lines": sum(
+                    row["physical_lines"] for row in rows if row["path"] in active_set
+                ),
+            },
+            "categories": categories,
+        }
 
 
 if __name__ == "__main__":

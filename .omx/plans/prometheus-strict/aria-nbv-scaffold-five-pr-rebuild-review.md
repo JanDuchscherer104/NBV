@@ -1,31 +1,31 @@
-# Independent Architect and Critic review
+# Independent Architect and Critic successor review
 
 ## Review unit
 
-The reviewed unit is the native six-family bundle, its registry, the privacy-safe
-legacy-plan disposition, and the minimal validator/test pair.
+The reviewed unit is the predecessor archive, native six-family successor, LOC
+manifest, registry, privacy-safe legacy-plan disposition, and minimal
+validator/test pair.
 
 This artifact records planning Architect/Critic approval only. It is not
 implementation approval; final exact-head code review remains required.
 
 ## Architect verdict: APPROVED
 
-The lifecycle has one ownership model: current evidence remains at native OMX
-role paths, superseded privacy-safe evidence retains its native path in metadata
-and moves to the matching archive bundle. Baseline ancestry, hash, byte, handoff,
-acceptance, transition, redaction, and tracked-membership checks define the
-minimal lifecycle gate.
+The successor is architecturally clear. It binds acceptance and handoff identity
+to bundle and task, makes the LOC manifest the sole machine-readable owner of
+selection rules and sorted rows, and proves the actual predecessor's native Git
+blobs against its byte-identical archive. The unchanged SCAFF report and PR1/PR2
+transcript boundary remain consistent with the five-PR architecture.
 
 ## Critic verdict: APPROVED
 
-The test specification covers drift, unsafe current or superseded evidence,
-incomplete role/review evidence, unregistered tracked files, base-registry
-mutation, bootstrap, and invalid supersession. The two unaccepted pre-policy
-payloads are removed; only their path, digest, size, classification, historical
-commit, disposition, and successor links remain.
+The correction is approved without further mandatory changes. Tests cover
+identity drift, unsafe current or superseded evidence, unregistered artifacts,
+bootstrap and supersession, actual predecessor byte identity, LOC regeneration,
+complete hosted history, and lifecycle path triggers.
 
 ## Independence record
 
-Architect and Critic evaluated the same bounded review unit from their distinct
+Architect and Critic evaluated the same bounded successor design from distinct
 architecture and adversarial-contract roles. Both verdicts are explicit and no
-runtime identifier or transcript is retained.
+runtime identifier, machine path, or transcript is retained.

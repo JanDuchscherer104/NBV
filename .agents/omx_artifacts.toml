@@ -3,19 +3,128 @@ schema_version = 1
 [[bundle]]
 id = "aria-nbv-scaffold-five-pr-rebuild-20260726"
 task = "aria-nbv-scaffold-lifecycle"
-status = "current"
+status = "superseded"
 classification = "accepted-decision-evidence"
 baseline_commit = "b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c"
+superseded_by = "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726"
 handoff_sha256 = "9ab9f17906881e6ecf0e594970e6c1dd3c203b127992052ecfc00640e11d4c84"
 acceptance_sha256 = "aae51034f99fe944aaa28bad3a7e98f607b221e6e47fa8e5826a399d7ed19acb"
 
 [[bundle.artifact]]
 family = "context"
 role = "context"
-path = ".omx/context/aria-nbv-scaffold-five-pr-rebuild-20260726.md"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/context/aria-nbv-scaffold-five-pr-rebuild-20260726.md"
 native_path = ".omx/context/aria-nbv-scaffold-five-pr-rebuild-20260726.md"
 sha256 = "e72fbd4d9e2000c594db9f30bd2af96ed24e213da68a5a132d6bf03df909f016"
 bytes = 1068
+
+[[bundle.artifact]]
+family = "specification"
+role = "autoresearch-report"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/autoresearch-agent-scaffold-issue-index-20260726/report.md"
+native_path = ".omx/specs/autoresearch-agent-scaffold-issue-index-20260726/report.md"
+sha256 = "8cf4ded5b1da43369674ba0a6ed53bbb4dcb911ea17c2da020b61e1e11032936"
+bytes = 40070
+
+[[bundle.artifact]]
+family = "specification"
+role = "commit-inventory"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/commit-inventory.csv"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/commit-inventory.csv"
+sha256 = "4e93e30b51ab249efbdb7df93332e7012855ed800279ae8d661fb3cbbad4c7aa"
+bytes = 30947
+
+[[bundle.artifact]]
+family = "specification"
+role = "path-inventory"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/path-inventory.csv"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/path-inventory.csv"
+sha256 = "2342383891538a4409def8dc17fa3eb9d74a2b5759a8438f7bdbab1720f1e99c"
+bytes = 101741
+
+[[bundle.artifact]]
+family = "specification"
+role = "loc-baseline"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-baseline.json"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-baseline.json"
+sha256 = "7b314333ea8ca01ed53868bab24ea35f42e5dd794f1e6c5dcdc254271640383a"
+bytes = 1350
+
+[[bundle.artifact]]
+family = "specification"
+role = "evidence-coverage"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/evidence-coverage.md"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/evidence-coverage.md"
+sha256 = "c4668f81fda540b9f63f56cd826ed44f8aa490d9f50fa62a8850a8f5351874a7"
+bytes = 3656
+
+[[bundle.artifact]]
+family = "specification"
+role = "acceptance-record"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/acceptance-record.json"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/acceptance-record.json"
+sha256 = "aae51034f99fe944aaa28bad3a7e98f607b221e6e47fa8e5826a399d7ed19acb"
+bytes = 678
+
+[[bundle.artifact]]
+family = "specification"
+role = "legacy-plan-disposition"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/legacy-plan-disposition.md"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/legacy-plan-disposition.md"
+sha256 = "7c53295a5590bd9b5d15b5dbc4d1bd273a6292785dd3aa73b682ab2ad9b45539"
+bytes = 1050
+
+[[bundle.artifact]]
+family = "plan"
+role = "prometheus-strict-plan"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild.md"
+native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild.md"
+sha256 = "c2303aa56fbbd3446dc99d86c53698725073e170a6358ddff31b22adcb5fd47a"
+bytes = 29713
+
+[[bundle.artifact]]
+family = "test_specification"
+role = "test-specification"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/test-specification.md"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/test-specification.md"
+sha256 = "8c734a568a7f7a7e424176798b1fe9918ddedf1028cd03e02a4597a1cf34cf16"
+bytes = 1175
+
+[[bundle.artifact]]
+family = "review"
+role = "independent-review"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-review.md"
+native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-review.md"
+sha256 = "57c3a41777e93464830f05677769e3f4e17a6512fbebb7f50b1c67ce70037887"
+bytes = 1340
+review_kinds = ["architect", "critic"]
+
+[[bundle.artifact]]
+family = "handoff"
+role = "handoff"
+path = ".omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-handoff.json"
+native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-handoff.json"
+sha256 = "9ab9f17906881e6ecf0e594970e6c1dd3c203b127992052ecfc00640e11d4c84"
+bytes = 891
+
+[[bundle]]
+id = "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726"
+task = "aria-nbv-scaffold-lifecycle"
+status = "current"
+classification = "accepted-decision-evidence"
+baseline_commit = "b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c"
+predecessor_bundle_id = "aria-nbv-scaffold-five-pr-rebuild-20260726"
+predecessor_registry_commit = "1a48952f527149c1f295121c2208da440a29d8f4"
+handoff_sha256 = "18250b82b103bc35cd39808b50a22e308a41ed06ec65f55f7c7c00e38d8c0b81"
+acceptance_sha256 = "1f3118d0d54e46e98becfb7ddbc7e4a427c6962709ecb93e6cd810464d1351bf"
+
+[[bundle.artifact]]
+family = "context"
+role = "context"
+path = ".omx/context/aria-nbv-scaffold-five-pr-rebuild-20260726.md"
+native_path = ".omx/context/aria-nbv-scaffold-five-pr-rebuild-20260726.md"
+sha256 = "124f7c13f0c72883f3c1c2aa2cbe7a1e5c17d89b68c4e3b3c62280670c5ff664"
+bytes = 1220
 
 [[bundle.artifact]]
 family = "specification"
@@ -38,32 +147,32 @@ family = "specification"
 role = "path-inventory"
 path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/path-inventory.csv"
 native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/path-inventory.csv"
-sha256 = "2342383891538a4409def8dc17fa3eb9d74a2b5759a8438f7bdbab1720f1e99c"
-bytes = 101741
+sha256 = "70ebfd624262a2150de3b4e22dc4f978faffe496f2b85de4a84d0e9b94e85e75"
+bytes = 101712
 
 [[bundle.artifact]]
 family = "specification"
-role = "loc-baseline"
-path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-baseline.json"
-native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-baseline.json"
-sha256 = "7b314333ea8ca01ed53868bab24ea35f42e5dd794f1e6c5dcdc254271640383a"
-bytes = 1350
+role = "loc-manifest"
+path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-manifest.json"
+native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/loc-manifest.json"
+sha256 = "e86109083eab54801c3884910cb2130ec018f2ce89f1e7027b8dd8efa888965a"
+bytes = 37412
 
 [[bundle.artifact]]
 family = "specification"
 role = "evidence-coverage"
 path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/evidence-coverage.md"
 native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/evidence-coverage.md"
-sha256 = "c4668f81fda540b9f63f56cd826ed44f8aa490d9f50fa62a8850a8f5351874a7"
-bytes = 3656
+sha256 = "648bc6a27c386c1c97e85c27c204a46f3a6e50e2593b13aee36f775fb98b2997"
+bytes = 4811
 
 [[bundle.artifact]]
 family = "specification"
 role = "acceptance-record"
 path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/acceptance-record.json"
 native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/acceptance-record.json"
-sha256 = "aae51034f99fe944aaa28bad3a7e98f607b221e6e47fa8e5826a399d7ed19acb"
-bytes = 678
+sha256 = "1f3118d0d54e46e98becfb7ddbc7e4a427c6962709ecb93e6cd810464d1351bf"
+bytes = 859
 
 [[bundle.artifact]]
 family = "specification"
@@ -78,24 +187,24 @@ family = "plan"
 role = "prometheus-strict-plan"
 path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild.md"
 native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild.md"
-sha256 = "c2303aa56fbbd3446dc99d86c53698725073e170a6358ddff31b22adcb5fd47a"
-bytes = 29713
+sha256 = "124d3d51ef5227e160a6d17d65552379d778284b8fb2cc77948288881e226072"
+bytes = 31322
 
 [[bundle.artifact]]
 family = "test_specification"
 role = "test-specification"
 path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/test-specification.md"
 native_path = ".omx/specs/aria-nbv-scaffold-five-pr-rebuild-20260726/test-specification.md"
-sha256 = "8c734a568a7f7a7e424176798b1fe9918ddedf1028cd03e02a4597a1cf34cf16"
-bytes = 1175
+sha256 = "cc0b08458fa7f509f660363f5466a56b98a6a111b5a9595d1c80f7322c356185"
+bytes = 1746
 
 [[bundle.artifact]]
 family = "review"
 role = "independent-review"
 path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-review.md"
 native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-review.md"
-sha256 = "57c3a41777e93464830f05677769e3f4e17a6512fbebb7f50b1c67ce70037887"
-bytes = 1340
+sha256 = "5f9c41f454a63dea4eebe7520080ede6b597349908fb98a3465ec59c31bc3f0b"
+bytes = 1368
 review_kinds = ["architect", "critic"]
 
 [[bundle.artifact]]
@@ -103,5 +212,5 @@ family = "handoff"
 role = "handoff"
 path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-handoff.json"
 native_path = ".omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild-handoff.json"
-sha256 = "9ab9f17906881e6ecf0e594970e6c1dd3c203b127992052ecfc00640e11d4c84"
-bytes = 891
+sha256 = "18250b82b103bc35cd39808b50a22e308a41ed06ec65f55f7c7c00e38d8c0b81"
+bytes = 1196

@@ -1,13 +1,11 @@
 {
   "schema_version": 1,
-  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726",
-  "task": "aria-nbv-scaffold-lifecycle",
-  "accepted_scope": "the corrected PR1 evidence contract for the five-PR ARIA-NBV scaffold rebuild",
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
+  "accepted_scope": "the five-PR ARIA-NBV scaffold rebuild plan",
   "excluded_scope": [
     "implementation acceptance",
     "pull request publication or merge",
-    "raw prompts, transcripts, runtime state, and machine-local evidence",
-    "all-session transcript completeness and owner promotion, which remain PR2 blockers"
+    "raw prompts, transcripts, runtime state, and machine-local evidence"
   ],
   "actor_class": "repository-owner",
   "instruction_channel": "direct-user-instruction",

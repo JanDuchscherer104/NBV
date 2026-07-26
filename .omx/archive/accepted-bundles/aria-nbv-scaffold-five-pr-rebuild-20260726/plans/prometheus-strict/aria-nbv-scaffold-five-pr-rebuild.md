@@ -4,7 +4,7 @@
 
 - Planning baseline: `b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c`
 - Evidence branch: `5bc48d461eb6679a28d45fc0f2bf7fc6a1222121`
-- Superseded PR: [PR #28](https://github.com/JanDuchscherer104/ARIA-NBV/pull/28), head `6339bb74d8e382937d728318cc18ad07a9063eef`, closed 2026-07-26
+- Existing PR to supersede: [PR #28](https://github.com/JanDuchscherer104/ARIA-NBV/pull/28), head `6339bb74d8e382937d728318cc18ad07a9063eef`
 - Autoresearch report:
   `.omx/specs/autoresearch-agent-scaffold-issue-index-20260726/report.md`
 - Report SHA-256 at planning time:
@@ -14,8 +14,8 @@
 - Post-plan Metis gap check: `CLEAR`
 - Execution handoff: sequential `$ultragoal`; no parallel write team
 
-This is a planning artifact. PR #28 is closed; publication and implementation
-acceptance still require the sequential Ultragoal and hosted gates below.
+This is a planning artifact. It does not close PR #28, push branches, open pull
+requests, or modify the dirty source worktree.
 
 ## Target Result
 
@@ -164,11 +164,6 @@ bundle records only aggregate counts, corpus digest, reviewed paraphrases,
 source hashes, and owner/conflict/supersession relations. Secret/PII detection is
 a hard stop before any push.
 
-PR1 classifies the frozen Git/report corpus and records aggregate transcript
-manifest facts only. It does not claim complete user-invariant, conflict, TODO,
-or supersession coverage across all sessions. That normalized all-session audit
-and reviewed owner promotion are explicit PR2 blockers.
-
 ## External Basis And Reuse Policy
 
 The source/license ledger classifies every external item as `linked`,
@@ -275,7 +270,6 @@ description of the implementing or deferring PR.
 - agents DB TOMLs
 - minimal OMX registry/redaction/hash/transition validator and tests
 - `.gitignore` privacy and accepted-bundle rules
-- `.github/workflows/ci.yml` lifecycle paths and complete-history checkout
 - current accepted bundle at native `.omx/context`, `.omx/specs`, and
   `.omx/plans` paths
 
@@ -294,23 +288,12 @@ registered disposition specification.
 - complete 130-commit and history/net/transient path inventory;
 - reviewed current preferences in `human_owner_intent.md`;
 - current non-duplicate actionable items in agents DB;
-- one path-level LOC manifest containing the production/test/generated/upstream
-  selection rules, sorted rows, and summaries;
+- production/test/generated/upstream LOC baseline;
 - privacy and clean-room source/license ledger.
 
-**Acceptance:** zero unclassified commits, paths, and SCAFF issues in the frozen
-Git/report corpus; transcript completeness and reviewed owner promotion remain
-explicit PR2 blockers; accepted bundle hashes, predecessor byte identity, LOC
-regeneration, and privacy scanning pass; no raw or machine-local evidence is
-tracked. Hosted CI checks out complete history because transition validation
-must resolve Git ancestors and predecessor blobs.
-
-The privacy threat model rejects absolute machine paths, runtime UUIDs,
-private/raw evidence paths, HTML payloads, email addresses, private-key blocks,
-and explicit GitHub, OpenAI, AWS, Slack, Google, GitLab, Hugging Face, or bearer
-credential formats. It deliberately avoids a generic entropy regex because that
-would reject ordinary hashes and technical evidence without a reviewable threat
-classification.
+**Acceptance:** zero unclassified commits, paths, issues, user invariants,
+preferences, conflicts, or TODOs in the frozen corpus; accepted bundle hashes and
+redaction pass; no raw/machine-local evidence tracked.
 
 ### PR2: Memory And MemPalace
 
@@ -318,10 +301,6 @@ classification.
 
 **Owns:** `.agents/memory/**`, MemPalace plugin/contract, transcript extractor,
 agent-memory tests, and its scoped Make targets.
-
-**PR1 prerequisite exception:** PR1 corrects only the two stale advisor-deck
-path references in the 2026-06-17 debrief because the root memory gate rejects
-their removed path. Claim review and all other memory ownership remain PR2.
 
 **Deliverables:**
 
@@ -434,7 +413,6 @@ Shared files are not free-for-all ownership:
 | `AGENTS.md` | PR3, PR4, PR5 | routing; Graphify/hook command; final reconciliation |
 | `Makefile` | PR2, PR3, PR4, PR5 | memory; skill/Matt; Graphify/hook; final aggregation |
 | `.gitignore` | PR1; PR4 only if required | privacy/OMX; generated Graphify output |
-| `.github/workflows/ci.yml` | PR1; later PR only with ledger amendment | complete Git history and lifecycle path triggers |
 | `source_order.md` | PR1 only | authority ladder |
 | `human_owner_intent.md` | PR1 only | reviewed current preferences |
 | `verification_matrix.md` | PR5 only | final command matrix |
@@ -501,10 +479,9 @@ PRs repeat the relevant subset and link the immutable accepted bundle.
 
 ## Rollback And Stop Conditions
 
-Merge sequentially. Roll back implementation behavior in reverse order, but do
-not revert accepted registry history. Record a rollback as a new current bundle
-that supersedes the previous current bundle; accepted and archived bundles stay
-immutable. A literal revert that removes a successor is invalid.
+Merge sequentially. If a merged PR must be removed, revert in reverse order.
+Never rewrite an accepted bundle; create a superseding accepted bundle with a
+successor link.
 
 Stop before push or PR creation when:
 

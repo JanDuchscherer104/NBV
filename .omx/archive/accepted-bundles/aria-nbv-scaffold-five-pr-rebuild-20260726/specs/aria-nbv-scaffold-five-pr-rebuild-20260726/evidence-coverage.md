@@ -1,21 +1,5 @@
 # PR1 evidence coverage
 
-## Successor correction
-
-The accepted predecessor is commit
-`1a48952f527149c1f295121c2208da440a29d8f4`. Its twelve registered artifacts
-are retained byte-identically under
-`.omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/`.
-The lifecycle validator resolves that commit, reads its registry and native
-artifact blobs, and compares their hashes and byte counts with the archived
-bundle before accepting this successor.
-
-PR1's frozen evidence corpus is the 130-commit scaffold branch, its history and
-path inventories, the accepted SCAFF report, and aggregate transcript-manifest
-facts below. It is not an all-session assertion inventory. Normalization,
-privacy review, conflict/supersession classification, and owner promotion for
-all ARIA-NBV sessions remain blocking PR2 work.
-
 ## PR #28 snapshot
 
 PR #28 was closed as superseded on 2026-07-26. Its head was
@@ -57,14 +41,6 @@ a full refresh; its SHA-256 is
 All-session normalization, privacy scanning, review, conflict/supersession
 classification, and promotion remain PR2 blockers. This evidence does not claim
 that all prior prompts are reconciled.
-
-## LOC baseline
-
-[`loc-manifest.json`](loc-manifest.json) is the single machine-readable owner of
-the baseline selection rules, sorted category/path/physical-line rows, and
-category summaries. Its test regenerates every row from Git blobs at
-`b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c`; no production evidence generator
-or second glob list is retained.
 
 ## Current owners and supporting evidence
 

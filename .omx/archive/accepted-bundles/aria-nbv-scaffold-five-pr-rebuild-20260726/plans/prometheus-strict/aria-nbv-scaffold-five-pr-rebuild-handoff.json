@@ -1,10 +1,8 @@
 {
   "schema_version": 1,
-  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726",
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
   "task": "aria-nbv-scaffold-lifecycle",
   "status": "accepted",
-  "predecessor_bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
-  "predecessor_registry_commit": "1a48952f527149c1f295121c2208da440a29d8f4",
   "roles": [
     "context",
     "specification",
@@ -23,12 +21,10 @@
     "write_scope": "scaffold-series worktree only"
   },
   "constraints": [
-    "keep successor evidence in native OMX role paths",
-    "archive the accepted predecessor byte-identically and prove its native Git blobs",
+    "keep current accepted evidence in native OMX role paths",
+    "archive only superseded evidence that already passes privacy scanning",
     "remove unaccepted pre-policy payloads that contain machine-local paths",
     "compare accepted registry state against the merge base in hosted CI",
-    "bind acceptance and handoff JSON identity to bundle and task",
-    "use one LOC manifest for selection rules and path-level rows",
     "exclude runtime state, transcripts, and machine identifiers"
   ]
 }
