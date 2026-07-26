@@ -9,7 +9,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6b6fa124fcbf9b13b05faefb5e21406278ccb469`
+- Built from commit: `0a3de3f7619e67d2e91c692fc8458c8fa8dbb136`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
