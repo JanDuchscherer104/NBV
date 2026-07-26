@@ -45,6 +45,14 @@ PRIVATE_PARTS = {
 ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+IMMUTABLE_BUNDLE_FIELDS = (
+    "id",
+    "task",
+    "classification",
+    "baseline_commit",
+    "handoff_sha256",
+    "acceptance_sha256",
+)
 RUNTIME_UUID = re.compile(
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
     re.IGNORECASE,
@@ -353,14 +361,6 @@ def _membership(bundle: dict[str, Any]) -> set[tuple[Any, ...]]:
 def validate_transition(previous: dict[str, Any], current: dict[str, Any]) -> None:
     old = {bundle["id"]: bundle for bundle in previous.get("bundle", [])}
     new = {bundle["id"]: bundle for bundle in current.get("bundle", [])}
-    immutable = (
-        "id",
-        "task",
-        "classification",
-        "baseline_commit",
-        "handoff_sha256",
-        "acceptance_sha256",
-    )
     for bundle_id, before in old.items():
         after = new.get(bundle_id)
         if not after:
@@ -372,7 +372,7 @@ def validate_transition(previous: dict[str, Any], current: dict[str, Any]) -> No
         if (
             after["status"] != "superseded"
             or _membership(before) != _membership(after)
-            or any(before.get(key) != after.get(key) for key in immutable)
+            or any(before.get(key) != after.get(key) for key in IMMUTABLE_BUNDLE_FIELDS)
         ):
             raise ValidationError(f"invalid or non-identical supersession: {bundle_id}")
         successor = new.get(after.get("superseded_by"))
@@ -427,15 +427,7 @@ def _validate_archive_source(
         raise ValidationError(f"predecessor bundle is not current for {bundle_id}")
     if _membership(before) != _membership(archived):
         raise ValidationError(f"predecessor artifact metadata drift for {bundle_id}")
-    immutable = (
-        "id",
-        "task",
-        "classification",
-        "baseline_commit",
-        "handoff_sha256",
-        "acceptance_sha256",
-    )
-    if any(before.get(key) != archived.get(key) for key in immutable):
+    if any(before.get(key) != archived.get(key) for key in IMMUTABLE_BUNDLE_FIELDS):
         raise ValidationError(f"predecessor bundle metadata drift for {bundle_id}")
     for artifact in before["artifact"]:
         shown = subprocess.run(
