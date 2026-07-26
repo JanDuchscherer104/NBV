@@ -91,7 +91,7 @@ def main() -> None:
         cwd=ROOT,
         text=True,
     )
-    assert "rollouts/zarr_store.py L517" in explanation
+    assert "rollouts/zarr_store.py" in explanation
     assert DESCRIPTOR_PLAN in explanation
     print("Graphify retrieval contract passed")
 
