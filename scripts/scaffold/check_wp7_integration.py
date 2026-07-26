@@ -108,7 +108,7 @@ def is_active_scaffold_source(path: str) -> bool:
 
 
 def outline_scripts(tree: dict[str, tuple[str, str]]) -> list[str]:
-    """Return retained root and ARIA context-owner outline scripts."""
+    """Return obsolete generated-navigation scripts still present in a tree."""
     return sorted(
         path
         for path, (mode, _) in tree.items()
@@ -310,10 +310,8 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append("WP0 active scaffold source paths evade LOC accounting")
     if metrics["active_source_coverage_gaps"]:
         errors.append("HEAD active scaffold source paths evade LOC accounting")
-    if not set(cast(list[str], metrics["baseline_outline_scripts"])) <= set(
-        cast(list[str], metrics["active_outline_scripts"])
-    ):
-        errors.append("retained WP0 outline scripts are missing at HEAD")
+    if metrics["active_outline_scripts"]:
+        errors.append("obsolete generated-navigation outline scripts remain at HEAD")
     for label, paths in (
         ("baseline included", baseline_paths),
         ("HEAD included", active_paths),

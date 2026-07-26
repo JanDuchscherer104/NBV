@@ -8,14 +8,9 @@ also changes prose or visual argumentation.
 
 1. Read `docs/AGENTS.md`, the target entrypoint, its imports, and adjacent
    sections.
-2. Localize large documents before broad reads:
-
-   ```bash
-   make context-typst-outline \
-     TYPST_OUTLINE_ARGS='--paper docs/typst/thesis/main.typ --mode outline'
-   make context-typst-includes \
-     TYPST_INCLUDES_ARGS='--paper docs/typst/thesis/main.typ --mode includes'
-   ```
+2. Localize large documents with native Graphify traversal when fresh, or with
+   `rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'` as the exact-source
+   fallback.
 
 3. Inspect the relevant files under `docs/typst/shared/`.
 4. Compile from `docs/` with `--root .`; do not guess import roots from the

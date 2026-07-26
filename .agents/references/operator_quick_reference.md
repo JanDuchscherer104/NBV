@@ -30,9 +30,9 @@ uv run python --version
 ## Exact-Source Inspection
 
 - Contracts: `make context-contracts`
-- Quarto outline: `make context-qmd-outline`
-- Typst outline/includes: `make context-typst-outline` and
-  `make context-typst-includes`
+- Quarto headings: `rg -n '^#{1,6} ' docs -g '*.qmd'`
+- Typst headings/includes:
+  `rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'`
 - Package/docs trees: `make context-dir-tree` and `make context-qmd-tree`
 - Literature: `rg -n '<term>' docs/literature/tex-src docs/references.bib`
 - Scoped UML: `make uml UML_ROOT=aria_nbv/aria_nbv/<package>

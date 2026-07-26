@@ -1,25 +1,22 @@
 # ARIA Docs Workflow
 
 Use one branch and read only the files it names. Start from the target document
-and its imports; use outlines to localize large sources before opening them.
+and its imports; use native Graphify traversal or targeted exact-source search
+to localize large sources before opening them.
 
 ## Quarto
 
 Read `docs/AGENTS.md`, the target page, and its navigation owner. Use
-`scripts/nbv_qmd_outline.sh --compact` to localize broad pages. Run
+`rg -n '^#{1,6} ' docs -g '*.qmd'` to localize broad pages when Graphify is not
+fresh. Run
 `make qmd-frontmatter-check`; render the touched page or site when layout,
 cross-references, execution, or navigation changes.
 
 ## Typst, Notation, And Glossary
 
-Read `references/typst.md`. Use:
-
-```bash
-make context-typst-outline \
-  TYPST_OUTLINE_ARGS='--paper docs/typst/thesis/main.typ --mode outline'
-make context-typst-includes \
-  TYPST_INCLUDES_ARGS='--paper docs/typst/thesis/main.typ --mode includes'
-```
+Read `references/typst.md`. Inspect the target entrypoint and use
+`rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'` when exact heading or
+include localization is needed.
 
 Inspect the target imports and `docs/typst/shared` before changing recurring
 terms, symbols, equations, or document-wide style.

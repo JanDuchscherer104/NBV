@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test api-docs-self-test
-.PHONY: context-qmd-tree context-contracts context-qmd-outline context-typst-outline context-typst-includes context-dir-tree uml qmd-frontmatter-check
+.PHONY: context-qmd-tree context-contracts context-dir-tree uml qmd-frontmatter-check
 .PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills graphify-setup install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
@@ -40,9 +40,6 @@ PYTHON_INTERPRETER ?= $(VENV_PYTHON)
 FORCE_ACTIV_CONDA_ENV ?= 0  # set to 1 only if you insist on the old conda env check
 CONDA_ENV_NAME ?= aria-nbv       # legacy: expected conda env name
 QMD_FORMATTER := scripts/format_qmd_lists.py
-QMD_OUTLINE_ARGS ?= --compact
-TYPST_OUTLINE_ARGS ?= --paper --mode outline
-TYPST_INCLUDES_ARGS ?= --paper --mode includes
 UML_ROOT ?=
 UML_OUT ?=
 UML_PYTHON ?= $(PYTHON_INTERPRETER)
@@ -110,15 +107,6 @@ _check_python:
 
 context-contracts: _check_python ## 🗺️ Show data/config contract index for aria_nbv
 	@$(PYTHON_INTERPRETER) aria_nbv/scripts/get_context.py --root aria_nbv/aria_nbv
-
-context-qmd-outline: _check_python ## 🗺️ Outline Quarto pages (QMD_OUTLINE_ARGS='--compact' by default)
-	@./scripts/nbv_qmd_outline.sh $(QMD_OUTLINE_ARGS)
-
-context-typst-outline: _check_python ## 🗺️ Outline Typst paper/slides (TYPST_OUTLINE_ARGS='--paper --mode outline')
-	@$(PYTHON_INTERPRETER) .agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py $(TYPST_OUTLINE_ARGS)
-
-context-typst-includes: _check_python ## 🗺️ Print Typst include edges (TYPST_INCLUDES_ARGS='--paper --mode includes')
-	@$(PYTHON_INTERPRETER) .agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py $(TYPST_INCLUDES_ARGS)
 
 migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into .agents/memory
 	@$(PYTHON_INTERPRETER) scripts/migrate_codex_memory.py $(MIGRATE_CODEX_MEMORY_ARGS)

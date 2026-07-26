@@ -53,8 +53,8 @@ exact-source, or diagnostic workflow.
 2. Use fresh Graphify navigation when available; otherwise continue directly
    with exact source owners and targeted `rg`.
 3. Use source-specific inspection before broad raw reads:
-   - Quarto: `scripts/nbv_qmd_outline.sh --compact`
-   - Typst: `scripts/nbv_typst_includes.py --paper --mode outline|includes`
+   - Quarto: `rg -n '^#{1,6} ' docs -g '*.qmd'`
+   - Typst: `rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'`
    - Literature: direct `rg -n <term> docs/literature/tex-src docs/references.bib`
    - Code/contracts: `make context-contracts`
    - Trees: `make context-dir-tree` or `make context-qmd-tree`

@@ -82,8 +82,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Package format/lint: `ruff format <file>` and `ruff check <file>`
 - Package tests: `cd aria_nbv && uv run pytest <path>`
 - Contract inspection: `make context-contracts`
-- Source outlines: `make context-qmd-outline`, `make context-typst-outline`,
-  and `make context-typst-includes`
+- Source inspection: use native Graphify traversal when fresh, otherwise
+  targeted `rg` against the owning QMD or Typst sources.
 - Agents DB: `make agents-db`; memory check: `make check-agent-memory`
 - Surface checks: see `.agents/references/verification_matrix.md`.
 

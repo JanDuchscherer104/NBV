@@ -44,13 +44,7 @@ def main() -> None:
         ".agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py",
         "scripts/nbv_qmd_outline.sh",
     ]
-    assert metrics["active_outline_scripts"] == [
-        ".agents/skills/aria-nbv-context/scripts/nbv_qmd_outline.py",
-        ".agents/skills/aria-nbv-context/scripts/nbv_qmd_outline.sh",
-        ".agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py",
-        "scripts/nbv_qmd_outline.sh",
-        "scripts/nbv_typst_includes.py",
-    ]
+    assert metrics["active_outline_scripts"] == []
     assert (
         metrics["active_scaffold_source_loc"] < metrics["baseline_scaffold_source_loc"]
     )
@@ -72,7 +66,6 @@ def main() -> None:
         "scripts/graphify_adapter.py",
         "scripts/graphify_bridge.py",
         "scripts/git_hooks/post-commit",
-        "scripts/nbv_typst_includes.py",
         "scripts/scaffold/bootstrap_matt_skills.py",
         "scripts/scaffold/check_wp7_integration.py",
         "scripts/scaffold/matt_skills_policy.py",
@@ -99,8 +92,8 @@ def main() -> None:
     rejected(
         metrics,
         "active_outline_scripts",
-        metrics["active_outline_scripts"][1:],
-        "outline scripts",
+        ["scripts/nbv_qmd_outline.sh"],
+        "generated-navigation outline scripts",
     )
     rejected(metrics, "active_skill_count", 10, "exactly 9")
     rejected(metrics, "aria_model_visible_skill_count", 8, "model-visible")

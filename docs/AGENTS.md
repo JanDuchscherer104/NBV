@@ -33,8 +33,8 @@ Apply this file when working under `docs/`.
   `.agents/generated/`; do not write agent mirrors under `docs/contents/**`.
 
 ## Default Workflow
-- Use `scripts/nbv_qmd_outline.sh --compact` to localize the exact Quarto page before opening it.
-- Use `scripts/nbv_typst_includes.py --paper --mode outline` to localize the exact Typst section before opening it.
+- Use native Graphify traversal when fresh; otherwise localize Quarto headings
+  and Typst headings/includes with targeted `rg` against the owning sources.
 - Open `docs/index.qmd`, `docs/contents/thesis/roadmap.qmd`, and
   `docs/contents/thesis/questions.qmd` only when the task is about project
   narrative, priorities, or roadmap. Historical scratch pages live under
@@ -62,7 +62,7 @@ Apply this file when working under `docs/`.
   `cd docs && typst compile typst/thesis/main.typ /tmp/aria-thesis-final.pdf --root . --input aria-wip-links=false --input aria-code-ref=<sha-or-tag>`
 - Typst slides: `cd docs && typst compile typst/seminar_slides/<file>.typ --root .`
 - QMD tree: `make context-qmd-tree`
-- Outline-first routing: `scripts/nbv_qmd_outline.sh`, `scripts/nbv_typst_includes.py`
+- Exact-source fallback: targeted `rg` over the relevant QMD or Typst subtree
 - Scoped UML: `make uml UML_ROOT=aria_nbv/aria_nbv/<package> UML_OUT=<absolute-ignored-path>`
 
 ## Diagram Rules
