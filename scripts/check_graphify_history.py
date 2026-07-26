@@ -14,13 +14,13 @@ from typing import Any
 import tomllib
 from graphify_adapter import (
     _ARTIFACTS,
-    _MANIFEST,
     CONFIG,
     IMPLEMENTATION,
     ROOT,
     AdapterError,
     Source,
     _manifest_rows,
+    _literature_contract,
     classify_path,
     implementation_digest,
     is_fresh,
@@ -53,7 +53,8 @@ def _blob(root: Path, commit: str, path: str) -> bytes:
 
 def _tree_context(root: Path, commit: str) -> tuple[dict[str, Any], set[str]]:
     config = tomllib.loads(_blob(root, commit, CONFIG.name).decode())
-    manifest = _blob(root, commit, _MANIFEST).decode()
+    manifest_path = _literature_contract(config).manifest
+    manifest = _blob(root, commit, manifest_path).decode()
     selected = {directory for directory, _ in _manifest_rows(manifest)}
     return config, selected
 

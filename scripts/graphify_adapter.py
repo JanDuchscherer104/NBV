@@ -28,7 +28,6 @@ UPSTREAM_KEYS = frozenset(
 )
 _ARTIFACTS = ("graph.json", "manifest.json", "GRAPH_REPORT.md")
 IMPLEMENTATION = ("scripts/graphify_adapter.py", "scripts/graphify_bridge.py")
-_MANIFEST = "docs/literature/sources.jsonl"
 _BRIDGE_SUFFIXES = {".typ", ".tex", ".bib"}
 _LOCATION = re.compile(r"^L(\d+)(?:-L?(\d+))?$")
 _TEX_INCLUDE = re.compile(r"\\(?:input|include)\s*\{([^}]+)\}")
@@ -46,6 +45,12 @@ class Source:
     text: str
 
 
+@dataclass(frozen=True)
+class LiteratureContract:
+    manifest: str
+    roots: tuple[PurePosixPath, ...]
+
+
 LineMap = Mapping[int, tuple[str, int]]
 Mappings = Mapping[Path, LineMap]
 
@@ -61,10 +66,65 @@ def load_config(root: Path = ROOT) -> dict[str, Any]:
         raise AdapterError("Graphify partitions must be code, thesis, literature")
     if any(not isinstance(partitions[name].get("patterns"), list) for name in FAMILIES):
         raise AdapterError("Graphify partition patterns must be lists")
+    _literature_contract(config)
     return config
 
 
-def _manifest_rows(text: str, label: str = _MANIFEST) -> list[tuple[str, str]]:
+def _canonical_config_path(path: str, label: str) -> PurePosixPath:
+    pure = PurePosixPath(path)
+    if (
+        pure.is_absolute()
+        or not pure.parts
+        or "\\" in path
+        or {"", ".", ".."} & set(pure.parts)
+        or any(character in path for character in "*?[")
+    ):
+        raise AdapterError(f"malformed literature {label}: {path!r}")
+    return pure
+
+
+def _literature_contract(config: Mapping[str, Any]) -> LiteratureContract:
+    try:
+        patterns = config["partition"]["literature"]["patterns"]
+    except (KeyError, TypeError) as exc:
+        raise AdapterError("missing literature patterns") from exc
+    if (
+        not isinstance(patterns, list)
+        or not patterns
+        or not all(isinstance(pattern, str) for pattern in patterns)
+    ):
+        raise AdapterError("literature patterns must be nonempty strings")
+    manifests = [
+        pattern
+        for pattern in patterns
+        if not any(character in pattern for character in "*?[")
+        and pattern.endswith(".jsonl")
+    ]
+    recursive = [pattern for pattern in patterns if pattern.endswith("/**")]
+    if not recursive or len(manifests) != 1 or len(recursive) != len(patterns) - 1:
+        raise AdapterError(
+            "literature patterns require one exact JSONL manifest and recursive roots"
+        )
+    manifest = str(_canonical_config_path(manifests[0], "manifest"))
+    roots = tuple(
+        _canonical_config_path(pattern.removesuffix("/**"), "root")
+        for pattern in recursive
+    )
+    if any(
+        left == right or left in right.parents or right in left.parents
+        for index, left in enumerate(roots)
+        for right in roots[index + 1 :]
+    ):
+        raise AdapterError("ambiguous overlapping literature roots")
+    manifest_path = PurePosixPath(manifest)
+    if any(root == manifest_path or root in manifest_path.parents for root in roots):
+        raise AdapterError("literature manifest cannot be inside a paper root")
+    return LiteratureContract(manifest, roots)
+
+
+def _manifest_rows(
+    text: str, label: str = "literature manifest"
+) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     directories: set[str] = set()
     arxiv_ids: set[str] = set()
@@ -98,8 +158,11 @@ def _manifest_rows(text: str, label: str = _MANIFEST) -> list[tuple[str, str]]:
     return rows
 
 
-def selected_literature_dirs(root: Path = ROOT) -> set[str]:
-    path = root / _MANIFEST
+def selected_literature_dirs(
+    root: Path = ROOT, config: Mapping[str, Any] | None = None
+) -> set[str]:
+    contract = _literature_contract(config or load_config(root))
+    path = root / contract.manifest
     return {directory for directory, _ in _manifest_rows(path.read_text())}
 
 
@@ -112,6 +175,7 @@ def classify_path(
     partitions = config.get("partition", {})
     if tuple(partitions) != FAMILIES:
         raise AdapterError("unknown source families in config")
+    literature = _literature_contract(config)
     for family in FAMILIES:
         if not any(
             fnmatchcase(path, pattern) for pattern in partitions[family]["patterns"]
@@ -121,12 +185,20 @@ def classify_path(
             return family
         if family == "thesis" and pure.suffix in {".typ", ".bib"}:
             return family
-        if family == "literature" and (
-            path == _MANIFEST
-            or pure.suffix == ".tex"
-            and any(part in selected for part in pure.parts[:-1])
-        ):
-            return family
+        if family == "literature":
+            if path == literature.manifest:
+                return family
+            for root in literature.roots:
+                try:
+                    relative = pure.relative_to(root)
+                except ValueError:
+                    continue
+                if (
+                    pure.suffix == ".tex"
+                    and len(relative.parts) >= 2
+                    and relative.parts[0] in selected
+                ):
+                    return family
     return None
 
 
@@ -134,7 +206,7 @@ def collect_sources(
     root: Path = ROOT, config: Mapping[str, Any] | None = None
 ) -> list[Source]:
     config = config or load_config(root)
-    selected = selected_literature_dirs(root)
+    selected = selected_literature_dirs(root, config)
     output = subprocess.check_output(
         ["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=root
     )
@@ -157,14 +229,24 @@ def source_digest(sources: Iterable[Source]) -> str:
     return hashlib.sha256("\n".join(records).encode()).hexdigest()
 
 
-def _paper_map(manifest: Source, sources: list[Source]) -> dict[str, str]:
+def _paper_map(
+    config: Mapping[str, Any], manifest: Source, sources: list[Source]
+) -> dict[str, str]:
+    contract = _literature_contract(config)
     tex_paths = {source.path for source in sources if source.path.endswith(".tex")}
     papers: dict[str, str] = {}
     for directory, arxiv in _manifest_rows(manifest.text, manifest.path):
-        prefix = f"docs/literature/tex-src/{directory}/"
-        choices = sorted(path for path in tex_paths if path.startswith(prefix))
-        if not choices:
+        matches: list[tuple[str, list[str]]] = []
+        for root in contract.roots:
+            prefix = f"{root}/{directory}/"
+            choices = sorted(path for path in tex_paths if path.startswith(prefix))
+            if choices:
+                matches.append((prefix, choices))
+        if not matches:
             raise AdapterError(f"missing paper family: {directory}")
+        if len(matches) != 1:
+            raise AdapterError(f"ambiguous paper family: {directory}")
+        prefix, choices = matches[0]
         main = prefix + "main.tex"
         papers[arxiv] = main if main in choices else choices[0]
     return papers
@@ -198,14 +280,15 @@ def materialize_corpus(
     if len(by_path) != len(items):
         raise AdapterError("duplicate source path")
     config = load_config(root)
-    selected = selected_literature_dirs(root)
+    literature = _literature_contract(config)
+    selected = selected_literature_dirs(root, config)
     for source in items:
         if classify_path(source.path, config, selected) != source.family:
             raise AdapterError(f"unknown source path or family: {source.path}")
     families = {source.family for source in items}
     if missing := next((family for family in FAMILIES if family not in families), None):
         raise AdapterError(f"empty source family: {missing}")
-    manifest = by_path.get(_MANIFEST)
+    manifest = by_path.get(literature.manifest)
     if manifest is None or manifest.family != "literature":
         raise AdapterError("missing literature manifest")
 
@@ -222,7 +305,7 @@ def materialize_corpus(
     ]
     try:
         converted = materialize(
-            bridged, destination, paper_by_arxiv=_paper_map(manifest, items)
+            bridged, destination, paper_by_arxiv=_paper_map(config, manifest, items)
         )
     except (TypeError, ValueError) as exc:
         raise AdapterError(f"cannot materialize Graphify bridge: {exc}") from exc

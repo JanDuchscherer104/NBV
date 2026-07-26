@@ -205,6 +205,84 @@ def test_configured_partition_patterns_control_classification(repo: Path) -> Non
     assert (
         adapter.classify_path("papers/not-selected/main.tex", config, selected) is None
     )
+    assert (
+        adapter.classify_path("papers/not-selected/paper-a/main.tex", config, selected)
+        is None
+    )
+    assert (
+        adapter.classify_path("papers/paper-a-lookalike/main.tex", config, selected)
+        is None
+    )
+
+
+def test_relocated_literature_root_maps_selected_family_end_to_end(
+    repo: Path, tmp_path: Path
+) -> None:
+    config_path = repo / ".graphify.toml"
+    config_path.write_text(
+        config_path.read_text().replace(
+            '"docs/literature/sources.jsonl", "docs/literature/tex-src/**"',
+            '"metadata/papers.jsonl", "papers/**", "archive/**"',
+        ),
+        encoding="utf-8",
+    )
+    manifest = repo / "docs/literature/sources.jsonl"
+    relocated_manifest = repo / "metadata/papers.jsonl"
+    relocated_manifest.parent.mkdir()
+    shutil.move(manifest, relocated_manifest)
+    source_root = repo / "docs/literature/tex-src"
+    relocated_root = repo / "papers"
+    relocated_root.mkdir()
+    shutil.move(str(source_root / "paper-a"), relocated_root / "paper-a")
+    shutil.move(str(source_root / "not-selected"), relocated_root / "not-selected")
+
+    sources = adapter.collect_sources(repo)
+    paths = {source.path for source in sources}
+    assert "metadata/papers.jsonl" in paths
+    assert "papers/paper-a/main.tex" in paths
+    assert "papers/not-selected/main.tex" not in paths
+
+    destination = tmp_path / "materialized"
+    adapter.materialize_corpus(repo, sources, destination)
+    main = destination / "papers/paper-a/main.py"
+    assert main.is_file()
+    assert "paper_arxiv__1234_5678" in main.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "patterns",
+    (
+        ["docs/literature/sources.jsonl", "papers/*/**"],
+        ["docs/literature/sources.jsonl", "papers/**", "papers/archive/**"],
+        ["one.jsonl", "two.jsonl", "papers/**"],
+        ["papers/**"],
+        ["papers.jsonl"],
+        ["papers.jsonl", "papers\\archive/**"],
+    ),
+)
+def test_classification_rejects_ambiguous_literature_roots(
+    repo: Path, patterns: list[str]
+) -> None:
+    config = adapter.load_config(repo)
+    config["partition"]["literature"]["patterns"] = patterns
+    with pytest.raises(adapter.AdapterError, match="literature"):
+        adapter.classify_path("papers/paper-a/main.tex", config, {"paper-a"})
+
+
+def test_paper_mapping_rejects_family_in_multiple_roots(repo: Path) -> None:
+    config = adapter.load_config(repo)
+    config["partition"]["literature"]["patterns"].append("archive/**")
+    sources = adapter.collect_sources(repo)
+    manifest = next(
+        source for source in sources if source.path == "docs/literature/sources.jsonl"
+    )
+    sources.append(
+        adapter.Source(
+            "archive/paper-a/main.tex", "literature", "0" * 64, "\\section{Copy}\n"
+        )
+    )
+    with pytest.raises(adapter.AdapterError, match="ambiguous paper family: paper-a"):
+        adapter._paper_map(config, manifest, sources)
 
 
 @pytest.mark.parametrize("path", ("/src/model.py", "../src/model.py", "src\\model.py"))
@@ -477,11 +555,12 @@ def test_unmapped_and_zero_family_fail_closed(
 
 
 def test_manifest_uses_main_or_first_tex(repo: Path) -> None:
+    config = adapter.load_config(repo)
     sources = adapter.collect_sources(repo)
     manifest = next(
         source for source in sources if source.path == "docs/literature/sources.jsonl"
     )
-    assert adapter._paper_map(manifest, sources) == {
+    assert adapter._paper_map(config, manifest, sources) == {
         "1234.5678": "docs/literature/tex-src/paper-a/main.tex"
     }
     (repo / "docs/literature/tex-src/paper-a/main.tex").unlink()
@@ -489,7 +568,7 @@ def test_manifest_uses_main_or_first_tex(repo: Path) -> None:
     manifest = next(
         source for source in sources if source.path == "docs/literature/sources.jsonl"
     )
-    assert adapter._paper_map(manifest, sources) == {
+    assert adapter._paper_map(config, manifest, sources) == {
         "1234.5678": "docs/literature/tex-src/paper-a/section.tex"
     }
 
