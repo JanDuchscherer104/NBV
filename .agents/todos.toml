@@ -747,3 +747,20 @@ references = ["repo:.agents/references/source_order.md", "repo:aria_nbv/AGENTS.m
 implementation_notes = ["Inventory package READMEs and classify each section as durable orientation, executable contract duplication, generated inventory, status report, or agent routing.", "Keep edits package-scoped and verify the nearest package guidance and tests."]
 acceptance = ["Every retained package README has a clear human audience and durable orientation role.", "No retained README contains generated symbol matrices, refactor progress, or agent routing.", "Executable contracts remain in code tests docstrings and nearest package guidance."]
 verification = ["rg -n \"generated|inventory|agent routing|refactor status\" aria_nbv/aria_nbv -g 'README.md'", "make check-agent-memory"]
+
+[[todo]]
+id = "todo-097"
+title = "Type and simplify offline visual inventory helpers"
+description = "Finish a bounded typing and simplification pass over offline visual-inventory diagnostics without changing validation behavior."
+priority = "low"
+status = "todo"
+labels = ["data-handling", "typing", "simplification", "offline"]
+issue_ids = ["issue-012"]
+loc_min = 40
+loc_expected = 120
+loc_max = 240
+context = ["The offline visual-inventory module still relies on broad object helper boundaries, repeated tensor conversion, incomplete tensor shape and dtype documentation, and an optional intermediate dictionary.", "This debt is deferred from scaffold distillation so the current pass remains comment-only and behavior-preserving."]
+references = ["repo:aria_nbv/aria_nbv/data_handling/offline/inventory.py", "repo:aria_nbv/tests/data_handling/test_offline_visual_inventory.py", "repo:aria_nbv/tests/data_handling/public_api_typing_contract.py", "repo:aria_nbv/aria_nbv/data_handling/AGENTS.md"]
+implementation_notes = ["Document tensor fields with precise shapes and dtypes using the package typing conventions.", "Narrow broad object helper boundaries to the smallest truthful protocols or concrete types.", "Consolidate repeated tensor conversion through an existing suitable helper or one local canonical path.", "Remove the optional intermediate dictionary by passing the owned fields directly while preserving warnings, metadata, strict validation, and the public result contract."]
+acceptance = ["Public inventory tensor fields state shape and dtype contracts.", "Helper inputs no longer use broader object types than required.", "Tensor conversion has one canonical implementation for this module.", "The optional intermediate dictionary is removed without changing observable inventory results or error behavior."]
+verification = ["cd aria_nbv && uv run ruff format --check aria_nbv/data_handling/offline/inventory.py && uv run ruff check aria_nbv/data_handling/offline/inventory.py", "cd aria_nbv && uv run pytest tests/data_handling/test_offline_visual_inventory.py tests/data_handling/public_api_typing_contract.py -q", "make agents-db AGENTS_ARGS='validate'"]
