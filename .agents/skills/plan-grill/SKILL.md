@@ -1,68 +1,43 @@
 ---
 name: plan-grill
-description: Stress-test high-impact or advisor-facing ARIA-NBV plans.
+description: Ground and grill high-impact ARIA-NBV plans.
 metadata:
   mode: router
   not_when:
-    - "a concrete failure or localized low-impact edit owns the task"
-    - "the user asks for review of an existing concrete diff"
+    - "a localized low-impact edit or concrete failure owns the task"
   handoff_to:
-    - "aria-nbv-context when the affected source owner is unknown"
-    - "aria-docs for direct-source claim review"
-    - "aria-docs for public narrative after the decision"
-    - "specialized diagnostic or review capability for concrete evidence"
+    - "aria-nbv-context when the source owner is unknown"
+    - "aria-docs for the resulting public narrative"
   evidence_required:
-    - "source-order owner and current implementation boundary"
-    - "success criteria, in/out of scope, assumptions, and deferred decisions"
-    - "claim strength and source evidence for research-facing choices"
+    - "exact current owner, implementation evidence, and decision scope"
   applies_to:
     - "**"
   triggers:
-    - "advisor-facing or thesis-scope decision"
-    - "high-impact scaffold or architecture plan"
-    - "theory-rich or conceptual option analysis"
+    - "high-impact or cross-surface ARIA-NBV decision"
   must_read:
-    - ".agents/references/source_order.md"
-    - ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md when theory-rich"
+    - "AGENTS.md"
   canonical_sources:
-    - ".agents/references/source_order.md#role-split"
-    - "docs/contents/thesis/roadmap.qmd"
-    - "docs/contents/thesis/questions.qmd"
+    - "AGENTS.md#source-order"
+    - ".agents/references/direct_source_claim_checklist.md"
     - "docs/typst/thesis/main.typ"
-    - ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md"
-  context7_refs:
-    - "/pytorch/pytorch"
-    - "/facebookresearch/pytorch3d"
-    - "/websites/typst_app"
-    - "/websites/quarto"
-  literature_refs:
-    - "docs/contents/literature/index.qmd"
-    - "DoubleDQN-vanHasselt2015"
-    - "VIN-NBV-frahm2025"
-  tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
-    - "mcp__code_index.search_code_advanced"
   verification:
-    - "decision-complete plan with owners, tests, risks, and deferred choices"
+    - "decision-ready handoff with owners, checks, risks, and deferred choices"
 ---
 
 # Plan Grill
 
-Resolve discoverable facts before asking questions. Start from the source-order
-owner, nearest package/docs guidance, current implementation, and active tests.
+This is the ARIA evidence wrapper around the selected generic grilling or
+planning capability. It does not own general interview, option-analysis, or
+consensus behavior.
 
-For each material ambiguity:
+1. Localize the exact owner and current implementation evidence before
+   grilling the plan.
+2. Apply the generic capability selected by root guidance: use
+   `deep-interview` for unresolved requirements and `ralplan` for reviewed
+   implementation consensus.
+3. For evidence-sensitive claims, follow the direct-source checklist. Keep current
+   evidence, proposed changes, assumptions, and deferred work distinct.
+4. Return a decision-ready handoff naming the goal, owner paths, boundaries,
+   verification, risks, rollback point, and deferred choices.
 
-1. State the decision and recommended default.
-2. Explain the practical tradeoff and failure mode.
-3. Test one normal case, one boundary case, and one failure case.
-4. Separate current, planned, scratch, and historical evidence.
-
-For theory-rich work, read `references/plan-mode-theory-patterns.md`, name the
-source ladder and claim strength, and use external API or literature evidence
-only where it changes the decision. Durable outcomes go directly to the owner
-named by root guidance, never to a parallel context or decision file.
-
-Complete with a decision-ready plan naming goal, interfaces, owners, sequence,
-verification, assumptions, rollback point, and deferred decisions.
+Write durable outcomes only to the owner selected by root guidance.

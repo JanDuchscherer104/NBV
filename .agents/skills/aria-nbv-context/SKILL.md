@@ -1,73 +1,37 @@
 ---
 name: aria-nbv-context
-description: Locate ARIA-NBV files, symbols, docs, and owners.
+description: Localize ARIA-NBV sources and owners.
 metadata:
   mode: router
   not_when:
-    - "exact file and owner are already known"
-    - "authority-sensitive claim review is required"
-    - "a concrete failure command or traceback owns the task"
+    - "the exact owner and target are already known"
   handoff_to:
-    - "aria-docs for direct-source claim review"
-    - "specialized diagnostic capability for concrete failures"
-    - "nearest AGENTS.md or narrow skill after localization"
+    - "aria-docs for documentation authoring after localization"
+    - "plan-grill for high-impact decisions after localization"
   evidence_required:
-    - "localized owning files or source family"
-    - "nearest applicable AGENTS.md"
-    - "targeted rg, outline, contract, or directory-tree evidence"
+    - "owning path plus Graphify or exact-source localization evidence"
   applies_to:
     - "**"
   triggers:
-    - "locate files"
-    - "cross-surface context"
-    - "where is this implemented"
-    - "source family"
+    - "locate an ARIA-NBV file, symbol, owner, or source family"
   must_read:
     - "AGENTS.md"
-    - ".agents/references/source_order.md"
   canonical_sources:
-    - "AGENTS.md"
-    - ".agents/references/source_order.md#role-split"
+    - "AGENTS.md#graphify"
     - ".agents/references/graphify_contract.md"
-  literature_refs:
-    - "docs/contents/literature/index.qmd"
-    - "docs/literature/sources.jsonl"
-    - "VIN-NBV-frahm2025"
-    - "docs/contents/literature/rl_planning.qmd"
-  tool_refs:
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__code_index.get_symbol_body"
   verification:
-    - "targeted exact-source command from this skill"
+    - "the localized owner is confirmed in exact source"
 ---
 
-# Aria NBV Context
+# ARIA-NBV Context
 
-Use this skill as the local discovery layer. It should identify the smallest
-relevant set of files, then hand off to a narrower implementation, docs,
-exact-source, or diagnostic workflow.
+1. Run `make graphify-freshness`. When fresh, start with native `graphify
+   query`, then use `path`, `explain`, or `tree` only as needed.
+2. Confirm the result in exact tracked source. If Graphify is stale or
+   insufficient, use targeted `rg` and narrow reads directly.
+3. Open the nearest `AGENTS.md` only after the surface is localized.
+4. Hand off with the owning path, the evidence that selected it, the relevant
+   caller or consumer, and the narrow next workflow or verification command.
 
-## Workflow
-
-1. Read `AGENTS.md` and `.agents/references/source_order.md`.
-2. Use fresh Graphify navigation when available; otherwise continue directly
-   with exact source owners and targeted `rg`.
-3. Use source-specific inspection before broad raw reads:
-   - Quarto: `rg -n '^#{1,6} ' docs -g '*.qmd'`
-   - Typst: `rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'`
-   - Literature: direct `rg -n <term> docs/literature/tex-src docs/references.bib`
-   - Code/contracts: `make context-contracts`
-   - Trees: `make context-dir-tree` or `make context-qmd-tree`
-4. Open the nearest nested `AGENTS.md` once the surface is known.
-5. Use targeted `rg` inside the narrowed file set.
-
-## Zoom-Out Output
-
-When asked to map a surface, return:
-
-- domain term and glossary anchor when one exists
-- owning package/module and nearest `AGENTS.md`
-- main callers and data contracts
-- relevant tests or render checks
-- docs/memory surfaces likely to need updates
-- open risks or missing context
+Stop once the smallest sufficient source set and owner are confirmed. Graphify
+is navigation evidence; exact source owns the result.

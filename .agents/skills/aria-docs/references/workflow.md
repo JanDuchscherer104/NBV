@@ -1,49 +1,17 @@
 # ARIA Docs Workflow
 
-Use one branch and read only the files it names. Start from the target document
-and its imports; use native Graphify traversal or targeted exact-source search
-to localize large sources before opening them.
+1. Read `docs/AGENTS.md`, the target entrypoint or page, its imports, and the
+   adjacent source. Use Graphify when fresh; otherwise use targeted `rg` within
+   that owning subtree.
+2. Author in the exact owner. Reuse `docs/typst/shared` for durable terms,
+   symbols, equations, and shared style; do not restate those contracts here.
+3. Preserve reproducible figure or table source beside, or traceably linked to,
+   the document asset.
+4. Run the narrowest owning check and render from the command contract in
+   `docs/AGENTS.md`.
+5. Inspect affected rendered pages, not only compiler output. Check legibility,
+   clipping, math and reference attachment, captions, contrast, and layout.
+6. Iterate until the source and rendered result agree, or report the exact
+   environment blocker.
 
-## Quarto
-
-Read `docs/AGENTS.md`, the target page, and its navigation owner. Use
-`rg -n '^#{1,6} ' docs -g '*.qmd'` to localize broad pages when Graphify is not
-fresh. Run
-`make qmd-frontmatter-check`; render the touched page or site when layout,
-cross-references, execution, or navigation changes.
-
-## Typst, Notation, And Glossary
-
-Read `references/typst.md`. Inspect the target entrypoint and use
-`rg -n '^\s*(=+ |#include\s+")' docs/typst -g '*.typ'` when exact heading or
-include localization is needed.
-
-Inspect the target imports and `docs/typst/shared` before changing recurring
-terms, symbols, equations, or document-wide style.
-
-## Thesis Or Proposal Prose
-
-Read `references/thesis-writing.md`, the target section, and adjacent sections.
-Use `.agents/references/direct_source_claim_checklist.md` for advisor-facing
-claims and `.agents/references/thesis_code_links.md` for implementation links.
-
-## Citations And Scientific Figures
-
-Resolve bibliography keys in `docs/references.bib`. For an advisor-facing
-claim, inspect an authoritative TeX section, local PDF page, or upstream source
-and retain an exact locator. Follow
-`.agents/references/direct_source_claim_checklist.md`, calibrate wording, and
-record touched-surface render evidence. Figures retain reproducible source plus
-units, coordinate frame, fixed view/projection, export settings, and provenance.
-Read `references/visuals.md` for figures, tables, captions, and slides.
-
-## Mermaid
-
-Read `references/mermaid.md`. It routes to the symbol map, style guide,
-templates, linter, and local renderer without loading unrelated Typst guidance.
-
-## Completion
-
-Run the narrowest owning compile or render. For non-trivial prose, equations,
-figures, tables, or slides, export the affected pages to PNG and inspect them.
-Report exact commands, outputs, warnings, and any skipped check.
+For Mermaid, follow `mermaid.md` in addition to this workflow.
