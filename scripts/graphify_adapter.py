@@ -467,6 +467,13 @@ def generate(
     ensure_graphify_pin(command, root)
     sources = collect_sources(root)
     source_commit = _source_commit(root)
+    try:
+        current = _read(root)
+        validate(current, root)
+    except (AdapterError, OSError):
+        pass
+    else:
+        source_commit = json.loads(current["manifest.json"])["built_source_commit"]
     if {source.family for source in sources} != set(FAMILIES):
         raise AdapterError(
             "source corpus must contain nonempty code, thesis, and literature"

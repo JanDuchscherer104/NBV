@@ -344,6 +344,48 @@ def test_graph_only_child_keeps_generation_identical_and_fresh(repo: Path) -> No
     assert adapter.is_fresh(repo)
 
 
+def test_non_corpus_commit_preserves_validated_manifest_identity(repo: Path) -> None:
+    artifacts = _generate(repo)
+    adapter._write(artifacts, repo)
+    subprocess.run(["git", "add", "graphify-out"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "graph-only child"], cwd=repo, check=True)
+    _write(repo, "scripts/ignored.py", "BROKEN = False\n")
+    subprocess.run(["git", "add", "scripts/ignored.py"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "non-corpus change"], cwd=repo, check=True)
+
+    assert _generate(repo) == artifacts
+    assert adapter.is_fresh(repo)
+
+
+@pytest.mark.parametrize(
+    ("relative", "addition"),
+    (
+        ("aria_nbv/aria_nbv/model.py", "\n# corpus drift\n"),
+        (".graphify.toml", "\n# config drift\n"),
+        ("scripts/graphify_adapter.py", "\n# adapter drift\n"),
+    ),
+)
+def test_graphify_input_change_requires_new_source_identity(
+    repo: Path, relative: str, addition: str
+) -> None:
+    artifacts = _generate(repo)
+    adapter._write(artifacts, repo)
+    subprocess.run(["git", "add", "graphify-out"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "graph-only child"], cwd=repo, check=True)
+    target = repo / relative
+    target.write_text(target.read_text() + addition, encoding="utf-8")
+    subprocess.run(["git", "add", relative], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "source change"], cwd=repo, check=True)
+    source_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+    ).strip()
+
+    generated = _generate(repo)
+    manifest = json.loads(generated["manifest.json"])
+    assert generated != artifacts
+    assert manifest["built_source_commit"] == source_commit
+
+
 def test_manifest_records_exact_selected_sources(repo: Path) -> None:
     manifest = json.loads(_generate(repo)["manifest.json"])
     assert manifest["sources"] == [
