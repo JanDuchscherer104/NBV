@@ -1,6 +1,6 @@
 ---
 name: agents-db
-description: ARIA-NBV memory/backlog TOML maintenance.
+description: Maintain ARIA-NBV backlog TOMLs.
 metadata:
   mode: maintenance
   not_when:
@@ -8,30 +8,22 @@ metadata:
     - "ordinary source lookup without backlog edits"
     - "tiny cleanup that does not change active debt"
   handoff_to:
-    - "aria-docs for public docs or thesis narrative"
-    - "aria-nbv-context for exact-source discovery"
-    - "external codebase-design capability for behavior-preserving pruning"
+    - "aria-docs for public narrative"
+    - "aria-nbv-context for source discovery"
   evidence_required:
-    - "existing record search before adding duplicates"
-    - "compact context plus stable references for each changed record"
+    - "existing-record search before additions"
+    - "compact context and stable references"
     - "agents-db validation output"
   applies_to:
-    - ".agents/AGENTS_INTERNAL_DB.md"
-    - ".agents/issues.toml"
-    - ".agents/todos.toml"
-    - ".agents/refactors.toml"
-    - ".agents/resolved.toml"
-    - ".agents/memory/README.md"
+    - ".agents/{issues,todos,refactors,resolved}.toml"
+    - ".agents/memory/history/**"
   triggers:
     - "agents DB"
-    - "backlog"
-    - "memory consolidation"
-    - "issue triage"
-    - "resolved work"
+    - "backlog or resolved-work maintenance"
+    - "debrief routing"
   must_read:
     - ".agents/AGENTS_INTERNAL_DB.md"
     - ".agents/skills/agents-db/references/schema.md"
-    - ".agents/skills/agents-db/references/provenance.md"
   canonical_sources:
     - ".agents/AGENTS_INTERNAL_DB.md"
     - ".agents/skills/agents-db/references/schema.md"
@@ -40,61 +32,28 @@ metadata:
     - ".agents/todos.toml"
     - ".agents/refactors.toml"
     - ".agents/resolved.toml"
-  literature_refs:
-    - "docs/contents/thesis/questions.qmd"
   verification:
     - "make agents-db AGENTS_ARGS='validate'"
     - "make agents-db"
-    - "make check-agent-memory when memory or guidance changed"
 ---
 
-# AGENTS DB
-
-Use this skill when work depends on the internal agent-memory surfaces under
-`.agents/`, active backlog ranking, proposal/review requirement consolidation,
-or durable maintenance debt capture.
-
-## Read First
-
-1. `.agents/AGENTS_INTERNAL_DB.md`
-2. `.agents/skills/agents-db/references/schema.md`
-3. `.agents/skills/agents-db/references/provenance.md`
-4. `.agents/skills/agents-db/references/modes.md` for `triage`,
-   `to-issues`, or `to-prd` style work
+# Agents DB
 
 ## Workflow
 
-1. Run or inspect `make agents-db` to understand active ranking.
-2. Prefer amending existing records over creating duplicates.
-3. Add or amend a record only when the work materially changes the repo's
-   maintenance picture.
-4. Keep records compact but auditable with `context` plus stable `references`.
-5. Route extracted requirements to the smallest owner: `.agents/*.toml` for
-   active work, thesis/package/reference owners for durable current facts, and
-   dated history debriefs for episodic task records.
-6. Resolve or retire completed records into `.agents/resolved.toml`; do not
-   delete records outright.
+1. Inspect `make agents-db` and search for an existing record.
+2. Amend instead of duplicating; keep `context` and `references` auditable.
+3. Use `references/modes.md` for `triage`, `to-issues`, or `to-prd` work.
+4. Route active work to the matching backlog TOML and episodic narrative to a
+   dated debrief under `.agents/memory/history/`.
+5. Resolve completed records into `.agents/resolved.toml`; never delete their
+   history.
 
 ## Commands
 
 - `make agents-db`
 - `make agents-db AGENTS_ARGS='validate'`
-- `make agents-db AGENTS_ARGS='resolve issue issue-XXXX --note "..."'`
-- `make agents-db AGENTS_ARGS='resolve todo todo-XXXX --note "..."'`
-- `make agents-db AGENTS_ARGS='resolve refactor refactor-XXXX --note "..."'`
+- `make agents-db AGENTS_ARGS='resolve <issue|todo|refactor> <ID> --note "..."'`
 
-## Rules
-
-- Use vertical slices for concrete follow-up work.
-- Keep `.agents/*.toml` as the local source of truth unless the user explicitly
-  asks to publish GitHub issues.
-- Do not churn the DB for tiny local cleanup that does not change active debt.
-- For broad or literature-backed additions, include source-backed evidence
-  before changing records.
-
-## Verification
-
-- `make agents-db AGENTS_ARGS='validate'`
-- `make agents-db`
-- `make check-agent-memory` when skills, debriefs, guidance, or source owners
-  changed
+Do not churn the DB for cleanup that does not change active debt. Validate the
+DB after every lifecycle or schema-facing edit.

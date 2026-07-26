@@ -1,7 +1,6 @@
 # Slurm Job Patterns
 
-Use this after `slurm-partitions.md` when shaping allocations or batch scripts.
-Run live one-shot checks before choosing final resources.
+Run live one-shot checks before shaping allocations or batch scripts.
 
 ## Interactive Smoke
 
@@ -31,8 +30,7 @@ debug allocation.
 - On multi-node jobs, `--gres=gpu:<N>` is GPUs per node, not total GPUs.
 - Match `--ntasks-per-node` to the launcher. Torchrun commonly uses one
   container/process launcher per node and `--nproc_per_node=$SLURM_GPUS_ON_NODE`.
-- Do not assume `--gres=gpu:8` works on every serious partition. Current LRZ H100
-  and HGX A100 nodes expose 4 GPUs per node; DGX A100 and DGX-1 nodes expose 8.
+- Derive per-node GPU counts from current `sinfo` output.
 
 ## Containerized Steps
 
@@ -46,13 +44,9 @@ srun --ntasks=1 \
   bash -lc 'cd "$ARIA_REPO" && source .agents/skills/lrz-ai-systems/scripts/lrz-aria-env.sh "$ARIA_DSS" && exec bash'
 ```
 
-## Templates
+## Parameterized Scripts
 
-- CPU preprocessing: `templates/sbatch_cpu_dataset_prep.sh`
-- Single-GPU smoke/cache job: `templates/sbatch_single_gpu_aria.sh`
-- Multi-GPU Torchrun job: `templates/sbatch_multigpu_torchrun_aria.sh`
-
-Use the wrapper scripts for ordinary ARIA runs:
+Use the wrapper scripts after setting current resource parameters:
 
 - `scripts/lrz-sbatch-cpu.sh`
 - `scripts/lrz-sbatch-single-gpu.sh`

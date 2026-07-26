@@ -1,8 +1,6 @@
 # LRZ And Upstream Source Pointers
 
-Last checked: 2026-06-22.
-
-Use these links when refreshing LRZ/Slurm/Pyxis/EFM3D guidance. Local notes are
+Use these links when refreshing LRZ/Slurm/Pyxis guidance. Local notes are
 operator aids; these sources decide current cluster behavior when they conflict.
 
 ## LRZ AI Systems
@@ -21,8 +19,8 @@ operator aids; these sources decide current cluster behavior when they conflict.
 - Multi-node Slurm jobs:
   <https://doku.lrz.de/5-4-slurm-batch-jobs-multi-node-1898714389.html>
 
-Refresh local partition examples after LRZ changes the compute table, time
-limits, GPU counts, QOS rules, or Pyxis examples.
+Check live Slurm output before relying on partition names, limits, GPU counts,
+QOS rules, or examples.
 
 ## Upstream Slurm And Containers
 
@@ -33,17 +31,3 @@ limits, GPU counts, QOS rules, or Pyxis examples.
 
 Use LRZ pages first for LRZ-specific policy. Use upstream Slurm/Pyxis pages for
 syntax and behavior that LRZ delegates to those tools.
-
-## EFM3D
-
-- EFM3D repository: <https://github.com/facebookresearch/efm3d>
-- EFM3D install guide:
-  <https://github.com/facebookresearch/efm3d/blob/main/INSTALL.md>
-- EFM3D data guide:
-  <https://github.com/facebookresearch/efm3d/blob/main/data/README.md>
-- EFM3D Slurm example:
-  <https://github.com/facebookresearch/efm3d/blob/main/sbatch_run.sh>
-
-Treat the upstream EFM3D Slurm script as workload evidence, not an LRZ-ready
-template. Reconcile its node/GPU assumptions with current LRZ partitions before
-copying any directive.
