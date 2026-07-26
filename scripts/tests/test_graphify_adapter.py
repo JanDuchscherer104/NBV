@@ -183,6 +183,43 @@ def test_collection_selection_and_source_attributes(repo: Path) -> None:
     assert all(len(source.sha256) == 64 for source in sources)
 
 
+def test_configured_partition_patterns_control_classification(repo: Path) -> None:
+    config = adapter.load_config(repo)
+    config["partition"]["code"]["patterns"] = ["src/**"]
+    config["partition"]["thesis"]["patterns"] = ["writing/**"]
+    config["partition"]["literature"]["patterns"] = [
+        "docs/literature/sources.jsonl",
+        "papers/**",
+    ]
+    selected = {"paper-a"}
+
+    assert adapter.classify_path("src/model.py", config, selected) == "code"
+    assert adapter.classify_path("writing/main.typ", config, selected) == "thesis"
+    assert (
+        adapter.classify_path("papers/paper-a/main.tex", config, selected)
+        == "literature"
+    )
+    assert adapter.classify_path("aria_nbv/aria_nbv/model.py", config, selected) is None
+    assert adapter.classify_path("src/model.txt", config, selected) is None
+    assert adapter.classify_path("writing/main.tex", config, selected) is None
+    assert (
+        adapter.classify_path("papers/not-selected/main.tex", config, selected) is None
+    )
+
+
+@pytest.mark.parametrize("path", ("/src/model.py", "../src/model.py", "src\\model.py"))
+def test_classification_rejects_noncanonical_paths(repo: Path, path: str) -> None:
+    with pytest.raises(adapter.AdapterError, match="non-canonical source path"):
+        adapter.classify_path(path, adapter.load_config(repo), {"paper-a"})
+
+
+def test_classification_rejects_unknown_source_families(repo: Path) -> None:
+    config = adapter.load_config(repo)
+    config["partition"]["other"] = {"patterns": ["other/**"]}
+    with pytest.raises(adapter.AdapterError, match="unknown source families"):
+        adapter.classify_path("aria_nbv/aria_nbv/model.py", config, {"paper-a"})
+
+
 def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     first = _generate(repo)
     second = _generate(repo)

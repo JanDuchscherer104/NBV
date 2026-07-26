@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import tomllib
+from fnmatch import fnmatchcase
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -108,23 +109,24 @@ def classify_path(
     pure = PurePosixPath(path)
     if pure.is_absolute() or "\\" in path or {"", ".", ".."} & set(pure.parts):
         raise AdapterError(f"non-canonical source path: {path!r}")
-    if tuple(config.get("partition", {})) != FAMILIES:
+    partitions = config.get("partition", {})
+    if tuple(partitions) != FAMILIES:
         raise AdapterError("unknown source families in config")
-    if path.startswith("aria_nbv/aria_nbv/") and pure.suffix == ".py":
-        return "code"
-    active = path.startswith(("docs/typst/thesis/", "docs/typst/shared/"))
-    if active and pure.suffix in {".typ", ".bib"}:
-        return "thesis"
-    if path == _MANIFEST:
-        return "literature"
-    parts = pure.parts
-    if (
-        path.startswith("docs/literature/tex-src/")
-        and pure.suffix == ".tex"
-        and len(parts) >= 5
-        and parts[3] in selected
-    ):
-        return "literature"
+    for family in FAMILIES:
+        if not any(
+            fnmatchcase(path, pattern) for pattern in partitions[family]["patterns"]
+        ):
+            continue
+        if family == "code" and pure.suffix == ".py":
+            return family
+        if family == "thesis" and pure.suffix in {".typ", ".bib"}:
+            return family
+        if family == "literature" and (
+            path == _MANIFEST
+            or pure.suffix == ".tex"
+            and any(part in selected for part in pure.parts[:-1])
+        ):
+            return family
     return None
 
 
