@@ -111,20 +111,18 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Graphify is source-derived navigation; exact code, active Typst sources,
-bibliography entries, and external papers remain authoritative. The adapter
-admits three explicit source families from `.graphify.toml` and converts only
-explicit Typst, TeX, and Bib structure into input for the pinned upstream AST.
+Graphify is a local source-derived navigation index; exact code, active Typst
+sources, bibliography entries, and external papers remain authoritative. The
+small adapter selects three source families from `.graphify.toml` and converts
+only Typst, TeX, and Bib constructs that upstream Graphify cannot parse.
 
 Rules:
-- For architecture, codebase, file-relationship, or project-content questions,
-  run `make graphify-freshness`, then use native `graphify query`, `path`,
-  `explain`, or `tree`. Fall back to exact sources when the graph is stale or
-  insufficient.
+- Run `make graphify-freshness` before navigation. Use `graphify tree --root .`
+  for hierarchy, `explain` for a known symbol, `affected` for callers and
+  impact, `path` for two known entities, and `query` for broad discovery.
+  Confirm consequential claims in exact sources.
 - Refresh only through `make graphify-refresh` or
   `python scripts/graphify_adapter.py sync`; direct root `graphify update .` is
   not canonical because extraction uses the adapter's temporary corpus.
-- Native Graphify owns graph schema, reports, traversal, clustering, merge, and
-  on-demand ignored HTML. No wiki is maintained.
-- A corpus-changing source commit `S` requires an immediate graph-only child
-  `G`; `make graphify-ci` validates the final tree and authoring history.
+- Native Graphify owns graph schema, traversal, clustering, and on-demand
+  ignored HTML. The graph, reports, and wiki exports are generated local state.

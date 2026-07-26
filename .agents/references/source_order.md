@@ -38,8 +38,7 @@ Use this reference when a task needs current project truth or sources disagree.
   supersede direct behavior, empirical, literature, or narrative owners.
 - Source-derived navigation: Graphify when fresh; exact owners, targeted `rg`,
   contract inspection, document outlines/includes, and bounded directory trees
-  remain the no-tool fallback. Corpus-changing source commits require the
-  immediate graph-only child enforced by `make graphify-ci`.
+  remain the fallback. Graphify output is reproducible local state, not truth.
 - Operator aids and long conventions: `.agents/references/`.
 - Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
   read-first, evidence, and verification loops only. They must point to

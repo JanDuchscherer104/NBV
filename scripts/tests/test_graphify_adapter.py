@@ -13,11 +13,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 import graphify_adapter as adapter  # noqa: E402
 
-CONFIG = """schema_version = "aria-graph-v2"
-graphify_package = "graphifyy"
-graphify_version = "0.9.22"
-graphify_upstream_commit = "abff1b1ca4052fcf9d955c5f6a034088723f4536"
-canonical_artifacts = ["graphify-out/graph.json", "graphify-out/manifest.json", "graphify-out/GRAPH_REPORT.md"]
+CONFIG = """graphify_version = "0.9.26"
+graphify_upstream_commit = "66d8110a534b52df3d660b5fda5aa5461a6b667a"
 
 [partition.code]
 semantic_mode = "structural"
@@ -134,17 +131,14 @@ def test_generate_overrides_upstream_determinism_environment(
     monkeypatch.setattr(
         adapter,
         "_rewrite_graph",
-        lambda graph, mappings, commit, temporary: {
-            "built_at_commit": commit,
-            "directed": False,
-            "graph": {},
+        lambda graph, mappings, temporary: {
+            "edges": [],
             "hyperedges": [],
-            "links": [],
-            "multigraph": False,
+            "input_tokens": 0,
             "nodes": [],
+            "output_tokens": 0,
         },
     )
-    monkeypatch.setattr(adapter, "_report", lambda *args: "report\n")
     monkeypatch.setattr(adapter, "_manifest", lambda *args: {})
     monkeypatch.setattr(adapter, "validate", lambda artifacts, root: None)
 
@@ -157,14 +151,13 @@ def test_generate_overrides_upstream_determinism_environment(
         upstream = Path(invocation[2]) / "graphify-out"
         upstream.mkdir(parents=True, exist_ok=True)
         (upstream / "graph.json").write_text("{}", encoding="utf-8")
-        (upstream / "GRAPH_REPORT.md").write_text("report\n", encoding="utf-8")
         return subprocess.CompletedProcess(invocation, 0, "", "")
 
     monkeypatch.setattr(adapter.subprocess, "run", fake_run)
 
     adapter.generate(repo, ["graphify"])
 
-    assert environments == [expected, expected]
+    assert environments == [expected]
 
 
 def test_collection_selection_and_source_attributes(repo: Path) -> None:
@@ -302,28 +295,23 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     first = _generate(repo)
     second = _generate(repo)
     assert first == second
-    assert set(first) == {"graph.json", "manifest.json", "GRAPH_REPORT.md"}
+    assert set(first) == {"graph.json", "manifest.json"}
     graph = json.loads(first["graph.json"])
     manifest = json.loads(first["manifest.json"])
     assert set(graph) == adapter.UPSTREAM_KEYS
-    assert "edges" not in graph
+    assert "links" not in graph
     assert manifest["node_count"] == len(graph["nodes"])
-    assert manifest["link_count"] == len(graph["links"])
-    assert manifest["graphify_version"] == "0.9.22"
-    assert manifest["adapter_schema_version"] == 1
+    assert manifest["edge_count"] == len(graph["edges"])
+    assert manifest["graphify_version"] == "0.9.26"
+    assert manifest["adapter_schema_version"] == 2
     assert manifest["adapter_sha256"] == adapter._adapter_digest(repo)
-    assert graph["built_at_commit"] == manifest["built_source_commit"]
-    assert (
-        f"- Built from commit: `{manifest['built_source_commit']}`".encode()
-        in first["GRAPH_REPORT.md"]
-    )
     assert set(manifest) == {
         "adapter_sha256",
         "adapter_schema_version",
         "built_source_commit",
         "config_sha256",
         "graphify_version",
-        "link_count",
+        "edge_count",
         "node_count",
         "source_digest",
         "sources",
@@ -331,8 +319,8 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     assert [node["id"] for node in graph["nodes"]] == sorted(
         node["id"] for node in graph["nodes"]
     )
-    assert graph["links"] == sorted(
-        graph["links"],
+    assert graph["edges"] == sorted(
+        graph["edges"],
         key=lambda link: (link["source"], link["target"], link["relation"]),
     )
     model = next(node for node in graph["nodes"] if node["label"] == "Model")
@@ -352,7 +340,7 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     adapter.validate(first, root=repo)
 
 
-def test_real_generation_covers_three_families_and_normalizes_report(
+def test_real_generation_covers_three_families(
     repo: Path,
 ) -> None:
     artifacts = _generate(repo)
@@ -364,30 +352,20 @@ def test_real_generation_covers_three_families_and_normalizes_report(
     assert {family_by_path[node["source_file"]] for node in graph["nodes"]} == set(
         adapter.FAMILIES
     )
-    report = artifacts["GRAPH_REPORT.md"]
-    assert report.startswith(b"# Graph Report - ARIA-NBV\n\n## Corpus Check\n")
-    assert b"cluster-only mode" in report
-    assert str(repo).encode() not in report
-    assert b"aria_nbv/model.py" not in report
-    assert b"docs/typst/thesis/main.py" not in report
-    assert b"docs/literature/tex-src/paper-a/main.py" not in report
-    assert b"## Graph Freshness\n" in report
-    assert b"## Suggested Questions\n" in report
-
     broken_graph = dict(graph)
     broken_graph["nodes"] = [
         node
         for node in graph["nodes"]
         if family_by_path[node["source_file"]] != "literature"
     ]
-    broken_graph["links"] = [
+    broken_graph["edges"] = [
         link
-        for link in graph["links"]
+        for link in graph["edges"]
         if family_by_path[link["source_file"]] != "literature"
     ]
     broken_manifest = dict(manifest)
     broken_manifest["node_count"] = len(broken_graph["nodes"])
-    broken_manifest["link_count"] = len(broken_graph["links"])
+    broken_manifest["edge_count"] = len(broken_graph["edges"])
     broken = dict(artifacts)
     broken["graph.json"] = adapter._json_bytes(broken_graph)
     broken["manifest.json"] = adapter._json_bytes(broken_manifest)
@@ -425,7 +403,7 @@ def test_freshness_changes_for_each_family_and_config(repo: Path) -> None:
         target.write_text(original, encoding="utf-8")
         assert adapter.is_fresh(repo)
     config = repo / ".graphify.toml"
-    config.write_text(config.read_text() + '\n[history]\nactivation_commit = "abc"\n')
+    config.write_text(config.read_text() + "\n# policy drift\n")
     assert not adapter.is_fresh(repo)
 
 
@@ -441,37 +419,6 @@ def test_implementation_digest_drift_is_stale(repo: Path, name: str) -> None:
         adapter.validate(artifacts, repo)
 
 
-def test_graph_only_child_keeps_generation_identical_and_fresh(repo: Path) -> None:
-    source_commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
-    ).strip()
-    artifacts = _generate(repo)
-    adapter._write(artifacts, repo)
-    subprocess.run(["git", "add", "graphify-out"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "graph-only child"], cwd=repo, check=True)
-    assert (
-        subprocess.check_output(
-            ["git", "rev-parse", "HEAD^"], cwd=repo, text=True
-        ).strip()
-        == source_commit
-    )
-    assert _generate(repo) == artifacts
-    assert adapter.is_fresh(repo)
-
-
-def test_non_corpus_commit_preserves_validated_manifest_identity(repo: Path) -> None:
-    artifacts = _generate(repo)
-    adapter._write(artifacts, repo)
-    subprocess.run(["git", "add", "graphify-out"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "graph-only child"], cwd=repo, check=True)
-    _write(repo, "scripts/ignored.py", "BROKEN = False\n")
-    subprocess.run(["git", "add", "scripts/ignored.py"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "non-corpus change"], cwd=repo, check=True)
-
-    assert _generate(repo) == artifacts
-    assert adapter.is_fresh(repo)
-
-
 @pytest.mark.parametrize(
     ("relative", "addition"),
     (
@@ -485,8 +432,6 @@ def test_graphify_input_change_requires_new_source_identity(
 ) -> None:
     artifacts = _generate(repo)
     adapter._write(artifacts, repo)
-    subprocess.run(["git", "add", "graphify-out"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-qm", "graph-only child"], cwd=repo, check=True)
     target = repo / relative
     target.write_text(target.read_text() + addition, encoding="utf-8")
     subprocess.run(["git", "add", relative], cwd=repo, check=True)
@@ -523,12 +468,9 @@ def test_unmapped_and_zero_family_fail_closed(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     graph = {
-        "built_at_commit": "x",
-        "directed": False,
-        "graph": {},
+        "edges": [],
         "hyperedges": [],
-        "links": [],
-        "multigraph": False,
+        "input_tokens": 0,
         "nodes": [
             {
                 "id": "x",
@@ -537,9 +479,10 @@ def test_unmapped_and_zero_family_fail_closed(
                 "source_location": "L1",
             }
         ],
+        "output_tokens": 0,
     }
     with pytest.raises(adapter.AdapterError, match="unmapped upstream source"):
-        adapter._rewrite_graph(graph, {}, "0" * 40, Path("/tmp/materialized"))
+        adapter._rewrite_graph(graph, {}, Path("/tmp/materialized"))
     monkeypatch.setattr(
         adapter,
         "collect_sources",
@@ -582,7 +525,7 @@ def test_pin_and_command_are_public(
     config = repo / ".graphify.toml"
     config.write_text(
         config.read_text().replace(
-            'graphify_version = "0.9.22"', 'graphify_version = "0.0.0"'
+            'graphify_version = "0.9.26"', 'graphify_version = "0.0.0"'
         )
     )
     with pytest.raises(adapter.AdapterError, match="does not match pin 0.0.0"):

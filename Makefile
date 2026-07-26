@@ -2,7 +2,7 @@
 .PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test api-docs-self-test
 .PHONY: context-qmd-tree context-contracts context-dir-tree uml qmd-frontmatter-check
-.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills graphify-setup install-git-hooks install-hooks
+.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -152,24 +152,17 @@ wp7-integration-self-test: _check_python ## 🧭 Run negative probes for final W
 wp7-integration-check: wp7-integration-self-test _check_python ## 🧭 Prove final skill, LOC, prompt, graph, agent, and wiki budgets
 	@$(PYTHON_INTERPRETER) scripts/scaffold/check_wp7_integration.py
 
-graphify-refresh: _check_python ## 🕸️ Explicitly synchronize all canonical Graphify partitions
+graphify-refresh: _check_python ## 🕸️ Refresh the local Graphify navigation index
 	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py sync
 
-graphify-diff-check: _check_python ## 🕸️ Prove deterministic canonical Graphify regeneration
-	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py sync --check
-
-graphify-freshness: _check_python ## 🕸️ Validate partition and bridge freshness
+graphify-freshness: _check_python ## 🕸️ Validate corpus and bridge freshness
 	@$(PYTHON_INTERPRETER) scripts/graphify_adapter.py check
 
-graphify-history: _check_python ## 🕸️ Validate final-tree Graphify synchronization
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_history.py --activation-range --final-tree
-
-graphify-integration-self-test: _check_python ## 🕸️ Verify adapter, bridge, history, and hook dispatch
+graphify-integration-self-test: _check_python ## 🕸️ Verify adapter, bridge, retrieval, and hook dispatch
 	@$(PYTHON_INTERPRETER) -m pytest -q scripts/tests/test_graphify_adapter.py scripts/tests/test_graphify_bridge.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_history.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-integration-self-test graphify-freshness graphify-history graphify-diff-check ## 🕸️ Run pinned canonical Graphify gates
+graphify-ci: graphify-integration-self-test graphify-freshness ## 🕸️ Run the pinned Graphify integration gates
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -184,12 +177,7 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude Code activation
 	@scripts/sync_claude_skills.sh
 
-graphify-setup: _check_python ## 🕸️ Configure the pinned upstream Graphify merge driver
-	@GRAPHIFY_COMMAND="$$(PYTHONPATH=scripts $(PYTHON_INTERPRETER) -c 'import shlex; from graphify_adapter import ensure_graphify_pin, graphify_command; command = graphify_command(); ensure_graphify_pin(command); print(shlex.join(command))')"; \
-	git config merge.graphify.name "ARIA-NBV canonical Graphify merge"; \
-	git config merge.graphify.driver "$$GRAPHIFY_COMMAND merge-driver %O %A %B"
-
-install-git-hooks: graphify-setup ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/
+install-git-hooks: ## 🪝 Copy repository hooks into the current worktree
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
 		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
@@ -199,8 +187,8 @@ install-git-hooks: graphify-setup ## 🪝 Symlink scripts/git_hooks/* into .git/
 		[ -f "$$hook" ] || continue; \
 		name=$$(basename "$$hook"); \
 		target="$$HOOK_DIR/$$name"; \
-		ln -sf "$(CURDIR)/$$hook" "$$target" && \
-			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
+		cp "$$hook" "$$target" && chmod +x "$$target" && \
+			echo "$(GREEN)installed $$target$(NC)"; \
 	done
 
 install-hooks: install-git-hooks ## 🪝 Activate portable Claude, Codex, Gemini, and git hooks

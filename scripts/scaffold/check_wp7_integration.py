@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the final WP7 scaffold counts and tracked-output budgets."""
+"""Validate the final WP7 scaffold counts and generated-output policy."""
 
 from __future__ import annotations
 
@@ -17,12 +17,6 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE = ROOT / ".agents/baselines/scaffold_wp0_baseline.json"
 WP6_SKILLS = ROOT / ".agents/baselines/scaffold_wp6_skill_inventory.json"
 MATT_MANIFEST = ROOT / ".agents/references/mattpocock_skills_manifest.toml"
-CANONICAL_GRAPH = (
-    ROOT / "graphify-out/graph.json",
-    ROOT / "graphify-out/manifest.json",
-    ROOT / "graphify-out/GRAPH_REPORT.md",
-)
-MAX_GRAPH_BYTES = 35 * 1024 * 1024
 BASELINE_COMMIT = "57457ec31e0d3b56da7cb6ebdbb9fde6166de434"
 OUTLINE_SCRIPT_NAMES = {
     "nbv_qmd_outline.py",
@@ -254,8 +248,9 @@ def measure() -> dict[str, object]:
         "declared_integrated_description_bytes": matt["budget"][
             "integrated_description_bytes"
         ],
-        "canonical_graph_bytes": sum(path.stat().st_size for path in CANONICAL_GRAPH),
-        "maximum_canonical_graph_bytes": MAX_GRAPH_BYTES,
+        "tracked_graphify_output": [
+            path for path in tracked if path.startswith("graphify-out/")
+        ],
         "tracked_generated_codex_agents": [
             path for path in tracked if path.startswith(".codex/agents/")
         ],
@@ -278,8 +273,6 @@ def validate(metrics: dict[str, object]) -> list[str]:
     active_loc = cast(int, metrics["active_scaffold_source_loc"])
     model_visible_bytes = cast(int, metrics["model_visible_description_bytes"])
     maximum_description_bytes = cast(int, metrics["maximum_description_bytes"])
-    canonical_graph_bytes = cast(int, metrics["canonical_graph_bytes"])
-    maximum_canonical_graph_bytes = cast(int, metrics["maximum_canonical_graph_bytes"])
     if metrics["baseline_commit"] != BASELINE_COMMIT:
         errors.append(f"WP0 baseline commit must be exactly {BASELINE_COMMIT}")
     if metrics["baseline_skill_count"] != 21:
@@ -355,8 +348,8 @@ def validate(metrics: dict[str, object]) -> list[str]:
         errors.append("integrated description arithmetic differs from the manifest")
     if model_visible_bytes > maximum_description_bytes:
         errors.append("model-visible skill descriptions exceed the 40 percent budget")
-    if canonical_graph_bytes > maximum_canonical_graph_bytes:
-        errors.append("canonical Graphify output exceeds 35 MB")
+    if metrics["tracked_graphify_output"]:
+        errors.append("generated Graphify output must not be tracked")
     if metrics["tracked_generated_codex_agents"]:
         errors.append("generated .codex/agents files must not be tracked")
     if metrics["tracked_graphify_wiki"]:
@@ -381,9 +374,7 @@ def main() -> int:
         f"{metrics['matt_model_visible_description_bytes']}="
         f"{metrics['model_visible_description_bytes']}"
         f"<={metrics['maximum_description_bytes']}, "
-        f"graph_bytes={metrics['canonical_graph_bytes']}"
-        f"<={metrics['maximum_canonical_graph_bytes']}, "
-        "tracked_agents=0, tracked_wiki=0"
+        "tracked_graph=0, tracked_agents=0, tracked_wiki=0"
     )
     return 0
 

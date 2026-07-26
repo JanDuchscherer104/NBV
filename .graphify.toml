@@ -1,8 +1,5 @@
-graphify_version = "0.9.22"
-graphify_upstream_commit = "abff1b1ca4052fcf9d955c5f6a034088723f4536"
-
-[history]
-activation_commit = "4f82731de1e84d27ef2f6378a098551080aff8b7"
+graphify_version = "0.9.26"
+graphify_upstream_commit = "66d8110a534b52df3d660b5fda5aa5461a6b667a"
 
 [partition.code]
 patterns = ["aria_nbv/aria_nbv/**"]

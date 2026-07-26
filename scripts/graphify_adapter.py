@@ -23,10 +23,8 @@ from graphify_bridge import materialize
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".graphify.toml"
 FAMILIES = ("code", "thesis", "literature")
-UPSTREAM_KEYS = frozenset(
-    "built_at_commit directed graph hyperedges links multigraph nodes".split()  # noqa: SIM905
-)
-_ARTIFACTS = ("graph.json", "manifest.json", "GRAPH_REPORT.md")
+UPSTREAM_KEYS = frozenset("edges hyperedges input_tokens nodes output_tokens".split())
+_ARTIFACTS = ("graph.json", "manifest.json")
 IMPLEMENTATION = ("scripts/graphify_adapter.py", "scripts/graphify_bridge.py")
 _BRIDGE_SUFFIXES = {".typ", ".tex", ".bib"}
 _LOCATION = re.compile(r"^L(\d+)(?:-L?(\d+))?$")
@@ -378,7 +376,6 @@ def _mapped_location(location: Any, source_map: LineMap) -> tuple[str, str]:
 def _rewrite_graph(
     graph: Mapping[str, Any],
     mappings: Mappings,
-    source_commit: str,
     temporary: Path | None = None,
 ) -> dict[str, Any]:
     if set(graph) != UPSTREAM_KEYS:
@@ -390,15 +387,14 @@ def _rewrite_graph(
         for key in (output.relative_to(temporary).as_posix(), str(output))
     }
     incident: dict[Any, list[tuple[str, str]]] = {}
-    for link in graph.get("links", []):
+    for link in graph.get("edges", []):
         source_file = link.get("source_file")
         source_location = link.get("source_location")
         if source_file in lookup and isinstance(source_location, str):
             for endpoint in (link.get("source"), link.get("target")):
                 incident.setdefault(endpoint, []).append((source_file, source_location))
     rewritten = dict(graph)
-    rewritten["built_at_commit"] = source_commit
-    for collection in ("nodes", "links"):
+    for collection in ("nodes", "edges"):
         records = graph.get(collection)
         if not isinstance(records, list):
             raise AdapterError(f"upstream {collection} must be a list")
@@ -428,8 +424,8 @@ def _rewrite_graph(
             output_records.append(record)
         rewritten[collection] = output_records
     rewritten["nodes"] = sorted(rewritten["nodes"], key=lambda node: str(node["id"]))
-    rewritten["links"] = sorted(
-        rewritten["links"],
+    rewritten["edges"] = sorted(
+        rewritten["edges"],
         key=lambda link: (
             str(link["source"]),
             str(link["target"]),
@@ -437,41 +433,6 @@ def _rewrite_graph(
         ),
     )
     return rewritten
-
-
-def _report(
-    report: str,
-    mappings: Mappings,
-    temporary: Path,
-    source_commit: str,
-) -> str:
-    if not report:
-        raise AdapterError("upstream report is empty")
-    _, separator, remainder = report.partition("\n")
-    body = "# Graph Report - ARIA-NBV\n" + (remainder if separator else "")
-    body, count = re.subn(
-        r"(?m)^- Built from commit: `[^`]+`$",
-        f"- Built from commit: `{source_commit}`",
-        body,
-        count=1,
-    )
-    if count != 1:
-        raise AdapterError("upstream report lacks built source commit")
-    replacements: dict[str, str] = {}
-    for output, source_map in mappings.items():
-        authoritative = next(iter(source_map.values()))[0]
-        replacements[str(output)] = authoritative
-        replacements[output.relative_to(temporary).as_posix()] = authoritative
-    if replacements:
-        pattern = re.compile(
-            "|".join(
-                re.escape(path) for path in sorted(replacements, key=len, reverse=True)
-            )
-        )
-        body = pattern.sub(lambda match: replacements[match.group()], body)
-    if str(temporary) in body:
-        raise AdapterError("temporary path remains in upstream report")
-    return body
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -482,24 +443,10 @@ def _json_bytes(value: Any) -> bytes:
 
 def _source_commit(root: Path) -> str:
     try:
-        revision = subprocess.check_output(
-            ["git", "rev-list", "--parents", "-n", "1", "HEAD"],
-            cwd=root,
-            text=True,
-        ).split()
-        if len(revision) == 2:
-            changed = set(
-                subprocess.check_output(
-                    ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
-                    cwd=root,
-                    text=True,
-                ).splitlines()
-            )
-            canonical = {f"graphify-out/{name}" for name in _ARTIFACTS}
-            if changed and changed <= canonical:
-                return revision[1]
-        return revision[0]
-    except (OSError, subprocess.CalledProcessError, IndexError) as exc:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
         raise AdapterError(f"cannot resolve source commit: {exc}") from exc
 
 
@@ -530,11 +477,11 @@ def _manifest(
     config = load_config(root)
     return {
         "adapter_sha256": _adapter_digest(root),
-        "adapter_schema_version": 1,
+        "adapter_schema_version": 2,
         "built_source_commit": source_commit,
         "config_sha256": hashlib.sha256((root / CONFIG.name).read_bytes()).hexdigest(),
         "graphify_version": config["graphify_version"],
-        "link_count": len(graph["links"]),
+        "edge_count": len(graph["edges"]),
         "node_count": len(graph["nodes"]),
         "source_digest": source_digest(sources),
         "sources": [
@@ -552,13 +499,6 @@ def generate(
     ensure_graphify_pin(command, root)
     sources = collect_sources(root)
     source_commit = _source_commit(root)
-    try:
-        current = _read(root)
-        validate(current, root)
-    except (AdapterError, OSError):
-        pass
-    else:
-        source_commit = json.loads(current["manifest.json"])["built_source_commit"]
     if {source.family for source in sources} != set(FAMILIES):
         raise AdapterError(
             "source corpus must contain nonempty code, thesis, and literature"
@@ -566,17 +506,14 @@ def generate(
     with tempfile.TemporaryDirectory(prefix="aria-graphify-") as name:
         temporary = Path(name)
         mappings = materialize_corpus(root, sources, temporary)
-        invocations = (
-            [
-                *command,
-                "extract",
-                str(temporary),
-                "--code-only",
-                "--no-cluster",
-                "--no-gitignore",
-            ],
-            [*command, "cluster-only", str(temporary), "--no-viz", "--no-label"],
-        )
+        invocation = [
+            *command,
+            "extract",
+            str(temporary),
+            "--code-only",
+            "--no-cluster",
+            "--no-gitignore",
+        ]
         environment = os.environ.copy()
         environment.update(
             {
@@ -587,15 +524,14 @@ def generate(
             }
         )
         try:
-            for invocation in invocations:
-                subprocess.run(
-                    invocation,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=root,
-                    env=environment,
-                )
+            subprocess.run(
+                invocation,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=root,
+                env=environment,
+            )
         except (OSError, subprocess.CalledProcessError) as exc:
             detail = exc.stderr.strip() if hasattr(exc, "stderr") else str(exc)
             raise AdapterError(f"Graphify failed: {detail}") from exc
@@ -603,41 +539,32 @@ def generate(
         graph = _rewrite_graph(
             json.loads((upstream / "graph.json").read_text(encoding="utf-8")),
             mappings,
-            source_commit,
             temporary,
-        )
-        report = _report(
-            (upstream / "GRAPH_REPORT.md").read_text(encoding="utf-8"),
-            mappings,
-            temporary,
-            source_commit,
         )
         artifacts = {
             "graph.json": _json_bytes(graph),
             "manifest.json": _json_bytes(
                 _manifest(root, sources, graph, source_commit)
             ),
-            "GRAPH_REPORT.md": report.encode(),
         }
         if any(str(temporary).encode() in value for value in artifacts.values()):
-            raise AdapterError("temporary path remains in canonical artifacts")
+            raise AdapterError("temporary path remains in Graphify output")
     validate(artifacts, root)
     return artifacts
 
 
 def validate(artifacts: Mapping[str, bytes], root: Path = ROOT) -> None:
     if set(artifacts) != set(_ARTIFACTS):
-        raise AdapterError("canonical artifact set must contain exactly three files")
+        raise AdapterError("Graphify output must contain graph and manifest")
     try:
         graph = json.loads(artifacts["graph.json"])
         manifest = json.loads(artifacts["manifest.json"])
-        report = artifacts["GRAPH_REPORT.md"].decode()
-    except (KeyError, UnicodeError, json.JSONDecodeError) as exc:
-        raise AdapterError(f"invalid canonical artifact: {exc}") from exc
+    except (KeyError, json.JSONDecodeError) as exc:
+        raise AdapterError(f"invalid Graphify output: {exc}") from exc
     if (
         set(graph) != UPSTREAM_KEYS
         or not isinstance(graph.get("nodes"), list)
-        or not isinstance(graph.get("links"), list)
+        or not isinstance(graph.get("edges"), list)
     ):
         raise AdapterError("invalid native Graphify schema")
     source_commit = manifest.get("built_source_commit")
@@ -646,21 +573,8 @@ def validate(artifacts: Mapping[str, bytes], root: Path = ROOT) -> None:
     expected = _manifest(root, collect_sources(root), graph, source_commit)
     if manifest != expected:
         raise AdapterError("manifest does not match current source selection")
-    ancestor = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", source_commit, "HEAD"],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if ancestor.returncode != 0:
-        raise AdapterError("built source commit is not a valid ancestor")
-    if graph["built_at_commit"] != source_commit or (
-        f"- Built from commit: `{source_commit}`" not in report
-    ):
-        raise AdapterError("source commit differs across canonical artifacts")
     paths = {source["path"] for source in manifest["sources"]}
-    for record in [*graph["nodes"], *graph["links"]]:
+    for record in [*graph["nodes"], *graph["edges"]]:
         if record.get("source_file") not in paths or not _LOCATION.fullmatch(
             str(record.get("source_location", ""))
         ):
@@ -673,8 +587,6 @@ def validate(artifacts: Mapping[str, bytes], root: Path = ROOT) -> None:
     node_families = {family_by_path[node["source_file"]] for node in graph["nodes"]}
     if not set(FAMILIES) <= node_families:
         raise AdapterError("graph must contain at least one node from each family")
-    if not report.startswith("# Graph Report - ARIA-NBV\n"):
-        raise AdapterError("report heading is not normalized")
 
 
 def _read(root: Path) -> dict[str, bytes]:
@@ -716,23 +628,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="action", required=True)
-    sync = subparsers.add_parser("sync")
-    sync.add_argument("--check", action="store_true")
+    subparsers.add_parser("sync")
     subparsers.add_parser("check")
     args = parser.parse_args(argv)
     try:
         if args.action == "check":
             if not is_fresh(ROOT):
-                raise AdapterError("canonical Graphify artifacts are stale or invalid")
+                raise AdapterError("Graphify output is stale or invalid")
         else:
-            generated = generate(ROOT)
-            if args.check:
-                if generated != _read(ROOT):
-                    raise AdapterError(
-                        "canonical Graphify artifacts differ from generated output"
-                    )
-            else:
-                _write(generated, ROOT)
+            _write(generate(ROOT), ROOT)
     except (AdapterError, OSError) as exc:
         parser.exit(1, f"graphify-adapter: {exc}\n")
     return 0

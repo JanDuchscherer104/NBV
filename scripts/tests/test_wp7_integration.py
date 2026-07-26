@@ -62,7 +62,6 @@ def main() -> None:
     }
     for path in (
         ".graphify.toml",
-        "scripts/check_graphify_history.py",
         "scripts/graphify_adapter.py",
         "scripts/graphify_bridge.py",
         "scripts/git_hooks/post-commit",
@@ -83,7 +82,7 @@ def main() -> None:
         "scripts/tests/test_graphify_integration.py",
     ):
         assert not (wp7.ROOT / path).exists()
-    for prefix in ("scripts/tests/", "graphify-out/", ".omx/"):
+    for prefix in ("scripts/tests/", ".omx/"):
         assert any(
             path.startswith(prefix)
             for path in metrics["active_scaffold_excluded_paths"]
@@ -212,9 +211,9 @@ def main() -> None:
     )
     rejected(
         metrics,
-        "canonical_graph_bytes",
-        metrics["maximum_canonical_graph_bytes"] + 1,
-        "35 MB",
+        "tracked_graphify_output",
+        ["graphify-out/graph.json"],
+        "must not be tracked",
     )
     rejected(
         metrics,
