@@ -64,6 +64,8 @@ Keep the body concise:
 - findings or outputs
 - verification
 - canonical state impact
+- TODO disposition: resolved items or exact agents-DB IDs for actionable TODOs
+  encountered in source or the task conversation
 
 Useful additions when they materially clarify the work:
 - mention staged scope or commit scope when the worktree was dirty

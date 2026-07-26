@@ -105,6 +105,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   entries name the exact package, docs, reference, or backlog owners updated.
 - Debriefs and transcripts preserve supporting context; direct sources own the
   behavior, measurements, validity, and literature claims they summarize.
+- Any actionable TODO discovered in source or the task conversation must be
+  resolved in the current work or linked from the debrief to one agents-DB
+  record; debrief prose is not a second backlog.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except
   the intentionally vendored `.codex/skills/graphify/**` project skill.
