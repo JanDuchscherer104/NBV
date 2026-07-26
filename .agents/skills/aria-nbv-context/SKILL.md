@@ -32,8 +32,8 @@ metadata:
 2. Confirm the result in exact tracked source. If Graphify is stale or
    insufficient, use targeted `rg` and narrow reads directly.
 3. Open the nearest `AGENTS.md` only after the surface is localized.
-4. Hand off with the owning path, the evidence that selected it, the relevant
-   caller or consumer, and the narrow next workflow or verification command.
+4. Hand off with the owning path, why it owns the task, the relevant caller or
+   consumer, the narrow verification command, and any unresolved evidence.
 
 Stop once the smallest sufficient source set and owner are confirmed. Graphify
 is navigation evidence; exact source owns the result.

@@ -26,11 +26,13 @@ metadata:
 
 Use this workflow before non-trivial work.
 
-1. State material assumptions and ambiguity.
+1. State material assumptions, ambiguity, intended behavior, and success criteria.
 2. Inspect the nearest owner before editing.
 3. Choose the smallest request-traceable scope.
 4. Preserve unrelated user and agent changes.
 5. Verify the touched surface and report the evidence.
 
 If verification cannot run, report the exact blocker. Capture durable changes
-only in the actual owning surface named by root `AGENTS.md`.
+only in the actual owning surface named by root `AGENTS.md`. Completion means
+every changed file maps to the request or required verification, and every
+unverified claim or uncaptured durable delta is explicit.

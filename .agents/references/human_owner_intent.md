@@ -15,6 +15,10 @@ narrative, not current technical truth, and not a repeatable workflow.
   interpretation owner, while direct code/tests, immutable empirical artifacts,
   and exact papers remain authoritative for the claims it cites. Keep Quarto
   thesis pages as navigation only.
+- Prefer upstream tool behavior and the smallest maintainable adapter that can
+  preserve ARIA source identity; generated navigation is evidence, not truth.
+- Preserve high-signal prior instructions by assigning each accepted rule or
+  preference one current owner, not by treating transcripts as live guidance.
 - Manage checkpoints and model artifacts through Git LFS when they are intended
   to be versioned.
 - Prefer compact ARIA-native skills over vendoring generic upstream skill sets.
