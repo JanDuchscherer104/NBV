@@ -100,8 +100,8 @@ def test_mapping_determinism_and_supported_constructs(tmp_path: Path) -> None:
     assert "marker_source" in main
     assert "marker_gate" in main
     assert "from .refs import citation_Paper_Key" in main
-    assert "import aria_nbv.rollouts.zarr_store" in main
-    assert "from aria_nbv.vin import Model" in main
+    assert "import aria_nbv.aria_nbv.rollouts.zarr_store" in main
+    assert "from aria_nbv.aria_nbv.vin import Model" in main
     assert "RolloutZarrStoreReader.q_h_view()" in main
     assert "def let_L5" in main
     paper = first.output_paths[1].read_text()
@@ -135,13 +135,13 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
         pytest.skip("graphify CLI is unavailable")
     root = tmp_path / "corpus"
     _materialize(root)
-    code = root / "aria_nbv/rollouts/zarr_store.py"
+    code = root / "aria_nbv/aria_nbv/rollouts/zarr_store.py"
     code.parent.mkdir(parents=True)
     code.write_text(
         "class RolloutZarrStoreReader:\n    def q_h_view(self):\n        pass\n",
         encoding="utf-8",
     )
-    dotted = root / "aria_nbv/vin.py"
+    dotted = root / "aria_nbv/aria_nbv/vin.py"
     dotted.write_text("class Model: pass\n", encoding="utf-8")
     out = tmp_path / "extract"
     subprocess.run(

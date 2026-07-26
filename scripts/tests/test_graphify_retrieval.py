@@ -20,14 +20,18 @@ DESCRIPTOR_PLAN = (
 def main() -> None:
     graph = json.loads(GRAPH.read_text(encoding="utf-8"))
     assert set(graph) == {
-        "edges",
+        "built_at_commit",
+        "directed",
+        "graph",
         "hyperedges",
-        "input_tokens",
+        "links",
+        "multigraph",
         "nodes",
-        "output_tokens",
     }
     labels = {node["id"]: node["label"] for node in graph["nodes"]}
-    edges = graph["edges"]
+    edges = graph["links"]
+    assert all(edge["source"] in labels and edge["target"] in labels for edge in edges)
+    assert all(node.get("community") is not None for node in graph["nodes"])
 
     assert not any(
         label.startswith(
@@ -86,13 +90,25 @@ def main() -> None:
         tree = json.loads(match.group(1))
         assert [child["name"] for child in tree["children"]] == ["aria_nbv", "docs"]
 
-    explanation = subprocess.check_output(
+    explained = subprocess.run(
         ["graphify", "explain", "q_h_view", "--graph", str(GRAPH)],
         cwd=ROOT,
+        check=True,
+        capture_output=True,
         text=True,
     )
-    assert "rollouts/zarr_store.py" in explanation
-    assert DESCRIPTOR_PLAN in explanation
+    assert "pre-#1504" not in explained.stderr
+    assert "rollouts/zarr_store.py" in explained.stdout
+    assert DESCRIPTOR_PLAN in explained.stdout
+
+    benchmark = subprocess.run(
+        ["graphify", "benchmark", str(GRAPH)],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "token reduction benchmark" in benchmark.stdout
     print("Graphify retrieval contract passed")
 
 

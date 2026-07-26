@@ -103,14 +103,14 @@ class _Parser:
         for path, symbol in _GH_WIP.findall(line):
             if not path.startswith("aria_nbv/aria_nbv/") or not path.endswith(".py"):
                 continue
-            module = path[len("aria_nbv/") : -3].replace("/", ".")
+            module = path[:-3].replace("/", ".")
             owner, _, member = symbol.partition(".")
             self.import_once(number, f"from {module} import {owner}")
             if member:
                 self.source_calls.append((number, f"{owner}.{member}"))
             seen.add(module)
         for path in _CODE_PATH.findall(line):
-            reference = path[len("aria_nbv/") : -3].replace("/", ".")
+            reference = path[:-3].replace("/", ".")
             if reference in seen:
                 continue
             seen.add(reference)
@@ -118,6 +118,7 @@ class _Parser:
         for reference in _CODE_DOTTED.findall(line):
             if reference in seen:
                 continue
+            reference = "aria_nbv." + reference
             parts = reference.split(".")
             symbol = next(
                 (

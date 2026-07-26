@@ -12,9 +12,12 @@ structure into Python-shaped input for the upstream AST. Direct root
 `graphify update .` is therefore not canonical.
 
 Native Graphify owns the graph schema, query/path/explain/affected/tree, and
-clustering. Graph JSON, reports, HTML, and wiki exports are generated local
-state and remain ignored. Rewritten nodes and links retain authoritative source
-paths and line locators.
+clustering. The adapter preserves repo-relative paths, then runs the native
+`cluster-only --no-label --no-viz` build so the local graph has canonical node
+IDs, resolved links, and communities without maintaining generated labels or
+visualizations. Graph JSON, reports, HTML, and wiki exports are generated local
+state and remain ignored. Nodes and links retain authoritative source paths and
+line locators.
 
 Run `python scripts/graphify_adapter.py sync` or `make graphify-refresh` to
 synchronize all partitions. The post-commit hook invokes the same adapter for

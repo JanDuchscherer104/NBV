@@ -23,7 +23,10 @@ from graphify_bridge import materialize
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".graphify.toml"
 FAMILIES = ("code", "thesis", "literature")
-UPSTREAM_KEYS = frozenset("edges hyperedges input_tokens nodes output_tokens".split())
+RAW_GRAPH_KEYS = frozenset("edges hyperedges input_tokens nodes output_tokens".split())
+BUILT_GRAPH_KEYS = frozenset(
+    "built_at_commit directed graph hyperedges links multigraph nodes".split()
+)
 _ARTIFACTS = ("graph.json", "manifest.json")
 IMPLEMENTATION = ("scripts/graphify_adapter.py", "scripts/graphify_bridge.py")
 _BRIDGE_SUFFIXES = {".typ", ".tex", ".bib"}
@@ -322,11 +325,10 @@ def materialize_corpus(
         raise AdapterError(f"cannot materialize Graphify bridge: {exc}") from exc
     result.update(converted.line_map)
 
-    prefix = "aria_nbv/aria_nbv/"
     for source in sorted(
         (s for s in items if s.family == "code"), key=lambda s: s.path
     ):
-        output = destination / "aria_nbv" / source.path.removeprefix(prefix)
+        output = destination / source.path
         if output in result:
             raise AdapterError(f"duplicate materialized path: {output}")
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -391,7 +393,7 @@ def _rewrite_graph(
     mappings: Mappings,
     temporary: Path | None = None,
 ) -> dict[str, Any]:
-    if set(graph) != UPSTREAM_KEYS:
+    if set(graph) != RAW_GRAPH_KEYS:
         raise AdapterError("unexpected upstream graph schema")
     temporary = temporary or Path("/")
     lookup = {
@@ -490,11 +492,11 @@ def _manifest(
     config = load_config(root)
     return {
         "adapter_sha256": _adapter_digest(root),
-        "adapter_schema_version": 2,
+        "adapter_schema_version": 3,
         "built_source_commit": source_commit,
         "config_sha256": hashlib.sha256((root / CONFIG.name).read_bytes()).hexdigest(),
         "graphify_version": config["graphify_version"],
-        "edge_count": len(graph["edges"]),
+        "edge_count": len(graph["links"]),
         "node_count": len(graph["nodes"]),
         "source_digest": source_digest(sources),
         "sources": [
@@ -554,6 +556,29 @@ def generate(
             mappings,
             temporary,
         )
+        (upstream / "graph.json").write_bytes(_json_bytes(graph))
+        cluster = [
+            *command,
+            "cluster-only",
+            str(temporary),
+            "--graph",
+            str(upstream / "graph.json"),
+            "--no-label",
+            "--no-viz",
+        ]
+        try:
+            subprocess.run(
+                cluster,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=root,
+                env=environment,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = exc.stderr.strip() if hasattr(exc, "stderr") else str(exc)
+            raise AdapterError(f"Graphify build failed: {detail}") from exc
+        graph = json.loads((upstream / "graph.json").read_text(encoding="utf-8"))
         artifacts = {
             "graph.json": _json_bytes(graph),
             "manifest.json": _json_bytes(
@@ -575,9 +600,9 @@ def validate(artifacts: Mapping[str, bytes], root: Path = ROOT) -> None:
     except (KeyError, json.JSONDecodeError) as exc:
         raise AdapterError(f"invalid Graphify output: {exc}") from exc
     if (
-        set(graph) != UPSTREAM_KEYS
+        set(graph) != BUILT_GRAPH_KEYS
         or not isinstance(graph.get("nodes"), list)
-        or not isinstance(graph.get("edges"), list)
+        or not isinstance(graph.get("links"), list)
     ):
         raise AdapterError("invalid native Graphify schema")
     source_commit = manifest.get("built_source_commit")
@@ -587,7 +612,11 @@ def validate(artifacts: Mapping[str, bytes], root: Path = ROOT) -> None:
     if manifest != expected:
         raise AdapterError("manifest does not match current source selection")
     paths = {source["path"] for source in manifest["sources"]}
-    for record in [*graph["nodes"], *graph["edges"]]:
+    node_ids = {node.get("id") for node in graph["nodes"]}
+    for link in graph["links"]:
+        if link.get("source") not in node_ids or link.get("target") not in node_ids:
+            raise AdapterError("built graph contains a dangling edge")
+    for record in [*graph["nodes"], *graph["links"]]:
         if record.get("source_file") not in paths or not _LOCATION.fullmatch(
             str(record.get("source_location", ""))
         ):

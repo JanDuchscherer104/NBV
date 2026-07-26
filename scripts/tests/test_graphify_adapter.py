@@ -44,6 +44,11 @@ def repo(tmp_path: Path) -> Path:
     _write(root, ".graphify.toml", CONFIG)
     _write(root, "aria_nbv/aria_nbv/__init__.py", "")
     _write(root, "aria_nbv/aria_nbv/model.py", "# model\nclass Model:\n    pass\n")
+    _write(
+        root,
+        "aria_nbv/aria_nbv/consumer.py",
+        "from aria_nbv.model import Model\n\ndef build() -> Model:\n    return Model()\n",
+    )
     _write(root, "aria_nbv/tests/test_no.py", "assert True\n")
     _write(root, "docs/typst/shared/symbols.typ", "#let symbol = 1\n")
     _write(
@@ -150,14 +155,30 @@ def test_generate_overrides_upstream_determinism_environment(
         environments.append(environment)
         upstream = Path(invocation[2]) / "graphify-out"
         upstream.mkdir(parents=True, exist_ok=True)
-        (upstream / "graph.json").write_text("{}", encoding="utf-8")
+        if invocation[1] == "extract":
+            (upstream / "graph.json").write_text("{}", encoding="utf-8")
+        else:
+            (upstream / "graph.json").write_text(
+                json.dumps(
+                    {
+                        "built_at_commit": "0" * 40,
+                        "directed": False,
+                        "graph": {},
+                        "hyperedges": [],
+                        "links": [],
+                        "multigraph": False,
+                        "nodes": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
         return subprocess.CompletedProcess(invocation, 0, "", "")
 
     monkeypatch.setattr(adapter.subprocess, "run", fake_run)
 
     adapter.generate(repo, ["graphify"])
 
-    assert environments == [expected]
+    assert environments == [expected, expected]
 
 
 def test_collection_selection_and_source_attributes(repo: Path) -> None:
@@ -298,12 +319,11 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     assert set(first) == {"graph.json", "manifest.json"}
     graph = json.loads(first["graph.json"])
     manifest = json.loads(first["manifest.json"])
-    assert set(graph) == adapter.UPSTREAM_KEYS
-    assert "links" not in graph
+    assert set(graph) == adapter.BUILT_GRAPH_KEYS
     assert manifest["node_count"] == len(graph["nodes"])
-    assert manifest["edge_count"] == len(graph["edges"])
+    assert manifest["edge_count"] == len(graph["links"])
     assert manifest["graphify_version"] == "0.9.26"
-    assert manifest["adapter_schema_version"] == 2
+    assert manifest["adapter_schema_version"] == 3
     assert manifest["adapter_sha256"] == adapter._adapter_digest(repo)
     assert set(manifest) == {
         "adapter_sha256",
@@ -319,11 +339,13 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
     assert [node["id"] for node in graph["nodes"]] == sorted(
         node["id"] for node in graph["nodes"]
     )
-    assert graph["edges"] == sorted(
-        graph["edges"],
-        key=lambda link: (link["source"], link["target"], link["relation"]),
-    )
     model = next(node for node in graph["nodes"] if node["label"] == "Model")
+    model_file = next(
+        node
+        for node in graph["nodes"]
+        if node["source_file"] == "aria_nbv/aria_nbv/model.py"
+        and node["source_location"] == "L1"
+    )
     thesis = next(
         node for node in graph["nodes"] if node["label"].startswith("heading_1")
     )
@@ -331,13 +353,39 @@ def test_real_generation_is_deterministic_native_and_exact(repo: Path) -> None:
         "aria_nbv/aria_nbv/model.py",
         "L2",
     )
+    assert model_file["id"].startswith("aria_nbv_aria_nbv_model")
     assert (thesis["source_file"], thesis["source_location"]) == (
         "docs/typst/thesis/main.typ",
         "L3",
     )
     assert any(node["label"].endswith("main.typ") for node in graph["nodes"])
     assert any(node["label"].endswith("main.tex") for node in graph["nodes"])
+    node_ids = {node["id"] for node in graph["nodes"]}
+    assert not any(
+        endpoint.startswith("tmp_")
+        for edge in graph["links"]
+        for endpoint in (edge["source"], edge["target"])
+        if endpoint not in node_ids
+    )
+    assert any(
+        edge["source_file"] == "aria_nbv/aria_nbv/consumer.py"
+        and edge["relation"] in {"imports", "imports_from"}
+        and edge["target"] in node_ids
+        for edge in graph["links"]
+    )
     adapter.validate(first, root=repo)
+
+
+def test_code_corpus_preserves_repository_relative_layout(
+    repo: Path, tmp_path: Path
+) -> None:
+    destination = tmp_path / "materialized"
+    mappings = adapter.materialize_corpus(
+        repo, adapter.collect_sources(repo), destination
+    )
+
+    assert destination / "aria_nbv/aria_nbv/model.py" in mappings
+    assert not (destination / "aria_nbv/model.py").exists()
 
 
 def test_real_generation_covers_three_families(
@@ -358,14 +406,14 @@ def test_real_generation_covers_three_families(
         for node in graph["nodes"]
         if family_by_path[node["source_file"]] != "literature"
     ]
-    broken_graph["edges"] = [
+    broken_graph["links"] = [
         link
-        for link in graph["edges"]
+        for link in graph["links"]
         if family_by_path[link["source_file"]] != "literature"
     ]
     broken_manifest = dict(manifest)
     broken_manifest["node_count"] = len(broken_graph["nodes"])
-    broken_manifest["edge_count"] = len(broken_graph["edges"])
+    broken_manifest["edge_count"] = len(broken_graph["links"])
     broken = dict(artifacts)
     broken["graph.json"] = adapter._json_bytes(broken_graph)
     broken["manifest.json"] = adapter._json_bytes(broken_manifest)
