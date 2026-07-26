@@ -28,6 +28,17 @@ generated-context helpers, and retired render wrappers. Exact thesis, shared
 Typst, bibliography, code, evidence, and upstream package sources remain the
 owners of content; the skill owns authoring workflow only.
 
+A follow-up retention audit against the full former skill closure restored
+missing behavioral contracts without changing the branch structure: notation
+facade synchronization and migration-on-touch, scoped claims and falsifiers,
+section checks, typed draft/submission markers, label/reference conventions,
+spherical-domain safeguards, hybrid-render provenance, package failure modes,
+Typst data/layout semantics, and slide reveal constraints.
+The model-visible description now names these authoring branches explicitly;
+the updated integrated description budget remains below its frozen ceiling.
+An independent retention audit added the remaining opt-in rule for generated
+bitmap imagery and otherwise returned no authoring-contract gaps.
+
 Validation:
 
 - skill `quick_validate.py`: passed;

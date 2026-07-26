@@ -36,8 +36,8 @@ baseline_description_bytes = 3778
 maximum_fraction = 0.4
 maximum_description_bytes = 1511
 selected_description_bytes = 1008
-aria_description_bytes = 380
-integrated_description_bytes = 1388
+aria_description_bytes = 462
+integrated_description_bytes = 1470
 model_visible_allowlist = [
   "codebase-design",
   "diagnosing-bugs",

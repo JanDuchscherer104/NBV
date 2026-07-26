@@ -18,3 +18,9 @@ tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg
 
 Run the renderer when `mmdc` is available, inspect the standalone asset, then
 render and inspect the including Quarto or Typst page.
+
+Quarto normally owns Mermaid through a `{mermaid}` fence. Typst includes a
+locally rendered SVG, PDF, or PNG with explicit width while retaining the
+adjacent `.mmd` source. Do not paste Mermaid source into Typst or discard the
+source after export. Keep node labels and mathematical notation aligned with
+`docs/typst/shared`.

@@ -6,13 +6,15 @@
    subtree.
 2. Establish the artifact contract before writing: claim and evidence for
    prose; notation owner for math; construction provenance and evidential role
-   for visuals; reader move for slides.
+   for visuals; reader move for slides. Also inspect nearby labels,
+   bibliography style, thesis-code link tier, and active thesis profile.
 3. Author in the exact owner. Reuse `docs/typst/shared` and existing local
    components before introducing document-local helpers or dependencies.
 4. Isolate a fragile equation, table, diagram, or layout component when a
    focused fixture or page makes failures easier to observe.
 5. Run the narrowest owning check and compile command from `docs/AGENTS.md`.
-   Render affected Typst pages directly when possible, for example:
+   Use `make thesis-pdf` for the full thesis gate. Render affected Typst pages
+   directly when possible, for example:
 
    ```bash
    cd docs
@@ -20,10 +22,25 @@
      '/tmp/aria-thesis-page-{0p}.png' --root . --pages <pages> --ppi 220
    ```
 
+   Use 300--600 PPI for fine equations or geometry. When a change touches
+   draft markers, evidence status, or final-facing links, also compile the
+   submission profile and require unresolved action markers to fail closed:
+
+   ```bash
+   cd docs
+   typst compile typst/thesis/main.typ /tmp/aria-thesis-submission.pdf \
+     --root . --input aria-thesis-mode=submission
+   ```
+
 6. Inspect rendered pages, not only compiler output. Check legibility,
    clipping, math attachment, references, captions, contrast, page breaks, and
    final-size layout.
 7. Iterate until source, evidence, and render agree. Report exact commands,
    inspected pages, warnings, skipped checks, or the environment blocker.
+
+For unfamiliar or version-sensitive Typst or package behavior, inspect the
+target's pinned import and current official/upstream documentation before
+changing it. Distill only the local decision into this workflow; upstream
+manuals remain upstream.
 
 For Mermaid, follow `mermaid.md` in addition to this workflow.
