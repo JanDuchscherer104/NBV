@@ -1,7 +1,7 @@
 {
   "adapter_schema_version": 1,
-  "adapter_sha256": "632fe7f74be55e0080e80b49b536f8d30d8a3193ef8609385b3dcc8b15667487",
-  "built_source_commit": "b05d2e752aa595e4c0418bb655bfeb4ef5f7a71a",
+  "adapter_sha256": "3ce56dfd40fe6e868a0e3fc10e2cf0ad4dbea09599fc220a0f074c1b2fcf4f05",
+  "built_source_commit": "6b6fa124fcbf9b13b05faefb5e21406278ccb469",
   "config_sha256": "a6ce819fea9f0122983d0646fadb137f08c74d01dd10d1234b5e8f887ee951a8",
   "graphify_version": "0.9.22",
   "link_count": 20212,
