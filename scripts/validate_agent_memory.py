@@ -71,6 +71,10 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/config.toml",
     ".codex/hooks.json",
 }
+FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (
+    ".agents/memory/session-manifests/",
+    ".agents/memory/transcripts/",
+)
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 
 REQUIRED_NATIVE_KEYS = {
@@ -220,8 +224,12 @@ def check_registered_omx_artifacts(
     repo_root: Path = REPO_ROOT,
     validator_path: Path = OMX_ARTIFACT_VALIDATOR,
 ) -> list[str]:
+    hosted = os.environ.get("GITHUB_ACTIONS") == "true"
+    explicit_ref = os.environ.get("OMX_ARTIFACT_PREVIOUS_REF")
+    if hosted and not explicit_ref:
+        return ["hosted CI requires OMX_ARTIFACT_PREVIOUS_REF"]
     base_name = os.environ.get("GITHUB_BASE_REF")
-    base_ref = f"origin/{base_name}" if base_name else "origin/main"
+    base_ref = explicit_ref or (f"origin/{base_name}" if base_name else "origin/main")
     verify = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", f"{base_ref}^{{commit}}"],
         cwd=repo_root,
@@ -230,7 +238,25 @@ def check_registered_omx_artifacts(
         text=True,
     )
     previous_ref: str | None = None
-    if verify.returncode == 0:
+    if verify.returncode == 0 and explicit_ref:
+        resolved = subprocess.run(
+            ["git", "rev-parse", f"{base_ref}^{{commit}}"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if resolved == head:
+            return ["OMX artifact transition comparison cannot use HEAD itself"]
+        previous_ref = resolved
+    elif verify.returncode == 0:
         merge_base = subprocess.run(
             ["git", "merge-base", "HEAD", base_ref],
             cwd=repo_root,
@@ -240,9 +266,9 @@ def check_registered_omx_artifacts(
         )
         if merge_base.returncode == 0 and merge_base.stdout.strip():
             previous_ref = merge_base.stdout.strip()
-        elif os.environ.get("GITHUB_ACTIONS") == "true":
+        elif hosted:
             return [f"hosted CI could not determine merge base against {base_ref}"]
-    elif os.environ.get("GITHUB_ACTIONS") == "true":
+    elif hosted:
         return [f"hosted CI requires transition comparison against {base_ref}"]
 
     command = [
@@ -273,6 +299,15 @@ def check_registered_omx_artifacts(
 
     stderr_lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
     return [stderr_lines[-1] if stderr_lines else "OMX artifact validation failed"]
+
+
+def check_forbidden_tracked_paths(tracked_paths: list[str]) -> list[str]:
+    return [
+        f"runtime or transcript evidence must not be tracked: {path}"
+        for path in tracked_paths
+        if path in FORBIDDEN_TRACKED_RUNTIME_PATHS
+        or path.startswith(FORBIDDEN_TRACKED_RUNTIME_PREFIXES)
+    ]
 
 
 def check_history_records() -> list[str]:
@@ -366,9 +401,7 @@ def check_scaffold_alignment() -> list[str]:
     tracked_paths = [
         line.strip() for line in result.stdout.splitlines() if line.strip()
     ]
-    for tracked_path in tracked_paths:
-        if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
-            errors.append(f"runtime state must not be tracked: {tracked_path}")
+    errors.extend(check_forbidden_tracked_paths(tracked_paths))
 
     if OMX_ARTIFACT_REGISTRY.exists():
         errors.extend(check_registered_omx_artifacts())

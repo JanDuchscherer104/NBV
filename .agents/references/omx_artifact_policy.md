@@ -30,6 +30,10 @@ commits as data. A current bundle may transition only to `superseded`, with a
 current successor and complete byte-identical privacy-safe archive. Accepted
 bytes are never edited in place; corrections require a successor.
 
+A behavioral rollback is also a successor transition: restore implementation
+behavior separately, archive the current bundle, and register a new current
+rollback successor. Never revert the registry to an earlier accepted state.
+
 Every registered artifact, current or superseded, is scanned. The validator
 rejects missing or unregistered tracked `.omx` files, path escapes, duplicate
 ownership, hash drift, incomplete roles, invalid transitions, machine-local

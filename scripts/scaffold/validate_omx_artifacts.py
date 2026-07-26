@@ -53,6 +53,24 @@ IMMUTABLE_BUNDLE_FIELDS = (
     "handoff_sha256",
     "acceptance_sha256",
 )
+REGISTRY_FIELDS = {"schema_version", "bundle"}
+BUNDLE_FIELDS = {
+    *IMMUTABLE_BUNDLE_FIELDS,
+    "status",
+    "predecessor_bundle_id",
+    "predecessor_registry_commit",
+    "superseded_by",
+    "artifact",
+}
+ARTIFACT_FIELDS = {
+    "family",
+    "role",
+    "path",
+    "native_path",
+    "sha256",
+    "bytes",
+    "review_kinds",
+}
 RUNTIME_UUID = re.compile(
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
     re.IGNORECASE,
@@ -129,8 +147,7 @@ def _digest(path: Path) -> tuple[str, int]:
     return hashlib.sha256(payload).hexdigest(), len(payload)
 
 
-def _scan(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
+def _scan_text(text: str, subject: object) -> None:
     checks = (
         (ABSOLUTE_PATH, "absolute path"),
         (RUNTIME_UUID, "runtime UUID"),
@@ -141,8 +158,12 @@ def _scan(path: Path) -> None:
     for pattern, label in checks:
         if pattern.search(text):
             raise ValidationError(
-                f"privacy threat ({label}) in registered evidence: {path}"
+                f"privacy threat ({label}) in registered evidence: {subject}"
             )
+
+
+def _scan(path: Path) -> None:
+    _scan_text(path.read_text(encoding="utf-8"), path)
 
 
 def _json_identity(path: Path, bundle_id: str, task: str, label: str) -> None:
@@ -155,11 +176,37 @@ def _json_identity(path: Path, bundle_id: str, task: str, label: str) -> None:
 
 
 def _parse_registry(payload: bytes) -> dict[str, Any]:
-    data = tomllib.loads(payload.decode("utf-8"))
+    text = payload.decode("utf-8")
+    _scan_text(text, REGISTRY)
+    data = tomllib.loads(text)
+    unknown = set(data) - REGISTRY_FIELDS
+    if unknown:
+        raise ValidationError(f"unknown registry fields: {sorted(unknown)}")
     if data.get("schema_version") != 1:
         raise ValidationError("registry schema_version must be 1")
     if not isinstance(data.get("bundle"), list) or not data["bundle"]:
         raise ValidationError("registry must contain at least one bundle")
+    for bundle in data["bundle"]:
+        if not isinstance(bundle, dict):
+            raise ValidationError("registry bundle must be a mapping")
+        unknown = set(bundle) - BUNDLE_FIELDS
+        if unknown:
+            raise ValidationError(
+                f"unknown bundle fields for {bundle.get('id')}: {sorted(unknown)}"
+            )
+        artifacts = bundle.get("artifact")
+        if not isinstance(artifacts, list):
+            raise ValidationError(f"bundle {bundle.get('id')} artifacts must be a list")
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} artifact must be a mapping"
+                )
+            unknown = set(artifact) - ARTIFACT_FIELDS
+            if unknown:
+                raise ValidationError(
+                    f"unknown artifact fields for {bundle.get('id')}: {sorted(unknown)}"
+                )
     return data
 
 
@@ -331,16 +378,24 @@ def validate_registry(repo: Path, registry_path: Path) -> set[str]:
                 "acceptance record",
             )
     for bundle_id, (bundle, _) in parsed.items():
-        successor_id = bundle.get("superseded_by")
-        if successor_id:
+        if bundle["status"] == "current":
+            continue
+        seen = {bundle_id}
+        node = bundle
+        while node["status"] == "superseded":
+            successor_id = node.get("superseded_by")
+            if not isinstance(successor_id, str):
+                raise ValidationError(f"invalid successor for {bundle_id}")
             successor = parsed.get(successor_id)
-            if not successor or successor[0]["status"] != "current":
+            if not successor or successor_id in seen:
                 raise ValidationError(
-                    f"invalid successor {successor_id} for {bundle_id}"
+                    f"invalid or cyclic successor {successor_id} for {bundle_id}"
                 )
             if successor[0]["task"] != bundle["task"]:
                 raise ValidationError(f"successor task mismatch for {bundle_id}")
-            _validate_archive_source(repo, bundle, successor[0])
+            _validate_archive_source(repo, node, successor[0])
+            seen.add(successor_id)
+            node = successor[0]
     return owned
 
 
@@ -418,6 +473,16 @@ def _validate_archive_source(
     if not HEX_40.fullmatch(str(commit or "")):
         raise ValidationError(f"invalid predecessor registry commit for {bundle_id}")
     previous = _previous_registry(repo, str(commit))
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", str(commit), "HEAD"],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+    )
+    if ancestor.returncode:
+        raise ValidationError(
+            f"predecessor registry commit is not an ancestor of HEAD for {bundle_id}"
+        )
     if previous is None:
         raise ValidationError(f"predecessor registry is missing for {bundle_id}")
     before = next(

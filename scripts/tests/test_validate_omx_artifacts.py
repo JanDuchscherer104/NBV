@@ -244,6 +244,29 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", f"supersede {mutation or 'valid'}")
 
+    def commit_second_supersession(self, successor: dict[str, Any]) -> None:
+        registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
+        current = next(
+            item for item in registry["bundle"] if item["status"] == "current"
+        )
+        archived = self.archived(current, successor["id"])
+        successor["predecessor_bundle_id"] = current["id"]
+        successor["predecessor_registry_commit"] = self.git(
+            "rev-parse", "HEAD"
+        ).stdout.strip()
+        for artifact in archived["artifact"]:
+            source = self.repo / artifact["native_path"]
+            destination = self.repo / artifact["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+            source.unlink()
+        previous = [item for item in registry["bundle"] if item["id"] != current["id"]]
+        self.write_registry(
+            [*previous, archived, successor], ".agents/omx_artifacts.toml"
+        )
+        self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
+        self.git("commit", "-qm", "second supersession")
+
     def test_success_hash_drift_and_acceptance_hash_required(self) -> None:
         bundle = self.bundle()
         registry = self.write_registry([bundle])
@@ -328,6 +351,33 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         archived["artifact"][0]["bytes"] = len(payload)
         with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
             MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
+    def test_registry_schema_and_privacy_cover_metadata(self) -> None:
+        for insertion, message in (
+            ('mystery = "value"\n', "unknown bundle fields"),
+            (
+                _fixture('secret = "ghp_', 'abcdefghijklmnopqrstuvwxyz"\n'),
+                "GitHub token",
+            ),
+        ):
+            with self.subTest(message=message):
+                registry = self.write_registry([self.bundle()])
+                text = registry.read_text(encoding="utf-8").replace(
+                    "[[bundle]]\n", f"[[bundle]]\n{insertion}", 1
+                )
+                registry.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(MODULE.ValidationError, message):
+                    MODULE.load_registry(registry)
+
+        registry = self.write_registry([self.bundle()])
+        text = registry.read_text(encoding="utf-8").replace(
+            "[[bundle.artifact]]\n",
+            '[[bundle.artifact]]\nmystery = "value"\n',
+            1,
+        )
+        registry.write_text(text, encoding="utf-8")
+        with self.assertRaisesRegex(MODULE.ValidationError, "unknown artifact fields"):
+            MODULE.load_registry(registry)
 
     def test_unregistered_tracked_artifact_fails(self) -> None:
         bundle = self.bundle()
@@ -425,6 +475,75 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 [],
             )
 
+    def test_semantic_rollback_is_a_new_successor_chain(self) -> None:
+        first = self.bundle("task-first")
+        self.commit_registry(first, "first accepted bundle")
+        second = self.bundle("task-second", "second")
+        self.commit_supersession(first, second)
+        third = self.bundle("task-rollback", "rollback")
+        self.commit_second_supersession(third)
+
+        registry = self.repo / ".agents/omx_artifacts.toml"
+        self.assertEqual(len(MODULE.validate_registry(self.repo, registry)), 21)
+        by_id = {item["id"]: item for item in MODULE.load_registry(registry)["bundle"]}
+        self.assertEqual(by_id[first["id"]]["superseded_by"], second["id"])
+        self.assertEqual(by_id[second["id"]]["superseded_by"], third["id"])
+        self.assertEqual(by_id[third["id"]]["status"], "current")
+
+    def test_predecessor_registry_commit_must_be_an_ancestor(self) -> None:
+        original = self.bundle("task-old")
+        self.commit_registry(original, "accepted base")
+        self.git("checkout", "-qb", "sibling")
+        (self.repo / "sibling.txt").write_text("sibling\n", encoding="utf-8")
+        self.git("add", "sibling.txt")
+        self.git("commit", "-qm", "sibling evidence tree")
+        sibling = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "-q", "main")
+        self.git("checkout", "-qb", "feature-sibling-predecessor")
+        successor = self.bundle("task-new", "successor")
+        self.commit_supersession(original, successor)
+        registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
+        current = next(
+            item for item in registry["bundle"] if item["status"] == "current"
+        )
+        current["predecessor_registry_commit"] = sibling
+        self.write_registry(registry["bundle"], ".agents/omx_artifacts.toml")
+        with self.assertRaisesRegex(MODULE.ValidationError, "not an ancestor"):
+            MODULE.validate_registry(
+                self.repo, self.repo / ".agents/omx_artifacts.toml"
+            )
+
+    def test_branch_history_omits_literal_secret_fixtures(self) -> None:
+        previous = os.environ.get("OMX_ARTIFACT_PREVIOUS_REF") or "origin/main"
+        commits = subprocess.run(
+            ["git", "rev-list", f"{previous}..HEAD"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        for commit in commits:
+            shown = subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{commit}:scripts/tests/test_validate_omx_artifacts.py",
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if shown.returncode:
+                continue
+            findings = [
+                label
+                for pattern, label in MODULE.SENSITIVE_TEXT
+                if label != "email address" and pattern.search(shown.stdout)
+            ]
+            self.assertEqual(findings, [], msg=f"{commit}: {findings}")
+
     def test_history_backed_supersession_rejects_metadata_drift(self) -> None:
         original = self.bundle("task-old")
         self.commit_registry(original, "accepted base")
@@ -477,12 +596,64 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         bundle = self.bundle()
         self.stage_registry(bundle)
         with patch.dict(
-            os.environ, {"GITHUB_BASE_REF": "missing", "GITHUB_ACTIONS": "true"}
+            os.environ,
+            {
+                "GITHUB_ACTIONS": "true",
+                "OMX_ARTIFACT_PREVIOUS_REF": "missing",
+            },
         ):
             errors = MEMORY_MODULE.check_registered_omx_artifacts(
                 repo_root=self.repo, validator_path=SCRIPT
             )
         self.assertRegex(errors[0], "hosted CI requires transition comparison")
+
+    def test_hosted_ci_uses_explicit_previous_sha_and_rejects_self(self) -> None:
+        original = self.bundle("task-current")
+        self.commit_registry(original, "accepted base")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        target = self.repo / original["artifact"][0]["path"]
+        target.write_text("mutated accepted evidence\n", encoding="utf-8")
+        payload = target.read_bytes()
+        original["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        original["artifact"][0]["bytes"] = len(payload)
+        self.commit_registry(original, "invalid mutation")
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTIONS": "true",
+                "OMX_ARTIFACT_PREVIOUS_REF": previous,
+            },
+        ):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertRegex(errors[0], "accepted bundle mutated")
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTIONS": "true",
+                "OMX_ARTIFACT_PREVIOUS_REF": self.git(
+                    "rev-parse", "HEAD"
+                ).stdout.strip(),
+            },
+        ):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertRegex(errors[0], "cannot use HEAD itself")
+
+    def test_transcript_and_session_manifest_paths_are_never_tracked(self) -> None:
+        errors = MEMORY_MODULE.check_forbidden_tracked_paths(
+            [
+                ".agents/memory/transcripts/raw/messages.jsonl",
+                ".agents/memory/session-manifests/corpus.json",
+                ".agents/memory/history/2026/07/debrief.md",
+            ]
+        )
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(all("must not be tracked" in error for error in errors))
 
     def test_workflow_runs_lifecycle_checks_with_full_history(self) -> None:
         workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text(
@@ -501,6 +672,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertGreaterEqual(workflow.count(f'- "{path}"'), 2)
         self.assertIn("python scripts/tests/test_validate_omx_artifacts.py", workflow)
+        self.assertIn("OMX_ARTIFACT_PREVIOUS_REF:", workflow)
+        self.assertIn("github.event.pull_request.base.sha", workflow)
+        self.assertIn("github.event.before", workflow)
 
     def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
         registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"
