@@ -11,12 +11,12 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-import tomllib
 from graphify_bridge import materialize
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -485,6 +485,15 @@ def generate(
             ],
             [*command, "cluster-only", str(temporary), "--no-viz", "--no-label"],
         )
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "PYTHONHASHSEED": "0",
+                "OMP_NUM_THREADS": "1",
+                "OPENBLAS_NUM_THREADS": "1",
+                "MKL_NUM_THREADS": "1",
+            }
+        )
         try:
             for invocation in invocations:
                 subprocess.run(
@@ -493,6 +502,7 @@ def generate(
                     capture_output=True,
                     text=True,
                     cwd=root,
+                    env=environment,
                 )
         except (OSError, subprocess.CalledProcessError) as exc:
             detail = exc.stderr.strip() if hasattr(exc, "stderr") else str(exc)

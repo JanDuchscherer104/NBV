@@ -104,6 +104,69 @@ def _generate(repo: Path) -> dict[str, bytes]:
     return adapter.generate(repo, ["graphify"])
 
 
+def test_generate_overrides_upstream_determinism_environment(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overrides = {
+        "PYTHONHASHSEED": "0",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+    }
+    for name in overrides:
+        monkeypatch.setenv(name, "inherited")
+    monkeypatch.setenv("GRAPHIFY_TEST_MARKER", "preserved")
+    expected = adapter.os.environ.copy()
+    expected.update(overrides)
+    environments: list[dict[str, str]] = []
+
+    monkeypatch.setattr(adapter, "ensure_graphify_pin", lambda command, root: None)
+    monkeypatch.setattr(
+        adapter,
+        "collect_sources",
+        lambda root: [
+            adapter.Source(f"{family}.txt", family, "0" * 64, family)
+            for family in adapter.FAMILIES
+        ],
+    )
+    monkeypatch.setattr(adapter, "_source_commit", lambda root: "0" * 40)
+    monkeypatch.setattr(adapter, "materialize_corpus", lambda root, sources, path: {})
+    monkeypatch.setattr(
+        adapter,
+        "_rewrite_graph",
+        lambda graph, mappings, commit, temporary: {
+            "built_at_commit": commit,
+            "directed": False,
+            "graph": {},
+            "hyperedges": [],
+            "links": [],
+            "multigraph": False,
+            "nodes": [],
+        },
+    )
+    monkeypatch.setattr(adapter, "_report", lambda *args: "report\n")
+    monkeypatch.setattr(adapter, "_manifest", lambda *args: {})
+    monkeypatch.setattr(adapter, "validate", lambda artifacts, root: None)
+
+    def fake_run(
+        invocation: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        environments.append(environment)
+        upstream = Path(invocation[2]) / "graphify-out"
+        upstream.mkdir(parents=True, exist_ok=True)
+        (upstream / "graph.json").write_text("{}", encoding="utf-8")
+        (upstream / "GRAPH_REPORT.md").write_text("report\n", encoding="utf-8")
+        return subprocess.CompletedProcess(invocation, 0, "", "")
+
+    monkeypatch.setattr(adapter.subprocess, "run", fake_run)
+
+    adapter.generate(repo, ["graphify"])
+
+    assert environments == [expected, expected]
+
+
 def test_collection_selection_and_source_attributes(repo: Path) -> None:
     config = adapter.load_config(repo)
     assert adapter.selected_literature_dirs(repo) == {"paper-a"}
