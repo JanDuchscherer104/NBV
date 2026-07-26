@@ -1,62 +1,50 @@
 # ARIA-NBV Source Order
 
-Use this reference when a task needs current project truth or sources disagree.
+Use this reference when sources disagree or an agent must decide where a durable
+change belongs.
 
 ## Role Split
 
-- Current thesis direction: `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and `.agents/memory/state/` describe
-  the active thesis plan, locked decisions, open questions, gotchas, and current
-  state.
-- Current terminology: `docs/typst/shared/glossary.typ` owns terms and symbols;
-  `docs/contents/glossary.qmd` is generated public output.
-- Idea archive: `docs/contents/ideas.qmd` is read-only scratch/history, not
-  current direction.
-- Active thesis seed: `docs/typst/thesis/main.typ` and its included sections
-  own thesis-facing Typst prose once thesis work is in scope. Archived
-  proposal/advisor Typst sources under `.agents/archive/docs/typst/thesis/`
-  are provenance only.
-- Seminar evidence: `docs/typst/seminar_paper/main.typ` and included sections
-  describe the older implemented substrate and past seminar writeup. Use them
-  for historical evidence, not for current thesis priority.
-- Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
-  `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
-- Generated routing artifacts: `docs/_generated/context/source_index.md`,
-  `literature_index.md`, and `data_contracts.md`; refresh with `make context`
-  when stale.
-- Operator aids and long conventions: `.agents/references/`.
-- Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
-  read-first, evidence, and verification loops only. They must point to
-  canonical sources through `metadata.canonical_sources` instead of restating
-  thesis claims, formulas, package contracts, or planned implementation detail.
-  Optional `metadata.context7_refs`, `metadata.literature_refs`, and
-  `metadata.tool_refs` are horizontal evidence-routing hints; they do not
-  override the owner ladder in this file.
-  Semantic-drift warnings from `make scaffold-audit` are source-order review
-  prompts: move durable truth to the owner above, or justify the text as a
-  compact routing/evidence cue.
-- Optional tool and adapter boundaries:
-  `.agents/references/alignment_tools_contract.md`. KG/backend operational
-  details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
-- Thesis-to-code links: `.agents/references/thesis_code_links.md` defines the
-  horizontal link convention for Typst implementation anchors and removable
-  agent/draft navigation links. These links help humans and agents traverse
-  thesis/code relationships, but they do not override the thesis, code,
-  bibliography, memory, or backlog owners above.
+| Information | Current owner | Supporting evidence only |
+| --- | --- | --- |
+| Executable behavior | Code, typed APIs, tests, and nearest package guidance | PRs, debriefs, navigation tools |
+| Scientific narrative and interpretation | Active Typst thesis include closure | Quarto navigation, plans, reviews |
+| Measurements and validity | Immutable manifests and accepted evidence bundles | Thesis interpretation and reports |
+| Literature claims | Exact cited paper | Bibliography entries and local notes |
+| Terminology and reusable notation | `docs/typst/shared/` | Generated glossary pages |
+| Current human preferences | `.agents/references/human_owner_intent.md` | Reviewed transcript evidence |
+| Actionable work | Agents DB TOMLs | Debriefs and PR summaries |
+| Accepted planning evidence | `.agents/omx_artifacts.toml` and its registered bundle | PR descriptions and handoffs |
 
-## Conflict Rule
+Quarto thesis pages, the seminar paper, archived proposals, debriefs,
+transcripts, OMX runtime state, Graphify, MemPalace, and agent output are not
+current-truth owners. They can locate or explain an owner, but the exact owner
+must be checked before acting.
 
-When current thesis docs or canonical memory conflict with the seminar paper,
-prefer the current source for direction and keep the seminar paper as historical
-implemented evidence. Do not promote planned work to implemented results.
+## Conflict And Time Rule
+
+Resolve each disputed statement through the owner for its information class.
+Recency and provenance do not establish truth by themselves. A later human
+preference supersedes an earlier preference only after a reviewed record names
+both statements, their scopes, the active owner update, and any unresolved
+conflict. Conversation cannot supersede code, tests, measurements, or papers
+without a corresponding owner change.
+
+Historical ledgers preserve the owner wording that was valid when recorded.
+Readers must resolve every historical destination through this current source
+order; transcripts and debriefs remain supporting records.
 
 ## Capture Rule
 
-- Repo invariant: root or nearest nested `AGENTS.md`.
-- Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- Current truth: `.agents/memory/state/`.
+- Repository invariant: root or nearest nested `AGENTS.md`.
+- Repeatable workflow: compact `.agents/skills/*/SKILL.md`.
+- Scientific direction or interpretation: active Typst thesis.
+- Implementation contract: owning code, tests, docstrings, or package guidance.
+- Measurement or validity: immutable manifest or evidence bundle.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
-- Public narrative: Quarto or Typst docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
 - Optional tool boundary: `.agents/references/alignment_tools_contract.md`.
+
+Prefer the smallest owner that can hold the information without creating a
+second source of truth.
