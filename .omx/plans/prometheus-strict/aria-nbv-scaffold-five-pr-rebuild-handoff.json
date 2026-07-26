@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
+  "task": "aria-nbv-scaffold-lifecycle",
+  "status": "accepted",
+  "roles": [
+    "context",
+    "specification",
+    "plan",
+    "test_specification",
+    "review",
+    "handoff"
+  ],
+  "review": {
+    "architect": "APPROVED",
+    "critic": "APPROVED"
+  },
+  "execution": {
+    "mode": "sequential",
+    "next_package": "PR1 OMX evidence ownership and lifecycle",
+    "write_scope": "scaffold-series worktree only"
+  },
+  "constraints": [
+    "keep current accepted evidence in native OMX role paths",
+    "archive only superseded evidence that already passes privacy scanning",
+    "remove unaccepted pre-policy payloads that contain machine-local paths",
+    "compare accepted registry state against the merge base in hosted CI",
+    "exclude runtime state, transcripts, and machine identifiers"
+  ]
+}

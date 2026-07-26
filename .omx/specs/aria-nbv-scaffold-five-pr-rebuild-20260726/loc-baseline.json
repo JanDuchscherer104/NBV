@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c",
+  "categories": {
+    "generated": {
+      "file_count": 4,
+      "path_lines_sha256": "1afa62dc0751292c54ed19a8249564dde0d3fe7846ce90e733d7a81e1e3bd97f",
+      "paths_sha256": "c2149078120e4debb502de467e3bb22b0141c43165cf8a8060a51eff15ae4004",
+      "physical_lines": 447
+    },
+    "production": {
+      "file_count": 225,
+      "path_lines_sha256": "ae31dc7ef53728eea19c8494a6fea670254ac361e85f29b94f5bd568d74bd2a0",
+      "paths_sha256": "4947fb936b6f80a5894a088ad9d21efe7735f15bbab3a19e209ac4928ec1d7ce",
+      "physical_lines": 25733
+    },
+    "test": {
+      "file_count": 5,
+      "path_lines_sha256": "a7e196056e854395860ecdf2fa9885d39081961174b6d8827690851a022dc68c",
+      "paths_sha256": "6df7103209d6d15c1f710c56932071e64faf91521b644982df4cb3d988575e03",
+      "physical_lines": 685
+    },
+    "upstream": {
+      "file_count": 11,
+      "path_lines_sha256": "b81088e93f8b5599fe09f6fcdc9c82270a7c37ca4b5642e65b539ed6a161acc8",
+      "paths_sha256": "f84c33699e7eee00b7355588333d95770353246fcd5864591f04f06c146bc70b",
+      "physical_lines": 1666
+    }
+  },
+  "counting_method": "Git blobs; physical lines are bytes.splitlines(); categories are disjoint.",
+  "schema_version": 1,
+  "wp0_active_scaffold_total": {
+    "file_count": 237,
+    "physical_lines": 27550
+  }
+}

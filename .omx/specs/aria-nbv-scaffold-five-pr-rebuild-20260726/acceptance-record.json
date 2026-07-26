@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
+  "accepted_scope": "the five-PR ARIA-NBV scaffold rebuild plan",
+  "excluded_scope": [
+    "implementation acceptance",
+    "pull request publication or merge",
+    "raw prompts, transcripts, runtime state, and machine-local evidence"
+  ],
+  "actor_class": "repository-owner",
+  "instruction_channel": "direct-user-instruction",
+  "date": "2026-07-26",
+  "request_digest": "90894cdcddd9705f0bbd2dede171df3dfdf89cb7b63882874cfec3cebfb86915",
+  "request_digest_normalization": "SHA-256 over UTF-8 bytes for the exact two lowercase instruction lines separated by one LF, with no trailing LF"
+}

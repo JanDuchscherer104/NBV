@@ -10,6 +10,7 @@ This checker intentionally stays narrow:
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -17,7 +18,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
-ALIGNMENT_CONTRACT = REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
+ALIGNMENT_CONTRACT = (
+    REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
+)
+OMX_ARTIFACT_REGISTRY = REPO_ROOT / ".agents" / "omx_artifacts.toml"
+OMX_ARTIFACT_VALIDATOR = (
+    REPO_ROOT / "scripts" / "scaffold" / "validate_omx_artifacts.py"
+)
 ALIGNMENT_LINK_TARGETS = (
     (
         REPO_ROOT / "AGENTS.md",
@@ -122,7 +129,9 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         if list_match and current_key is not None:
             current_value = data.get(current_key)
             if not isinstance(current_value, list):
-                raise ValueError(f"`{current_key}` must be a list when using list items")
+                raise ValueError(
+                    f"`{current_key}` must be a list when using list items"
+                )
             current_value.append(list_match.group(1).strip().strip("\"'"))
             continue
 
@@ -139,7 +148,15 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
 
 def check_codex_notes() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", ".codex"],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ".codex",
+        ],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -159,9 +176,9 @@ def check_codex_notes() -> list[str]:
     if not notes:
         return []
 
-    errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
-        f"  - {note}" for note in notes
-    ]
+    errors = [
+        "legacy `.codex/*.md` notes are not allowed outside approved project skills:"
+    ] + [f"  - {note}" for note in notes]
     return errors
 
 
@@ -172,7 +189,11 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
             continue
 
         expected_kind = next(
-            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
+            (
+                kind
+                for prefix, kind in OMX_RECORD_PATHS.items()
+                if tracked_path.startswith(prefix)
+            ),
             None,
         )
         if expected_kind is None or not tracked_path.endswith(".md"):
@@ -195,10 +216,71 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
     return errors
 
 
+def check_registered_omx_artifacts(
+    repo_root: Path = REPO_ROOT,
+    validator_path: Path = OMX_ARTIFACT_VALIDATOR,
+) -> list[str]:
+    base_name = os.environ.get("GITHUB_BASE_REF")
+    base_ref = f"origin/{base_name}" if base_name else "origin/main"
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{base_ref}^{{commit}}"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    previous_ref: str | None = None
+    if verify.returncode == 0:
+        merge_base = subprocess.run(
+            ["git", "merge-base", "HEAD", base_ref],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if merge_base.returncode == 0 and merge_base.stdout.strip():
+            previous_ref = merge_base.stdout.strip()
+        elif os.environ.get("GITHUB_ACTIONS") == "true":
+            return [f"hosted CI could not determine merge base against {base_ref}"]
+    elif os.environ.get("GITHUB_ACTIONS") == "true":
+        return [f"hosted CI requires transition comparison against {base_ref}"]
+
+    command = [
+        sys.executable,
+        str(validator_path),
+        "--repo",
+        str(repo_root),
+        "--registry",
+        str(repo_root / ".agents" / "omx_artifacts.toml"),
+        "--check-tracked",
+    ]
+    if previous_ref:
+        command.extend(["--previous-ref", previous_ref])
+    else:
+        print(
+            "OMX artifact transition validation unavailable: "
+            "running local-only snapshot validation (no valid remote base ref)."
+        )
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+
+    stderr_lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
+    return [stderr_lines[-1] if stderr_lines else "OMX artifact validation failed"]
+
+
 def check_history_records() -> list[str]:
     errors: list[str] = []
     if not HISTORY_ROOT.exists():
-        return [f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"]
+        return [
+            f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"
+        ]
 
     for path in sorted(HISTORY_ROOT.rglob("*.md")):
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -214,7 +296,9 @@ def check_history_records() -> list[str]:
 
         missing_keys = sorted(REQUIRED_NATIVE_KEYS - frontmatter.keys())
         if missing_keys:
-            errors.append(f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}")
+            errors.append(
+                f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}"
+            )
             continue
 
         canonical_updates = frontmatter.get("canonical_updates_needed")
@@ -229,7 +313,9 @@ def check_history_records() -> list[str]:
                 continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists():
-                errors.append(f"{rel}: canonical update path does not exist: {update_text}")
+                errors.append(
+                    f"{rel}: canonical update path does not exist: {update_text}"
+                )
 
     return errors
 
@@ -238,7 +324,9 @@ def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
 
     if not ALIGNMENT_CONTRACT.exists():
-        errors.append(f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}")
+        errors.append(
+            f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}"
+        )
 
     for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -256,7 +344,9 @@ def check_scaffold_alignment() -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         if expected_snippet not in text:
-            errors.append(f"{rel}: missing scaffold ownership snippet: {expected_snippet}")
+            errors.append(
+                f"{rel}: missing scaffold ownership snippet: {expected_snippet}"
+            )
 
     result = subprocess.run(
         ["git", "ls-files"],
@@ -268,21 +358,32 @@ def check_scaffold_alignment() -> list[str]:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         suffix = f": {stderr}" if stderr else ""
-        errors.append(f"git ls-files failed while checking tracked runtime state{suffix}")
+        errors.append(
+            f"git ls-files failed while checking tracked runtime state{suffix}"
+        )
         return errors
 
-    tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    tracked_paths = [
+        line.strip() for line in result.stdout.splitlines() if line.strip()
+    ]
     for tracked_path in tracked_paths:
         if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
             errors.append(f"runtime state must not be tracked: {tracked_path}")
 
-    errors.extend(check_tracked_omx_records(tracked_paths))
+    if OMX_ARTIFACT_REGISTRY.exists():
+        errors.extend(check_registered_omx_artifacts())
+    else:
+        errors.extend(check_tracked_omx_records(tracked_paths))
 
     return errors
 
 
 def main() -> int:
-    errors = [*check_codex_notes(), *check_history_records(), *check_scaffold_alignment()]
+    errors = [
+        *check_codex_notes(),
+        *check_history_records(),
+        *check_scaffold_alignment(),
+    ]
     if not errors:
         print("agent memory validation passed")
         return 0

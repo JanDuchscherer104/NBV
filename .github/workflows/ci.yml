@@ -6,6 +6,8 @@ on:
       - ".agents/**"
       - ".codex/skills/graphify/**"
       - ".github/workflows/**"
+      - ".gitignore"
+      - ".omx/**"
       - ".pre-commit-config.yaml"
       - ".configs/**"
       - ".graphifyignore"
@@ -16,6 +18,7 @@ on:
       - "aria_nbv/**"
       - "docs/**"
       - "scripts/agents_db.py"
+      - "scripts/scaffold/**"
       - "scripts/check_graphify_freshness.py"
       - "scripts/check_graphify_integration.py"
       - "scripts/git_hooks/**"
@@ -24,6 +27,7 @@ on:
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_integration.py"
       - "scripts/tests/test_post_commit_graph_dispatch.sh"
+      - "scripts/tests/test_validate_omx_artifacts.py"
       - "scripts/validate_agent_memory.py"
       - "scripts/validate_qmd_frontmatter.py"
   push:
@@ -33,6 +37,8 @@ on:
       - ".agents/**"
       - ".codex/skills/graphify/**"
       - ".github/workflows/**"
+      - ".gitignore"
+      - ".omx/**"
       - ".pre-commit-config.yaml"
       - ".configs/**"
       - ".graphifyignore"
@@ -43,6 +49,7 @@ on:
       - "aria_nbv/**"
       - "docs/**"
       - "scripts/agents_db.py"
+      - "scripts/scaffold/**"
       - "scripts/check_graphify_freshness.py"
       - "scripts/check_graphify_integration.py"
       - "scripts/git_hooks/**"
@@ -51,6 +58,7 @@ on:
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_integration.py"
       - "scripts/tests/test_post_commit_graph_dispatch.sh"
+      - "scripts/tests/test_validate_omx_artifacts.py"
       - "scripts/validate_agent_memory.py"
       - "scripts/validate_qmd_frontmatter.py"
   workflow_dispatch:
@@ -70,6 +78,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Initialize EFM3D submodule
         run: git submodule update --init external/efm3d
@@ -97,6 +107,9 @@ jobs:
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
         run: make ci PYTEST_ARGS=
+
+      - name: Run OMX artifact lifecycle tests
+        run: python scripts/tests/test_validate_omx_artifacts.py
 
       - name: Run opt-in Graphify integration contract
         run: make graphify-ci
