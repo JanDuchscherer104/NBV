@@ -17,6 +17,15 @@ def test_rollouts_public_api_smoke_imports_all_exports() -> None:
     assert not missing
 
 
+def test_trace_keeps_private_persisted_store_helper_aliases() -> None:
+    """Persisted-store imports keep resolving without widening the leaf API."""
+
+    module = importlib.import_module("aria_nbv.rollouts.trace")
+    assert module._policy_name is module.policy_name
+    assert module._termination_reason is module.termination_reason
+    assert {"_policy_name", "_termination_reason"}.isdisjoint(module.__all__)
+
+
 def test_removed_counterfactuals_module_has_no_compatibility_facade() -> None:
     """The clean replay move must not leave a second module owner behind."""
 

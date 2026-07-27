@@ -391,6 +391,11 @@ def policy_name(policy: str | CounterfactualSelectionPolicy) -> str:
     return policy.value if isinstance(policy, CounterfactualSelectionPolicy) else str(policy)
 
 
+# Preserve the original private imports used by persisted-store code.
+_termination_reason = termination_reason
+_policy_name = policy_name
+
+
 __all__ = [
     "INVALID_REASON_CODES",
     "INVALID_REASON_VERSION",
