@@ -60,7 +60,7 @@ The implemented hard mask defines $m_(t,i)=0$ as exclusion from the action set, 
   implementation: "planned",
   evidence: "pending",
   citation: [@SelectiveNet-geifman2019 @DeepGamblers-liu2019],
-  source: "aria_nbv/aria_nbv/rollouts/zarr_store.py; planned finite-horizon scorer",
+  source: [#gh("aria_nbv/aria_nbv/rollouts/zarr_store.py"); planned finite-horizon scorer],
   gate: [implement feasibility head and evaluate held-out calibration without weakening the hard mask],
 )[A separate feasibility head is planned. It is not part of the current scorer or training module.]
 
@@ -70,7 +70,7 @@ The hard mask remains the deployment safety constraint. A soft feasibility score
 
 #research_todo(
   [Compare hard masking against a calibrated feasibility-times-value ranking only after feasibility calibration is measured. The hard mask remains the safety constraint in every comparison.],
-  source: [invalid-row supervision hypothesis; repo:.agents/todos.toml\#todo-048],
+  source: [invalid-row supervision hypothesis; #gh(".agents/todos.toml", body: [todo-048])],
   gate: [feasibility calibration and policy ablation],
 )
 

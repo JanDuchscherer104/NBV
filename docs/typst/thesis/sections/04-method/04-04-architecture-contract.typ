@@ -10,7 +10,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019 @FixedHorizonTD-deAsis2020],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/tests/vin/test_target_finite_horizon.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  source: [#gh("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py"); #gh("aria_nbv/tests/vin/test_target_finite_horizon.py"); #gh("aria_nbv/tests/rollouts/test_qh_reader.py")],
   gate: [end-to-end permutation, mask, duplicate, frame, source, and variable-horizon tests for every admitted state protocol],
 )[The H=2 tracer covers candidate-row equivariance, local-frame geometry, invalid-row isolation, and deterministic selection. Dynamic selected-observation state, source-dropout, and variable-horizon acceptance tests remain pending.]
 
@@ -42,7 +42,7 @@ The variable-horizon interface adds its own acceptance contract. The boundary qu
   implementation: "partial",
   evidence: "pending",
   citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
+  source: [#gh("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py"); #gh("docs/contents/theory/candidate_view_dependence.qmd")],
   gate: [promote a level only after lower interaction controls pass on the same scene carrier, target/source protocol, and horizon-query contract],
 )[The development tracer implements candidate-to-state cross-attention over an `S0-pose` carrier. Scene-carrier upgrades from @tab:thesis-scene-representation-design-space and variable-horizon conditioning are orthogonal to the interaction ladder below.]
 

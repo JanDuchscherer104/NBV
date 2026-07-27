@@ -12,7 +12,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@EFM3D-straub2024],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
+  source: [#gh("aria_nbv/aria_nbv/data_handling/qh.py"); #gh("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py"); #gh("aria_nbv/aria_nbv/rollouts/qh_reader.py"); #gh("aria_nbv/tests/vin/test_target_finite_horizon.py")],
   gate: [retain actor/oracle provenance checks and name the admitted state protocol in every run],
 )[The replay carrier and a V0 horizon-two pose-history tracer are implemented. The tracer uses a compact root semidense summary and does not yet implement selected-observation fusion, root EVL tokens, or a task-sufficient dynamic reconstruction memory. Frozen scientific validation remains pending.]
 
@@ -28,7 +28,7 @@ Three boundaries are invariant. Invalidity is a hard mask with versioned reason 
   implementation: "planned",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017],
-  source: "docs/contents/theory/efm3d_scene_embeddings.qmd; docs/contents/theory/candidate_view_dependence.qmd",
+  source: [#gh("docs/contents/theory/efm3d_scene_embeddings.qmd"); #gh("docs/contents/theory/candidate_view_dependence.qmd")],
   gate: [selected-observation reader, deterministic fusion, source-dropout tests, and held-out target-RRI ranking],
 )[The canonical state separates immutable root context from a causal dynamic memory. Particular scene carriers are promoted only when they preserve the information boundary and improve target-conditioned decisions.]
 
@@ -86,7 +86,7 @@ A useful representation must preserve distinctions that can change target-specif
   implementation: "partial",
   evidence: "pending",
   citation: [@EFM3D-straub2024 @EVL-Doc-2025],
-  source: "docs/literature/tex-src/arXiv-EFM3D/method.tex, Sec. Egocentric Voxel Lifting, lines 2--44; docs/contents/literature/efm3d.qmd; docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/data_handling/offline/writer.py",
+  source: [#gh("docs/literature/tex-src/arXiv-EFM3D/method.tex", body: [EFM3D method, lines 2--44]); #gh("docs/contents/literature/efm3d.qmd"); #gh("docs/contents/theory/efm3d_scene_embeddings.qmd"); #gh("aria_nbv/aria_nbv/data_handling/offline/writer.py")],
   gate: [report target and candidate support against the persisted voxel pose and extent],
 )[EFM3D fields, their voxel pose, and finite extent are persisted. They are not consumed by the current horizon-two tracer, and their sufficiency as the only long-horizon scene representation remains pending.]
 
@@ -100,7 +100,7 @@ The coverage limitation motivates a layered interface rather than repeated infer
   implementation: "exploratory",
   evidence: "pending",
   citation: [@VIN-NBV-frahm2025 @GenNBV-chen2024 @ObjectCentricNBV-jeong2026 @SceneScript-avetisyan2024],
-  source: "docs/literature/tex-src/arXiv-GenNBV/3-Method.tex, Secs. Formulation and Generalizable State Embedding, lines 10--49; docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex, Sec. Methods, lines 14--58; docs/literature/tex-src/arXiv-scene-script/sections/structured_scene_language.tex; docs/contents/literature/efm3d.qmd",
+  source: [#gh("docs/literature/tex-src/arXiv-GenNBV/3-Method.tex", body: [GenNBV method, lines 10--49]); #gh("docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex", body: [Hestia method, lines 14--58]); #gh("docs/literature/tex-src/arXiv-scene-script/sections/structured_scene_language.tex"); #gh("docs/contents/literature/efm3d.qmd")],
   gate: [promote only after matched support, leakage, runtime, and oracle-policy ablations],
 )[This table ranks scene carriers only. The interaction architecture is specified separately in @sec:thesis-method-geometry-contract so a carrier change does not silently redefine candidate or target semantics.]
 

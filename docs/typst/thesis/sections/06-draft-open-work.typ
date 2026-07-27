@@ -1,4 +1,5 @@
 #import "../draft_markers.typ": *
+#import "../../shared/macros.typ": *
 #import "../../shared/symbols.typ": symb
 
 = Development Diary
@@ -23,7 +24,7 @@ The next gate is actor-visible target selection followed by a target-conditioned
 
 #impl_todo(
   [Implement and validate observed/predicted target matching, then establish the actor-visible target-conditioned one-step scorer as the myopic control.],
-  source: [RQ3 and M3--M4 contracts; repo:.agents/todos.toml\#todo-053],
+  source: [RQ3 and M3--M4 contracts; #gh(".agents/todos.toml", body: [todo-053])],
   gate: [held-out target matching and myopic scorer evidence],
 )
 
@@ -31,7 +32,7 @@ Only after that control is stable does bounded oracle lookahead test whether the
 
 #validation_todo(
   [Measure bounded oracle-lookahead headroom under matched roots, candidate support, validity rules, and acquisition budgets.],
-  source: [RQ2 and M5 contracts; repo:.agents/todos.toml\#todo-026],
+  source: [RQ2 and M5 contracts; #gh(".agents/todos.toml", body: [todo-026])],
   gate: [positive, uncertainty-qualified held-out headroom],
 )
 
@@ -39,7 +40,7 @@ Finite-horizon #symb.rl.qh is trained and interpreted only if that headroom gate
 
 #decision_todo(
   [Freeze claims only from a validated confirmatory report bundle with paired held-out policy outcomes and complete population accounting.],
-  source: [experimental-design and reporting contracts; repo:.agents/todos.toml\#todo-037],
+  source: [experimental-design and reporting contracts; #gh(".agents/todos.toml", body: [todo-037])],
   gate: [confirmatory bundle freeze],
 )
 
@@ -53,7 +54,7 @@ The current GT target sampler is not an actor-visible matching protocol. No vali
 
 #validation_todo(
   [Require completed stores, matching manifests, resource summaries, and recorded failures before extrapolating rollout bandwidth, storage demand, headroom, or policy quality.],
-  source: [rollout attempts and H3--H8 campaign record; repo:.agents/todos.toml\#todo-089],
+  source: [rollout attempts and H3--H8 campaign record; #gh(".agents/todos.toml", body: [todo-089])],
   gate: [validated campaign and confirmatory evidence],
 )
 
@@ -63,7 +64,7 @@ Online discrete #symb.rl.qh over the existing ASE mesh/oracle loop is deferred u
 
 #prune_todo(
   [Keep online-discrete, continuous-control, and simulator material out of the core claim until their upstream finite-candidate evidence gates pass.],
-  source: [RQ5--RQ6 and M6 contracts; repo:.agents/todos.toml\#todo-038],
+  source: [RQ5--RQ6 and M6 contracts; #gh(".agents/todos.toml", body: [todo-038])],
   gate: [stable offline finite-candidate evidence],
 )
 
@@ -71,7 +72,7 @@ Online discrete #symb.rl.qh over the existing ASE mesh/oracle loop is deferred u
 
 #research_todo(
   [Treat target-centred directional memory as an ablation hypothesis, not an established actor feature or contribution. It must be implemented, mask-audited, and compared against pose distance and overlap before any predictive claim enters the manuscript.],
-  source: [RQ3 representation hypothesis; repo:.agents/todos.toml\#todo-060],
+  source: [RQ3 representation hypothesis; #gh(".agents/todos.toml", body: [todo-060])],
   gate: [paired held-out ablation],
 )
 

@@ -67,7 +67,7 @@
   aria-github-base + "/blob/" + resolved-ref + "/" + path + _gh-line-anchor(line: line, end: end)
 }
 
-#let _github-symbol-url(symbol, language: "python") = {
+#let _github-symbol-search-url(symbol, language: "python") = {
   (
     "https://github.com/search?q=repo%3A"
       + aria-github-repo
@@ -86,8 +86,9 @@
   ]
 }
 
-/// Draft-only GitHub file/line link. Compiles to plain text with `--input aria-wip-links=false`.
-#let gh-wip(path, body: none, ref: "main", line: none, end: none) = {
+/// Draft-only GitHub file/line link. By default it inherits `aria-code-ref`.
+/// Compiles to plain text with `--input aria-wip-links=false`.
+#let gh-wip(path, body: none, ref: none, line: none, end: none) = {
   let label = _gh-label(path, body: body)
   if _aria-wip-links-enabled() {
     link(_github-file-url(path, ref: ref, line: line, end: end))[
@@ -98,11 +99,20 @@
   }
 }
 
-/// Draft-only GitHub symbol-search link. Compiles to plain text with `--input aria-wip-links=false`.
-#let gh-symbol(symbol, body: none, language: "python") = {
+/// Link a known source symbol to its branch- or SHA-resolved GitHub file anchor.
+#let gh-symbol(path, symbol, body: none, ref: none, line: none, end: none) = {
+  let label = if body == none { code-inline(symbol) } else { body }
+  link(_github-file-url(path, ref: ref, line: line, end: end))[
+    #_gh-link-label(label)
+  ]
+}
+
+/// Draft-only, unpinned GitHub Code Search navigation; never use as a source anchor.
+/// Compiles to plain text with `--input aria-wip-links=false`.
+#let gh-symbol-search(symbol, body: none, language: "python") = {
   let label = if body == none { code-inline(symbol) } else { body }
   if _aria-wip-links-enabled() {
-    link(_github-symbol-url(symbol, language: language))[
+    link(_github-symbol-search-url(symbol, language: language))[
       #_gh-link-label(label)
     ]
   } else {

@@ -58,8 +58,17 @@ SOURCES = [
             '  gate: "G-1",\n)\n'
             "#symb.shape.Nq #eqs.scene.memory @Paper-Key @next-best-view\n"
             "`aria_nbv.vin.Model`\n"
+            '#gh("aria_nbv/aria_nbv/viewer.py", body: [`Viewer.render`], '
+            "line: 11, end: 13)\n"
             '#gh-wip("aria_nbv/aria_nbv/rollouts/zarr_store.py", '
-            "body: [`RolloutZarrStoreReader.q_h_view`], line: 1)\n"
+            "body: [`RolloutZarrStoreReader.q_h_view`], line: 1, end: 2)\n"
+            '#gh-symbol("aria_nbv/aria_nbv/vin.py", "Model.predict", line: 1)\n'
+            '#gh-symbol-search("aria_nbv.vin.Model.predict")\n'
+            '#gh("docs/plain.typ", line: 4)\n'
+            '#gh-wip("scripts/tests/test_graphify_bridge.py", line: 1, end: 2)\n'
+            '#gh("docs/papers/paper.tex", line: 2)\n'
+            '#gh-symbol("aria_nbv/aria_nbv/viewer.py", "Viewer", line: 1)\n'
+            '#gh("aria_nbv/aria_nbv/viewer.py")\n'
         ),
     },
     {"path": "docs/plain.typ", "text": "Plain Typst source.\n"},
@@ -71,6 +80,10 @@ def _materialize(root: Path):
         SOURCES,
         root,
         paper_by_arxiv={"2501.00001": "docs/papers/paper.tex"},
+        source_paths=[
+            *(source["path"] for source in SOURCES),
+            "scripts/tests/test_graphify_bridge.py",
+        ],
     )
 
 
@@ -102,7 +115,31 @@ def test_mapping_determinism_and_supported_constructs(tmp_path: Path) -> None:
     assert "from .refs import citation_Paper_Key" in main
     assert "import aria_nbv.aria_nbv.rollouts.zarr_store" in main
     assert "from aria_nbv.aria_nbv.vin import Model" in main
+    assert "from aria_nbv.aria_nbv.viewer import Viewer" in main
     assert "RolloutZarrStoreReader.q_h_view()" in main
+    assert "Viewer.render()" in main
+    assert "Model.predict()" in main
+    assert "Viewer()" in main
+    assert "source_file_aria_nbv_aria_nbv_viewer()" in main
+    assert "github_reference_L15" in main
+    assert "github_reference_L16" in main
+    assert "github_reference_L17" in main
+    assert "github_symbol_search_L18" in main
+    assert "github_reference_L19" in main
+    assert "github_reference_L20" in main
+    assert "github_reference_L21" in main
+    assert "github_reference_L22" in main
+    assert "github_reference_L23" in main
+    assert "gh_11_13_aria_nbv" in main
+    assert "gh_wip_1_2_aria_nbv" in main
+    assert "gh_4_docs_plain_typ" in main
+    assert "gh_wip_1_2_scripts_tests" in main
+    assert "from .plain import source_plain" in main
+    assert "from .papers.paper import source_paper" in main
+    assert (
+        "from scripts.tests.test_graphify_bridge import "
+        "source_file_scripts_tests_test_graphify_bridge" in main
+    )
     assert "def let_L5" in main
     paper = first.output_paths[1].read_text()
     assert "subsubsection" in paper and "label" in paper
@@ -141,8 +178,23 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
         "class RolloutZarrStoreReader:\n    def q_h_view(self):\n        pass\n",
         encoding="utf-8",
     )
+    viewer = root / "aria_nbv/aria_nbv/viewer.py"
+    viewer.write_text(
+        "class Viewer:\n    def render(self):\n        pass\n\n"
+        "def source_file_aria_nbv_aria_nbv_viewer():\n    pass\n",
+        encoding="utf-8",
+    )
     dotted = root / "aria_nbv/aria_nbv/vin.py"
-    dotted.write_text("class Model: pass\n", encoding="utf-8")
+    dotted.write_text(
+        "class Model:\n    def predict(self):\n        pass\n", encoding="utf-8"
+    )
+    test_target = root / "scripts/tests/test_graphify_bridge.py"
+    test_target.parent.mkdir(parents=True)
+    test_target.write_text(
+        "def target():\n    pass\n\n"
+        "def source_file_scripts_tests_test_graphify_bridge():\n    pass\n",
+        encoding="utf-8",
+    )
     out = tmp_path / "extract"
     subprocess.run(
         [
@@ -186,6 +238,7 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
         "eqs_scene_memory",
         "term_next_best_view",
         "Model",
+        "Viewer",
     ):
         assert any(target in labels.get(edge["target"], "") for edge in imports)
     assert any(
@@ -206,6 +259,50 @@ def test_upstream_ast_extracts_distinct_nodes_and_edges(tmp_path: Path) -> None:
         "source_main" in labels.get(edge["source"], "")
         and "q_h_view" in labels.get(edge["target"], "")
         for edge in call_edges
+    )
+    assert any(
+        "github_reference" in labels.get(edge["source"], "")
+        and "render" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any(
+        "github_reference" in labels.get(edge["source"], "")
+        and "predict" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any("github_symbol_search" in label for label in labels.values())
+    assert any(
+        "github_reference" in labels.get(edge["source"], "")
+        and "Viewer" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any(
+        "github_reference" in labels.get(edge["source"], "")
+        and "source_file_aria_nbv_aria_nbv_viewer" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any(
+        "github_reference" in label and "docs_plain_typ" in label
+        for label in labels.values()
+    )
+    assert any(
+        "github_reference" in label and "scripts_tests" in label
+        for label in labels.values()
+    )
+    assert any(
+        "source_main" in labels.get(edge["source"], "")
+        and "source_plain" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any(
+        "source_main" in labels.get(edge["source"], "")
+        and "source_paper" in labels.get(edge["target"], "")
+        for edge in call_edges
+    )
+    assert any(
+        edge["source"].endswith("docs_main")
+        and edge["target"].endswith("scripts_tests_test_graphify_bridge")
+        for edge in imports
     )
     assert not any(
         labels[node_id].startswith(("symb_use_", "eqs_use_", "code_reference_"))

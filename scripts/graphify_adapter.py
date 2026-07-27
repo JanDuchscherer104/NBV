@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from graphify_bridge import materialize
+from graphify_bridge import _code_source_anchor, materialize
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".graphify.toml"
@@ -319,7 +319,10 @@ def materialize_corpus(
     ]
     try:
         converted = materialize(
-            bridged, destination, paper_by_arxiv=_paper_map(config, manifest, items)
+            bridged,
+            destination,
+            paper_by_arxiv=_paper_map(config, manifest, items),
+            source_paths=(source.path for source in items),
         )
     except (TypeError, ValueError) as exc:
         raise AdapterError(f"cannot materialize Graphify bridge: {exc}") from exc
@@ -332,11 +335,16 @@ def materialize_corpus(
         if output in result:
             raise AdapterError(f"duplicate materialized path: {output}")
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(source.text, encoding="utf-8")
+        anchor = _code_source_anchor(source.path)
+        separator = "" if source.text.endswith("\n") else "\n"
+        rendered = source.text + separator + f"def {anchor}():\n    pass\n"
+        output.write_text(rendered, encoding="utf-8")
         source_map = {
             line: (source.path, line)
             for line in range(1, max(1, len(source.text.splitlines())) + 1)
         }
+        for line in range(len(source_map) + 1, len(rendered.splitlines()) + 1):
+            source_map[line] = (source.path, 1)
         result[output] = source_map
     return dict(sorted(result.items(), key=lambda item: str(item[0])))
 

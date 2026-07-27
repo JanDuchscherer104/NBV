@@ -815,34 +815,32 @@
   short: Q_H
   aliases:
   - Q_H
-  - candidate-query Q_H
+  - variable-horizon Q scorer
+  - horizon-conditioned Q
   - bounded Q function
   - finite-candidate Q
-  - fitted Double-Q head
   category: model.value
   parent: target-conditioned-nbv-mdp
   tier: core
   lookup_rank: 190
-  definition_short: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
-  definition_long: 'The mandatory M5 learned policy-like result is Q_H over finite candidate
-    sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0},
-    actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory
-    summaries, and candidate tokens, then emit one continuous return value per candidate.
-    DQN contributes replayed transition learning and Bellman-style finite-action value targets;
-    Double DQN contributes the masked online-selector / target-evaluator backup to reduce
-    max-over-candidate overestimation; IQL contributes the offline support rule that value
-    learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect
-    validity masks and beat one-step greedy or model scoring on cumulative root-normalized
-    target gain under equal acquisition budget, with bounded oracle lookahead as an upper
-    bound.'
+  definition_short: Horizon-conditioned candidate-value family for target-conditioned ARIA-NBV.
+  definition_long: The minimal learned method is one shared scorer Q_theta(s_t,e,i,h) that
+    conditions on the actor state, target, candidate row, and requested residual horizon.
+    H is the maximum supported horizon, h is the query, and h must not exceed the remaining
+    budget. Offline fitted Q learning does not require online interaction. Q_1 is densely
+    supervised, exact Q_2 is a base-case control when successor one-step labels exist, and
+    Q_h for h>1 bootstraps only from a lower-horizon value Q_{h-1}. Double Q may separate
+    successor selection from evaluation to reduce maximization bias, but it does not define
+    the architecture or solve offline-support and state-aliasing failures. Optimality is bounded
+    to the finite candidate, validity, state, and replay-support contract.
   formula:
     label: Finite-horizon candidate value
-    tex: Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
+    tex: Q_\theta(s_t,e,a,h)=\mathbb{E}[G_t^{(h)}\mid s_t,e,a_t=a]
   formulae:
-  - label: Masked Double-DQN selector
-    tex: j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1}^{\mathrm{cf0}},a_{t+1,j},\boldsymbol{\phi}_e)
-  - label: Masked Double-DQN target
-    tex: y_t=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1}^{\mathrm{cf0}},a_{t+1,j^*},\boldsymbol{\phi}_e)
+  - label: Lower-horizon fitted target
+    tex: y_t^{(h)}=r_t^e+\gamma(1-d_t)\max_{j:m_{t+1,j}=1}Q_{\bar\theta}(s_{t+1},e,j,h-1)
+  - label: Optional Double-Q selector
+    tex: j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1},e,j,h-1)
   notation:
     typst: $Q_H$
   symbol_refs:
@@ -859,9 +857,10 @@
   - docs/contents/theory/rl_planning.qmd#q-h-training-contract
   - docs/contents/literature/rl_planning.qmd#q-h-and-dqn
   citations:
-  - DBLP:journals/corr/MnihKSGAWR13
+  - FittedQIteration-ernst2005
+  - FixedHorizonTD-deAsis2020
+  - UVFA-schaul2015
   - DoubleDQN-vanHasselt2015
-  - IQL-kostrikov2021
   related:
   - finite-horizon-return
   - minimal-counterfactual-state
@@ -870,6 +869,7 @@
   kg_tags:
   - model
   - q-learning
+  - variable-horizon
   - thesis-core
 - id: validity-mask
   anchor: term-validity-mask

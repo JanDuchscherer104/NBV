@@ -34,6 +34,15 @@
 #let conflict_todo(body, source: none, gate: none) = todo_marker([Conflict], body, stroke: red, source: source, gate: gate)
 #let validation_todo(body, source: none, gate: none) = todo_marker([Validation TODO], body, stroke: olive, source: source, gate: gate)
 #let prune_todo(body, source: none, gate: none) = todo_marker([Remove or rewrite before submission], body, stroke: gray, source: source, gate: gate)
+#let prune_target(label, key: none, reason: none, static_occurrences: none, build_occurrences: none) = if thesis_mode == "submission" {
+  panic("Unresolved thesis prune target in submission mode: " + key)
+} else { block(above: 0.35em, below: 0.45em, breakable: false)[
+  #text(size: 8.5pt)[
+    *Prune target:* #strike(label) — #reason
+    #h(0.45em)
+    #text(size: 7.4pt, fill: gray)[#key; direct uses: #static_occurrences; build uses: #build_occurrences]
+  ]
+] }
 #let archive_note(body, source: none) = todo_marker([Archived source note], body, stroke: gray, source: source)
 
 #let implementation_colour(state) = if state == "implemented" {

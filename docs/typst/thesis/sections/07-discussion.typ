@@ -1,4 +1,5 @@
 #import "../../shared/symbols.typ": symb
+#import "../../shared/macros.typ": *
 #import "../draft_markers.typ": thesis_status, research_todo
 
 = Discussion <sec:thesis-discussion>
@@ -26,7 +27,7 @@ Sequence or recurrent models are similarly conditional. They become scientifical
 
 #research_todo(
   [After the primary evidence chain is complete, promote only bridges tied to a measured failure: EVL support, target observability, directional history, valid-set interaction, long-horizon credit, or action-support mismatch.],
-  source: [method design-space registry; repo:.agents/todos.toml\#todo-038],
+  source: [method design-space registry; #gh(".agents/todos.toml", body: [todo-038])],
   gate: [artifact-backed failure analysis],
 )
 

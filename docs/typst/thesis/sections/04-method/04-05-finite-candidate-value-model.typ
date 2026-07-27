@@ -11,7 +11,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_myopic.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/data_handling/qh.py",
+  source: [#gh("aria_nbv/aria_nbv/vin/models/target_myopic.py"); #gh("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py"); #gh("aria_nbv/aria_nbv/lightning/qh_module.py"); #gh("aria_nbv/aria_nbv/data_handling/qh.py")],
   gate: [retain the one-step scorer as a matched control and label the H=2 implementation as an `S0-pose` tracer],
 )[The one-step VIN/CORAL scorer remains the historical myopic control. A dedicated development path implements a deterministic V0, horizon-two, candidate-to-state scorer and selected-transition Double-Q trainer. Frozen matched-control and policy evidence remain pending.]
 
@@ -25,7 +25,7 @@ The target-conditioned tracer emits one continuous value per candidate row. Cand
   implementation: "planned",
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @UVFA-schaul2015 @DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query],
-  source: "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ; docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
+  source: [#gh("docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ"); #gh("docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ"); #gh("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py")],
   gate: [explicit horizon-query DTO, dynamic-state reader, A0/A1 controls, horizon tests, and held-out oracle policy comparison],
 )[The minimal thesis goal is one target-conditioned candidate scorer that evaluates any supported residual horizon with shared scene, target, and candidate encoders. Candidate--candidate interaction and exact equivariance remain later ablations.]
 
@@ -114,7 +114,7 @@ Because dense one-step rows vastly outnumber selected transitions at longer hori
   implementation: "exploratory",
   evidence: "pending",
   citation: [@CORAL-cao2019 @FixedHorizonTD-deAsis2020],
-  source: "docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex, ordinal RRI paragraph, line 125; docs/contents/theory/candidate_view_dependence.qmd",
+  source: [#gh("docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex", body: [VIN-NBV methods, ordinal RRI paragraph, line 125]); #gh("docs/contents/theory/candidate_view_dependence.qmd")],
   gate: [target-specific root-gain calibration and direct-versus-residual ablation across horizons],
 )[The residual decomposition is a testable hypothesis. Direct continuous horizon-conditioned value prediction remains the required control.]
 
@@ -148,13 +148,13 @@ but additive finite-horizon returns are learned in continuous root-gain units. T
 
 #research_todo(
   [Compare staged and joint shared-parameter variable-horizon fitted Q against separate per-horizon heads; include dense Q1, exact Q2, Double Q, behavior-return regression, and the uncentred residual after positive oracle-lookahead headroom is established.],
-  source: [variable-horizon learning-target contract; repo:.agents/todos.toml\#todo-052],
+  source: [variable-horizon learning-target contract; #gh(".agents/todos.toml", body: [todo-052])],
   gate: [A0/A1 learning, per-horizon support report, and headroom report],
 )
 
 #decision_todo(
   [Freeze the maximum horizon, horizon-sampling or loss-weighting rule, lower-horizon target-update schedule, and target-network rule in the resolved training manifest. For the residual ablation, also record whether the one-step base is frozen, slow-fine-tuned, or jointly trained.],
-  source: [variable-horizon fitted-value hypothesis; repo:.agents/todos.toml\#todo-037],
+  source: [variable-horizon fitted-value hypothesis; #gh(".agents/todos.toml", body: [todo-037])],
   gate: [model-selection protocol freeze],
 )
 

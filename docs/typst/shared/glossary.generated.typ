@@ -119,7 +119,7 @@
   - *EFM3D - Egocentric Foundation Model 3D*: Egocentric 3D foundation-model stack used as the frozen spatial backbone for ARIA-NBV candidate scoring.
   - *EVL - Egocentric Voxel Lifting*: EFM3D architecture that lifts synchronized egocentric observations into a gravity-aligned 3D voxel feature volume.
   - *action set - Finite Candidate Action Set*: Masked finite action-index set over sampled candidate views.
-  - *Q_H - Finite-Horizon Q Function*: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
+  - *Q_H - Finite-Horizon Q Function*: Horizon-conditioned candidate-value family for target-conditioned ARIA-NBV.
   - *return - Finite-Horizon Return*: H-step discounted return over root-normalized target-gain rewards.
   - *5DoF - Five Degrees of Freedom*: Reduced camera-action parameterization commonly used when roll is fixed or otherwise constrained.
   - *frustum - Frustum*: Truncated pyramidal camera-visible volume bounded by near and far clipping planes plus lateral field-of-view planes.

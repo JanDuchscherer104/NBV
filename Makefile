@@ -27,6 +27,10 @@ TYPST_PAPER ?= $(DOCS_DIR)/typst/seminar_paper/main.typ
 TYPST_PAPER_PDF ?= $(DOCS_DIR)/typst/seminar_paper/main.pdf
 TYPST_THESIS ?= $(DOCS_DIR)/typst/thesis/main.typ
 TYPST_THESIS_PDF ?= $(DOCS_DIR)/typst/thesis/main.pdf
+# The active worktree branch keeps draft thesis-to-source links reviewable
+# before that branch is merged. Override with a release tag or commit SHA for
+# an archival/submission build: `make thesis-pdf THESIS_CODE_REF=<ref>`.
+THESIS_CODE_REF ?= $(shell git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --verify HEAD)
 TYPST_SLIDES_DIR ?= $(DOCS_DIR)/typst/seminar_slides
 CI_RENDER_DIR ?= $(CURDIR)/.cache/ci-renders
 SLIDES ?= slides_4.typ
@@ -459,7 +463,7 @@ quarto-preview: ## Preview the Quarto website locally
 #  🧾 Typst builds
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: typst-paper typst-slide thesis-pdf thesis-watch
+.PHONY: typst-paper typst-slide thesis-prune-audit thesis-pdf thesis-watch
 typst-paper: ## Compile the Typst paper (docs/typst/seminar_paper/main.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PAPER) $(TYPST_PAPER_PDF)
 
@@ -470,11 +474,14 @@ typst-paper-ci: ## Compile the Typst paper into an ignored CI artifact path
 typst-slide: ## Compile a Typst slide deck (make typst-slide SLIDES=slides_4.typ or SLIDES=docs/typst/thesis_slides/slides_thesis_outlook.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(SLIDES_SRC) $(SLIDES_PDF)
 
-thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
-	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
+thesis-prune-audit: ## Generate direct-use evidence and thesis prune-target markers
+	@$(PYTHON_INTERPRETER) scripts/thesis_prune_audit.py
+
+thesis-pdf: thesis-prune-audit ## Compile the Typst thesis (docs/typst/thesis/main.typ)
+	@$(TYPST) compile --root $(TYPST_ROOT) --input aria-code-ref=$(THESIS_CODE_REF) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
 thesis-watch: ## Watch and recompile the Typst thesis
-	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
+	@$(TYPST) watch --root $(TYPST_ROOT) --input aria-code-ref=$(THESIS_CODE_REF) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
 docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 

@@ -22,7 +22,9 @@ _CITE = re.compile(r"(?<![\w\\])@([A-Za-z0-9][\w:.-]*)")
 _MARKER = re.compile(r"#(" + "|".join(sorted(_MARKERS)) + r")\s*\(")
 _CODE_PATH = re.compile(r"(?<![\w/])(aria_nbv/aria_nbv/[\w./-]+\.py)\b")
 _CODE_DOTTED = re.compile(r"(?<![\w/])(aria_nbv(?:\.[A-Za-z_]\w*)+)\b")
-_GH_WIP = re.compile(r'#gh-wip\("([^"]+)"\s*,\s*body:\s*\[`([^`]+)`\]', re.DOTALL)
+_GH_LINK = re.compile(r"#(gh|gh-wip|gh-symbol|gh-symbol-search)\s*\(")
+_GH_POSITIONAL_STRING = re.compile(r'^\s*"((?:\\.|[^"\\])*)"', re.DOTALL)
+_CODE_SYMBOL = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*")
 _TEX_IMPORT = re.compile(r"\\(?:input|include)\s*\{([^}]+)\}")
 _TEX_SECTION = re.compile(r"\\(subsubsection|subsection|section)\*?\s*\{([^}]*)\}")
 _TEX_LABEL = re.compile(r"\\label\s*\{([^}]+)\}")
@@ -47,8 +49,9 @@ class _Source:
 
 
 class _Parser:
-    def __init__(self, source: _Source) -> None:
+    def __init__(self, source: _Source, link_targets: set[PurePosixPath]) -> None:
         self.source = source
+        self.link_targets = link_targets
         self.anchor = f"source_{_identifier(source.path.stem)}"
         self.lines: list[tuple[int, str]] = []
         self.definitions: set[str] = set()
@@ -98,17 +101,33 @@ class _Parser:
         tail = f"_{_identifier(value)[:32]}_{digest}" if value else ""
         return f"{_identifier(kind)}_L{line}_{ordinal}{tail}"
 
-    def code_refs(self, line: str, number: int) -> None:
+    def code_refs(self, lines: list[str], line: str, number: int) -> None:
         seen: set[str] = set()
-        for path, symbol in _GH_WIP.findall(line):
-            if not path.startswith("aria_nbv/aria_nbv/") or not path.endswith(".py"):
-                continue
-            module = path[:-3].replace("/", ".")
-            owner, _, member = symbol.partition(".")
-            self.import_once(number, f"from {module} import {owner}")
-            if member:
-                self.source_calls.append((number, f"{owner}.{member}"))
-            seen.add(module)
+        for kind, arguments in _github_links(lines, line, number):
+            if kind == "gh-symbol":
+                self._github_path_ref(
+                    number,
+                    kind,
+                    _first_string(arguments),
+                    _second_string(arguments),
+                    _integer_argument(arguments, "line"),
+                    _integer_argument(arguments, "end"),
+                    self.link_targets,
+                    seen,
+                )
+            elif kind == "gh-symbol-search":
+                self._github_symbol_search_ref(number, _first_string(arguments), seen)
+            else:
+                self._github_path_ref(
+                    number,
+                    kind,
+                    _first_string(arguments),
+                    _literal(arguments, "body"),
+                    _integer_argument(arguments, "line"),
+                    _integer_argument(arguments, "end"),
+                    self.link_targets,
+                    seen,
+                )
         for path in _CODE_PATH.findall(line):
             reference = path[:-3].replace("/", ".")
             if reference in seen:
@@ -136,6 +155,91 @@ class _Parser:
                 if member := ".".join(parts[symbol + 1 :]):
                     self.source_calls.append((number, f"{owner}.{member}"))
             self.import_once(number, import_line)
+
+    def _github_path_ref(
+        self,
+        number: int,
+        kind: str,
+        path: str | None,
+        label: str | None,
+        line: str | None,
+        end: str | None,
+        link_targets: set[PurePosixPath],
+        seen: set[str],
+    ) -> None:
+        """Bridge a typed GitHub file anchor to its real Python module and symbol."""
+        if not _repo_local_path(path):
+            return
+        symbol = _symbol_from_label(label)
+        target_call = None
+        target = PurePosixPath(path)
+        package_python = path.startswith("aria_nbv/aria_nbv/") and path.endswith(".py")
+        if target.suffix in _SUPPORTED and target in link_targets:
+            target_call = f"source_{_identifier(target.stem)}"
+            self.import_once(number, _import(self.source.path, target, target_call))
+        elif target.suffix == ".py" and target in link_targets and not package_python:
+            module = path[:-3].replace("/", ".")
+            target_call = _code_source_anchor(path)
+            self.import_once(number, f"from {module} import {target_call}")
+        if package_python:
+            module = path[:-3].replace("/", ".")
+            if symbol is None:
+                target_call = _code_source_anchor(path)
+                self.import_once(number, f"from {module} import {target_call}")
+            else:
+                owner, _, member = symbol.partition(".")
+                if module not in seen:
+                    seen.add(module)
+                    self.import_once(number, f"from {module} import {owner}")
+                target_call = f"{owner}.{member}" if member else owner
+        range_label = "-".join(value for value in (line, end) if value) or "file"
+        identity = f"{kind}_{range_label}_{path}_{symbol or 'file'}"
+        reference = self.occurrence("github_reference", number, identity)
+        self.function(number, reference, (target_call,) if target_call else ())
+        self.source_calls.append((number, reference))
+        if target_call:
+            self.source_calls.append((number, target_call))
+
+    def _github_symbol_search_ref(
+        self, number: int, symbol: str | None, seen: set[str]
+    ) -> None:
+        """Bridge a draft GitHub symbol-search anchor when it names ARIA code."""
+        if symbol is None:
+            return
+        link_node = self.occurrence("github_symbol_search", number, symbol)
+        match = _CODE_DOTTED.fullmatch(symbol)
+        if match is None:
+            self.function(number, link_node, ())
+            self.source_calls.append((number, link_node))
+            return
+        raw_reference = match.group(0)
+        reference = "aria_nbv." + raw_reference
+        seen.add(raw_reference)
+        parts = reference.split(".")
+        owner_index = next(
+            (index for index, part in enumerate(parts[1:], 1) if part[:1].isupper()),
+            None,
+        )
+        if owner_index is None:
+            if reference not in seen:
+                seen.add(reference)
+                self.import_once(number, f"import {reference}")
+            self.function(number, link_node, ())
+            self.source_calls.append((number, link_node))
+            return
+        module, owner = ".".join(parts[:owner_index]), parts[owner_index]
+        if reference not in seen:
+            seen.add(reference)
+            self.import_once(number, f"from {module} import {owner}")
+        member = ".".join(parts[owner_index + 1 :])
+        self.function(
+            number,
+            link_node,
+            (f"{owner}.{member}",) if member else (),
+        )
+        self.source_calls.append((number, link_node))
+        if member:
+            self.source_calls.append((number, f"{owner}.{member}"))
 
     def typ_events(
         self,
@@ -204,7 +308,7 @@ class _Parser:
                     else:
                         continue
                     self.import_once(number, _import(self.source.path, target, name))
-            self.code_refs(line, number)
+            self.code_refs(lines, line, number)
         return self.finish()
 
     def non_typ_events(
@@ -225,7 +329,7 @@ class _Parser:
                     self.define(number, self.occurrence(level, number, title))
                 for label in _TEX_LABEL.findall(line):
                     self.define(number, self.occurrence("label", number, label))
-                self.code_refs(line, number)
+                self.code_refs(self.source.text.splitlines(), line, number)
             return self.finish()
         for number, key, arxiv in bib_entries:
             self.define(number, f"citation_{_identifier(key)}")
@@ -242,6 +346,11 @@ def _identifier(value: Any) -> str:
     if name[0].isdigit():
         name = "_" + name
     return name + "_" if keyword.iskeyword(name) else name
+
+
+def _code_source_anchor(path: str) -> str:
+    """Name the temporary Graphify anchor for a copied Python source file."""
+    return f"source_file_{_identifier(path[:-3])}"
 
 
 def _source(item: Any) -> _Source:
@@ -330,6 +439,57 @@ def _literal(text: str, name: str) -> str | None:
     )
 
 
+def _first_string(arguments: str) -> str | None:
+    """Return the leading Typst string argument, if the call has one."""
+    match = _GH_POSITIONAL_STRING.match(arguments)
+    if match is None:
+        return None
+    return bytes(match.group(1), "utf-8").decode("unicode_escape")
+
+
+def _second_string(arguments: str) -> str | None:
+    """Return the second positional Typst string argument, if present."""
+    first = _GH_POSITIONAL_STRING.match(arguments)
+    if first is None:
+        return None
+    second = _GH_POSITIONAL_STRING.match(arguments[first.end() :].lstrip(" ,"))
+    return bytes(second.group(1), "utf-8").decode("unicode_escape") if second else None
+
+
+def _integer_argument(arguments: str, name: str) -> str | None:
+    """Return a non-negative integer keyword argument as stable link metadata."""
+    match = re.search(rf"\b{re.escape(name)}\s*:\s*(\d+)\b", arguments)
+    return match.group(1) if match else None
+
+
+def _repo_local_path(path: str | None) -> bool:
+    """Accept only a non-empty, traversal-free repository-relative link target."""
+    if path is None or "\\" in path or ":" in path:
+        return False
+    candidate = PurePosixPath(path)
+    return not (
+        candidate.is_absolute()
+        or not candidate.parts
+        or any(part in {"", ".", ".."} for part in candidate.parts)
+    )
+
+
+def _symbol_from_label(label: str | None) -> str | None:
+    """Accept only a code-like label as a source symbol identity."""
+    if label is None:
+        return None
+    value = label.strip().strip("`")
+    return value if _CODE_SYMBOL.fullmatch(value) else None
+
+
+def _github_links(
+    lines: list[str], line: str, number: int
+) -> Iterable[tuple[str, str]]:
+    """Yield typed GitHub-link calls that begin on the current source line."""
+    for match in _GH_LINK.finditer(line):
+        yield match.group(1), _call_text(lines, number - 1, match.start())
+
+
 def _bib_entries(source: _Source) -> list[tuple[int, str, str | None]]:
     lines, entries, index = source.text.splitlines(), [], 0
     while index < len(lines):
@@ -382,6 +542,7 @@ def materialize(
     destination: str | os.PathLike[str],
     *,
     paper_by_arxiv: Mapping[str, Any] | None = None,
+    source_paths: Iterable[str | PurePosixPath] | None = None,
 ) -> BridgeResult:
     parsed = [_source(item) for item in sources]
     if not parsed:
@@ -395,6 +556,16 @@ def materialize(
     outputs = {source.path.with_suffix(".py") for source in parsed}
     if len(outputs) != len(parsed):
         raise ValueError("duplicate output path")
+    link_targets = {
+        PurePosixPath(str(path).replace("\\", "/")) for path in (source_paths or ())
+    } | paths
+    if any(
+        target.is_absolute()
+        or not target.parts
+        or any(part in {"", ".", ".."} for part in target.parts)
+        for target in link_targets
+    ):
+        raise ValueError("source paths must be repo-relative")
     papers: dict[str, tuple[PurePosixPath, str]] = {}
     paper_nodes: dict[PurePosixPath, list[str]] = {}
     for arxiv, value in sorted(
@@ -429,7 +600,7 @@ def materialize(
     root, result_paths, line_map = Path(destination), [], {}
     for source in sorted(parsed, key=lambda item: str(item.path)):
         suffix = source.path.suffix.lower()
-        parser = _Parser(source)
+        parser = _Parser(source, link_targets)
         if suffix == ".typ":
             events = parser.typ_events(paths, citations, terms, references, paper_nodes)
         else:

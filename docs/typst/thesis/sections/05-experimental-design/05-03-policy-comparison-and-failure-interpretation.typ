@@ -8,7 +8,7 @@
 #thesis_status(
   implementation: "partial",
   evidence: "pending",
-  source: "aria_nbv/aria_nbv/rollouts/reporting.py; docs/typst/thesis/experiment_data.typ",
+  source: [#gh("aria_nbv/aria_nbv/rollouts/reporting.py"); #gh("docs/typst/thesis/experiment_data.typ")],
   gate: [frozen held-out manifest, completed paired endpoints, and validated report bundle],
 )[The aggregation and artifact-driven reporting seam exists, but confirmatory paired policy evidence does not.]
 
@@ -38,19 +38,19 @@ The first inferential comparison is bounded oracle lookahead against one-step or
 
 #validation_todo(
   [Populate the evidence chain in order: metric repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon recovery, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
-  source: [thesis objective-to-evidence contract; repo:.agents/todos.toml\#todo-037],
+  source: [thesis objective-to-evidence contract; #gh(".agents/todos.toml", body: [todo-037])],
   gate: [artifact-backed Results bundle],
 )
 
 #validation_todo(
   [Run row-shuffle, mask-isolation, duplicate-row, valid-count, frame-transform, target-source-dropout, and horizon-boundary tests for every model admitted to the policy comparison.],
-  source: [geometric acceptance contract; repo:.agents/todos.toml\#todo-052],
+  source: [geometric acceptance contract; #gh(".agents/todos.toml", body: [todo-052])],
   gate: [architecture validity report],
 )
 
 #decision_todo(
   [Freeze the scene aggregation, interval procedure, interval level, comparison family, and meaningful-headroom threshold in the resolved analysis manifest rather than in thesis prose.],
-  source: [artifact-driven reporting plan; repo:.agents/todos.toml\#todo-018],
+  source: [artifact-driven reporting plan; #gh(".agents/todos.toml", body: [todo-018])],
   gate: [confirmatory analysis freeze],
 )
 

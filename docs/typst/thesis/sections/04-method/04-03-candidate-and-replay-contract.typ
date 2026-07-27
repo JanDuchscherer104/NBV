@@ -8,7 +8,7 @@
 #thesis_status(
   implementation: "implemented",
   evidence: "pending",
-  source: "aria_nbv/aria_nbv/rollouts/replay/types.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  source: [#gh("aria_nbv/aria_nbv/rollouts/replay/types.py"); #gh("aria_nbv/aria_nbv/rollouts/replay/engine.py"); #gh("aria_nbv/aria_nbv/rollouts/zarr_store.py"); #gh("aria_nbv/aria_nbv/rollouts/qh_reader.py"); #gh("aria_nbv/tests/rollouts/test_qh_reader.py")],
   gate: [preserve deterministic shell identity, source roles, and selected-transition validation],
 )[Finite candidate tables, hard masks, lineage, selected transitions, selected-depth persistence, and the derived `q_h/` view are implemented and schema-tested. Frozen scientific store evidence remains pending.]
 
@@ -40,7 +40,7 @@ The persisted factual tables retain source and target identity, lineage hashes, 
   implementation: "planned",
   evidence: "pending",
   citation: [@GenNBV-chen2024 @Hestia-lu2026],
-  source: "docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/oracle/evidence.py; aria_nbv/aria_nbv/rollouts/zarr_store.py",
+  source: [#gh("docs/contents/theory/efm3d_scene_embeddings.qmd"); #gh("aria_nbv/aria_nbv/oracle/evidence.py"); #gh("aria_nbv/aria_nbv/rollouts/zarr_store.py")],
   gate: [typed selected-observation reader, deterministic fusion, source masks, and no-future-observation tests],
 )[A task-sufficient successor state must update only evidence produced by the selected observation. Current GT-mesh selected depth is privileged counterfactual evidence and requires an explicit `CF-GT` state protocol.]
 

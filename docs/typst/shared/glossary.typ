@@ -1109,21 +1109,21 @@
     key: "finite-horizon-q-function",
     short: "Q_H",
     long: "Finite-Horizon Q Function",
-    description: "Target-conditioned finite-candidate value function trained from ASE oracle rollout traces. The first thesis implementation uses candidate-to-state query attention and emits one masked continuous-return value per valid candidate-table action, using DQN-style replayed Bellman targets, Double-DQN selector/evaluator backups, and offline support constraints.",
+    description: "Target-conditioned finite-candidate value family Q_theta(s,e,a,h) that scores each valid candidate for an explicit requested residual horizon h up to a configured maximum H. The thesis-core architecture is one shared horizon-conditioned scorer; dense Q_1 and exact Q_2 targets establish the recursion, horizon-indexed fitted Q supplies longer-horizon targets, and Double Q remains an optional correction for a noisy learned successor maximum.",
     group: "Model",
     custom: (
       anchor: "term-finite-horizon-q-function",
       aliases: (
         "Q_H",
-        "candidate-query Q_H",
+        "variable-horizon Q scorer",
+        "horizon-conditioned Q",
         "bounded Q function",
         "finite-candidate Q",
-        "fitted Double-Q head",
       ),
       category: "model.value",
       parent: "target-conditioned-nbv-mdp",
-      definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
-      definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
+      definition_short: "Horizon-conditioned candidate-value family for target-conditioned ARIA-NBV.",
+      definition_long: "The minimal learned method is one shared scorer Q_theta(s_t,e,i,h) that conditions on the actor state, target, candidate row, and requested residual horizon. H is the maximum supported horizon, h is the query, and h must not exceed the remaining budget. Offline fitted Q learning does not require online interaction. Q_1 is densely supervised, exact Q_2 is a base-case control when successor one-step labels exist, and Q_h for h>1 bootstraps only from a lower-horizon value Q_{h-1}. Double Q may separate successor selection from evaluation to reduce maximization bias, but it does not define the architecture or solve offline-support and state-aliasing failures. Optimality is bounded to the finite candidate, validity, state, and replay-support contract.",
       internal_links: (
         "docs/contents/thesis/questions.qmd#rq4-planning",
         "docs/contents/thesis/roadmap.qmd#roadmap-m5",
@@ -1131,9 +1131,10 @@
         "docs/contents/literature/rl_planning.qmd#q-h-and-dqn",
       ),
       citations: (
-        "DBLP:journals/corr/MnihKSGAWR13",
+        "FittedQIteration-ernst2005",
+        "FixedHorizonTD-deAsis2020",
+        "UVFA-schaul2015",
         "DoubleDQN-vanHasselt2015",
-        "IQL-kostrikov2021",
       ),
       related: (
         "finite-horizon-return",
@@ -1144,6 +1145,7 @@
       kg_tags: (
         "model",
         "q-learning",
+        "variable-horizon",
         "thesis-core",
       ),
       tier: "core",
@@ -1164,16 +1166,16 @@
       ),
       formula: (
         label: "Finite-horizon candidate value",
-        tex: "Q_H(s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e\\right]",
+        tex: "Q_\\theta(s_t,e,a,h)=\\mathbb{E}[G_t^{(h)}\\mid s_t,e,a_t=a]",
       ),
       formulae: (
         (
-          label: "Masked Double-DQN selector",
-          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j},\\boldsymbol{\\phi}_e)",
+          label: "Lower-horizon fitted target",
+          tex: "y_t^{(h)}=r_t^e+\\gamma(1-d_t)\\max_{j:m_{t+1,j}=1}Q_{\\bar\\theta}(s_{t+1},e,j,h-1)",
         ),
         (
-          label: "Masked Double-DQN target",
-          tex: "y_t=r_t^e+\\gamma(1-d_t)Q_{\\bar\\theta}(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j^*},\\boldsymbol{\\phi}_e)",
+          label: "Optional Double-Q selector",
+          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1},e,j,h-1)",
         ),
       ),
     ),
@@ -2170,7 +2172,7 @@
     short: "CD",
     long: "Chamfer Distance",
     description: [
-      Historical bidirectional distance family used to compare reconstructed points against reference geometry. Thesis-facing ARIA-NBV notation uses point-mesh error #symb.oracle.err with directional components #symb.oracle.acc and #symb.oracle.comp#text[;] older seminar material may still call this CD.
+      Historical bidirectional distance family used to compare reconstructed points against reference geometry. Thesis-facing ARIA-NBV notation uses point-mesh error #symb.oracle.err with directional components #symb.oracle.acc and #symb.oracle.comp.
     ],
     group: "Metrics",
     custom: (
@@ -2563,6 +2565,7 @@
   formulae: entry.custom.formulae,
 )
 
+#let make-aria-glossary = make-glossary
 #let register-aria-glossary() = register-glossary(aria-glossary-entries)
 #let print-aria-glossary(..args) = print-glossary(aria-glossary-entries, ..args)
 #let aria-glossary-reference-stub(label-key) = [
