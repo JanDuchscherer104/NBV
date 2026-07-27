@@ -103,6 +103,20 @@ def test_flatten_gathers_causal_history_for_variable_length_chains_without_step_
     assert not any(isinstance(node, (ast.For, ast.While)) for node in ast.walk(tree))
 
 
+def test_flattened_causal_history_ignores_future_chain_corruption() -> None:
+    """Prototype ef4aed9f: a state may not consume a later chain token."""
+
+    batch = collate_qh_samples([_chain(steps=3, width=2)])
+    row_ids = batch.supervision.candidate_row_id.clone()
+    row_ids[0, 2] += 10_000
+    corrupted = replace(batch, supervision=replace(batch.supervision, candidate_row_id=row_ids))
+
+    baseline, _ = _flatten_qh_scorer_inputs(batch)
+    changed, _ = _flatten_qh_scorer_inputs(corrupted)
+
+    assert torch.equal(changed.history_candidate_row_id[:2], baseline.history_candidate_row_id[:2])
+
+
 def test_forward_scatter_keeps_padded_states_zero() -> None:
     module = _module()
     batch = collate_qh_samples([_chain(steps=1, width=3), _chain(steps=2, width=3, offset=10)])

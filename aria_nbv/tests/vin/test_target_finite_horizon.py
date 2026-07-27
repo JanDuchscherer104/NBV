@@ -6,17 +6,35 @@ from __future__ import annotations
 
 import inspect
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
 import aria_nbv.vin.models.target_finite_horizon as target_finite_horizon
-from aria_nbv.data_handling.qh import QhActorInputs
 from aria_nbv.data_handling.raw.views import VinSnippetView
 from aria_nbv.vin.encoders.shell_descriptor import encode_shell_pose_descriptor
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
+
+
+@dataclass(frozen=True)
+class _ScorerActor:
+    """Minimal structural actor carrier required by the scorer's public seam."""
+
+    vin_snippet: VinSnippetView
+    root_pose_world: torch.Tensor
+    target_extents: torch.Tensor
+    target_pose_world_object: torch.Tensor
+    candidate_row_id: torch.Tensor
+    candidate_pose_relative_root: torch.Tensor
+    candidate_position_id: torch.Tensor
+    actor_action_mask: torch.Tensor
+    history_candidate_row_id: torch.Tensor
+    history_pose_relative_root: torch.Tensor
+    history_position_id: torch.Tensor
+    history_mask: torch.Tensor
+    remaining_budget: torch.Tensor
 
 
 def _poses(translations: torch.Tensor) -> torch.Tensor:
@@ -26,7 +44,7 @@ def _poses(translations: torch.Tensor) -> torch.Tensor:
     return torch.cat((rotations.flatten(start_dim=-2), translations), dim=-1)
 
 
-def _actor() -> QhActorInputs:
+def _actor() -> _ScorerActor:
     root_translation = torch.tensor([[1.0, -2.0, 0.5], [-3.0, 4.0, 1.5]])
     rig_translation = torch.stack(
         (
@@ -61,7 +79,7 @@ def _actor() -> QhActorInputs:
         ]
     )
     target_center_root = torch.tensor([[2.0, 0.0, 1.0], [0.0, 3.0, 1.0]])
-    return QhActorInputs(
+    return _ScorerActor(
         vin_snippet=VinSnippetView(
             points_world=points_world,
             lengths=torch.tensor([[6], [8]], dtype=torch.int64),
@@ -88,7 +106,7 @@ def _scorer():
     return scorer.eval()
 
 
-def _target_pose_relative_root(actor: QhActorInputs) -> torch.Tensor:
+def _target_pose_relative_root(actor: _ScorerActor) -> torch.Tensor:
     return (PoseTW(actor.root_pose_world).inverse() @ PoseTW(actor.target_pose_world_object)).tensor()
 
 
@@ -102,7 +120,7 @@ def _left_multiply_world_pose(pose: torch.Tensor, rotation: torch.Tensor, transl
     return torch.cat((transformed_rotation.flatten(start_dim=-2), transformed_translation), dim=-1)
 
 
-def _apply_common_world_transform(actor: QhActorInputs) -> QhActorInputs:
+def _apply_common_world_transform(actor: _ScorerActor) -> _ScorerActor:
     """Transform every world-frame actor fact while preserving local facts."""
 
     yaw = math.pi / 3
@@ -184,6 +202,37 @@ def test_scorer_is_candidate_permutation_equivariant_and_row_id_independent() ->
     actual = scorer(permuted)
 
     assert torch.allclose(actual, expected, atol=1e-6)
+
+
+def test_scorer_candidate_subset_preserves_retained_query_values() -> None:
+    """Prototype 150e0d28: removed candidate queries cannot perturb retained values."""
+
+    scorer = _scorer()
+    actor = _actor()
+    retained = torch.tensor([1, 0])
+    subset = replace(
+        actor,
+        candidate_row_id=actor.candidate_row_id[:, retained],
+        candidate_pose_relative_root=actor.candidate_pose_relative_root[:, retained],
+        candidate_position_id=actor.candidate_position_id[:, retained],
+        actor_action_mask=actor.actor_action_mask[:, retained],
+    )
+
+    assert torch.allclose(scorer(subset), scorer(actor)[:, retained], atol=1e-6)
+
+
+def test_target_change_is_isolated_to_its_own_batched_query() -> None:
+    """Prototype ef4aed9f: target-conditioned queries cannot cross batch items."""
+
+    scorer = _scorer()
+    actor = _actor()
+    target_pose = actor.target_pose_world_object.clone()
+    target_pose[1, 9:12] += torch.tensor([8.0, -3.0, 2.0])
+
+    baseline = scorer(actor)
+    changed = scorer(replace(actor, target_pose_world_object=target_pose))
+
+    assert torch.equal(changed[0], baseline[0])
 
 
 def test_invalid_candidate_features_cannot_change_valid_scores() -> None:

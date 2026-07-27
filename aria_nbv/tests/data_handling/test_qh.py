@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import astuple, dataclass, fields
+from dataclasses import astuple, dataclass, fields, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -247,6 +247,27 @@ def test_collate_pads_time_and_candidates_and_preserves_causal_history() -> None
     batch.assert_selected_rows_consistent()
 
 
+def test_collation_keeps_sibling_chains_isolated_across_variable_widths() -> None:
+    """Prototype 55462356: grouped rollout siblings must remain independent items."""
+
+    left = _chain(steps=2, width=1, offset=0)
+    right = _chain(steps=3, width=3, offset=100)
+    changed_right = replace(
+        right,
+        inputs=replace(
+            right.inputs,
+            candidate_pose_relative_root=right.inputs.candidate_pose_relative_root + 10_000,
+        ),
+    )
+
+    baseline = collate_qh_samples([left, right])
+    changed = collate_qh_samples([left, changed_right])
+
+    assert torch.equal(changed.inputs.candidate_pose_relative_root[0], baseline.inputs.candidate_pose_relative_root[0])
+    assert changed.lineage[0] == baseline.lineage[0]
+    assert baseline.inputs.actor_action_mask[0, :, 1:].eq(False).all()
+
+
 def test_padding_numeric_values_are_inert_under_explicit_masks() -> None:
     batch = collate_qh_samples([_chain(steps=1, width=1), _chain(steps=2, width=2, offset=10)])
     valid = batch.inputs.step_mask.unsqueeze(-1) & batch.inputs.actor_action_mask
@@ -381,6 +402,14 @@ def test_datamodule_uses_chain_datasets_and_lightning_default_sampler() -> None:
     assert isinstance(loader.sampler, RandomSampler)
     assert distributed_padding_rows(train, world_size=2) == 1
     assert next(iter(loader)).inputs.step_mask.shape == (2, 2)
+
+
+def test_default_distributed_sampler_padding_reports_duplicate_count_and_fraction() -> None:
+    chains = _StaticDataset([_chain(steps=2, width=2) for _ in range(5)], scene="train")
+    duplicate_count = distributed_padding_rows(chains, world_size=2)
+
+    assert duplicate_count == 1
+    assert duplicate_count / (len(chains) + duplicate_count) == pytest.approx(1 / 6)
 
 
 def test_datamodule_rejects_empty_overlap_and_horizon_mismatch() -> None:

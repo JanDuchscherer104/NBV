@@ -14,7 +14,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 _ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -56,9 +55,7 @@ def test_extract_batch_workload_matches_legacy_and_chain_shapes() -> None:
 def test_extract_batch_workload_rejects_lineage_and_mask_length_mismatch() -> None:
     instrument = _load_script("qh_loader_benchmark")
     invalid = SimpleNamespace(
-        lineage=(
-            SimpleNamespace(current=SimpleNamespace(source_sample_key="scene-a:one")),
-        ),
+        lineage=(SimpleNamespace(current=SimpleNamespace(source_sample_key="scene-a:one")),),
         transition=SimpleNamespace(row_train_mask=(True, False)),
     )
 
@@ -95,18 +92,10 @@ def test_ordered_workload_digest_covers_the_entire_frozen_loader() -> None:
     assert digest == instrument.digest_keys(("a", "b", "c"))
 
 
-def test_loc_audit_reproduces_the_frozen_h_baseline() -> None:
-    completed = subprocess.run(
-        [sys.executable, "scripts/qh_loc_audit.py", "--repo-root", str(_ROOT)],
-        cwd=_ROOT,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
+def test_frozen_loc_config_records_the_2480_h_baseline() -> None:
+    config = json.loads((_ROOT / ".configs" / "qh_loc_audit.json").read_text())
 
-    result = json.loads(completed.stdout)
-    assert result["total_physical_loc"] == 2480
-    assert result["baseline_total"] == 2480
+    assert config["baseline_total"] == 2480
 
 
 def test_loc_audit_rejects_duplicate_manifest_targets(tmp_path: Path) -> None:
@@ -139,7 +128,38 @@ def test_loc_audit_rejects_duplicate_manifest_targets(tmp_path: Path) -> None:
     assert "double counts" in completed.stderr.lower()
 
 
-def test_loc_audit_final_phase_fails_closed_until_every_future_symbol_exists() -> None:
+def test_loc_audit_baseline_phase_accepts_absent_future_symbols(tmp_path: Path) -> None:
+    (tmp_path / "legacy.py").write_text("x = 1\n", encoding="utf-8")
+    config = {
+        "schema_version": 1,
+        "baseline_total": 1,
+        "files": [{"owner": "legacy", "path": "legacy.py"}],
+        "future_symbols": [{"owner": "future", "path": "future.py", "kind": "function", "name": "future_symbol"}],
+    }
+    config_path = tmp_path / "audit.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/qh_loc_audit.py",
+            "--repo-root",
+            str(tmp_path),
+            "--config",
+            str(config_path),
+            "--phase",
+            "baseline",
+        ],
+        cwd=_ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    assert json.loads(completed.stdout)["total_physical_loc"] == 1
+
+
+def test_loc_audit_final_phase_requires_and_counts_every_future_symbol() -> None:
     completed = subprocess.run(
         [
             sys.executable,
@@ -150,18 +170,18 @@ def test_loc_audit_final_phase_fails_closed_until_every_future_symbol_exists() -
             "final",
         ],
         cwd=_ROOT,
+        check=True,
         text=True,
         capture_output=True,
     )
 
-    assert completed.returncode != 0
-    assert "read_actor_snippet" in completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["phase"] == "final"
+    assert result["total_physical_loc"] == 1835
 
 
 def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
-    config = tomllib.loads(
-        (_ROOT / ".configs" / "build_rollouts_qh_v0_baseline.toml").read_text()
-    )
+    config = tomllib.loads((_ROOT / ".configs" / "build_rollouts_qh_v0_baseline.toml").read_text())
 
     assert config["max_samples"] == 1
     assert config["max_targets_per_sample"] == 1
@@ -173,12 +193,8 @@ def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
 def test_instrumentation_allowlist_hashes_every_frozen_path() -> None:
     instrument = _load_script("qh_loader_benchmark")
 
-    hashes = instrument.instrumentation_hashes(
-        _ROOT, _ROOT / ".configs" / "qh_instrumentation_allowlist.json"
-    )
+    hashes = instrument.instrumentation_hashes(_ROOT, _ROOT / ".configs" / "qh_instrumentation_allowlist.json")
 
-    paths = json.loads(
-        (_ROOT / ".configs" / "qh_instrumentation_allowlist.json").read_text()
-    )["paths"]
+    paths = json.loads((_ROOT / ".configs" / "qh_instrumentation_allowlist.json").read_text())["paths"]
     assert set(hashes) == set(paths)
     assert all(len(value) == 64 for value in hashes.values())
