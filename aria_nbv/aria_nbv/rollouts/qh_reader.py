@@ -1171,12 +1171,14 @@ def _read_chain_candidate_row(
     return {
         "candidate_row_id": _readonly(candidate_ids),
         "candidate_pose_relative_root": _readonly(candidates["pose_relative_root"].astype(np.float32, copy=False)),
-        "candidate_position_id": _readonly(q_rows["position_id"].astype(np.int32, copy=False)),
-        "actor_action_mask": _readonly(q_rows["valid_action_mask"].astype(np.bool_, copy=False)),
-        "q_train_mask": _readonly(q_rows["q_train_mask"].astype(np.bool_, copy=False)),
-        "invalid_reason_bitset": _readonly(q_rows["invalid_reason_bitset"].astype(np.uint32, copy=False)),
-        "one_step_target_rri": _readonly(q_rows["one_step_target_rri"].astype(np.float32, copy=False)),
-        "one_step_target_root_gain": _readonly(q_rows["one_step_target_root_gain"].astype(np.float32, copy=False)),
+        "candidate_position_id": _readonly(q_rows["position_id"][:width].astype(np.int32, copy=False)),
+        "actor_action_mask": _readonly(q_rows["valid_action_mask"][:width].astype(np.bool_, copy=False)),
+        "q_train_mask": _readonly(q_rows["q_train_mask"][:width].astype(np.bool_, copy=False)),
+        "invalid_reason_bitset": _readonly(q_rows["invalid_reason_bitset"][:width].astype(np.uint32, copy=False)),
+        "one_step_target_rri": _readonly(q_rows["one_step_target_rri"][:width].astype(np.float32, copy=False)),
+        "one_step_target_root_gain": _readonly(
+            q_rows["one_step_target_root_gain"][:width].astype(np.float32, copy=False)
+        ),
     }
 
 

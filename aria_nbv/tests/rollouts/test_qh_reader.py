@@ -570,6 +570,40 @@ def test_qh_reader_rejects_corrupt_padded_candidate_tail(tmp_path) -> None:
         array[0, width] = original
 
 
+def test_qh_reader_trims_every_chain_candidate_field_to_active_width(tmp_path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    active_width = int(root["q_h"].attrs["max_candidates"])
+    state_count = int(root["q_h/state_step_row_id"].shape[0])
+    sentinels = {
+        "candidate_row_id": -1,
+        "valid_action_mask": False,
+        "q_train_mask": False,
+        "position_id": -1,
+        "invalid_reason_bitset": 0,
+        "one_step_target_rri": np.nan,
+        "one_step_target_root_gain": np.nan,
+    }
+    for field, sentinel in sentinels.items():
+        array = root[f"q_h/{field}"]
+        array.resize((state_count, active_width + 1))
+        array[:, active_width] = sentinel
+    root["q_h"].attrs["max_candidates"] = active_width + 1
+
+    chain = QhRolloutReaderConfig(store_dirs=(store,)).setup_target().read_chain(0)
+
+    for step_index, candidate_ids in enumerate(chain.supervision.candidate_row_id):
+        width = candidate_ids.size
+        assert width == active_width
+        assert chain.state.candidate_pose_relative_root[step_index].shape[0] == width
+        assert chain.state.candidate_position_id[step_index].shape[0] == width
+        assert chain.state.actor_action_mask[step_index].shape[0] == width
+        assert chain.supervision.q_train_mask[step_index].shape[0] == width
+        assert chain.supervision.invalid_reason_bitset[step_index].shape[0] == width
+        assert chain.supervision.one_step_target_rri[step_index].shape[0] == width
+        assert chain.supervision.one_step_target_root_gain[step_index].shape[0] == width
+
+
 def test_qh_reader_resolves_all_sparse_persisted_ids(tmp_path) -> None:
     store = _write_store(tmp_path / "rollouts.zarr", source_row_id=10)
     root = zarr.open_group(store, mode="a")
