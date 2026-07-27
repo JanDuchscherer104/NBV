@@ -15,6 +15,7 @@ from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
 from tests.data_handling.test_qh import _chain, _StaticDataset
+from tests.lightning.test_qh_module import _TableScorer
 
 
 def main() -> None:
@@ -22,7 +23,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
         "--scenario",
-        choices=("standard", "global-empty", "local-empty"),
+        choices=("standard", "global-empty", "local-empty", "unequal"),
         default="standard",
     )
     args = parser.parse_args()
@@ -48,8 +49,19 @@ def main() -> None:
         samples = [empty, empty]
         validation = None
         max_epochs = 1
-    else:
+    elif args.scenario == "local-empty":
         samples = [admitted, empty]
+        validation = None
+        max_epochs = 1
+    else:
+        one_admitted = replace(
+            _chain(steps=2, width=2),
+            supervision=replace(
+                admitted.supervision,
+                row_train_mask=torch.tensor([True, False]),
+            ),
+        )
+        samples = [one_admitted, _chain(steps=2, width=2, offset=10)]
         validation = None
         max_epochs = 1
     data = QhDataModule(
@@ -61,8 +73,10 @@ def main() -> None:
     module = QhLightningModule(
         QhLightningModuleConfig(
             scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
+            lr_scheduler=None,
             target_sync_interval=3,
-        )
+        ),
+        scorer=_TableScorer() if args.scenario == "unequal" else None,
     )
     callbacks = []
     if args.scenario == "standard":

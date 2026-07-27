@@ -16,6 +16,7 @@ import math
 import warnings
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Any
 
 import pytorch_lightning as pl
 import torch
@@ -29,7 +30,7 @@ from ..data_handling.qh import QhBatch
 from ..data_handling.raw.views import VinSnippetView
 from ..utils import Stage, TargetConfig
 from ..vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from .optimizers import AdamWConfig
+from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,9 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
 
     optimizer: AdamWConfig = Field(default_factory=AdamWConfig)
     """AdamW settings applied only to online-scorer parameters."""
+
+    lr_scheduler: OneCycleSchedulerConfig | None = Field(default_factory=OneCycleSchedulerConfig)
+    """Optional stateful per-update learning-rate schedule."""
 
     huber_delta: FiniteFloat = Field(default=1.0, gt=0.0)
     """Positive transition point for the selected-action Huber loss."""
@@ -427,11 +431,20 @@ class QhLightningModule(pl.LightningModule):
             .reshape(batch_size, steps, candidates)
         )
 
-    def configure_optimizers(self) -> Optimizer:
-        """Construct AdamW over online-scorer parameters only."""
+    def configure_optimizers(self) -> Optimizer | dict[str, Any]:
+        """Construct AdamW and its optional per-update scheduler."""
 
         params = [parameter for parameter in self.online_scorer.parameters() if parameter.requires_grad]
-        return self.config.optimizer.setup_target(params)
+        optimizer = self.config.optimizer.setup_target(params)
+        if self.config.lr_scheduler is None:
+            return optimizer
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": self.config.lr_scheduler.setup_lightning(
+                optimizer,
+                trainer=getattr(self, "trainer", None),
+            ),
+        }
 
     def record_optimizer_update(self) -> None:
         """Advance the checkpointed update counter and hard-sync on cadence.

@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
 from tests.data_handling.test_qh import _chain, _StaticDataset
+from tests.lightning.test_qh_module import _TableScorer
 
 
 def _run_torchrun(output_dir: Path, scenario: str = "standard") -> list[dict[str, object]]:
@@ -52,8 +54,16 @@ def _module() -> QhLightningModule:
     return QhLightningModule(
         QhLightningModuleConfig(
             scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
+            lr_scheduler=None,
             target_sync_interval=3,
         )
+    )
+
+
+def _table_module() -> QhLightningModule:
+    return QhLightningModule(
+        QhLightningModuleConfig(lr_scheduler=None, target_sync_interval=3),
+        scorer=_TableScorer(),
     )
 
 
@@ -115,6 +125,41 @@ def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_pa
     data = QhDataModule(
         train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
         batch_size=1,
+        seed=43,
+    )
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        use_distributed_sampler=True,
+        deterministic=True,
+    )
+    trainer.fit(control, datamodule=data)
+    for name, expected in control.state_dict().items():
+        assert torch.allclose(rank_states[0][name], expected, atol=1e-6, rtol=1e-6), name
+
+
+def test_two_process_unequal_transition_counts_match_exact_global_mean_update(tmp_path: Path) -> None:
+    payloads = _run_torchrun(tmp_path, "unequal")
+
+    assert sorted(payload["training_row_count"] for payload in payloads) == [1, 2]
+    rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
+    for name in rank_states[0]:
+        assert torch.equal(rank_states[0][name], rank_states[1][name])
+
+    one_admitted = _chain(steps=2, width=2)
+    one_admitted = replace(
+        one_admitted,
+        supervision=replace(one_admitted.supervision, row_train_mask=torch.tensor([True, False])),
+    )
+    pl.seed_everything(123, workers=True)
+    control = _table_module()
+    data = QhDataModule(
+        train=_StaticDataset([one_admitted, _chain(steps=2, width=2, offset=10)], scene="train-scene"),
+        batch_size=2,
         seed=43,
     )
     trainer = pl.Trainer(

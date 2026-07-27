@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from torch import nn
 
 from aria_nbv.data_handling.qh import QhBatch, collate_qh_samples
+from aria_nbv.lightning.optimizers import OneCycleSchedulerConfig
 from aria_nbv.lightning.qh_module import (
     QhLightningModule,
     QhLightningModuleConfig,
@@ -54,7 +55,7 @@ def _batch(*, bootstrap: bool = True) -> QhBatch:
 
 def _module(sync_interval: int = 2) -> QhLightningModule:
     return QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=sync_interval, huber_delta=1.0),
+        QhLightningModuleConfig(target_sync_interval=sync_interval, huber_delta=1.0, lr_scheduler=None),
         scorer=_TableScorer(),
     )
 
@@ -377,6 +378,23 @@ def test_optimizer_excludes_target_parameters() -> None:
 
     assert optimized == {id(parameter) for parameter in module.online_scorer.parameters()}
     assert optimized.isdisjoint({id(parameter) for parameter in module.target_scorer.parameters()})
+
+
+def test_configure_optimizers_builds_repo_standard_stateful_step_scheduler() -> None:
+    module = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=OneCycleSchedulerConfig(max_lr=1e-3),
+            target_sync_interval=2,
+        ),
+        scorer=_TableScorer(),
+    )
+    module.trainer = SimpleNamespace(estimated_stepping_batches=4)
+
+    configured = module.configure_optimizers()
+
+    assert isinstance(configured, dict)
+    assert configured["lr_scheduler"]["interval"] == "step"
+    assert configured["lr_scheduler"]["scheduler"].total_steps == 4
 
 
 def test_empty_local_admission_still_participates_in_distributed_count(monkeypatch: pytest.MonkeyPatch) -> None:
