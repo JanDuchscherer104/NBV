@@ -68,7 +68,7 @@ def test_lightning_module_uses_the_data_owned_selected_row_predicate() -> None:
     assert fitted_source.count("batch.assert_selected_rows_consistent()") == 1
     assert "_validate_selected_rows" not in source
     assert "selected_candidate_row_id" not in fitted_source
-    assert "torch.isfinite(batch.transition.reward)" not in fitted_source
+    assert "torch.isfinite(batch.supervision.selected_reward)" not in fitted_source
 
 
 def test_datamodule_does_not_read_private_trainer_accelerator_state() -> None:

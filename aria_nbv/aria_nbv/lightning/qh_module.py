@@ -3,7 +3,7 @@
 :class:`QhLightningModule` owns Bellman target construction, distributed loss
 normalization, optimization, and hard target-network synchronization. It
 consumes the canonical data-owned admission from
-:attr:`aria_nbv.data_handling.qh.QhTransition.row_train_mask` and delegates
+:attr:`aria_nbv.data_handling.qh.QhSupervision.row_train_mask` and delegates
 selected-row consistency to :meth:`aria_nbv.data_handling.qh.QhBatch.assert_selected_rows_consistent`;
 it does not recreate the data admission predicate. Actor-only feature construction belongs to
 :mod:`aria_nbv.vin.models.target_finite_horizon`; transition loading and padding
@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 import warnings
 from copy import deepcopy
+from dataclasses import dataclass
 
 import pytorch_lightning as pl
 import torch
@@ -24,10 +25,82 @@ from torch import Tensor, nn
 from torch.nn import functional
 from torch.optim import Optimizer
 
-from ..data_handling.qh import QhActorInputs, QhBatch
+from ..data_handling.qh import QhBatch
+from ..data_handling.raw.views import VinSnippetView
 from ..utils import Stage, TargetConfig
 from ..vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
 from .optimizers import AdamWConfig
+
+
+@dataclass(frozen=True, slots=True)
+class _QhScorerInputs:
+    vin_snippet: VinSnippetView
+    root_pose_world: Tensor
+    target_extents: Tensor
+    target_pose_world_object: Tensor
+    candidate_pose_relative_root: Tensor
+    candidate_position_id: Tensor
+    actor_action_mask: Tensor
+    candidate_row_id: Tensor
+    history_pose_relative_root: Tensor
+    history_position_id: Tensor
+    history_candidate_row_id: Tensor
+    history_mask: Tensor
+    remaining_budget: Tensor
+
+
+def _flatten_qh_scorer_inputs(batch: QhBatch) -> tuple[_QhScorerInputs, Tensor]:
+    """Gather causal history and flatten valid ``[B,S]`` states to ``K``."""
+
+    inputs, supervision = batch.inputs, batch.supervision
+    batch_size, steps, candidates = supervision.candidate_row_id.shape
+    selected = supervision.selected_candidate_index.clamp(0, max(candidates - 1, 0))
+    selected_pose = inputs.candidate_pose_relative_root.gather(
+        2, selected[..., None, None].expand(batch_size, steps, 1, 12)
+    ).squeeze(2)
+    selected_position = inputs.candidate_position_id.gather(2, selected[..., None]).squeeze(2)
+    selected_row = supervision.candidate_row_id.gather(2, selected[..., None]).squeeze(2)
+    history_mask = (
+        torch.ones((steps, steps), dtype=torch.bool, device=selected.device).tril(diagonal=-1)[None]
+        & inputs.step_mask[:, :, None]
+        & inputs.step_mask[:, None, :]
+    )
+    history_pose = selected_pose[:, None].expand(-1, steps, -1, -1).masked_fill(~history_mask[..., None], 0)
+    history_position = selected_position[:, None].expand(-1, steps, -1).masked_fill(~history_mask, -1)
+    history_row = selected_row[:, None].expand(-1, steps, -1).masked_fill(~history_mask, -1)
+    valid = inputs.step_mask.reshape(-1)
+
+    def _states(value: Tensor) -> Tensor:
+        return value.reshape(batch_size * steps, *value.shape[2:])[valid]
+
+    def _constant(value: Tensor) -> Tensor:
+        return (
+            value[:, None]
+            .expand(batch_size, steps, *value.shape[1:])
+            .reshape(batch_size * steps, *value.shape[1:])[valid]
+        )
+
+    snippet = inputs.vin_snippet
+    scorer_inputs = _QhScorerInputs(
+        vin_snippet=VinSnippetView(
+            points_world=_constant(snippet.points_world),
+            lengths=_constant(snippet.lengths),
+            t_world_rig=type(snippet.t_world_rig)(_constant(snippet.t_world_rig.tensor())),
+        ),
+        root_pose_world=_constant(inputs.root_pose_world),
+        target_extents=_constant(inputs.target_extents),
+        target_pose_world_object=_constant(inputs.target_pose_world_object),
+        candidate_pose_relative_root=_states(inputs.candidate_pose_relative_root),
+        candidate_position_id=_states(inputs.candidate_position_id),
+        actor_action_mask=_states(inputs.actor_action_mask),
+        candidate_row_id=_states(supervision.candidate_row_id),
+        history_pose_relative_root=_states(history_pose),
+        history_position_id=_states(history_position),
+        history_candidate_row_id=_states(history_row),
+        history_mask=_states(history_mask),
+        remaining_budget=_states(inputs.remaining_budget),
+    )
+    return scorer_inputs, valid
 
 
 class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
@@ -66,7 +139,7 @@ class QhLightningModule(pl.LightningModule):
     Here $b$ is the bootstrap gate: it is one only for an admitted,
     non-terminal row with a materialized successor and at least one valid next
     action. Only rows admitted by
-    :attr:`aria_nbv.data_handling.qh.QhTransition.row_train_mask` contribute
+    :attr:`aria_nbv.data_handling.qh.QhSupervision.row_train_mask` contribute
     to the Huber objective. The summed local losses are normalized by the exact
     all-rank admitted-row count while preserving DistributedDataParallel's
     gradient averaging.
@@ -133,14 +206,11 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
-    def forward(self, actor: QhActorInputs) -> Float[Tensor, "B N"]:
-        """Return online values ``Tensor["B N_q", float32]`` for one actor batch.
+    def forward(self, batch: QhBatch) -> Float[Tensor, "B S N"]:
+        """Return online values scattered onto the padded chain axes."""
 
-        Candidate-axis alignment and padding semantics are defined by
-        :class:`aria_nbv.data_handling.qh.QhActorInputs`.
-        """
-
-        return self.online_scorer(actor)
+        scorer_inputs, valid = _flatten_qh_scorer_inputs(batch)
+        return self._scatter_values(self.online_scorer(scorer_inputs), valid, batch)
 
     def train(self, mode: bool = True) -> "QhLightningModule":
         """Propagate parent mode while keeping the target network in eval mode."""
@@ -185,14 +255,14 @@ class QhLightningModule(pl.LightningModule):
         """Execute one exact globally normalized manual optimizer transaction.
 
         Every rank first contributes its canonical
-        :attr:`~aria_nbv.data_handling.qh.QhTransition.row_train_mask` count.
+        :attr:`~aria_nbv.data_handling.qh.QhSupervision.row_train_mask` count.
         A globally empty batch returns before model execution or any training
         clock advances. Otherwise every rank backpropagates; a locally empty
         rank contributes a graph-connected zero so DDP gradient hooks match.
         """
 
         del batch_idx
-        admitted = batch.transition.row_train_mask.bool()
+        admitted = batch.supervision.row_train_mask.bool()
         global_count = self._global_admitted_count(admitted)
         if int(global_count.item()) == 0:
             return None
@@ -291,14 +361,14 @@ class QhLightningModule(pl.LightningModule):
 
         Args:
             batch: Padded :class:`QhBatch` with candidate values aligned on
-                ``Tensor["B N_q", float32]`` and row admission on
-                ``Tensor["B", bool]``.
+                ``Tensor["B S N_q", float32]`` and transition admission on
+                ``Tensor["B S", bool]``.
 
         Returns:
             Tuple[Tensor, Tensor, Tensor]: Globally count-normalized scalar
             Huber loss ``Tensor["", float32]``, detached TD targets
-            ``Tensor["B", float32]``, and admitted-row mask
-            ``Tensor["B", bool]``.
+            ``Tensor["B S", float32]``, and admitted-transition mask
+            ``Tensor["B S", bool]``.
         """
 
         losses, targets, admitted, _predictions, _bootstrap, _no_valid_next = self._fitted_q_components(batch)
@@ -311,31 +381,34 @@ class QhLightningModule(pl.LightningModule):
         """Return loss inputs and branch masks without duplicating admission."""
 
         batch.assert_selected_rows_consistent()
-        admitted = batch.transition.row_train_mask.bool()
-        current_values = self.online_scorer(batch.current_actor)
-        targets = batch.transition.reward.float().clone()
+        supervision = batch.supervision
+        admitted = supervision.row_train_mask.bool()
+        scorer_inputs, valid = _flatten_qh_scorer_inputs(batch)
+        online_values = self._scatter_values(self.online_scorer(scorer_inputs), valid, batch)
+        with torch.no_grad():
+            self.target_scorer.eval()
+            target_values = self._scatter_values(self.target_scorer(scorer_inputs), valid, batch)
+        targets = supervision.selected_reward.float().clone()
 
-        terminal = batch.transition.terminal.bool()
-        successor_present = batch.next_actor_present.bool()
-        has_valid_next = torch.zeros_like(admitted)
-        if batch.next_actor is not None:
-            has_valid_next = batch.next_actor.actor_action_mask.bool().any(dim=1)
+        terminal = supervision.terminal.bool()
+        successor_present = torch.zeros_like(admitted)
+        successor_present[:, :-1] = batch.inputs.step_mask[:, 1:]
+        next_valid = torch.zeros_like(batch.inputs.actor_action_mask)
+        next_valid[:, :-1] = batch.inputs.actor_action_mask[:, 1:]
+        has_valid_next = next_valid.any(dim=-1)
         bootstrap = admitted & ~terminal & successor_present & has_valid_next
         no_valid_next = admitted & ~terminal & successor_present & ~has_valid_next
         if bootstrap.any():
-            if batch.next_actor is None:
-                raise ValueError("Q_H bootstrap rows require next_actor inputs.")
-            next_valid = batch.next_actor.actor_action_mask.bool()
-            with torch.no_grad():
-                online_next = self.online_scorer(batch.next_actor)
-                selected_next = online_next[bootstrap].masked_fill(~next_valid[bootstrap], -torch.inf).argmax(dim=1)
-                self.target_scorer.eval()
-                target_next = self.target_scorer(batch.next_actor)[bootstrap]
-                bootstrap_values = target_next.gather(1, selected_next.unsqueeze(1)).squeeze(1)
-            targets[bootstrap] = targets[bootstrap] + batch.transition.discount.float()[bootstrap] * bootstrap_values
+            online_next = torch.zeros_like(online_values)
+            target_next = torch.zeros_like(target_values)
+            online_next[:, :-1] = online_values[:, 1:]
+            target_next[:, :-1] = target_values[:, 1:]
+            selected_next = online_next[bootstrap].masked_fill(~next_valid[bootstrap], -torch.inf).argmax(dim=1)
+            bootstrap_values = target_next[bootstrap].gather(1, selected_next.unsqueeze(1)).squeeze(1)
+            targets[bootstrap] += supervision.discount.float()[bootstrap] * bootstrap_values
 
-        selected = batch.transition.selected_candidate_index.long()[admitted]
-        predictions = current_values[admitted].gather(1, selected.unsqueeze(1)).squeeze(1)
+        selected = supervision.selected_candidate_index.long()[admitted]
+        predictions = online_values[admitted].gather(1, selected.unsqueeze(1)).squeeze(1)
         losses = functional.huber_loss(
             predictions,
             targets[admitted].detach(),
@@ -343,6 +416,16 @@ class QhLightningModule(pl.LightningModule):
             reduction="none",
         )
         return losses, targets.detach(), admitted, predictions.detach(), bootstrap, no_valid_next
+
+    @staticmethod
+    def _scatter_values(values: Tensor, valid: Tensor, batch: QhBatch) -> Tensor:
+        batch_size, steps, candidates = batch.supervision.candidate_row_id.shape
+        flat_indices = valid.nonzero(as_tuple=False).squeeze(1)
+        return (
+            values.new_zeros(batch_size * steps, candidates)
+            .index_copy(0, flat_indices, values)
+            .reshape(batch_size, steps, candidates)
+        )
 
     def configure_optimizers(self) -> Optimizer:
         """Construct AdamW over online-scorer parameters only."""
@@ -404,8 +487,8 @@ class QhLightningModule(pl.LightningModule):
 
         count = admitted.sum()
         denominator = count.clamp_min(1).to(dtype=torch.float32)
-        terminal = batch.transition.terminal.bool() & admitted
-        support_actions = batch.current_actor.actor_action_mask.bool()[admitted].sum()
+        terminal = batch.supervision.terminal.bool() & admitted
+        support_actions = batch.inputs.actor_action_mask.bool()[admitted].sum()
         zero = losses.new_zeros(())
 
         def _mean(values: Tensor) -> Tensor:
@@ -433,14 +516,14 @@ class QhLightningModule(pl.LightningModule):
             "terminal_fraction": terminal.sum().float() / denominator,
             "bootstrap_fraction": bootstrap.sum().float() / denominator,
             "no_valid_next_fraction": no_valid_next.sum().float() / denominator,
-            "support_actions": support_actions.float(),
+            "support_actions": support_actions.float() / denominator,
             "nonfinite_count": ((~torch.isfinite(predictions)).sum() + (~torch.isfinite(targets)).sum()).float(),
             "target_age": (self.optimizer_updates % self.config.target_sync_interval).float(),
             "target_syncs": self.target_syncs.float(),
         }
         is_training = stage is Stage.TRAIN
         for name, value in metrics.items():
-            reduce_fx = "sum" if name in {"support_actions", "nonfinite_count"} else "mean"
+            reduce_fx = "sum" if name == "nonfinite_count" else "mean"
             self.log(
                 f"{stage.value}/{name}",
                 value,

@@ -4,7 +4,6 @@
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -37,7 +36,7 @@ def _data(tmp_path: Path, *, val: bool = False, test: bool = False) -> QhDataMod
 
 def _trainer(**kwargs: object) -> TrainerFactoryConfig:
     return TrainerFactoryConfig(
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
         gradient_clip_val=None,
         accumulate_grad_batches=1,
         use_wandb=False,
@@ -48,29 +47,32 @@ def _trainer(**kwargs: object) -> TrainerFactoryConfig:
 class _Data:
     training_horizon = 2
     batch_size = 4
-    training_padding_rows = 2
-    training_padding_fraction = 1 / 6
 
     def __init__(self, events: list[str]) -> None:
         self.events = events
-        self.corpus = SimpleNamespace(
-            train=object(),
-            val=object(),
-            test=object(),
-            provenance={"train": {"manifest": "abc"}, "val": None, "test": None},
-        )
+        self.train_dataset = [object()] * 4
+        self.val_dataset = [object()]
+        self.test_dataset = [object()]
+
+    @property
+    def provenance(self) -> dict[str, object]:
+        return {"train": {"manifest": "abc"}, "val": None, "test": None}
+
+    def dataset_for_stage(self, stage: Stage) -> object | None:
+        return {
+            Stage.TRAIN: self.train_dataset,
+            Stage.VAL: self.val_dataset,
+            Stage.TEST: self.test_dataset,
+        }[stage]
 
     def setup(self, stage: str) -> None:
         self.events.append(f"data.setup:{stage}")
-
-    def prepare_training_sampler(self, *, num_replicas: int, rank: int) -> None:
-        self.events.append(f"sampler:{num_replicas}:{rank}")
 
 
 def test_default_trainer_is_safe_for_manual_optimization(tmp_path: Path) -> None:
     config = QhExperimentConfig(datamodule_config=_data(tmp_path))
 
-    assert config.trainer_config.use_distributed_sampler is False
+    assert config.trainer_config.use_distributed_sampler is True
     assert config.trainer_config.gradient_clip_val is None
     assert config.trainer_config.accumulate_grad_batches == 1
 
@@ -104,7 +106,7 @@ def test_experiment_propagates_shared_optimizer_finiteness(tmp_path: Path, value
 @pytest.mark.parametrize(
     ("override", "message"),
     [
-        ({"use_distributed_sampler": True}, "owns samplers"),
+        ({"use_distributed_sampler": False}, "default distributed sampler"),
         ({"gradient_clip_val": 1.0}, "None or zero"),
         ({"accumulate_grad_batches": 2}, "accumulate_grad_batches=1"),
     ],
@@ -115,7 +117,7 @@ def test_experiment_rejects_conflicting_trainer_ownership(
     message: str,
 ) -> None:
     values = {
-        "use_distributed_sampler": False,
+        "use_distributed_sampler": True,
         "gradient_clip_val": None,
         "accumulate_grad_batches": 1,
         **override,
@@ -177,13 +179,13 @@ def test_strict_toml_rejects_unknown_nested_keys(tmp_path: Path) -> None:
     config_path.write_text(
         """
 [trainer_config]
-use_distributed_sampler = false
+use_distributed_sampler = true
 gradient_clip_val = 0
 unknown_nested = true
 [datamodule_config]
 [datamodule_config.train.rollout]
 store_dirs = ["/tmp/rollouts"]
-[datamodule_config.train.actor.store]
+[datamodule_config.train.actor]
 store_dir = "/tmp/vin"
 """
     )
@@ -218,14 +220,14 @@ def test_setup_admits_without_eager_datamodule_setup_and_writes_manifest_before_
 
     config.setup_target()
 
-    assert events == ["seed:0:False", "sampler:3:0", "manifest", "module", "trainer"]
+    assert events == ["seed:0:False", "manifest", "module", "trainer"]
     manifest = json.loads((tmp_path / "run" / "run_manifest.json").read_text())
     assert manifest["config_hash"]
-    assert manifest["corpus"] == data.corpus.provenance
+    assert manifest["corpus"] == data.provenance
     assert manifest["run"]["launched_world_size"] == 3
     assert manifest["run"]["effective_emitted_batch_size"] == 12
     assert manifest["run"]["training_padding_rows"] == 2
-    assert manifest["run"]["training_padding_fraction"] == pytest.approx(1 / 6)
+    assert manifest["run"]["training_padding_fraction"] == pytest.approx(1 / 3)
     assert manifest["run"]["container_image"] == "registry.example/aria@sha256:exact"
     assert manifest["run"]["launcher_kind"] == "slurm-torchrun"
     assert manifest["run"]["slurm_job_id"] == "48151623"
@@ -245,7 +247,7 @@ def test_manifest_write_failure_prevents_module_and_trainer(
     with pytest.raises(OSError, match="full"):
         config.setup_target()
 
-    assert events == ["sampler:1:0"]
+    assert events == []
 
 
 def test_nonzero_launcher_rank_skips_manifest_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,7 +261,7 @@ def test_nonzero_launcher_rank_skips_manifest_write(tmp_path: Path, monkeypatch:
 
     config.setup_target()
 
-    assert events == ["sampler:1:1"]
+    assert events == []
 
 
 @pytest.mark.parametrize(("stage", "attr"), [(Stage.VAL, "val"), (Stage.TEST, "test")])
@@ -271,7 +273,7 @@ def test_missing_requested_eval_stage_fails_before_module_or_trainer(
 ) -> None:
     events: list[str] = []
     data = _Data(events)
-    setattr(data.corpus, attr, None)
+    setattr(data, f"{attr}_dataset", None)
     config = QhExperimentConfig(
         stage=stage,
         datamodule_config=_data(tmp_path),

@@ -23,13 +23,13 @@ def test_cli_loads_toml_and_applies_explicit_checkpoint(tmp_path: Path, monkeypa
     config_path.write_text(
         """
 [trainer_config]
-use_distributed_sampler = false
+use_distributed_sampler = true
 gradient_clip_val = 0
 use_wandb = false
 [datamodule_config]
 [datamodule_config.train.rollout]
 store_dirs = ["/tmp/rollouts"]
-[datamodule_config.train.actor.store]
+[datamodule_config.train.actor]
 store_dir = "/tmp/vin"
 """
     )

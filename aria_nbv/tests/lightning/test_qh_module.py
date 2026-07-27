@@ -4,20 +4,25 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import warnings
 from copy import deepcopy
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import get_type_hints
 
 import pytest
 import torch
 from pydantic import ValidationError
 from torch import nn
 
-from aria_nbv.data_handling.qh import QhActorInputs, QhBatch, QhTransition
-from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
-from tests.vin.test_target_finite_horizon import _actor
+from aria_nbv.data_handling.qh import QhBatch, collate_qh_samples
+from aria_nbv.lightning.qh_module import (
+    QhLightningModule,
+    QhLightningModuleConfig,
+    _flatten_qh_scorer_inputs,
+)
+from tests.data_handling.test_qh import _chain
 
 
 class _TableScorer(nn.Module):
@@ -25,39 +30,26 @@ class _TableScorer(nn.Module):
         super().__init__()
         self.current = nn.Parameter(torch.tensor([1.0, 2.0, 3.0]))
         self.next = nn.Parameter(torch.tensor([1.0, 3.0, 2.0]))
+        self.calls = 0
 
     def forward(self, actor):
-        successor = actor.target_pose_world_object[:, 9:10] > 5
-        return torch.where(successor, self.next.unsqueeze(0), self.current.unsqueeze(0))
+        self.calls += 1
+        successor = actor.remaining_budget.unsqueeze(1) == 1
+        width = actor.candidate_pose_relative_root.shape[1]
+        return torch.where(successor, self.next[:width].unsqueeze(0), self.current[:width].unsqueeze(0))
 
 
 def _batch(*, bootstrap: bool = True) -> QhBatch:
-    current = _actor()
-    current = replace(
-        current,
-        target_pose_world_object=torch.zeros_like(current.target_pose_world_object),
-        candidate_row_id=torch.tensor([[10, 11, 12], [20, 21, 22]]),
-        actor_action_mask=torch.ones(2, 3, dtype=torch.bool),
+    chain = _chain(steps=2, width=3)
+    supervision = replace(
+        chain.supervision,
+        one_step_target_root_gain=torch.tensor([[0.0, 0.5, 0.0], [2.0, 0.0, 0.0]]),
+        selected_candidate_index=torch.tensor([1, 0]),
+        discount=torch.tensor([0.9, 0.9]),
+        terminal=torch.tensor([not bootstrap, not bootstrap]),
+        row_train_mask=torch.tensor([True, True]),
     )
-    successor = replace(
-        current,
-        target_pose_world_object=torch.full_like(current.target_pose_world_object, 10),
-        actor_action_mask=torch.tensor([[bootstrap, bootstrap, bootstrap], [False, False, False]]),
-    )
-    return QhBatch(
-        current_actor=current,
-        next_actor=successor,
-        next_actor_present=torch.tensor([True, True]),
-        transition=QhTransition(
-            selected_candidate_index=torch.tensor([1, 0]),
-            selected_candidate_row_id=torch.tensor([11, 20]),
-            reward=torch.tensor([0.5, 2.0]),
-            discount=torch.tensor([0.9, 0.9]),
-            terminal=torch.tensor([False, not bootstrap]),
-            row_train_mask=torch.tensor([True, True]),
-        ),
-        lineage=(),
-    )
+    return collate_qh_samples([replace(chain, supervision=supervision)])
 
 
 def _module(sync_interval: int = 2) -> QhLightningModule:
@@ -75,8 +67,50 @@ def test_huber_delta_rejects_nonfinite_values(value: float | str) -> None:
     assert error.value.errors()[0]["loc"] == ("huber_delta",)
 
 
-def test_forward_accepts_the_concrete_actor_input_contract() -> None:
-    assert get_type_hints(QhLightningModule.forward)["actor"] is QhActorInputs
+def test_forward_flattens_and_scatters_every_valid_chain_state_once() -> None:
+    module = _module()
+    batch = _batch()
+
+    values = module(batch)
+
+    assert values.shape == (1, 2, 3)
+    assert values.tolist() == [[[1.0, 2.0, 3.0], [1.0, 3.0, 2.0]]]
+    assert module.online_scorer.calls == 1
+
+
+def test_flatten_gathers_causal_history_for_variable_length_chains_without_step_loop() -> None:
+    batch = collate_qh_samples([_chain(steps=3, width=2), _chain(steps=2, width=2, offset=10)])
+
+    flattened, valid = _flatten_qh_scorer_inputs(batch)
+
+    assert valid.tolist() == [True, True, True, True, True, False]
+    assert flattened.history_mask.tolist() == [
+        [False, False, False],
+        [True, False, False],
+        [True, True, False],
+        [False, False, False],
+        [True, False, False],
+    ]
+    assert flattened.history_candidate_row_id.tolist() == [
+        [-1, -1, -1],
+        [0, -1, -1],
+        [0, 3, -1],
+        [-1, -1, -1],
+        [10, -1, -1],
+    ]
+    tree = ast.parse(inspect.getsource(_flatten_qh_scorer_inputs))
+    assert not any(isinstance(node, (ast.For, ast.While)) for node in ast.walk(tree))
+
+
+def test_forward_scatter_keeps_padded_states_zero() -> None:
+    module = _module()
+    batch = collate_qh_samples([_chain(steps=1, width=3), _chain(steps=2, width=3, offset=10)])
+
+    values = module(batch)
+
+    assert values.shape == (2, 2, 3)
+    assert values[0, 1].eq(0).all()
+    assert module.online_scorer.calls == 1
 
 
 def test_exact_double_q_target_and_huber_loss() -> None:
@@ -85,9 +119,11 @@ def test_exact_double_q_target_and_huber_loss() -> None:
 
     loss, targets, admitted = module.compute_fitted_q_loss(_batch())
 
-    assert admitted.tolist() == [True, True]
-    assert targets.tolist() == pytest.approx([18.5, 2.0])
+    assert admitted.tolist() == [[True, True]]
+    assert torch.allclose(targets, torch.tensor([[18.5, 2.0]]))
     assert loss.item() == pytest.approx(8.25)
+    assert module.online_scorer.calls == 1
+    assert module.target_scorer.calls == 1
 
 
 def test_terminal_and_no_valid_next_rows_do_not_bootstrap() -> None:
@@ -96,7 +132,26 @@ def test_terminal_and_no_valid_next_rows_do_not_bootstrap() -> None:
 
     _loss, targets, _admitted = module.compute_fitted_q_loss(batch)
 
-    assert targets.tolist() == pytest.approx(batch.transition.reward.tolist())
+    assert torch.equal(targets, batch.supervision.selected_reward)
+
+
+def test_nonterminal_transition_with_no_valid_successor_action_does_not_bootstrap() -> None:
+    module = _module()
+    batch = _batch()
+    action_mask = batch.inputs.actor_action_mask.clone()
+    action_mask[:, 1] = False
+    row_mask = batch.supervision.row_train_mask.clone()
+    row_mask[:, 1] = False
+    batch = replace(
+        batch,
+        inputs=replace(batch.inputs, actor_action_mask=action_mask),
+        supervision=replace(batch.supervision, row_train_mask=row_mask),
+    )
+
+    _loss, targets, admitted = module.compute_fitted_q_loss(batch)
+
+    assert admitted.tolist() == [[True, False]]
+    assert targets[0, 0] == batch.supervision.selected_reward[0, 0]
 
 
 @pytest.mark.parametrize("field", ["index", "row_id", "actor_mask", "reward"])
@@ -104,15 +159,22 @@ def test_trainable_selected_rows_fail_closed(field: str) -> None:
     module = _module()
     batch = _batch()
     if field == "index":
-        batch = replace(batch, transition=replace(batch.transition, selected_candidate_index=torch.tensor([9, 0])))
+        batch = replace(
+            batch,
+            supervision=replace(batch.supervision, selected_candidate_index=torch.tensor([[9, 0]])),
+        )
     elif field == "row_id":
-        batch = replace(batch, transition=replace(batch.transition, selected_candidate_row_id=torch.tensor([999, 20])))
+        row_ids = batch.supervision.candidate_row_id.clone()
+        row_ids[0, 0, 1] = -1
+        batch = replace(batch, supervision=replace(batch.supervision, candidate_row_id=row_ids))
     elif field == "actor_mask":
-        mask = batch.current_actor.actor_action_mask.clone()
-        mask[0, 1] = False
-        batch = replace(batch, current_actor=replace(batch.current_actor, actor_action_mask=mask))
+        mask = batch.inputs.actor_action_mask.clone()
+        mask[0, 0, 1] = False
+        batch = replace(batch, inputs=replace(batch.inputs, actor_action_mask=mask))
     else:
-        batch = replace(batch, transition=replace(batch.transition, reward=torch.tensor([float("nan"), 2.0])))
+        reward = batch.supervision.one_step_target_root_gain.clone()
+        reward[0, 0, 1] = float("nan")
+        batch = replace(batch, supervision=replace(batch.supervision, one_step_target_root_gain=reward))
 
     with pytest.raises(ValueError, match="selected Q_H row"):
         module.compute_fitted_q_loss(batch)
@@ -123,20 +185,21 @@ def test_row_train_mask_is_the_canonical_selected_transition_admission() -> None
 
     module = _module()
     batch = _batch()
+    reward = batch.supervision.one_step_target_root_gain.clone()
+    reward[0, 0, 0] = float("nan")
     batch = replace(
         batch,
-        transition=replace(
-            batch.transition,
-            selected_candidate_index=torch.tensor([99, 0]),
-            selected_candidate_row_id=torch.tensor([999, 20]),
-            reward=torch.tensor([float("nan"), 2.0]),
-            row_train_mask=torch.tensor([False, True]),
+        supervision=replace(
+            batch.supervision,
+            selected_candidate_index=torch.tensor([[0, 0]]),
+            one_step_target_root_gain=reward,
+            row_train_mask=torch.tensor([[False, True]]),
         ),
     )
 
     loss, _targets, admitted = module.compute_fitted_q_loss(batch)
 
-    assert admitted.tolist() == [False, True]
+    assert admitted.tolist() == [[False, True]]
     assert torch.isfinite(loss)
 
 
@@ -165,9 +228,9 @@ def test_stage_diagnostics_are_interpretable_and_share_one_key_contract(
         "val/q_target_max": 18.5,
         "val/terminal_fraction": 0.0,
         "val/bootstrap_fraction": 0.5,
-        "val/no_valid_next_fraction": 0.5,
+        "val/no_valid_next_fraction": 0.0,
         "val/admitted_rows": 2.0,
-        "val/support_actions": 6.0,
+        "val/support_actions": 3.0,
         "val/nonfinite_count": 0.0,
         "val/target_age": 0.0,
         "val/target_syncs": 0.0,
@@ -321,7 +384,7 @@ def test_empty_local_admission_still_participates_in_distributed_count(monkeypat
     batch = _batch()
     batch = replace(
         batch,
-        transition=replace(batch.transition, row_train_mask=torch.zeros(2, dtype=torch.bool)),
+        supervision=replace(batch.supervision, row_train_mask=torch.zeros(1, 2, dtype=torch.bool)),
     )
     calls: list[torch.Tensor] = []
 

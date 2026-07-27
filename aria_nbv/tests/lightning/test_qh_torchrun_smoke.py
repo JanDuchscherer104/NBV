@@ -62,7 +62,7 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
     assert {payload["world_size"] for payload in payloads} == {2}
     assert {payload["epoch"] for payload in payloads} == {1}
     assert {payload["global_step"] for payload in payloads} == {4}
-    assert {payload["validation_row_count"] for payload in payloads} == {3}
+    assert {payload["validation_row_count"] for payload in payloads} == {4}
     assert payloads[0]["validation_loss"] == pytest.approx(payloads[1]["validation_loss"])
     assert set(payloads[0]["indices"]).isdisjoint(payloads[1]["indices"])
     assert sorted(payloads[0]["indices"] + payloads[1]["indices"]) == [0, 1, 2, 3]
@@ -105,7 +105,7 @@ def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_pa
 
     assert {payload["global_step"] for payload in payloads} == {1}
     assert {payload["optimizer_updates"] for payload in payloads} == {1}
-    assert sorted(payload["training_row_count"] for payload in payloads) == [0, 1]
+    assert sorted(payload["training_row_count"] for payload in payloads) == [0, 2]
     rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
     for name in rank_states[0]:
         assert torch.equal(rank_states[0][name], rank_states[1][name])

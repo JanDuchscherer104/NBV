@@ -17,7 +17,7 @@ from tests.data_handling.test_qh import _chain, _StaticDataset
 
 
 def _data() -> QhDataModule:
-    samples = [_chain(steps=2, width=2, offset=offset) for offset in range(4)]
+    samples = [_chain(steps=2, width=2) for _ in range(4)]
     return QhDataModule(
         train=_StaticDataset(samples, scene="train-scene"),
         batch_size=2,
