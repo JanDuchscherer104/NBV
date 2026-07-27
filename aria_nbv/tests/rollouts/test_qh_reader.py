@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import pickle
+from dataclasses import fields
 from pathlib import Path
 
 import numpy as np
@@ -207,7 +208,16 @@ def test_qh_reader_uses_no_eager_or_oracle_audit_read_path(tmp_path, monkeypatch
     reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
 
     construction_matrix_reads = [(path, selection) for path, selection in reads if path in matrix_paths]
-    assert construction_matrix_reads == []
+    assert construction_matrix_reads
+    assert {path for path, _ in construction_matrix_reads} == {"q_h/candidate_row_id"}
+    assert all(
+        isinstance(selection, tuple)
+        and len(selection) == 2
+        and isinstance(selection[0], (int, np.integer))
+        and isinstance(selection[1], slice)
+        and selection[1].stop is not None
+        for _, selection in construction_matrix_reads
+    )
 
     reads.clear()
     state = reader[0]
@@ -371,15 +381,13 @@ def test_qh_reader_rejects_lineage_versions_that_differ_from_root(tmp_path, fiel
         QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
 
 
-def test_qh_reader_rejects_corrupt_transition_linkage_when_row_is_read(tmp_path) -> None:
+def test_qh_reader_rejects_corrupt_transition_linkage_during_indexing(tmp_path) -> None:
     store = _write_store(tmp_path / "rollouts.zarr")
     root = zarr.open_group(store, mode="a")
     root["q_h/td_next_step_row_id"][0] = -1
 
-    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
-
-    with pytest.raises(ValueError, match="terminal/next linkage"):
-        reader[0]
+    with pytest.raises(ValueError, match="broken or crossing successor"):
+        QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
 
 
 def test_qh_reader_resolves_sparse_source_ids_without_row_position_assumption(tmp_path) -> None:
@@ -391,3 +399,137 @@ def test_qh_reader_resolves_sparse_source_ids_without_row_position_assumption(tm
     assert state.lineage.source_row_id == 10
     assert state.lineage.source_sample_index == 10
     assert state.lineage.source_shard_row == 10
+
+
+def test_qh_reader_indexes_and_decodes_complete_chains_once(tmp_path) -> None:
+    reader = QhRolloutReaderConfig(store_dirs=(_write_store(tmp_path / "rollouts.zarr", records=2),)).setup_target()
+
+    assert len(reader) == 4  # Legacy transition surface until G004.
+    assert reader.chain_count == 2
+    first = reader.read_chain(0)
+    second = reader.read_chain(1)
+
+    assert first.lineage.rollout_row_id != second.lineage.rollout_row_id
+    assert first.lineage.source_row_id != second.lineage.source_row_id
+    assert len(first.state.candidate_pose_relative_root) == first.lineage.horizon == 2
+    assert len(first.supervision.candidate_row_id) == 2
+    assert first.transition.terminal.tolist() == [False, True]
+    assert first.transition.discount.tolist() == pytest.approx([0.95, 0.0])
+    assert first.state.remaining_budget.tolist() == [2, 1]
+    assert all(candidate_ids.size > 0 for candidate_ids in first.supervision.candidate_row_id)
+
+
+def test_qh_reader_chain_lineage_is_exact_and_ordered(tmp_path) -> None:
+    reader = QhRolloutReaderConfig(store_dirs=(_write_store(tmp_path / "rollouts.zarr"),)).setup_target()
+    lineage = reader.read_chain(0).lineage
+
+    assert [field.name for field in fields(lineage)] == [
+        "source_row_id",
+        "source_sample_index",
+        "source_sample_key",
+        "source_shard_id",
+        "source_shard_row",
+        "scene_id",
+        "snippet_id",
+        "split",
+        "source_cache_version",
+        "source_offline_store_manifest_hash",
+        "split_manifest_hash",
+        "mesh_version",
+        "target_row_id",
+        "target_sem_id",
+        "target_inst_id",
+        "target_protocol_version",
+        "target_source",
+        "target_crop_policy",
+        "schema_version",
+        "reason_code_version",
+        "return_semantics",
+        "td_semantics",
+        "reward_metric",
+        "discount_gamma",
+        "horizon",
+        "rollout_row_id",
+        "rollout_id",
+        "chain_id",
+        "root_time_ns",
+        "root_trajectory_index",
+        "root_frame_index",
+        "policy",
+        "branch_factor",
+        "beam_width",
+        "temperature",
+        "random_seed",
+        "termination_reason",
+        "candidate_config_hash",
+        "oracle_config_hash",
+        "rollout_config_hash",
+        "model_checkpoint_hash",
+        "branch_schedule_id",
+        "selection_rng_state_hash",
+    ]
+    assert lineage.target_protocol_version == "v0_gt_input"
+    assert lineage.target_source == "gt_obbs_oracle"
+    assert lineage.horizon == 2
+
+
+@pytest.mark.parametrize(
+    ("array_path", "row", "value", "match"),
+    [
+        ("steps/step_index", 1, 0, "contiguous step indices"),
+        ("q_h/td_next_step_row_id", 0, -1, "broken or crossing successor"),
+        ("q_h/source_row_id", 1, 999, "mismatched source/target lineage"),
+        ("steps/num_candidates", 1, 0, "empty candidate state"),
+    ],
+)
+def test_qh_reader_rejects_broken_chain_during_indexing(tmp_path, array_path, row, value, match) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    zarr.open_group(store, mode="a")[array_path][row] = value
+
+    with pytest.raises(ValueError, match=match):
+        QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+
+
+def test_qh_reader_rejects_duplicate_and_empty_rollout_chains(tmp_path) -> None:
+    duplicate = _write_store(tmp_path / "duplicate.zarr", records=2)
+    duplicate_root = zarr.open_group(duplicate, mode="a")
+    duplicate_root["rollouts/rollout_row_id"][1] = duplicate_root["rollouts/rollout_row_id"][0]
+    with pytest.raises(ValueError, match="duplicate.*rollout_row_id"):
+        QhRolloutReaderConfig(store_dirs=(duplicate,)).setup_target()
+
+    empty = _write_store(tmp_path / "empty.zarr", records=2)
+    empty_root = zarr.open_group(empty, mode="a")
+    empty_root["rollouts/rollout_row_id"][1] = 999
+    with pytest.raises(ValueError, match="rollout_row_id=999 is empty"):
+        QhRolloutReaderConfig(store_dirs=(empty,)).setup_target()
+
+
+def test_qh_reader_chain_reads_bound_state_and_candidate_slices(tmp_path, monkeypatch) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+    reads: list[tuple[str, object]] = []
+    original = zarr.Array.__getitem__
+
+    def recording_getitem(array, selection):
+        reads.append((str(array.path), selection))
+        return original(array, selection)
+
+    monkeypatch.setattr(zarr.Array, "__getitem__", recording_getitem)
+    chain = reader.read_chain(0)
+
+    assert len(chain.supervision.candidate_row_id) == 2
+    matrix_reads = [(path, selection) for path, selection in reads if path.startswith("q_h/")]
+    assert matrix_reads
+    assert all(selection != slice(None) for _, selection in matrix_reads)
+    candidate_reads = [(path, selection) for path, selection in reads if path.startswith("candidates/")]
+    assert candidate_reads
+    assert all(selection != slice(None) for _, selection in candidate_reads)
+
+
+def test_qh_reader_rejects_candidate_misalignment_during_indexing(tmp_path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["q_h/candidate_row_id"][0, 0] = 1
+
+    with pytest.raises(ValueError, match="candidate ids are not a contiguous full-shell slice"):
+        QhRolloutReaderConfig(store_dirs=(store,)).setup_target()

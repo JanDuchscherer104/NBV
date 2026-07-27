@@ -1,12 +1,11 @@
-"""Lazy storage-only reader for finite-candidate ``Q_H`` rollout states.
+"""Lazy storage-only reader for finite-candidate ``Q_H`` rollout chains.
 
-The module deliberately exposes one state at a time. Corpus admission validates
-immutable store contracts once; worker processes then reopen Zarr handles and
-perform only bounded row or contiguous candidate slices. Mesh-rendered depth and
-candidate diagnostics remain audit-only and are never part of this interface.
-The training-facing tensor conversion and batching seam is
-:mod:`aria_nbv.data_handling.qh`; this module owns only validated NumPy DTOs
-and worker-local Zarr access.
+Corpus admission indexes and validates every complete, non-empty persisted
+rollout chain. Worker processes reopen Zarr handles and read only bounded state
+rows and contiguous candidate slices. The legacy state-at-a-time surface stays
+temporarily available for the transition data plane; the chain facts consumed
+by its replacement remain private until :mod:`aria_nbv.data_handling.qh` owns
+the public tensor DTOs.
 """
 
 from __future__ import annotations
@@ -305,6 +304,96 @@ class QhSourceLineage:
     """Hash of the admitted rollout split manifest."""
 
 
+@dataclass(frozen=True, slots=True)
+class _QhChainStateFacts:
+    root_pose_world: np.ndarray
+    target_extents: np.ndarray
+    target_pose_world_object: np.ndarray
+    candidate_pose_relative_root: tuple[np.ndarray, ...]
+    candidate_position_id: tuple[np.ndarray, ...]
+    actor_action_mask: tuple[np.ndarray, ...]
+    remaining_budget: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class _QhChainSupervisionFacts:
+    candidate_row_id: tuple[np.ndarray, ...]
+    q_train_mask: tuple[np.ndarray, ...]
+    invalid_reason_bitset: tuple[np.ndarray, ...]
+    one_step_target_rri: tuple[np.ndarray, ...]
+    one_step_target_root_gain: tuple[np.ndarray, ...]
+    selected_candidate_index: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class _QhChainTransitionFacts:
+    discount: np.ndarray
+    terminal: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class _QhChainLineage:
+    source_row_id: int
+    source_sample_index: int
+    source_sample_key: str
+    source_shard_id: str
+    source_shard_row: int
+    scene_id: str
+    snippet_id: str
+    split: Stage
+    source_cache_version: str
+    source_offline_store_manifest_hash: str
+    split_manifest_hash: str
+    mesh_version: str
+    target_row_id: int
+    target_sem_id: int
+    target_inst_id: int
+    target_protocol_version: str
+    target_source: str
+    target_crop_policy: str
+    schema_version: str
+    reason_code_version: str
+    return_semantics: str
+    td_semantics: str
+    reward_metric: str
+    discount_gamma: float
+    horizon: int
+    rollout_row_id: int
+    rollout_id: str
+    chain_id: int
+    root_time_ns: int
+    root_trajectory_index: int
+    root_frame_index: int
+    policy: str
+    branch_factor: int
+    beam_width: int
+    temperature: float
+    random_seed: int
+    termination_reason: str
+    candidate_config_hash: str
+    oracle_config_hash: str
+    rollout_config_hash: str
+    model_checkpoint_hash: str
+    branch_schedule_id: str
+    selection_rng_state_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class _QhRolloutChainFacts:
+    state: _QhChainStateFacts
+    supervision: _QhChainSupervisionFacts
+    transition: _QhChainTransitionFacts
+    lineage: _QhChainLineage
+
+
+@dataclass(frozen=True, slots=True)
+class _ChainIndexEntry:
+    rollout_position: int
+    rollout_row_id: int
+    state_start: int
+    state_stop: int
+
+
 class QhRolloutReaderConfig(TargetConfig["QhRolloutReader"]):
     """Validate and construct a homogeneous V0 rollout-reader corpus."""
 
@@ -331,6 +420,7 @@ class _StoreMetadata:
     path: Path
     manifest_hash: str
     state_count: int
+    chains: tuple[_ChainIndexEntry, ...]
     dictionaries: dict[str, tuple[str, ...]]
     compatibility: tuple[tuple[str, object], ...]
     source_lineage: tuple[QhSourceLineage, ...]
@@ -368,15 +458,39 @@ class QhRolloutReader:
             total += store.state_count
             prefix_ends.append(total)
         self._prefix_ends = tuple(prefix_ends)
+        chain_prefix_ends: list[int] = []
+        chain_total = 0
+        for store in self._stores:
+            chain_total += len(store.chains)
+            chain_prefix_ends.append(chain_total)
+        self._chain_prefix_ends = tuple(chain_prefix_ends)
         self._source_lineage = tuple(dict.fromkeys(source for store in self._stores for source in store.source_lineage))
         self._scene_ids = frozenset(scene for store in self._stores for scene in store.scene_ids)
         self._open_pid: int | None = None
         self._roots: dict[int, zarr.Group] = {}
 
     def __len__(self) -> int:
-        """Return the sum of validated state-axis lengths."""
+        """Return the legacy transition-state count until G004 switches consumers."""
 
         return self._prefix_ends[-1]
+
+    @property
+    def chain_count(self) -> int:
+        """Return the number of complete non-empty persisted rollout chains."""
+
+        return self._chain_prefix_ends[-1]
+
+    def read_chain(self, index: int) -> _QhRolloutChainFacts:
+        """Decode one validated chain through bounded state and candidate slices."""
+
+        if index < 0:
+            index += self.chain_count
+        if index < 0 or index >= self.chain_count:
+            raise IndexError(f"Q_H chain index {index} is outside corpus length {self.chain_count}.")
+        store_index = bisect_right(self._chain_prefix_ends, index)
+        previous_end = 0 if store_index == 0 else self._chain_prefix_ends[store_index - 1]
+        store = self._stores[store_index]
+        return _read_chain(self._root(store_index), store, store.chains[index - previous_end])
 
     def __getitem__(self, index: int) -> QhRolloutState:
         """Return one state using bounded Zarr reads and direct dense-id joins."""
@@ -518,6 +632,15 @@ _ROLLOUT_VECTOR_NAMES = (
     "source_row_id",
     "target_row_id",
     "horizon",
+    "root_time_ns",
+    "root_trajectory_index",
+    "root_frame_index",
+    "policy_id",
+    "branch_factor",
+    "beam_width",
+    "temperature",
+    "random_seed",
+    "termination_reason",
 )
 _TARGET_VECTOR_NAMES = (
     "target_row_id",
@@ -543,8 +666,13 @@ _LINEAGE_VECTOR_NAMES = (
     "candidate_config_id",
     "oracle_config_id",
     "rollout_config_id",
+    "model_checkpoint_id",
+    "mesh_version_id",
+    "branch_schedule_id",
     "target_protocol_version_id",
+    "target_crop_policy_id",
     "reason_code_version_id",
+    "selection_rng_state_hash_id",
 )
 
 
@@ -596,10 +724,13 @@ def _preflight_store(path: Path) -> _StoreMetadata:
             "source_shard",
             "split",
             "target_source",
+            "policy",
+            "termination_reason",
         )
     }
     source_lineage = _read_source_lineage(root, path, dictionaries)
     _validate_lineage_provenance(root, path, dictionaries)
+    chains = _build_chain_index(root, path)
     state_scene_ids = frozenset(source.scene_id for source in source_lineage)
     compatibility = tuple((name, root.attrs.get(name)) for name in QhRolloutReader._COMPATIBILITY_ROOT_ATTRS) + (
         ("td_semantics", q_h.attrs.get("td_semantics")),
@@ -612,6 +743,7 @@ def _preflight_store(path: Path) -> _StoreMetadata:
         path=path,
         manifest_hash=str(root.attrs["manifest_sha256"]),
         state_count=state_count,
+        chains=chains,
         dictionaries=dictionaries,
         compatibility=compatibility,
         source_lineage=source_lineage,
@@ -760,6 +892,7 @@ def _validate_shapes(
         _require_shape(root, f"candidates/{name}", (candidate_count,))
     for name in ("pose_world_cam", "pose_relative_root"):
         _require_shape(root, f"candidates/{name}", (candidate_count, 12))
+    _require_shape(root, "rollouts/root_pose_world", (rollout_count, 12))
     for name, width in (
         ("target_center_world", 3),
         ("target_extents", 3),
@@ -782,6 +915,82 @@ def _validate_shapes(
         or q_h_horizon != int(root.attrs.get("q_h_horizon", -1))
     ):
         raise ValueError("Q_H rollout horizons must lie in [1, q_h_horizon] and realize the padded maximum.")
+
+
+def _build_chain_index(root: zarr.Group, path: Path) -> tuple[_ChainIndexEntry, ...]:
+    """Validate complete persisted chains without materializing padded matrices."""
+
+    rollout_ids = np.asarray(root["rollouts/rollout_row_id"], dtype=np.int64).reshape(-1)
+    if rollout_ids.size == 0:
+        raise ValueError(f"Q_H rollout store contains no rollout chains: {path}.")
+    if np.unique(rollout_ids).size != rollout_ids.size:
+        raise ValueError(f"Q_H store {path} has duplicate rollouts/rollout_row_id values.")
+
+    steps = root["steps"]
+    step_ids = np.asarray(steps["step_row_id"], dtype=np.int64).reshape(-1)
+    step_rollouts = np.asarray(steps["rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(steps["step_index"], dtype=np.int64).reshape(-1)
+    step_widths = np.asarray(steps["num_candidates"], dtype=np.int64).reshape(-1)
+    q_h = root["q_h"]
+    state_step_ids = np.asarray(q_h["state_step_row_id"], dtype=np.int64).reshape(-1)
+    state_sources = np.asarray(q_h["source_row_id"], dtype=np.int64).reshape(-1)
+    state_targets = np.asarray(q_h["target_row_id"], dtype=np.int64).reshape(-1)
+    next_rows = np.asarray(q_h["td_next_step_row_id"], dtype=np.int64).reshape(-1)
+    terminal = np.asarray(q_h["td_terminal_mask"], dtype=np.bool_).reshape(-1)
+    rollout_sources = np.asarray(root["rollouts/source_row_id"], dtype=np.int64).reshape(-1)
+    rollout_targets = np.asarray(root["rollouts/target_row_id"], dtype=np.int64).reshape(-1)
+    horizons = np.asarray(root["rollouts/horizon"], dtype=np.int64).reshape(-1)
+
+    if not np.array_equal(step_ids, state_step_ids):
+        raise ValueError(f"Q_H store {path} q_h states do not align one-to-one with step rows.")
+    entries: list[_ChainIndexEntry] = []
+    previous_stop = 0
+    for rollout_position, rollout_row_id in enumerate(rollout_ids.tolist()):
+        positions = np.flatnonzero(step_rollouts == rollout_row_id)
+        if positions.size == 0:
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} is empty.")
+        start = int(positions[0])
+        stop = int(positions[-1]) + 1
+        if not np.array_equal(positions, np.arange(start, stop, dtype=np.int64)):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} is not a contiguous state slice.")
+        if start != previous_stop:
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} crosses or leaves unowned state rows.")
+        expected_indices = np.arange(stop - start, dtype=np.int64)
+        if not np.array_equal(step_indices[start:stop], expected_indices):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} requires contiguous step indices 0..S-1.")
+        if stop - start != int(horizons[rollout_position]):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has a missing or extra candidate-bearing state.")
+        if np.any(step_widths[start:stop] < 1):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} contains an empty candidate state.")
+        if np.any(state_sources[start:stop] != rollout_sources[rollout_position]) or np.any(
+            state_targets[start:stop] != rollout_targets[rollout_position]
+        ):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has mismatched source/target lineage.")
+        expected_next = np.arange(start + 1, stop + 1, dtype=np.int64)
+        expected_next[-1] = -1
+        expected_terminal = np.zeros(stop - start, dtype=np.bool_)
+        expected_terminal[-1] = True
+        if not np.array_equal(next_rows[start:stop], expected_next) or not np.array_equal(
+            terminal[start:stop], expected_terminal
+        ):
+            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has broken or crossing successor linkage.")
+        for row, width in zip(range(start, stop), step_widths[start:stop].tolist(), strict=True):
+            _validate_indexed_candidate_slice(root, row=row, width=int(width))
+        entries.append(_ChainIndexEntry(rollout_position, int(rollout_row_id), start, stop))
+        previous_stop = stop
+    if previous_stop != step_ids.size:
+        raise ValueError(f"Q_H store {path} contains state rows not owned by exactly one rollout chain.")
+    return tuple(entries)
+
+
+def _validate_indexed_candidate_slice(root: zarr.Group, *, row: int, width: int) -> None:
+    candidate_ids = np.asarray(root["q_h/candidate_row_id"][row, :width], dtype=np.int64)
+    start, stop = _contiguous_candidate_bounds(candidate_ids, row)
+    candidates = root["candidates"]
+    if not np.array_equal(np.asarray(candidates["candidate_row_id"][start:stop]), candidate_ids):
+        raise ValueError(f"Q_H candidate row-position join changed at state row {row}.")
+    if np.any(np.asarray(candidates["step_row_id"][start:stop], dtype=np.int64) != row):
+        raise ValueError(f"Q_H candidate rows cross state ownership at state row {row}.")
 
 
 def _validate_homogeneous(stores: tuple[_StoreMetadata, ...]) -> None:
@@ -815,6 +1024,168 @@ def _array_equal(left: np.ndarray, right: np.ndarray) -> bool:
     if np.issubdtype(left.dtype, np.floating) or np.issubdtype(right.dtype, np.floating):
         return bool(np.allclose(left, right, equal_nan=True))
     return bool(np.array_equal(left, right))
+
+
+def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry) -> _QhRolloutChainFacts:
+    """Decode one preflighted root-to-leaf chain without a terminal empty state."""
+
+    rows = range(entry.state_start, entry.state_stop)
+    steps = root["steps"]
+    q_h = root["q_h"]
+    widths = np.asarray(steps["num_candidates"][entry.state_start : entry.state_stop], dtype=np.int64)
+    candidate_rows = tuple(
+        _read_chain_candidate_row(root, row=row, width=int(width))
+        for row, width in zip(rows, widths.tolist(), strict=True)
+    )
+    selected_index = np.asarray(q_h["selected_candidate_index"][entry.state_start : entry.state_stop], dtype=np.int64)
+    for offset, (selected, facts) in enumerate(zip(selected_index.tolist(), candidate_rows, strict=True)):
+        row = entry.state_start + offset
+        if selected < 0 or selected >= facts["candidate_row_id"].size:
+            raise ValueError(f"Q_H selected candidate linkage is invalid at state row {row}.")
+        selected_row_id = int(facts["candidate_row_id"][selected])
+        if selected_row_id != int(q_h["td_selected_candidate_row_id"][row]) or selected_row_id != int(
+            steps["selected_candidate_row_id"][row]
+        ):
+            raise ValueError(f"Q_H selected candidate row id is inconsistent at state row {row}.")
+        if not bool(facts["actor_action_mask"][selected]):
+            raise ValueError(f"Q_H selected candidate is actor-invalid at state row {row}.")
+        if not np.isclose(float(q_h["td_reward"][row]), float(facts["one_step_target_root_gain"][selected])):
+            raise ValueError(f"Q_H selected reward is inconsistent at state row {row}.")
+        if not np.isclose(float(q_h["td_reward_target_rri"][row]), float(facts["one_step_target_rri"][selected])):
+            raise ValueError(f"Q_H selected target RRI is inconsistent at state row {row}.")
+
+    rollout = root["rollouts"]
+    rollout_position = entry.rollout_position
+    source_row_id = int(rollout["source_row_id"][rollout_position])
+    target_row_id = int(rollout["target_row_id"][rollout_position])
+    source_row = _find_sorted_row(root["sources/source_row_id"], source_row_id, "sources/source_row_id")
+    target_row = _find_sorted_row(root["targets/target_row_id"], target_row_id, "targets/target_row_id")
+    sources = root["sources"]
+    target = root["targets"]
+    dictionaries = store.dictionaries
+    target_source = _decode_id(root, dictionaries, "target_source", "targets/target_source_id", target_row)
+    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
+    target_extents = np.asarray(target["target_extents"][target_row], dtype=np.float32)
+    target_pose = np.asarray(target["target_pose_world_object"][target_row], dtype=np.float32)
+    if root_pose_world.shape != (12,) or not np.isfinite(root_pose_world).all():
+        raise ValueError(f"Q_H rollout_row_id={entry.rollout_row_id} has an invalid rollout root pose.")
+    if (
+        target_extents.shape != (3,)
+        or target_pose.shape != (12,)
+        or not (np.isfinite(target_extents).all() and np.isfinite(target_pose).all())
+    ):
+        raise ValueError(f"Q_H rollout_row_id={entry.rollout_row_id} has an incomplete canonical V0 descriptor.")
+
+    horizon = int(rollout["horizon"][rollout_position])
+    discounts = np.asarray(q_h["td_discount"][entry.state_start : entry.state_stop], dtype=np.float32)
+    terminals = np.asarray(q_h["td_terminal_mask"][entry.state_start : entry.state_stop], dtype=np.bool_)
+    expected_discounts = np.full(horizon, float(root.attrs["discount_gamma"]), dtype=np.float32)
+    expected_discounts[-1] = 0.0
+    if not np.allclose(discounts, expected_discounts):
+        raise ValueError(f"Q_H rollout_row_id={entry.rollout_row_id} has inconsistent transition discounts.")
+
+    return _QhRolloutChainFacts(
+        state=_QhChainStateFacts(
+            root_pose_world=_readonly(root_pose_world),
+            target_extents=_readonly(target_extents),
+            target_pose_world_object=_readonly(target_pose),
+            candidate_pose_relative_root=tuple(facts["candidate_pose_relative_root"] for facts in candidate_rows),
+            candidate_position_id=tuple(facts["candidate_position_id"] for facts in candidate_rows),
+            actor_action_mask=tuple(facts["actor_action_mask"] for facts in candidate_rows),
+            remaining_budget=_readonly(np.arange(horizon, 0, -1, dtype=np.int64)),
+        ),
+        supervision=_QhChainSupervisionFacts(
+            candidate_row_id=tuple(facts["candidate_row_id"] for facts in candidate_rows),
+            q_train_mask=tuple(facts["q_train_mask"] for facts in candidate_rows),
+            invalid_reason_bitset=tuple(facts["invalid_reason_bitset"] for facts in candidate_rows),
+            one_step_target_rri=tuple(facts["one_step_target_rri"] for facts in candidate_rows),
+            one_step_target_root_gain=tuple(facts["one_step_target_root_gain"] for facts in candidate_rows),
+            selected_candidate_index=_readonly(selected_index),
+        ),
+        transition=_QhChainTransitionFacts(
+            discount=_readonly(discounts),
+            terminal=_readonly(terminals),
+        ),
+        lineage=_QhChainLineage(
+            source_row_id=source_row_id,
+            source_sample_index=int(sources["sample_index"][source_row]),
+            source_sample_key=_decode_id(root, dictionaries, "source_key", "sources/sample_key_id", source_row),
+            source_shard_id=_decode_id(root, dictionaries, "source_shard", "sources/source_shard_id", source_row),
+            source_shard_row=int(sources["source_shard_row"][source_row]),
+            scene_id=_decode_id(root, dictionaries, "scene", "sources/scene_id", source_row),
+            snippet_id=_decode_id(root, dictionaries, "snippet", "sources/snippet_id", source_row),
+            split=Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", source_row)),
+            source_cache_version=_decode_id(
+                root, dictionaries, "config", "sources/source_cache_version_id", source_row
+            ),
+            source_offline_store_manifest_hash=_decode_id(
+                root, dictionaries, "config", "sources/source_offline_store_manifest_hash_id", source_row
+            ),
+            split_manifest_hash=_decode_id(root, dictionaries, "config", "sources/split_manifest_hash_id", source_row),
+            mesh_version=_decode_optional_id(root, dictionaries, "config", "lineage/mesh_version_id", rollout_position),
+            target_row_id=target_row_id,
+            target_sem_id=int(target["target_sem_id"][target_row]),
+            target_inst_id=int(target["target_inst_id"][target_row]),
+            target_protocol_version=str(root.attrs["target_protocol_version"]),
+            target_source=target_source,
+            target_crop_policy=_decode_optional_id(
+                root, dictionaries, "config", "lineage/target_crop_policy_id", rollout_position
+            ),
+            schema_version=str(root.attrs["schema_version"]),
+            reason_code_version=str(root.attrs["reason_code_version"]),
+            return_semantics=str(root.attrs["return_semantics"]),
+            td_semantics=str(q_h.attrs["td_semantics"]),
+            reward_metric=str(q_h.attrs["reward_metric"]),
+            discount_gamma=float(root.attrs["discount_gamma"]),
+            horizon=horizon,
+            rollout_row_id=entry.rollout_row_id,
+            rollout_id=_decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_position),
+            chain_id=int(rollout["chain_id"][rollout_position]),
+            root_time_ns=int(rollout["root_time_ns"][rollout_position]),
+            root_trajectory_index=int(rollout["root_trajectory_index"][rollout_position]),
+            root_frame_index=int(rollout["root_frame_index"][rollout_position]),
+            policy=_decode_id(root, dictionaries, "policy", "rollouts/policy_id", rollout_position),
+            branch_factor=int(rollout["branch_factor"][rollout_position]),
+            beam_width=int(rollout["beam_width"][rollout_position]),
+            temperature=float(rollout["temperature"][rollout_position]),
+            random_seed=int(rollout["random_seed"][rollout_position]),
+            termination_reason=_decode_id(
+                root, dictionaries, "termination_reason", "rollouts/termination_reason", rollout_position
+            ),
+            candidate_config_hash=_decode_id(
+                root, dictionaries, "config", "lineage/candidate_config_id", rollout_position
+            ),
+            oracle_config_hash=_decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_position),
+            rollout_config_hash=_decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_position),
+            model_checkpoint_hash=_decode_optional_id(
+                root, dictionaries, "config", "lineage/model_checkpoint_id", rollout_position
+            ),
+            branch_schedule_id=_decode_optional_id(
+                root, dictionaries, "config", "lineage/branch_schedule_id", rollout_position
+            ),
+            selection_rng_state_hash=_decode_optional_id(
+                root, dictionaries, "config", "lineage/selection_rng_state_hash_id", rollout_position
+            ),
+        ),
+    )
+
+
+def _read_chain_candidate_row(root: zarr.Group, *, row: int, width: int) -> dict[str, np.ndarray]:
+    q_h = root["q_h"]
+    q_rows = {name: np.asarray(q_h[name][row, :width]) for name in _Q_H_MATRIX_NAMES}
+    candidate_ids = q_rows["candidate_row_id"].astype(np.int64, copy=False)
+    candidates = _candidate_slice(root, candidate_ids, row)
+    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
+    return {
+        "candidate_row_id": _readonly(candidate_ids),
+        "candidate_pose_relative_root": _readonly(candidates["pose_relative_root"].astype(np.float32, copy=False)),
+        "candidate_position_id": _readonly(q_rows["position_id"].astype(np.int32, copy=False)),
+        "actor_action_mask": _readonly(q_rows["valid_action_mask"].astype(np.bool_, copy=False)),
+        "q_train_mask": _readonly(q_rows["q_train_mask"].astype(np.bool_, copy=False)),
+        "invalid_reason_bitset": _readonly(q_rows["invalid_reason_bitset"].astype(np.uint32, copy=False)),
+        "one_step_target_rri": _readonly(q_rows["one_step_target_rri"].astype(np.float32, copy=False)),
+        "one_step_target_root_gain": _readonly(q_rows["one_step_target_root_gain"].astype(np.float32, copy=False)),
+    }
 
 
 def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator) -> QhRolloutState:
@@ -1116,6 +1487,19 @@ def _decode_id(
     row: int,
 ) -> str:
     value_id = int(root[array_path][row])
+    return _decoded(dictionaries[dictionary_name], value_id, array_path)
+
+
+def _decode_optional_id(
+    root: zarr.Group,
+    dictionaries: dict[str, tuple[str, ...]],
+    dictionary_name: str,
+    array_path: str,
+    row: int,
+) -> str:
+    value_id = int(root[array_path][row])
+    if value_id == -1:
+        return ""
     return _decoded(dictionaries[dictionary_name], value_id, array_path)
 
 
