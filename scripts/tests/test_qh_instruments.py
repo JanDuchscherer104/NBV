@@ -165,6 +165,7 @@ def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
 
     assert config["max_samples"] == 1
     assert config["max_targets_per_sample"] == 1
+    assert config["min_valid_root_candidates"] == 1
     assert config["store"]["target_protocol_version"] == "v0_gt_input"
     assert "v1" not in config["store"]["store_dir"]
 

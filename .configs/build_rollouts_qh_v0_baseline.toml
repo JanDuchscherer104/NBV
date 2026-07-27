@@ -9,6 +9,7 @@
 max_samples = 1
 max_targets_per_sample = 1
 require_label_valid = true
+min_valid_root_candidates = 1
 log_timing = true
 verbosity = 1
 
