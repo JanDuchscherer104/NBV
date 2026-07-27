@@ -7,18 +7,19 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 
-from aria_nbv.data_handling.qh import QhCorpus
 from aria_nbv.lightning import qh_cli
 from aria_nbv.lightning.qh_datamodule import QhDataModule, QhDataModuleConfig
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.data_handling.test_qh import _dataset, _StaticDataset
+from tests.data_handling.test_qh import _chain, _StaticDataset
 
 
 def test_cpu_fast_dev_run_executes_real_qh_batch() -> None:
-    source, _ = _dataset()
-    train = _StaticDataset((source[0], source[1]), "train-scene")
-    data = QhDataModule(QhCorpus.admit(train=train), batch_size=2, seed=17)
+    train = _StaticDataset(
+        [_chain(steps=2, width=2), _chain(steps=2, width=2, offset=10)],
+        scene="train-scene",
+    )
+    data = QhDataModule(train=train, batch_size=2, seed=17)
     module = QhLightningModule(
         QhLightningModuleConfig(
             scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
@@ -32,7 +33,7 @@ def test_cpu_fast_dev_run_executes_real_qh_batch() -> None:
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
 
     trainer.fit(module, datamodule=data)
@@ -47,9 +48,11 @@ def test_cli_executes_real_fast_dev_fit_through_experiment(
 ) -> None:
     """Exercise strict TOML -> CLI -> experiment -> real Lightning fit."""
 
-    source, _ = _dataset()
     data = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((source[0], source[1]), "train-scene")),
+        train=_StaticDataset(
+            [_chain(steps=2, width=2), _chain(steps=2, width=2, offset=10)],
+            scene="train-scene",
+        ),
         batch_size=2,
         seed=17,
     )
@@ -65,7 +68,7 @@ out_dir = "{tmp_path / "run"}"
 accelerator = "cpu"
 devices = 1
 fast_dev_run = true
-use_distributed_sampler = false
+use_distributed_sampler = true
 gradient_clip_val = 0
 accumulate_grad_batches = 1
 use_wandb = false
@@ -79,7 +82,7 @@ use_lr_monitor = false
 batch_size = 2
 [datamodule_config.train.rollout]
 store_dirs = ["{tmp_path / "unused-rollouts"}"]
-[datamodule_config.train.actor.store]
+[datamodule_config.train.actor]
 store_dir = "{tmp_path / "unused-vin"}"
 
 [module_config]

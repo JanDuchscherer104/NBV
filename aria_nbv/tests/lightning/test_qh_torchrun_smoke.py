@@ -14,11 +14,10 @@ import pytest
 import pytorch_lightning as pl
 import torch
 
-from aria_nbv.data_handling.qh import QhCorpus
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.data_handling.test_qh import _dataset, _StaticDataset
+from tests.data_handling.test_qh import _chain, _StaticDataset
 
 
 def _run_torchrun(output_dir: Path, scenario: str = "standard") -> list[dict[str, object]]:
@@ -69,13 +68,13 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
     assert sorted(payloads[0]["indices"] + payloads[1]["indices"]) == [0, 1, 2, 3]
     assert len(list((tmp_path / "checkpoints").glob("*.ckpt"))) == 2
 
-    source, _ = _dataset()
     module = _module()
     module.load_state_dict(torch.load(tmp_path / "rank-0-state.pt", weights_only=True))
     data = QhDataModule(
-        QhCorpus.admit(
-            train=_StaticDataset((source[0],), "train-scene"),
-            val=_StaticDataset((source[1], source[1], source[1]), "val-scene"),
+        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
+        val=_StaticDataset(
+            [_chain(steps=2, width=2, offset=10) for _ in range(3)],
+            scene="val-scene",
         ),
         batch_size=1,
         seed=43,
@@ -86,7 +85,7 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
     single_rank_loss = trainer.validate(module, datamodule=data, verbose=False)[0]["val/loss"]
     assert payloads[0]["validation_loss"] == pytest.approx(single_rank_loss)
@@ -112,10 +111,9 @@ def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_pa
         assert torch.equal(rank_states[0][name], rank_states[1][name])
 
     pl.seed_everything(123, workers=True)
-    source, _ = _dataset()
     control = _module()
     data = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((source[1],), "train-scene")),
+        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
         batch_size=1,
         seed=43,
     )
@@ -126,7 +124,7 @@ def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_pa
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
         deterministic=True,
     )
     trainer.fit(control, datamodule=data)

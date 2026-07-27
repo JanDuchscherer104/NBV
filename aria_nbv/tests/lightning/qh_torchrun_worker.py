@@ -11,11 +11,10 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from aria_nbv.data_handling.qh import QhCorpus
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.data_handling.test_qh import _dataset, _StaticDataset
+from tests.data_handling.test_qh import _chain, _StaticDataset
 
 
 def main() -> None:
@@ -30,29 +29,32 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     pl.seed_everything(123, workers=True)
-    source, _ = _dataset()
-    admitted = source[1]
+    admitted = _chain(steps=2, width=2)
     empty = replace(
         admitted,
-        transition=replace(admitted.transition, row_train_mask=torch.tensor(False)),
+        supervision=replace(
+            admitted.supervision,
+            row_train_mask=torch.zeros_like(admitted.supervision.row_train_mask),
+        ),
     )
     if args.scenario == "standard":
-        samples = (source[0], source[1], source[0], source[1])
-        validation = _StaticDataset((source[1], source[1], source[1]), "val-scene")
+        samples = [_chain(steps=2, width=2, offset=offset) for offset in range(4)]
+        validation = _StaticDataset(
+            [_chain(steps=2, width=2, offset=10) for _ in range(3)],
+            scene="val-scene",
+        )
         max_epochs = 2
     elif args.scenario == "global-empty":
-        samples = (empty, empty)
+        samples = [empty, empty]
         validation = None
         max_epochs = 1
     else:
-        samples = (admitted, empty)
+        samples = [admitted, empty]
         validation = None
         max_epochs = 1
     data = QhDataModule(
-        QhCorpus.admit(
-            train=_StaticDataset(samples, "train-scene"),
-            val=validation,
-        ),
+        train=_StaticDataset(samples, scene="train-scene"),
+        val=validation,
         batch_size=1,
         seed=43,
     )
@@ -83,18 +85,16 @@ def main() -> None:
         callbacks=callbacks,
         enable_checkpointing=bool(callbacks),
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
         deterministic=True,
     )
     trainer.fit(module, datamodule=data)
 
-    sampler = data._train_sampler
-    if sampler is None:
-        raise RuntimeError("Q_H training sampler was not constructed.")
+    sampler = trainer.train_dataloader.sampler
     payload = {
         "rank": trainer.global_rank,
         "world_size": trainer.world_size,
-        "epoch": sampler.epoch,
+        "epoch": getattr(sampler, "epoch", 0),
         "indices": list(sampler),
         "global_step": trainer.global_step,
         "optimizer_updates": int(module.optimizer_updates.item()),

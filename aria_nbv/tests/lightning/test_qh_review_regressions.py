@@ -9,38 +9,35 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
-import numpy as np
 import pytest
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities.exceptions import MisconfigurationException
 from torch.optim.lr_scheduler import StepLR
 
-from aria_nbv.data_handling.qh import QhBatch, QhCorpus, QhDataset
+from aria_nbv.data_handling.qh import QhBatch
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule
-from tests.data_handling.test_qh import _dataset, _Reader, _SparseActorSource, _StaticDataset, _stored_state
+from tests.data_handling.test_qh import _chain, _StaticDataset
 from tests.lightning.test_qh_module import _module
 
 
 def test_setup_none_admits_test_before_checking_scene_overlap() -> None:
     """``setup(None)`` must include test in the all-stage admission check."""
 
-    dataset, _ = _dataset()
-    sample = dataset[1]
-    shared_train = _StaticDataset((sample,), "shared-scene")
-    shared_test = _StaticDataset((sample,), "shared-scene")
+    sample = _chain(steps=2, width=2)
+    shared_train = _StaticDataset([sample], scene="shared-scene")
+    shared_test = _StaticDataset([sample], scene="shared-scene")
 
     with pytest.raises(ValueError, match="train/test.*overlap scenes|overlap scenes.*train/test"):
-        QhCorpus.admit(train=shared_train, test=shared_test)
+        QhDataModule(train=shared_train, test=shared_test, batch_size=1, seed=0)
 
 
 def test_qh_batch_owns_pinning_and_nonblocking_transfer() -> None:
     """The top-level batch owns tensor pinning and transfer, not its lineage."""
 
-    dataset, _ = _dataset()
     loader = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((dataset[0],), "train-scene")),
+        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
         batch_size=1,
         seed=0,
     )
@@ -117,14 +114,16 @@ class _ClockSnapshot(pl.Callback):
 def test_globally_empty_batch_does_not_advance_training_clocks() -> None:
     """A globally empty admitted batch is not an optimizer update."""
 
-    dataset, _ = _dataset()
-    sample = dataset[1]
+    sample = _chain(steps=2, width=2)
     empty = replace(
         sample,
-        transition=replace(sample.transition, row_train_mask=torch.tensor(False)),
+        supervision=replace(
+            sample.supervision,
+            row_train_mask=torch.zeros_like(sample.supervision.row_train_mask),
+        ),
     )
     data = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((empty,), "train-scene")),
+        train=_StaticDataset([empty], scene="train-scene"),
         batch_size=1,
         seed=0,
     )
@@ -143,7 +142,7 @@ def test_globally_empty_batch_does_not_advance_training_clocks() -> None:
         callbacks=[clocks],
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
 
     trainer.fit(module, datamodule=data)
@@ -160,21 +159,23 @@ def test_globally_empty_batch_does_not_advance_training_clocks() -> None:
 def test_dataset_actor_mask_exclusion_emits_diagnostic_row_without_training_update() -> None:
     """A selected action rejected by the actor mask must remain loadable but untrained."""
 
-    state = _stored_state(0, width=2, terminal=True)
-    selected = state.transition.selected_candidate_index
-    actor_action_mask = np.array(state.actor.actor_action_mask, copy=True)
-    actor_action_mask[selected] = False
-    state = replace(state, actor=replace(state.actor, actor_action_mask=actor_action_mask))
-    assert state.supervision.q_train_mask[selected]
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_Reader((state,)),
-        actor_source=_SparseActorSource(),
+    sample = _chain(steps=2, width=2)
+    selected = sample.supervision.selected_candidate_index
+    actor_action_mask = sample.inputs.actor_action_mask.clone()
+    actor_action_mask[torch.arange(selected.numel()), selected] = False
+    sample = replace(
+        sample,
+        inputs=replace(sample.inputs, actor_action_mask=actor_action_mask),
+        supervision=replace(
+            sample.supervision,
+            row_train_mask=torch.zeros_like(sample.supervision.row_train_mask),
+        ),
     )
 
-    sample = dataset[0]
-    assert not sample.transition.row_train_mask.item()
+    assert sample.supervision.q_train_mask[torch.arange(selected.numel()), selected].all()
+    assert not sample.supervision.row_train_mask.any()
     data = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((sample,), "train-scene")),
+        train=_StaticDataset([sample], scene="train-scene"),
         batch_size=1,
         seed=0,
     )
@@ -188,7 +189,7 @@ def test_dataset_actor_mask_exclusion_emits_diagnostic_row_without_training_upda
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
 
     trainer.fit(module, datamodule=data)
@@ -201,9 +202,8 @@ def test_dataset_actor_mask_exclusion_emits_diagnostic_row_without_training_upda
 def test_manual_optimization_rejects_gradient_accumulation() -> None:
     """Unsupported accumulation must fail publicly before the first batch."""
 
-    dataset, _ = _dataset()
     data = QhDataModule(
-        QhCorpus.admit(train=_StaticDataset((dataset[1],), "train-scene")),
+        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
         batch_size=1,
         seed=0,
     )
@@ -215,7 +215,7 @@ def test_manual_optimization_rejects_gradient_accumulation() -> None:
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
 
     with pytest.raises(MisconfigurationException, match="gradient accumulation.*manual optimization"):
@@ -225,13 +225,10 @@ def test_manual_optimization_rejects_gradient_accumulation() -> None:
 def test_validate_and_test_share_the_public_evaluation_lifecycle() -> None:
     """Trainer owns setup while validation and test share one metric contract."""
 
-    dataset, _ = _dataset()
     data = QhDataModule(
-        QhCorpus.admit(
-            train=_StaticDataset((dataset[0],), "train-scene"),
-            val=_StaticDataset((dataset[1],), "val-scene"),
-            test=_StaticDataset((dataset[1],), "test-scene"),
-        ),
+        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
+        val=_StaticDataset([_chain(steps=2, width=2, offset=10)], scene="val-scene"),
+        test=_StaticDataset([_chain(steps=2, width=2, offset=20)], scene="test-scene"),
         batch_size=1,
         seed=0,
     )
@@ -255,7 +252,7 @@ def test_validate_and_test_share_the_public_evaluation_lifecycle() -> None:
         logger=False,
         enable_checkpointing=False,
         enable_model_summary=False,
-        use_distributed_sampler=False,
+        use_distributed_sampler=True,
     )
 
     trainer.fit(module, datamodule=data)
