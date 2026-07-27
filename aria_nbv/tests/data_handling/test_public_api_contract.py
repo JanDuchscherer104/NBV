@@ -23,6 +23,11 @@ def test_public_api_has_exact_stable_allowlist() -> None:
         "VinOfflineDataset",
         "VinOfflineDatasetConfig",
         "VinOfflineStoreConfig",
+        "QhRolloutChain",
+        "QhChainLineage",
+        "QhInputs",
+        "QhSupervision",
+        "QhBatch",
     )
     assert tuple(module.__all__) == expected  # noqa: S101
     assert all(hasattr(module, name) for name in expected)  # noqa: S101
