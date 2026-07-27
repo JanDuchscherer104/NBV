@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pickle
 import subprocess
 import sys
 import tarfile
@@ -1111,6 +1112,75 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     assert torch.equal(batch.trajectory.time_ns, torch.tensor([100, 200], dtype=torch.int64))  # noqa: S101
 
 
+def test_actor_snippet_reader_matches_one_step_sample_and_reads_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One-step samples should use one shared typed actor-snippet read."""
+
+    store_cfg = _write_test_store(tmp_path)
+    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample", split="all").setup_target()
+    record = dataset._records[0]
+    direct = dataset._store.read_actor_snippet(record)
+    reads: list[VinOfflineIndexRecord] = []
+    original = dataset._store.read_actor_snippet
+
+    def _record_read(
+        requested: VinOfflineIndexRecord,
+        *,
+        device: str | torch.device = "cpu",
+    ) -> VinSnippetView:
+        reads.append(requested)
+        return original(requested, device=device)
+
+    monkeypatch.setattr(dataset._store, "read_actor_snippet", _record_read)
+    sample = dataset[0]
+
+    assert reads == [record]  # noqa: S101
+    torch.testing.assert_close(sample.vin_snippet.points_world, direct.points_world, equal_nan=True)
+    assert torch.equal(sample.vin_snippet.lengths, direct.lengths)  # noqa: S101
+    assert torch.equal(sample.vin_snippet.t_world_rig.tensor(), direct.t_world_rig.tensor())  # noqa: S101
+    assert sample.vin_snippet.points_world.dtype is torch.float32  # noqa: S101
+    assert sample.vin_snippet.lengths.dtype is torch.int64  # noqa: S101
+
+
+@pytest.mark.parametrize("failure", ["missing", "record_block"])
+def test_actor_snippet_reader_rejects_invalid_required_blocks(tmp_path: Path, failure: str) -> None:
+    """Required actor evidence must fail with immutable-store rebuild guidance."""
+
+    store_cfg = _write_test_store(tmp_path)
+    manifest = VinOfflineManifest.read(store_cfg.manifest_path)
+    if failure == "missing":
+        del manifest.shards[0].blocks["vin.lengths"]
+        match = "Required actor block 'vin.lengths'.*Rebuild"
+    else:
+        manifest.shards[0].blocks["vin.lengths"].kind = "msgpack_indexed_records"
+        match = "Actor block 'vin.lengths'.*numeric Zarr array.*Rebuild"
+    manifest.write(store_cfg.manifest_path)
+    reader = VinOfflineStoreReader(store_cfg)
+
+    with pytest.raises(ValueError, match=match):
+        reader.read_actor_snippet(reader.sample_index[0])
+
+
+def test_actor_snippet_reader_drops_worker_handles_when_pickled(tmp_path: Path) -> None:
+    """Reader pickling should preserve metadata but discard process-owned handles."""
+
+    store_cfg = _write_test_store(tmp_path)
+    reader = VinOfflineStoreReader(store_cfg)
+    expected = reader.read_actor_snippet(reader.sample_index[0])
+    assert reader._opened  # noqa: S101
+
+    restored = pickle.loads(pickle.dumps(reader))
+
+    assert restored._opened == {}  # noqa: S101
+    assert restored._opened_pid is None  # noqa: S101
+    actual = restored.read_actor_snippet(restored.sample_index[0])
+    torch.testing.assert_close(actual.points_world, expected.points_world, equal_nan=True)
+    assert torch.equal(actual.lengths, expected.lengths)  # noqa: S101
+    assert torch.equal(actual.t_world_rig.tensor(), expected.t_world_rig.tensor())  # noqa: S101
+
+
 def test_vin_offline_dataset_get_by_scene_snippet_accepts_compact_ase_atek_ids(tmp_path: Path) -> None:
     store_cfg = _write_test_store(tmp_path)
     records = VinOfflineIndexRecord.read_many(store_cfg.sample_index_path)
@@ -1288,7 +1358,9 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
         datamodule = dm_cfg.setup_target()
         datamodule.setup(stage=Stage.TRAIN)
 
-        train_batch = next(iter(datamodule.train_dataloader()))
+        train_loader = datamodule.train_dataloader()
+        train_batch = next(iter(train_loader))
+        repeated_train_batch = next(iter(train_loader))
         val_batch = next(iter(datamodule.val_dataloader()))
         assert isinstance(train_batch, VinOracleBatch)  # noqa: S101
         assert train_batch.rri.shape == (2, 4)  # noqa: S101
@@ -1304,6 +1376,7 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
             ),
         )  # noqa: S101
         assert train_batch.scene_id == ["scene-a", "scene-b"]  # noqa: S101
+        assert set(repeated_train_batch.scene_id) == set(train_batch.scene_id)  # noqa: S101
 
         assert isinstance(val_batch, VinOracleBatch)  # noqa: S101
         assert val_batch.rri.shape == (1, 4)  # noqa: S101

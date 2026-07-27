@@ -271,7 +271,6 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
         state = self.__dict__.copy()
         state["console"] = None
         state["_loader_by_device"] = {}
-        state["_store"] = VinOfflineStoreReader(self.config.store)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -286,8 +285,6 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             self.console = Console.with_prefix(self.__class__.__name__).set_verbosity(self.config.verbosity)
         if self.__dict__.get("_loader_by_device") is None:
             self._loader_by_device = {}
-        if not isinstance(self.__dict__.get("_store"), VinOfflineStoreReader):
-            self._store = VinOfflineStoreReader(self.config.store)
 
     def _select_records(self) -> list[VinOfflineIndexRecord]:
         """Apply split, simplification, and limit to the global index.
@@ -374,12 +371,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             Decoded VIN snippet view.
         """
 
-        points_world = self._tensor(self._store.read_numeric_block(record, "vin.points_world"), dtype=torch.float32)
-        lengths = self._tensor(self._store.read_numeric_block(record, "vin.lengths"), dtype=torch.int64).reshape(-1)
-        t_world_rig = PoseTW(
-            self._tensor(self._store.read_numeric_block(record, "vin.t_world_rig"), dtype=torch.float32)
-        )
-        return VinSnippetView(points_world=points_world, lengths=lengths, t_world_rig=t_world_rig)
+        return self._store.read_actor_snippet(record, device=self.config.map_location)
 
     @staticmethod
     def _restore_padded_rows(values: Tensor, *, candidate_count: int) -> Tensor:
