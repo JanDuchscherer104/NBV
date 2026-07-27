@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from aria_nbv.data_handling.offline.actor import VinActorSourceConfig
 from aria_nbv.data_handling.offline.store import VinOfflineStoreConfig
 from aria_nbv.data_handling.qh import QhDatasetConfig
 from aria_nbv.lightning import qh_experiment
@@ -25,7 +24,8 @@ def _data(tmp_path: Path, *, val: bool = False, test: bool = False) -> QhDataMod
     def dataset(split: str) -> QhDatasetConfig:
         return QhDatasetConfig(
             rollout=QhRolloutReaderConfig(store_dirs=(tmp_path / f"rollouts-{split}",)),
-            actor=VinActorSourceConfig(store=VinOfflineStoreConfig(store_dir=tmp_path / "vin"), split=split),
+            actor=VinOfflineStoreConfig(store_dir=tmp_path / "vin"),
+            split=split,
         )
 
     return QhDataModuleConfig(

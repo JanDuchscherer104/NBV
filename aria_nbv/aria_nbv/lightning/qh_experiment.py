@@ -24,7 +24,7 @@ from ..rollouts.manifest import collect_runtime_provenance
 from ..utils import Stage, TargetConfig
 from ..utils.fingerprints import stable_config_hash
 from .lit_trainer_factory import TrainerFactoryConfig
-from .qh_datamodule import QhDataModule, QhDataModuleConfig
+from .qh_datamodule import QhDataModule, QhDataModuleConfig, distributed_padding_rows
 from .qh_module import QhLightningModule, QhLightningModuleConfig
 
 QhExperimentTarget = tuple[pl.Trainer, QhLightningModule, QhDataModule]
@@ -34,7 +34,6 @@ def _default_trainer_config() -> TrainerFactoryConfig:
     """Return the manual-optimization-safe ``Q_H`` Trainer defaults."""
 
     return TrainerFactoryConfig(
-        use_distributed_sampler=False,
         gradient_clip_val=None,
         accumulate_grad_batches=1,
     )
@@ -46,7 +45,7 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
     The field names and :meth:`setup_target_and_run` lifecycle intentionally
     match :class:`aria_nbv.lightning.aria_nbv_experiment.AriaNBVExperimentConfig`.
     ``Q_H`` remains a separate deep module because its admitted multi-step
-    corpus, manual fitted-Q optimizer, and explicit sampler ownership differ
+    corpus and manual fitted-Q optimizer differ
     from scene-wise one-step RRI training.
     """
 
@@ -63,7 +62,7 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
     """Optional full-state checkpoint forwarded unchanged to the selected loop."""
 
     trainer_config: TrainerFactoryConfig = Field(default_factory=_default_trainer_config)
-    """Trainer policy; sampler replacement, clipping, and accumulation are forbidden."""
+    """Trainer policy; default distributed sampling is required."""
 
     datamodule_config: QhDataModuleConfig
     """All-stage corpus factories and deterministic DataLoader policy."""
@@ -85,8 +84,8 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
     @model_validator(mode="after")
     def _validate_trainer_ownership(self) -> "QhExperimentConfig":
         trainer = self.trainer_config
-        if trainer.use_distributed_sampler is not False:
-            raise ValueError("Q_H requires trainer_config.use_distributed_sampler=false; QhDataModule owns samplers.")
+        if trainer.use_distributed_sampler is not True:
+            raise ValueError("Q_H requires Lightning's default distributed sampler replacement.")
         if trainer.gradient_clip_val not in (None, 0, 0.0):
             raise ValueError("Q_H manual optimization requires trainer_config.gradient_clip_val to be None or zero.")
         if trainer.accumulate_grad_batches != 1:
@@ -117,16 +116,11 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
             object.__setattr__(self.trainer_config.callbacks, "checkpoint_dir", out_dir / "checkpoints")
 
         data = self.datamodule_config.setup_target(seed=self.seed)
-        requested_dataset = {
-            Stage.TRAIN: data.corpus.train,
-            Stage.VAL: data.corpus.val,
-            Stage.TEST: data.corpus.test,
-        }[resolved_stage]
+        requested_dataset = data.dataset_for_stage(resolved_stage)
         if requested_dataset is None:
             raise ValueError(f"Q_H stage={resolved_stage!s} requires a configured {resolved_stage!s} corpus.")
         launched_world_size = _positive_env_int("WORLD_SIZE", default=1)
         launcher_rank = _launcher_rank()
-        data.prepare_training_sampler(num_replicas=launched_world_size, rank=launcher_rank)
 
         scorer_horizon = self.module_config.scorer.horizon
         if scorer_horizon != data.training_horizon:
@@ -186,6 +180,8 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
             launcher_kind = "torchrun"
         if os.environ.get("SLURM_JOB_ID"):
             launcher_kind = "slurm-torchrun"
+        padding_rows = distributed_padding_rows(data.train_dataset, world_size=launched_world_size)
+        emitted_rows = len(data.train_dataset) + padding_rows
         return {
             "config": self.model_dump_jsonable(),
             "config_hash": stable_config_hash(self),
@@ -199,11 +195,11 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
                 "configured_devices": self.trainer_config.devices,
                 "batch_size_per_rank": data.batch_size,
                 "effective_emitted_batch_size": data.batch_size * launched_world_size,
-                "training_padding_rows": data.training_padding_rows,
-                "training_padding_fraction": data.training_padding_fraction,
+                "training_padding_rows": padding_rows,
+                "training_padding_fraction": 0.0 if emitted_rows == 0 else padding_rows / emitted_rows,
                 "container_image": os.environ.get("LRZ_CONTAINER_IMAGE"),
             },
-            "corpus": data.corpus.provenance,
+            "corpus": data.provenance,
             "runtime": runtime,
         }
 

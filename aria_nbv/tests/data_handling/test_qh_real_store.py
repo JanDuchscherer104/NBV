@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 import zarr
 
-from aria_nbv.data_handling.offline.actor import VinActorSourceConfig
 from aria_nbv.data_handling.offline.store import VinOfflineStoreConfig
 from aria_nbv.data_handling.qh import QhDatasetConfig
 from aria_nbv.rollouts.qh_reader import QhRolloutReaderConfig
@@ -54,10 +53,11 @@ def test_real_v1_store_fails_before_actor_or_trainer_construction(
     def fail_actor_setup(*_args: object, **_kwargs: object) -> None:
         pytest.fail("Protocol-incompatible rollout corpus reached VIN actor construction.")
 
-    monkeypatch.setattr(VinActorSourceConfig, "setup_target", fail_actor_setup)
+    monkeypatch.setattr("aria_nbv.data_handling.qh.VinOfflineStoreReader", fail_actor_setup)
     config = QhDatasetConfig(
         rollout=QhRolloutReaderConfig(store_dirs=(rollout_store,)),
-        actor=VinActorSourceConfig(store=VinOfflineStoreConfig(store_dir=vin_store), split="train"),
+        actor=VinOfflineStoreConfig(store_dir=vin_store),
+        split="train",
     )
 
     with pytest.raises(ValueError, match="v1_observed.*Oracle GT.*rebuild"):

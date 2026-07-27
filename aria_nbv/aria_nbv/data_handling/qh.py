@@ -1,322 +1,271 @@
-"""Framework-neutral joined data seam for finite-candidate ``Q_H`` training.
+"""Chain-native data plane for finite-candidate ``Q_H`` training.
 
-The module composes lazy rollout states with immutable, typed VIN actor rows.
-It owns protocol-aware descriptor selection, exact lineage validation,
-all-stage corpus admission, tensor conversion, deterministic padding, and the
-single batch pin/transfer interface. Rollout storage interpretation remains in
-:mod:`aria_nbv.rollouts.qh_reader`; DataLoader and distributed-sampler policy
-belong to :mod:`aria_nbv.lightning.qh_datamodule`.
+One dataset item is one complete persisted rollout chain. Actor-visible inputs
+and privileged supervision are structurally separate; collation pads the time
+and candidate axes once, and lineage remains immutable CPU-only audit data.
+Storage interpretation belongs to :mod:`aria_nbv.rollouts.qh_reader`, while
+loader and training policy belong to :mod:`aria_nbv.lightning`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from functools import cached_property
-from typing import Protocol
 
 import numpy as np
 import torch
 from efm3d.aria.pose import PoseTW
+from pydantic import Field, field_validator
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from ..rollouts import qh_reader as rollout_qh
+from ..rollouts.qh_reader import QhRolloutReader, QhRolloutReaderConfig
 from ..targets.protocol import TargetDescriptorProvenance, TargetInputProtocol, validate_target_protocol_admission
-from ..utils import TargetConfig
-from .offline.actor import VinActorSample, VinActorSource, VinActorSourceConfig
+from ..utils import Stage, TargetConfig
+from ..utils.fingerprints import stable_msgspec_hash
+from .identifiers import compact_ase_atek_sample_id
+from .offline.format import VinOfflineIndexRecord
+from .offline.store import VinOfflineStoreConfig, VinOfflineStoreReader
 from .raw.views import VinSnippetView
 
 
 @dataclass(frozen=True, slots=True)
-class QhActorInputs:
-    """Actor-visible tensors for one state or a padded batch of states.
+class QhChainLineage:
+    """Exact CPU-scalar provenance for one persisted rollout chain."""
 
-    Candidate and history axes are compact for a sample and right-padded for a
-    batch. Only `actor_action_mask` and `history_mask` define usable rows;
-    padded ids are ``-1``. Candidate and history camera poses cross this
-    interface only in the rollout-root frame used by the scorer; their
-    world-frame storage copies remain audit data. No Oracle label, invalid
-    reason, selection diagnostic, or selected-depth raster crosses this
-    interface.
-    """
+    source_row_id: int
+    """Dense rollout-store source row id."""
+    source_sample_index: int
+    """Global immutable VIN sample index."""
+    source_sample_key: str
+    """Stable compact ASE/ATEK sample key."""
+    source_shard_id: str
+    """Immutable VIN shard id."""
+    source_shard_row: int
+    """Row within the immutable VIN shard."""
+    scene_id: str
+    """ASE scene id."""
+    snippet_id: str
+    """ATEK snippet id."""
+    split: Stage
+    """Immutable source split."""
+    source_cache_version: str
+    """Immutable VIN store-format version."""
+    source_offline_store_manifest_hash: str
+    """Hash of the complete VIN source manifest."""
+    split_manifest_hash: str
+    """Hash of the admitted split manifest."""
+    mesh_version: str
+    """Persisted mesh version, or an empty string when absent."""
+    target_row_id: int
+    """Dense target-table row id."""
+    target_sem_id: int
+    """Target semantic-category id."""
+    target_inst_id: int
+    """Target instance id."""
+    target_protocol_version: str
+    """Actor-visible target protocol version."""
+    target_source: str
+    """Persisted target descriptor source."""
+    target_crop_policy: str
+    """Persisted target crop policy, or an empty string."""
+    schema_version: str
+    """Rollout Zarr schema version."""
+    reason_code_version: str
+    """Invalid-reason vocabulary version."""
+    return_semantics: str
+    """Persisted finite-horizon return definition."""
+    td_semantics: str
+    """Persisted Bellman-tuple definition."""
+    reward_metric: str
+    """Scalar reward metric name."""
+    discount_gamma: float
+    """Corpus discount factor."""
+    horizon: int
+    """Candidate-bearing chain length."""
+    rollout_row_id: int
+    """Canonical persisted dataset-item key."""
+    rollout_id: str
+    """Stable rollout identifier."""
+    chain_id: int
+    """Persisted branch-chain identifier."""
+    root_time_ns: int
+    """Rollout-root timestamp in nanoseconds."""
+    root_trajectory_index: int
+    """Rollout-root trajectory index."""
+    root_frame_index: int
+    """Rollout-root frame index."""
+    policy: str
+    """Persisted rollout policy name."""
+    branch_factor: int
+    """Persisted rollout branch factor."""
+    beam_width: int
+    """Persisted beam width; ``-1`` means absent."""
+    temperature: float
+    """Persisted stochastic-policy temperature."""
+    random_seed: int
+    """Persisted random seed; ``-1`` means absent."""
+    termination_reason: str
+    """Persisted chain termination reason."""
+    candidate_config_hash: str
+    """Candidate-generation config hash."""
+    oracle_config_hash: str
+    """Privileged Oracle config hash."""
+    rollout_config_hash: str
+    """Rollout-policy config hash."""
+    model_checkpoint_hash: str
+    """Selection-model checkpoint hash, or an empty string."""
+    branch_schedule_id: str
+    """Branch-schedule id, or an empty string."""
+    selection_rng_state_hash: str
+    """Selection RNG-state hash, or an empty string."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhInputs:
+    """Actor-visible V0 tensors for one chain or padded chain batch."""
 
     vin_snippet: VinSnippetView
-    """Typed semidense points, valid lengths, and world-from-rig history."""
-
+    """Chain-constant semidense points, lengths, and world-from-rig history."""
     root_pose_world: Tensor
-    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` world-from-rollout-root pose."""
-
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` world-from-root pose."""
     target_extents: Tensor
     """``Tensor["3", float32]`` or ``Tensor["B 3", float32]`` V0 OBB extents in metres."""
-
     target_pose_world_object: Tensor
-    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` V0 object pose in world frame."""
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` world-from-object pose."""
+    candidate_pose_relative_root: Tensor
+    """``Tensor["S N 12", float32]`` or ``Tensor["B S N 12", float32]`` root-from-camera poses."""
+    candidate_position_id: Tensor
+    """``Tensor["S N", int64]`` or ``Tensor["B S N", int64]`` position ids; padding is ``-1``."""
+    actor_action_mask: Tensor
+    """``Tensor["S N", bool]`` or ``Tensor["B S N", bool]`` hard actor action mask."""
+    previous_selected_pose_relative_root: Tensor
+    """``Tensor["S 12", float32]`` or ``Tensor["B S 12", float32]`` right-shifted selected poses."""
+    previous_selected_position_id: Tensor
+    """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` right-shifted position ids."""
+    previous_selected_mask: Tensor
+    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` shifted-history presence mask."""
+    remaining_budget: Tensor
+    """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` residual acquisition count."""
+    step_mask: Tensor
+    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` candidate-bearing state mask."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhSupervision:
+    """Dense Oracle supervision and factual selected-transition tensors."""
 
     candidate_row_id: Tensor
-    """``Tensor["N_q", int64]`` or ``Tensor["B N_q", int64]`` stable ids; padding is ``-1``."""
-
-    candidate_pose_relative_root: Tensor
-    """``Tensor["N_q 12", float32]`` or ``Tensor["B N_q 12", float32]`` root-from-camera poses."""
-
-    candidate_position_id: Tensor
-    """``Tensor["N_q", int64]`` or ``Tensor["B N_q", int64]`` position-family ids; padding is ``-1``."""
-
-    actor_action_mask: Tensor
-    """``Tensor["N_q", bool]`` or ``Tensor["B N_q", bool]`` hard action mask; padding is false."""
-
-    history_candidate_row_id: Tensor
-    """``Tensor["H_t", int64]`` or ``Tensor["B H_t", int64]`` prior candidate ids; padding is ``-1``."""
-
-    history_pose_relative_root: Tensor
-    """``Tensor["H_t 12", float32]`` or ``Tensor["B H_t 12", float32]`` prior root-from-camera poses."""
-
-    history_position_id: Tensor
-    """``Tensor["H_t", int64]`` or ``Tensor["B H_t", int64]`` prior position-family ids; padding is ``-1``."""
-
-    history_mask: Tensor
-    """``Tensor["H_t", bool]`` or ``Tensor["B H_t", bool]`` history-presence mask; padding is false."""
-
-    remaining_budget: Tensor
-    """``Tensor["", int64]`` or ``Tensor["B", int64]`` remaining acquisition count."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhTransition:
-    """Selected-transition tensors and the exact row-level training gate."""
-
+    """``Tensor["S N", int64]`` or ``Tensor["B S N", int64]`` stable ids; padding is ``-1``."""
+    q_train_mask: Tensor
+    """``Tensor["S N", bool]`` or ``Tensor["B S N", bool]`` finite actor-valid Oracle mask."""
+    invalid_reason_bitset: Tensor
+    """``Tensor["S N", int64]`` or ``Tensor["B S N", int64]`` hard-invalid reason flags."""
+    one_step_target_rri: Tensor
+    """``Tensor["S N", float32]`` or ``Tensor["B S N", float32]`` diagnostic target RRI."""
+    one_step_target_root_gain: Tensor
+    """``Tensor["S N", float32]`` or ``Tensor["B S N", float32]`` immediate training reward."""
     selected_candidate_index: Tensor
-    """``Tensor["", int64]`` or ``Tensor["B", int64]`` selected full-shell indices."""
-
-    selected_candidate_row_id: Tensor
-    """``Tensor["", int64]`` or ``Tensor["B", int64]`` selected stable candidate ids."""
-
-    reward: Tensor
-    """``Tensor["", float32]`` or ``Tensor["B", float32]`` selected target-root-gain rewards."""
-
+    """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` factual compact selected index."""
     discount: Tensor
-    """``Tensor["", float32]`` or ``Tensor["B", float32]`` gamma-or-zero TD discounts."""
-
+    """``Tensor["S", float32]`` or ``Tensor["B S", float32]`` gamma-or-zero discount."""
     terminal: Tensor
-    """``Tensor["", bool]`` or ``Tensor["B", bool]`` terminal flags."""
-
+    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` factual terminal flag."""
     row_train_mask: Tensor
-    """``Tensor["", bool]`` or ``Tensor["B", bool]`` exact fitted-Q admission gate."""
+    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` selected-transition loss gate."""
+
+    @property
+    def selected_candidate_row_id(self) -> Tensor:
+        """Gather factual selected row ids from the dense candidate basis."""
+
+        return _gather_candidates(self.candidate_row_id, self.selected_candidate_index)
+
+    @property
+    def selected_reward(self) -> Tensor:
+        """Gather factual selected root-gain rewards from dense supervision."""
+
+        return _gather_candidates(self.one_step_target_root_gain, self.selected_candidate_index)
+
+    @property
+    def selected_rri(self) -> Tensor:
+        """Gather factual selected diagnostic RRI from dense supervision."""
+
+        return _gather_candidates(self.one_step_target_rri, self.selected_candidate_index)
 
 
 @dataclass(frozen=True, slots=True)
-class QhLineage:
-    """Audit-only current and optional next rollout provenance."""
+class QhRolloutChain:
+    """One complete non-empty persisted rollout chain."""
 
-    current: rollout_qh.QhLineage
-    """Exact persisted lineage for the current rollout state."""
-
-    next: rollout_qh.QhLineage | None
-    """Exact persisted lineage for the admitted successor, when present."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhSample:
-    """One transition-complete, actor-safe finite-candidate training sample."""
-
-    current_actor: QhActorInputs
-    """Current model input view."""
-
-    next_actor: QhActorInputs | None
-    """Admitted successor model input, absent exactly for terminal rows."""
-
-    transition: QhTransition
-    """Selected transition and row-level training gate."""
-
-    lineage: QhLineage
-    """Audit provenance excluded from model calls."""
-
-
-class QhStageDataset(Protocol):
-    """Static interface required for one admitted ``Q_H`` corpus stage.
-
-    Admission consumes only compact metadata. It never calls
-    :meth:`__getitem__`, so a caller can validate split and horizon contracts
-    before any rollout matrix, candidate payload, or actor row is materialized.
-    """
-
-    scene_ids: frozenset[str]
-    """Scene identifiers represented by this stage."""
-
-    q_h_horizon: int
-    """Positive residual horizon shared by every stage in one corpus."""
-
-    provenance: dict[str, object]
-    """JSON-serializable identity decoded during stage preflight."""
-
-    def __len__(self) -> int:
-        """Return the number of joined rollout states."""
-
-    def __getitem__(self, index: int) -> QhSample:
-        """Return one joined actor/transition sample."""
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class QhCorpus:
-    """Admitted train/validation/test datasets for one fitted-Q experiment.
-
-    Use :meth:`admit` as the sole construction interface. It proves non-empty
-    training data, a common positive horizon, and scene-disjoint configured
-    stages before :mod:`pytorch_lightning` constructs a Trainer.
-    """
-
-    train: QhStageDataset
-    """Required training stage."""
-
-    val: QhStageDataset | None
-    """Optional scene-disjoint validation stage."""
-
-    test: QhStageDataset | None
-    """Optional scene-disjoint held-out stage."""
-
-    def __init__(self, *_args: object, **_kwargs: object) -> None:
-        """Reject construction that bypasses :meth:`admit`."""
-
-        raise TypeError("QhCorpus must be constructed through QhCorpus.admit(...).")
-
-    @classmethod
-    def admit(
-        cls,
-        *,
-        train: QhStageDataset,
-        val: QhStageDataset | None = None,
-        test: QhStageDataset | None = None,
-    ) -> QhCorpus:
-        """Validate all configured stages without materializing dataset rows."""
-
-        stages = {
-            name: dataset for name, dataset in (("train", train), ("val", val), ("test", test)) if dataset is not None
-        }
-        empty = [name for name, dataset in stages.items() if len(dataset) < 1]
-        if empty:
-            raise ValueError(f"Q_H configured corpus stages must contain at least one state: {empty}.")
-        horizons = {name: dataset.q_h_horizon for name, dataset in stages.items()}
-        invalid_horizons = {name: value for name, value in horizons.items() if not _is_positive_int(value)}
-        if invalid_horizons:
-            raise ValueError(f"Q_H corpus stages require positive integer horizons: {invalid_horizons}.")
-        if len(set(horizons.values())) != 1:
-            raise ValueError(f"Q_H corpus stage horizons disagree: {horizons}.")
-        names = tuple(stages)
-        for index, left in enumerate(names):
-            for right in names[index + 1 :]:
-                overlap = stages[left].scene_ids & stages[right].scene_ids
-                if overlap:
-                    raise ValueError(
-                        f"Q_H {left}/{right} datasets overlap scenes {sorted(overlap)}; use scene-level splits."
-                    )
-        corpus = object.__new__(cls)
-        object.__setattr__(corpus, "train", train)
-        object.__setattr__(corpus, "val", val)
-        object.__setattr__(corpus, "test", test)
-        return corpus
-
-    @property
-    def q_h_horizon(self) -> int:
-        """Return the horizon proven common across every configured stage."""
-
-        return self.train.q_h_horizon
-
-    @property
-    def provenance(self) -> dict[str, object]:
-        """Return compact preflighted provenance for every admitted stage."""
-
-        return {
-            name: None if dataset is None else dataset.provenance
-            for name, dataset in (("train", self.train), ("val", self.val), ("test", self.test))
-        }
+    inputs: QhInputs
+    """Actor-visible V0 tensor basis."""
+    supervision: QhSupervision
+    """Dense privileged labels and selected-transition facts."""
+    lineage: QhChainLineage
+    """CPU-only chain provenance."""
 
 
 @dataclass(frozen=True, slots=True)
 class QhBatch:
-    """Padded transition batch with explicit mixed-terminal presence masks."""
+    """Padded ``[B,S,N,...]`` chain batch with CPU-only lineage."""
 
-    current_actor: QhActorInputs
-    """Padded current actor views."""
-
-    next_actor: QhActorInputs | None
-    """Padded successor actor views, absent only when the whole batch is terminal."""
-
-    next_actor_present: Tensor
-    """``Tensor["B", bool]`` identifying rows represented in `next_actor`."""
-
-    transition: QhTransition
-    """Batched selected-transition facts and row masks."""
-
-    lineage: tuple[QhLineage, ...]
-    """Per-row audit provenance, never passed to the model."""
+    inputs: QhInputs
+    """Padded actor-visible model inputs."""
+    supervision: QhSupervision
+    """Padded privileged labels and selected-transition facts."""
+    lineage: tuple[QhChainLineage, ...]
+    """Per-chain CPU-only provenance, never passed to the model."""
 
     def assert_selected_rows_consistent(self) -> None:
-        """Reject any admitted transition inconsistent with its actor row.
+        """Reject any admitted row inconsistent with dense candidate facts."""
 
-        For every row admitted by :attr:`QhTransition.row_train_mask`, the
-        selected index must address the current candidate table, resolve to the
-        persisted selected row id, remain actor-valid, and carry finite reward
-        and discount values. This data-owned assertion is the single semantic
-        boundary consumed before fitted-Q target construction.
-
-        Raises:
-            ValueError: If any admitted selected transition violates the
-                index, row-id, actor-mask, reward, or discount contract.
-        """
-
-        admitted = self.transition.row_train_mask.bool()
-        if not admitted.any():
+        admitted = self.supervision.row_train_mask
+        if not bool(admitted.any()):
             return
-        selected = self.transition.selected_candidate_index.long()
-        width = self.current_actor.candidate_row_id.shape[1]
+        selected = self.supervision.selected_candidate_index
+        width = self.supervision.candidate_row_id.shape[-1]
         valid_index = selected.ge(0) & selected.lt(width)
-        if not valid_index[admitted].all():
-            raise ValueError("Trainable selected Q_H row has an out-of-range candidate index.")
-        safe = selected.clamp(0, max(width - 1, 0)).unsqueeze(1)
-        row_ids = self.current_actor.candidate_row_id.gather(1, safe).squeeze(1)
-        actor_mask = self.current_actor.actor_action_mask.gather(1, safe).squeeze(1)
+        safe = selected.clamp(0, max(width - 1, 0))
+        actor_valid = _gather_candidates(self.inputs.actor_action_mask, safe)
         valid = (
-            row_ids.eq(self.transition.selected_candidate_row_id)
-            & actor_mask.bool()
-            & torch.isfinite(self.transition.reward)
-            & torch.isfinite(self.transition.discount)
+            valid_index
+            & actor_valid
+            & self.supervision.selected_candidate_row_id.ge(0)
+            & torch.isfinite(self.supervision.selected_reward)
+            & torch.isfinite(self.supervision.selected_rri)
+            & torch.isfinite(self.supervision.discount)
         )
-        if not valid[admitted].all():
-            raise ValueError("Trainable selected Q_H row violates row-id, mask, reward, or discount admission.")
+        if not bool(valid[admitted].all()):
+            raise ValueError("Trainable selected Q_H row violates dense supervision or action admission.")
 
     def pin_memory(self) -> QhBatch:
-        """Pin every tensor-bearing field while retaining CPU audit lineage.
+        """Pin every tensor exactly once while preserving lineage by identity."""
 
-        This is the custom-batch contract used by PyTorch
-        [memory pinning](https://docs.pytorch.org/docs/2.4/data.html#memory-pinning).
-        Lineage is immutable Python/NumPy audit state and is intentionally
-        returned by identity.
-        """
-
-        return _transform_batch(self, lambda value: value.pin_memory())
+        return _transform_batch(self, Tensor.pin_memory)
 
     def to(self, device: str | torch.device, *, non_blocking: bool = True) -> QhBatch:
-        """Move all tensors to `device` and keep lineage on the CPU.
+        """Move every tensor to `device` while keeping lineage on the CPU."""
 
-        `non_blocking=True` requests asynchronous copies from pinned host
-        memory; PyTorch may fall back to a synchronous copy when the source or
-        destination cannot support it.
-        """
-
-        return _transform_batch(
-            self,
-            lambda value: value.to(device=device, non_blocking=non_blocking),
-        )
+        return _transform_batch(self, lambda value: value.to(device=device, non_blocking=non_blocking))
 
 
 class QhDatasetConfig(TargetConfig["QhDataset"]):
-    """Configure the lazy rollout reader and immutable VIN actor source."""
+    """Configure complete rollout-chain and immutable VIN source readers."""
 
-    rollout: rollout_qh.QhRolloutReaderConfig
-    """Homogeneous V0 rollout corpus configuration."""
+    rollout: QhRolloutReaderConfig
+    """Homogeneous V0 rollout corpus."""
+    actor: VinOfflineStoreConfig = Field(default_factory=VinOfflineStoreConfig)
+    """Immutable VIN store read directly through its canonical reader."""
+    split: Stage | None = None
+    """Optional VIN split restriction; ``None`` admits every source record."""
 
-    actor: VinActorSourceConfig
-    """Actor-only immutable VIN source configuration."""
+    @field_validator("split", mode="before")
+    @classmethod
+    def _normalize_split(cls, value: Stage | str | None) -> Stage | None:
+        if value is None or value == "all":
+            return None
+        return Stage.from_str(value)
 
     @property
     def target_type(self) -> type[QhDataset]:
@@ -325,124 +274,45 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
         return QhDataset
 
     def setup_target(self) -> QhDataset:
-        """Construct the reader and actor source behind their owned factories."""
+        """Construct both lazy readers behind their owning configurations."""
 
         return QhDataset(
             rollout_reader=self.rollout.setup_target(),
-            actor_source=self.actor.setup_target(),
+            actor_reader=VinOfflineStoreReader(self.actor),
+            split=self.split,
         )
 
 
-class QhDataset(Dataset[QhSample]):
-    """Join rollout transitions and immutable actor evidence by exact lineage.
+class QhDataset(Dataset[QhRolloutChain]):
+    """Join complete rollout chains to one chain-constant VIN actor snippet."""
 
-    :class:`aria_nbv.rollouts.qh_reader.QhRolloutReader` supplies current and
-    successor rollout facts; :class:`aria_nbv.data_handling.offline.actor.VinActorSource`
-    supplies typed actor-visible observation evidence. Construction validates every
-    compact source join before :meth:`__getitem__` can materialize a sample.
-    Oracle diagnostics stay outside :class:`QhActorInputs`. Candidate-wide
-    training masks are consumed here and reduced to the selected transition's
-    scalar :attr:`QhTransition.row_train_mask`.
-    """
+    _REBUILD_GUIDANCE = "Rebuild the VIN offline store and rollout corpus from the same immutable source manifest."
 
     def __init__(
         self,
         *,
-        rollout_reader: rollout_qh.QhRolloutReader,
-        actor_source: VinActorSource,
+        rollout_reader: QhRolloutReader,
+        actor_reader: VinOfflineStoreReader,
+        split: Stage | None = None,
     ) -> None:
-        """Join explicit reader and actor-source adapters.
-
-        Use :meth:`QhDatasetConfig.setup_target` at configuration boundaries.
-        Accepting adapters here keeps the runtime dataset directly testable
-        without adding a second construction policy to the data plane.
-        """
-
         self.rollout_reader = rollout_reader
-        self.actor_source = actor_source
+        self.actor_reader = actor_reader
+        self.split = split
+        self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
+        records = actor_reader.get_split_records(split)
+        self._records = {record.sample_index: record for record in records}
         self._validate_source_lineage()
 
     def __len__(self) -> int:
-        """Return the validated rollout-state count."""
+        """Return the number of complete non-empty persisted chains."""
 
         return len(self.rollout_reader)
 
-    def __getitem__(self, index: int) -> QhSample:
-        """Join one selected transition and optional successor to actor evidence.
+    def __getitem__(self, index: int) -> QhRolloutChain:
+        """Read one chain and its chain-constant actor snippet exactly once."""
 
-        The returned :class:`QhSample` preserves exact candidate-row alignment.
-        ``row_train_mask`` is true only when the selected index is in range,
-        its candidate is admitted by both the persisted ``q_train_mask`` and
-        the materialized actor hard-action mask, and reward/discount are finite.
-        """
-
-        current = self.rollout_reader[index]
-        current_actor = self._compose_actor(current)
-        next_state = None
-        next_actor = None
-        if current.transition.next_state is not None:
-            next_state = self.rollout_reader.read(current.transition.next_state)
-            self._validate_transition_link(current, next_state)
-            next_actor = self._compose_actor(next_state)
-
-        selected = current.transition.selected_candidate_index
-        selected_index_valid = (
-            0 <= selected < current.supervision.q_train_mask.shape[0]
-            and selected < current_actor.actor_action_mask.shape[0]
-        )
-        row_train = bool(
-            selected_index_valid
-            and current.supervision.q_train_mask[selected]
-            and current_actor.actor_action_mask[selected]
-            and np.isfinite(current.transition.reward)
-            and np.isfinite(current.transition.discount)
-        )
-        return QhSample(
-            current_actor=current_actor,
-            next_actor=next_actor,
-            transition=QhTransition(
-                selected_candidate_index=torch.tensor(selected, dtype=torch.int64),
-                selected_candidate_row_id=torch.tensor(
-                    current.transition.selected_candidate_row_id,
-                    dtype=torch.int64,
-                ),
-                reward=torch.tensor(current.transition.reward, dtype=torch.float32),
-                discount=torch.tensor(current.transition.discount, dtype=torch.float32),
-                terminal=torch.tensor(current.transition.terminal, dtype=torch.bool),
-                row_train_mask=torch.tensor(row_train, dtype=torch.bool),
-            ),
-            lineage=QhLineage(current=current.lineage, next=None if next_state is None else next_state.lineage),
-        )
-
-    @cached_property
-    def scene_ids(self) -> frozenset[str]:
-        """Return scene ids for split-disjointness checks before loader creation."""
-
-        return self.rollout_reader.scene_ids
-
-    @property
-    def q_h_horizon(self) -> int:
-        """Return :attr:`QhRolloutReader.q_h_horizon` without reading samples."""
-
-        return self.rollout_reader.q_h_horizon
-
-    @property
-    def provenance(self) -> dict[str, object]:
-        """Return joined rollout and actor identities without loading a sample."""
-
-        return {
-            "rollout": self.rollout_reader.provenance,
-            "actor": self.actor_source.provenance,
-        }
-
-    def _validate_source_lineage(self) -> None:
-        """Validate every compact rollout/source join before any batch can load."""
-
-        for lineage in self.rollout_reader.source_lineage:
-            self._actor_source_index(lineage)
-
-    def _compose_actor(self, state: rollout_qh.QhRolloutState) -> QhActorInputs:
-        lineage = state.lineage
+        stored = self.rollout_reader[index]
+        lineage = QhChainLineage(*stored.lineage)
         protocol = validate_target_protocol_admission(
             lineage.target_protocol_version,
             target_source=lineage.target_source,
@@ -451,259 +321,241 @@ class QhDataset(Dataset[QhSample]):
         )
         if protocol is not TargetInputProtocol.V0_GT_INPUT:
             raise ValueError("QhDataset currently materializes only v0_gt_input target descriptors.")
+        record = self._record(lineage)
+        snippet = self.actor_reader.read_actor_snippet(record, device="cpu")
+        return _tensor_chain(stored, snippet, lineage)
 
-        source_index = self._actor_source_index(lineage)
-        return _tensor_actor(
-            self.actor_source[source_index],
-            state.actor,
+    @cached_property
+    def scene_ids(self) -> frozenset[str]:
+        """Return preflighted scene ids without materializing chain payloads."""
+
+        return self.rollout_reader.scene_ids
+
+    @property
+    def q_h_horizon(self) -> int:
+        """Return the validated maximum candidate-bearing chain length."""
+
+        return self.rollout_reader.q_h_horizon
+
+    @property
+    def provenance(self) -> dict[str, object]:
+        """Return compact rollout and VIN source identity."""
+
+        return {
+            "rollout": self.rollout_reader.provenance,
+            "actor": {
+                "store_path": str(self.actor_reader.config.store_dir),
+                "store_version": self.actor_reader.manifest.version,
+                "manifest_hash": self._manifest_hash,
+                "split": self.split,
+                "row_count": len(self._records),
+            },
+        }
+
+    def _validate_source_lineage(self) -> None:
+        for lineage in self.rollout_reader.source_lineage:
+            self._record(lineage)
+
+    def _record(self, lineage: object) -> VinOfflineIndexRecord:
+        sample_index = int(lineage.source_sample_index)
+        try:
+            record = self._records[sample_index]
+        except KeyError as error:
+            raise KeyError(
+                f"VIN sample_index={sample_index} is absent from split {self.split!r}. {self._REBUILD_GUIDANCE}"
+            ) from error
+        actual = (
+            record.sample_index,
+            compact_ase_atek_sample_id(record.sample_key),
+            record.shard_id,
+            record.row,
+            str(self.actor_reader.manifest.version),
+            self._manifest_hash,
+            record.scene_id,
+            compact_ase_atek_sample_id(record.snippet_id),
+            Stage.from_str(record.split),
         )
-
-    def _actor_source_index(self, lineage: rollout_qh.QhLineage | rollout_qh.QhSourceLineage) -> int:
-        """Resolve and validate one compact rollout-to-source join."""
-
-        source_index = self.actor_source.index_for_sample(lineage.source_sample_index)
-        self.actor_source.validate_lineage(
-            source_index,
-            source_sample_index=lineage.source_sample_index,
-            source_sample_key=lineage.source_sample_key,
-            source_shard_id=lineage.source_shard_id,
-            source_shard_row=lineage.source_shard_row,
-            source_offline_store_version=lineage.source_cache_version,
-            source_offline_store_manifest_hash=lineage.source_offline_store_manifest_hash,
-            scene_id=lineage.scene_id,
-            snippet_id=lineage.snippet_id,
-            split=lineage.split,
+        expected = (
+            sample_index,
+            compact_ase_atek_sample_id(str(lineage.source_sample_key)),
+            str(lineage.source_shard_id),
+            int(lineage.source_shard_row),
+            str(lineage.source_cache_version),
+            str(lineage.source_offline_store_manifest_hash),
+            str(lineage.scene_id),
+            compact_ase_atek_sample_id(str(lineage.snippet_id)),
+            lineage.split,
         )
-        return source_index
-
-    @staticmethod
-    def _validate_transition_link(
-        current: rollout_qh.QhRolloutState,
-        next_state: rollout_qh.QhRolloutState,
-    ) -> None:
-        expected = current.transition.next_state
-        if expected != next_state.locator:
-            raise ValueError("Q_H successor locator changed during dataset composition.")
-        if (
-            next_state.lineage.rollout_row_id != current.lineage.rollout_row_id
-            or next_state.lineage.step_index != current.lineage.step_index + 1
-            or next_state.lineage.source_sample_index != current.lineage.source_sample_index
-        ):
-            raise ValueError("Q_H successor crosses rollout, step, or source lineage.")
+        if actual != expected:
+            raise ValueError(f"VIN source lineage does not match rollout chain. {self._REBUILD_GUIDANCE}")
+        return record
 
 
-def collate_qh_samples(samples: list[QhSample]) -> QhBatch:
-    """Collate transition samples with deterministic right padding.
-
-    Candidate and history ids use ``-1`` sentinels, pose/features use zeros,
-    and all associated masks use false. Mixed terminal batches receive an
-    empty padded successor row plus ``next_actor_present=False``; an all-terminal
-    batch keeps ``next_actor=None``. This is the ``collate_fn`` used by
-    :class:`aria_nbv.lightning.qh_datamodule.QhDataModule` and PyTorch's
-    [DataLoader](https://docs.pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader).
-
-    Args:
-        samples: Non-empty list of transition-complete :class:`QhSample` rows.
-
-    Returns:
-        :class:`QhBatch` with batch axis ``B=len(samples)`` and independently
-        padded current/successor candidate and history axes.
-    """
+def collate_qh_samples(samples: list[QhRolloutChain]) -> QhBatch:
+    """Pad heterogeneous complete chains to one explicit ``[B,S,N,...]`` basis."""
 
     if not samples:
-        raise ValueError("Cannot collate an empty Q_H sample list.")
-    current_actor = _collate_actor([sample.current_actor for sample in samples])
-    next_present = torch.tensor([sample.next_actor is not None for sample in samples], dtype=torch.bool)
-    next_actor = None
-    if bool(next_present.any()):
-        exemplar = next(sample.next_actor for sample in samples if sample.next_actor is not None)
-        assert exemplar is not None
-        next_actor = _collate_actor(
-            [sample.next_actor if sample.next_actor is not None else _empty_actor_like(exemplar) for sample in samples]
-        )
-
-    transition = QhTransition(
-        selected_candidate_index=torch.stack([sample.transition.selected_candidate_index for sample in samples]),
-        selected_candidate_row_id=torch.stack([sample.transition.selected_candidate_row_id for sample in samples]),
-        reward=torch.stack([sample.transition.reward for sample in samples]),
-        discount=torch.stack([sample.transition.discount for sample in samples]),
-        terminal=torch.stack([sample.transition.terminal for sample in samples]),
-        row_train_mask=torch.stack([sample.transition.row_train_mask for sample in samples]),
-    )
+        raise ValueError("Cannot collate an empty Q_H chain list.")
+    inputs = [sample.inputs for sample in samples]
+    supervision = [sample.supervision for sample in samples]
+    snippets = [value.vin_snippet for value in inputs]
     return QhBatch(
-        current_actor=current_actor,
-        next_actor=next_actor,
-        next_actor_present=next_present,
-        transition=transition,
+        inputs=QhInputs(
+            vin_snippet=VinSnippetView(
+                points_world=_pad([value.points_world for value in snippets], float("nan")),
+                lengths=torch.stack([value.lengths for value in snippets]),
+                t_world_rig=PoseTW(_pad([value.t_world_rig.tensor() for value in snippets], 0)),
+            ),
+            root_pose_world=torch.stack([value.root_pose_world for value in inputs]),
+            target_extents=torch.stack([value.target_extents for value in inputs]),
+            target_pose_world_object=torch.stack([value.target_pose_world_object for value in inputs]),
+            candidate_pose_relative_root=_pad([value.candidate_pose_relative_root for value in inputs], 0),
+            candidate_position_id=_pad([value.candidate_position_id for value in inputs], -1),
+            actor_action_mask=_pad([value.actor_action_mask for value in inputs], False),
+            previous_selected_pose_relative_root=_pad(
+                [value.previous_selected_pose_relative_root for value in inputs], 0
+            ),
+            previous_selected_position_id=_pad([value.previous_selected_position_id for value in inputs], -1),
+            previous_selected_mask=_pad([value.previous_selected_mask for value in inputs], False),
+            remaining_budget=_pad([value.remaining_budget for value in inputs], 0),
+            step_mask=_pad([value.step_mask for value in inputs], False),
+        ),
+        supervision=QhSupervision(
+            candidate_row_id=_pad([value.candidate_row_id for value in supervision], -1),
+            q_train_mask=_pad([value.q_train_mask for value in supervision], False),
+            invalid_reason_bitset=_pad([value.invalid_reason_bitset for value in supervision], 0),
+            one_step_target_rri=_pad([value.one_step_target_rri for value in supervision], 0),
+            one_step_target_root_gain=_pad([value.one_step_target_root_gain for value in supervision], 0),
+            selected_candidate_index=_pad([value.selected_candidate_index for value in supervision], -1),
+            discount=_pad([value.discount for value in supervision], 0),
+            terminal=_pad([value.terminal for value in supervision], True),
+            row_train_mask=_pad([value.row_train_mask for value in supervision], False),
+        ),
         lineage=tuple(sample.lineage for sample in samples),
     )
 
 
-def _tensor_actor(
-    source: VinActorSample,
-    state: rollout_qh.QhActorState,
-) -> QhActorInputs:
-    history_count = int(state.history_candidate_row_id.shape[0])
-    return QhActorInputs(
-        vin_snippet=source.snippet,
-        root_pose_world=_from_numpy(state.root_pose_world, torch.float32),
-        target_extents=_from_numpy(state.target_extents, torch.float32),
-        target_pose_world_object=_from_numpy(state.target_pose_world_object, torch.float32),
-        candidate_row_id=_from_numpy(state.candidate_row_id, torch.int64),
-        candidate_pose_relative_root=_from_numpy(state.candidate_pose_relative_root, torch.float32),
-        candidate_position_id=_from_numpy(state.candidate_position_id, torch.int64),
-        actor_action_mask=_from_numpy(state.actor_action_mask, torch.bool),
-        history_candidate_row_id=_from_numpy(state.history_candidate_row_id, torch.int64),
-        history_pose_relative_root=_from_numpy(state.history_pose_relative_root, torch.float32),
-        history_position_id=_from_numpy(state.history_position_id, torch.int64),
-        history_mask=torch.ones(history_count, dtype=torch.bool),
-        remaining_budget=torch.tensor(state.remaining_budget, dtype=torch.int64),
+def _tensor_chain(stored: object, snippet: VinSnippetView, lineage: QhChainLineage) -> QhRolloutChain:
+    candidate_pose = _stack_rows(stored.candidate_pose_relative_root, 0, torch.float32)
+    position_id = _stack_rows(stored.candidate_position_id, -1, torch.int64)
+    actor_mask = _stack_rows(stored.actor_action_mask, False, torch.bool)
+    candidate_row_id = _stack_rows(stored.candidate_row_id, -1, torch.int64)
+    q_train_mask = _stack_rows(stored.q_train_mask, False, torch.bool)
+    invalid_reason = _stack_rows(stored.invalid_reason_bitset, 0, torch.int64)
+    target_rri = _stack_rows(stored.one_step_target_rri, 0, torch.float32)
+    target_gain = _stack_rows(stored.one_step_target_root_gain, 0, torch.float32)
+    selected = _from_numpy(stored.selected_candidate_index, torch.int64)
+    selected_pose = _gather_candidates(candidate_pose, selected)
+    selected_position = _gather_candidates(position_id, selected)
+    steps = selected.shape[0]
+    previous_pose = torch.zeros_like(selected_pose)
+    previous_position = torch.full_like(selected_position, -1)
+    previous_mask = torch.zeros(steps, dtype=torch.bool)
+    if steps > 1:
+        previous_pose[1:] = selected_pose[:-1]
+        previous_position[1:] = selected_position[:-1]
+        previous_mask[1:] = True
+    discount = _from_numpy(stored.discount, torch.float32)
+    terminal = _from_numpy(stored.terminal, torch.bool)
+    selected_q_mask = _gather_candidates(q_train_mask, selected)
+    selected_actor_mask = _gather_candidates(actor_mask, selected)
+    selected_rri = _gather_candidates(target_rri, selected)
+    selected_gain = _gather_candidates(target_gain, selected)
+    if not bool(torch.isfinite(target_rri[q_train_mask]).all() and torch.isfinite(target_gain[q_train_mask]).all()):
+        raise ValueError("Q_H q_train_mask admits a candidate with non-finite supervision.")
+    row_train = (
+        selected_q_mask
+        & selected_actor_mask
+        & torch.isfinite(selected_rri)
+        & torch.isfinite(selected_gain)
+        & torch.isfinite(discount)
     )
-
-
-def _from_numpy(value: np.ndarray, dtype: torch.dtype | None = None) -> Tensor:
-    tensor = torch.from_numpy(np.array(value, copy=True))
-    return tensor if dtype is None else tensor.to(dtype=dtype)
-
-
-def _collate_actor(actors: list[QhActorInputs]) -> QhActorInputs:
-    snippets = [actor.vin_snippet for actor in actors]
-    vin_snippet = VinSnippetView(
-        points_world=_pad_nd([snippet.points_world for snippet in snippets], float("nan")),
-        lengths=torch.stack([snippet.lengths for snippet in snippets]),
-        t_world_rig=PoseTW(_pad_first_axis([snippet.t_world_rig.tensor() for snippet in snippets], 0)),
-    )
-    return QhActorInputs(
-        vin_snippet=vin_snippet,
-        root_pose_world=torch.stack([actor.root_pose_world for actor in actors]),
-        target_extents=torch.stack([actor.target_extents for actor in actors]),
-        target_pose_world_object=torch.stack([actor.target_pose_world_object for actor in actors]),
-        candidate_row_id=_pad_first_axis([actor.candidate_row_id for actor in actors], -1),
-        candidate_pose_relative_root=_pad_first_axis(
-            [actor.candidate_pose_relative_root for actor in actors],
-            0,
+    return QhRolloutChain(
+        inputs=QhInputs(
+            vin_snippet=snippet,
+            root_pose_world=_from_numpy(stored.root_pose_world, torch.float32),
+            target_extents=_from_numpy(stored.target_extents, torch.float32),
+            target_pose_world_object=_from_numpy(stored.target_pose_world_object, torch.float32),
+            candidate_pose_relative_root=candidate_pose,
+            candidate_position_id=position_id,
+            actor_action_mask=actor_mask,
+            previous_selected_pose_relative_root=previous_pose,
+            previous_selected_position_id=previous_position,
+            previous_selected_mask=previous_mask,
+            remaining_budget=_from_numpy(stored.remaining_budget, torch.int64),
+            step_mask=torch.ones(steps, dtype=torch.bool),
         ),
-        candidate_position_id=_pad_first_axis([actor.candidate_position_id for actor in actors], -1),
-        actor_action_mask=_pad_first_axis([actor.actor_action_mask for actor in actors], False),
-        history_candidate_row_id=_pad_first_axis([actor.history_candidate_row_id for actor in actors], -1),
-        history_pose_relative_root=_pad_first_axis(
-            [actor.history_pose_relative_root for actor in actors],
-            0,
+        supervision=QhSupervision(
+            candidate_row_id=candidate_row_id,
+            q_train_mask=q_train_mask,
+            invalid_reason_bitset=invalid_reason,
+            one_step_target_rri=target_rri,
+            one_step_target_root_gain=target_gain,
+            selected_candidate_index=selected,
+            discount=discount,
+            terminal=terminal,
+            row_train_mask=row_train,
         ),
-        history_position_id=_pad_first_axis([actor.history_position_id for actor in actors], -1),
-        history_mask=_pad_first_axis([actor.history_mask for actor in actors], False),
-        remaining_budget=torch.stack([actor.remaining_budget for actor in actors]),
+        lineage=lineage,
     )
 
 
-def _empty_actor_like(actor: QhActorInputs) -> QhActorInputs:
-    def empty(value: Tensor) -> Tensor:
-        return value.new_empty((0, *value.shape[1:]))
-
-    return replace(
-        actor,
-        vin_snippet=VinSnippetView(
-            points_world=empty(actor.vin_snippet.points_world),
-            lengths=torch.zeros_like(actor.vin_snippet.lengths),
-            t_world_rig=PoseTW(empty(actor.vin_snippet.t_world_rig.tensor())),
-        ),
-        root_pose_world=torch.zeros_like(actor.root_pose_world),
-        target_extents=torch.zeros_like(actor.target_extents),
-        target_pose_world_object=torch.zeros_like(actor.target_pose_world_object),
-        candidate_row_id=empty(actor.candidate_row_id),
-        candidate_pose_relative_root=empty(actor.candidate_pose_relative_root),
-        candidate_position_id=empty(actor.candidate_position_id),
-        actor_action_mask=empty(actor.actor_action_mask),
-        history_candidate_row_id=empty(actor.history_candidate_row_id),
-        history_pose_relative_root=empty(actor.history_pose_relative_root),
-        history_position_id=empty(actor.history_position_id),
-        history_mask=empty(actor.history_mask),
-        remaining_budget=torch.tensor(0, dtype=torch.int64),
-    )
+def _from_numpy(value: np.ndarray, dtype: torch.dtype) -> Tensor:
+    return torch.from_numpy(np.array(value, copy=True)).to(dtype=dtype)
 
 
-def _pad_first_axis(values: list[Tensor], fill: int | float | bool) -> Tensor:
-    return _pad_nd(values, fill, only_first=True)
+def _stack_rows(values: tuple[np.ndarray, ...], fill: int | float | bool, dtype: torch.dtype) -> Tensor:
+    return _pad([_from_numpy(value, dtype) for value in values], fill)
 
 
-def _pad_nd(values: list[Tensor], fill: int | float | bool, *, only_first: bool = False) -> Tensor:
+def _pad(values: list[Tensor], fill: int | float | bool) -> Tensor:
     if not values:
         raise ValueError("Cannot pad an empty tensor list.")
-    ndim = values[0].ndim
-    if any(value.ndim != ndim for value in values):
+    rank = values[0].ndim
+    if any(value.ndim != rank for value in values):
         raise ValueError("Q_H tensors with different ranks cannot share one padded field.")
-    maxima = [max(value.shape[axis] for value in values) for axis in range(ndim)]
-    if only_first:
-        expected_tail = values[0].shape[1:]
-        if any(value.shape[1:] != expected_tail for value in values[1:]):
-            raise ValueError("Only the leading Q_H candidate/history axis may vary.")
-        maxima[1:] = expected_tail
+    maxima = tuple(max(value.shape[axis] for value in values) for axis in range(rank))
     output = torch.full((len(values), *maxima), fill, dtype=values[0].dtype)
     for row, value in enumerate(values):
-        selection = (row, *(slice(0, size) for size in value.shape))
-        output[selection] = value
+        output[(row, *(slice(0, size) for size in value.shape))] = value
     return output
 
 
-def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> QhBatch:
-    """Apply one tensor transform while preserving the batch's lineage identity."""
+def _gather_candidates(values: Tensor, indices: Tensor) -> Tensor:
+    safe = indices.clamp(0, max(values.shape[-1] - 1, 0))
+    if values.ndim == indices.ndim + 1:
+        return values.gather(-1, safe.unsqueeze(-1)).squeeze(-1)
+    expanded = safe.unsqueeze(-1).unsqueeze(-1).expand(*safe.shape, 1, values.shape[-1])
+    return values.gather(-2, expanded).squeeze(-2)
 
+
+def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> QhBatch:
+    inputs = batch.inputs
+    snippet = inputs.vin_snippet
+    transformed_inputs = {
+        field.name: transform(getattr(inputs, field.name)) for field in fields(QhInputs) if field.name != "vin_snippet"
+    }
+    transformed_supervision = {
+        field.name: transform(getattr(batch.supervision, field.name)) for field in fields(QhSupervision)
+    }
     return replace(
         batch,
-        current_actor=_transform_actor(batch.current_actor, transform),
-        next_actor=None if batch.next_actor is None else _transform_actor(batch.next_actor, transform),
-        next_actor_present=transform(batch.next_actor_present),
-        transition=replace(
-            batch.transition,
-            selected_candidate_index=transform(batch.transition.selected_candidate_index),
-            selected_candidate_row_id=transform(batch.transition.selected_candidate_row_id),
-            reward=transform(batch.transition.reward),
-            discount=transform(batch.transition.discount),
-            terminal=transform(batch.transition.terminal),
-            row_train_mask=transform(batch.transition.row_train_mask),
+        inputs=QhInputs(
+            vin_snippet=VinSnippetView(
+                points_world=transform(snippet.points_world),
+                lengths=transform(snippet.lengths),
+                t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
+            ),
+            **transformed_inputs,
         ),
+        supervision=QhSupervision(**transformed_supervision),
     )
-
-
-def _transform_actor(actor: QhActorInputs, transform: Callable[[Tensor], Tensor]) -> QhActorInputs:
-    """Apply a batch-owned transform to every actor tensor."""
-
-    snippet = actor.vin_snippet
-    return replace(
-        actor,
-        vin_snippet=VinSnippetView(
-            points_world=transform(snippet.points_world),
-            lengths=transform(snippet.lengths),
-            t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
-        ),
-        root_pose_world=transform(actor.root_pose_world),
-        target_extents=transform(actor.target_extents),
-        target_pose_world_object=transform(actor.target_pose_world_object),
-        candidate_row_id=transform(actor.candidate_row_id),
-        candidate_pose_relative_root=transform(actor.candidate_pose_relative_root),
-        candidate_position_id=transform(actor.candidate_position_id),
-        actor_action_mask=transform(actor.actor_action_mask),
-        history_candidate_row_id=transform(actor.history_candidate_row_id),
-        history_pose_relative_root=transform(actor.history_pose_relative_root),
-        history_position_id=transform(actor.history_position_id),
-        history_mask=transform(actor.history_mask),
-        remaining_budget=transform(actor.remaining_budget),
-    )
-
-
-def _is_positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 __all__ = [
-    "QhActorInputs",
+    "QhRolloutChain",
+    "QhChainLineage",
+    "QhInputs",
+    "QhSupervision",
     "QhBatch",
-    "QhCorpus",
-    "QhDataset",
-    "QhDatasetConfig",
-    "QhLineage",
-    "QhSample",
-    "QhStageDataset",
-    "QhTransition",
-    "collate_qh_samples",
 ]

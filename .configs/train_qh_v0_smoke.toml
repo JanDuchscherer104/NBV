@@ -3,7 +3,7 @@ out_dir = ".logs/qh/smoke"
 
 [trainer_config]
 is_debug = true
-use_distributed_sampler = false
+use_distributed_sampler = true
 use_wandb = false
 enable_validation = false
 gradient_clip_val = 0

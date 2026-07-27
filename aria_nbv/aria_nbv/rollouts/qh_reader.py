@@ -1,11 +1,9 @@
-"""Lazy storage-only reader for finite-candidate ``Q_H`` rollout chains.
+"""Lazy storage reader for complete finite-candidate ``Q_H`` rollout chains.
 
 Corpus admission indexes and validates every complete, non-empty persisted
-rollout chain. Worker processes reopen Zarr handles and read only bounded state
-rows and contiguous candidate slices. The legacy state-at-a-time surface stays
-temporarily available for the transition data plane; the chain facts consumed
-by its replacement remain private until :mod:`aria_nbv.data_handling.qh` owns
-the public tensor DTOs.
+chain. Worker processes reopen Zarr handles and read only bounded state rows
+and contiguous candidate slices. Tensor conversion, VIN composition, padding,
+and the public five-DTO interface belong to :mod:`aria_nbv.data_handling.qh`.
 """
 
 from __future__ import annotations
@@ -39,273 +37,26 @@ from .zarr_store import (
 
 
 @dataclass(frozen=True, slots=True)
-class QhStateLocator:
-    """Store-local address of one validated ``Q_H`` state row."""
-
-    store_index: int
-    """Zero-based index into :attr:`QhRolloutReaderConfig.store_dirs`."""
-
-    state_row: int
-    """Zero-based row on the selected store's dense ``q_h`` state axis."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhActorState:
-    """Actor-safe rollout facts for one finite-candidate state.
-
-    ``remaining_budget`` is the fixed acquisition budget ``horizon -
-    step_index``. History contains only previously selected pose, position/action
-    id, and candidate id rows; persisted depth and Oracle diagnostics are absent.
-    """
-
-    candidate_row_id: np.ndarray
-    """``ndarray["N_q", int64]`` stable candidate-table ids for the compact shell."""
-
-    candidate_pose_world_cam: np.ndarray
-    """``ndarray["N_q 12", float32]`` world-from-camera poses."""
-
-    candidate_pose_relative_root: np.ndarray
-    """``ndarray["N_q 12", float32]`` root-reference-from-camera poses."""
-
-    candidate_position_id: np.ndarray
-    """``ndarray["N_q", int32]`` actor-visible finite-position family ids."""
-
-    actor_action_mask: np.ndarray
-    """``ndarray["N_q", bool]`` hard action-admission mask for selection."""
-
-    root_pose_world: np.ndarray
-    """``ndarray["12", float32]`` persisted world-from-rollout-root pose."""
-
-    target_row_id: int
-    """Dense row id of the persisted V0 target descriptor."""
-
-    target_center_world: np.ndarray
-    """``ndarray["3", float32]`` target OBB center in world frame, metres."""
-
-    target_extents: np.ndarray
-    """``ndarray["3", float32]`` target OBB full extents, metres."""
-
-    target_pose_world_object: np.ndarray
-    """``ndarray["12", float32]`` world-from-object target pose."""
-
-    target_relative_pose_reference_object: np.ndarray
-    """``ndarray["12", float32]`` rollout-reference-from-object target pose."""
-
-    target_sem_id: int
-    """Target semantic-category id from the admitted Oracle GT descriptor."""
-
-    target_inst_id: int
-    """Target instance id from the admitted Oracle GT descriptor."""
-
-    history_candidate_row_id: np.ndarray
-    """``ndarray["H_t", int64]`` stable ids selected before this state."""
-
-    history_pose_world_cam: np.ndarray
-    """``ndarray["H_t 12", float32]`` prior selected world-from-camera poses."""
-
-    history_pose_relative_root: np.ndarray
-    """``ndarray["H_t 12", float32]`` prior root-reference-from-camera poses."""
-
-    history_position_id: np.ndarray
-    """``ndarray["H_t", int32]`` prior selected finite-position family ids."""
-
-    remaining_budget: int
-    """Acquisitions remaining including the current step, ``horizon - step_index``."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhSupervision:
-    """One-step Oracle labels and hard training masks aligned to candidates."""
-
-    q_train_mask: np.ndarray
-    """``ndarray["N_q", bool]`` candidates with actor validity and finite Oracle labels."""
-
-    invalid_reason_bitset: np.ndarray
-    """``ndarray["N_q", uint32]`` persisted hard-invalid reason flags."""
-
-    one_step_target_rri: np.ndarray
-    """``ndarray["N_q", float32]`` one-step target RRI; invalid entries may be NaN."""
-
-    one_step_target_root_gain: np.ndarray
-    """``ndarray["N_q", float32]`` root-gain rewards; invalid entries may be NaN."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhTransition:
-    """Factual selected transition and its optional next-state address."""
-
-    selected_candidate_index: int
-    """Index of the factual selected action on the current compact candidate axis."""
-
-    selected_candidate_row_id: int
-    """Stable candidate-table id at :attr:`selected_candidate_index`."""
-
-    reward: float
-    """Selected one-step target-root-gain reward used by fitted ``Q_H``."""
-
-    reward_target_rri: float
-    """Selected one-step target RRI retained as an audit diagnostic."""
-
-    discount: float
-    """Persisted TD discount: corpus gamma for successors and ``0.0`` at terminal rows."""
-
-    terminal: bool
-    """Whether the selected transition ends the persisted rollout chain."""
-
-    next_state: QhStateLocator | None
-    """Exact next state in the same store and chain, absent iff :attr:`terminal`."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhLineage:
-    """Observation, target, rollout, and configuration provenance.
-
-    The immutable VIN source row is the observation provenance. The rollout
-    store does not reinterpret that lineage as an actor observation payload.
-    """
-
-    source_row_id: int
-    """Dense rollout-store row id of the immutable VIN source reference."""
-
-    source_sample_index: int
-    """Global immutable VIN ``sample_index.jsonl`` index used for the actor join."""
-
-    source_sample_key: str
-    """Stable compact ASE/ATEK sample key."""
-
-    source_shard_id: str
-    """Immutable VIN shard containing :attr:`source_shard_row`."""
-
-    source_shard_row: int
-    """Zero-based row within :attr:`source_shard_id`."""
-
-    scene_id: str
-    """ASE scene id used for scene-disjoint split validation."""
-
-    snippet_id: str
-    """ATEK snippet id of the source observation."""
-
-    split: Stage
-    """Immutable VIN source split recorded for the observation row."""
-
-    source_cache_version: str
-    """Strict immutable VIN store-format version."""
-
-    source_offline_store_manifest_hash: str
-    """Hash binding the rollout row to the complete immutable VIN manifest."""
-
-    split_manifest_hash: str
-    """Hash binding source admission to the rollout corpus split manifest."""
-
-    target_protocol_version: str
-    """Persisted actor-visible target-input protocol version."""
-
-    target_source: str
-    """Canonical target descriptor source admitted by that protocol."""
-
-    schema_version: str
-    """Rollout Zarr schema version used to decode the state."""
-
-    reason_code_version: str
-    """Version of the invalid-reason bitset vocabulary."""
-
-    return_semantics: str
-    """Corpus-level definition of persisted finite-horizon returns."""
-
-    td_semantics: str
-    """Definition of the selected-transition Bellman tuple."""
-
-    reward_metric: str
-    """Name of the scalar reward carried by :attr:`QhTransition.reward`."""
-
-    discount_gamma: float
-    """Corpus discount gamma applied to non-terminal transitions."""
-
-    horizon: int
-    """Maximum acquisition-step count for this rollout chain."""
-
-    rollout_row_id: int
-    """Dense row id of the owning rollout."""
-
-    rollout_id: str
-    """Stable persisted rollout identifier."""
-
-    chain_id: int
-    """Persisted chain identifier within the rollout source/target task."""
-
-    step_index: int
-    """Zero-based state index within the rollout chain."""
-
-    candidate_config_hash: str
-    """Hash of the candidate-generation config used by the rollout."""
-
-    oracle_config_hash: str
-    """Hash of the privileged Oracle scoring config used to label the rollout."""
-
-    rollout_config_hash: str
-    """Hash of the rollout-policy and persistence config."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhRolloutState:
-    """Storage-side current state returned by :class:`QhRolloutReader`."""
-
-    locator: QhStateLocator
-    """Store-local address from which this state was read."""
-
-    actor: QhActorState
-    """Actor-visible candidate, target, and selected-history facts."""
-
-    supervision: QhSupervision
-    """Candidate-aligned Oracle labels and hard training admission."""
-
-    transition: QhTransition
-    """Factual selected Bellman transition."""
-
-    lineage: QhLineage
-    """Observation, target, rollout, and configuration provenance."""
-
-
-@dataclass(frozen=True, slots=True)
-class QhSourceLineage:
+class _QhSourceLineage:
     """Compact immutable source facts admitted during rollout preflight."""
 
     source_row_id: int
-    """Dense rollout-store source-table row id."""
-
     source_sample_index: int
-    """Global immutable VIN sample index used by :class:`QhRolloutReader`."""
-
     source_sample_key: str
-    """Stable compact ASE/ATEK sample key."""
-
     source_shard_id: str
-    """Immutable VIN shard containing the source observation."""
-
     source_shard_row: int
-    """Zero-based row within :attr:`source_shard_id`."""
-
     scene_id: str
-    """ASE scene id used for split-disjointness checks."""
-
     snippet_id: str
-    """ATEK snippet id of the source observation."""
-
     split: Stage
-    """Immutable VIN source split."""
-
     source_cache_version: str
-    """Strict immutable VIN store-format version."""
-
     source_offline_store_manifest_hash: str
-    """Hash of the complete immutable VIN source manifest."""
-
     split_manifest_hash: str
-    """Hash of the admitted rollout split manifest."""
 
 
 @dataclass(frozen=True, slots=True)
-class _QhChainStateFacts:
+class _StoredChain:
+    """One decoded chain of storage facts before tensor/VIN composition."""
+
     root_pose_world: np.ndarray
     target_extents: np.ndarray
     target_pose_world_object: np.ndarray
@@ -313,77 +64,15 @@ class _QhChainStateFacts:
     candidate_position_id: tuple[np.ndarray, ...]
     actor_action_mask: tuple[np.ndarray, ...]
     remaining_budget: np.ndarray
-
-
-@dataclass(frozen=True, slots=True)
-class _QhChainSupervisionFacts:
     candidate_row_id: tuple[np.ndarray, ...]
     q_train_mask: tuple[np.ndarray, ...]
     invalid_reason_bitset: tuple[np.ndarray, ...]
     one_step_target_rri: tuple[np.ndarray, ...]
     one_step_target_root_gain: tuple[np.ndarray, ...]
     selected_candidate_index: np.ndarray
-
-
-@dataclass(frozen=True, slots=True)
-class _QhChainTransitionFacts:
     discount: np.ndarray
     terminal: np.ndarray
-
-
-@dataclass(frozen=True, slots=True)
-class _QhChainLineage:
-    source_row_id: int
-    source_sample_index: int
-    source_sample_key: str
-    source_shard_id: str
-    source_shard_row: int
-    scene_id: str
-    snippet_id: str
-    split: Stage
-    source_cache_version: str
-    source_offline_store_manifest_hash: str
-    split_manifest_hash: str
-    mesh_version: str
-    target_row_id: int
-    target_sem_id: int
-    target_inst_id: int
-    target_protocol_version: str
-    target_source: str
-    target_crop_policy: str
-    schema_version: str
-    reason_code_version: str
-    return_semantics: str
-    td_semantics: str
-    reward_metric: str
-    discount_gamma: float
-    horizon: int
-    rollout_row_id: int
-    rollout_id: str
-    chain_id: int
-    root_time_ns: int
-    root_trajectory_index: int
-    root_frame_index: int
-    policy: str
-    branch_factor: int
-    beam_width: int
-    temperature: float
-    random_seed: int
-    termination_reason: str
-    candidate_config_hash: str
-    oracle_config_hash: str
-    rollout_config_hash: str
-    model_checkpoint_hash: str
-    branch_schedule_id: str
-    selection_rng_state_hash: str
-
-
-@dataclass(frozen=True, slots=True)
-class _QhRolloutChainFacts:
-    state: _QhChainStateFacts
-    supervision: _QhChainSupervisionFacts
-    transition: _QhChainTransitionFacts
-    lineage: _QhChainLineage
+    lineage: tuple[object, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,7 +113,7 @@ class _StoreMetadata:
     chains: tuple[_ChainIndexEntry, ...]
     dictionaries: dict[str, tuple[str, ...]]
     compatibility: tuple[tuple[str, object], ...]
-    source_lineage: tuple[QhSourceLineage, ...]
+    source_lineage: tuple[_QhSourceLineage, ...]
     scene_ids: frozenset[str]
 
 
@@ -453,12 +142,6 @@ class QhRolloutReader:
         self.config = config
         self._stores = tuple(_preflight_store(path) for path in config.store_dirs)
         _validate_homogeneous(self._stores)
-        prefix_ends: list[int] = []
-        total = 0
-        for store in self._stores:
-            total += store.state_count
-            prefix_ends.append(total)
-        self._prefix_ends = tuple(prefix_ends)
         chain_prefix_ends: list[int] = []
         chain_total = 0
         for store in self._stores:
@@ -471,36 +154,23 @@ class QhRolloutReader:
         self._roots: dict[int, zarr.Group] = {}
 
     def __len__(self) -> int:
-        """Return the legacy transition-state count until G004 switches consumers."""
-
-        return self._prefix_ends[-1]
-
-    @property
-    def chain_count(self) -> int:
-        """Return the number of complete non-empty persisted rollout chains."""
+        """Return the number of complete non-empty persisted chains."""
 
         return self._chain_prefix_ends[-1]
 
-    def read_chain(self, index: int) -> _QhRolloutChainFacts:
-        """Decode one validated chain through bounded state and candidate slices."""
-
+    def __getitem__(self, index: int) -> _StoredChain:
+        """Decode one validated chain through bounded Zarr slices."""
         if index < 0:
-            index += self.chain_count
-        if index < 0 or index >= self.chain_count:
-            raise IndexError(f"Q_H chain index {index} is outside corpus length {self.chain_count}.")
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Q_H chain index {index} is outside corpus length {len(self)}.")
         store_index = bisect_right(self._chain_prefix_ends, index)
         previous_end = 0 if store_index == 0 else self._chain_prefix_ends[store_index - 1]
         store = self._stores[store_index]
         return _read_chain(self._root(store_index), store, store.chains[index - previous_end])
 
-    def __getitem__(self, index: int) -> QhRolloutState:
-        """Return one state using bounded Zarr reads and direct dense-id joins."""
-
-        locator = self.locator(index)
-        return self.read(locator)
-
     @property
-    def source_lineage(self) -> tuple[QhSourceLineage, ...]:
+    def source_lineage(self) -> tuple[_QhSourceLineage, ...]:
         """Return compact source rows validated without reading state payloads."""
 
         return self._source_lineage
@@ -550,28 +220,6 @@ class QhRolloutReader:
         state["_open_pid"] = None
         state["_roots"] = {}
         return state
-
-    def locator(self, index: int) -> QhStateLocator:
-        """Translate one global corpus index with prefix-length bisection."""
-
-        if index < 0:
-            index += len(self)
-        if index < 0 or index >= len(self):
-            raise IndexError(f"Q_H state index {index} is outside corpus length {len(self)}.")
-        store_index = bisect_right(self._prefix_ends, index)
-        previous_end = 0 if store_index == 0 else self._prefix_ends[store_index - 1]
-        return QhStateLocator(store_index=store_index, state_row=index - previous_end)
-
-    def read(self, locator: QhStateLocator) -> QhRolloutState:
-        """Read one previously validated store-local state locator."""
-
-        if locator.store_index < 0 or locator.store_index >= len(self._stores):
-            raise IndexError(f"Unknown Q_H store index {locator.store_index}.")
-        store = self._stores[locator.store_index]
-        if locator.state_row < 0 or locator.state_row >= store.state_count:
-            raise IndexError(f"Q_H state row {locator.state_row} is outside store length {store.state_count}.")
-        root = self._root(locator.store_index)
-        return _read_state(root, store, locator)
 
     def _root(self, store_index: int) -> zarr.Group:
         pid = os.getpid()
@@ -756,7 +404,7 @@ def _read_source_lineage(
     root: zarr.Group,
     path: Path,
     dictionaries: dict[str, tuple[str, ...]],
-) -> tuple[QhSourceLineage, ...]:
+) -> tuple[_QhSourceLineage, ...]:
     """Decode bounded source-table vectors and validate their split provenance."""
 
     sources = root["sources"]
@@ -764,7 +412,7 @@ def _read_source_lineage(
     if source_ids.size == 0 or np.any(source_ids[1:] <= source_ids[:-1]):
         raise ValueError(f"Q_H store {path} requires sorted unique immutable source ids.")
     rows = tuple(
-        QhSourceLineage(
+        _QhSourceLineage(
             source_row_id=int(source_id),
             source_sample_index=int(sources["sample_index"][row]),
             source_sample_key=_decode_id(root, dictionaries, "source_key", "sources/sample_key_id", row),
@@ -974,6 +622,18 @@ def _validate_indexed_candidate_slice(root: zarr.Group, *, row: int, width: int,
     candidate_ids = q_rows["candidate_row_id"][:width].astype(np.int64, copy=False)
     candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
     _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
+    selected = int(root["q_h/selected_candidate_index"][row])
+    if selected < 0 or selected >= width or not bool(q_rows["valid_action_mask"][selected]):
+        raise ValueError(f"Q_H selected candidate linkage is invalid at state row {row}.")
+    selected_id = int(candidate_ids[selected])
+    if selected_id != int(root["q_h/td_selected_candidate_row_id"][row]) or selected_id != int(
+        root["steps/selected_candidate_row_id"][row]
+    ):
+        raise ValueError(f"Q_H selected candidate row id is inconsistent at state row {row}.")
+    if not np.isclose(float(root["q_h/td_reward"][row]), float(q_rows["one_step_target_root_gain"][selected])):
+        raise ValueError(f"Q_H selected reward is inconsistent at state row {row}.")
+    if not np.isclose(float(root["q_h/td_reward_target_rri"][row]), float(q_rows["one_step_target_rri"][selected])):
+        raise ValueError(f"Q_H selected target RRI is inconsistent at state row {row}.")
 
 
 def _validate_homogeneous(stores: tuple[_StoreMetadata, ...]) -> None:
@@ -1009,7 +669,7 @@ def _array_equal(left: np.ndarray, right: np.ndarray) -> bool:
     return bool(np.array_equal(left, right))
 
 
-def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry) -> _QhRolloutChainFacts:
+def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry) -> _StoredChain:
     """Decode one preflighted root-to-leaf chain without a terminal empty state."""
 
     rows = range(entry.state_start, entry.state_stop)
@@ -1025,21 +685,6 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
         for row, step_row_id in zip(rows, entry.step_row_ids, strict=True)
     )
     selected_index = np.asarray(q_h["selected_candidate_index"][entry.state_start : entry.state_stop], dtype=np.int64)
-    for offset, (selected, facts) in enumerate(zip(selected_index.tolist(), candidate_rows, strict=True)):
-        row = entry.state_start + offset
-        if selected < 0 or selected >= facts["candidate_row_id"].size:
-            raise ValueError(f"Q_H selected candidate linkage is invalid at state row {row}.")
-        selected_row_id = int(facts["candidate_row_id"][selected])
-        if selected_row_id != int(q_h["td_selected_candidate_row_id"][row]) or selected_row_id != int(
-            steps["selected_candidate_row_id"][row]
-        ):
-            raise ValueError(f"Q_H selected candidate row id is inconsistent at state row {row}.")
-        if not bool(facts["actor_action_mask"][selected]):
-            raise ValueError(f"Q_H selected candidate is actor-invalid at state row {row}.")
-        if not np.isclose(float(q_h["td_reward"][row]), float(facts["one_step_target_root_gain"][selected])):
-            raise ValueError(f"Q_H selected reward is inconsistent at state row {row}.")
-        if not np.isclose(float(q_h["td_reward_target_rri"][row]), float(facts["one_step_target_rri"][selected])):
-            raise ValueError(f"Q_H selected target RRI is inconsistent at state row {row}.")
 
     rollout = root["rollouts"]
     rollout_position = entry.rollout_position
@@ -1071,88 +716,66 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     if not np.allclose(discounts, expected_discounts):
         raise ValueError(f"Q_H rollout_row_id={entry.rollout_row_id} has inconsistent transition discounts.")
 
-    return _QhRolloutChainFacts(
-        state=_QhChainStateFacts(
-            root_pose_world=_readonly(root_pose_world),
-            target_extents=_readonly(target_extents),
-            target_pose_world_object=_readonly(target_pose),
-            candidate_pose_relative_root=tuple(facts["candidate_pose_relative_root"] for facts in candidate_rows),
-            candidate_position_id=tuple(facts["candidate_position_id"] for facts in candidate_rows),
-            actor_action_mask=tuple(facts["actor_action_mask"] for facts in candidate_rows),
-            remaining_budget=_readonly(np.arange(horizon, 0, -1, dtype=np.int64)),
-        ),
-        supervision=_QhChainSupervisionFacts(
-            candidate_row_id=tuple(facts["candidate_row_id"] for facts in candidate_rows),
-            q_train_mask=tuple(facts["q_train_mask"] for facts in candidate_rows),
-            invalid_reason_bitset=tuple(facts["invalid_reason_bitset"] for facts in candidate_rows),
-            one_step_target_rri=tuple(facts["one_step_target_rri"] for facts in candidate_rows),
-            one_step_target_root_gain=tuple(facts["one_step_target_root_gain"] for facts in candidate_rows),
-            selected_candidate_index=_readonly(selected_index),
-        ),
-        transition=_QhChainTransitionFacts(
-            discount=_readonly(discounts),
-            terminal=_readonly(terminals),
-        ),
-        lineage=_QhChainLineage(
-            source_row_id=source_row_id,
-            source_sample_index=int(sources["sample_index"][source_row]),
-            source_sample_key=_decode_id(root, dictionaries, "source_key", "sources/sample_key_id", source_row),
-            source_shard_id=_decode_id(root, dictionaries, "source_shard", "sources/source_shard_id", source_row),
-            source_shard_row=int(sources["source_shard_row"][source_row]),
-            scene_id=_decode_id(root, dictionaries, "scene", "sources/scene_id", source_row),
-            snippet_id=_decode_id(root, dictionaries, "snippet", "sources/snippet_id", source_row),
-            split=Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", source_row)),
-            source_cache_version=_decode_id(
-                root, dictionaries, "config", "sources/source_cache_version_id", source_row
-            ),
-            source_offline_store_manifest_hash=_decode_id(
-                root, dictionaries, "config", "sources/source_offline_store_manifest_hash_id", source_row
-            ),
-            split_manifest_hash=_decode_id(root, dictionaries, "config", "sources/split_manifest_hash_id", source_row),
-            mesh_version=_decode_optional_id(root, dictionaries, "config", "lineage/mesh_version_id", rollout_position),
-            target_row_id=target_row_id,
-            target_sem_id=int(target["target_sem_id"][target_row]),
-            target_inst_id=int(target["target_inst_id"][target_row]),
-            target_protocol_version=str(root.attrs["target_protocol_version"]),
-            target_source=target_source,
-            target_crop_policy=_decode_optional_id(
-                root, dictionaries, "config", "lineage/target_crop_policy_id", rollout_position
-            ),
-            schema_version=str(root.attrs["schema_version"]),
-            reason_code_version=str(root.attrs["reason_code_version"]),
-            return_semantics=str(root.attrs["return_semantics"]),
-            td_semantics=str(q_h.attrs["td_semantics"]),
-            reward_metric=str(q_h.attrs["reward_metric"]),
-            discount_gamma=float(root.attrs["discount_gamma"]),
-            horizon=horizon,
-            rollout_row_id=entry.rollout_row_id,
-            rollout_id=_decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_position),
-            chain_id=int(rollout["chain_id"][rollout_position]),
-            root_time_ns=int(rollout["root_time_ns"][rollout_position]),
-            root_trajectory_index=int(rollout["root_trajectory_index"][rollout_position]),
-            root_frame_index=int(rollout["root_frame_index"][rollout_position]),
-            policy=_decode_id(root, dictionaries, "policy", "rollouts/policy_id", rollout_position),
-            branch_factor=int(rollout["branch_factor"][rollout_position]),
-            beam_width=int(rollout["beam_width"][rollout_position]),
-            temperature=float(rollout["temperature"][rollout_position]),
-            random_seed=int(rollout["random_seed"][rollout_position]),
-            termination_reason=_decode_id(
-                root, dictionaries, "termination_reason", "rollouts/termination_reason", rollout_position
-            ),
-            candidate_config_hash=_decode_id(
-                root, dictionaries, "config", "lineage/candidate_config_id", rollout_position
-            ),
-            oracle_config_hash=_decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_position),
-            rollout_config_hash=_decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_position),
-            model_checkpoint_hash=_decode_optional_id(
-                root, dictionaries, "config", "lineage/model_checkpoint_id", rollout_position
-            ),
-            branch_schedule_id=_decode_optional_id(
-                root, dictionaries, "config", "lineage/branch_schedule_id", rollout_position
-            ),
-            selection_rng_state_hash=_decode_optional_id(
-                root, dictionaries, "config", "lineage/selection_rng_state_hash_id", rollout_position
-            ),
+    return _StoredChain(
+        root_pose_world=_readonly(root_pose_world),
+        target_extents=_readonly(target_extents),
+        target_pose_world_object=_readonly(target_pose),
+        candidate_pose_relative_root=tuple(facts["candidate_pose_relative_root"] for facts in candidate_rows),
+        candidate_position_id=tuple(facts["candidate_position_id"] for facts in candidate_rows),
+        actor_action_mask=tuple(facts["actor_action_mask"] for facts in candidate_rows),
+        remaining_budget=_readonly(np.arange(horizon, 0, -1, dtype=np.int64)),
+        candidate_row_id=tuple(facts["candidate_row_id"] for facts in candidate_rows),
+        q_train_mask=tuple(facts["q_train_mask"] for facts in candidate_rows),
+        invalid_reason_bitset=tuple(facts["invalid_reason_bitset"] for facts in candidate_rows),
+        one_step_target_rri=tuple(facts["one_step_target_rri"] for facts in candidate_rows),
+        one_step_target_root_gain=tuple(facts["one_step_target_root_gain"] for facts in candidate_rows),
+        selected_candidate_index=_readonly(selected_index),
+        discount=_readonly(discounts),
+        terminal=_readonly(terminals),
+        lineage=(
+            source_row_id,
+            int(sources["sample_index"][source_row]),
+            _decode_id(root, dictionaries, "source_key", "sources/sample_key_id", source_row),
+            _decode_id(root, dictionaries, "source_shard", "sources/source_shard_id", source_row),
+            int(sources["source_shard_row"][source_row]),
+            _decode_id(root, dictionaries, "scene", "sources/scene_id", source_row),
+            _decode_id(root, dictionaries, "snippet", "sources/snippet_id", source_row),
+            Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", source_row)),
+            _decode_id(root, dictionaries, "config", "sources/source_cache_version_id", source_row),
+            _decode_id(root, dictionaries, "config", "sources/source_offline_store_manifest_hash_id", source_row),
+            _decode_id(root, dictionaries, "config", "sources/split_manifest_hash_id", source_row),
+            _decode_optional_id(root, dictionaries, "config", "lineage/mesh_version_id", rollout_position),
+            target_row_id,
+            int(target["target_sem_id"][target_row]),
+            int(target["target_inst_id"][target_row]),
+            str(root.attrs["target_protocol_version"]),
+            target_source,
+            _decode_optional_id(root, dictionaries, "config", "lineage/target_crop_policy_id", rollout_position),
+            str(root.attrs["schema_version"]),
+            str(root.attrs["reason_code_version"]),
+            str(root.attrs["return_semantics"]),
+            str(q_h.attrs["td_semantics"]),
+            str(q_h.attrs["reward_metric"]),
+            float(root.attrs["discount_gamma"]),
+            horizon,
+            entry.rollout_row_id,
+            _decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_position),
+            int(rollout["chain_id"][rollout_position]),
+            int(rollout["root_time_ns"][rollout_position]),
+            int(rollout["root_trajectory_index"][rollout_position]),
+            int(rollout["root_frame_index"][rollout_position]),
+            _decode_id(root, dictionaries, "policy", "rollouts/policy_id", rollout_position),
+            int(rollout["branch_factor"][rollout_position]),
+            int(rollout["beam_width"][rollout_position]),
+            float(rollout["temperature"][rollout_position]),
+            int(rollout["random_seed"][rollout_position]),
+            _decode_id(root, dictionaries, "termination_reason", "rollouts/termination_reason", rollout_position),
+            _decode_id(root, dictionaries, "config", "lineage/candidate_config_id", rollout_position),
+            _decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_position),
+            _decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_position),
+            _decode_optional_id(root, dictionaries, "config", "lineage/model_checkpoint_id", rollout_position),
+            _decode_optional_id(root, dictionaries, "config", "lineage/branch_schedule_id", rollout_position),
+            _decode_optional_id(root, dictionaries, "config", "lineage/selection_rng_state_hash_id", rollout_position),
         ),
     )
 
@@ -1167,7 +790,6 @@ def _read_chain_candidate_row(
     q_rows = _read_padded_qh_row(root, row)
     candidate_ids = q_rows["candidate_row_id"][:width].astype(np.int64, copy=False)
     candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
-    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
     return {
         "candidate_row_id": _readonly(candidate_ids),
         "candidate_pose_relative_root": _readonly(candidates["pose_relative_root"].astype(np.float32, copy=False)),
@@ -1180,178 +802,6 @@ def _read_chain_candidate_row(
             q_rows["one_step_target_root_gain"][:width].astype(np.float32, copy=False)
         ),
     }
-
-
-def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator) -> QhRolloutState:
-    row = locator.state_row
-    q_h = root["q_h"]
-    step = root["steps"]
-    q_rows = {name: np.asarray(q_h[name][row]) for name in _Q_H_MATRIX_NAMES}
-    q_candidate_ids = q_rows["candidate_row_id"].astype(np.int64, copy=False)
-    width = int(np.count_nonzero(q_candidate_ids >= 0))
-    candidate_ids = q_candidate_ids[:width]
-    if width < 1 or np.any(q_candidate_ids[width:] != -1):
-        raise ValueError(f"Q_H state row {row} must have a non-empty candidate shell with trailing -1 padding.")
-    if width != int(step["num_candidates"][row]):
-        raise ValueError(f"Q_H candidate width does not match steps/num_candidates at state row {row}.")
-    step_row_id = int(q_h["state_step_row_id"][row])
-    if int(step["step_row_id"][row]) != step_row_id:
-        raise ValueError(f"Q_H state row {row} no longer matches its persisted step row id.")
-    candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
-    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
-    rollout_row_id = int(step["rollout_row_id"][row])
-    step_index = int(step["step_index"][row])
-    rollout = root["rollouts"]
-    rollout_position = _find_sorted_row(rollout["rollout_row_id"], rollout_row_id, "rollouts/rollout_row_id")
-    horizon = int(rollout["horizon"][rollout_position])
-    if step_index < 0 or step_index >= horizon:
-        raise ValueError(f"Q_H step_index={step_index} is outside horizon={horizon} at state row {row}.")
-    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
-    if root_pose_world.shape != (12,) or not np.isfinite(root_pose_world).all():
-        raise ValueError(f"Q_H state row {row} has an invalid persisted rollout root pose.")
-
-    target_row_id = int(q_h["target_row_id"][row])
-    source_row_id = int(q_h["source_row_id"][row])
-    target = root["targets"]
-    sources = root["sources"]
-    target_position = _find_sorted_row(target["target_row_id"], target_row_id, "targets/target_row_id")
-    if (
-        int(rollout["source_row_id"][rollout_position]) != source_row_id
-        or int(rollout["target_row_id"][rollout_position]) != target_row_id
-    ):
-        raise ValueError(f"Q_H state row {row} does not match its rollout source/target lineage.")
-    source_row = _find_sorted_row(sources["source_row_id"], source_row_id, "sources/source_row_id")
-    history = _selected_history(root, row=row, rollout_row_id=rollout_row_id, step_index=step_index)
-
-    selected_index = int(q_h["selected_candidate_index"][row])
-    selected_candidate_id = int(q_h["td_selected_candidate_row_id"][row])
-    if selected_index < 0 or selected_index >= width or int(candidate_ids[selected_index]) != selected_candidate_id:
-        raise ValueError(f"Q_H selected candidate linkage is invalid at state row {row}.")
-    if selected_candidate_id != int(step["selected_candidate_row_id"][row]) or not bool(
-        q_rows["valid_action_mask"][selected_index]
-    ):
-        raise ValueError(f"Q_H selected candidate is not the actor-valid step selection at state row {row}.")
-    if not np.isclose(
-        float(q_h["td_reward"][row]),
-        float(q_rows["one_step_target_root_gain"][selected_index]),
-        equal_nan=False,
-    ):
-        raise ValueError(f"Q_H TD reward does not match the selected target-root-gain at state row {row}.")
-    if not np.isclose(
-        float(q_h["td_reward_target_rri"][row]),
-        float(q_rows["one_step_target_rri"][selected_index]),
-        equal_nan=False,
-    ):
-        raise ValueError(f"Q_H TD diagnostic RRI does not match the selected label at state row {row}.")
-    terminal = bool(q_h["td_terminal_mask"][row])
-    next_step_row = int(q_h["td_next_step_row_id"][row])
-    discount = float(q_h["td_discount"][row])
-    next_state = None
-    if terminal != (next_step_row < 0):
-        raise ValueError(f"Q_H terminal/next linkage is inconsistent at state row {row}.")
-    if terminal and discount != 0.0:
-        raise ValueError(f"Q_H terminal transition has non-zero discount at state row {row}.")
-    if not terminal and not np.isclose(discount, float(root.attrs["discount_gamma"])):
-        raise ValueError(f"Q_H non-terminal discount does not match corpus metadata at state row {row}.")
-    if not terminal:
-        next_position = _validate_next_state(
-            root,
-            row=row,
-            next_step_row_id=next_step_row,
-            rollout_row_id=rollout_row_id,
-        )
-        next_state = QhStateLocator(locator.store_index, next_position)
-
-    dictionaries = store.dictionaries
-    target_source = _decoded(
-        dictionaries["target_source"],
-        int(target["target_source_id"][target_position]),
-        "target source",
-    )
-    if target_source != ORACLE_GT_TARGET_SOURCE:
-        raise ValueError(f"Q_H state row {row} does not use the canonical Oracle GT target source.")
-    target_values = {
-        "target_center_world": np.asarray(target["target_center_world"][target_position]),
-        "target_extents": np.asarray(target["target_extents"][target_position]),
-        "target_pose_world_object": np.asarray(target["target_pose_world_object"][target_position]),
-        "target_relative_pose_reference_object": np.asarray(
-            target["target_relative_pose_reference_object"][target_position]
-        ),
-    }
-    for name, values in target_values.items():
-        if not np.isfinite(values).all():
-            raise ValueError(f"Q_H state row {row} has an incomplete canonical V0 descriptor field targets/{name}.")
-    actor = QhActorState(
-        candidate_row_id=_readonly(candidate_ids),
-        candidate_pose_world_cam=_readonly(candidates["pose_world_cam"]),
-        candidate_pose_relative_root=_readonly(candidates["pose_relative_root"]),
-        candidate_position_id=_readonly(candidates["position_id"]),
-        actor_action_mask=_readonly(candidates["actor_action_mask"]),
-        root_pose_world=_readonly(root_pose_world),
-        target_row_id=target_row_id,
-        target_center_world=_readonly(target_values["target_center_world"]),
-        target_extents=_readonly(target_values["target_extents"]),
-        target_pose_world_object=_readonly(target_values["target_pose_world_object"]),
-        target_relative_pose_reference_object=_readonly(target_values["target_relative_pose_reference_object"]),
-        target_sem_id=int(target["target_sem_id"][target_position]),
-        target_inst_id=int(target["target_inst_id"][target_position]),
-        history_candidate_row_id=_readonly(history["candidate_row_id"]),
-        history_pose_world_cam=_readonly(history["pose_world_cam"]),
-        history_pose_relative_root=_readonly(history["pose_relative_root"]),
-        history_position_id=_readonly(history["position_id"]),
-        remaining_budget=horizon - step_index,
-    )
-    supervision = QhSupervision(
-        q_train_mask=_readonly(q_rows["q_train_mask"].astype(np.bool_, copy=False)[:width]),
-        invalid_reason_bitset=_readonly(q_rows["invalid_reason_bitset"].astype(np.uint32, copy=False)[:width]),
-        one_step_target_rri=_readonly(q_rows["one_step_target_rri"].astype(np.float32, copy=False)[:width]),
-        one_step_target_root_gain=_readonly(q_rows["one_step_target_root_gain"].astype(np.float32, copy=False)[:width]),
-    )
-    transition = QhTransition(
-        selected_candidate_index=selected_index,
-        selected_candidate_row_id=selected_candidate_id,
-        reward=float(q_h["td_reward"][row]),
-        reward_target_rri=float(q_h["td_reward_target_rri"][row]),
-        discount=discount,
-        terminal=terminal,
-        next_state=next_state,
-    )
-    lineage = QhLineage(
-        source_row_id=source_row_id,
-        source_sample_index=int(sources["sample_index"][source_row]),
-        source_sample_key=_decode_id(root, dictionaries, "source_key", "sources/sample_key_id", source_row),
-        source_shard_id=_decode_id(root, dictionaries, "source_shard", "sources/source_shard_id", source_row),
-        source_shard_row=int(sources["source_shard_row"][source_row]),
-        scene_id=_decode_id(root, dictionaries, "scene", "sources/scene_id", source_row),
-        snippet_id=_decode_id(root, dictionaries, "snippet", "sources/snippet_id", source_row),
-        split=Stage.from_str(_decode_id(root, dictionaries, "split", "sources/split_id", source_row)),
-        source_cache_version=_decode_id(root, dictionaries, "config", "sources/source_cache_version_id", source_row),
-        source_offline_store_manifest_hash=_decode_id(
-            root,
-            dictionaries,
-            "config",
-            "sources/source_offline_store_manifest_hash_id",
-            source_row,
-        ),
-        split_manifest_hash=_decode_id(root, dictionaries, "config", "sources/split_manifest_hash_id", source_row),
-        target_protocol_version=str(root.attrs["target_protocol_version"]),
-        target_source=target_source,
-        schema_version=str(root.attrs["schema_version"]),
-        reason_code_version=str(root.attrs["reason_code_version"]),
-        return_semantics=str(root.attrs["return_semantics"]),
-        td_semantics=str(q_h.attrs["td_semantics"]),
-        reward_metric=str(q_h.attrs["reward_metric"]),
-        discount_gamma=float(root.attrs["discount_gamma"]),
-        horizon=horizon,
-        rollout_row_id=rollout_row_id,
-        rollout_id=_decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_position),
-        chain_id=int(rollout["chain_id"][rollout_position]),
-        step_index=step_index,
-        candidate_config_hash=_decode_id(root, dictionaries, "config", "lineage/candidate_config_id", rollout_position),
-        oracle_config_hash=_decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_position),
-        rollout_config_hash=_decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_position),
-    )
-    return QhRolloutState(locator, actor, supervision, transition, lineage)
 
 
 def _candidate_slice(
@@ -1441,58 +891,6 @@ def _contiguous_candidate_bounds(candidate_ids: np.ndarray, state_row: int) -> t
     return start, stop
 
 
-def _selected_history(
-    root: zarr.Group,
-    *,
-    row: int,
-    rollout_row_id: int,
-    step_index: int,
-) -> dict[str, np.ndarray]:
-    if step_index == 0:
-        return {
-            "candidate_row_id": np.empty((0,), dtype=np.int64),
-            "pose_world_cam": np.empty((0, 12), dtype=np.float32),
-            "pose_relative_root": np.empty((0, 12), dtype=np.float32),
-            "position_id": np.empty((0,), dtype=np.int32),
-        }
-    start = row - step_index
-    if start < 0:
-        raise ValueError(f"Q_H history underflows the state axis at row {row}.")
-    step = root["steps"]
-    history_rollouts = np.asarray(step["rollout_row_id"][start:row], dtype=np.int64)
-    history_indices = np.asarray(step["step_index"][start:row], dtype=np.int64)
-    if np.any(history_rollouts != rollout_row_id) or not np.array_equal(
-        history_indices, np.arange(step_index, dtype=np.int64)
-    ):
-        raise ValueError(f"Q_H actor history is not a contiguous rollout prefix at row {row}.")
-    candidate_ids = np.asarray(step["selected_candidate_row_id"][start:row], dtype=np.int64)
-    candidate_group = root["candidates"]
-    candidate_positions = np.asarray(
-        [
-            _find_sorted_row(candidate_group["candidate_row_id"], int(candidate_id), "candidates/candidate_row_id")
-            for candidate_id in candidate_ids
-        ],
-        dtype=np.int64,
-    )
-    return {
-        "candidate_row_id": candidate_ids,
-        "pose_world_cam": np.asarray(candidate_group["pose_world_cam"].oindex[candidate_positions]),
-        "pose_relative_root": np.asarray(candidate_group["pose_relative_root"].oindex[candidate_positions]),
-        "position_id": np.asarray(candidate_group["position_id"].oindex[candidate_positions]),
-    }
-
-
-def _validate_next_state(root: zarr.Group, *, row: int, next_step_row_id: int, rollout_row_id: int) -> int:
-    next_position = _find_sorted_row(root["steps/step_row_id"], next_step_row_id, "steps/step_row_id")
-    if next_position != row + 1:
-        raise ValueError(f"Q_H next-state linkage is not the adjacent rollout state at row {row}.")
-    if int(root["steps/rollout_row_id"][next_position]) != rollout_row_id:
-        raise ValueError(f"Q_H next-state linkage crosses rollout ownership at row {row}.")
-    if int(root["steps/step_index"][next_position]) != int(root["steps/step_index"][row]) + 1:
-        raise ValueError(f"Q_H next-state linkage skips the next rollout step at row {row}.")
-    return next_position
-
-
 def _decode_dictionary(root: zarr.Group, name: str) -> tuple[str, ...]:
     encoded = np.asarray(root[f"dictionaries/{name}"], dtype=np.uint8)
     values = json.loads(encoded.tobytes().decode("utf-8"))
@@ -1553,12 +951,6 @@ def _readonly(values: Any) -> np.ndarray:
 
 
 __all__ = [
-    "QhActorState",
-    "QhLineage",
     "QhRolloutReader",
     "QhRolloutReaderConfig",
-    "QhRolloutState",
-    "QhStateLocator",
-    "QhSupervision",
-    "QhTransition",
 ]
