@@ -392,6 +392,7 @@ class _ChainIndexEntry:
     rollout_row_id: int
     state_start: int
     state_stop: int
+    step_row_ids: tuple[int, ...]
 
 
 class QhRolloutReaderConfig(TargetConfig["QhRolloutReader"]):
@@ -904,93 +905,75 @@ def _validate_shapes(
         raise ValueError("Q_H state_count attr does not match the persisted state axis.")
     if int(root.attrs.get("q_h_state_count", -1)) != state_count:
         raise ValueError("Q_H root state count does not match the persisted state axis.")
-    horizons = np.asarray(root["rollouts/horizon"], dtype=np.int64)
     q_h_horizon = int(root["q_h"].attrs.get("horizon", -1))
-    if (
-        horizons.size == 0
-        or q_h_horizon < 1
-        or np.any(horizons < 1)
-        or np.any(horizons > q_h_horizon)
-        or int(horizons.max()) != q_h_horizon
-        or q_h_horizon != int(root.attrs.get("q_h_horizon", -1))
-    ):
+    realized_max = max((int(root["rollouts/horizon"][row]) for row in range(rollout_count)), default=-1)
+    if q_h_horizon < 1 or realized_max != q_h_horizon or q_h_horizon != int(root.attrs.get("q_h_horizon", -1)):
+        raise ValueError("Q_H rollout horizons must lie in [1, q_h_horizon] and realize the padded maximum.")
+    if any(not 1 <= int(root["rollouts/horizon"][row]) <= q_h_horizon for row in range(rollout_count)):
         raise ValueError("Q_H rollout horizons must lie in [1, q_h_horizon] and realize the padded maximum.")
 
 
 def _build_chain_index(root: zarr.Group, path: Path) -> tuple[_ChainIndexEntry, ...]:
-    """Validate complete persisted chains without materializing padded matrices."""
+    """Validate chains with scalar state scans and bounded padded-row reads."""
 
-    rollout_ids = np.asarray(root["rollouts/rollout_row_id"], dtype=np.int64).reshape(-1)
-    if rollout_ids.size == 0:
+    rollout_count = int(root["rollouts/rollout_row_id"].shape[0])
+    state_count = int(root["steps/step_row_id"].shape[0])
+    if rollout_count == 0:
         raise ValueError(f"Q_H rollout store contains no rollout chains: {path}.")
-    if np.unique(rollout_ids).size != rollout_ids.size:
-        raise ValueError(f"Q_H store {path} has duplicate rollouts/rollout_row_id values.")
-
     steps = root["steps"]
-    step_ids = np.asarray(steps["step_row_id"], dtype=np.int64).reshape(-1)
-    step_rollouts = np.asarray(steps["rollout_row_id"], dtype=np.int64).reshape(-1)
-    step_indices = np.asarray(steps["step_index"], dtype=np.int64).reshape(-1)
-    step_widths = np.asarray(steps["num_candidates"], dtype=np.int64).reshape(-1)
     q_h = root["q_h"]
-    state_step_ids = np.asarray(q_h["state_step_row_id"], dtype=np.int64).reshape(-1)
-    state_sources = np.asarray(q_h["source_row_id"], dtype=np.int64).reshape(-1)
-    state_targets = np.asarray(q_h["target_row_id"], dtype=np.int64).reshape(-1)
-    next_rows = np.asarray(q_h["td_next_step_row_id"], dtype=np.int64).reshape(-1)
-    terminal = np.asarray(q_h["td_terminal_mask"], dtype=np.bool_).reshape(-1)
-    rollout_sources = np.asarray(root["rollouts/source_row_id"], dtype=np.int64).reshape(-1)
-    rollout_targets = np.asarray(root["rollouts/target_row_id"], dtype=np.int64).reshape(-1)
-    horizons = np.asarray(root["rollouts/horizon"], dtype=np.int64).reshape(-1)
-
-    if not np.array_equal(step_ids, state_step_ids):
-        raise ValueError(f"Q_H store {path} q_h states do not align one-to-one with step rows.")
     entries: list[_ChainIndexEntry] = []
-    previous_stop = 0
-    for rollout_position, rollout_row_id in enumerate(rollout_ids.tolist()):
-        positions = np.flatnonzero(step_rollouts == rollout_row_id)
-        if positions.size == 0:
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} is empty.")
-        start = int(positions[0])
-        stop = int(positions[-1]) + 1
-        if not np.array_equal(positions, np.arange(start, stop, dtype=np.int64)):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} is not a contiguous state slice.")
-        if start != previous_stop:
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} crosses or leaves unowned state rows.")
-        expected_indices = np.arange(stop - start, dtype=np.int64)
-        if not np.array_equal(step_indices[start:stop], expected_indices):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} requires contiguous step indices 0..S-1.")
-        if stop - start != int(horizons[rollout_position]):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has a missing or extra candidate-bearing state.")
-        if np.any(step_widths[start:stop] < 1):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} contains an empty candidate state.")
-        if np.any(state_sources[start:stop] != rollout_sources[rollout_position]) or np.any(
-            state_targets[start:stop] != rollout_targets[rollout_position]
-        ):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has mismatched source/target lineage.")
-        expected_next = np.arange(start + 1, stop + 1, dtype=np.int64)
-        expected_next[-1] = -1
-        expected_terminal = np.zeros(stop - start, dtype=np.bool_)
-        expected_terminal[-1] = True
-        if not np.array_equal(next_rows[start:stop], expected_next) or not np.array_equal(
-            terminal[start:stop], expected_terminal
-        ):
-            raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has broken or crossing successor linkage.")
-        for row, width in zip(range(start, stop), step_widths[start:stop].tolist(), strict=True):
-            _validate_indexed_candidate_slice(root, row=row, width=int(width))
-        entries.append(_ChainIndexEntry(rollout_position, int(rollout_row_id), start, stop))
-        previous_stop = stop
-    if previous_stop != step_ids.size:
+    seen_rollout_ids: set[int] = set()
+    state_position = 0
+    for rollout_position in range(rollout_count):
+        rollout_row_id = int(root["rollouts/rollout_row_id"][rollout_position])
+        if rollout_row_id in seen_rollout_ids:
+            raise ValueError(f"Q_H store {path} has duplicate rollouts/rollout_row_id values.")
+        seen_rollout_ids.add(rollout_row_id)
+        horizon = int(root["rollouts/horizon"][rollout_position])
+        source_row_id = int(root["rollouts/source_row_id"][rollout_position])
+        target_row_id = int(root["rollouts/target_row_id"][rollout_position])
+        start = state_position
+        step_row_ids: list[int] = []
+        for step_index in range(horizon):
+            if state_position >= state_count:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} is empty or incomplete.")
+            step_row_id = int(steps["step_row_id"][state_position])
+            step_row_ids.append(step_row_id)
+            if int(q_h["state_step_row_id"][state_position]) != step_row_id:
+                raise ValueError(f"Q_H store {path} q_h states do not align one-to-one with step rows.")
+            if int(steps["rollout_row_id"][state_position]) != rollout_row_id:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} crosses or leaves unowned state rows.")
+            if int(steps["step_index"][state_position]) != step_index:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} requires contiguous step indices 0..S-1.")
+            width = int(steps["num_candidates"][state_position])
+            if width < 1:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} contains an empty candidate state.")
+            if (
+                int(q_h["source_row_id"][state_position]) != source_row_id
+                or int(q_h["target_row_id"][state_position]) != target_row_id
+            ):
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has mismatched source/target lineage.")
+            expected_terminal = step_index == horizon - 1
+            if bool(q_h["td_terminal_mask"][state_position]) != expected_terminal:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has broken or crossing successor linkage.")
+            if step_index > 0 and int(q_h["td_next_step_row_id"][state_position - 1]) != step_row_id:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has broken or crossing successor linkage.")
+            if expected_terminal and int(q_h["td_next_step_row_id"][state_position]) != -1:
+                raise ValueError(f"Q_H rollout_row_id={rollout_row_id} has broken or crossing successor linkage.")
+            _validate_indexed_candidate_slice(root, row=state_position, width=width, step_row_id=step_row_id)
+            state_position += 1
+        entries.append(_ChainIndexEntry(rollout_position, rollout_row_id, start, state_position, tuple(step_row_ids)))
+    if state_position != state_count:
         raise ValueError(f"Q_H store {path} contains state rows not owned by exactly one rollout chain.")
     return tuple(entries)
 
 
-def _validate_indexed_candidate_slice(root: zarr.Group, *, row: int, width: int) -> None:
-    candidate_ids = np.asarray(root["q_h/candidate_row_id"][row, :width], dtype=np.int64)
-    start, stop = _contiguous_candidate_bounds(candidate_ids, row)
-    candidates = root["candidates"]
-    if not np.array_equal(np.asarray(candidates["candidate_row_id"][start:stop]), candidate_ids):
-        raise ValueError(f"Q_H candidate row-position join changed at state row {row}.")
-    if np.any(np.asarray(candidates["step_row_id"][start:stop], dtype=np.int64) != row):
-        raise ValueError(f"Q_H candidate rows cross state ownership at state row {row}.")
+def _validate_indexed_candidate_slice(root: zarr.Group, *, row: int, width: int, step_row_id: int) -> None:
+    q_rows = _read_padded_qh_row(root, row)
+    candidate_ids = q_rows["candidate_row_id"][:width].astype(np.int64, copy=False)
+    candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
+    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
 
 
 def _validate_homogeneous(stores: tuple[_StoreMetadata, ...]) -> None:
@@ -1032,10 +1015,14 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     rows = range(entry.state_start, entry.state_stop)
     steps = root["steps"]
     q_h = root["q_h"]
-    widths = np.asarray(steps["num_candidates"][entry.state_start : entry.state_stop], dtype=np.int64)
     candidate_rows = tuple(
-        _read_chain_candidate_row(root, row=row, width=int(width))
-        for row, width in zip(rows, widths.tolist(), strict=True)
+        _read_chain_candidate_row(
+            root,
+            row=row,
+            width=int(steps["num_candidates"][row]),
+            step_row_id=step_row_id,
+        )
+        for row, step_row_id in zip(rows, entry.step_row_ids, strict=True)
     )
     selected_index = np.asarray(q_h["selected_candidate_index"][entry.state_start : entry.state_stop], dtype=np.int64)
     for offset, (selected, facts) in enumerate(zip(selected_index.tolist(), candidate_rows, strict=True)):
@@ -1170,11 +1157,16 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     )
 
 
-def _read_chain_candidate_row(root: zarr.Group, *, row: int, width: int) -> dict[str, np.ndarray]:
-    q_h = root["q_h"]
-    q_rows = {name: np.asarray(q_h[name][row, :width]) for name in _Q_H_MATRIX_NAMES}
-    candidate_ids = q_rows["candidate_row_id"].astype(np.int64, copy=False)
-    candidates = _candidate_slice(root, candidate_ids, row)
+def _read_chain_candidate_row(
+    root: zarr.Group,
+    *,
+    row: int,
+    width: int,
+    step_row_id: int,
+) -> dict[str, np.ndarray]:
+    q_rows = _read_padded_qh_row(root, row)
+    candidate_ids = q_rows["candidate_row_id"][:width].astype(np.int64, copy=False)
+    candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
     _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
     return {
         "candidate_row_id": _readonly(candidate_ids),
@@ -1200,23 +1192,19 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
         raise ValueError(f"Q_H state row {row} must have a non-empty candidate shell with trailing -1 padding.")
     if width != int(step["num_candidates"][row]):
         raise ValueError(f"Q_H candidate width does not match steps/num_candidates at state row {row}.")
-    candidates = _candidate_slice(root, candidate_ids, row)
-    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
-
     step_row_id = int(q_h["state_step_row_id"][row])
-    if step_row_id != row or int(step["step_row_id"][row]) != row:
-        raise ValueError(f"Q_H state row {row} no longer matches its dense step row id.")
+    if int(step["step_row_id"][row]) != step_row_id:
+        raise ValueError(f"Q_H state row {row} no longer matches its persisted step row id.")
+    candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
+    _validate_materialized_qh_row(q_rows, candidates, width=width, row=row)
     rollout_row_id = int(step["rollout_row_id"][row])
     step_index = int(step["step_index"][row])
     rollout = root["rollouts"]
-    if rollout_row_id < 0 or rollout_row_id >= int(rollout["rollout_row_id"].shape[0]):
-        raise ValueError(f"Q_H state row {row} references unknown rollout row {rollout_row_id}.")
-    if int(rollout["rollout_row_id"][rollout_row_id]) != rollout_row_id:
-        raise ValueError(f"Q_H rollout row id is not dense at state row {row}.")
-    horizon = int(rollout["horizon"][rollout_row_id])
+    rollout_position = _find_sorted_row(rollout["rollout_row_id"], rollout_row_id, "rollouts/rollout_row_id")
+    horizon = int(rollout["horizon"][rollout_position])
     if step_index < 0 or step_index >= horizon:
         raise ValueError(f"Q_H step_index={step_index} is outside horizon={horizon} at state row {row}.")
-    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_row_id], dtype=np.float32)
+    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
     if root_pose_world.shape != (12,) or not np.isfinite(root_pose_world).all():
         raise ValueError(f"Q_H state row {row} has an invalid persisted rollout root pose.")
 
@@ -1224,13 +1212,10 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
     source_row_id = int(q_h["source_row_id"][row])
     target = root["targets"]
     sources = root["sources"]
-    if target_row_id < 0 or target_row_id >= int(target["target_row_id"].shape[0]):
-        raise ValueError(f"Q_H state row {row} references unknown target row {target_row_id}.")
-    if int(target["target_row_id"][target_row_id]) != target_row_id:
-        raise ValueError(f"Q_H target row id is not dense at state row {row}.")
+    target_position = _find_sorted_row(target["target_row_id"], target_row_id, "targets/target_row_id")
     if (
-        int(rollout["source_row_id"][rollout_row_id]) != source_row_id
-        or int(rollout["target_row_id"][rollout_row_id]) != target_row_id
+        int(rollout["source_row_id"][rollout_position]) != source_row_id
+        or int(rollout["target_row_id"][rollout_position]) != target_row_id
     ):
         raise ValueError(f"Q_H state row {row} does not match its rollout source/target lineage.")
     source_row = _find_sorted_row(sources["source_row_id"], source_row_id, "sources/source_row_id")
@@ -1259,30 +1244,36 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
     terminal = bool(q_h["td_terminal_mask"][row])
     next_step_row = int(q_h["td_next_step_row_id"][row])
     discount = float(q_h["td_discount"][row])
-    next_state = None if terminal else QhStateLocator(locator.store_index, next_step_row)
+    next_state = None
     if terminal != (next_step_row < 0):
         raise ValueError(f"Q_H terminal/next linkage is inconsistent at state row {row}.")
     if terminal and discount != 0.0:
         raise ValueError(f"Q_H terminal transition has non-zero discount at state row {row}.")
     if not terminal and not np.isclose(discount, float(root.attrs["discount_gamma"])):
         raise ValueError(f"Q_H non-terminal discount does not match corpus metadata at state row {row}.")
-    if next_state is not None:
-        _validate_next_state(root, row=row, next_row=next_step_row, rollout_row_id=rollout_row_id)
+    if not terminal:
+        next_position = _validate_next_state(
+            root,
+            row=row,
+            next_step_row_id=next_step_row,
+            rollout_row_id=rollout_row_id,
+        )
+        next_state = QhStateLocator(locator.store_index, next_position)
 
     dictionaries = store.dictionaries
     target_source = _decoded(
         dictionaries["target_source"],
-        int(target["target_source_id"][target_row_id]),
+        int(target["target_source_id"][target_position]),
         "target source",
     )
     if target_source != ORACLE_GT_TARGET_SOURCE:
         raise ValueError(f"Q_H state row {row} does not use the canonical Oracle GT target source.")
     target_values = {
-        "target_center_world": np.asarray(target["target_center_world"][target_row_id]),
-        "target_extents": np.asarray(target["target_extents"][target_row_id]),
-        "target_pose_world_object": np.asarray(target["target_pose_world_object"][target_row_id]),
+        "target_center_world": np.asarray(target["target_center_world"][target_position]),
+        "target_extents": np.asarray(target["target_extents"][target_position]),
+        "target_pose_world_object": np.asarray(target["target_pose_world_object"][target_position]),
         "target_relative_pose_reference_object": np.asarray(
-            target["target_relative_pose_reference_object"][target_row_id]
+            target["target_relative_pose_reference_object"][target_position]
         ),
     }
     for name, values in target_values.items():
@@ -1300,8 +1291,8 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
         target_extents=_readonly(target_values["target_extents"]),
         target_pose_world_object=_readonly(target_values["target_pose_world_object"]),
         target_relative_pose_reference_object=_readonly(target_values["target_relative_pose_reference_object"]),
-        target_sem_id=int(target["target_sem_id"][target_row_id]),
-        target_inst_id=int(target["target_inst_id"][target_row_id]),
+        target_sem_id=int(target["target_sem_id"][target_position]),
+        target_inst_id=int(target["target_inst_id"][target_position]),
         history_candidate_row_id=_readonly(history["candidate_row_id"]),
         history_pose_world_cam=_readonly(history["pose_world_cam"]),
         history_pose_relative_root=_readonly(history["pose_relative_root"]),
@@ -1351,19 +1342,26 @@ def _read_state(root: zarr.Group, store: _StoreMetadata, locator: QhStateLocator
         discount_gamma=float(root.attrs["discount_gamma"]),
         horizon=horizon,
         rollout_row_id=rollout_row_id,
-        rollout_id=_decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_row_id),
-        chain_id=int(rollout["chain_id"][rollout_row_id]),
+        rollout_id=_decode_id(root, dictionaries, "rollout", "rollouts/rollout_id", rollout_position),
+        chain_id=int(rollout["chain_id"][rollout_position]),
         step_index=step_index,
-        candidate_config_hash=_decode_id(root, dictionaries, "config", "lineage/candidate_config_id", rollout_row_id),
-        oracle_config_hash=_decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_row_id),
-        rollout_config_hash=_decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_row_id),
+        candidate_config_hash=_decode_id(root, dictionaries, "config", "lineage/candidate_config_id", rollout_position),
+        oracle_config_hash=_decode_id(root, dictionaries, "config", "lineage/oracle_config_id", rollout_position),
+        rollout_config_hash=_decode_id(root, dictionaries, "config", "lineage/rollout_config_id", rollout_position),
     )
     return QhRolloutState(locator, actor, supervision, transition, lineage)
 
 
-def _candidate_slice(root: zarr.Group, candidate_ids: np.ndarray, state_row: int) -> dict[str, np.ndarray]:
-    start, stop = _contiguous_candidate_bounds(candidate_ids, state_row)
+def _candidate_slice(
+    root: zarr.Group,
+    candidate_ids: np.ndarray,
+    state_row: int,
+    step_row_id: int,
+) -> dict[str, np.ndarray]:
+    _contiguous_candidate_bounds(candidate_ids, state_row)
     group = root["candidates"]
+    start = _find_sorted_row(group["candidate_row_id"], int(candidate_ids[0]), "candidates/candidate_row_id")
+    stop = start + int(candidate_ids.size)
     values = {
         name: np.asarray(group[name][start:stop])
         for name in (
@@ -1381,9 +1379,14 @@ def _candidate_slice(root: zarr.Group, candidate_ids: np.ndarray, state_row: int
     }
     if not np.array_equal(values["candidate_row_id"], candidate_ids):
         raise ValueError(f"Q_H candidate row-position join changed at state row {state_row}.")
-    if np.any(values["step_row_id"] != state_row):
+    if np.any(values["step_row_id"] != step_row_id):
         raise ValueError(f"Q_H candidate rows cross state ownership at state row {state_row}.")
     return values
+
+
+def _read_padded_qh_row(root: zarr.Group, row: int) -> dict[str, np.ndarray]:
+    max_candidates = int(root["q_h"].attrs["max_candidates"])
+    return {name: np.asarray(root[f"q_h/{name}"][row, :max_candidates]) for name in _Q_H_MATRIX_NAMES}
 
 
 def _validate_materialized_qh_row(
@@ -1409,8 +1412,17 @@ def _validate_materialized_qh_row(
     target_rri = q_rows["one_step_target_rri"].astype(np.float32, copy=False)
     root_gain = q_rows["one_step_target_root_gain"].astype(np.float32, copy=False)
     position_id = q_rows["position_id"].astype(np.int32, copy=False)
-    if valid_mask[width:].any() or train_mask[width:].any() or np.any(position_id[width:] != -1):
+    candidate_id = q_rows["candidate_row_id"].astype(np.int64, copy=False)
+    reason = q_rows["invalid_reason_bitset"].astype(np.uint32, copy=False)
+    if (
+        np.any(candidate_id[width:] != -1)
+        or valid_mask[width:].any()
+        or train_mask[width:].any()
+        or np.any(position_id[width:] != -1)
+    ):
         raise ValueError(f"Q_H padded candidate slots have non-sentinel actor fields at state row {row}.")
+    if np.any(reason[width:] != 0):
+        raise ValueError(f"Q_H padded candidate slots have non-zero invalid reasons at state row {row}.")
     if not np.isnan(target_rri[width:]).all() or not np.isnan(root_gain[width:]).all():
         raise ValueError(f"Q_H padded candidate slots have finite supervision at state row {row}.")
     if np.any(train_mask & ~valid_mask) or np.any(train_mask & (~np.isfinite(root_gain) | ~np.isfinite(target_rri))):
@@ -1453,22 +1465,30 @@ def _selected_history(
         raise ValueError(f"Q_H actor history is not a contiguous rollout prefix at row {row}.")
     candidate_ids = np.asarray(step["selected_candidate_row_id"][start:row], dtype=np.int64)
     candidate_group = root["candidates"]
+    candidate_positions = np.asarray(
+        [
+            _find_sorted_row(candidate_group["candidate_row_id"], int(candidate_id), "candidates/candidate_row_id")
+            for candidate_id in candidate_ids
+        ],
+        dtype=np.int64,
+    )
     return {
         "candidate_row_id": candidate_ids,
-        "pose_world_cam": np.asarray(candidate_group["pose_world_cam"].oindex[candidate_ids]),
-        "pose_relative_root": np.asarray(candidate_group["pose_relative_root"].oindex[candidate_ids]),
-        "position_id": np.asarray(candidate_group["position_id"].oindex[candidate_ids]),
+        "pose_world_cam": np.asarray(candidate_group["pose_world_cam"].oindex[candidate_positions]),
+        "pose_relative_root": np.asarray(candidate_group["pose_relative_root"].oindex[candidate_positions]),
+        "position_id": np.asarray(candidate_group["position_id"].oindex[candidate_positions]),
     }
 
 
-def _validate_next_state(root: zarr.Group, *, row: int, next_row: int, rollout_row_id: int) -> None:
-    state_count = int(root["q_h/state_step_row_id"].shape[0])
-    if next_row != row + 1 or next_row >= state_count:
+def _validate_next_state(root: zarr.Group, *, row: int, next_step_row_id: int, rollout_row_id: int) -> int:
+    next_position = _find_sorted_row(root["steps/step_row_id"], next_step_row_id, "steps/step_row_id")
+    if next_position != row + 1:
         raise ValueError(f"Q_H next-state linkage is not the adjacent rollout state at row {row}.")
-    if int(root["steps/rollout_row_id"][next_row]) != rollout_row_id:
+    if int(root["steps/rollout_row_id"][next_position]) != rollout_row_id:
         raise ValueError(f"Q_H next-state linkage crosses rollout ownership at row {row}.")
-    if int(root["steps/step_index"][next_row]) != int(root["steps/step_index"][row]) + 1:
+    if int(root["steps/step_index"][next_position]) != int(root["steps/step_index"][row]) + 1:
         raise ValueError(f"Q_H next-state linkage skips the next rollout step at row {row}.")
+    return next_position
 
 
 def _decode_dictionary(root: zarr.Group, name: str) -> tuple[str, ...]:

@@ -209,7 +209,7 @@ def test_qh_reader_uses_no_eager_or_oracle_audit_read_path(tmp_path, monkeypatch
 
     construction_matrix_reads = [(path, selection) for path, selection in reads if path in matrix_paths]
     assert construction_matrix_reads
-    assert {path for path, _ in construction_matrix_reads} == {"q_h/candidate_row_id"}
+    assert {path for path, _ in construction_matrix_reads} == matrix_paths
     assert all(
         isinstance(selection, tuple)
         and len(selection) == 2
@@ -217,6 +217,15 @@ def test_qh_reader_uses_no_eager_or_oracle_audit_read_path(tmp_path, monkeypatch
         and isinstance(selection[1], slice)
         and selection[1].stop is not None
         for _, selection in construction_matrix_reads
+    )
+    state_axis_reads = [
+        (path, selection) for path, selection in reads if path.startswith("steps/") or path.startswith("q_h/")
+    ]
+    assert state_axis_reads
+    assert all(
+        isinstance(selection, (int, np.integer))
+        or (isinstance(selection, tuple) and isinstance(selection[0], (int, np.integer)))
+        for _, selection in state_axis_reads
     )
 
     reads.clear()
@@ -390,17 +399,6 @@ def test_qh_reader_rejects_corrupt_transition_linkage_during_indexing(tmp_path) 
         QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
 
 
-def test_qh_reader_resolves_sparse_source_ids_without_row_position_assumption(tmp_path) -> None:
-    store = _write_store(tmp_path / "rollouts.zarr", source_row_id=10)
-
-    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
-    state = reader[0]
-
-    assert state.lineage.source_row_id == 10
-    assert state.lineage.source_sample_index == 10
-    assert state.lineage.source_shard_row == 10
-
-
 def test_qh_reader_indexes_and_decodes_complete_chains_once(tmp_path) -> None:
     reader = QhRolloutReaderConfig(store_dirs=(_write_store(tmp_path / "rollouts.zarr", records=2),)).setup_target()
 
@@ -500,7 +498,7 @@ def test_qh_reader_rejects_duplicate_and_empty_rollout_chains(tmp_path) -> None:
     empty = _write_store(tmp_path / "empty.zarr", records=2)
     empty_root = zarr.open_group(empty, mode="a")
     empty_root["rollouts/rollout_row_id"][1] = 999
-    with pytest.raises(ValueError, match="rollout_row_id=999 is empty"):
+    with pytest.raises(ValueError, match="rollout_row_id=999.*unowned state rows"):
         QhRolloutReaderConfig(store_dirs=(empty,)).setup_target()
 
 
@@ -533,3 +531,88 @@ def test_qh_reader_rejects_candidate_misalignment_during_indexing(tmp_path) -> N
 
     with pytest.raises(ValueError, match="candidate ids are not a contiguous full-shell slice"):
         QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+
+
+def test_qh_reader_rejects_corrupt_padded_candidate_tail(tmp_path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    width = int(root["q_h"].attrs["max_candidates"])
+    state_count = int(root["q_h/state_step_row_id"].shape[0])
+    sentinels = {
+        "candidate_row_id": -1,
+        "valid_action_mask": False,
+        "q_train_mask": False,
+        "position_id": -1,
+        "invalid_reason_bitset": 0,
+        "one_step_target_rri": np.nan,
+        "one_step_target_root_gain": np.nan,
+    }
+    for field, sentinel in sentinels.items():
+        array = root[f"q_h/{field}"]
+        array.resize((state_count, width + 1))
+        array[:, width] = sentinel
+    root["q_h"].attrs["max_candidates"] = width + 1
+    corruptions = (
+        ("candidate_row_id", 999, "non-sentinel actor fields"),
+        ("valid_action_mask", True, "non-sentinel actor fields"),
+        ("q_train_mask", True, "non-sentinel actor fields"),
+        ("position_id", 0, "non-sentinel actor fields"),
+        ("invalid_reason_bitset", 1, "non-zero invalid reasons"),
+        ("one_step_target_rri", 0.0, "finite supervision"),
+        ("one_step_target_root_gain", 0.0, "finite supervision"),
+    )
+    for field, value, match in corruptions:
+        array = root[f"q_h/{field}"]
+        original = array[0, width]
+        array[0, width] = value
+        with pytest.raises(ValueError, match=match):
+            QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+        array[0, width] = original
+
+
+def test_qh_reader_resolves_all_sparse_persisted_ids(tmp_path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr", source_row_id=10)
+    root = zarr.open_group(store, mode="a")
+
+    step_ids = np.asarray([10, 20], dtype=np.int64)
+    root["steps/step_row_id"][:] = step_ids
+    root["q_h/state_step_row_id"][:] = step_ids
+    root["q_h/td_next_step_row_id"][:] = np.asarray([20, -1], dtype=np.int64)
+    for row, step_id in enumerate(step_ids.tolist()):
+        start = int(np.flatnonzero(np.asarray(root["candidates/step_row_id"]) == row)[0])
+        stop = start + int(root["steps/num_candidates"][row])
+        root["candidates/step_row_id"][start:stop] = step_id
+
+    candidate_ids = np.asarray(root["candidates/candidate_row_id"], dtype=np.int64) + 100
+    root["candidates/candidate_row_id"][:] = candidate_ids
+    padded_ids = np.asarray(root["q_h/candidate_row_id"], dtype=np.int64)
+    padded_ids[padded_ids >= 0] += 100
+    root["q_h/candidate_row_id"][:] = padded_ids
+    root["steps/selected_candidate_row_id"][:] = (
+        np.asarray(root["steps/selected_candidate_row_id"], dtype=np.int64) + 100
+    )
+    root["q_h/td_selected_candidate_row_id"][:] = (
+        np.asarray(root["q_h/td_selected_candidate_row_id"], dtype=np.int64) + 100
+    )
+
+    root["rollouts/rollout_row_id"][0] = 50
+    root["lineage/rollout_row_id"][0] = 50
+    root["steps/rollout_row_id"][:] = 50
+    root["targets/target_row_id"][0] = 30
+    root["rollouts/target_row_id"][0] = 30
+    root["q_h/target_row_id"][:] = 30
+
+    reader = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()
+    chain = reader.read_chain(0)
+    current = reader[0]
+    successor = reader.read(current.transition.next_state)
+
+    assert chain.lineage.rollout_row_id == 50
+    assert chain.lineage.target_row_id == 30
+    assert chain.lineage.source_row_id == 10
+    assert chain.lineage.source_sample_index == 10
+    assert chain.lineage.source_shard_row == 10
+    assert chain.supervision.candidate_row_id[0][0] == 100
+    assert current.transition.next_state == QhStateLocator(0, 1)
+    assert successor.lineage.step_index == 1
+    assert successor.actor.history_candidate_row_id.tolist() == [current.transition.selected_candidate_row_id]
