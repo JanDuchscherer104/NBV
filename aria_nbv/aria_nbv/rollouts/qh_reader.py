@@ -1,9 +1,8 @@
 """Lazy storage reader for complete finite-candidate ``Q_H`` rollout chains.
-
-Corpus admission indexes and validates every complete, non-empty persisted
-chain. Worker processes reopen Zarr handles and read only bounded state rows
-and contiguous candidate slices. Tensor conversion, VIN composition, padding,
-and the public five-DTO interface belong to :mod:`aria_nbv.data_handling.qh`.
+Admission validates complete non-empty chains; workers reopen [Zarr](https://zarr.readthedocs.io/)
+handles for bounded rows and candidate slices. Tensor conversion, VIN composition,
+padding, and the public five-DTO interface belong to
+:mod:`aria_nbv.data_handling.qh`.
 """
 
 from __future__ import annotations
@@ -120,10 +119,9 @@ class _StoreMetadata:
 class QhRolloutReader:
     """Read a homogeneous corpus through a small, lazy state interface.
 
-    Construction preflights manifests, schemas, tensor shapes, provenance, and
-    cross-store compatibility. :meth:`read` then performs bounded row/slice
-    access, while :meth:`__getstate__` prevents process-owned Zarr handles from
-    crossing PyTorch DataLoader worker boundaries.
+    Construction preflights schemas, shapes, provenance, and compatibility.
+    :meth:`__getitem__` performs bounded slices; :meth:`__getstate__` prevents
+    process-owned Zarr handles from crossing DataLoader worker boundaries.
     """
 
     _COMPATIBILITY_ROOT_ATTRS: ClassVar[tuple[str, ...]] = (

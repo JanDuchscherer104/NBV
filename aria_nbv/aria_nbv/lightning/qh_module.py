@@ -5,9 +5,9 @@ normalization, optimization, and hard target-network synchronization. It
 consumes the canonical data-owned admission from
 :attr:`aria_nbv.data_handling.qh.QhSupervision.row_train_mask` and delegates
 selected-row consistency to :meth:`aria_nbv.data_handling.qh.QhBatch.assert_selected_rows_consistent`;
-it does not recreate the data admission predicate. Actor-only feature construction belongs to
-:mod:`aria_nbv.vin.models.target_finite_horizon`; transition loading and padding
-belong to :mod:`aria_nbv.data_handling.qh`.
+neither labels nor selected-action facts enter scorer inputs. Actor-only feature
+construction belongs to :mod:`aria_nbv.vin.models.target_finite_horizon`;
+transition loading and padding belong to :mod:`aria_nbv.data_handling.qh`.
 """
 
 from __future__ import annotations
@@ -53,14 +53,9 @@ def _flatten_qh_scorer_inputs(batch: QhBatch) -> tuple[_QhScorerInputs, Tensor]:
 
     inputs = batch.inputs
     batch_size, steps = inputs.step_mask.shape
-    selected_pose = torch.cat(
-        (inputs.previous_selected_pose_relative_root[:, 1:], inputs.previous_selected_pose_relative_root[:, :1]),
-        dim=1,
-    )
-    selected_position = torch.cat(
-        (inputs.previous_selected_position_id[:, 1:], inputs.previous_selected_position_id[:, :1]), dim=1
-    )
-    selected_mask = torch.cat((inputs.previous_selected_mask[:, 1:], inputs.previous_selected_mask[:, :1]), dim=1)
+    selected_pose = inputs.previous_selected_pose_relative_root.roll(-1, dims=1)
+    selected_position = inputs.previous_selected_position_id.roll(-1, dims=1)
+    selected_mask = inputs.previous_selected_mask.roll(-1, dims=1)
     history_mask = (
         torch.ones((steps, steps), dtype=torch.bool, device=inputs.step_mask.device).tril(diagonal=-1)[None]
         & inputs.step_mask[:, :, None]
@@ -152,6 +147,9 @@ class QhLightningModule(pl.LightningModule):
     endpoint policy evaluation remains outside this module. Hard-sync age is
     measured in completed optimizer updates and resets to zero after every
     :meth:`record_optimizer_update` that reaches ``target_sync_interval``.
+    Epoch loss metrics all-reduce loss sums and admitted-row counts over rows
+    emitted by Lightning's sampler. When its distributed sampler pads an
+    evaluation corpus, duplicate rows remain represented honestly.
 
     This follows the action-selection/evaluation split from
     [Double DQN](https://arxiv.org/abs/1509.06461). Lifecycle hooks follow the
@@ -208,7 +206,13 @@ class QhLightningModule(pl.LightningModule):
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
     def forward(self, batch: QhBatch) -> Float[Tensor, "B S N"]:
-        """Return online values scattered onto the padded chain axes."""
+        """Score every valid state in one call and scatter onto ``[B,S,N]``.
+
+        Returns:
+            ``Tensor["B S N", float32]`` online candidate values. Padded state
+            rows are zero; invalid candidates remain governed by the actor's
+            hard action mask rather than a learned low value.
+        """
 
         scorer_inputs, valid = _flatten_qh_scorer_inputs(batch)
         return self._scatter_values(self.online_scorer(scorer_inputs), valid, batch)

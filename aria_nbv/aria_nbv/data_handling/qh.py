@@ -1,10 +1,11 @@
 """Chain-native data plane for finite-candidate ``Q_H`` training.
 
-One dataset item is one complete persisted rollout chain. Actor-visible inputs
-and privileged supervision are structurally separate; collation pads the time
-and candidate axes once, and lineage remains immutable CPU-only audit data.
-Storage interpretation belongs to :mod:`aria_nbv.rollouts.qh_reader`, while
-loader and training policy belong to :mod:`aria_nbv.lightning`.
+One item is one persisted rollout chain. :class:`QhInputs` contains only actor
+tensors; :class:`QhSupervision` holds Oracle labels and never enters the scorer.
+V0 uses an Oracle-GT target OBB as an ablation input; V1 replaces it without weakening the boundary.
+Collation pads time/candidate axes once; lineage stays immutable CPU-only audit data.
+Storage belongs to :mod:`aria_nbv.rollouts.qh_reader`; loader policy belongs to
+:mod:`aria_nbv.lightning.qh_datamodule`.
 """
 
 from __future__ import annotations
@@ -124,16 +125,16 @@ class QhChainLineage:
 
 @dataclass(frozen=True, slots=True)
 class QhInputs:
-    """Actor-visible V0 tensors for one chain or padded chain batch."""
+    """Actor-visible V0 tensors for one chain or padded ``[B,S,N]`` batch."""
 
     vin_snippet: VinSnippetView
     """Chain-constant semidense points, lengths, and world-from-rig history."""
     root_pose_world: Tensor
     """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` world-from-root pose."""
     target_extents: Tensor
-    """``Tensor["3", float32]`` or ``Tensor["B 3", float32]`` V0 OBB extents in metres."""
+    """``Tensor["3", float32]`` or ``Tensor["B 3", float32]`` Oracle-GT V0 OBB extents in metres."""
     target_pose_world_object: Tensor
-    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` world-from-object pose."""
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]`` Oracle-GT V0 world-from-object pose."""
     candidate_pose_relative_root: Tensor
     """``Tensor["S N 12", float32]`` or ``Tensor["B S N 12", float32]`` root-from-camera poses."""
     candidate_position_id: Tensor
@@ -141,20 +142,20 @@ class QhInputs:
     actor_action_mask: Tensor
     """``Tensor["S N", bool]`` or ``Tensor["B S N", bool]`` hard actor action mask."""
     previous_selected_pose_relative_root: Tensor
-    """``Tensor["S 12", float32]`` or ``Tensor["B S 12", float32]`` right-shifted selected poses."""
+    """``Tensor["S 12", float32]`` or ``Tensor["B S 12", float32]`` right-shifted root-from-camera history."""
     previous_selected_position_id: Tensor
     """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` right-shifted position ids."""
     previous_selected_mask: Tensor
-    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` shifted-history presence mask."""
+    """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` hard presence mask for shifted actor history."""
     remaining_budget: Tensor
-    """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` residual acquisition count."""
+    """``Tensor["S", int64]`` or ``Tensor["B S", int64]`` residual acquisition budget including this action."""
     step_mask: Tensor
     """``Tensor["S", bool]`` or ``Tensor["B S", bool]`` candidate-bearing state mask."""
 
 
 @dataclass(frozen=True, slots=True)
 class QhSupervision:
-    """Dense Oracle supervision and factual selected-transition tensors."""
+    """Dense Oracle labels and factual actions excluded from scorer inputs."""
 
     candidate_row_id: Tensor
     """``Tensor["S N", int64]`` or ``Tensor["B S N", int64]`` stable ids; padding is ``-1``."""
@@ -208,7 +209,7 @@ class QhRolloutChain:
 
 @dataclass(frozen=True, slots=True)
 class QhBatch:
-    """Padded ``[B,S,N,...]`` chain batch with CPU-only lineage."""
+    """Padded ``[B,S,N,...]`` chain batch with explicit actor/GT separation."""
 
     inputs: QhInputs
     """Padded actor-visible model inputs."""

@@ -1,4 +1,8 @@
-"""Thin Lightning loader policy for chain-native ``Q_H`` datasets."""
+"""Lightning loader policy for chain-native :class:`QhDataset` stages.
+It owns deterministic [PyTorch DataLoaders](https://pytorch.org/docs/stable/data.html) and resumable shuffling.
+[Lightning](https://lightning.ai/docs/pytorch/stable/data/datamodule.html) replaces samplers;
+metrics describe emitted rows, including padding duplicates, not a deduplicated corpus.
+"""
 
 from __future__ import annotations
 
@@ -55,7 +59,11 @@ class QhDataModuleConfig(TargetConfig["QhDataModule"]):
 
 
 class QhDataModule(pl.LightningDataModule):
-    """Build loaders while leaving distributed sampler replacement to Lightning."""
+    """Build stage loaders without interpreting storage or training labels.
+
+    :class:`QhDataset` owns admission and :func:`collate_qh_samples` owns padding;
+    ``use_distributed_sampler=True`` lets Lightning partition every stage.
+    """
 
     def __init__(
         self,
@@ -132,12 +140,12 @@ class QhDataModule(pl.LightningDataModule):
         return self._loader(self.train_dataset, shuffle=True)
 
     def val_dataloader(self) -> DataLoader[QhBatch] | list[DataLoader[QhBatch]]:
-        """Build the validation loader when configured."""
+        """Build a sequential validation loader eligible for sampler replacement."""
 
         return [] if self.val_dataset is None else self._loader(self.val_dataset, shuffle=False)
 
     def test_dataloader(self) -> DataLoader[QhBatch] | list[DataLoader[QhBatch]]:
-        """Build the held-out loader when configured."""
+        """Build a sequential held-out loader eligible for sampler replacement."""
 
         return [] if self.test_dataset is None else self._loader(self.test_dataset, shuffle=False)
 

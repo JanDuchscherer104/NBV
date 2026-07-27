@@ -1,9 +1,9 @@
 """Reproducible experiment boundary for target-conditioned ``Q_H`` training.
 
 The module composes :class:`QhDataModule`, :class:`QhLightningModule`, and
-Lightning's :class:`~pytorch_lightning.Trainer` without widening the scene-wise
-one-step experiment. It admits every configured corpus stage and atomically
-records the resolved run identity before constructing model or Trainer state.
+Lightning's [Trainer](https://lightning.ai/docs/pytorch/stable/common/trainer.html)
+without widening the scene-wise one-step experiment. It admits every configured
+corpus stage and atomically records the resolved run identity before model or Trainer state.
 It owns run-level seeding, paths, provenance, and one-loop dispatch; lower
 modules retain data, model, optimizer, and Trainer policy.
 """
@@ -99,7 +99,7 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
 
         Corpus setup is metadata-only. A missing validation or test stage,
         horizon mismatch, or provenance-write failure therefore fails before
-        :class:`QhLightningModule` or :class:`~pytorch_lightning.Trainer` exists.
+        :class:`QhLightningModule` or Lightning Trainer exists.
         External ``torchrun`` launches one CLI process per rank; only launcher
         rank zero writes the manifest, without requiring an initialized process
         group.

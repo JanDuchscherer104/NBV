@@ -353,16 +353,16 @@ class VinOfflineStoreReader:
     ) -> VinSnippetView:
         """Decode the actor-visible VIN blocks for one immutable source row.
 
-        The returned tensors own their memory, so callers may transfer or
-        mutate them without aliasing read-only Zarr buffers. Shard handles are
-        recreated automatically after worker pickling or a process fork.
+        Tensors never alias Zarr buffers; shard handles reopen after worker forks.
 
         Args:
             record: Global sample-index record selecting the source row.
             device: Device receiving the decoded tensors.
 
         Returns:
-            Typed semidense points, lengths, and world-from-rig trajectory.
+            :class:`VinSnippetView` with world points ``Tensor["P C", float32]``,
+            valid point length ``Tensor["1", int64]``,
+            and world-from-rig :class:`PoseTW` history ``Tensor["T 12", float32]``.
         """
 
         shard = self._shards.get(record.shard_id)
