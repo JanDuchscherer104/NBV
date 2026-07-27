@@ -194,6 +194,16 @@ store_dir = "/tmp/vin"
         QhExperimentConfig.from_toml(config_path)
 
 
+@pytest.mark.parametrize("name", ["train_qh_v0_smoke.toml", "train_qh_v0_lrz.template.toml"])
+def test_repo_qh_configs_match_current_dataset_shape(name: str) -> None:
+    config_path = Path(__file__).resolve().parents[3] / ".configs" / name
+
+    config = QhExperimentConfig.from_toml(config_path)
+
+    assert config.datamodule_config.train.split is Stage.TRAIN
+    assert config.datamodule_config.train.actor.store_dir.name == "vin-offline-v7"
+
+
 def test_setup_admits_without_eager_datamodule_setup_and_writes_manifest_before_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

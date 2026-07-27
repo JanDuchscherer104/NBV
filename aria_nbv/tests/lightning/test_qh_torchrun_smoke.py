@@ -73,6 +73,7 @@ def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_pa
     assert {payload["epoch"] for payload in payloads} == {1}
     assert {payload["global_step"] for payload in payloads} == {4}
     assert {payload["validation_row_count"] for payload in payloads} == {4}
+    assert {payload["validation_admitted_rows"] for payload in payloads} == {8}
     assert payloads[0]["validation_loss"] == pytest.approx(payloads[1]["validation_loss"])
     assert set(payloads[0]["indices"]).isdisjoint(payloads[1]["indices"])
     assert sorted(payloads[0]["indices"] + payloads[1]["indices"]) == [0, 1, 2, 3]

@@ -116,6 +116,7 @@ def main() -> None:
         "training_row_count": int(module.training_row_count.item()),
         "validation_row_count": int(module.validation_row_count.item()),
         "validation_loss": float(trainer.callback_metrics.get("val/loss", torch.tensor(float("nan"))).item()),
+        "validation_admitted_rows": int(trainer.callback_metrics.get("val/admitted_rows", torch.tensor(-1)).item()),
     }
     (args.output_dir / f"rank-{trainer.global_rank}.json").write_text(json.dumps(payload, sort_keys=True))
     torch.save(module.state_dict(), args.output_dir / f"rank-{trainer.global_rank}-state.pt")

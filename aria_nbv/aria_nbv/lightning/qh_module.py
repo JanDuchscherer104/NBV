@@ -42,10 +42,8 @@ class _QhScorerInputs:
     candidate_pose_relative_root: Tensor
     candidate_position_id: Tensor
     actor_action_mask: Tensor
-    candidate_row_id: Tensor
     history_pose_relative_root: Tensor
     history_position_id: Tensor
-    history_candidate_row_id: Tensor
     history_mask: Tensor
     remaining_budget: Tensor
 
@@ -53,22 +51,23 @@ class _QhScorerInputs:
 def _flatten_qh_scorer_inputs(batch: QhBatch) -> tuple[_QhScorerInputs, Tensor]:
     """Gather causal history and flatten valid ``[B,S]`` states to ``K``."""
 
-    inputs, supervision = batch.inputs, batch.supervision
-    batch_size, steps, candidates = supervision.candidate_row_id.shape
-    selected = supervision.selected_candidate_index.clamp(0, max(candidates - 1, 0))
-    selected_pose = inputs.candidate_pose_relative_root.gather(
-        2, selected[..., None, None].expand(batch_size, steps, 1, 12)
-    ).squeeze(2)
-    selected_position = inputs.candidate_position_id.gather(2, selected[..., None]).squeeze(2)
-    selected_row = supervision.candidate_row_id.gather(2, selected[..., None]).squeeze(2)
+    inputs = batch.inputs
+    batch_size, steps = inputs.step_mask.shape
+    selected_pose = torch.cat(
+        (inputs.previous_selected_pose_relative_root[:, 1:], inputs.previous_selected_pose_relative_root[:, :1]),
+        dim=1,
+    )
+    selected_position = torch.cat(
+        (inputs.previous_selected_position_id[:, 1:], inputs.previous_selected_position_id[:, :1]), dim=1
+    )
+    selected_mask = torch.cat((inputs.previous_selected_mask[:, 1:], inputs.previous_selected_mask[:, :1]), dim=1)
     history_mask = (
-        torch.ones((steps, steps), dtype=torch.bool, device=selected.device).tril(diagonal=-1)[None]
+        torch.ones((steps, steps), dtype=torch.bool, device=inputs.step_mask.device).tril(diagonal=-1)[None]
         & inputs.step_mask[:, :, None]
-        & inputs.step_mask[:, None, :]
+        & selected_mask[:, None, :]
     )
     history_pose = selected_pose[:, None].expand(-1, steps, -1, -1).masked_fill(~history_mask[..., None], 0)
     history_position = selected_position[:, None].expand(-1, steps, -1).masked_fill(~history_mask, -1)
-    history_row = selected_row[:, None].expand(-1, steps, -1).masked_fill(~history_mask, -1)
     valid = inputs.step_mask.reshape(-1)
 
     def _states(value: Tensor) -> Tensor:
@@ -94,10 +93,8 @@ def _flatten_qh_scorer_inputs(batch: QhBatch) -> tuple[_QhScorerInputs, Tensor]:
         candidate_pose_relative_root=_states(inputs.candidate_pose_relative_root),
         candidate_position_id=_states(inputs.candidate_position_id),
         actor_action_mask=_states(inputs.actor_action_mask),
-        candidate_row_id=_states(supervision.candidate_row_id),
         history_pose_relative_root=_states(history_pose),
         history_position_id=_states(history_position),
-        history_candidate_row_id=_states(history_row),
         history_mask=_states(history_mask),
         remaining_budget=_states(inputs.remaining_budget),
     )
@@ -342,9 +339,9 @@ class QhLightningModule(pl.LightningModule):
         self.validation_row_count.zero_()
 
     def on_validation_epoch_end(self) -> None:
-        """Log the exact loss accumulated by the replicated evaluation loader."""
+        """Log all-rank sums over validation sampler-emitted rows."""
 
-        self._log_aggregate(Stage.VAL, self.validation_loss_sum, self.validation_row_count, distributed=False)
+        self._log_aggregate(Stage.VAL, self.validation_loss_sum, self.validation_row_count, distributed=True)
 
     def on_test_epoch_start(self) -> None:
         """Reset rank-local exact held-out accumulators."""
@@ -353,9 +350,9 @@ class QhLightningModule(pl.LightningModule):
         self.test_row_count.zero_()
 
     def on_test_epoch_end(self) -> None:
-        """Log exact held-out metrics from the replicated evaluation loader."""
+        """Log all-rank sums over held-out sampler-emitted rows."""
 
-        self._log_aggregate(Stage.TEST, self.test_loss_sum, self.test_row_count, distributed=False)
+        self._log_aggregate(Stage.TEST, self.test_loss_sum, self.test_row_count, distributed=True)
 
     def compute_fitted_q_loss(
         self,

@@ -16,10 +16,10 @@ num_workers = 0
 [datamodule_config.train.rollout]
 store_dirs = ["/ABS/PATH/TO/ARIA_DSS/caches/oracle/rollouts-v0-smoke.zarr"]
 
-[datamodule_config.train.actor]
+[datamodule_config.train]
 split = "train"
 
-[datamodule_config.train.actor.store]
+[datamodule_config.train.actor]
 store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin-offline-v7"
 
 [module_config]

@@ -92,29 +92,43 @@ def test_flatten_gathers_causal_history_for_variable_length_chains_without_step_
         [False, False, False],
         [True, False, False],
     ]
-    assert flattened.history_candidate_row_id.tolist() == [
+    assert flattened.history_position_id.tolist() == [
         [-1, -1, -1],
         [0, -1, -1],
-        [0, 3, -1],
+        [0, 1, -1],
         [-1, -1, -1],
-        [10, -1, -1],
+        [0, -1, -1],
     ]
     tree = ast.parse(inspect.getsource(_flatten_qh_scorer_inputs))
     assert not any(isinstance(node, (ast.For, ast.While)) for node in ast.walk(tree))
 
 
-def test_flattened_causal_history_ignores_future_chain_corruption() -> None:
-    """Prototype ef4aed9f: a state may not consume a later chain token."""
-
+def test_flattened_causal_history_uses_only_actor_inputs() -> None:
     batch = collate_qh_samples([_chain(steps=3, width=2)])
     row_ids = batch.supervision.candidate_row_id.clone()
-    row_ids[0, 2] += 10_000
-    corrupted = replace(batch, supervision=replace(batch.supervision, candidate_row_id=row_ids))
+    row_ids += 10_000
+    corrupted = replace(
+        batch,
+        supervision=replace(
+            batch.supervision,
+            candidate_row_id=row_ids,
+            selected_candidate_index=batch.supervision.selected_candidate_index.roll(1),
+        ),
+    )
 
     baseline, _ = _flatten_qh_scorer_inputs(batch)
     changed, _ = _flatten_qh_scorer_inputs(corrupted)
 
-    assert torch.equal(changed.history_candidate_row_id[:2], baseline.history_candidate_row_id[:2])
+    assert torch.equal(changed.history_pose_relative_root, baseline.history_pose_relative_root)
+    assert torch.equal(changed.history_position_id, baseline.history_position_id)
+    assert torch.equal(changed.history_mask, baseline.history_mask)
+
+    future_pose = batch.inputs.previous_selected_pose_relative_root.clone()
+    future_pose[:, 2] += 10_000
+    future, _ = _flatten_qh_scorer_inputs(
+        replace(batch, inputs=replace(batch.inputs, previous_selected_pose_relative_root=future_pose))
+    )
+    assert torch.equal(future.history_pose_relative_root[:2], baseline.history_pose_relative_root[:2])
 
 
 def test_forward_scatter_keeps_padded_states_zero() -> None:
@@ -439,21 +453,25 @@ def test_empty_local_admission_still_participates_in_distributed_count(monkeypat
     assert loss.requires_grad
 
 
-def test_validation_uses_no_distributed_collectives(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validation_reduces_unequal_rank_sums_and_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _module()
     logged: list[tuple[str, torch.Tensor]] = []
-    expected = module.compute_fitted_q_loss(_batch())[0].item()
+    module.validation_loss_sum.fill_(2.0)
+    module.validation_row_count.fill_(1)
+    reductions = iter((9.0, 3))
 
     monkeypatch.setattr(module, "log", lambda name, value, **kwargs: logged.append((name, value)))
-    monkeypatch.setattr(
-        torch.distributed,
-        "all_reduce",
-        lambda *args, **kwargs: pytest.fail("replicated validation must not reduce across ranks"),
-    )
+    monkeypatch.setattr(torch.distributed, "is_available", lambda: True)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
 
-    module.on_validation_epoch_start()
-    module.validation_step(_batch(), 0)
+    def _all_reduce(value: torch.Tensor, op) -> None:
+        assert op is torch.distributed.ReduceOp.SUM
+        value.add_(next(reductions))
+
+    monkeypatch.setattr(torch.distributed, "all_reduce", _all_reduce)
+
     module.on_validation_epoch_end()
 
     logged_by_name = dict(logged)
-    assert logged_by_name["val/loss"].item() == pytest.approx(expected)
+    assert logged_by_name["val/loss"].item() == pytest.approx(11 / 4)
+    assert logged_by_name["val/admitted_rows"].item() == 4
