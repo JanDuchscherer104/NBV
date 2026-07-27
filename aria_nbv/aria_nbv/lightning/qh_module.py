@@ -227,7 +227,7 @@ class QhLightningModule(pl.LightningModule):
         )
         self.log("train/optimizer_updates", self.optimizer_updates.float(), on_step=True, sync_dist=False)
         self._log_step_diagnostics(
-            "train",
+            Stage.TRAIN,
             batch=batch,
             losses=losses,
             predictions=predictions,

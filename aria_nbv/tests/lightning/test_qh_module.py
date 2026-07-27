@@ -177,6 +177,21 @@ def test_stage_diagnostics_are_interpretable_and_share_one_key_contract(
         assert logged[name].item() == pytest.approx(value)
 
 
+def test_training_step_logs_stage_qualified_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    optimizer = torch.optim.SGD(module.online_scorer.parameters(), lr=0.01)
+    logged: set[str] = set()
+    monkeypatch.setattr(module, "optimizers", lambda: optimizer)
+    monkeypatch.setattr(module, "manual_backward", lambda loss: loss.backward())
+    monkeypatch.setattr(module, "_step_learning_rate_schedulers", lambda: None)
+    monkeypatch.setattr(module, "log", lambda name, value, **kwargs: logged.add(name))
+
+    loss = module.training_step(_batch(), 0)
+
+    assert loss is not None
+    assert "train/td_abs_mean" in logged
+
+
 @pytest.mark.parametrize(
     ("updates", "expected_age", "expected_syncs"),
     [(1, 1.0, 0.0), (2, 0.0, 1.0)],
