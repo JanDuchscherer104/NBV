@@ -9,7 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from pydantic import Field
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, RandomSampler
 
 from ..data_handling.qh import QhBatch, QhDatasetConfig, QhRolloutChain, collate_qh_samples
 from ..utils import Stage, TargetConfig
@@ -78,6 +78,7 @@ class QhDataModule(pl.LightningDataModule):
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers and num_workers > 0
         self.seed = seed
+        self._train_generator = torch.Generator().manual_seed(seed)
         _validate_stages(train=train, val=val, test=test)
 
     @property
@@ -115,6 +116,16 @@ class QhDataModule(pl.LightningDataModule):
         if stage not in (None, "predict"):
             Stage.from_str(stage)
 
+    def state_dict(self) -> dict[str, torch.Tensor]:
+        """Persist the shuffled training stream at epoch boundaries."""
+
+        return {"train_generator_state": self._train_generator.get_state()}
+
+    def load_state_dict(self, state_dict: dict[str, torch.Tensor]) -> None:
+        """Restore the shuffled training stream from a Lightning checkpoint."""
+
+        self._train_generator.set_state(state_dict["train_generator_state"])
+
     def train_dataloader(self) -> DataLoader[QhBatch]:
         """Build a shuffled loader eligible for Lightning sampler replacement."""
 
@@ -134,7 +145,7 @@ class QhDataModule(pl.LightningDataModule):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
-            shuffle=shuffle,
+            sampler=RandomSampler(dataset, generator=self._train_generator) if shuffle else None,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,

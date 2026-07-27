@@ -21,7 +21,7 @@ def _data() -> QhDataModule:
     samples = [_chain(steps=2, width=2, offset=offset) for offset in (0, 10, 20, 30)]
     return QhDataModule(
         train=_StaticDataset(samples, scene="train-scene"),
-        batch_size=4,
+        batch_size=2,
         seed=29,
     )
 
@@ -32,7 +32,7 @@ class _RecordingQhModule(QhLightningModule):
         self.sample_stream: list[tuple[int, ...]] = []
 
     def training_step(self, batch, batch_idx):
-        self.sample_stream.append(tuple(sorted(value.rollout_row_id for value in batch.lineage)))
+        self.sample_stream.append(tuple(value.rollout_row_id for value in batch.lineage))
         return super().training_step(batch, batch_idx)
 
 
@@ -46,14 +46,14 @@ def _module() -> _RecordingQhModule:
     )
 
 
-def _trainer(root: Path, *, max_steps: int, checkpoint_after_two_epochs: bool = False) -> pl.Trainer:
+def _trainer(root: Path, *, max_steps: int, checkpoint_after_first_epoch: bool = False) -> pl.Trainer:
     callbacks = []
-    if checkpoint_after_two_epochs:
+    if checkpoint_after_first_epoch:
         callbacks.append(
             ModelCheckpoint(
                 dirpath=root / "checkpoints",
                 filename="epoch={epoch}-step={step}",
-                every_n_epochs=2,
+                every_n_epochs=1,
                 save_top_k=-1,
                 save_on_train_epoch_end=True,
                 auto_insert_metric_name=False,
@@ -66,7 +66,7 @@ def _trainer(root: Path, *, max_steps: int, checkpoint_after_two_epochs: bool = 
         max_epochs=max_steps + 1,
         default_root_dir=root,
         logger=False,
-        enable_checkpointing=checkpoint_after_two_epochs,
+        enable_checkpointing=checkpoint_after_first_epoch,
         callbacks=callbacks,
         enable_model_summary=False,
         use_distributed_sampler=True,
@@ -77,9 +77,9 @@ def _trainer(root: Path, *, max_steps: int, checkpoint_after_two_epochs: bool = 
 def test_resume_matches_uninterrupted_online_target_and_sync_state(tmp_path: Path) -> None:
     pl.seed_everything(31, workers=True)
     reference = _module()
-    reference_trainer = _trainer(tmp_path / "reference", max_steps=4, checkpoint_after_two_epochs=True)
+    reference_trainer = _trainer(tmp_path / "reference", max_steps=4, checkpoint_after_first_epoch=True)
     reference_trainer.fit(reference, datamodule=_data())
-    checkpoint = tmp_path / "reference" / "checkpoints" / "epoch=1-step=2.ckpt"
+    checkpoint = tmp_path / "reference" / "checkpoints" / "epoch=0-step=2.ckpt"
     assert checkpoint.is_file()
 
     pl.seed_everything(999, workers=True)
