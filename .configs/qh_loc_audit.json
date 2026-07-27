@@ -29,13 +29,13 @@
     },
     {
       "owner": "scorer_adapter_input",
-      "path": "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
+      "path": "aria_nbv/aria_nbv/lightning/qh_module.py",
       "kind": "class",
       "name": "_QhScorerInputs"
     },
     {
       "owner": "scorer_adapter_flatten",
-      "path": "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
+      "path": "aria_nbv/aria_nbv/lightning/qh_module.py",
       "kind": "function",
       "name": "_flatten_qh_scorer_inputs"
     }
