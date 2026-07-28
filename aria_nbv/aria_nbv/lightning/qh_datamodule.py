@@ -1,7 +1,5 @@
-"""Lightning loader policy for chain-native :class:`QhDataset` stages.
-It owns deterministic [PyTorch DataLoaders](https://pytorch.org/docs/stable/data.html) and resumable shuffling.
-[Lightning](https://lightning.ai/docs/pytorch/stable/data/datamodule.html) replaces samplers;
-metrics describe emitted rows, including padding duplicates, not a deduplicated corpus.
+"""Chain-native :class:`QhDataset` loaders with deterministic, resumable shuffling.
+Lightning replaces samplers; metrics include padding duplicates rather than a deduplicated corpus.
 """
 
 from __future__ import annotations
@@ -17,6 +15,8 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 
 from ..data_handling.qh import QhBatch, QhDatasetConfig, QhRolloutChain, collate_qh_samples
 from ..utils import Stage, TargetConfig
+
+_LearningContract = tuple[tuple[tuple[str, object], ...], ...]
 
 
 class QhDataModuleConfig(TargetConfig["QhDataModule"]):
@@ -87,18 +87,16 @@ class QhDataModule(pl.LightningDataModule):
         self.persistent_workers = persistent_workers and num_workers > 0
         self.seed = seed
         self._train_generator = torch.Generator().manual_seed(seed)
-        _validate_stages(train=train, val=val, test=test)
+        self._learning_contract = _validate_stages(train=train, val=val, test=test)
 
     @property
     def training_horizon(self) -> int:
         """Return the horizon proven common across configured stages."""
-
         return int(self.train_dataset.q_h_horizon)
 
     @property
     def provenance(self) -> dict[str, object]:
         """Return compact preflighted provenance for every configured stage."""
-
         return {
             name: None if dataset is None else dataset.provenance
             for name, dataset in (
@@ -108,9 +106,13 @@ class QhDataModule(pl.LightningDataModule):
             )
         }
 
+    @property
+    def learning_contract(self) -> dict[str, object]:
+        """Return stage-invariant corpus semantics used by checkpoints."""
+        return dict(zip(("rollout", "actor"), map(dict, self._learning_contract), strict=True))
+
     def dataset_for_stage(self, stage: Stage | str) -> Dataset[QhRolloutChain] | None:
         """Return the configured dataset for one lifecycle stage."""
-
         resolved = Stage.from_str(stage)
         return {
             Stage.TRAIN: self.train_dataset,
@@ -120,33 +122,27 @@ class QhDataModule(pl.LightningDataModule):
 
     def setup(self, stage: Stage | str | None = None) -> None:
         """Validate Lightning stage text; datasets are already admitted."""
-
         if stage not in (None, "predict"):
             Stage.from_str(stage)
 
     def state_dict(self) -> dict[str, torch.Tensor]:
         """Persist the shuffled training stream at epoch boundaries."""
-
         return {"train_generator_state": self._train_generator.get_state()}
 
     def load_state_dict(self, state_dict: dict[str, torch.Tensor]) -> None:
         """Restore the shuffled training stream from a Lightning checkpoint."""
-
         self._train_generator.set_state(state_dict["train_generator_state"])
 
     def train_dataloader(self) -> DataLoader[QhBatch]:
         """Build a shuffled loader eligible for Lightning sampler replacement."""
-
         return self._loader(self.train_dataset, shuffle=True)
 
     def val_dataloader(self) -> DataLoader[QhBatch] | list[DataLoader[QhBatch]]:
         """Build a sequential validation loader eligible for sampler replacement."""
-
         return [] if self.val_dataset is None else self._loader(self.val_dataset, shuffle=False)
 
     def test_dataloader(self) -> DataLoader[QhBatch] | list[DataLoader[QhBatch]]:
         """Build a sequential held-out loader eligible for sampler replacement."""
-
         return [] if self.test_dataset is None else self._loader(self.test_dataset, shuffle=False)
 
     def _loader(self, dataset: Dataset[QhRolloutChain], *, shuffle: bool) -> DataLoader[QhBatch]:
@@ -163,8 +159,10 @@ class QhDataModule(pl.LightningDataModule):
         )
 
 
-def _validate_stages(**stages: Dataset[QhRolloutChain] | None) -> None:
+def _validate_stages(**stages: Dataset[QhRolloutChain] | None) -> _LearningContract:
     configured = {name: value for name, value in stages.items() if value is not None}
+    if len(contracts := {_learning_contract(value.provenance) for value in configured.values()}) != 1:
+        raise ValueError("Q_H corpus stages have incompatible learning contracts.")
     empty = [name for name, value in configured.items() if len(value) < 1]
     if empty:
         raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
@@ -177,6 +175,16 @@ def _validate_stages(**stages: Dataset[QhRolloutChain] | None) -> None:
             overlap = configured[left].scene_ids & configured[right].scene_ids
             if overlap:
                 raise ValueError(f"Q_H {left}/{right} datasets overlap scenes {sorted(overlap)}.")
+    return contracts.pop()
+
+
+def _learning_contract(provenance: dict[str, object]) -> _LearningContract:
+    rollout = provenance["rollout"]["compatibility"]  # type: ignore[index]
+    actor = provenance["actor"]  # type: ignore[assignment]
+    return (
+        tuple(sorted((name, value) for name, value in rollout.items() if name != "source_split")),
+        (("manifest_hash", actor["manifest_hash"]), ("store_version", actor["store_version"])),
+    )
 
 
 def distributed_padding_rows(dataset: Sized, *, world_size: int) -> int:

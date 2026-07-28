@@ -380,17 +380,60 @@ def test_chain_dataset_collates_with_multiple_workers() -> None:
 
 
 class _StaticDataset(torch.utils.data.Dataset[QhRolloutChain]):
-    def __init__(self, samples: list[QhRolloutChain], *, scene: str, horizon: int = 2) -> None:
+    def __init__(
+        self,
+        samples: list[QhRolloutChain],
+        *,
+        scene: str,
+        horizon: int = 2,
+        provenance: dict[str, object] | None = None,
+    ) -> None:
         self.samples = samples
         self.scene_ids = frozenset({scene})
         self.q_h_horizon = horizon
-        self.provenance = {"scene": scene}
+        self.provenance = _stage_provenance(scene) if provenance is None else provenance
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, index: int) -> QhRolloutChain:
         return self.samples[index]
+
+
+def _stage_provenance(
+    stage: str,
+    *,
+    discount_gamma: float = 0.95,
+    candidate_config_hashes: tuple[str, ...] = ("candidate-v1",),
+) -> dict[str, object]:
+    return {
+        "rollout": {
+            "stores": [{"path": f"/{stage}", "manifest_sha256": stage, "state_count": len(stage)}],
+            "compatibility": {
+                "schema_version": "qh-v1",
+                "reason_code_version": "reasons-v1",
+                "target_protocol_version": "v0_gt_input",
+                "return_semantics": "finite-horizon",
+                "discount_gamma": discount_gamma,
+                "source_offline_store_version": "vin-v1",
+                "split_manifest_hash": "split-v1",
+                "source_split": stage,
+                "q_h_horizon": 2,
+                "td_semantics": "fitted-q",
+                "reward_metric": "target-root-gain",
+                "candidate_config_hashes": candidate_config_hashes,
+                "oracle_config_hashes": ("oracle-v1",),
+                "rollout_config_hashes": ("rollout-v1",),
+            },
+        },
+        "actor": {
+            "store_path": f"/actor/{stage}",
+            "store_version": "vin-v1",
+            "manifest_hash": "actor-v1",
+            "split": stage,
+            "row_count": len(stage),
+        },
+    }
 
 
 def test_datamodule_uses_chain_datasets_and_lightning_default_sampler() -> None:
@@ -421,6 +464,50 @@ def test_datamodule_rejects_empty_overlap_and_horizon_mismatch() -> None:
         QhDataModule(train=train, val=_StaticDataset([chain], scene="shared"), seed=7)
     with pytest.raises(ValueError, match="equal positive"):
         QhDataModule(train=train, val=_StaticDataset([chain], scene="val", horizon=3), seed=7)
+
+
+@pytest.mark.parametrize(
+    ("changed", "value"),
+    (("discount_gamma", 0.9), ("candidate_config_hashes", ("candidate-v2",))),
+)
+def test_datamodule_rejects_cross_stage_learning_contract_mismatch(changed: str, value: object) -> None:
+    chain = _chain(steps=2, width=2)
+    train = _StaticDataset([chain], scene="train")
+    val_provenance = _stage_provenance("val")
+    val_provenance["rollout"]["compatibility"][changed] = value  # type: ignore[index]
+    val = _StaticDataset([chain], scene="val", provenance=val_provenance)
+
+    with pytest.raises(ValueError, match="incompatible learning contracts"):
+        QhDataModule(train=train, val=val, seed=7)
+
+
+def test_datamodule_learning_contract_accepts_stage_local_identity() -> None:
+    chain = _chain(steps=2, width=2)
+    data = QhDataModule(
+        train=_StaticDataset([chain], scene="train"),
+        val=_StaticDataset([chain], scene="val"),
+        test=_StaticDataset([chain], scene="test"),
+        seed=7,
+    )
+
+    assert data.learning_contract == {
+        "rollout": {
+            "schema_version": "qh-v1",
+            "reason_code_version": "reasons-v1",
+            "target_protocol_version": "v0_gt_input",
+            "return_semantics": "finite-horizon",
+            "discount_gamma": 0.95,
+            "source_offline_store_version": "vin-v1",
+            "split_manifest_hash": "split-v1",
+            "q_h_horizon": 2,
+            "td_semantics": "fitted-q",
+            "reward_metric": "target-root-gain",
+            "candidate_config_hashes": ("candidate-v1",),
+            "oracle_config_hashes": ("oracle-v1",),
+            "rollout_config_hashes": ("rollout-v1",),
+        },
+        "actor": {"store_version": "vin-v1", "manifest_hash": "actor-v1"},
+    }
 
 
 def test_experiment_uses_chain_stages_and_lightning_sampler_defaults() -> None:
