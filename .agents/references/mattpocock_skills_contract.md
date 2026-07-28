@@ -19,7 +19,7 @@ repo layout a second source of project truth.
 | Matt assumption | ARIA-NBV owner |
 |---|---|
 | `CONTEXT.md` domain language | `docs/typst/shared/glossary.typ`, generated `docs/contents/glossary.qmd`, and `.agents/references/source_order.md` |
-| `docs/adr/` decisions | `.agents/memory/state/DECISIONS.md`, `docs/contents/thesis/roadmap.qmd`, `docs/contents/thesis/questions.qmd`, and the nearest `AGENTS.md` |
+| `docs/adr/` decisions | The smallest owner selected through `.agents/references/source_order.md`; no generic ADR or legacy-journal destination |
 | Issue tracker setup | `.agents/issues.toml`, `.agents/todos.toml`, `.agents/refactors.toml`, and `.agents/resolved.toml` through `agents-db` |
 | Code standards | root or nearest `AGENTS.md`, `.agents/references/python_conventions.md`, `.agents/references/verification_matrix.md`, and package tests |
 | Research notes | `aria-litkg-memory`, `semantic-scholar-litkg`, `docs-curator`, Quarto literature pages, and `docs/references.bib` |

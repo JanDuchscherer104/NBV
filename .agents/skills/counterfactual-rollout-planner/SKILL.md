@@ -28,7 +28,7 @@ metadata:
   must_read:
     - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
     - "docs/contents/thesis/questions.qmd#rq2-offline-qh"
-    - ".agents/memory/state/PROJECT_STATE.md"
+    - ".agents/references/source_order.md"
     - ".agents/references/rollout_zarr_q_invalidity_contract.md"
   canonical_sources:
     - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
@@ -82,7 +82,7 @@ simulator bridge after the ASE rollout and Q_H path is stable.
 2. `docs/contents/thesis/questions.qmd` sections RQ4, RQ5, and the shared
    evidence protocol
 3. `aria_nbv/AGENTS.md`
-4. `.agents/memory/state/PROJECT_STATE.md`
+4. `.agents/references/source_order.md`
 5. Relevant `pose_generation` and `rl` tests
 
 ## Rules

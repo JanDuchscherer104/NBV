@@ -26,13 +26,12 @@ metadata:
     - "suspicious metric"
   must_read:
     - "AGENTS.md"
-    - ".agents/memory/state/GOTCHAS.md"
+    - ".agents/references/source_order.md"
     - ".agents/references/verification_matrix.md"
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
     - ".agents/references/verification_matrix.md"
-    - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/websites/streamlit_io"
     - "/pytorch/pytorch"

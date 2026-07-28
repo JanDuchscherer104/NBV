@@ -16,6 +16,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -901,12 +902,12 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
     return data
 
 
-def load_registry(path: Path) -> dict[str, Any]:
+def load_registry(path: Path, *, live: bool = True) -> dict[str, Any]:
     if path.is_symlink() or not path.is_file():
         raise ValidationError(f"registry must be a regular file: {path}")
     with path.open("rb") as stream:
         registry = _parse_registry(stream.read(MAX_REGISTRY_BYTES + 1))
-    if registry["schema_version"] != 2:
+    if live and registry["schema_version"] != 2:
         raise ValidationError("live registry schema_version must be 2")
     return registry
 
@@ -957,8 +958,10 @@ def _validate_baseline(repo: Path, bundle_id: str, baseline: object) -> None:
         )
 
 
-def validate_registry(repo: Path, registry_path: Path) -> set[str]:
-    registry = load_registry(registry_path)
+def validate_registry(
+    repo: Path, registry_path: Path, *, live: bool = True
+) -> set[str]:
+    registry = load_registry(registry_path, live=live)
     bundles = registry["bundle"]
     ids: set[str] = set()
     owned: set[str] = set()
@@ -1274,8 +1277,10 @@ def bundle_chain_sha256(
     return _bundle_chain_digests(bundles)[bundle_id]
 
 
-def validate_transition(previous: dict[str, Any], current: dict[str, Any]) -> None:
-    if current.get("schema_version") != 2:
+def validate_transition(
+    previous: dict[str, Any], current: dict[str, Any], *, live: bool = True
+) -> None:
+    if live and current.get("schema_version") != 2:
         raise ValidationError("live registry schema_version must be 2")
     if current["schema_version"] < previous.get("schema_version", 1):
         raise ValidationError("registry schema version cannot decrease")
@@ -1400,6 +1405,109 @@ def validate_tracked(repo: Path, owned: set[str]) -> None:
         )
 
 
+def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] | None:
+    resolved_previous = _run(
+        repo, "git", "rev-parse", "--verify", f"{previous_ref}^{{commit}}"
+    ).strip()
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", resolved_previous, "HEAD"],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+    )
+    if ancestor.returncode:
+        raise ValidationError("previous_ref must be an ancestor of HEAD")
+
+    commits = [resolved_previous]
+    commits.extend(
+        filter(
+            None,
+            _run(
+                repo,
+                "git",
+                "rev-list",
+                "--first-parent",
+                "--ancestry-path",
+                "--reverse",
+                f"{resolved_previous}..HEAD",
+            ).splitlines(),
+        )
+    )
+    previous_registry: dict[str, Any] | None = None
+    registry_seen = False
+    with tempfile.TemporaryDirectory(prefix="omx-artifact-history-") as temporary:
+        snapshot = Path(temporary) / "snapshot"
+        added = False
+        try:
+            _run(
+                repo,
+                "git",
+                "worktree",
+                "add",
+                "--detach",
+                "--no-checkout",
+                "--quiet",
+                str(snapshot),
+                commits[0],
+            )
+            added = True
+            _run(snapshot, "git", "sparse-checkout", "init", "--no-cone")
+            _run(snapshot, "git", "sparse-checkout", "set", REGISTRY, ".omx/")
+            for commit in commits:
+                _run(
+                    snapshot,
+                    "git",
+                    "-c",
+                    "filter.lfs.smudge=",
+                    "-c",
+                    "filter.lfs.required=false",
+                    "checkout",
+                    "--detach",
+                    "--force",
+                    "--quiet",
+                    commit,
+                )
+                try:
+                    registry = _previous_registry(repo, commit)
+                    if registry is None:
+                        if registry_seen:
+                            raise ValidationError(
+                                "accepted OMX artifact registry must not disappear"
+                            )
+                        if (
+                            commit != resolved_previous
+                            and _run(
+                                snapshot,
+                                "git",
+                                "diff",
+                                "--name-only",
+                                resolved_previous,
+                                commit,
+                                "--",
+                                ".omx",
+                            ).strip()
+                        ):
+                            raise ValidationError(
+                                "registry-free OMX payload changed after previous_ref"
+                            )
+                        continue
+
+                    registry_seen = True
+                    owned = validate_registry(snapshot, snapshot / REGISTRY, live=False)
+                    validate_tracked(snapshot, owned)
+                    if previous_registry is not None:
+                        validate_transition(previous_registry, registry, live=False)
+                    previous_registry = registry
+                except ValidationError as exc:
+                    raise ValidationError(
+                        f"committed snapshot {commit}: {exc}"
+                    ) from exc
+        finally:
+            if added:
+                _run(repo, "git", "worktree", "remove", "--force", str(snapshot))
+    return previous_registry
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -1412,7 +1520,7 @@ def main() -> int:
     try:
         owned = validate_registry(repo, registry)
         if args.previous_ref:
-            previous = _previous_registry(repo, args.previous_ref)
+            previous = validate_committed_history(repo, args.previous_ref)
             if previous is not None:
                 validate_transition(previous, load_registry(registry))
         if args.check_tracked:

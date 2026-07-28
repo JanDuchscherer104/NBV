@@ -29,13 +29,13 @@ metadata:
     - "data smoke"
   must_read:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
-    - ".agents/memory/state/GOTCHAS.md"
+    - ".agents/references/source_order.md"
     - ".agents/references/verification_matrix.md"
   canonical_sources:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - "docs/contents/setup.qmd"
     - ".agents/references/verification_matrix.md"
-    - ".agents/memory/state/GOTCHAS.md"
+    - ".agents/references/source_order.md"
   context7_refs:
     - "/pydantic/pydantic"
     - "/jcrist/msgspec"
@@ -84,7 +84,7 @@ operating or validating an existing ARIA store.
 2. `aria_nbv/aria_nbv/data_handling/AGENTS.md`
 3. `README.md`
 4. `.agents/references/operator_quick_reference.md`
-5. `.agents/memory/state/GOTCHAS.md`
+5. The smallest current owner named by `.agents/references/source_order.md`
 
 ## Rules
 

@@ -71,7 +71,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo
   echo "## Retrieval ladder"
   echo "1. Source order and conflict rule: .agents/references/source_order.md"
-  echo "2. Current thesis direction: docs/contents/thesis/{roadmap,questions}.qmd plus .agents/memory/state/{PROJECT_STATE,DECISIONS,OPEN_QUESTIONS,GOTCHAS}.md"
+  echo "2. Current thesis direction: active docs/typst/thesis/main.typ include closure; use source_order.md to resolve the exact owner"
   echo "3. Current terminology: docs/typst/shared/glossary.typ and generated docs/contents/glossary.qmd"
   echo "4. Active thesis seed: docs/typst/thesis/main.typ"
   echo "5. Seminar evidence: docs/typst/seminar_paper/main.typ for historical implemented evidence only"
@@ -89,10 +89,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- docs/typst/thesis/main.typ  # active thesis seed"
   echo "- docs/typst/seminar_paper/main.typ  # only for seminar evidence"
   echo "- docs/contents/ideas.qmd  # read-only archive/scratch"
-  echo "- .agents/memory/state/PROJECT_STATE.md"
-  echo "- .agents/memory/state/DECISIONS.md"
-  echo "- .agents/memory/state/OPEN_QUESTIONS.md"
-  echo "- .agents/memory/state/GOTCHAS.md"
+  echo "- .agents/memory/state/*.md  # legacy migration evidence only"
   echo
   echo "## Lightweight refresh"
   echo "- \`make context\` refreshes \`source_index.md\`, \`literature_index.md\`, and \`data_contracts.md\`."
@@ -102,7 +99,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "## Source families"
   echo "| Family | Count | Use when | First reveal |"
   echo "|---|---:|---|---|"
-  echo "| Canonical state | ${memory_state_count} docs | You need current truth, conventions, or decisions | Open the relevant doc in \`.agents/memory/state/\` |"
+  echo "| Legacy state evidence | ${memory_state_count} docs | You are tracing a migrated claim or historical decision | Resolve the current owner through \`.agents/references/source_order.md\` before acting |"
   echo "| Agent history | ${memory_history_count} docs | The task is historical, comparative, or evidence-driven | \`rg -n \"<term>\" .agents/memory/history\` |"
   echo "| Agent references | ${ref_count} docs | You need conventions, templates, or external-doc lookup ids | Open \`python_conventions.md\` or the specific reference doc |"
   echo "| Quarto docs | ${qmd_count} files | You need implementation narrative, roadmap, or explainer docs | \`scripts/nbv_qmd_outline.sh --compact\` |"
@@ -115,7 +112,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "| Topic | Primary paths | Use when |"
   echo "|---|---|---|"
   echo "| Project hub | \`docs/index.qmd\` | You need the docs landing page or high-level navigation. |"
-  echo "| Current thesis | \`docs/contents/thesis/roadmap.qmd\`, \`docs/contents/thesis/questions.qmd\`, \`.agents/memory/state/\` | You need current milestones, direction, or open research questions. |"
+  echo "| Current thesis | active \`docs/typst/thesis/main.typ\` include closure | You need current scientific direction or interpretation. |"
   echo "| Setup and resources | \`docs/contents/setup.qmd\`, \`resources.qmd\` | You need environment/bootstrap help or external resource links. |"
   echo "| Findings and glossary | \`docs/contents/experiments/findings.qmd\`, \`docs/contents/glossary.qmd\`, \`docs/typst/shared/glossary.typ\` | You need prior experiment outcomes or project terminology. |"
   echo "| Idea archive | \`docs/contents/ideas.qmd\` | You need read-only scratch/history, not current direction. |"
@@ -147,7 +144,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- Heavy artifacts: \`context_snapshot.md\`, \`aria_nbv_uml.mmd\`, \`aria_nbv_filtered_uml.mmd\`, \`aria_nbv_class_docstrings.md\`, \`aria_nbv_tree.md\`."
   echo
   echo "## Search recipes (rg)"
-  echo 'rg -n "<term>" .agents/memory/state'
+  echo 'rg -n "<term>" .agents/memory/state  # legacy migration evidence; resolve owner before use'
   echo 'rg -n "<term>" .agents/memory/history'
   echo 'rg -n "<term>" .agents/references'
   echo 'rg -n "<term>" docs/**/*.qmd'

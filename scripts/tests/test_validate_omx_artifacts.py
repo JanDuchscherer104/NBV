@@ -261,6 +261,25 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", message)
 
+    def run_validator(self, previous_ref: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--repo",
+                str(self.repo),
+                "--registry",
+                str(self.repo / ".agents/omx_artifacts.toml"),
+                "--previous-ref",
+                previous_ref,
+                "--check-tracked",
+            ],
+            cwd=self.repo,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
     def archived(self, bundle: dict[str, Any], successor_id: str) -> dict[str, Any]:
         archived = deepcopy(bundle)
         archived["status"] = "superseded"
@@ -1795,6 +1814,149 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 ),
                 [],
             )
+
+    def test_full_history_rejects_restored_accepted_bundle_mutation(self) -> None:
+        original = self.bundle("task-current")
+        self.commit_registry(original, "accepted base")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+
+        mutated = deepcopy(original)
+        target = self.repo / mutated["artifact"][0]["path"]
+        original_payload = target.read_bytes()
+        target.write_text("transient accepted evidence mutation\n", encoding="utf-8")
+        payload = target.read_bytes()
+        mutated["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        mutated["artifact"][0]["bytes"] = len(payload)
+        self.commit_registry(mutated, "transient accepted mutation")
+
+        target.write_bytes(original_payload)
+        self.commit_registry(original, "restore accepted state")
+        result = self.run_validator(previous)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stderr, "accepted bundle mutated")
+        self.assertNotIn(
+            "omx-artifact-history-", self.git("worktree", "list", "--porcelain").stdout
+        )
+
+    def test_full_history_rejects_restored_registry_symlinks(self) -> None:
+        bundle = self.bundle("task-current")
+        self.commit_registry(bundle, "accepted base")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        registry = self.repo / ".agents/omx_artifacts.toml"
+        registry_payload = registry.read_bytes()
+
+        for kind in ("regular", "dangling"):
+            with self.subTest(kind=kind):
+                self.git("checkout", "-q", "main")
+                self.git("checkout", "-qb", f"feature-{kind}-registry-link")
+                target = self.repo / ".agents/omx-artifacts-target.toml"
+                registry.unlink()
+                if kind == "regular":
+                    target.write_bytes(registry_payload)
+                registry.symlink_to(target.name)
+                self.git("add", "-A")
+                self.git("commit", "-qm", f"transient {kind} registry symlink")
+
+                registry.unlink()
+                registry.write_bytes(registry_payload)
+                if target.exists():
+                    target.unlink()
+                self.git("add", "-A")
+                self.git("commit", "-qm", "restore regular registry")
+                result = self.run_validator(previous)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertRegex(
+                    result.stderr, "historical registry must be a regular file"
+                )
+
+    def test_full_history_accepts_valid_multi_commit_successor_chain(self) -> None:
+        first = self.bundle("task-first")
+        self.commit_registry(first, "first accepted bundle")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        second = self.bundle("task-second", "second")
+        self.commit_supersession(first, second)
+        third = self.bundle("task-third", "third")
+        self.commit_second_supersession(third)
+
+        result = self.run_validator(previous)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_full_history_allows_registry_free_prefix_without_omx_payload(self) -> None:
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        (self.repo / "README.md").write_text("prefix change\n", encoding="utf-8")
+        self.git("add", "README.md")
+        self.git("commit", "-qm", "registry-free prefix")
+        self.commit_registry(self.bundle("task-current"), "bootstrap registry")
+
+        result = self.run_validator(previous)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_full_history_allows_unchanged_prepolicy_omx_until_bootstrap(
+        self,
+    ) -> None:
+        bundle = self.bundle("task-current")
+        self.git("add", "-f", ".omx")
+        self.git("commit", "-qm", "prepolicy OMX evidence")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        (self.repo / "README.md").write_text("ownership contract\n", encoding="utf-8")
+        self.git("add", "README.md")
+        self.git("commit", "-qm", "define ownership before bootstrap")
+        self.commit_registry(bundle, "bootstrap accepted registry")
+
+        result = self.run_validator(previous)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_full_history_rejects_registry_free_prefix_with_omx_payload(self) -> None:
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        payload = self.repo / ".omx/plans/unregistered.md"
+        payload.parent.mkdir(parents=True)
+        payload.write_text("transient unregistered payload\n", encoding="utf-8")
+        self.git("add", "-f", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "transient registry-free OMX payload")
+        self.git("rm", "-q", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "remove transient OMX payload")
+        self.commit_registry(self.bundle("task-current"), "bootstrap registry")
+
+        result = self.run_validator(previous)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(
+            result.stderr, "registry-free OMX payload changed after previous_ref"
+        )
+
+    def test_full_history_requires_previous_ref_to_ancestor_head(self) -> None:
+        self.commit_registry(self.bundle("task-current"), "accepted registry")
+        sibling = self.git("commit-tree", f"{self.baseline}^{{tree}}").stdout.strip()
+
+        result = self.run_validator(sibling)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stderr, "previous_ref must be an ancestor of HEAD")
+
+    def test_full_history_rejects_restored_registry_removal(self) -> None:
+        bundle = self.bundle("task-current")
+        self.commit_registry(bundle, "accepted base")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        registry = self.repo / ".agents/omx_artifacts.toml"
+        registry_payload = registry.read_bytes()
+        self.git("rm", "-q", ".agents/omx_artifacts.toml")
+        self.git("commit", "-qm", "transient registry removal")
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.write_bytes(registry_payload)
+        self.git("add", ".agents/omx_artifacts.toml")
+        self.git("commit", "-qm", "restore registry")
+
+        result = self.run_validator(previous)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(
+            result.stderr, "accepted OMX artifact registry must not disappear"
+        )
 
     def test_semantic_rollback_is_a_new_successor_chain(self) -> None:
         first = self.bundle("task-first")

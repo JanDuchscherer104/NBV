@@ -32,7 +32,7 @@ canonical_updates_needed: []
 ---
 ```
 
-## Native Debrief With Canonical Updates
+## Native Debrief With Owner Updates
 
 ```yaml
 ---
@@ -43,8 +43,8 @@ status: done
 topics: [scaffold, codex, memory]
 confidence: high
 canonical_updates_needed:
-  - .agents/memory/state/DECISIONS.md
-  - .agents/memory/state/PROJECT_STATE.md
+  - .agents/references/human_owner_intent.md
+  - docs/typst/shared/glossary.typ
 ---
 ```
 

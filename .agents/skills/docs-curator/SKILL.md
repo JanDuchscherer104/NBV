@@ -61,7 +61,7 @@ navigation, and public/internal boundary decisions.
 1. `docs/AGENTS.md`
 2. `.agents/references/source_order.md`
 3. The source that owns the touched role, as defined by source order
-4. `.agents/memory/state/GOTCHAS.md` when behavior or workflow claims are involved
+4. The exact behavior or workflow owner named by source order
 
 ## Rules
 

@@ -4,9 +4,9 @@ Use this map to pick the smallest relevant set of files before broad search.
 
 ## Concept-to-source matrix
 
-Only the non-obvious cross-surface routes live here. Obvious file-name or heading matches should be handled by `source_index.md`, outlines, or direct `rg`.
+Only the non-obvious cross-surface routes live here. Obvious file-name or heading matches should be handled by `source_index.md`, outlines, or direct `rg`. The legacy-state column is migration evidence only; resolve current claims through `.agents/references/source_order.md`.
 
-| Topic | Canonical state | References | Paper | Quarto docs | Literature | Code | First reveal command |
+| Topic | Legacy state evidence | References | Paper | Quarto docs | Literature | Code | First reveal command |
 |---|---|---|---|---|---|---|---|
 | Coordinate frames and conventions | `.agents/memory/state/DECISIONS.md`, `.agents/memory/state/GOTCHAS.md` | `.agents/references/python_conventions.md`, `.agents/references/external_stack_contracts.md` | `docs/typst/seminar_paper/sections/05-coordinate-conventions.typ`, `docs/typst/seminar_paper/sections/12f-appendix-pose-frames.typ` | `docs/contents/glossary.qmd`, `docs/contents/literature/efm3d.qmd` | `literature/tex-src/arXiv-project-aria/definitions.tex` | `aria_nbv/aria_nbv/pose_generation`, `aria_nbv/aria_nbv/rendering` | `scripts/nbv_typst_includes.py --paper --mode outline` |
 | Oracle RRI computation | `.agents/memory/state/PROJECT_STATE.md`, `.agents/memory/state/DECISIONS.md`, `.agents/memory/state/GOTCHAS.md` | `.agents/references/python_conventions.md` | `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/12c-appendix-oracle-rri-labeler.typ` | `docs/reference/index.qmd`, `docs/contents/theory/rri_theory.qmd` | `literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex` | `aria_nbv/aria_nbv/oracle/pipelines/scene_labels.py`, `aria_nbv/aria_nbv/rendering/candidate_depth_renderer.py` | `scripts/nbv_get_context.sh match OracleRriLabeler` |

@@ -1,9 +1,10 @@
 # OMX Quick Reference
 
 Use this reference for optional Oh My Codex (OMX) orchestration around
-ARIA-NBV. OMX is not required for normal repo work; the canonical repo surfaces
-remain `AGENTS.md`, `.agents/skills/`, `.agents/memory/state/`, and
-`make agents-db`.
+ARIA-NBV. OMX is not required for normal repo work; authoritative repo surfaces
+are selected through `.agents/references/source_order.md`, with `AGENTS.md`,
+nearest package guidance, active Typst, and the agents DB owning their stated
+roles.
 
 ## Requirements
 

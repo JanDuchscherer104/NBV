@@ -58,8 +58,8 @@ canonical_updates_needed: []
 ## Verification
 <commands; pass/fail; blockers>
 
-## Canonical State Impact
-<list .agents/memory/state/*.md updates, or say "none" explicitly>
+## Owner Impact
+<list updates to owners selected through .agents/references/source_order.md, or say "none" explicitly>
 """
     return file_path, body
 
@@ -76,7 +76,10 @@ def main() -> int:
 
     file_path, body = render(date.today(), args.title)
     if file_path.exists() and not args.force:
-        print(f"debrief already exists: {file_path.relative_to(REPO_ROOT)}", file=sys.stderr)
+        print(
+            f"debrief already exists: {file_path.relative_to(REPO_ROOT)}",
+            file=sys.stderr,
+        )
         print("re-run with --force to overwrite", file=sys.stderr)
         return 1
     file_path.write_text(body, encoding="utf-8")

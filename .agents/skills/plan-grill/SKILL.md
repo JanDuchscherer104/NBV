@@ -36,13 +36,13 @@ metadata:
     - ".agents/references/source_order.md"
     - "docs/contents/thesis/roadmap.qmd"
     - "docs/contents/thesis/questions.qmd"
-    - ".agents/memory/state/PROJECT_STATE.md"
+    - ".agents/references/source_order.md"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
   canonical_sources:
     - ".agents/references/source_order.md#role-split"
     - "docs/contents/thesis/roadmap.qmd"
     - "docs/contents/thesis/questions.qmd"
-    - ".agents/memory/state/PROJECT_STATE.md"
+    - ".agents/references/source_order.md"
     - ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md"
   context7_refs:
     - "/pytorch/pytorch"
@@ -124,11 +124,11 @@ Keep the default path concise unless one of these modifiers applies.
 - Challenge overloaded terms against `docs/typst/shared/glossary.typ`.
 - For fuzzy thesis or planning terms, test the plan with three concrete
   scenarios: one normal case, one boundary case, and one failure case.
-- Cross-check claims against code, paper, memory state, and roadmap before
-  accepting them.
-- Resolved terminology updates `docs/typst/shared/glossary.typ` or
-  `.agents/memory/state/DECISIONS.md`. Do not add a parallel root context file
-  or ADR tree as a second source of truth.
+- Cross-check claims against the owners named by source order before accepting
+  them; legacy state journals are supporting migration evidence only.
+- Resolved terminology updates `docs/typst/shared/glossary.typ`; other durable
+  outcomes go to the smallest owner named by source order. Do not add a
+  parallel root context file or ADR tree as a second source of truth.
 - Distinguish `current`, `planned`, `scratch`, and `archive` docs.
 - Capture durable outcomes through the root `AGENTS.md` Instruction Capture
   lanes.

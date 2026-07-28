@@ -35,3 +35,19 @@ incident audit, credential rotation if needed, and any coordinated owner-
 approved history rewrite. PR1 must not claim historical purge. The post-commit
 Graphify hook still fails to import `graphify_adapter`; SCAFF-014/015 and PR4
 own that pre-existing integration defect.
+
+A later exact-head code review exposed two further blockers that earlier gates
+missed. The lifecycle validator compared only the base and final registries, so
+an intermediate accepted-artifact mutation or registry symlink could be
+committed and then restored. It now validates every first-parent committed
+snapshot with a sparse temporary worktree containing only the registry and
+`.omx/`, checks adjacent transitions, and preserves only unchanged pre-policy
+payloads until registry bootstrap. The same review found active guidance still
+routing facts into legacy state journals. Those routes now resolve owners
+through `source_order.md`, and the memory validator rejects future live
+guidance that promotes the journals to current truth.
+
+Fresh verification passes 41 lifecycle tests, 16 agent-memory tests, exact
+base-to-HEAD history validation for all 36 artifacts, Ruff, MyPy, agents DB
+validation, and the scaffold audit with zero errors. Hosted CI and independent
+exact-head review must be repeated after the blocker-resolution commit.

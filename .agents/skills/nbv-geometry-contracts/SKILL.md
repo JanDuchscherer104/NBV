@@ -29,13 +29,12 @@ metadata:
   must_read:
     - "AGENTS.md"
     - "aria_nbv/AGENTS.md"
-    - ".agents/memory/state/GOTCHAS.md"
+    - ".agents/references/source_order.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#core-rules"
     - ".agents/references/python_conventions.md#core-rules"
     - ".agents/references/external_stack_contracts.md#efm3d-and-evl"
     - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
-    - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/facebookresearch/pytorch3d"
     - "/pytorch/pytorch"
@@ -76,7 +75,7 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 2. `aria_nbv/AGENTS.md`
 3. `.agents/references/python_conventions.md`
 4. `.agents/references/external_stack_contracts.md`
-5. `.agents/memory/state/GOTCHAS.md`
+5. The exact geometry owner named by `.agents/references/source_order.md`
 6. `aria_nbv/aria_nbv/vin/AGENTS.md` when VIN batch/candidate fields are touched
 7. The focused rendering or pose-generation tests for the changed path
 8. `docs/_generated/context/data_contracts.md` only after `make

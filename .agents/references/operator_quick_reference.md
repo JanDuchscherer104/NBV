@@ -41,7 +41,7 @@ when:
 - the ollama tunnel at `127.0.0.1:11434` is unreachable
   (`ssh -N -R 11434:127.0.0.1:11434 ubuntu` not running);
 - no tracked source under `docs/`, `aria_nbv/aria_nbv/`,
-  `.agents/memory/state/`, or `.agents/*.toml` changed since the last
+  `.agents/references/`, or `.agents/*.toml` changed since the last
   refresh;
 - another refresh is in flight (`.agents/kg/.refresh.lock` present).
 

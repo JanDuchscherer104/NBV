@@ -48,3 +48,29 @@ def test_operator_runtime_state_must_not_be_tracked(path: str) -> None:
 
 def test_unrelated_paths_are_outside_the_runtime_policy() -> None:
     assert not validator.is_forbidden_tracked_runtime_path("aria_nbv/aria_nbv/__init__.py")
+
+
+def test_live_guidance_must_not_route_legacy_state_as_current_truth(
+    tmp_path: Path,
+) -> None:
+    skill = tmp_path / ".agents/skills/example/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "Use `.agents/memory/state/` for durable current truth.\n",
+        encoding="utf-8",
+    )
+
+    assert validator.check_legacy_state_owner_claims([".agents/skills/example/SKILL.md"], repo_root=tmp_path) == [
+        ".agents/skills/example/SKILL.md:1: legacy state journals must not be routed as current-truth owners"
+    ]
+
+
+def test_legacy_state_may_remain_explicit_migration_evidence(tmp_path: Path) -> None:
+    source_order = tmp_path / ".agents/references/source_order.md"
+    source_order.parent.mkdir(parents=True)
+    source_order.write_text(
+        "`.agents/memory/state/` is legacy migration evidence, not current truth.\n",
+        encoding="utf-8",
+    )
+
+    assert not validator.check_legacy_state_owner_claims([".agents/references/source_order.md"], repo_root=tmp_path)

@@ -67,9 +67,10 @@ or durable maintenance debt capture.
 3. Add or amend a record only when the work materially changes the repo's
    maintenance picture.
 4. Keep records compact but auditable with `context` plus stable `references`.
-5. Route extracted requirements to the smallest owner: `.agents/*.toml` for
-   active work, `.agents/memory/state/` for durable current truth, and dated
-   history debriefs for episodic task records.
+5. Route extracted requirements to the smallest owner named by
+   `.agents/references/source_order.md`: `.agents/*.toml` for active work and
+   dated history debriefs for episodic task records. Do not add facts to the
+   legacy state journals.
 6. Resolve or retire completed records into `.agents/resolved.toml`; do not
    delete records outright.
 

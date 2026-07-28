@@ -97,7 +97,40 @@ FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (
     ".mempalace/",
     ".palace/",
 )
+FORBIDDEN_OMX_RUNTIME_PREFIXES = (
+    ".omx/cache/",
+    ".omx/logs/",
+    ".omx/state/",
+    ".omx/tmp/",
+    ".omx/ultragoal/",
+)
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
+LEGACY_STATE_PATH = ".agents/memory/state"
+LEGACY_STATE_OWNER_TERMS = (
+    "canonical state",
+    "canonical truth",
+    "current thesis direction",
+    "current truth",
+    "current-truth",
+    "durable current truth",
+    "durable decisions live",
+)
+LEGACY_STATE_OWNER_EXEMPTIONS = (
+    "do not",
+    "legacy",
+    "migration evidence",
+    "not current",
+    "supporting evidence",
+)
+LEGACY_STATE_SCAN_SUFFIXES = {".md", ".py", ".sh", ".toml"}
+LEGACY_STATE_SCAN_EXCLUDED_PREFIXES = (
+    ".agents/archive/",
+    ".agents/memory/history/",
+    ".agents/memory/state/",
+    ".omx/",
+    "aria_nbv/tests/",
+    "scripts/tests/",
+)
 
 REQUIRED_NATIVE_KEYS = {
     "id",
@@ -352,9 +385,50 @@ def check_forbidden_tracked_paths(tracked_paths: list[str]) -> list[str]:
     return [
         f"runtime or transcript evidence must not be tracked: {path}"
         for path in tracked_paths
-        if path in FORBIDDEN_TRACKED_RUNTIME_PATHS
-        or path.startswith(FORBIDDEN_TRACKED_RUNTIME_PREFIXES)
+        if is_forbidden_tracked_runtime_path(path)
     ]
+
+
+def is_forbidden_tracked_runtime_path(path: str) -> bool:
+    """Return whether a tracked path is private or operator-owned runtime state."""
+
+    return (
+        path in FORBIDDEN_TRACKED_RUNTIME_PATHS
+        or path.startswith(FORBIDDEN_TRACKED_RUNTIME_PREFIXES)
+        or path.startswith(FORBIDDEN_OMX_RUNTIME_PREFIXES)
+        or (path.startswith(".omx/goals/") and "/artifacts/" in path)
+    )
+
+
+def check_legacy_state_owner_claims(
+    tracked_paths: list[str], repo_root: Path = REPO_ROOT
+) -> list[str]:
+    """Reject live guidance that promotes legacy journals to truth owners."""
+
+    errors: list[str] = []
+    for tracked_path in tracked_paths:
+        if tracked_path.startswith(LEGACY_STATE_SCAN_EXCLUDED_PREFIXES):
+            continue
+        path = repo_root / tracked_path
+        if path.suffix not in LEGACY_STATE_SCAN_SUFFIXES or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            continue
+        for line_number, line in enumerate(lines, start=1):
+            normalized = " ".join(line.lower().split())
+            if LEGACY_STATE_PATH not in normalized:
+                continue
+            if not any(term in normalized for term in LEGACY_STATE_OWNER_TERMS):
+                continue
+            if any(term in normalized for term in LEGACY_STATE_OWNER_EXEMPTIONS):
+                continue
+            errors.append(
+                f"{tracked_path}:{line_number}: legacy state journals must not be "
+                "routed as current-truth owners"
+            )
+    return errors
 
 
 def check_history_records() -> list[str]:
@@ -449,6 +523,7 @@ def check_scaffold_alignment() -> list[str]:
         line.strip() for line in result.stdout.splitlines() if line.strip()
     ]
     errors.extend(check_forbidden_tracked_paths(tracked_paths))
+    errors.extend(check_legacy_state_owner_claims(tracked_paths))
 
     if OMX_ARTIFACT_REGISTRY.exists():
         errors.extend(check_registered_omx_artifacts())
