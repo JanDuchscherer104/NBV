@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-
 SCRIPT = Path(__file__).parents[1] / "scaffold" / "validate_omx_artifacts.py"
 SPEC = importlib.util.spec_from_file_location("validate_omx_artifacts", SCRIPT)
 assert SPEC and SPEC.loader
@@ -26,9 +25,7 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 MEMORY_SCRIPT = Path(__file__).parents[1] / "validate_agent_memory.py"
-MEMORY_SPEC = importlib.util.spec_from_file_location(
-    "validate_agent_memory", MEMORY_SCRIPT
-)
+MEMORY_SPEC = importlib.util.spec_from_file_location("validate_agent_memory", MEMORY_SCRIPT)
 assert MEMORY_SPEC and MEMORY_SPEC.loader
 MEMORY_MODULE = importlib.util.module_from_spec(MEMORY_SPEC)
 sys.modules[MEMORY_SPEC.name] = MEMORY_MODULE
@@ -62,9 +59,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def git(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", *args], cwd=self.repo, check=True, capture_output=True, text=True
-        )
+        return subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True)
 
     def artifact(
         self,
@@ -182,9 +177,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     )
                 artifacts.append(self.artifact(path, family, role, text=text))
         handoff = next(item for item in artifacts if item["family"] == "handoff")
-        acceptance = next(
-            item for item in artifacts if item["role"] == "acceptance-record"
-        )
+        acceptance = next(item for item in artifacts if item["role"] == "acceptance-record")
         return {
             "id": bundle_id,
             "task": "task",
@@ -223,9 +216,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "predecessor_registry_commit",
                 "superseded_by",
             ):
-                if key in bundle and (
-                    key == "contract_version" or isinstance(bundle[key], bool)
-                ):
+                if key in bundle and (key == "contract_version" or isinstance(bundle[key], bool)):
                     value = bundle[key]
                     rendered = str(value).lower() if isinstance(value, bool) else value
                     lines.append(f"{key} = {rendered}")
@@ -237,9 +228,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     lines.append(f'{key} = "{artifact[key]}"')
                 lines.append(f"bytes = {artifact['bytes']}")
                 if artifact.get("review_kinds"):
-                    values = ", ".join(
-                        f'"{value}"' for value in artifact["review_kinds"]
-                    )
+                    values = ", ".join(f'"{value}"' for value in artifact["review_kinds"])
                     lines.append(f"review_kinds = [{values}]")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return path
@@ -252,12 +241,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.write_registry([bundle], ".agents/omx_artifacts.toml")
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
 
-    def commit_registry(
-        self, bundle: dict[str, Any], message: str, schema_version: int = 2
-    ) -> None:
-        self.write_registry(
-            [bundle], ".agents/omx_artifacts.toml", schema_version=schema_version
-        )
+    def commit_registry(self, bundle: dict[str, Any], message: str, schema_version: int = 2) -> None:
+        self.write_registry([bundle], ".agents/omx_artifacts.toml", schema_version=schema_version)
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", message)
 
@@ -285,10 +270,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         archived["status"] = "superseded"
         archived["superseded_by"] = successor_id
         for artifact in archived["artifact"]:
-            artifact["path"] = (
-                f".omx/archive/accepted-bundles/{archived['id']}/"
-                + artifact["native_path"].removeprefix(".omx/")
-            )
+            artifact["path"] = f".omx/archive/accepted-bundles/{archived['id']}/" + artifact[
+                "native_path"
+            ].removeprefix(".omx/")
         return archived
 
     def bind_predecessor(
@@ -299,15 +283,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
     ) -> None:
         chain_bundles = {predecessor["id"]: predecessor} if bundles is None else bundles
         successor["predecessor_bundle_id"] = predecessor["id"]
-        successor["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(
-            predecessor
-        )
-        successor["predecessor_chain_sha256"] = MODULE.bundle_chain_sha256(
-            predecessor["id"], chain_bundles
-        )
-        handoff = next(
-            item for item in successor["artifact"] if item["family"] == "handoff"
-        )
+        successor["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(predecessor)
+        successor["predecessor_chain_sha256"] = MODULE.bundle_chain_sha256(predecessor["id"], chain_bundles)
+        handoff = next(item for item in successor["artifact"] if item["family"] == "handoff")
         path = self.repo / handoff["path"]
         payload = json.loads(path.read_text(encoding="utf-8"))
         payload["predecessor_bundle_id"] = predecessor["id"]
@@ -356,9 +334,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             artifact["sha256"] = hashlib.sha256(payload).hexdigest()
             artifact["bytes"] = len(payload)
         elif mutation == "review":
-            review = next(
-                item for item in archived["artifact"] if item["family"] == "review"
-            )
+            review = next(item for item in archived["artifact"] if item["family"] == "review")
             review["review_kinds"] = ["architect"]
 
         self.write_registry([archived, successor], ".agents/omx_artifacts.toml")
@@ -367,9 +343,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
     def commit_second_supersession(self, successor: dict[str, Any]) -> None:
         registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
-        current = next(
-            item for item in registry["bundle"] if item["status"] == "current"
-        )
+        current = next(item for item in registry["bundle"] if item["status"] == "current")
         archived = self.archived(current, successor["id"])
         self.bind_predecessor(
             successor,
@@ -383,9 +357,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             destination.write_bytes(source.read_bytes())
             source.unlink()
         previous = [item for item in registry["bundle"] if item["id"] != current["id"]]
-        self.write_registry(
-            [*previous, archived, successor], ".agents/omx_artifacts.toml"
-        )
+        self.write_registry([*previous, archived, successor], ".agents/omx_artifacts.toml")
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", "second supersession")
 
@@ -393,9 +365,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         bundle = self.bundle()
         registry = self.write_registry([bundle])
         self.assertEqual(len(MODULE.validate_registry(self.repo, registry)), 7)
-        (self.repo / ".omx/context/context.md").write_text(
-            "changed\n", encoding="utf-8"
-        )
+        (self.repo / ".omx/context/context.md").write_text("changed\n", encoding="utf-8")
         with self.assertRaisesRegex(MODULE.ValidationError, "hash or byte drift"):
             MODULE.validate_registry(self.repo, registry)
         bundle = self.bundle()
@@ -414,9 +384,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         for family, wrong_path in wrong_roots.items():
             with self.subTest(family=family):
                 bundle = self.bundle()
-                artifact = next(
-                    item for item in bundle["artifact"] if item["family"] == family
-                )
+                artifact = next(item for item in bundle["artifact"] if item["family"] == family)
                 source = self.repo / artifact["path"]
                 destination = self.repo / wrong_path
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -428,9 +396,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
     def test_contract_v2_native_root_check_is_independent_of_bundle_order(self) -> None:
         current = self.bundle()
-        context = next(
-            item for item in current["artifact"] if item["family"] == "context"
-        )
+        context = next(item for item in current["artifact"] if item["family"] == "context")
         wrong_path = ".omx/plans/context.md"
         (self.repo / context["path"]).replace(self.repo / wrong_path)
         context["path"] = wrong_path
@@ -442,9 +408,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         legacy["superseded_by"] = current["id"]
         for artifact in legacy["artifact"]:
             source = self.repo / artifact["path"]
-            artifact["path"] = (
-                f".omx/archive/accepted-bundles/{legacy['id']}/"
-                + artifact["native_path"].removeprefix(".omx/")
+            artifact["path"] = f".omx/archive/accepted-bundles/{legacy['id']}/" + artifact["native_path"].removeprefix(
+                ".omx/"
             )
             destination = self.repo / artifact["path"]
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -452,9 +417,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
         for bundles in ([current, legacy], [legacy, current]):
             with self.subTest(order=[bundle["id"] for bundle in bundles]):
-                with self.assertRaisesRegex(
-                    MODULE.ValidationError, "invalid native role path"
-                ):
+                with self.assertRaisesRegex(MODULE.ValidationError, "invalid native role path"):
                     MODULE.validate_registry(self.repo, self.write_registry(bundles))
 
     def test_archived_contract_v2_family_keeps_native_root(self) -> None:
@@ -462,23 +425,15 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         successor = self.bundle("task-next", "next")
         self.commit_supersession(original, successor)
         registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
-        archived = next(
-            item for item in registry["bundle"] if item["status"] == "superseded"
-        )
-        context = next(
-            item for item in archived["artifact"] if item["family"] == "context"
-        )
+        archived = next(item for item in registry["bundle"] if item["status"] == "superseded")
+        context = next(item for item in archived["artifact"] if item["family"] == "context")
         source = self.repo / context["path"]
         context["native_path"] = ".omx/plans/context.md"
-        context["path"] = (
-            f".omx/archive/accepted-bundles/{archived['id']}/plans/context.md"
-        )
+        context["path"] = f".omx/archive/accepted-bundles/{archived['id']}/plans/context.md"
         destination = self.repo / context["path"]
         destination.parent.mkdir(parents=True, exist_ok=True)
         source.replace(destination)
-        current = next(
-            item for item in registry["bundle"] if item["status"] == "current"
-        )
+        current = next(item for item in registry["bundle"] if item["status"] == "current")
         self.bind_predecessor(current, archived)
 
         with self.assertRaisesRegex(MODULE.ValidationError, "invalid native role path"):
@@ -486,14 +441,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
     def test_repeated_non_specification_and_incomplete_review_fail(self) -> None:
         bundle = self.bundle()
-        bundle["artifact"].append(
-            self.artifact(".omx/plans/extra.md", "plan", "extra-plan")
-        )
+        bundle["artifact"].append(self.artifact(".omx/plans/extra.md", "plan", "extra-plan"))
         self.assert_invalid(bundle, "invalid repeated role families")
         bundle = self.bundle()
-        next(item for item in bundle["artifact"] if item["family"] == "review")[
-            "review_kinds"
-        ] = ["architect"]
+        next(item for item in bundle["artifact"] if item["family"] == "review")["review_kinds"] = ["architect"]
         self.assert_invalid(bundle, r"Architect\+Critic")
 
     def test_acceptance_handoff_and_review_semantics_are_required(self) -> None:
@@ -548,9 +499,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ):
             with self.subTest(role=role):
                 bundle = self.bundle()
-                artifact = next(
-                    item for item in bundle["artifact"] if item["role"] == role
-                )
+                artifact = next(item for item in bundle["artifact"] if item["role"] == role)
                 path = self.repo / artifact["path"]
                 path.write_text(text, encoding="utf-8")
                 payload = path.read_bytes()
@@ -563,9 +512,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 self.assert_invalid(bundle, message)
 
         bundle = self.bundle()
-        acceptance = next(
-            item for item in bundle["artifact"] if item["role"] == "acceptance-record"
-        )
+        acceptance = next(item for item in bundle["artifact"] if item["role"] == "acceptance-record")
         acceptance_path = self.repo / acceptance["path"]
         duplicate = acceptance_path.read_text(encoding="utf-8").replace(
             '"status": "accepted"',
@@ -601,9 +548,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         bundle["predecessor_bundle_id"] = False
         bundle["predecessor_bundle_sha256"] = False
         bundle["predecessor_chain_sha256"] = False
-        handoff = next(
-            item for item in bundle["artifact"] if item["family"] == "handoff"
-        )
+        handoff = next(item for item in bundle["artifact"] if item["family"] == "handoff")
         handoff_path = self.repo / handoff["path"]
         payload = json.loads(handoff_path.read_text(encoding="utf-8"))
         payload["predecessor_bundle_id"] = False
@@ -618,14 +563,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
         registry = self.write_registry([self.bundle()])
         registry.write_text(
-            registry.read_text(encoding="utf-8").replace(
-                "schema_version = 2", "schema_version = true", 1
-            ),
+            registry.read_text(encoding="utf-8").replace("schema_version = 2", "schema_version = true", 1),
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "registry schema_version must be 1 or 2"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "registry schema_version must be 1 or 2"):
             MODULE._parse_registry(registry.read_bytes())
 
         for predecessor_id in ("ghost-bundle", "task-current"):
@@ -634,9 +575,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 bundle["predecessor_bundle_id"] = predecessor_id
                 bundle["predecessor_bundle_sha256"] = "0" * 64
                 bundle["predecessor_chain_sha256"] = "1" * 64
-                handoff = next(
-                    item for item in bundle["artifact"] if item["family"] == "handoff"
-                )
+                handoff = next(item for item in bundle["artifact"] if item["family"] == "handoff")
                 handoff_path = self.repo / handoff["path"]
                 payload = json.loads(handoff_path.read_text(encoding="utf-8"))
                 payload["predecessor_bundle_id"] = predecessor_id
@@ -670,9 +609,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ):
             with self.subTest(role=role, key=key):
                 bundle = self.bundle()
-                artifact = next(
-                    item for item in bundle["artifact"] if item["role"] == role
-                )
+                artifact = next(item for item in bundle["artifact"] if item["role"] == role)
                 path = self.repo / artifact["path"]
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 payload[key] = value
@@ -680,11 +617,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 content = path.read_bytes()
                 artifact["sha256"] = hashlib.sha256(content).hexdigest()
                 artifact["bytes"] = len(content)
-                bundle[
-                    "acceptance_sha256"
-                    if role == "acceptance-record"
-                    else "handoff_sha256"
-                ] = artifact["sha256"]
+                bundle["acceptance_sha256" if role == "acceptance-record" else "handoff_sha256"] = artifact["sha256"]
                 self.assert_invalid(bundle, message)
 
     def test_privacy_scan_covers_current_and_superseded_artifacts(self) -> None:
@@ -872,8 +805,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "absolute path",
             ),
             (
-                "note%253A%2520%257B%2522path%2522%253A%2522%255Cu002fhome"
-                "%255Cu002falice%255Cu002fsecret%2522%257D\n",
+                "note%253A%2520%257B%2522path%2522%253A%2522%255Cu002fhome%255Cu002falice%255Cu002fsecret%2522%257D\n",
                 "absolute path",
             ),
             (_fixture("-----BEGIN OPENSSH ", "PRIVATE KEY-----\n"), "private key"),
@@ -883,9 +815,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "GitHub token",
             ),
             (
-                _fixture(
-                    "https://example.invalid/ghp_", "abcdefghijklmnopqrstuvwxyz\n"
-                ),
+                _fixture("https://example.invalid/ghp_", "abcdefghijklmnopqrstuvwxyz\n"),
                 "GitHub token",
             ),
             (
@@ -1102,11 +1032,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         large_integer_json = '{"value":' + "9" * 5_000 + "}"
         for extension in (".md", ".csv", ".json"):
             bundle = self.bundle(f"large-integer-{extension[1:]}")
-            content = (
-                large_integer_json
-                if extension == ".json"
-                else f"note: {large_integer_json}\n"
-            )
+            content = large_integer_json if extension == ".json" else f"note: {large_integer_json}\n"
             bundle["artifact"].append(
                 self.artifact(
                     f".omx/specs/large-integer{extension}",
@@ -1115,9 +1041,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     text=content,
                 )
             )
-            self.assert_invalid(
-                bundle, "invalid registered JSON evidence|invalid nested JSON value"
-            )
+            self.assert_invalid(bundle, "invalid registered JSON evidence|invalid nested JSON value")
 
         bundle = self.bundle("embedded-json-attempts")
         bundle["artifact"].append(
@@ -1131,15 +1055,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assert_invalid(bundle, "nested JSON exceeds attempt limit")
 
         bundle = self.bundle("unicode-json")
-        acceptance = next(
-            item for item in bundle["artifact"] if item["role"] == "acceptance-record"
-        )
+        acceptance = next(item for item in bundle["artifact"] if item["role"] == "acceptance-record")
         acceptance_path = self.repo / acceptance["path"]
         acceptance_payload = json.loads(acceptance_path.read_text(encoding="utf-8"))
         acceptance_payload["accepted_scope"] = "UNICODE_PATH"
-        encoded = json.dumps(acceptance_payload).replace(
-            "UNICODE_PATH", r"\u002fhome\u002falice\u002fsecret"
-        )
+        encoded = json.dumps(acceptance_payload).replace("UNICODE_PATH", r"\u002fhome\u002falice\u002fsecret")
         acceptance_path.write_text(encoded + "\n", encoding="utf-8")
         payload = acceptance_path.read_bytes()
         acceptance["sha256"] = hashlib.sha256(payload).hexdigest()
@@ -1159,17 +1079,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             )
         ):
             bundle = self.bundle(f"nested-json-{index}")
-            acceptance = next(
-                item
-                for item in bundle["artifact"]
-                if item["role"] == "acceptance-record"
-            )
+            acceptance = next(item for item in bundle["artifact"] if item["role"] == "acceptance-record")
             acceptance_path = self.repo / acceptance["path"]
             acceptance_payload = json.loads(acceptance_path.read_text(encoding="utf-8"))
             acceptance_payload["accepted_scope"] = nested_json
-            acceptance_path.write_text(
-                json.dumps(acceptance_payload) + "\n", encoding="utf-8"
-            )
+            acceptance_path.write_text(json.dumps(acceptance_payload) + "\n", encoding="utf-8")
             payload = acceptance_path.read_bytes()
             acceptance["sha256"] = hashlib.sha256(payload).hexdigest()
             acceptance["bytes"] = len(payload)
@@ -1233,9 +1147,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         current = self.bundle("task-new", "successor")
         self.commit_supersession(old, current)
         registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
-        archived = next(
-            item for item in registry["bundle"] if item["status"] == "superseded"
-        )
+        archived = next(item for item in registry["bundle"] if item["status"] == "superseded")
         unsafe = self.repo / archived["artifact"][0]["path"]
         unsafe.write_text("machine /home/example/repo/file\n", encoding="utf-8")
         payload = unsafe.read_bytes()
@@ -1283,13 +1195,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {
-                            "note": "src/%252A%252Amodule.py%252A%252A%252Fhome"
-                            "%252Falice%252Fsecret"
-                        }
-                    )
-                    + "\n",
+                    json.dumps({"note": "src/%252A%252Amodule.py%252A%252A%252Fhome%252Falice%252Fsecret"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1303,10 +1209,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {"note": "_https://example.invalid/docs_/home/alice/secret"}
-                    )
-                    + "\n",
+                    json.dumps({"note": "_https://example.invalid/docs_/home/alice/secret"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1331,13 +1234,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {
-                            "note": "[x](https://example.invalid/src/*/module.py)"
-                            "-/home/alice/secret"
-                        }
-                    )
-                    + "\n",
+                    json.dumps({"note": "[x](https://example.invalid/src/*/module.py)-/home/alice/secret"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1351,10 +1248,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {"note": "[x](https://example.invalid/docs)_/home/alice/secret"}
-                    )
-                    + "\n",
+                    json.dumps({"note": "[x](https://example.invalid/docs)_/home/alice/secret"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1368,13 +1262,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {
-                            "note": "https://example.invalid/"
-                            "?next=%252Fhome%252Falice%252Fsecret"
-                        }
-                    )
-                    + "\n",
+                    json.dumps({"note": "https://example.invalid/?next=%252Fhome%252Falice%252Fsecret"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1410,10 +1298,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {"note": "https://example.invalid/?next=%252F%252Fmachine"}
-                    )
-                    + "\n",
+                    json.dumps({"note": "https://example.invalid/?next=%252F%252Fmachine"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1427,9 +1312,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 artifact["sha256"] = hashlib.sha256(payload).hexdigest()
                 artifact["bytes"] = len(payload)
                 with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
-                    MODULE.validate_registry(
-                        self.repo, self.write_registry(registry["bundle"])
-                    )
+                    MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
                 path.write_text(safe_text, encoding="utf-8")
                 payload = path.read_bytes()
                 artifact["sha256"] = hashlib.sha256(payload).hexdigest()
@@ -1445,8 +1328,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 safe_globs,
             ),
             "glob-json": (
-                json.dumps({"note": "https://outer.invalid/path/https://:443/x"})
-                + "\n",
+                json.dumps({"note": "https://outer.invalid/path/https://:443/x"}) + "\n",
                 safe_globs_json,
             ),
         }
@@ -1458,9 +1340,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             artifact["sha256"] = hashlib.sha256(payload).hexdigest()
             artifact["bytes"] = len(payload)
             with self.assertRaisesRegex(MODULE.ValidationError, "malformed HTTP URI"):
-                MODULE.validate_registry(
-                    self.repo, self.write_registry(registry["bundle"])
-                )
+                MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
             path.write_text(safe_text, encoding="utf-8")
             payload = path.read_bytes()
             artifact["sha256"] = hashlib.sha256(payload).hexdigest()
@@ -1512,13 +1392,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps(
-                        {
-                            "note": "[x](https://example.invalid/src/*/module.py)"
-                            "-**custom:**//opaque"
-                        }
-                    )
-                    + "\n",
+                    json.dumps({"note": "[x](https://example.invalid/src/*/module.py)-**custom:**//opaque"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1532,8 +1406,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     safe_globs,
                 ),
                 "glob-json": (
-                    json.dumps({"note": "https://example.invalid/path/custom://opaque"})
-                    + "\n",
+                    json.dumps({"note": "https://example.invalid/path/custom://opaque"}) + "\n",
                     safe_globs_json,
                 ),
             },
@@ -1554,12 +1427,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 payload = path.read_bytes()
                 artifact["sha256"] = hashlib.sha256(payload).hexdigest()
                 artifact["bytes"] = len(payload)
-                with self.assertRaisesRegex(
-                    MODULE.ValidationError, "unsupported URI scheme"
-                ):
-                    MODULE.validate_registry(
-                        self.repo, self.write_registry(registry["bundle"])
-                    )
+                with self.assertRaisesRegex(MODULE.ValidationError, "unsupported URI scheme"):
+                    MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
                 path.write_text(safe_text, encoding="utf-8")
                 payload = path.read_bytes()
                 artifact["sha256"] = hashlib.sha256(payload).hexdigest()
@@ -1584,13 +1453,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             "non-path syntax",
             contract_version=2,
         )
-        MODULE._scan_text(
-            "./relative ../parent\n", "relative paths", contract_version=2
-        )
+        MODULE._scan_text("./relative ../parent\n", "relative paths", contract_version=2)
         MODULE._scan_text("historical /tmp reference\n", "legacy", contract_version=1)
-        MODULE._scan_text(
-            "legacy <bundle-id> placeholder\n", "legacy", contract_version=1
-        )
+        MODULE._scan_text("legacy <bundle-id> placeholder\n", "legacy", contract_version=1)
         for legacy in (
             "C:/Users/alice/project/file.txt",
             "\\\\server\\share\\project\\file.txt",
@@ -1619,9 +1484,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 registry = self.write_registry([self.bundle()])
-                text = registry.read_text(encoding="utf-8").replace(
-                    "[[bundle]]\n", f"[[bundle]]\n{insertion}", 1
-                )
+                text = registry.read_text(encoding="utf-8").replace("[[bundle]]\n", f"[[bundle]]\n{insertion}", 1)
                 registry.write_text(text, encoding="utf-8")
                 with self.assertRaisesRegex(MODULE.ValidationError, message):
                     MODULE.load_registry(registry)
@@ -1651,9 +1514,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         bundle = self.bundle()
         bundle["artifact"][0]["review_kinds"] = ["architect"]
         registry = self.write_registry([bundle])
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "only review artifacts may declare review_kinds"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "only review artifacts may declare review_kinds"):
             MODULE.load_registry(registry)
 
         for old, new, message in (
@@ -1685,16 +1546,12 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ValidationError, "invalid UTF-8 registry"):
             MODULE._parse_registry(b"\xff")
 
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "registry exceeds byte limit"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "registry exceeds byte limit"):
             MODULE._parse_registry(b"x" * (MODULE.MAX_REGISTRY_BYTES + 1))
 
         oversized_registry = self.repo / "oversized-registry.toml"
         oversized_registry.write_bytes(b"x" * (MODULE.MAX_REGISTRY_BYTES + 1))
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "registry exceeds byte limit"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "registry exceeds byte limit"):
             MODULE.load_registry(oversized_registry)
 
         symlink_target = self.write_registry([self.bundle("symlink-registry")])
@@ -1723,9 +1580,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assert_invalid(bundle, "invalid Unicode")
 
         bundle = self.bundle("nested-handoff-role")
-        handoff = next(
-            item for item in bundle["artifact"] if item["family"] == "handoff"
-        )
+        handoff = next(item for item in bundle["artifact"] if item["family"] == "handoff")
         handoff_path = self.repo / handoff["path"]
         handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
         handoff_payload["roles"][0] = ["context"]
@@ -1771,9 +1626,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             predecessor = bundle_id
         bounded = dict(list(bundles.items())[:200])
         original_digest = MODULE.bundle_content_sha256
-        with patch.object(
-            MODULE, "bundle_content_sha256", wraps=original_digest
-        ) as digest:
+        with patch.object(MODULE, "bundle_content_sha256", wraps=original_digest) as digest:
             self.assertEqual(len(MODULE._bundle_chain_digests(bounded)), len(bounded))
             self.assertEqual(digest.call_count, len(bounded))
         with self.assertRaisesRegex(MODULE.ValidationError, "chain exceeds limit"):
@@ -1790,18 +1643,14 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.ValidationError, "artifact-count limit"):
                 MODULE._parse_registry(payload)
         with patch.object(MODULE, "MAX_REGISTRY_ARTIFACTS", 0):
-            with self.assertRaisesRegex(
-                MODULE.ValidationError, "total artifact-count limit"
-            ):
+            with self.assertRaisesRegex(MODULE.ValidationError, "total artifact-count limit"):
                 MODULE._parse_registry(payload)
 
     def test_historical_registry_byte_limit_is_checked_before_git_show(self) -> None:
         bundle = self.bundle()
         self.commit_registry(bundle, "accepted base")
         with patch.object(MODULE, "MAX_REGISTRY_BYTES", 1):
-            with self.assertRaisesRegex(
-                MODULE.ValidationError, "historical registry exceeds byte limit"
-            ):
+            with self.assertRaisesRegex(MODULE.ValidationError, "historical registry exceeds byte limit"):
                 MODULE._previous_registry(self.repo, "HEAD")
 
     def test_unregistered_tracked_artifact_fails(self) -> None:
@@ -1809,22 +1658,29 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.stage_registry(bundle)
         MODULE.validate_tracked(
             self.repo,
-            MODULE.validate_registry(
-                self.repo, self.repo / ".agents/omx_artifacts.toml"
-            ),
+            MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml"),
         )
         extra = self.repo / ".omx/plans/unregistered.md"
         extra.write_text("unregistered\n", encoding="utf-8")
         self.git("add", "-f", ".omx/plans/unregistered.md")
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "tracked OMX membership differs"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "tracked OMX membership differs"):
             MODULE.validate_tracked(
                 self.repo,
-                MODULE.validate_registry(
-                    self.repo, self.repo / ".agents/omx_artifacts.toml"
-                ),
+                MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml"),
             )
+
+    def test_tracked_membership_preserves_control_characters(self) -> None:
+        for separator in ("\t", "\n"):
+            with self.subTest(separator=repr(separator)):
+                relative = f".omx/context/a{separator}b.md"
+                path = self.repo / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("evidence\n", encoding="utf-8")
+                self.git("add", "-f", "--", relative)
+
+                MODULE.validate_tracked(self.repo, {relative})
+
+                self.git("rm", "-f", "--", relative)
 
     def test_nonexistent_and_nonancestor_baselines_fail(self) -> None:
         bundle = self.bundle()
@@ -1847,9 +1703,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     target = self.repo / bundle["artifact"][0]["path"]
                     target.write_text("mutated accepted evidence\n", encoding="utf-8")
                     payload = target.read_bytes()
-                    bundle["artifact"][0]["sha256"] = hashlib.sha256(
-                        payload
-                    ).hexdigest()
+                    bundle["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
                     bundle["artifact"][0]["bytes"] = len(payload)
                 else:
                     bundle["id"] = "replacement-current"
@@ -1858,9 +1712,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                         ("acceptance-record", "acceptance_sha256"),
                         ("independent-review", None),
                     ):
-                        artifact = next(
-                            item for item in bundle["artifact"] if item["role"] == role
-                        )
+                        artifact = next(item for item in bundle["artifact"] if item["role"] == role)
                         target = self.repo / artifact["path"]
                         identity = json.loads(target.read_text(encoding="utf-8"))
                         identity["bundle_id"] = bundle["id"]
@@ -1873,12 +1725,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                             bundle[bundle_key] = artifact["sha256"]
                 self.commit_registry(bundle, change)
                 with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
-                    errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                        repo_root=self.repo, validator_path=SCRIPT
-                    )
-                self.assertRegex(
-                    errors[0], "accepted bundle mutated|registered bundle removed"
-                )
+                    errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
+                self.assertRegex(errors[0], "accepted bundle mutated|registered bundle removed")
                 self.git("checkout", "-q", "main")
 
     def test_history_backed_valid_supersession(self) -> None:
@@ -1891,9 +1739,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
         with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
             self.assertEqual(
-                MEMORY_MODULE.check_registered_omx_artifacts(
-                    repo_root=self.repo, validator_path=SCRIPT
-                ),
+                MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT),
                 [],
             )
 
@@ -1917,9 +1763,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertRegex(result.stderr, "accepted bundle mutated")
-        self.assertNotIn(
-            "omx-artifact-history-", self.git("worktree", "list", "--porcelain").stdout
-        )
+        self.assertNotIn("omx-artifact-history-", self.git("worktree", "list", "--porcelain").stdout)
 
     def test_full_history_rejects_restored_registry_symlinks(self) -> None:
         bundle = self.bundle("task-current")
@@ -1949,9 +1793,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 result = self.run_validator(previous)
 
                 self.assertNotEqual(result.returncode, 0)
-                self.assertRegex(
-                    result.stderr, "historical registry must be a regular file"
-                )
+                self.assertRegex(result.stderr, "historical registry must be a regular file")
 
     def test_full_history_accepts_valid_multi_commit_successor_chain(self) -> None:
         first = self.bundle("task-first")
@@ -2007,9 +1849,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         result = self.run_validator(previous)
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertRegex(
-            result.stderr, "registry-free OMX payload changed after previous_ref"
-        )
+        self.assertRegex(result.stderr, "registry-free OMX payload changed after previous_ref")
 
     def test_full_history_requires_previous_ref_to_ancestor_head(self) -> None:
         self.commit_registry(self.bundle("task-current"), "accepted registry")
@@ -2068,9 +1908,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         result = self.run_validator(previous)
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertRegex(
-            result.stderr, "registry-free OMX payload changed after previous_ref"
-        )
+        self.assertRegex(result.stderr, "registry-free OMX payload changed after previous_ref")
 
     def test_pr_history_uses_merge_base_when_base_branch_advances(self) -> None:
         fork = self.git("rev-parse", "HEAD").stdout.strip()
@@ -2107,9 +1945,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         merge_base_result = self.run_validator(merge_base)
 
         self.assertNotEqual(base_tip_result.returncode, 0)
-        self.assertRegex(
-            base_tip_result.stderr, "previous_ref must be an ancestor of HEAD"
-        )
+        self.assertRegex(base_tip_result.stderr, "previous_ref must be an ancestor of HEAD")
         self.assertNotEqual(merge_base_result.returncode, 0)
         self.assertRegex(
             merge_base_result.stderr,
@@ -2122,9 +1958,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("config", "filter.lfs.smudge", "cat")
         self.git("config", "filter.lfs.process", "")
         self.git("config", "filter.lfs.required", "false")
-        (self.repo / ".gitattributes").write_text(
-            ".omx/** filter=lfs\n", encoding="utf-8"
-        )
+        (self.repo / ".gitattributes").write_text(".omx/** filter=lfs\n", encoding="utf-8")
         self.commit_registry(bundle, "accepted registry")
         previous = self.git("rev-parse", "HEAD").stdout.strip()
         (self.repo / "README.md").write_text("next snapshot\n", encoding="utf-8")
@@ -2142,9 +1976,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         artifact = bundle["artifact"][0]
         target = self.repo / artifact["path"]
         target.write_text(
-            "version https://git-lfs.github.com/spec/v1\n"
-            f"oid sha256:{'0' * 64}\n"
-            "size 123\n",
+            f"version https://git-lfs.github.com/spec/v1\noid sha256:{'0' * 64}\nsize 123\n",
             encoding="utf-8",
         )
         payload = target.read_bytes()
@@ -2176,9 +2008,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.commit_supersession(original, successor)
 
         with self.assertRaisesRegex(MODULE.ValidationError, "LFS pointers"):
-            MODULE.validate_registry(
-                self.repo, self.repo / ".agents/omx_artifacts.toml"
-            )
+            MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml")
 
     def test_full_history_rejects_restored_registry_removal(self) -> None:
         bundle = self.bundle("task-current")
@@ -2196,9 +2026,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         result = self.run_validator(previous)
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertRegex(
-            result.stderr, "accepted OMX artifact registry must not disappear"
-        )
+        self.assertRegex(result.stderr, "accepted OMX artifact registry must not disappear")
 
     def test_semantic_rollback_is_a_new_successor_chain(self) -> None:
         first = self.bundle("task-first")
@@ -2221,13 +2049,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         successor = self.bundle("task-new", "successor")
         self.commit_supersession(original, successor)
         registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
-        current = next(
-            item for item in registry["bundle"] if item["status"] == "current"
-        )
+        current = next(item for item in registry["bundle"] if item["status"] == "current")
         current["predecessor_bundle_sha256"] = "0" * 64
-        handoff = next(
-            item for item in current["artifact"] if item["family"] == "handoff"
-        )
+        handoff = next(item for item in current["artifact"] if item["family"] == "handoff")
         handoff_path = self.repo / handoff["path"]
         payload = json.loads(handoff_path.read_text(encoding="utf-8"))
         payload["predecessor_bundle_sha256"] = "0" * 64
@@ -2238,9 +2062,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         current["handoff_sha256"] = handoff["sha256"]
         self.write_registry(registry["bundle"], ".agents/omx_artifacts.toml")
         with self.assertRaisesRegex(MODULE.ValidationError, "content digest drift"):
-            MODULE.validate_registry(
-                self.repo, self.repo / ".agents/omx_artifacts.toml"
-            )
+            MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml")
 
     def test_contract_v2_cannot_downgrade_to_v1(self) -> None:
         original = self.bundle("task-old")
@@ -2249,9 +2071,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.commit_supersession(original, successor)
         registry_path = self.repo / ".agents/omx_artifacts.toml"
         registry = MODULE.load_registry(registry_path)
-        current = next(
-            item for item in registry["bundle"] if item["status"] == "current"
-        )
+        current = next(item for item in registry["bundle"] if item["status"] == "current")
         current.pop("contract_version")
         current.pop("predecessor_bundle_sha256")
         current.pop("predecessor_chain_sha256")
@@ -2260,13 +2080,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             ".agents/omx_artifacts.toml",
             schema_version=1,
         )
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "live registry schema_version must be 2"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "live registry schema_version must be 2"):
             MODULE.validate_registry(self.repo, registry_path)
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "live registry schema_version must be 2"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "live registry schema_version must be 2"):
             MODULE.validate_transition(
                 {"schema_version": 2, "bundle": []},
                 MODULE._parse_registry(registry_path.read_bytes()),
@@ -2293,17 +2109,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         first_artifact["sha256"] = hashlib.sha256(content).hexdigest()
         first_artifact["bytes"] = len(content)
 
-        second_archived["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(
-            first_archived
-        )
-        second_handoff = next(
-            item for item in second_archived["artifact"] if item["family"] == "handoff"
-        )
+        second_archived["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(first_archived)
+        second_handoff = next(item for item in second_archived["artifact"] if item["family"] == "handoff")
         handoff_path = self.repo / second_handoff["path"]
         handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
-        handoff["predecessor_bundle_sha256"] = second_archived[
-            "predecessor_bundle_sha256"
-        ]
+        handoff["predecessor_bundle_sha256"] = second_archived["predecessor_bundle_sha256"]
         handoff_path.write_text(json.dumps(handoff) + "\n", encoding="utf-8")
         content = handoff_path.read_bytes()
         second_handoff["sha256"] = hashlib.sha256(content).hexdigest()
@@ -2339,9 +2149,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", "legacy second")
 
-        legacy_registry = MODULE._parse_registry(
-            (self.repo / ".agents/omx_artifacts.toml").read_bytes()
-        )
+        legacy_registry = MODULE._parse_registry((self.repo / ".agents/omx_artifacts.toml").read_bytes())
         third = self.bundle("task-third", "third")
         second_archived = self.archived(second, third["id"])
         self.bind_predecessor(
@@ -2368,9 +2176,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             ".agents/omx_artifacts.toml",
             schema_version=2,
         )
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "contract version downgrade"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "contract version downgrade"):
             MODULE.validate_registry(self.repo, registry_path)
         first_archived.pop("contract_version")
 
@@ -2396,9 +2202,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.commit_supersession(original, successor)
 
         tree = self.git("rev-parse", "HEAD^{tree}").stdout.strip()
-        squashed = self.git(
-            "commit-tree", tree, "-p", self.baseline, "-m", "squashed result"
-        ).stdout.strip()
+        squashed = self.git("commit-tree", tree, "-p", self.baseline, "-m", "squashed result").stdout.strip()
         self.git("branch", "-f", "squashed", squashed)
         self.git("checkout", "-q", "squashed")
         ancestor = subprocess.run(
@@ -2411,18 +2215,14 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
     def test_superseded_bundle_must_have_been_complete(self) -> None:
         original = self.bundle("task-old")
-        review = next(
-            item for item in original["artifact"] if item["family"] == "review"
-        )
+        review = next(item for item in original["artifact"] if item["family"] == "review")
         original["artifact"].remove(review)
         (self.repo / review["path"]).unlink()
         self.commit_registry(original, "invalid accepted base")
         successor = self.bundle("task-new", "successor")
         self.commit_supersession(original, successor)
         with self.assertRaisesRegex(MODULE.ValidationError, "role families differ"):
-            MODULE.validate_registry(
-                self.repo, self.repo / ".agents/omx_artifacts.toml"
-            )
+            MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml")
 
     def test_branch_history_omits_literal_secret_fixtures(self) -> None:
         previous = os.environ.get("OMX_ARTIFACT_PREVIOUS_REF") or "origin/main"
@@ -2465,9 +2265,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 successor = self.bundle("task-new", f"successor-{mutation}")
                 self.commit_supersession(original, successor, mutation)
                 with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
-                    errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                        repo_root=self.repo, validator_path=SCRIPT
-                    )
+                    errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
                 self.assertRegex(
                     errors[0],
                     "invalid or non-identical supersession|predecessor content digest drift|lacks Architect\\+Critic review",
@@ -2480,9 +2278,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.commit_registry(bundle, "bootstrap registry")
         with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
             self.assertEqual(
-                MEMORY_MODULE.check_registered_omx_artifacts(
-                    repo_root=self.repo, validator_path=SCRIPT
-                ),
+                MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT),
                 [],
             )
 
@@ -2494,9 +2290,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("rm", "-qr", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", "erase accepted evidence")
         with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertEqual(errors, ["accepted OMX artifact registry must not be removed"])
 
     def test_production_gate_rejects_symlinked_registry(self) -> None:
@@ -2511,13 +2305,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-qm", "replace registry with symlink")
         with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertRegex(errors[0], "registry must be a regular file")
-        with self.assertRaisesRegex(
-            MODULE.ValidationError, "historical registry must be a regular file"
-        ):
+        with self.assertRaisesRegex(MODULE.ValidationError, "historical registry must be a regular file"):
             MODULE._previous_registry(self.repo, "HEAD")
 
     def test_bootstrap_rejects_dangling_registry_symlink(self) -> None:
@@ -2529,9 +2319,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.git("add", ".agents/omx_artifacts.toml")
         self.git("commit", "-qm", "add dangling registry symlink")
         with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertEqual(errors, ["OMX artifact registry must be a regular file"])
 
     def test_local_only_snapshot_fallback_is_explicit(self) -> None:
@@ -2542,9 +2330,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             patch.dict(os.environ, LOCAL_TRANSITION_ENV),
             redirect_stdout(output),
         ):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertEqual(errors, [])
         self.assertIn("local-only snapshot validation", output.getvalue())
 
@@ -2558,9 +2344,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "OMX_ARTIFACT_PREVIOUS_REF": "missing",
             },
         ):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertRegex(errors[0], "hosted CI requires transition comparison")
 
     def test_explicit_invalid_local_ref_fails_closed(self) -> None:
@@ -2574,9 +2358,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "OMX_ARTIFACT_PREVIOUS_REF": "definitely-missing-ref",
             },
         ):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertRegex(errors[0], "explicit OMX artifact transition ref is invalid")
 
     def test_hosted_ci_uses_explicit_previous_sha_and_rejects_self(self) -> None:
@@ -2597,23 +2379,17 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "OMX_ARTIFACT_PREVIOUS_REF": previous,
             },
         ):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertRegex(errors[0], "accepted bundle mutated")
 
         with patch.dict(
             os.environ,
             {
                 "GITHUB_ACTIONS": "true",
-                "OMX_ARTIFACT_PREVIOUS_REF": self.git(
-                    "rev-parse", "HEAD"
-                ).stdout.strip(),
+                "OMX_ARTIFACT_PREVIOUS_REF": self.git("rev-parse", "HEAD").stdout.strip(),
             },
         ):
-            errors = MEMORY_MODULE.check_registered_omx_artifacts(
-                repo_root=self.repo, validator_path=SCRIPT
-            )
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(repo_root=self.repo, validator_path=SCRIPT)
         self.assertRegex(errors[0], "cannot use HEAD itself")
 
     def test_private_runtime_paths_are_never_tracked(self) -> None:
@@ -2650,16 +2426,12 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(len(errors), len(roots))
 
     def test_workflow_runs_lifecycle_checks_with_full_history(self) -> None:
-        workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text(
-            encoding="utf-8"
-        )
+        workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertRegex(
             workflow,
             r"uses: actions/checkout@v4\s+with:\s+fetch-depth: 0",
         )
-        self.assertIn(
-            "ref: ${{ github.event.pull_request.head.sha || github.sha }}", workflow
-        )
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha || github.sha }}", workflow)
         trigger_block = workflow.split("\npermissions:", maxsplit=1)[0]
         self.assertRegex(
             trigger_block,
@@ -2676,22 +2448,14 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             'echo "OMX_ARTIFACT_PREVIOUS_REF=${previous_ref}" >> "${GITHUB_ENV}"',
             workflow,
         )
-        self.assertNotRegex(
-            workflow, r"OMX_ARTIFACT_PREVIOUS_REF:\s*\$\{\{[^\n]+base\.sha"
-        )
+        self.assertNotRegex(workflow, r"OMX_ARTIFACT_PREVIOUS_REF:\s*\$\{\{[^\n]+base\.sha")
 
     def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
         registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"
         registry = MODULE.load_registry(registry_path)
         MODULE.validate_registry(REPO_ROOT, registry_path)
-        current = next(
-            item for item in registry["bundle"] if item["status"] == "current"
-        )
-        archived = next(
-            item
-            for item in registry["bundle"]
-            if item["id"] == current["predecessor_bundle_id"]
-        )
+        current = next(item for item in registry["bundle"] if item["status"] == "current")
+        archived = next(item for item in registry["bundle"] if item["id"] == current["predecessor_bundle_id"])
         self.assertEqual(current["predecessor_bundle_id"], archived["id"])
         self.assertEqual(
             current["predecessor_bundle_sha256"],
@@ -2699,15 +2463,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         self.assertEqual(
             current["predecessor_chain_sha256"],
-            MODULE.bundle_chain_sha256(
-                archived["id"], {item["id"]: item for item in registry["bundle"]}
-            ),
+            MODULE.bundle_chain_sha256(archived["id"], {item["id"]: item for item in registry["bundle"]}),
         )
 
         inventory_path = REPO_ROOT / next(
-            item["path"]
-            for item in current["artifact"]
-            if item["role"] == "path-inventory"
+            item["path"] for item in current["artifact"] if item["role"] == "path-inventory"
         )
         with inventory_path.open(newline="", encoding="utf-8") as stream:
             reader = csv.DictReader(stream)
@@ -2786,9 +2546,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             self.assertTrue(all(row[field].strip() for field in row))
 
         commit_inventory_path = REPO_ROOT / next(
-            item["path"]
-            for item in current["artifact"]
-            if item["role"] == "commit-inventory"
+            item["path"] for item in current["artifact"] if item["role"] == "commit-inventory"
         )
         with commit_inventory_path.open(newline="", encoding="utf-8") as stream:
             reader = csv.DictReader(stream)
@@ -2827,12 +2585,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         self.assertEqual(len(commit_inventory), 130)
         self.assertEqual([row["source"] for row in commit_inventory], expected_commits)
-        self.assertEqual(
-            [row["subject"] for row in commit_inventory], expected_subjects
-        )
-        self.assertEqual(
-            len({row["source"] for row in commit_inventory}), len(commit_inventory)
-        )
+        self.assertEqual([row["subject"] for row in commit_inventory], expected_subjects)
+        self.assertEqual(len({row["source"] for row in commit_inventory}), len(commit_inventory))
         for row in commit_inventory:
             self.assertEqual(row["type"], "commit")
             self.assertIn(row["final_state"], allowed_states)
@@ -2840,9 +2594,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             self.assertIn(row["disposition"], allowed_dispositions)
             self.assertTrue(all(row[field].strip() for field in row))
 
-        manifest_item = next(
-            item for item in current["artifact"] if item["role"] == "loc-manifest"
-        )
+        manifest_item = next(item for item in current["artifact"] if item["role"] == "loc-manifest")
         manifest = json.loads((REPO_ROOT / manifest_item["path"]).read_text())
         baseline = manifest["baseline_commit"]
         tracked = self.git_at(REPO_ROOT, "ls-tree", "-r", "--name-only", baseline)
@@ -2850,8 +2602,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         active = sorted(
             path
             for path in tracked
-            if self.matches(path, selection["active_include"])
-            and not self.matches(path, selection["active_exclude"])
+            if self.matches(path, selection["active_include"]) and not self.matches(path, selection["active_exclude"])
         )
         selected = {path: self.category_for(path, selection) for path in active}
         for rule in selection["supplemental_rules"]:
@@ -2860,9 +2611,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     selected.setdefault(path, rule["category"])
 
         expected = []
-        for path, category in sorted(
-            selected.items(), key=lambda item: (item[1], item[0])
-        ):
+        for path, category in sorted(selected.items(), key=lambda item: (item[1], item[0])):
             payload = subprocess.run(
                 ["git", "show", f"{baseline}:{path}"],
                 cwd=REPO_ROOT,
@@ -2881,9 +2630,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
     @staticmethod
     def git_at(repo: Path, *args: str) -> list[str]:
-        return subprocess.run(
-            ["git", *args], cwd=repo, check=True, capture_output=True, text=True
-        ).stdout.splitlines()
+        return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True).stdout.splitlines()
 
     @staticmethod
     def matches(path: str, patterns: list[str]) -> bool:
@@ -2908,22 +2655,16 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             categories[category] = {
                 "file_count": len(selected),
                 "physical_lines": sum(row["physical_lines"] for row in selected),
-                "paths_sha256": hashlib.sha256(
-                    "".join(f"{row['path']}\n" for row in selected).encode()
-                ).hexdigest(),
+                "paths_sha256": hashlib.sha256("".join(f"{row['path']}\n" for row in selected).encode()).hexdigest(),
                 "path_lines_sha256": hashlib.sha256(
-                    "".join(
-                        f"{row['path']}\t{row['physical_lines']}\n" for row in selected
-                    ).encode()
+                    "".join(f"{row['path']}\t{row['physical_lines']}\n" for row in selected).encode()
                 ).hexdigest(),
             }
         active_set = set(active)
         return {
             "active_scaffold": {
                 "file_count": len(active),
-                "physical_lines": sum(
-                    row["physical_lines"] for row in rows if row["path"] in active_set
-                ),
+                "physical_lines": sum(row["physical_lines"] for row in rows if row["path"] in active_set),
             },
             "categories": categories,
         }

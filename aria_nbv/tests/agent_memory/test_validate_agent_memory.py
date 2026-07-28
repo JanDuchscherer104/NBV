@@ -424,9 +424,12 @@ def test_connector_keeps_write_targets_clause_local(
 @pytest.mark.parametrize(
     "claim",
     [
+        "DECISIONS is legacy migration evidence. Write only DECISIONS.",
         "Do not update README—write DECISIONS instead.",
         "Do not update README, only write DECISIONS.",
         "Do not only update README, write DECISIONS.",
+        "Do not update README, write DECISIONS.",
+        "Do not update README - write DECISIONS.",
     ],
 )
 def test_positive_legacy_write_after_scope_reset_is_rejected(tmp_path: Path, suffix: str, claim: str) -> None:

@@ -139,6 +139,15 @@ WRITE_SCOPE_RESET = re.compile(
     r"because|although|while|whereas)\b[\s,]*)",
     re.IGNORECASE,
 )
+CLAUSE_SCOPE_RESET = re.compile(
+    r"(?:\b(?:but|then|however|instead|yet|nevertheless|nonetheless|still|"
+    r"because|although|while|whereas)\b[\s,]*)",
+    re.IGNORECASE,
+)
+WRITE_ACTION_BOUNDARY = re.compile(
+    r"(?:,\s*|\s[-—–]\s*)(?=(?:add|append|edit|maintain|persist|record|save|store|update|write)\b)",
+    re.IGNORECASE,
+)
 NEGATED_OWNER_COMPLEMENT = re.compile(
     r"\b(?:do\s+not|don't|never)\s+"
     r"(?:(?!\b(?:is|are|owns?|remains?|becomes?|serves)\b)[^.;!?]){0,240}"
@@ -512,7 +521,7 @@ def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
     ]
     connectors = [
         match.span()
-        for match in WRITE_SCOPE_RESET.finditer(text)
+        for match in (*CLAUSE_SCOPE_RESET.finditer(text), *WRITE_ACTION_BOUNDARY.finditer(text))
         if not any(is_protected(index) for index in range(*match.span()))
     ]
     starts.extend(end for _, end in connectors if end <= offset)
