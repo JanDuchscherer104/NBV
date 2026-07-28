@@ -1,37 +1,23 @@
 """Gauge-invariant V0 scorer for target-conditioned finite-horizon rollouts.
 
-The scorer maps :class:`aria_nbv.data_handling.qh.QhActorInputs` to one value
-per finite-shell candidate without learning the arbitrary world gauge.
-Semidense world points and the admitted world-from-object target pose are
-converted with the explicit persisted world-from-rollout-root pose. The target
-pose translation is the sole learned target-center authority. Candidate and
-history poses already persisted relative to that rollout root remain in the
-same frame. For each candidate, the target center is additionally expressed in
-the candidate camera frame, where metres, range, and the repository-owned
-shell-descriptor forward direction provide the minimal direct target relation.
+Inputs are a private structural view of :class:`aria_nbv.data_handling.qh.QhInputs`.
+The scorer maps each finite-shell candidate without learning the arbitrary world gauge.
+Semidense/target poses use the persisted rollout root; candidate/history poses
+stay in that frame, with target relations also expressed per camera.
 
-The current admitted horizon is two, so selected history is intentionally a
-set-valued summary without temporal positions. Candidate row ids, target
-semantic/instance ids, storage lineage, hard action masks, and
-selected-transition supervision are never learned features. Actor-input and
-mask ownership belongs to :mod:`aria_nbv.data_handling.qh`; Double-Q target
-construction and optimization belong to
-:class:`aria_nbv.lightning.qh_module.QhLightningModule`.
+The two-step horizon uses set-valued history; audit ids, lineage, masks, and
+supervision are never learned. Actor/mask ownership stays in
+:mod:`aria_nbv.data_handling.qh`; Double-Q training belongs to :class:`aria_nbv.lightning.qh_module.QhLightningModule`.
 
-See the [EFM3D ``PoseTW`` implementation](https://github.com/facebookresearch/efm3d/blob/main/efm3d/aria/pose.py)
-for the ``T_target_source`` transform convention and
-[Double DQN](https://arxiv.org/abs/1509.06461) for the separate action-selection
-and evaluation objective.
-
-This module provides the V0 scorer and its strict config factory. It owns only
-actor-visible feature construction and permutation-equivariant candidate
-scoring; storage joins, padding masks, and fitted-Q optimization remain at
-their dedicated seams.
+See [EFM3D ``PoseTW``](https://github.com/facebookresearch/efm3d/blob/main/efm3d/aria/pose.py)
+for transform conventions and [Double DQN](https://arxiv.org/abs/1509.06461)
+for the action-selection/evaluation split. This module owns actor-visible
+feature construction and permutation-equivariant scoring, not storage joins.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Protocol, Self
 
 import torch
 from efm3d.aria.pose import PoseTW
@@ -43,7 +29,21 @@ from ...utils import TargetConfig
 from ..encoders.shell_descriptor import encode_shell_pose_descriptor
 
 if TYPE_CHECKING:
-    from ...data_handling.qh import QhActorInputs
+    from ...data_handling.raw.views import VinSnippetView
+
+
+class _FiniteHorizonScorerInputs(Protocol):
+    vin_snippet: "VinSnippetView"
+    root_pose_world: Tensor
+    target_extents: Tensor
+    target_pose_world_object: Tensor
+    candidate_pose_relative_root: Tensor
+    candidate_position_id: Tensor
+    actor_action_mask: Tensor
+    history_pose_relative_root: Tensor
+    history_position_id: Tensor
+    history_mask: Tensor
+    remaining_budget: Tensor
 
 
 class MultiStepCandidateScorerConfig(TargetConfig["MultiStepCandidateScorer"]):
@@ -146,7 +146,7 @@ class MultiStepCandidateScorer(nn.Module):
         self.output_norm = nn.LayerNorm(width)
         self.value_head = nn.Linear(width, 1)
 
-    def forward(self, actor: "QhActorInputs") -> Float[Tensor, "B N"]:
+    def forward(self, actor: _FiniteHorizonScorerInputs) -> Float[Tensor, "B N"]:
         """Return finite candidate values aligned to the padded shell.
 
         Args:
@@ -249,7 +249,7 @@ def _mlp(input_dim: int, hidden_dim: int, output_dim: int) -> nn.Sequential:
     return nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, output_dim))
 
 
-def _scene_features(actor: "QhActorInputs") -> Tensor:
+def _scene_features(actor: _FiniteHorizonScorerInputs) -> Tensor:
     r"""Summarize semidense evidence in the persisted rollout-reference frame.
 
     The persisted ``root_pose_world`` is $T_{world\leftarrow root}$. Its inverse
@@ -280,7 +280,7 @@ def _scene_features(actor: "QhActorInputs") -> Tensor:
     )
 
 
-def _validate_actor(actor: "QhActorInputs", *, position_family_count: int) -> None:
+def _validate_actor(actor: _FiniteHorizonScorerInputs, *, position_family_count: int) -> None:
     """Fail closed on malformed shapes and every valid learned feature."""
 
     if actor.candidate_pose_relative_root.ndim != 3 or actor.candidate_pose_relative_root.shape[-1] != 12:
