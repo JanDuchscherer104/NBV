@@ -224,6 +224,81 @@ def test_toml_array_values_are_classified_as_a_unit(tmp_path: Path, body: str, e
     assert len(errors) == expected_errors
 
 
+@pytest.mark.parametrize(
+    ("suffix", "body"),
+    [
+        (
+            ".toml",
+            'notes = [\n  "DECISIONS is legacy migration evidence and not current truth.",\n'
+            '  "The active Typst thesis is authoritative.",\n]\n',
+        ),
+        (
+            ".typ",
+            "#let notes = [\n"
+            "  [DECISIONS is legacy migration evidence and not current truth.]\n"
+            "  [The active Typst thesis is authoritative.]\n"
+            "]\n",
+        ),
+    ],
+)
+def test_logical_record_allows_an_explicit_different_owner(tmp_path: Path, suffix: str, body: str) -> None:
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body"),
+    [
+        (
+            ".md",
+            "DECISIONS is legacy migration evidence; write DECISIONS.\n",
+        ),
+        (
+            ".toml",
+            'notes = ["DECISIONS is legacy migration evidence", "write DECISIONS."]\n',
+        ),
+        (
+            ".typ",
+            "#let notes = [DECISIONS is legacy migration evidence; write DECISIONS.]\n",
+        ),
+    ],
+)
+def test_direct_legacy_alias_write_routes_are_rejected(tmp_path: Path, suffix: str, body: str) -> None:
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "memory/state/DECISIONS.md is the current owner.",
+        "state/PROJECT_STATE.md is the current owner.",
+        "DECISIONS is legacy migration evidence; store DECISIONS.",
+        "DECISIONS is legacy migration evidence; persist DECISIONS.",
+        "DECISIONS is legacy migration evidence; append to DECISIONS.",
+    ],
+)
+def test_short_paths_and_additional_write_verbs_are_rejected(tmp_path: Path, claim: str) -> None:
+    path = tmp_path / "owner.md"
+    path.write_text(f"{claim}\n", encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+def test_domain_canonical_state_is_not_a_legacy_journal_alias(tmp_path: Path) -> None:
+    path = tmp_path / "model.typ"
+    path.write_text(
+        "The canonical state separates immutable context from dynamic memory.\n",
+        encoding="utf-8",
+    )
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
 def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / ".agents" / "missing.md"
     path.parent.mkdir(parents=True)

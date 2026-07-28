@@ -109,13 +109,14 @@ FORBIDDEN_OMX_RUNTIME_PREFIXES = (
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 LEGACY_STATE_MENTION = re.compile(
     r"(?:\.agents/memory/state(?:/[A-Z_]+\.md)?|"
+    r"(?:memory/)?state/(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
     r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
-    r"\b(?:canonical memory|canonical state|memory state|decision journals?|state journals?)\b)",
+    r"\b(?:canonical memory|memory state|decision journals?|state journals?)\b)",
     re.IGNORECASE,
 )
 LEGACY_STATE_BARE_NAME = re.compile(
-    r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)"
-    r"(?![A-Za-z0-9_/.])"
+    r"(?<![A-Za-z0-9_/])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)"
+    r"(?![A-Za-z0-9_/])"
 )
 LEGACY_STATE_MIGRATION_ONLY = (
     re.compile(r"\bmigration(?:-only)? evidence\b", re.IGNORECASE),
@@ -137,9 +138,39 @@ LEGACY_STATE_NEGATED_OWNER = re.compile(
 LEGACY_STATE_OWNER_ASSERTION = re.compile(
     r"\b(?:authoritative|canonical|current owner|current[- ]truth|source of truth|"
     r"current decisions?|current contract)\b|"
-    r"\b(?:add|update|write|record|maintain)\b.{0,120}\b(?:facts?|it|journal|state|truth)\b",
+    r"\b(?:add|append|edit|maintain|persist|record|save|store|update|write)\b"
+    r".{0,120}\b(?:facts?|it|journal|state|truth)\b",
     re.IGNORECASE,
 )
+LEGACY_STATE_WRITE_VERB = re.compile(
+    r"\b(?:add|append|edit|maintain|persist|record|save|store|update|write)\b",
+    re.IGNORECASE,
+)
+EXPLICIT_OWNER_SUBJECT = re.compile(
+    r"(?P<subject>(?:the\s+)?[a-z][a-z0-9_./-]*"
+    r"(?:\s+[a-z][a-z0-9_./-]*){0,7})\s+"
+    r"(?:is|are|owns?|remains?|becomes?|serves(?:\s+as)?)(?:\s+the)?$",
+    re.IGNORECASE,
+)
+EXPLICIT_USE_SUBJECT = re.compile(
+    r"\buse\s+(?P<subject>(?:the\s+)?[a-z][a-z0-9_./-]*"
+    r"(?:\s+[a-z][a-z0-9_./-]*){0,7})\s+as(?:\s+the)?$",
+    re.IGNORECASE,
+)
+ANAPHORIC_OWNER_SUBJECTS = {
+    "and",
+    "but",
+    "it",
+    "journal",
+    "journals",
+    "state",
+    "that",
+    "these",
+    "they",
+    "this",
+    "those",
+    "which",
+}
 LEGACY_STATE_SCAN_SUFFIXES = {
     ".json",
     ".md",
@@ -453,9 +484,42 @@ def _has_legacy_state_mention(text: str) -> bool:
     return bool(_legacy_state_mentions(text))
 
 
-def _strip_legacy_state_mentions(text: str) -> str:
-    text = LEGACY_STATE_MENTION.sub("", text)
-    return LEGACY_STATE_BARE_NAME.sub("", text)
+def _explicit_different_owner(prefix: str) -> bool:
+    subject_match = EXPLICIT_OWNER_SUBJECT.search(
+        prefix
+    ) or EXPLICIT_USE_SUBJECT.search(prefix)
+    if subject_match is None:
+        return False
+    subject = subject_match.group("subject").strip()
+    words = subject.split()
+    return bool(
+        words
+        and words[-1] not in ANAPHORIC_OWNER_SUBJECTS
+        and not _has_legacy_state_mention(subject)
+    )
+
+
+def _has_legacy_owner_assertion(text: str) -> bool:
+    """Return whether an owner assertion refers to the legacy mention."""
+
+    assertion_text = LEGACY_STATE_NEGATED_OWNER.sub("", text)
+    for write_verb in LEGACY_STATE_WRITE_VERB.finditer(assertion_text):
+        if _has_legacy_state_mention(
+            assertion_text[write_verb.start() : write_verb.end() + 120]
+        ):
+            return True
+    for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
+        clause_start = max(
+            assertion_text.rfind(delimiter, 0, assertion.start())
+            for delimiter in (".", ";", "!", "?")
+        )
+        clause = assertion_text[clause_start + 1 : assertion.end()]
+        if _has_legacy_state_mention(clause):
+            return True
+        prefix = clause[: assertion.start() - clause_start - 1].strip()
+        if not _explicit_different_owner(prefix):
+            return True
+    return False
 
 
 def _line_number(text: str, offset: int) -> int:
@@ -478,7 +542,7 @@ def _toml_string_records(value: Any) -> Iterator[str]:
     elif isinstance(value, list):
         strings = [entry for entry in value if isinstance(entry, str)]
         if strings:
-            yield " ".join(strings)
+            yield " . ".join(strings)
         for entry in value:
             if not isinstance(entry, str):
                 yield from _toml_string_records(entry)
@@ -659,16 +723,11 @@ def check_legacy_state_owner_claims(
             )
             continue
         for line_number, context in records:
-            normalized = " ".join(context.lower().split())
+            normalized = " ".join(context.split())
             migration_only = any(
                 pattern.search(normalized) for pattern in LEGACY_STATE_MIGRATION_ONLY
             )
-            assertion_text = _strip_legacy_state_mentions(
-                LEGACY_STATE_NEGATED_OWNER.sub("", normalized)
-            )
-            if migration_only and not LEGACY_STATE_OWNER_ASSERTION.search(
-                assertion_text
-            ):
+            if migration_only and not _has_legacy_owner_assertion(normalized):
                 continue
             errors.append(
                 f"{tracked_path}:{line_number}: legacy state journal route lacks "

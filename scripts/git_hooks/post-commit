@@ -10,13 +10,13 @@ changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only H
 [ -n "$changed" ] || exit 0
 
 case "$changed" in
-  *.agents/memory/README.md*|*.agents/references/source_order.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*docs/contents/*|*docs/typst/*|*docs/references.bib*|*aria_nbv/aria_nbv/*)
+  *.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*docs/contents/*|*docs/typst/*|*docs/references.bib*|*aria_nbv/aria_nbv/*)
     scripts/kg/auto_refresh.sh
     ;;
 esac
 
 case "$changed" in
-  *.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*.agents/memory/README.md*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)
+  *.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)
     export GRAPHIFY_CHANGED="$changed"
     PYTHON=${PYTHON_INTERPRETER:-}
     if [ -z "$PYTHON" ] && [ -f graphify-out/.graphify_python ]; then

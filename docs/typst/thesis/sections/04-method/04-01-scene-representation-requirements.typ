@@ -30,7 +30,7 @@ Three boundaries are invariant. Invalidity is a hard mask with versioned reason 
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017],
   source: "docs/contents/theory/efm3d_scene_embeddings.qmd; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [selected-observation reader, deterministic fusion, source-dropout tests, and held-out target-RRI ranking],
-)[The state contract separates immutable root context from a causal dynamic memory. Particular scene carriers are promoted only when they preserve the information boundary and improve target-conditioned decisions.]
+)[The canonical state separates immutable root context from a causal dynamic memory. Particular scene carriers are promoted only when they preserve the information boundary and improve target-conditioned decisions.]
 
 ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$ and requested residual horizon $h$:
 
