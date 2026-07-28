@@ -23,12 +23,16 @@ the current scaffold map, and live PR metadata.
 ```bash
 python3 scripts/scaffold_review.py build \
   --corpus <private-corpus>/review/clusters.jsonl \
+  --items <private-owner-findings.jsonl> \
   --omx <selected-plan.md>
 ```
 
 The command writes a self-contained `index.html`, a local Quarto wrapper, and a
 source manifest under `.artifacts/scaffold-review/`. Open the HTML directly.
 Decisions remain in browser local storage until exported as JSON.
+The optional `--items` input contains explicit owner-authored findings; live PR
+metadata contributes observations only. Repo-local output is restricted to the
+ignored `.artifacts/` directory.
 
 ```bash
 python3 scripts/scaffold_review.py summarize scaffold-decisions-<digest>.json
