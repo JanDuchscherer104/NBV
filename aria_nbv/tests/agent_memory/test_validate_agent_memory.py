@@ -488,6 +488,72 @@ def test_negated_parallel_owner_instruction_is_not_a_legacy_owner_route(
     assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
 
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "DECISIONS is legacy migration evidence, not the source of truth.",
+        "DECISIONS is legacy migration evidence, not the current owner.",
+        "DECISIONS is legacy migration evidence, not an authoritative source.",
+    ],
+)
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_determiner_bearing_negated_owner_assertions_are_allowed(tmp_path: Path, suffix: str, claim: str) -> None:
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "connector",
+    ["because", "although", "while", "whereas", "since", "even though", ","],
+)
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_positive_owner_assertion_after_negated_unrelated_action_is_rejected(
+    tmp_path: Path, suffix: str, connector: str
+) -> None:
+    separator = f" {connector} " if connector != "," else ", "
+    claim = f"Do not update README{separator}DECISIONS is authoritative."
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "DECISIONS is legacy migration evidence. Do not treat DECISIONS as authoritative.",
+        "DECISIONS is legacy migration evidence. Do not make DECISIONS current truth.",
+        "DECISIONS is legacy migration evidence. Do not designate DECISIONS the current owner.",
+    ],
+)
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_explicit_negated_legacy_owner_actions_are_allowed(tmp_path: Path, suffix: str, claim: str) -> None:
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
 def test_domain_canonical_state_is_not_a_legacy_journal_alias(tmp_path: Path) -> None:
     path = tmp_path / "model.typ"
     path.write_text(

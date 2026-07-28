@@ -860,15 +860,21 @@ def gather_records(
     return chat_messages, user_messages, plan_answers, counter
 
 
-def _open_directory_no_follow(path: Path) -> int:
-    """Open an absolute directory path without following symlink components."""
+def _open_directory_no_follow(path: Path, *, create: bool = False) -> int:
+    """Open a directory path component-wise, optionally creating missing parts."""
 
     absolute = _absolute_without_symlink_resolution(path)
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     current = os.open(absolute.anchor, flags)
     try:
         for part in absolute.parts[1:]:
-            child = os.open(part, flags, dir_fd=current)
+            try:
+                child = os.open(part, flags, dir_fd=current)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(part, 0o700, dir_fd=current)
+                child = os.open(part, flags, dir_fd=current)
             os.close(current)
             current = child
     except BaseException:
@@ -993,7 +999,8 @@ def prepare_output_paths(output_root: Path, batch: str) -> dict[str, Path]:
         resolved = path.resolve(strict=False)
         if output_root != resolved and output_root not in resolved.parents:
             raise ValueError(f"transcript output escapes its root: {path}")
-        path.parent.mkdir(parents=True, exist_ok=True)
+        parent_fd = _open_directory_no_follow(path.parent, create=True)
+        os.close(parent_fd)
         _reject_symlink_components(path)
         if path.exists() and not path.is_file():
             raise ValueError(f"transcript output is not a regular file: {path}")

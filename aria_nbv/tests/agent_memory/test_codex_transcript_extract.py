@@ -4,7 +4,9 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -431,7 +433,7 @@ def test_main_does_not_follow_output_symlink_swapped_after_preparation(
     output_root = tmp_path / "transcripts"
     outside = tmp_path / "outside.jsonl"
     outside.write_text("preserve me\n", encoding="utf-8")
-    original_prepare = extractor.prepare_output_paths
+    original_prepare = cast(Callable[[Path, str], dict[str, Path]], extractor.prepare_output_paths)
 
     def prepare_and_swap(root: Path, batch: str) -> dict[str, Path]:
         outputs = original_prepare(root, batch)
@@ -458,6 +460,47 @@ def test_main_does_not_follow_output_symlink_swapped_after_preparation(
     assert outside.read_text(encoding="utf-8") == "preserve me\n"
     assert not (output_root / "raw" / "2026-06-18" / "chat_messages.jsonl").is_symlink()
     assert not (output_root / "distilled" / "2026-06-18" / "manifest.json").is_symlink()
+
+
+def test_main_rejects_output_ancestor_swapped_after_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    safe_parent = tmp_path / "safe"
+    safe_parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    moved_parent = tmp_path / "safe-original"
+    output_root = safe_parent / "transcripts"
+    original_open = cast(Callable[..., int], extractor._open_directory_no_follow)
+    swapped = False
+
+    def open_and_swap(path: Path, *, create: bool = False) -> int:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            safe_parent.rename(moved_parent)
+            safe_parent.symlink_to(outside, target_is_directory=True)
+        return original_open(path, create=create)
+
+    monkeypatch.setattr(extractor, "_open_directory_no_follow", open_and_swap)
+
+    result = extractor.main(
+        [
+            "--sessions-root",
+            sessions_root.as_posix(),
+            "--project-root",
+            tmp_path.as_posix(),
+            "--output-root",
+            output_root.as_posix(),
+            "--date",
+            "2026-06-18",
+            "--write",
+        ]
+    )
+
+    assert result == 2
+    assert not (outside / "transcripts" / "raw").exists()
+    assert not (outside / "transcripts" / "distilled").exists()
 
 
 def test_distillates_do_not_choose_a_decision_owner() -> None:

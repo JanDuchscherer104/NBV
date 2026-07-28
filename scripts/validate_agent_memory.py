@@ -131,13 +131,27 @@ LEGACY_STATE_MIGRATION_ONLY = (
     ),
 )
 LEGACY_STATE_NEGATED_OWNER = re.compile(
-    r"\b(?:not|never) (?:a )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
-    r"\brather than (?:the )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b",
+    r"\b(?:not|never) (?:(?:a|an|the) )?(?:authoritative(?: source)?|canonical|"
+    r"current owner|current[- ]truth|source of truth)\b|"
+    r"\brather than (?:(?:a|an|the) )?(?:authoritative(?: source)?|canonical|"
+    r"current owner|current[- ]truth|source of truth)\b",
     re.IGNORECASE,
 )
 WRITE_NEGATION = re.compile(r"\b(?:do\s+not|don't|never)\b", re.IGNORECASE)
 WRITE_SCOPE_RESET = re.compile(
-    r"(?:\b(?:but|then|however|instead|yet|nevertheless|nonetheless|still)\b[\s,]*)",
+    r"(?:\b(?:but|then|however|instead|yet|nevertheless|nonetheless|still|"
+    r"because|although|while|whereas)\b[\s,]*)",
+    re.IGNORECASE,
+)
+NEGATED_OWNER_COMPLEMENT = re.compile(
+    r"\b(?:do\s+not|don't|never)\s+"
+    r"(?:(?!\b(?:is|are|owns?|remains?|becomes?|serves)\b)[^.;!?]){0,240}"
+    r"\b(?:as|a|an|the|second)\s*$",
+    re.IGNORECASE,
+)
+NEGATED_DIRECT_LEGACY_OWNER = re.compile(
+    r"\b(?:do\s+not|don't|never)\s+(?:declare|designate|make)\s+"
+    r"(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\s*$",
     re.IGNORECASE,
 )
 LEGACY_STATE_OWNER_ASSERTION = re.compile(
@@ -539,6 +553,17 @@ def _is_locally_negated(text: str, offset: int) -> bool:
     return WRITE_NEGATION.search(local_prefix) is not None
 
 
+def _owner_assertion_is_negated(text: str, offset: int) -> bool:
+    """Return whether an owner assertion belongs to its own negated action."""
+
+    clause_start, _ = _clause_bounds(text, offset)
+    prefix = text[clause_start:offset]
+    return (
+        NEGATED_OWNER_COMPLEMENT.search(prefix) is not None
+        or NEGATED_DIRECT_LEGACY_OWNER.search(prefix) is not None
+    )
+
+
 def _has_legacy_owner_assertion(text: str) -> bool:
     """Return whether an owner assertion refers to the legacy mention."""
 
@@ -559,7 +584,7 @@ def _has_legacy_owner_assertion(text: str) -> bool:
         ):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
-        if _is_locally_negated(assertion_text, assertion.start()):
+        if _owner_assertion_is_negated(assertion_text, assertion.start()):
             continue
         clause_start, _ = _clause_bounds(assertion_text, assertion.start())
         clause = assertion_text[clause_start : assertion.end()]
