@@ -110,6 +110,24 @@ def test_reader_uses_bounded_state_and_candidate_slices(tmp_path: Path, monkeypa
     assert all(selection != slice(None) for _, selection in payload_reads)
 
 
+def test_reader_rejects_corrupt_stored_relative_pose(tmp_path: Path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["candidates/pose_relative_root"][0, 9] += 0.25
+
+    with pytest.raises(ValueError, match="relative pose.*state row 0"):
+        _ = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()[0]
+
+
+def test_reader_rejects_non_rigid_stored_pose(tmp_path: Path) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["candidates/pose_world_cam"][0, 0] = 2.0
+
+    with pytest.raises(ValueError, match="non-rigid.*state row 0"):
+        _ = QhRolloutReaderConfig(store_dirs=(store,)).setup_target()[0]
+
+
 def test_reader_pickle_drops_and_reopens_worker_handles(tmp_path: Path) -> None:
     reader = QhRolloutReaderConfig(store_dirs=(_write_store(tmp_path / "rollouts.zarr"),)).setup_target()
     expected = reader[0].candidate_row_id[0].copy()

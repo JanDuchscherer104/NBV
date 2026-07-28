@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import numpy as np
+import torch
 import zarr
+from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator
 from zarr.storage import LocalStore
 
@@ -656,15 +658,26 @@ def _admitted_target_source(root: zarr.Group) -> str:
 
 
 def _require_shape(root: zarr.Group, path: str, expected: tuple[int, ...]) -> None:
-    actual = tuple(root[path].shape)
-    if actual != expected:
+    if (actual := tuple(root[path].shape)) != expected:
         raise ValueError(f"Q_H field {path} has shape {actual}, expected {expected}.")
 
 
 def _array_equal(left: np.ndarray, right: np.ndarray) -> bool:
-    if np.issubdtype(left.dtype, np.floating) or np.issubdtype(right.dtype, np.floating):
-        return bool(np.allclose(left, right, equal_nan=True))
-    return bool(np.array_equal(left, right))
+    floating = np.issubdtype(left.dtype, np.floating) or np.issubdtype(right.dtype, np.floating)
+    return bool(np.allclose(left, right, equal_nan=True) if floating else np.array_equal(left, right))
+
+
+def _validate_candidate_poses(root_row: np.ndarray, candidates: dict[str, np.ndarray], row: int) -> None:
+    root = PoseTW(torch.as_tensor(root_row, dtype=torch.float32))
+    world = PoseTW(torch.as_tensor(candidates["pose_world_cam"], dtype=torch.float32))
+    relative = PoseTW(torch.tensor(candidates["candidate_pose_relative_root"], dtype=torch.float32))
+    poses = PoseTW(torch.cat((root.tensor().reshape(1, 12), world.tensor(), relative.tensor())))
+    if (
+        not torch.allclose(poses.inverse().compose(poses).tensor(), PoseTW().tensor(), atol=1e-4, rtol=1e-4)
+        or not torch.allclose(torch.linalg.det(poses.R), torch.ones(poses.R.shape[0]), atol=1e-4, rtol=0)
+        or not torch.allclose(root.inverse().compose(world).tensor(), relative.tensor(), atol=1e-4, rtol=1e-4)
+    ):
+        raise ValueError(f"Q_H candidate slice has a non-rigid or inconsistent relative pose at state row {row}.")
 
 
 def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry) -> _StoredChain:
@@ -697,8 +710,8 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
     target_extents = np.asarray(target["target_extents"][target_row], dtype=np.float32)
     target_pose = np.asarray(target["target_pose_world_object"][target_row], dtype=np.float32)
-    if root_pose_world.shape != (12,) or not np.isfinite(root_pose_world).all():
-        raise ValueError(f"Q_H rollout_row_id={entry.rollout_row_id} has an invalid rollout root pose.")
+    for row, candidates in zip(rows, candidate_rows, strict=True):
+        _validate_candidate_poses(root_pose_world, candidates, row)
     if (
         target_extents.shape != (3,)
         or target_pose.shape != (12,)
@@ -790,6 +803,7 @@ def _read_chain_candidate_row(
     candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
     return {
         "candidate_row_id": _readonly(candidate_ids),
+        "pose_world_cam": candidates["pose_world_cam"],
         "candidate_pose_relative_root": _readonly(candidates["pose_relative_root"].astype(np.float32, copy=False)),
         "candidate_position_id": _readonly(q_rows["position_id"][:width].astype(np.int32, copy=False)),
         "actor_action_mask": _readonly(q_rows["valid_action_mask"][:width].astype(np.bool_, copy=False)),
