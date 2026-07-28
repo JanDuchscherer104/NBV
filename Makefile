@@ -116,7 +116,9 @@ PACKAGE_SMOKE_TESTS := \
 QH_CI_TESTS := \
 	tests/data_handling/test_qh.py \
 	tests/rollouts/test_qh_reader.py \
+	tests/vin/test_models_namespace.py \
 	tests/vin/test_target_finite_horizon.py \
+	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_qh_module.py \
 	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_fast_dev_run.py \

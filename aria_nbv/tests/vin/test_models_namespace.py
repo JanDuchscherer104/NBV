@@ -196,7 +196,7 @@ def test_candidate_scorer_config_parses_myopic_base_scorer_payload() -> None:
 def test_multi_step_scorer_config_is_runnable_from_its_leaf_module() -> None:
     """The finite-horizon scorer remains leaf-owned but is now constructible."""
 
-    config = MultiStepCandidateScorerConfig(horizon=3)
+    config = MultiStepCandidateScorerConfig(horizon=2)
 
     assert config.target_type is MultiStepCandidateScorer
     assert isinstance(config.setup_target(), MultiStepCandidateScorer)
@@ -207,7 +207,7 @@ def test_one_step_lightning_rejects_runnable_multi_step_scorer() -> None:
 
     from aria_nbv.lightning.lit_module import VinLightningModule, VinLightningModuleConfig
 
-    scorer_config = MultiStepCandidateScorerConfig(horizon=3)
+    scorer_config = MultiStepCandidateScorerConfig(horizon=2)
     module_config = VinLightningModuleConfig(vin=scorer_config)
 
     assert module_config.vin is scorer_config
@@ -222,13 +222,13 @@ def test_candidate_scorer_config_parses_multi_step_payload() -> None:
 
     module_config = VinLightningModuleConfig(
         vin={
-            "horizon": 3,
+            "horizon": 2,
             "candidate_token_dim": 64,
         },
     )
 
     assert isinstance(module_config.vin, MultiStepCandidateScorerConfig)
-    assert module_config.vin.horizon == 3
+    assert module_config.vin.horizon == 2
 
 
 def test_candidate_scorer_training_contract_classifies_configs() -> None:
@@ -243,4 +243,4 @@ def test_candidate_scorer_training_contract_classifies_configs() -> None:
         candidate_scorer_training_contract(TargetConditionedMyopicScorerConfig(target_descriptor_dim=32))
         == "target_myopic_coral_scaffold"
     )
-    assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=3)) == "finite_horizon_q"
+    assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=2)) == "finite_horizon_q"

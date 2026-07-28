@@ -41,7 +41,7 @@ def test_lightning_rejects_nonzero_target_descriptor_before_setup_target() -> No
 def test_one_step_lightning_rejects_runnable_multi_step_qh_scorer() -> None:
     """Finite-horizon Q_H scorers need a rollout objective, not the CORAL loss."""
 
-    config = MultiStepCandidateScorerConfig(horizon=3)
+    config = MultiStepCandidateScorerConfig(horizon=2)
 
     with pytest.raises(NotImplementedError, match="CORAL/VinPrediction.*Q_H.*rollout objective"):
         validate_vin_lightning_candidate_scorer_contract(config)
