@@ -60,6 +60,16 @@ def _module(sync_interval: int = 2) -> QhLightningModule:
     )
 
 
+def test_checkpoint_hyperparameters_include_learning_contract() -> None:
+    contract = {"schema_version": 1, "split": "train"}
+
+    module = QhLightningModule(
+        QhLightningModuleConfig(lr_scheduler=None), learning_contract=contract, scorer=_TableScorer()
+    )
+
+    assert module.hparams["learning_contract"] == contract
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "inf"])
 def test_huber_delta_rejects_nonfinite_values(value: float | str) -> None:
     with pytest.raises(ValidationError) as error:
@@ -267,6 +277,37 @@ def test_stage_diagnostics_are_interpretable_and_share_one_key_contract(
     assert set(logged) == set(expected)
     for name, value in expected.items():
         assert logged[name].item() == pytest.approx(value)
+
+
+@pytest.mark.parametrize(
+    ("step_name", "loss_sum_name", "row_count_name"),
+    [
+        ("validation_step", "validation_loss_sum", "validation_row_count"),
+        ("test_step", "test_loss_sum", "test_row_count"),
+    ],
+)
+def test_empty_evaluation_batch_skips_row_diagnostics_without_changing_aggregates_or_clocks(
+    step_name: str,
+    loss_sum_name: str,
+    row_count_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    batch = _batch()
+    batch = replace(
+        batch, supervision=replace(batch.supervision, row_train_mask=torch.zeros_like(batch.supervision.row_train_mask))
+    )
+    logged: list[str] = []
+    monkeypatch.setattr(module, "log", lambda name, value, **kwargs: logged.append(name))
+
+    loss = getattr(module, step_name)(batch, 0)
+
+    assert loss.item() == 0.0
+    assert getattr(module, loss_sum_name).item() == 0.0
+    assert getattr(module, row_count_name).item() == 0
+    assert module.optimizer_updates.item() == 0
+    assert module.target_syncs.item() == 0
+    assert logged == []
 
 
 def test_training_step_logs_stage_qualified_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -187,6 +187,7 @@ class QhLightningModule(pl.LightningModule):
         self,
         config: QhLightningModuleConfig,
         *,
+        learning_contract: dict[str, object] | None = None,
         scorer: nn.Module | None = None,
     ) -> None:
         super().__init__()
@@ -203,7 +204,7 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("validation_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.register_buffer("test_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
-        self.save_hyperparameters({"config": config.model_dump_jsonable()})
+        self.save_hyperparameters({"config": config.model_dump_jsonable(), "learning_contract": learning_contract})
 
     def forward(self, batch: QhBatch) -> Float[Tensor, "B S N"]:
         """Score every valid state in one call and scatter onto ``[B,S,N]``.
@@ -473,16 +474,17 @@ class QhLightningModule(pl.LightningModule):
             self.test_row_count.add_(row_count)
         else:
             raise ValueError(f"Unknown Q_H evaluation stage {stage!r}.")
-        self._log_step_diagnostics(
-            stage,
-            batch=batch,
-            losses=losses,
-            predictions=predictions,
-            targets=targets[admitted],
-            admitted=admitted,
-            bootstrap=bootstrap,
-            no_valid_next=no_valid_next,
-        )
+        if row_count:
+            self._log_step_diagnostics(
+                stage,
+                batch=batch,
+                losses=losses,
+                predictions=predictions,
+                targets=targets[admitted],
+                admitted=admitted,
+                bootstrap=bootstrap,
+                no_valid_next=no_valid_next,
+            )
         return losses.sum() / row_count.clamp_min(1)
 
     def _log_step_diagnostics(
