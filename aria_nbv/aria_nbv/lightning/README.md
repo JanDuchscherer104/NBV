@@ -26,8 +26,9 @@ scene-wise one-step CORAL stack:
 
 - `data_handling/qh.py` joins rollout transitions with typed VIN evidence and
   admits the framework-neutral train/validation/test corpus.
-- `qh_datamodule.py` owns only padded distributed training and replicated exact
-  validation/test loading, avoiding uneven-rank DDP evaluation.
+- `qh_datamodule.py` owns Lightning-partitioned train/validation/test loaders.
+  Distributed-sampler padding can duplicate rows in any stage; reported metrics
+  represent Lightning's emitted stream rather than a deduplicated exact corpus.
 - `qh_module.py` owns selected-action fitted Double-Q loss and the frozen hard-
   synchronized target network.
 - `qh_experiment.py` and `qh_cli.py` compose the dedicated stack behind
@@ -41,14 +42,16 @@ before running. Resume or evaluate from an explicit Lightning checkpoint with
 `--ckpt-path`; set `stage = "val"` or `stage = "test"` in the strict TOML and
 configure the corresponding scene-disjoint corpus.
 
-The experiment writes `run_manifest.json` atomically before constructing the
-scorer or Trainer. It records the resolved nested config and hash, rollout and
-immutable-VIN manifest identities, protocol/config compatibility, exact
-container string, framework/CUDA versions, launcher world size, and emitted
-batch size. Under external TorchRun only launcher rank zero writes this file.
+Before constructing the scorer or Trainer, launcher rank zero create-only writes
+`run_manifest.json` with the effective resolved config and hash, corpus and
+runtime provenance, and any content-addressed parent-checkpoint reference. This
+preflight artifact does not claim the Trainer's actual topology. After the loop,
+global zero create-only writes `run_result.json` with success or failure, actual
+world size, sampler padding, effective emitted batch size, global step, and
+content-addressed parent/evaluated/best/last checkpoint references.
 
 `Q_H` currently admits only the Oracle-GT `v0_gt_input` target protocol and a
 two-acquisition horizon. Candidate/history tensors are right-padded; `-1` ids,
 false presence/action masks, world/root/camera transform directions, and metre
-units are documented on `data_handling.qh.QhActorInputs`. Invalid actions are
+units are documented on `data_handling.qh.QhInputs`. Invalid actions are
 hard-masked and never reinterpreted as low-RRI supervision.

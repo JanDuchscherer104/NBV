@@ -221,6 +221,20 @@ def test_repo_qh_configs_match_current_dataset_shape(name: str) -> None:
     assert config.datamodule_config.train.actor.store_dir.name == "vin-offline-v7"
 
 
+def test_lightning_readme_matches_qh_runtime_contracts() -> None:
+    readme = (Path(__file__).resolve().parents[2] / "aria_nbv" / "lightning" / "README.md").read_text()
+
+    assert "`data_handling.qh.QhInputs`" in readme
+    assert "QhActorInputs" not in readme
+    assert "Lightning-partitioned train/validation/test loaders" in readme
+    assert "reported metrics" in readme
+    assert "replicated exact" not in readme
+    assert "`run_manifest.json`" in readme
+    assert "does not claim the Trainer's actual topology" in readme
+    assert "`run_result.json`" in readme
+    assert "success or failure" in readme
+
+
 def test_setup_admits_without_eager_datamodule_setup_and_writes_manifest_before_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
