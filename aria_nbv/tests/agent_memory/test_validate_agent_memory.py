@@ -360,6 +360,29 @@ def test_anaphoric_write_route_remains_rejected(tmp_path: Path, suffix: str) -> 
 
 
 @pytest.mark.parametrize(
+    "action",
+    [
+        "Update these benchmark results.",
+        "Save those report figures.",
+        "Update the report and save it.",
+    ],
+)
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_post_mention_write_to_explicit_nonlegacy_object_is_allowed(tmp_path: Path, action: str, suffix: str) -> None:
+    claim = f"DECISIONS is legacy migration evidence and not current truth. {action}"
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["{claim}"]\n'
+    else:
+        body = f"#let notes = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+@pytest.mark.parametrize(
     ("suffix", "body"),
     [
         (

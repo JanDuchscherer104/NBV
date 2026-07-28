@@ -143,7 +143,7 @@ LEGACY_STATE_OWNER_ASSERTION = re.compile(
 )
 LEGACY_STATE_ANAPHORIC_WRITE = re.compile(
     r"\b(?:add|append|edit|maintain|persist|record|save|store|update|write)\b"
-    r"(?:(?![.;!?]).){0,120}\b(?:it|them|these|those)\b",
+    r"\s+(?:to\s+)?(?:it|them)\b",
     re.IGNORECASE,
 )
 LEGACY_STATE_WRITE_VERB = re.compile(
@@ -521,7 +521,14 @@ def _has_legacy_owner_assertion(text: str) -> bool:
         if _has_legacy_state_mention(assertion_text[clause_start + 1 : clause_end]):
             return True
     for assertion in LEGACY_STATE_ANAPHORIC_WRITE.finditer(assertion_text):
-        if _has_legacy_state_mention(assertion_text[: assertion.start()]):
+        clause_start = max(
+            assertion_text.rfind(delimiter, 0, assertion.start())
+            for delimiter in (".", ";", "!", "?")
+        )
+        clause_prefix = assertion_text[clause_start + 1 : assertion.start()].strip()
+        if not clause_prefix and _has_legacy_state_mention(
+            assertion_text[: assertion.start()]
+        ):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
         clause_start = max(
