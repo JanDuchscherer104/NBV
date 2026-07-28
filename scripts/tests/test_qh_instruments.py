@@ -93,7 +93,7 @@ def test_ordered_workload_digest_covers_the_entire_frozen_loader() -> None:
 
 
 def test_frozen_loc_config_records_the_2480_h_baseline() -> None:
-    config = json.loads((_ROOT / ".configs" / "qh_loc_audit.json").read_text())
+    config = json.loads((_ROOT / ".configs/evidence/qh/qh_loc_audit.json").read_text())
 
     assert config["baseline_total"] == 2480
 
@@ -181,7 +181,9 @@ def test_loc_audit_final_phase_requires_and_counts_every_future_symbol() -> None
 
 
 def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
-    config = tomllib.loads((_ROOT / ".configs" / "build_rollouts_qh_v0_baseline.toml").read_text())
+    config = tomllib.loads(
+        (_ROOT / ".configs/generation/rollouts/benchmarks/build_rollouts_qh_v0_baseline.toml").read_text()
+    )
 
     assert config["max_samples"] == 1
     assert config["max_targets_per_sample"] == 1
@@ -193,8 +195,10 @@ def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
 def test_instrumentation_allowlist_hashes_every_frozen_path() -> None:
     instrument = _load_script("qh_loader_benchmark")
 
-    hashes = instrument.instrumentation_hashes(_ROOT, _ROOT / ".configs" / "qh_instrumentation_allowlist.json")
+    hashes = instrument.instrumentation_hashes(
+        _ROOT, _ROOT / ".configs/evidence/qh/qh_instrumentation_allowlist.json"
+    )
 
-    paths = json.loads((_ROOT / ".configs" / "qh_instrumentation_allowlist.json").read_text())["paths"]
+    paths = json.loads((_ROOT / ".configs/evidence/qh/qh_instrumentation_allowlist.json").read_text())["paths"]
     assert set(hashes) == set(paths)
     assert all(len(value) == 64 for value in hashes.values())

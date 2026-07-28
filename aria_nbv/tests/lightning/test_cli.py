@@ -177,7 +177,7 @@ def test_offline_smoke_config_disables_heavy_debug_metrics() -> None:
     """The checked-in two-epoch smoke config should stay quiet and bounded."""
 
     repo_root = Path(__file__).resolve().parents[3]
-    cfg = AriaNBVExperimentConfig.from_toml(repo_root / ".configs" / "offline_smoke_2epoch.toml")
+    cfg = AriaNBVExperimentConfig.from_toml(repo_root / ".configs/training/vin/offline_smoke_2epoch.toml")
 
     assert cfg.inspect_config is False
     assert cfg.module_config.log_spearman is False

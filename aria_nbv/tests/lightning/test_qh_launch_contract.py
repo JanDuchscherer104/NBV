@@ -48,13 +48,13 @@ def test_template_is_shell_valid_and_has_one_launcher_hierarchy() -> None:
     assert "throughput/smoke launcher" in text
     assert "scene-disjoint validation/test" in text
     assert "Checkpoint and target-network sync cadences are bounded" in text
-    config = (SCRIPT.parents[3] / ".configs" / "train_qh_v0_lrz.template.toml").read_text()
+    config = (SCRIPT.parents[3] / ".configs/training/qh/train_qh_v0_lrz.template.toml").read_text()
     assert "checkpoint_every_n_train_steps = 100" in config
     assert "target_sync_interval = 100" in config
 
 
 def test_local_smoke_syncs_the_target_within_one_bounded_update() -> None:
-    smoke = (SCRIPT.parents[3] / ".configs" / "train_qh_v0_smoke.toml").read_text()
+    smoke = (SCRIPT.parents[3] / ".configs/training/qh/train_qh_v0_smoke.toml").read_text()
 
     assert "target_sync_interval = 1" in smoke
 

@@ -322,7 +322,7 @@ def check_kg_search_smoke(repo: Path) -> CheckResult:
                 "kg",
                 "find",
                 "--config",
-                str(repo / ".configs/litkg.toml"),
+                str(repo / ".configs/infrastructure/litkg.toml"),
                 "--repo-root",
                 str(repo),
                 "--limit",

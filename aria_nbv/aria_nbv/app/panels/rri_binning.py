@@ -40,7 +40,7 @@ def render_rri_binning_page() -> None:
         "binning quality and the empirical bin means/stds used for expected-value "
         "computations."
         "\nTo refit the binner on updated data, run "
-        "`uv run nbv-fit-binner [--config-path .configs/offline_only.toml]`.",
+        "`uv run nbv-fit-binner [--config-path .configs/training/vin/offline_only.toml]`.",
     )
 
     default_fit_path = Path(".logs") / "vin" / "rri_binner_fit_data.pt"

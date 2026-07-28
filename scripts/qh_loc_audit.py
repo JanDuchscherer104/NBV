@@ -172,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument(
-        "--config", type=Path, default=Path(".configs/qh_loc_audit.json")
+        "--config", type=Path, default=Path(".configs/evidence/qh/qh_loc_audit.json")
     )
     parser.add_argument("--phase", choices=("baseline", "final"), default="baseline")
     arguments = parser.parse_args(argv)

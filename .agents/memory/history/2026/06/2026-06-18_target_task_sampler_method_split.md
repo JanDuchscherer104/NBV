@@ -12,7 +12,7 @@ canonical_updates_needed:
   - .agents/memory/state/OPEN_QUESTIONS.md
   - .agents/memory/state/PROJECT_STATE.md
   - aria_nbv/aria_nbv/oracle/target_selection.py
-  - .configs/build_rollouts_v1_realistic.toml
+  - .configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml
 artifacts:
   - docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ
   - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ

@@ -1,0 +1,107 @@
+# Immutable VIN offline-store build for all local ASE scenes.
+#
+# Usage:
+#   cd aria_nbv
+#   uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml
+
+include_backbone            = true
+include_depths              = true
+include_pointclouds         = true
+include_diagnostic_payloads = true
+vin_pad_points              = 50000
+semidense_max_points        = 16384
+semidense_include_obs_count = false
+max_candidates              = 60
+samples_per_shard           = 16
+train_val_split             = 0.2
+overwrite                   = false
+num_failures_allowed        = 40
+
+backbone_numeric_keep_fields = [
+    "t_world_voxel",
+    "voxel_extent",
+    "occ_pr",
+    "occ_input",
+    "free_input",
+    "counts",
+    "cent_pr",
+    "pts_world",
+]
+
+backbone_payload_keep_fields = [
+    "t_world_voxel",
+    "voxel_extent",
+    "occ_pr",
+    "cent_pr",
+    "bbox_pr",
+    "clas_pr",
+    "cent_pr_nms",
+    "obbs_pr_nms",
+    "obb_pred",
+    "obb_pred_viz",
+    "obb_pred_sem_id_to_name",
+    "obb_pred_probs_full",
+    "obb_pred_probs_full_viz",
+]
+
+[store]
+store_dir = "vin_offline"
+
+[dataset]
+atek_variant = "efm"
+scene_ids    = []
+batch_size   = 1
+wds_shuffle  = false
+wds_repeat   = false
+load_meshes  = true
+require_mesh = true
+
+[labeler]
+device                = "auto"
+backprojection_stride = 1
+
+    [labeler.generator]
+    device                 = "auto"
+    camera_label           = "rgb"
+    num_samples            = 60
+    oversample_factor      = 2.0
+    max_resamples          = 2
+    align_to_gravity       = true
+    min_radius             = 0.5
+    max_radius             = 1.8
+    min_elev_deg           = -20.0
+    max_elev_deg           = 25.0
+    delta_azimuth_deg      = 170.0
+    sampling_strategy      = "uniform_sphere"
+    kappa                  = 4.0
+    min_distance_to_mesh   = 0.2
+    ensure_collision_free  = true
+    ensure_free_space      = true
+    collision_backend      = "pytorch3d"
+    ray_subsample          = 32
+    step_clearance         = 0.1
+    view_direction_mode    = "radial_away"
+    view_max_azimuth_deg   = 60.0
+    view_max_elevation_deg = 30.0
+    view_roll_jitter_deg   = 0.0
+    seed                   = 0
+
+    [labeler.depth]
+    max_candidates_final = 60
+    resolution_scale     = 0.5
+
+        [labeler.depth.renderer]
+        device         = "auto"
+        znear          = 0.001
+        zfar           = 20.0
+        cull_backfaces = true
+        blur_radius    = 0.0
+        bin_size       = 0
+        dtype          = "float32"
+
+[backbone]
+model_cfg     = ".configs/models/evl/evl_inf_desktop.yaml"
+model_ckpt    = ".logs/ckpts/model_lite.pth"
+device        = "cuda"
+freeze        = true
+features_mode = "heads"

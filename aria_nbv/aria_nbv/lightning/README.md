@@ -34,8 +34,8 @@ scene-wise one-step CORAL stack:
 - `qh_experiment.py` and `qh_cli.py` compose the dedicated stack behind
   `nbv-train-qh` without widening `VinLightningModule`.
 
-Use `.configs/train_qh_v0_smoke.toml` locally and
-`.configs/train_qh_v0_lrz.template.toml` with
+Use `.configs/training/qh/train_qh_v0_smoke.toml` locally and
+`.configs/training/qh/train_qh_v0_lrz.template.toml` with
 `scripts/templates/lrz/qh_training_one_node.sbatch` on one LRZ node. Replace
 all `/ABS/PATH/...` placeholders and set a nonblank `LRZ_CONTAINER_IMAGE`
 before running. Resume or evaluate from an explicit Lightning checkpoint with

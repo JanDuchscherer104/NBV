@@ -19,7 +19,7 @@ if [[ -z "${LRZ_CONTAINER_IMAGE:-}" ]] \
   echo "LRZ_CONTAINER_IMAGE must be nonblank." >&2
   exit 2
 fi
-QH_CONFIG="${QH_CONFIG:-$ARIA_REPO/.configs/train_qh_v0_lrz.template.toml}"
+QH_CONFIG="${QH_CONFIG:-$ARIA_REPO/.configs/training/qh/train_qh_v0_lrz.template.toml}"
 GPUS_ON_NODE="${SLURM_GPUS_ON_NODE:-}"
 
 if [[ ! "$GPUS_ON_NODE" =~ ^[1-9][0-9]*$ ]]; then

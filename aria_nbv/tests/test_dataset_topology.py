@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
+import zarr
 
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.offline.format import (
@@ -13,7 +15,15 @@ from aria_nbv.data_handling.offline.format import (
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
-from aria_nbv.dataset_topology import build_dataset_topology, discover_vin_store_dirs
+from aria_nbv.dataset_topology import (
+    NativeDatasetLayout,
+    TopologyNode,
+    TopologyRelationship,
+    TopologySnapshot,
+    build_dataset_topology,
+    build_native_dataset_layout,
+    discover_vin_store_dirs,
+)
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 
@@ -144,6 +154,10 @@ def test_topology_resolves_rollout_lineage_by_exact_vin_manifest_hash(tmp_path: 
         selected_source_row_id=0,
     )
 
+    assert isinstance(topology, TopologySnapshot)
+    assert all(isinstance(node, TopologyNode) for node in topology.nodes)
+    assert all(isinstance(edge, TopologyRelationship) for edge in topology.edges)
+
     lineage_edges = [row for row in topology.edge_rows() if row["relation"] == "resolves manifest hash"]
     assert lineage_edges == [
         {
@@ -254,3 +268,91 @@ def test_stale_vin_manifest_retains_store_identity_without_claims(tmp_path: Path
     assert node["details"]["error"]
     assert node["details"]["manifest_hash"] is None
     assert topology.edge_rows() == []
+
+
+def _write_native_layout_stores(root: Path) -> tuple[Path, Path]:
+    vin_store, manifest_hash = _write_vin_store(root, name="native-vin")
+    shard_dir = vin_store / "shards" / "shard-000000"
+    shutil.rmtree(shard_dir)
+    shard = zarr.open_group(store=zarr.storage.LocalStore(str(shard_dir)), mode="w")
+    shard.create_array(
+        "vin/features",
+        data=np.arange(12, dtype=np.float32).reshape(3, 4),
+        chunks=(2, 4),
+    )
+    shard.create_array(
+        "oracle/rri",
+        data=np.asarray([[0.25, 0.5]], dtype=np.float32),
+        chunks=(1, 2),
+    )
+
+    rollout_store = root / "native-rollouts.zarr"
+    rollout = zarr.open_group(store=zarr.storage.LocalStore(str(rollout_store)), mode="w")
+    arrays = {
+        "sources/source_row_id": np.asarray([0], dtype=np.int64),
+        "targets/target_row_id": np.asarray([0], dtype=np.int64),
+        "rollouts/source_row_id": np.asarray([0], dtype=np.int64),
+        "rollouts/target_row_id": np.asarray([0], dtype=np.int64),
+        "rollouts/rollout_row_id": np.asarray([0], dtype=np.int64),
+        "lineage/rollout_row_id": np.asarray([0], dtype=np.int64),
+        "steps/rollout_row_id": np.asarray([0], dtype=np.int64),
+        "steps/step_row_id": np.asarray([0], dtype=np.int64),
+        "candidates/step_row_id": np.asarray([0], dtype=np.int64),
+        "candidates/candidate_row_id": np.asarray([0], dtype=np.int64),
+        "selected_depth/candidate_row_id": np.asarray([0], dtype=np.int64),
+        "q_h/state_step_row_id": np.asarray([0], dtype=np.int64),
+        "q_h/candidate_row_id": np.asarray([0], dtype=np.int64),
+    }
+    for path, data in arrays.items():
+        rollout.create_array(path, data=data, chunks=data.shape)
+    (rollout_store / "manifest.json").write_text(
+        json.dumps({"config_hashes": {"source_manifest": [manifest_hash]}}),
+        encoding="utf-8",
+    )
+    return vin_store, rollout_store
+
+
+def test_native_layout_catalogs_shapes_chunks_and_declared_references(tmp_path: Path) -> None:
+    vin_store, rollout_store = _write_native_layout_stores(tmp_path)
+
+    layout = build_native_dataset_layout(
+        root_store_dir=vin_store,
+        rollout_store_dirs=[rollout_store],
+    )
+
+    assert isinstance(layout, NativeDatasetLayout)
+    assert isinstance(layout, TopologySnapshot)
+    assert all(isinstance(node, TopologyNode) for node in layout.nodes)
+    assert all(isinstance(edge, TopologyRelationship) for edge in layout.edges)
+    features = next(node for node in layout.nodes if node.details.get("relative_path") == "vin/features")
+    assert features.details == {
+        "relative_path": "vin/features",
+        "dtype": "float32",
+        "shape": [3, 4],
+        "chunks": [2, 4],
+    }
+    assert features.role == "actor-visible"
+    assert any(
+        node.details.get("relative_path") == "oracle/rri" and node.role == "oracle/evaluation" for node in layout.nodes
+    )
+    assert any(edge.relation == "VIN manifest lineage" and edge.status == "resolved" for edge in layout.edges)
+    assert any(edge.relation == "source row" for edge in layout.edges)
+    assert any(edge.relation == "derived Q_H actions" for edge in layout.edges)
+    assert "dtype=float32 shape=[3, 4] chunks=[2, 4]" in layout.tree_text()
+    assert "digraph native_layout" in layout.graphviz_dot()
+
+
+def test_native_layout_reports_missing_metadata_without_inventing_arrays(tmp_path: Path) -> None:
+    missing_vin = tmp_path / "missing-vin"
+    missing_rollout = tmp_path / "missing-rollout.zarr"
+
+    layout = build_native_dataset_layout(
+        root_store_dir=missing_vin,
+        rollout_store_dirs=[missing_rollout],
+    )
+
+    assert not any(node.kind == "array" for node in layout.nodes)
+    assert any(node.kind == "error" and "unreadable" in layout.tree_text() for node in layout.nodes)
+    assert any(edge.status == "missing" for edge in layout.edges)
+    lineage = next(edge for edge in layout.edges if edge.relation == "VIN manifest lineage")
+    assert lineage.status == "blocked"

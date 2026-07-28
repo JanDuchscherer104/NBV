@@ -21,7 +21,7 @@ from ...data_handling.offline.format import (
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
-from ...data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
+from ...data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from ...data_handling.offline.writer import (
     DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS,
     DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS,
@@ -38,8 +38,10 @@ from ...vin.backbones import EvlBackboneConfig
 
 if TYPE_CHECKING:
     from ...vin.types import EvlBackboneOutput
+    from .progress import ProgressCallback
     from .scene_labels import OracleRriSample
 
+from .progress import GenerationProgress
 from .scene_labels import OracleRriLabelerConfig
 
 
@@ -202,8 +204,16 @@ class VinOfflineWriter:
             ),
         )
 
-    def run(self) -> VinOfflineManifest:
-        """Build the configured immutable VIN offline dataset."""
+    def run(self, *, progress: ProgressCallback | None = None) -> VinOfflineManifest:
+        """Build the configured immutable VIN offline dataset.
+
+        Args:
+            progress: Optional synchronous observer for framework-neutral
+                generation, writing, and validation updates.
+
+        Returns:
+            Manifest of the finalized immutable store.
+        """
 
         store_dir = self.config.store.store_dir
         temp_dir = store_dir.with_name(f"{store_dir.name}.tmp")
@@ -223,6 +233,17 @@ class VinOfflineWriter:
         failures = 0
         processed = 0
         interrupted = False
+        total = None if self.config.max_samples is None else int(self.config.max_samples)
+
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="generating",
+                    completed=0,
+                    total=total,
+                    message="Starting VIN offline sample generation",
+                )
+            )
 
         try:
             for sample in self._dataset:
@@ -240,6 +261,15 @@ class VinOfflineWriter:
                         ),
                     )
                     processed += 1
+                    if progress is not None:
+                        progress(
+                            GenerationProgress(
+                                stage="generating",
+                                completed=processed,
+                                total=total,
+                                message=f"Generated VIN offline sample {processed}",
+                            )
+                        )
                     if len(prepared_rows) >= int(self.config.samples_per_shard):
                         shard_spec, local_records = flush_prepared_samples_to_shard(
                             shard_index=len(shard_specs),
@@ -251,6 +281,17 @@ class VinOfflineWriter:
                         prepared_rows = []
                 except Exception as exc:
                     failures += 1
+                    if progress is not None:
+                        progress(
+                            GenerationProgress(
+                                stage="generating",
+                                completed=processed,
+                                total=total,
+                                message=(
+                                    f"Skipped scene={sample.scene_id} snippet={sample.snippet_id}; failures={failures}"
+                                ),
+                            )
+                        )
                     self.console.error(
                         f"Failed to build offline sample for scene={sample.scene_id} snippet={sample.snippet_id}: {exc}",
                     )
@@ -262,6 +303,15 @@ class VinOfflineWriter:
             interrupted = True
             self.console.log("Interrupted by user; finalizing already prepared VIN offline samples.")
 
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="writing",
+                    completed=processed,
+                    total=total,
+                    message="Writing VIN offline shards and metadata",
+                )
+            )
         if prepared_rows:
             shard_spec, local_records = flush_prepared_samples_to_shard(
                 shard_index=len(shard_specs),
@@ -338,6 +388,21 @@ class VinOfflineWriter:
         if store_dir.exists():
             shutil.rmtree(store_dir)
         temp_dir.rename(store_dir)
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="validating",
+                    completed=processed,
+                    total=total,
+                    message="Validating finalized VIN offline store metadata",
+                )
+            )
+        reader = VinOfflineStoreReader(self.config.store)
+        if len(reader.sample_index) != len(index_records):
+            raise RuntimeError(
+                "VIN offline post-write validation found a sample-index count mismatch: "
+                f"expected {len(index_records)}, read {len(reader.sample_index)}."
+            )
         self.console.log(
             f"Wrote VIN offline dataset with {len(index_records)} samples across {len(shard_specs)} shards to {store_dir}",
         )

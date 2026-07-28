@@ -186,8 +186,8 @@ Build immutable stores through the writer CLI:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml
 ```
 
 ## One-Scene Smoke {#one-scene-smoke}
@@ -198,9 +198,9 @@ smoke config writes one sample to `vin_offline_rerun_smoke_v7`:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline_smoke_v7.toml --split val --index 0 --save ../.artifacts/rerun/offline_smoke_v7.rrd
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline_smoke_v7.toml --split val --index 0 --save ../.artifacts/rerun/offline_smoke_v7.rrd
 ```
 
 The Rerun inspector is diagnostic-only. Its downsampling is display-only and
@@ -210,7 +210,7 @@ For local rollout-store plumbing, use the current V1 rollout builder smoke confi
 
 ```sh
 cd aria_nbv
-uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
+uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml --dry-run
 ```
 
 ## Stored Dataset Inspector {#stored-dataset-inspector}

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
-CONFIG_PATH="${PROJECT_ROOT}/.configs/litkg.toml"
+CONFIG_PATH="${PROJECT_ROOT}/.configs/infrastructure/litkg.toml"
 TOOLKIT_ROOT="${PROJECT_ROOT}/.agents/external/litkg-rs"
 MODE="${1:-all}"
 

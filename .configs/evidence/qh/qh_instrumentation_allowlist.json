@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256",
+  "paths": [
+    "scripts/qh_loader_benchmark.py",
+    "scripts/qh_loc_audit.py",
+    ".configs/evidence/qh/qh_loader_benchmark.json",
+    ".configs/evidence/qh/qh_loc_audit.json",
+    ".configs/evidence/qh/qh_instrumentation_allowlist.json",
+    ".configs/generation/rollouts/benchmarks/build_rollouts_qh_v0_baseline.toml",
+    ".configs/evidence/qh/qh_loader_benchmark_protocol.md"
+  ]
+}

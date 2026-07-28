@@ -29,7 +29,7 @@ uv run python --version
 
 ## litkg Health Probe
 Run `make kg-status` first when KG output looks degraded or empty. It is a
-fast 0/1 probe (checks `.configs/litkg.toml`, the litkg-rs submodule, and
+fast 0/1 probe (checks `.configs/infrastructure/litkg.toml`, the litkg-rs submodule, and
 `cargo` on PATH). Exit 0 = healthy, exit 1 = degraded with a one-line reason
 on stderr; never blocks. If degraded, fall back to `aria-nbv-context` plus
 targeted reads instead of waiting for the heavier `make kg-*` commands.
@@ -64,7 +64,7 @@ ssh -R 11434:127.0.0.1:11434 jd@ubuntu-workstation
 ```
 
 On Ubuntu, the ARIA-NBV Makefile reads the Ollama model settings from
-`.configs/litkg.toml`:
+`.configs/infrastructure/litkg.toml`:
 
 ```bash
 make kg-ollama-check

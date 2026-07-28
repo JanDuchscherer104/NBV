@@ -1,6 +1,6 @@
 # ARIA-NBV KG Profile
 
-`.configs/litkg.toml` is the operator entrypoint for ARIA-NBV knowledge-graph ingestion.
+`.configs/infrastructure/litkg.toml` is the operator entrypoint for ARIA-NBV knowledge-graph ingestion.
 
 Default runtime representation:
 
@@ -44,6 +44,6 @@ make kg-refresh-lit
 make kg-refresh-full
 ```
 
-Generated KG output is ignored by Git. Rebuild it from `.configs/litkg.toml`
+Generated KG output is ignored by Git. Rebuild it from `.configs/infrastructure/litkg.toml`
 and the source bibliography/docs when needed; commit only source config,
 curated docs, or an explicit artifact snapshot.

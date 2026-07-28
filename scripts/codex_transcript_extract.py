@@ -4,7 +4,7 @@
 The extractor keeps full raw Codex runtime transcripts out of repo memory. It
 writes chat-only user/assistant transcript records, high-signal user-authored
 records, and candidate distillates that LitKG can index through the existing
-`.configs/litkg.toml` transcript source globs.
+`.configs/infrastructure/litkg.toml` transcript source globs.
 """
 
 from __future__ import annotations

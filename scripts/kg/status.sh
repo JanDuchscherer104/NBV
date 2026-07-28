@@ -8,7 +8,7 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root"
 
 litkg_dir=".agents/external/litkg-rs"
-config=".configs/litkg.toml"
+config=".configs/infrastructure/litkg.toml"
 
 if [ ! -f "$config" ]; then
     echo "kg-status: missing $config" >&2

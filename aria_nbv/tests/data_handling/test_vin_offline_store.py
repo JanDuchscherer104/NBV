@@ -45,6 +45,7 @@ from aria_nbv.data_handling.offline.writer import (
 )
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
+from aria_nbv.oracle.pipelines.progress import GenerationProgress
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths
 from aria_nbv.rri_metrics.rri import RriResult
@@ -565,7 +566,8 @@ def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_pa
 
     writer._prepare_row = MethodType(_prepare_stub_row, writer)
 
-    manifest = writer.run()
+    progress_events: list[GenerationProgress] = []
+    manifest = writer.run(progress=progress_events.append)
 
     assert store_cfg.manifest_path.exists()  # noqa: S101
     assert store_cfg.sample_index_path.exists()  # noqa: S101
@@ -574,6 +576,15 @@ def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_pa
     assert manifest.stats["interrupted"] is True  # noqa: S101
     assert manifest.provenance["finalized_after_interrupt"] is True  # noqa: S101
     assert len(_read_sample_index_rows(store_cfg.sample_index_path)) == 2  # noqa: S101
+    assert [event.stage for event in progress_events] == [  # noqa: S101
+        "generating",
+        "generating",
+        "generating",
+        "writing",
+        "validating",
+    ]
+    assert all(event.total is None for event in progress_events)  # noqa: S101
+    assert progress_events[-1].completed == 2  # noqa: S101
 
 
 def _write_test_store(

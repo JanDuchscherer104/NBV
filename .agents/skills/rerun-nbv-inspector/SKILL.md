@@ -81,7 +81,7 @@ ARIA-NBV-specific decisions grounded in immutable VIN stores and NBV geometry.
 3. Read `references/rerun-python-patterns.md` for recording, entity-tree,
    camera/depth, transform, and timeline guardrails.
 4. Read `references/nbv-inspector-contract.md` before editing or reviewing
-   ARIA-NBV inspector code, tests, docs, or `.configs/rerun_offline.toml`.
+   ARIA-NBV inspector code, tests, docs, or `.configs/inspection/rerun/rerun_offline.toml`.
 5. Read `references/official-examples-map.md` when choosing a Rerun example to
    compare against.
 6. Inspect every touched `rr.` call site along the logging path, not just the
@@ -90,7 +90,7 @@ ARIA-NBV-specific decisions grounded in immutable VIN stores and NBV geometry.
 
 ```bash
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml \
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline.toml \
   --split val --index 0 --save ../.artifacts/rerun/sample.rrd
 ```
 
@@ -123,7 +123,7 @@ and run fixture/fake-Rerun tests instead of weakening validation.
 
 ## Review Checklist
 
-- Confirm config-as-factory usage and `.configs/rerun_offline.toml` stay aligned
+- Confirm config-as-factory usage and `.configs/inspection/rerun/rerun_offline.toml` stay aligned
   with `RerunOfflineInspectorConfig`.
 - Confirm required visual inventory failures happen before `rr.init`, `rr.save`,
   `rr.spawn`, or `rr.connect_grpc`.
@@ -153,6 +153,6 @@ When the store is compatible:
 
 ```bash
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml \
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline.toml \
   --split val --index 0 --save ../.artifacts/rerun/sample.rrd
 ```

@@ -26,7 +26,7 @@ if [[ "$#" -eq 0 ]]; then
     "${PROJECT_ROOT}/docs/typst/seminar_paper/main.typ"
 fi
 
-KG_OLLAMA_CONFIG="${PROJECT_ROOT}/.configs/litkg.toml" \
+KG_OLLAMA_CONFIG="${PROJECT_ROOT}/.configs/infrastructure/litkg.toml" \
 KG_DOC_REPO_ROOT="${PROJECT_ROOT}" \
 GRAPHITI_GROUP_ID="${GRAPHITI_GROUP_ID:-aria-nbv-docs}" \
   "${TOOLKIT_ROOT}/scripts/kg/ingest_docs.sh" "$@"

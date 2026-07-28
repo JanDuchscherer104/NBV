@@ -37,7 +37,7 @@ Use this reference when a task needs current project truth or sources disagree.
   compact routing/evidence cue.
 - Optional tool and adapter boundaries:
   `.agents/references/alignment_tools_contract.md`. KG/backend operational
-  details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
+  details remain with `.agents/external/litkg-rs/docs/` and `.configs/infrastructure/litkg.toml`.
 - Thesis-to-code links: `.agents/references/thesis_code_links.md` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse
