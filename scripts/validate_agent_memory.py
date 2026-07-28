@@ -74,6 +74,8 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
 FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (
     ".agents/memory/session-manifests/",
     ".agents/memory/transcripts/",
+    ".mempalace/",
+    ".palace/",
 )
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 
@@ -273,13 +275,26 @@ def check_registered_omx_artifacts(
     elif explicit_ref:
         return [f"explicit OMX artifact transition ref is invalid: {base_ref}"]
 
+    registry_path = repo_root / ".agents" / "omx_artifacts.toml"
+    if not registry_path.exists():
+        if previous_ref:
+            prior_registry = subprocess.run(
+                ["git", "cat-file", "-e", f"{previous_ref}:.agents/omx_artifacts.toml"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+            )
+            if prior_registry.returncode == 0:
+                return ["accepted OMX artifact registry must not be removed"]
+        return []
+
     command = [
         sys.executable,
         str(validator_path),
         "--repo",
         str(repo_root),
         "--registry",
-        str(repo_root / ".agents" / "omx_artifacts.toml"),
+        str(registry_path),
         "--check-tracked",
     ]
     if previous_ref:
@@ -408,6 +423,7 @@ def check_scaffold_alignment() -> list[str]:
     if OMX_ARTIFACT_REGISTRY.exists():
         errors.extend(check_registered_omx_artifacts())
     else:
+        errors.extend(check_registered_omx_artifacts())
         errors.extend(check_tracked_omx_records(tracked_paths))
 
     return errors

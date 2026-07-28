@@ -1564,6 +1564,18 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ValidationError, "invalid UTF-8 registry"):
             MODULE._parse_registry(b"\xff")
 
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "registry exceeds byte limit"
+        ):
+            MODULE._parse_registry(b"x" * (MODULE.MAX_REGISTRY_BYTES + 1))
+
+        oversized_registry = self.repo / "oversized-registry.toml"
+        oversized_registry.write_bytes(b"x" * (MODULE.MAX_REGISTRY_BYTES + 1))
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "registry exceeds byte limit"
+        ):
+            MODULE.load_registry(oversized_registry)
+
         bundle = self.bundle("invalid-utf8")
         target = self.repo / bundle["artifact"][0]["path"]
         target.write_bytes(b"\xff")
@@ -1639,6 +1651,31 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             self.assertEqual(digest.call_count, len(bounded))
         with self.assertRaisesRegex(MODULE.ValidationError, "chain exceeds limit"):
             MODULE.bundle_chain_sha256(predecessor, bundles)
+
+    def test_registry_entry_counts_have_hard_limits(self) -> None:
+        bundle = self.bundle()
+        registry = self.write_registry([bundle])
+        payload = registry.read_bytes()
+        with patch.object(MODULE, "MAX_REGISTRY_BUNDLES", 0):
+            with self.assertRaisesRegex(MODULE.ValidationError, "bundle-count limit"):
+                MODULE._parse_registry(payload)
+        with patch.object(MODULE, "MAX_ARTIFACTS_PER_BUNDLE", 0):
+            with self.assertRaisesRegex(MODULE.ValidationError, "artifact-count limit"):
+                MODULE._parse_registry(payload)
+        with patch.object(MODULE, "MAX_REGISTRY_ARTIFACTS", 0):
+            with self.assertRaisesRegex(
+                MODULE.ValidationError, "total artifact-count limit"
+            ):
+                MODULE._parse_registry(payload)
+
+    def test_historical_registry_byte_limit_is_checked_before_git_show(self) -> None:
+        bundle = self.bundle()
+        self.commit_registry(bundle, "accepted base")
+        with patch.object(MODULE, "MAX_REGISTRY_BYTES", 1):
+            with self.assertRaisesRegex(
+                MODULE.ValidationError, "historical registry exceeds byte limit"
+            ):
+                MODULE._previous_registry(self.repo, "HEAD")
 
     def test_unregistered_tracked_artifact_fails(self) -> None:
         bundle = self.bundle()
@@ -2019,6 +2056,19 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 [],
             )
 
+    def test_production_gate_rejects_registry_and_artifact_erasure(self) -> None:
+        bundle = self.bundle()
+        self.commit_registry(bundle, "accepted base")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.git("checkout", "-qb", "feature-erasure")
+        self.git("rm", "-qr", ".agents/omx_artifacts.toml", ".omx")
+        self.git("commit", "-qm", "erase accepted evidence")
+        with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertEqual(errors, ["accepted OMX artifact registry must not be removed"])
+
     def test_local_only_snapshot_fallback_is_explicit(self) -> None:
         bundle = self.bundle()
         self.stage_registry(bundle)
@@ -2101,15 +2151,17 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             )
         self.assertRegex(errors[0], "cannot use HEAD itself")
 
-    def test_transcript_and_session_manifest_paths_are_never_tracked(self) -> None:
+    def test_private_runtime_paths_are_never_tracked(self) -> None:
         errors = MEMORY_MODULE.check_forbidden_tracked_paths(
             [
                 ".agents/memory/transcripts/raw/messages.jsonl",
                 ".agents/memory/session-manifests/corpus.json",
+                ".mempalace/palace.db",
+                ".palace/runtime.json",
                 ".agents/memory/history/2026/07/debrief.md",
             ]
         )
-        self.assertEqual(len(errors), 2)
+        self.assertEqual(len(errors), 4)
         self.assertTrue(all("must not be tracked" in error for error in errors))
 
     def test_workflow_runs_lifecycle_checks_with_full_history(self) -> None:
@@ -2122,6 +2174,8 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         for path in (
             ".omx/**",
+            ".mempalace/**",
+            ".palace/**",
             ".gitignore",
             "scripts/scaffold/**",
             "scripts/tests/test_validate_omx_artifacts.py",

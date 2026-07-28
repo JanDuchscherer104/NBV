@@ -146,6 +146,10 @@ MAX_EMBEDDED_JSON_VALUES = 1_024
 MAX_EMBEDDED_JSON_ATTEMPTS = 1_024
 MAX_DECODED_TEXT_VARIANTS = 256
 MAX_BUNDLE_CHAIN_LENGTH = 1_000
+MAX_REGISTRY_BYTES = 1_000_000
+MAX_REGISTRY_BUNDLES = 1_024
+MAX_ARTIFACTS_PER_BUNDLE = 256
+MAX_REGISTRY_ARTIFACTS = 4_096
 MAX_ARTIFACT_BYTES = 2_000_000
 MAX_TOTAL_ARTIFACT_BYTES = 20_000_000
 ACCEPTANCE_FIELDS_V2 = {
@@ -439,7 +443,7 @@ def _http_mask_length(uri: str) -> int:
 
 def _validate_http_uri(uri: str, subject: object, *, strict: bool) -> bool:
     parsed = SIMPLE_HTTP_URL.fullmatch(uri)
-    malformed = parsed is None or re.search(r"%(?![0-9A-Fa-f]{2})", uri)
+    malformed = parsed is None or re.search(r"%(?![0-9A-Fa-f]{2})", uri) is not None
     if not malformed and parsed is not None:
         port = parsed.group("port")
         malformed = port is not None and not 1 <= int(port) <= 65535
@@ -802,6 +806,8 @@ def _validate_review(path: Path, bundle: dict[str, Any]) -> None:
 
 
 def _parse_registry(payload: bytes) -> dict[str, Any]:
+    if len(payload) > MAX_REGISTRY_BYTES:
+        raise ValidationError("registry exceeds byte limit")
     try:
         text = payload.decode("utf-8")
     except UnicodeError as exc:
@@ -819,9 +825,13 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
         2,
     }:
         raise ValidationError("registry schema_version must be 1 or 2")
-    if not isinstance(data.get("bundle"), list) or not data["bundle"]:
+    bundles = data.get("bundle")
+    if not isinstance(bundles, list) or not bundles:
         raise ValidationError("registry must contain at least one bundle")
-    for bundle in data["bundle"]:
+    if len(bundles) > MAX_REGISTRY_BUNDLES:
+        raise ValidationError("registry exceeds bundle-count limit")
+    artifact_count = 0
+    for bundle in bundles:
         if not isinstance(bundle, dict):
             raise ValidationError("registry bundle must be a mapping")
         unknown = set(bundle) - BUNDLE_FIELDS
@@ -832,6 +842,13 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
         artifacts = bundle.get("artifact")
         if not isinstance(artifacts, list):
             raise ValidationError(f"bundle {bundle.get('id')} artifacts must be a list")
+        if len(artifacts) > MAX_ARTIFACTS_PER_BUNDLE:
+            raise ValidationError(
+                f"bundle {bundle.get('id')} exceeds artifact-count limit"
+            )
+        artifact_count += len(artifacts)
+        if artifact_count > MAX_REGISTRY_ARTIFACTS:
+            raise ValidationError("registry exceeds total artifact-count limit")
         string_fields = (
             "id",
             "task",
@@ -882,7 +899,8 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
 
 
 def load_registry(path: Path) -> dict[str, Any]:
-    registry = _parse_registry(path.read_bytes())
+    with path.open("rb") as stream:
+        registry = _parse_registry(stream.read(MAX_REGISTRY_BYTES + 1))
     if registry["schema_version"] != 2:
         raise ValidationError("live registry schema_version must be 2")
     return registry
@@ -1295,11 +1313,33 @@ def validate_transition(previous: dict[str, Any], current: dict[str, Any]) -> No
 
 def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
     _run(repo, "git", "rev-parse", "--verify", f"{ref}^{{commit}}")
-    shown = subprocess.run(
-        ["git", "show", f"{ref}:{REGISTRY}"], cwd=repo, check=False, capture_output=True
+    object_name = f"{ref}:{REGISTRY}"
+    size = subprocess.run(
+        ["git", "cat-file", "-s", object_name],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    if shown.returncode == 0:
+    if size.returncode == 0:
+        try:
+            registry_bytes = int(size.stdout.strip())
+        except ValueError as exc:
+            raise ValidationError(
+                f"invalid registry size for {object_name}: {size.stdout.strip()}"
+            ) from exc
+        if registry_bytes > MAX_REGISTRY_BYTES:
+            raise ValidationError("historical registry exceeds byte limit")
+        shown = subprocess.run(
+            ["git", "show", object_name],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
         return _parse_registry(shown.stdout)
+    shown = subprocess.run(
+        ["git", "show", object_name], cwd=repo, check=False, capture_output=True
+    )
     tree = subprocess.run(
         ["git", "ls-tree", "--name-only", ref, "--", REGISTRY],
         cwd=repo,
@@ -1310,7 +1350,7 @@ def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
     if not tree.stdout.strip():
         return None
     raise ValidationError(
-        f"git show failed for {ref}:{REGISTRY}: {shown.stderr.decode().strip()}"
+        f"git show failed for {object_name}: {shown.stderr.decode().strip()}"
     )
 
 
