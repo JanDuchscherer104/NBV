@@ -323,14 +323,40 @@ def test_typst_apostrophe_does_not_split_balanced_owner_record(tmp_path: Path) -
     assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
 
 
-def test_write_verb_does_not_cross_sentence_boundary(tmp_path: Path) -> None:
-    path = tmp_path / "owner.md"
-    path.write_text(
-        "Write the report. DECISIONS is legacy migration evidence, not current truth.\n",
-        encoding="utf-8",
-    )
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Update the model state. DECISIONS is legacy migration evidence.",
+        "Write the report. The state journal is legacy migration evidence.",
+    ],
+)
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_write_verb_does_not_cross_sentence_boundary(tmp_path: Path, claim: str, suffix: str) -> None:
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["{claim}"]\n'
+    else:
+        body = f"#let notes = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
 
     assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_anaphoric_write_route_remains_rejected(tmp_path: Path, suffix: str) -> None:
+    claim = "DECISIONS is legacy migration evidence. Update it."
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["{claim}"]\n'
+    else:
+        body = f"#let notes = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
 
 
 @pytest.mark.parametrize(
