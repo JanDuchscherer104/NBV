@@ -8,7 +8,7 @@ type = "maintenance"
 priority = "high"
 status = "open"
 labels = ["docs", "hygiene"]
-context = ["Root guidance now points to canonical source order instead of restating a ladder: thesis docs and canonical memory own active direction, glossary source owns terminology, proposal Typst owns advisor wording, and the seminar paper is historical implemented evidence.", "The docs guide asks Quarto to stay aligned with the owning source role and keep internal agent guidance/generated context out of public navigation."]
+context = ["Root guidance now points to source order instead of restating a ladder: the active Typst thesis owns scientific direction, exact code/tests own behavior, glossary source owns terminology, and the seminar paper is historical implemented evidence.", "The docs guide asks Quarto to stay aligned with the owning source role and keep internal agent guidance/generated context out of public navigation."]
 references = ["repo:AGENTS.md#source-order", "repo:docs/AGENTS.md", "repo:.agents/references/source_order.md", "repo:docs/contents/thesis/questions.qmd#rq-kg-writing"]
 
 [[issue]]

@@ -59,7 +59,7 @@ Keep the body concise:
 - method or commands
 - findings or outputs
 - verification
-- canonical state impact
+- current-owner impact
 
 Useful additions when they materially clarify the work:
 - mention staged scope or commit scope when the worktree was dirty

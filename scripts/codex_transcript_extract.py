@@ -900,7 +900,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--decisions-file",
         type=Path,
-        default=REPO_ROOT / ".agents" / "memory" / "state" / "DECISIONS.md",
+        default=REPO_ROOT
+        / ".agents"
+        / "memory"
+        / "state"
+        / "DECISIONS.md",  # Read-only migration evidence.
         help="Legacy decision journal used only as read-only migration evidence.",
     )
     parser.add_argument(

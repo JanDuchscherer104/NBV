@@ -23,7 +23,8 @@ Interview rules:
 - Ask one material decision at a time.
 - State the recommended answer with the tradeoff.
 - Test fuzzy plans against three concrete scenarios: normal, boundary, failure.
-- Cross-check claims against code, paper, memory state, and roadmap.
+- Cross-check claims against exact code/tests, cited papers, measured evidence,
+  and the active Typst thesis.
 - Resolved terminology updates `docs/typst/shared/glossary.typ`; other durable
   outcomes update the smallest owner named by `source_order.md`. Do not create
   parallel ADR trees or add facts to legacy state journals.

@@ -92,6 +92,30 @@ def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> No
     assert all("migration-only qualifier" in error for error in errors)
 
 
+def test_qualifier_does_not_exempt_a_later_owner_route(tmp_path: Path) -> None:
+    path = tmp_path / "README.md"
+    path.write_text(
+        "DECISIONS.md is legacy migration evidence only.\nUpdate DECISIONS.md with durable current truth.\n",
+        encoding="utf-8",
+    )
+
+    assert validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path) == [
+        "README.md:2: legacy state journal route lacks an explicit migration-only qualifier"
+    ]
+
+
+def test_semantic_alias_and_makefile_route_are_rejected(tmp_path: Path) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        "owner:\n\t@echo 'canonical memory owns current truth'\n",
+        encoding="utf-8",
+    )
+
+    errors = validator.check_legacy_state_owner_claims(["Makefile"], repo_root=tmp_path)
+
+    assert errors == ["Makefile:2: legacy state journal route lacks an explicit migration-only qualifier"]
+
+
 def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / ".agents" / "missing.md"
     path.parent.mkdir(parents=True)

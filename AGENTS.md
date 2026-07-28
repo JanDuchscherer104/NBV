@@ -79,7 +79,7 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Surface checks: see `.agents/references/verification_matrix.md`.
 
 ## Verification
-- Repo guidance, canonical state, debriefs, or skills: `make check-agent-memory`
+- Repo guidance, debriefs, or skills: `make check-agent-memory`
   and validate changed skills with the local skill validator when available.
 - Agents DB edits: `make agents-db AGENTS_ARGS='validate'` and `make agents-db`.
 - Python/package edits: format, lint, and targeted pytest for the touched

@@ -69,7 +69,7 @@ navigation, and public/internal boundary decisions.
   context, raw scratch history, and OMX runtime notes stay under `.agents/`.
 - Run litkg claim checks for advisor-facing proposal, roadmap,
   research-question, or literature-synthesis claims.
-- Link to canonical state or owning implementation docs instead of repeating long explanations.
+- Link to the exact source-order owner instead of repeating long explanations.
 - Keep bibliography additions in `docs/references.bib`.
 - Use QMD frontmatter to classify rendered pages:
   `phase: thesis | seminar | archive | generated`,

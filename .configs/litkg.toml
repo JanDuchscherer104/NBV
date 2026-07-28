@@ -115,7 +115,6 @@ include = [
   ".agents/issues.toml",
   ".agents/todos.toml",
   ".agents/refactors.toml",
-  ".agents/resolved.toml",
 ]
 
 [sources.agent_backlog]
@@ -125,6 +124,12 @@ include = [
   ".agents/issues.toml",
   ".agents/todos.toml",
   ".agents/refactors.toml",
+]
+
+[sources.agent_resolved]
+required = false
+authority = "resolved_history"
+include = [
   ".agents/resolved.toml",
 ]
 

@@ -13,7 +13,7 @@ Then open the file and fill in:
 - method or commands (what was actually run)
 - findings or outputs (what changed; cite file paths)
 - verification (commands that ran; pass/fail; blockers)
-- canonical state impact (set `canonical_updates_needed` or say "none" explicitly)
+- current-owner impact (set `canonical_updates_needed` or say "none" explicitly)
 
 Keep the body short. If the work changed durable truth, list and update the
 smallest current owner named by `.agents/references/source_order.md`. Never add

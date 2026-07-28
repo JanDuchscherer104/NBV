@@ -155,6 +155,7 @@ MAX_ARTIFACT_BYTES = 2_000_000
 MAX_TOTAL_ARTIFACT_BYTES = 20_000_000
 LFS_POINTER = re.compile(
     r"\Aversion https://git-lfs\.github\.com/spec/v1\n"
+    r"(?:ext-[^\n]+\n)*"
     r"oid sha256:[0-9a-f]{64}\nsize [0-9]+\n?\Z"
 )
 ACCEPTANCE_FIELDS_V2 = {

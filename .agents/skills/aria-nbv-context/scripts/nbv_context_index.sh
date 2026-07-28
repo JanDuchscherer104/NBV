@@ -60,8 +60,7 @@ lit_bib_count="$(count_files '*.bib' "${lit_root}")"
 lit_family_count="$(count_immediate_dirs "${lit_root}/tex-src")"
 py_count="$(count_files '*.py' "${ROOT_DIR}/aria_nbv/aria_nbv")"
 ref_count="$(count_files '*.md' "${ROOT_DIR}/.agents/references")"
-# Count legacy migration evidence for inventory only; it is never a current owner.
-memory_state_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/state")"
+memory_state_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/state")" # legacy migration evidence only
 memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")"
 
 {

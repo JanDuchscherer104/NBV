@@ -14,7 +14,7 @@ Read `.agents/references/agent_memory_templates.md` first. Then:
    - method or commands (what was actually run)
    - findings or outputs (what changed; cite file paths)
    - verification (commands; pass/fail; blockers)
-   - canonical state impact
+   - current-owner impact
 3. Set `canonical_updates_needed`:
    - empty list if the task did not change current truth (say so explicitly)
    - otherwise list and update the smallest current owner named by

@@ -2003,6 +2003,31 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ValidationError, "LFS pointers"):
             MODULE.validate_registry(self.repo, registry)
 
+    def test_extended_lfs_pointer_is_rejected_in_archived_v1_bundle(self) -> None:
+        original = self.bundle("task-v1")
+        original.pop("contract_version")
+        artifact = original["artifact"][0]
+        target = self.repo / artifact["path"]
+        target.write_text(
+            "version https://git-lfs.github.com/spec/v1\n"
+            f"ext-0-example sha256:{'1' * 64} 123\n"
+            f"oid sha256:{'0' * 64}\n"
+            "size 123\n",
+            encoding="utf-8",
+        )
+        payload = target.read_bytes()
+        artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+        artifact["bytes"] = len(payload)
+        self.commit_registry(original, "legacy v1", schema_version=1)
+
+        successor = self.bundle("task-v2", "successor")
+        self.commit_supersession(original, successor)
+
+        with self.assertRaisesRegex(MODULE.ValidationError, "LFS pointers"):
+            MODULE.validate_registry(
+                self.repo, self.repo / ".agents/omx_artifacts.toml"
+            )
+
     def test_full_history_rejects_restored_registry_removal(self) -> None:
         bundle = self.bundle("task-current")
         self.commit_registry(bundle, "accepted base")
@@ -2481,6 +2506,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             r"uses: actions/checkout@v4\s+with:\s+fetch-depth: 0",
         )
         for path in (
+            ".claude/**",
             ".omx/**",
             ".mempalace",
             ".mempalace/**",
@@ -2488,6 +2514,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             ".palace/**",
             ".gitignore",
             "scripts/scaffold/**",
+            "scripts/codex_transcript_extract.py",
+            "scripts/kg/**",
+            "scripts/quarto_generate_agent_docs.py",
             "scripts/tests/test_validate_omx_artifacts.py",
         ):
             with self.subTest(path=path):
@@ -2496,6 +2525,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertIn("OMX_ARTIFACT_PREVIOUS_REF:", workflow)
         self.assertIn("github.event.pull_request.base.sha", workflow)
         self.assertIn("github.event.before", workflow)
+        self.assertGreaterEqual(workflow.count('- "CLAUDE.md"'), 2)
 
     def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
         registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"

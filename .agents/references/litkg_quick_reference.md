@@ -103,16 +103,16 @@ The following legacy fields are emitted only under `KG_VERBOSE=1`
 `missing_context_leaves`, and `backend_status`. The default lean JSON
 payload for a trivial smoke task is ~42 KB (vs ~230 KB legacy).
 
-Authority is configured in `.configs/litkg.toml`. Current canonical memory,
-current thesis QMDs, thesis proposal Typst, and implementation code should rank
-above historical seminar paper evidence and episodic history for comparable
-matches.
+Authority is configured in `.configs/litkg.toml`. Exact code/tests, active
+Typst thesis sources, current configs, human-owner intent, and active backlog
+should rank above historical seminar evidence and episodic history for
+comparable matches.
 
 Transcript-derived context follows a trust ladder: raw agent messages are
 private low-trust search material, raw user messages are higher-signal but not
 canonical, and distilled user intent plus later agent-grounded agreement is a
-high-trust candidate memory. Only checked-in canonical memory, backlog, docs,
-and code become current truth.
+high-trust candidate evidence. Only the checked-in owner selected through
+`.agents/references/source_order.md` can become current truth.
 
 ## Advanced Commands
 

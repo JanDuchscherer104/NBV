@@ -107,7 +107,9 @@ FORBIDDEN_OMX_RUNTIME_PREFIXES = (
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 LEGACY_STATE_MENTION = re.compile(
     r"(?:\.agents/memory/state(?:/[A-Z_]+\.md)?|"
-    r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md)"
+    r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
+    r"\b(?:canonical memory|canonical state|memory state)\b)",
+    re.IGNORECASE,
 )
 LEGACY_STATE_MIGRATION_TERMS = (
     "legacy migration",
@@ -121,8 +123,8 @@ LEGACY_STATE_MIGRATION_TERMS = (
     "not current truth",
     "supporting evidence",
 )
-LEGACY_STATE_CONTEXT_RADIUS = 320
-LEGACY_STATE_SCAN_SUFFIXES = {".md", ".py", ".sh", ".toml"}
+LEGACY_STATE_SCAN_SUFFIXES = {".json", ".md", ".py", ".sh", ".toml", ".yaml", ".yml"}
+LEGACY_STATE_SCAN_FILENAMES = {"Makefile"}
 LEGACY_STATE_SCAN_EXCLUDED_PREFIXES = (
     ".agents/archive/",
     ".agents/memory/history/",
@@ -416,7 +418,10 @@ def check_legacy_state_owner_claims(
         ):
             continue
         path = repo_root / tracked_path
-        if path.suffix not in LEGACY_STATE_SCAN_SUFFIXES:
+        if (
+            path.suffix not in LEGACY_STATE_SCAN_SUFFIXES
+            and path.name not in LEGACY_STATE_SCAN_FILENAMES
+        ):
             continue
         if path.is_symlink() or not path.is_file():
             errors.append(f"{tracked_path}: tracked ownership source is unreadable")
@@ -428,13 +433,12 @@ def check_legacy_state_owner_claims(
                 f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}"
             )
             continue
-        for match in LEGACY_STATE_MENTION.finditer(text):
-            start = max(0, match.start() - LEGACY_STATE_CONTEXT_RADIUS)
-            end = min(len(text), match.end() + LEGACY_STATE_CONTEXT_RADIUS)
-            context = " ".join(text[start:end].lower().split())
-            if any(term in context for term in LEGACY_STATE_MIGRATION_TERMS):
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            normalized = " ".join(line.lower().split())
+            if not LEGACY_STATE_MENTION.search(line):
                 continue
-            line_number = text.count("\n", 0, match.start()) + 1
+            if any(term in normalized for term in LEGACY_STATE_MIGRATION_TERMS):
+                continue
             errors.append(
                 f"{tracked_path}:{line_number}: legacy state journal route lacks "
                 "an explicit migration-only qualifier"

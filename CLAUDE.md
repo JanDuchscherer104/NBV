@@ -22,8 +22,8 @@ into the same scaffold that Codex and Gemini already use.
 - Capture durable instruction in the smallest correct surface (`AGENTS.md`,
   `.agents/skills/*/SKILL.md`, `.agents/references/human_owner_intent.md`,
   the active Typst thesis, owning code/tests, or the agents DB via
-  `make agents-db`). Legacy `.agents/memory/state/` journals are read-only
-  migration evidence.
+  `make agents-db`). Legacy `.agents/memory/state/` journals are read-only migration
+  evidence.
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`
   following `.agents/references/agent_memory_templates.md`.
 
