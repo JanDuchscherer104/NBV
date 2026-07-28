@@ -1,8 +1,8 @@
 """Lazy storage reader for complete finite-candidate ``Q_H`` rollout chains.
-Admission validates complete non-empty chains; workers reopen [Zarr](https://zarr.readthedocs.io/)
-handles for bounded rows and candidate slices. Tensor conversion, VIN composition,
-padding, and the public five-DTO interface belong to
-:mod:`aria_nbv.data_handling.qh`.
+This module owns admission of complete non-empty chains and bounded
+[Zarr](https://zarr.readthedocs.io/) reads; workers reopen handles for row and candidate slices.
+Tensor conversion, VIN composition, padding, and the public five-DTO interface
+belong to :mod:`aria_nbv.data_handling.qh`.
 """
 
 from __future__ import annotations

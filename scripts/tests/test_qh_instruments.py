@@ -177,7 +177,7 @@ def test_loc_audit_final_phase_requires_and_counts_every_future_symbol() -> None
 
     result = json.loads(completed.stdout)
     assert result["phase"] == "final"
-    assert result["total_physical_loc"] == 1835
+    assert result["total_physical_loc"] == 1834
 
 
 def test_v0_baseline_generation_config_keeps_truthful_v0_identity() -> None:
