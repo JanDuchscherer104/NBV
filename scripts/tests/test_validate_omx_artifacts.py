@@ -1990,6 +1990,50 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             result.stderr, "registry-free OMX payload changed after previous_ref"
         )
 
+    def test_pr_history_uses_merge_base_when_base_branch_advances(self) -> None:
+        fork = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "-qb", "feature")
+        payload = self.repo / ".omx/plans/unregistered.md"
+        payload.parent.mkdir(parents=True)
+        payload.write_text("transient unregistered payload\n", encoding="utf-8")
+        self.git("add", "-f", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "transient registry-free payload")
+        self.git("rm", "-q", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "remove transient payload")
+        self.commit_registry(self.bundle("task-current"), "accepted registry")
+        feature = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "-q", "main")
+        (self.repo / "main.txt").write_text("main advanced\n", encoding="utf-8")
+        self.git("add", "main.txt")
+        self.git("commit", "-qm", "advance base branch")
+        base_tip = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "--detach", "-q", feature)
+        ancestry = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", base_tip, "HEAD"],
+            cwd=self.repo,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(ancestry.returncode, 0)
+        merge_base = self.git("merge-base", "HEAD", base_tip).stdout.strip()
+        self.assertEqual(merge_base, fork)
+
+        base_tip_result = self.run_validator(base_tip)
+        merge_base_result = self.run_validator(merge_base)
+
+        self.assertNotEqual(base_tip_result.returncode, 0)
+        self.assertRegex(
+            base_tip_result.stderr, "previous_ref must be an ancestor of HEAD"
+        )
+        self.assertNotEqual(merge_base_result.returncode, 0)
+        self.assertRegex(
+            merge_base_result.stderr,
+            "registry-free OMX payload changed after previous_ref",
+        )
+
     def test_full_history_disables_lfs_process_filter(self) -> None:
         bundle = self.bundle("task-current")
         self.git("config", "filter.lfs.clean", "cat")
@@ -2542,9 +2586,17 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         self.assertNotRegex(trigger_block, r"(?m)^\s+(?:paths|paths-ignore):")
         self.assertIn("python scripts/tests/test_validate_omx_artifacts.py", workflow)
-        self.assertIn("OMX_ARTIFACT_PREVIOUS_REF:", workflow)
+        self.assertIn("OMX_ARTIFACT_PREVIOUS_REF=${previous_ref}", workflow)
         self.assertIn("github.event.pull_request.base.sha", workflow)
         self.assertIn("github.event.before", workflow)
+        self.assertIn('git merge-base HEAD "${PR_BASE_SHA}"', workflow)
+        self.assertIn(
+            'echo "OMX_ARTIFACT_PREVIOUS_REF=${previous_ref}" >> "${GITHUB_ENV}"',
+            workflow,
+        )
+        self.assertNotRegex(
+            workflow, r"OMX_ARTIFACT_PREVIOUS_REF:\s*\$\{\{[^\n]+base\.sha"
+        )
 
     def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
         registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"

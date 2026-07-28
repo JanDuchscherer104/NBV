@@ -19,13 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHON_INTERPRETER: python
-      OMX_ARTIFACT_PREVIOUS_REF: ${{ github.event.pull_request.base.sha || github.event.before || format('{0}^', github.sha) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Resolve OMX artifact history base
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ -n "${PR_BASE_SHA}" ]]; then
+            previous_ref="$(git merge-base HEAD "${PR_BASE_SHA}")"
+          elif [[ -n "${PUSH_BEFORE_SHA}" && "${PUSH_BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            previous_ref="${PUSH_BEFORE_SHA}"
+          else
+            previous_ref="$(git rev-parse HEAD^)"
+          fi
+          echo "OMX_ARTIFACT_PREVIOUS_REF=${previous_ref}" >> "${GITHUB_ENV}"
 
       - name: Initialize EFM3D submodule
         run: git submodule update --init external/efm3d

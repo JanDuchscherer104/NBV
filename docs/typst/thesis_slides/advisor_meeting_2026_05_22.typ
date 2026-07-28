@@ -163,7 +163,7 @@
     [
       #color-block(title: [Conflict rule], spacing: 0.4em)[
         #slide-small[
-          - Current deck claim beats historical seminar/outlook wording.
+          - Active Typst thesis claims beat historical seminar/outlook wording.
           - Current code and generated API pages beat planned implementation claims.
           - Unresolved advisor decisions belong in the active thesis source and owning backlog record.
           - Any imported historical claim must be marked as conflict, WIP, optional, or prune.
@@ -194,7 +194,7 @@
         [Current thesis core],
         [Required claim path for thesis success: target-RRI, finite candidates, offline $Q_H$.],
 
-        [this deck], [WIP necessary], [Must land before thesis-grade quantitative claims.],
+        [active Typst thesis], [WIP necessary], [Must land before thesis-grade quantitative claims.],
         [roadmap/backlog mirror], [Optional ablation], [Useful only if schedule/support allows.],
         [appendix or roadmap], [Open decision], [Advisor-facing unresolved choice.],
         [`main.typ` owner],
@@ -874,7 +874,7 @@
           #necessary_todo(
             [LRZ/Zarr preflight, stale-schema checks, and file-count/chunk budget before broad generation.],
             gate: [M1/M2 scale readiness],
-            sources: [roadmap; DECISIONS],
+            sources: [roadmap; `main.typ`],
           )
           #v(0.22em)
           #necessary_todo(

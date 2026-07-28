@@ -128,6 +128,15 @@ def test_migration_phrase_does_not_exempt_same_line_owner_assertion(tmp_path: Pa
     ]
 
 
+def test_bare_uppercase_legacy_alias_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "owner.typ"
+    path.write_text("#let sources = [roadmap; DECISIONS]\n", encoding="utf-8")
+
+    assert validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path) == [
+        "owner.typ:1: legacy state journal route lacks an explicit migration-only qualifier"
+    ]
+
+
 @pytest.mark.parametrize("suffix", [".qmd", ".typ"])
 def test_wrapped_and_alternative_owner_claims_are_rejected(tmp_path: Path, suffix: str) -> None:
     path = tmp_path / f"owner{suffix}"
@@ -158,6 +167,61 @@ def test_migration_qualifier_does_not_exempt_owner_variants(tmp_path: Path, clai
     errors = validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path)
 
     assert errors == ["README.md:1: legacy state journal route lacks an explicit migration-only qualifier"]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_errors"),
+    [
+        (
+            "#let note = [\n"
+            "  The decision journals are retained only as\n"
+            "  legacy migration evidence while the replacement\n"
+            "  owners are validated. They are not current truth.\n"
+            "]\n",
+            0,
+        ),
+        (
+            "#let note = [\n"
+            "  The decision journals are retained only as\n"
+            "  legacy migration evidence while the replacement\n"
+            "  owners are validated, but they remain\n"
+            "  authoritative for current decisions.\n"
+            "]\n",
+            1,
+        ),
+    ],
+)
+def test_typst_balanced_records_are_classified_as_a_unit(tmp_path: Path, body: str, expected_errors: int) -> None:
+    path = tmp_path / "owner.typ"
+    path.write_text(body, encoding="utf-8")
+
+    errors = validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+    assert len(errors) == expected_errors
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_errors"),
+    [
+        (
+            'notes = [\n  "DECISIONS is legacy migration evidence",\n  "and is not current truth.",\n]\n',
+            0,
+        ),
+        (
+            'notes = [\n  "DECISIONS is legacy migration evidence",\n'
+            '  "while replacement owners are validated",\n'
+            '  "but remains authoritative for current decisions.",\n]\n',
+            1,
+        ),
+    ],
+)
+def test_toml_array_values_are_classified_as_a_unit(tmp_path: Path, body: str, expected_errors: int) -> None:
+    path = tmp_path / "owner.toml"
+    path.write_text(body, encoding="utf-8")
+
+    errors = validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+    assert len(errors) == expected_errors
 
 
 def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:

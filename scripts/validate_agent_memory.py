@@ -14,7 +14,9 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
+from typing import Any, Iterator
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
@@ -110,6 +112,10 @@ LEGACY_STATE_MENTION = re.compile(
     r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
     r"\b(?:canonical memory|canonical state|memory state|decision journals?|state journals?)\b)",
     re.IGNORECASE,
+)
+LEGACY_STATE_BARE_NAME = re.compile(
+    r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)"
+    r"(?![A-Za-z0-9_/.])"
 )
 LEGACY_STATE_MIGRATION_ONLY = (
     re.compile(r"\bmigration(?:-only)? evidence\b", re.IGNORECASE),
@@ -427,6 +433,195 @@ def is_forbidden_tracked_runtime_path(path: str) -> bool:
     )
 
 
+def _legacy_state_mentions(text: str) -> list[re.Match[str]]:
+    """Return non-overlapping legacy-state mentions in source order."""
+
+    matches = [
+        *LEGACY_STATE_MENTION.finditer(text),
+        *LEGACY_STATE_BARE_NAME.finditer(text),
+    ]
+    matches.sort(key=lambda match: (match.start(), -(match.end() - match.start())))
+    selected: list[re.Match[str]] = []
+    for match in matches:
+        if selected and match.start() < selected[-1].end():
+            continue
+        selected.append(match)
+    return selected
+
+
+def _has_legacy_state_mention(text: str) -> bool:
+    return bool(_legacy_state_mentions(text))
+
+
+def _strip_legacy_state_mentions(text: str) -> str:
+    text = LEGACY_STATE_MENTION.sub("", text)
+    return LEGACY_STATE_BARE_NAME.sub("", text)
+
+
+def _line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
+
+
+def _paragraph_record(lines: list[str], line_index: int) -> tuple[int, str]:
+    start = line_index
+    while start > 0 and lines[start - 1].strip():
+        start -= 1
+    end = line_index + 1
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    return start + 1, " ".join(part.strip() for part in lines[start:end])
+
+
+def _toml_string_records(value: Any) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        strings = [entry for entry in value if isinstance(entry, str)]
+        if strings:
+            yield " ".join(strings)
+        for entry in value:
+            if not isinstance(entry, str):
+                yield from _toml_string_records(entry)
+    elif isinstance(value, dict):
+        for entry in value.values():
+            yield from _toml_string_records(entry)
+
+
+def _toml_records(text: str) -> list[tuple[int, str]]:
+    """Decode complete TOML values so wrapped arrays cannot split ownership claims."""
+
+    parsed = tomllib.loads(text)
+    records: list[tuple[int, str]] = []
+    search_offset = 0
+    for record in _toml_string_records(parsed):
+        mentions = _legacy_state_mentions(record)
+        if not mentions:
+            continue
+        token = mentions[0].group(0)
+        match = re.search(re.escape(token), text[search_offset:], re.IGNORECASE)
+        if match is None:
+            match = re.search(re.escape(token), text, re.IGNORECASE)
+            offset = match.start() if match else 0
+        else:
+            offset = search_offset + match.start()
+            search_offset += match.end()
+        records.append((_line_number(text, offset), record))
+
+    for match in re.finditer(r"(?m)^\s*#.*$", text):
+        if _has_legacy_state_mention(match.group(0)):
+            records.append((_line_number(text, match.start()), match.group(0)))
+    return records
+
+
+def _typst_bracket_spans(text: str) -> list[tuple[int, int]]:
+    """Return balanced Typst bracket spans while ignoring strings and comments."""
+
+    opening = {"[": "]", "(": ")", "{": "}"}
+    closing = {value: key for key, value in opening.items()}
+    stack: list[tuple[str, int]] = []
+    spans: list[tuple[int, int]] = []
+    quote: str | None = None
+    escaped = False
+    line_comment = False
+    block_comment_depth = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+            index += 1
+            continue
+        if block_comment_depth:
+            if char == "/" and following == "*":
+                block_comment_depth += 1
+                index += 2
+            elif char == "*" and following == "/":
+                block_comment_depth -= 1
+                index += 2
+            else:
+                index += 1
+            continue
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+            continue
+        if char == "/" and following == "/":
+            line_comment = True
+            index += 2
+            continue
+        if char == "/" and following == "*":
+            block_comment_depth = 1
+            index += 2
+            continue
+        if char in {'"', "'"}:
+            quote = char
+        elif char in opening:
+            stack.append((char, index))
+        elif char in closing and stack and stack[-1][0] == closing[char]:
+            _, start = stack.pop()
+            spans.append((start, index + 1))
+        index += 1
+    return spans
+
+
+def _typst_record(
+    text: str, mention_offset: int, spans: list[tuple[int, int]]
+) -> tuple[int, str]:
+    candidates = sorted(
+        (span for span in spans if span[0] <= mention_offset < span[1]),
+        key=lambda span: span[1] - span[0],
+    )
+    selected: tuple[int, int] | None = None
+    for span in candidates:
+        line_start = text.rfind("\n", 0, span[0]) + 1
+        prefix = text[line_start : span[0]].strip()
+        selected = span
+        if prefix.startswith("#") or prefix.endswith(("=", ":")):
+            break
+    if selected is None:
+        lines = text.splitlines()
+        line_index = _line_number(text, mention_offset) - 1
+        return _paragraph_record(lines, line_index)
+    return _line_number(text, selected[0]), text[selected[0] : selected[1]]
+
+
+def _logical_owner_records(path: Path, text: str) -> list[tuple[int, str]]:
+    lines = text.splitlines()
+    if path.suffix in {".md", ".qmd"}:
+        prose_records = {
+            _paragraph_record(lines, _line_number(text, match.start()) - 1)
+            for match in _legacy_state_mentions(text)
+        }
+        return sorted(prose_records)
+    if path.suffix == ".toml":
+        return _toml_records(text)
+    if path.suffix == ".typ":
+        spans = _typst_bracket_spans(text)
+        typst_records = {
+            _typst_record(text, match.start(), spans)
+            for match in _legacy_state_mentions(text)
+        }
+        return sorted(typst_records)
+
+    fallback_records: set[tuple[int, str]] = set()
+    for line_index, line in enumerate(lines):
+        if not _has_legacy_state_mention(line):
+            continue
+        start = max(0, line_index - 1)
+        end = min(len(lines), line_index + 2)
+        fallback_records.add(
+            (line_index + 1, " ".join(part.strip() for part in lines[start:end]))
+        )
+    return sorted(fallback_records)
+
+
 def check_legacy_state_owner_claims(
     tracked_paths: list[str], repo_root: Path = REPO_ROOT
 ) -> list[str]:
@@ -454,36 +649,29 @@ def check_legacy_state_owner_claims(
                 f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}"
             )
             continue
-        lines = text.splitlines()
-        prose = path.suffix in {".md", ".qmd"}
-        for line_index, line in enumerate(lines):
-            if not LEGACY_STATE_MENTION.search(line):
-                continue
-            if prose:
-                start = line_index
-                while start > 0 and lines[start - 1].strip():
-                    start -= 1
-                end = line_index + 1
-                while end < len(lines) and lines[end].strip():
-                    end += 1
-            else:
-                radius = 2 if path.suffix == ".typ" else 1
-                start = max(0, line_index - radius)
-                end = min(len(lines), line_index + radius + 1)
-            context = " ".join(part.strip() for part in lines[start:end])
+        if not _has_legacy_state_mention(text):
+            continue
+        try:
+            records = _logical_owner_records(path, text)
+        except tomllib.TOMLDecodeError as exc:
+            errors.append(
+                f"{tracked_path}: cannot parse tracked TOML ownership source: {exc}"
+            )
+            continue
+        for line_number, context in records:
             normalized = " ".join(context.lower().split())
             migration_only = any(
                 pattern.search(normalized) for pattern in LEGACY_STATE_MIGRATION_ONLY
             )
-            assertion_text = LEGACY_STATE_MENTION.sub(
-                "", LEGACY_STATE_NEGATED_OWNER.sub("", normalized)
+            assertion_text = _strip_legacy_state_mentions(
+                LEGACY_STATE_NEGATED_OWNER.sub("", normalized)
             )
             if migration_only and not LEGACY_STATE_OWNER_ASSERTION.search(
                 assertion_text
             ):
                 continue
             errors.append(
-                f"{tracked_path}:{line_index + 1}: legacy state journal route lacks "
+                f"{tracked_path}:{line_number}: legacy state journal route lacks "
                 "an explicit migration-only qualifier"
             )
     return errors
