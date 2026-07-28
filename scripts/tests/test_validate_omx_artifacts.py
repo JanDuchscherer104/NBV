@@ -1938,6 +1938,71 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertRegex(result.stderr, "previous_ref must be an ancestor of HEAD")
 
+    def test_full_history_rejects_previous_ref_on_merge_side_parent(self) -> None:
+        self.commit_registry(self.bundle("task-current"), "accepted registry")
+        self.git("checkout", "-qb", "feature")
+        (self.repo / "feature.txt").write_text("feature\n", encoding="utf-8")
+        self.git("add", "feature.txt")
+        self.git("commit", "-qm", "feature commit")
+        feature = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "-q", "main")
+        (self.repo / "main.txt").write_text("main\n", encoding="utf-8")
+        self.git("add", "main.txt")
+        self.git("commit", "-qm", "main commit")
+        side_parent = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "-q", "feature")
+        self.git("merge", "--no-ff", "-qm", "merge main", side_parent)
+        self.assertEqual(
+            self.git("rev-parse", "HEAD^1").stdout.strip(),
+            feature,
+        )
+
+        result = self.run_validator(side_parent)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stderr, "first-parent chain")
+
+    def test_full_history_disables_lfs_process_filter(self) -> None:
+        bundle = self.bundle("task-current")
+        self.git("config", "filter.lfs.clean", "cat")
+        self.git("config", "filter.lfs.smudge", "cat")
+        self.git("config", "filter.lfs.process", "")
+        self.git("config", "filter.lfs.required", "false")
+        (self.repo / ".gitattributes").write_text(
+            ".omx/** filter=lfs\n", encoding="utf-8"
+        )
+        self.commit_registry(bundle, "accepted registry")
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        (self.repo / "README.md").write_text("next snapshot\n", encoding="utf-8")
+        self.git("add", "README.md")
+        self.git("commit", "-qm", "next snapshot")
+        self.git("config", "filter.lfs.process", "false")
+        self.git("config", "filter.lfs.required", "true")
+
+        result = self.run_validator(previous)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_lfs_pointer_is_not_accepted_evidence(self) -> None:
+        bundle = self.bundle("task-current")
+        artifact = bundle["artifact"][0]
+        target = self.repo / artifact["path"]
+        target.write_text(
+            "version https://git-lfs.github.com/spec/v1\n"
+            f"oid sha256:{'0' * 64}\n"
+            "size 123\n",
+            encoding="utf-8",
+        )
+        payload = target.read_bytes()
+        artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+        artifact["bytes"] = len(payload)
+        registry = self.write_registry([bundle])
+
+        with self.assertRaisesRegex(MODULE.ValidationError, "LFS pointers"):
+            MODULE.validate_registry(self.repo, registry)
+
     def test_full_history_rejects_restored_registry_removal(self) -> None:
         bundle = self.bundle("task-current")
         self.commit_registry(bundle, "accepted base")

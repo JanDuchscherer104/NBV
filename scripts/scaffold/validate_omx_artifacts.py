@@ -153,6 +153,10 @@ MAX_ARTIFACTS_PER_BUNDLE = 256
 MAX_REGISTRY_ARTIFACTS = 4_096
 MAX_ARTIFACT_BYTES = 2_000_000
 MAX_TOTAL_ARTIFACT_BYTES = 20_000_000
+LFS_POINTER = re.compile(
+    r"\Aversion https://git-lfs\.github\.com/spec/v1\n"
+    r"oid sha256:[0-9a-f]{64}\nsize [0-9]+\n?\Z"
+)
 ACCEPTANCE_FIELDS_V2 = {
     "schema_version",
     "bundle_id",
@@ -594,6 +598,8 @@ def _scan_text(text: str, subject: object, contract_version: int = 2) -> None:
 
 def _scan(path: Path, contract_version: int) -> None:
     text = _read_utf8(path, "registered evidence")
+    if LFS_POINTER.fullmatch(text):
+        raise ValidationError(f"Git LFS pointers are not accepted evidence: {path}")
     if contract_version >= 2 and path.suffix.lower() == ".json":
         try:
             payload = json.loads(text, object_pairs_hook=_unique_json_object)
@@ -1418,6 +1424,14 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
     if ancestor.returncode:
         raise ValidationError("previous_ref must be an ancestor of HEAD")
 
+    first_parent_commits = set(
+        filter(
+            None, _run(repo, "git", "rev-list", "--first-parent", "HEAD").splitlines()
+        )
+    )
+    if resolved_previous not in first_parent_commits:
+        raise ValidationError("previous_ref must be on HEAD's first-parent chain")
+
     commits = [resolved_previous]
     commits.extend(
         filter(
@@ -1427,7 +1441,6 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
                 "git",
                 "rev-list",
                 "--first-parent",
-                "--ancestry-path",
                 "--reverse",
                 f"{resolved_previous}..HEAD",
             ).splitlines(),
@@ -1451,16 +1464,36 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
                 commits[0],
             )
             added = True
-            _run(snapshot, "git", "sparse-checkout", "init", "--no-cone")
-            _run(snapshot, "git", "sparse-checkout", "set", REGISTRY, ".omx/")
+            lfs_neutral = (
+                "-c",
+                "filter.lfs.process=",
+                "-c",
+                "filter.lfs.smudge=cat",
+                "-c",
+                "filter.lfs.required=false",
+            )
+            _run(
+                snapshot,
+                "git",
+                *lfs_neutral,
+                "sparse-checkout",
+                "init",
+                "--no-cone",
+            )
+            _run(
+                snapshot,
+                "git",
+                *lfs_neutral,
+                "sparse-checkout",
+                "set",
+                REGISTRY,
+                ".omx/",
+            )
             for commit in commits:
                 _run(
                     snapshot,
                     "git",
-                    "-c",
-                    "filter.lfs.smudge=",
-                    "-c",
-                    "filter.lfs.required=false",
+                    *lfs_neutral,
                     "checkout",
                     "--detach",
                     "--force",
