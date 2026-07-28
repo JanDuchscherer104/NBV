@@ -531,7 +531,7 @@ def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
 
     delimiters = ".;!?"
     starts = [
-        index
+        index + 1
         for index, char in enumerate(text[:offset])
         if char in delimiters and not is_protected(index)
     ]
@@ -540,7 +540,14 @@ def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
         for index, char in enumerate(text[offset:], start=offset)
         if char in delimiters and not is_protected(index)
     ]
-    return (max(starts, default=-1) + 1, min(ends, default=len(text)))
+    connectors = [
+        match.span()
+        for match in WRITE_SCOPE_RESET.finditer(text)
+        if not any(is_protected(index) for index in range(*match.span()))
+    ]
+    starts.extend(end for _, end in connectors if end <= offset)
+    ends.extend(start for start, _ in connectors if start >= offset)
+    return max(starts, default=0), min(ends, default=len(text))
 
 
 def _is_locally_negated(text: str, offset: int) -> bool:
@@ -610,34 +617,50 @@ def _paragraph_record(lines: list[str], line_index: int) -> tuple[int, str]:
     return start + 1, " ".join(part.strip() for part in lines[start:end])
 
 
-def _toml_string_records(value: Any) -> Iterator[str]:
+def _toml_string_records(value: Any, *, context: tuple[str, ...] = ()) -> Iterator[str]:
     """Yield one joined string record per TOML table or array entry."""
 
     if isinstance(value, str):
-        yield value
+        yield " . ".join((*context, value))
     elif isinstance(value, list):
         strings = [entry for entry in value if isinstance(entry, str)]
         if strings:
-            yield " . ".join(strings)
+            yield " . ".join((*context, *strings))
         for entry in value:
             if not isinstance(entry, str):
-                yield from _toml_string_records(entry)
+                yield from _toml_string_records(entry, context=context)
     elif isinstance(value, dict):
-        table_strings: list[str] = []
-        for entry in value.values():
+        table_strings: list[str] = list(context)
+        for key, entry in value.items():
             if isinstance(entry, str):
-                table_strings.append(entry)
+                table_strings.extend((key, entry))
             elif isinstance(entry, list):
-                table_strings.extend(item for item in entry if isinstance(item, str))
-        if table_strings:
+                strings = [item for item in entry if isinstance(item, str)]
+                if strings:
+                    table_strings.extend((key, *strings))
+        if len(table_strings) > len(context):
             yield " . ".join(table_strings)
-        for entry in value.values():
+        for key, entry in value.items():
             if isinstance(entry, dict):
-                yield from _toml_string_records(entry)
+                yield from _toml_string_records(entry, context=(*context, key))
             elif isinstance(entry, list):
                 for item in entry:
                     if not isinstance(item, str):
-                        yield from _toml_string_records(item)
+                        yield from _toml_string_records(item, context=(*context, key))
+
+
+def _git_tracked_paths(repo_root: Path) -> tuple[list[str], str | None]:
+    """Return tracked paths without Git's quoting or line-delimiter ambiguity."""
+
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return [], os.fsdecode(result.stderr).strip() or None
+    return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path], None
 
 
 def _toml_records(text: str) -> list[tuple[int, str]]:
@@ -819,8 +842,7 @@ def check_legacy_state_owner_claims(
             if migration_only and not _has_legacy_owner_assertion(normalized):
                 continue
             errors.append(
-                f"{tracked_path}:{line_number}: legacy state journal route lacks "
-                "an explicit migration-only qualifier"
+                f"{tracked_path}:{line_number}: legacy state journal route lacks an explicit migration-only qualifier"
             )
     return errors
 
@@ -898,24 +920,14 @@ def check_scaffold_alignment() -> list[str]:
                 f"{rel}: missing scaffold ownership snippet: {expected_snippet}"
             )
 
-    result = subprocess.run(
-        ["git", "ls-files"],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
+    tracked_paths, git_error = _git_tracked_paths(REPO_ROOT)
+    if git_error is not None:
+        stderr = git_error
         suffix = f": {stderr}" if stderr else ""
         errors.append(
             f"git ls-files failed while checking tracked runtime state{suffix}"
         )
         return errors
-
-    tracked_paths = [
-        line.strip() for line in result.stdout.splitlines() if line.strip()
-    ]
     errors.extend(check_forbidden_tracked_paths(tracked_paths))
     errors.extend(check_legacy_state_owner_claims(tracked_paths))
 

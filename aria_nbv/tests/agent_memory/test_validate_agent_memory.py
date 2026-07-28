@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -116,7 +117,9 @@ def test_semantic_alias_and_makefile_route_are_rejected(tmp_path: Path) -> None:
     assert errors == ["Makefile:2: legacy state journal route lacks an explicit migration-only qualifier"]
 
 
-def test_migration_phrase_does_not_exempt_same_line_owner_assertion(tmp_path: Path) -> None:
+def test_migration_phrase_does_not_exempt_same_line_owner_assertion(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "README.md"
     path.write_text(
         "The decision journal is legacy migration evidence; update it with current truth.\n",
@@ -309,6 +312,38 @@ def test_toml_table_fields_allow_an_explicit_active_owner(tmp_path: Path) -> Non
     assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        'DECISIONS = "canonical current owner"\n',
+        '[DECISIONS]\nroute = "write current truth here"\n',
+    ],
+)
+def test_toml_keys_and_table_names_are_part_of_owner_records(tmp_path: Path, body: str) -> None:
+    path = tmp_path / "owner.toml"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize("separator", ["\t", "\n"])
+def test_git_tracked_paths_preserve_control_characters(tmp_path: Path, separator: str) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    relative = f".agents/memory/transcripts/bad{separator}name.jsonl"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_text("{}\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", "--", relative], cwd=tmp_path, check=True)
+
+    tracked_paths, error = validator._git_tracked_paths(tmp_path)
+
+    assert error is None
+    assert relative in tracked_paths
+    assert validator.check_forbidden_tracked_paths(tracked_paths) == [
+        f"runtime or transcript evidence must not be tracked: {relative}"
+    ]
+
+
 def test_typst_apostrophe_does_not_split_balanced_owner_record(tmp_path: Path) -> None:
     path = tmp_path / "owner.typ"
     path.write_text(
@@ -342,6 +377,29 @@ def test_write_verb_does_not_cross_sentence_boundary(tmp_path: Path, claim: str,
     path.write_text(body, encoding="utf-8")
 
     assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+@pytest.mark.parametrize(
+    ("target", "expected_errors"),
+    [("active Typst", 0), ("DECISIONS", 1)],
+)
+def test_connector_keeps_write_targets_clause_local(
+    tmp_path: Path, suffix: str, target: str, expected_errors: int
+) -> None:
+    claim = f"DECISIONS is legacy migration evidence and not current truth, but write {target}."
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["{claim}"]\n'
+    else:
+        body = f"#let notes = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    errors = validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+    assert len(errors) == expected_errors
 
 
 @pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
