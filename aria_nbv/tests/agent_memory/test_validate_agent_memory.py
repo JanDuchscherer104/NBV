@@ -61,7 +61,7 @@ def test_live_guidance_must_not_route_legacy_state_as_current_truth(
     )
 
     assert validator.check_legacy_state_owner_claims([".agents/skills/example/SKILL.md"], repo_root=tmp_path) == [
-        ".agents/skills/example/SKILL.md:1: legacy state journals must not be routed as current-truth owners"
+        ".agents/skills/example/SKILL.md:1: legacy state journal route lacks an explicit migration-only qualifier"
     ]
 
 
@@ -74,3 +74,28 @@ def test_legacy_state_may_remain_explicit_migration_evidence(tmp_path: Path) -> 
     )
 
     assert not validator.check_legacy_state_owner_claims([".agents/references/source_order.md"], repo_root=tmp_path)
+
+
+def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> None:
+    path = tmp_path / ".agents" / "todos.toml"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'references = ["repo:.agents/memory/state/DECISIONS.md"]\n'
+        'acceptance = ["Update current truth in the decision journal."]\n'
+        'notes = ["Do not forget to update GOTCHAS.md after the fix."]\n',
+        encoding="utf-8",
+    )
+
+    errors = validator.check_legacy_state_owner_claims([".agents/todos.toml"], repo_root=tmp_path)
+
+    assert len(errors) == 2
+    assert all("migration-only qualifier" in error for error in errors)
+
+
+def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / ".agents" / "missing.md"
+    path.parent.mkdir(parents=True)
+
+    assert validator.check_legacy_state_owner_claims([".agents/missing.md"], repo_root=tmp_path) == [
+        ".agents/missing.md: tracked ownership source is unreadable"
+    ]

@@ -29,8 +29,9 @@ If no reproducible loop is possible, do not patch by guesswork. State the
 missing artifact, access, fixture, or metric needed next, and record durable
 debt as a blocked issue via `make agents-db`.
 
-Read `.agents/memory/state/GOTCHAS.md` and
-`.agents/references/verification_matrix.md` first.
+Read `.agents/references/source_order.md`, the nearest package guidance, and
+`.agents/references/verification_matrix.md` first. Legacy state journals are
+migration evidence, not diagnosis authority.
 
 Report:
 - failing loop and passing loop

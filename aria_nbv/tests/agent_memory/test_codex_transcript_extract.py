@@ -309,7 +309,7 @@ def test_extracts_chat_only_user_and_assistant_messages(tmp_path: Path) -> None:
     assert plans == []
 
 
-def test_default_main_writes_raw_chat_manifest(tmp_path: Path) -> None:
+def test_main_writes_raw_chat_manifest_only_when_explicit(tmp_path: Path) -> None:
     sessions_root = tmp_path / "sessions"
     session_path = sessions_root / "2026" / "06" / "18" / "rollout.jsonl"
     project_root = tmp_path / "ARIA-NBV"
@@ -338,22 +338,25 @@ def test_default_main_writes_raw_chat_manifest(tmp_path: Path) -> None:
         ],
     )
 
-    result = extractor.main(
-        [
-            "--sessions-root",
-            sessions_root.as_posix(),
-            "--project-root",
-            project_root.as_posix(),
-            "--output-root",
-            output_root.as_posix(),
-            "--decisions-file",
-            decisions_file.as_posix(),
-            "--preferences-file",
-            preferences_file.as_posix(),
-            "--date",
-            "2026-06-18",
-        ]
-    )
+    args = [
+        "--sessions-root",
+        sessions_root.as_posix(),
+        "--project-root",
+        project_root.as_posix(),
+        "--output-root",
+        output_root.as_posix(),
+        "--decisions-file",
+        decisions_file.as_posix(),
+        "--preferences-file",
+        preferences_file.as_posix(),
+        "--date",
+        "2026-06-18",
+    ]
+
+    assert extractor.main(args) == 0
+    assert not output_root.exists()
+
+    result = extractor.main([*args, "--write"])
 
     assert result == 0
     raw_path = output_root / "raw" / "2026-06-18" / "chat_messages.jsonl"
@@ -366,7 +369,7 @@ def test_default_main_writes_raw_chat_manifest(tmp_path: Path) -> None:
     assert raw_path.as_posix() in manifest["outputs"]
 
 
-def test_distillates_route_promotion_targets() -> None:
+def test_distillates_do_not_choose_a_decision_owner() -> None:
     plan_answer = {
         "kind": "plan_mode_answer",
         "content_hash": "abc",
@@ -382,49 +385,49 @@ def test_distillates_route_promotion_targets() -> None:
 
     assert len(distillates) == 1
     assert distillates[0]["summary"] == "Plan-mode answer `raw_policy` selected: User plus plans only"
-    assert distillates[0]["promotion_target"] == ".agents/memory/state/DECISIONS.md"
+    assert distillates[0]["promotion_target"] is None
 
 
-def test_review_marks_already_reflected_decisions() -> None:
+def test_review_keeps_matching_legacy_decisions_for_owner_review() -> None:
     distillates = [
         {
             "status": "candidate",
             "category": "durable repo decision",
             "summary": "Transcript mining must not check in full raw Codex transcripts.",
             "prompt": None,
-            "promotion_target": ".agents/memory/state/DECISIONS.md",
+            "promotion_target": None,
         }
     ]
-    canonical_text = """
+    legacy_decision_text = """
     - Transcript mining must not check in full raw Codex transcripts. Repo memory
       may contain only user-authored extracts and reviewed candidate distillates.
     """
 
     reviewed = extractor.review_distillates(
         distillates,
-        canonical_text=canonical_text,
+        legacy_decision_text=legacy_decision_text,
         preference_text="",
     )
 
-    assert reviewed[0]["review_status"] == "already_reflected"
-    assert reviewed[0]["canonical_overlap"] >= 0.55
+    assert reviewed[0]["review_status"] == "needs_owner_review"
+    assert reviewed[0]["supporting_overlap"] >= 0.55
 
 
-def test_review_marks_unreflected_decisions_for_canonical_review() -> None:
+def test_review_marks_unreflected_decisions_for_owner_review() -> None:
     distillates = [
         {
             "status": "candidate",
             "category": "technical decision",
             "summary": "Plan-mode answer `new_schema` selected: Store typed artifact manifests.",
             "prompt": "How should the new schema be stored?",
-            "promotion_target": ".agents/memory/state/DECISIONS.md",
+            "promotion_target": None,
         }
     ]
 
     reviewed = extractor.review_distillates(
         distillates,
-        canonical_text="- Unrelated canonical memory entry.",
+        legacy_decision_text="- Unrelated legacy decision entry.",
         preference_text="",
     )
 
-    assert reviewed[0]["review_status"] == "needs_canonical_review"
+    assert reviewed[0]["review_status"] == "needs_owner_review"

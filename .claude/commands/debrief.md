@@ -15,6 +15,6 @@ Then open the file and fill in:
 - verification (commands that ran; pass/fail; blockers)
 - canonical state impact (set `canonical_updates_needed` or say "none" explicitly)
 
-Keep the body short. If the work changed durable truth, list the affected
-`.agents/memory/state/*.md` files in `canonical_updates_needed` and update them
-in the same change.
+Keep the body short. If the work changed durable truth, list and update the
+smallest current owner named by `.agents/references/source_order.md`. Never add
+facts to the legacy `.agents/memory/state/` migration journals.

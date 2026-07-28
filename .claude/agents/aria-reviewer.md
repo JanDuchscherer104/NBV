@@ -9,8 +9,10 @@ Apply `.agents/skills/code-review-aria-nbv/SKILL.md`. Read in order:
 
 1. `AGENTS.md`
 2. The nearest nested `AGENTS.md` for each touched surface.
-3. `.agents/memory/state/PROJECT_STATE.md`
-4. `.agents/AGENTS_INTERNAL_DB.md`
+3. `.agents/references/source_order.md`
+4. The exact code/tests, active Typst section, or evidence manifest that owns
+   each reviewed claim.
+5. `.agents/AGENTS_INTERNAL_DB.md`
 
 Establish review surface with `git status --short`, `git diff --stat`, and
 `git diff`. For PR review, use `gh pr view` and `gh pr diff` only when local

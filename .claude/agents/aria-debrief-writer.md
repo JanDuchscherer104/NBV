@@ -17,8 +17,9 @@ Read `.agents/references/agent_memory_templates.md` first. Then:
    - canonical state impact
 3. Set `canonical_updates_needed`:
    - empty list if the task did not change current truth (say so explicitly)
-   - list affected `.agents/memory/state/*.md` paths if it did, and update them
-     in the same change
+   - otherwise list and update the smallest current owner named by
+     `.agents/references/source_order.md`; never add facts to the legacy
+     `.agents/memory/state/` migration journals
 4. Use absolute dates in prose ("2026-05-07", not "Thursday").
 5. Mention staged scope or commit scope when the worktree was dirty.
 6. Run `make check-agent-memory` and report any failures.

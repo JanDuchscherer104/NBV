@@ -105,23 +105,23 @@ FORBIDDEN_OMX_RUNTIME_PREFIXES = (
     ".omx/ultragoal/",
 )
 ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
-LEGACY_STATE_PATH = ".agents/memory/state"
-LEGACY_STATE_OWNER_TERMS = (
-    "canonical state",
-    "canonical truth",
-    "current thesis direction",
-    "current truth",
-    "current-truth",
-    "durable current truth",
-    "durable decisions live",
+LEGACY_STATE_MENTION = re.compile(
+    r"(?:\.agents/memory/state(?:/[A-Z_]+\.md)?|"
+    r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md)"
 )
-LEGACY_STATE_OWNER_EXEMPTIONS = (
-    "do not",
-    "legacy",
+LEGACY_STATE_MIGRATION_TERMS = (
+    "legacy migration",
+    "legacy state journal",
+    "legacy state evidence",
     "migration evidence",
-    "not current",
+    "migration journal",
+    "read-only migration",
+    "not current-truth",
+    "not a current-truth",
+    "not current truth",
     "supporting evidence",
 )
+LEGACY_STATE_CONTEXT_RADIUS = 320
 LEGACY_STATE_SCAN_SUFFIXES = {".md", ".py", ".sh", ".toml"}
 LEGACY_STATE_SCAN_EXCLUDED_PREFIXES = (
     ".agents/archive/",
@@ -131,6 +131,10 @@ LEGACY_STATE_SCAN_EXCLUDED_PREFIXES = (
     "aria_nbv/tests/",
     "scripts/tests/",
 )
+LEGACY_STATE_SCAN_EXCLUDED_PATHS = {
+    ".agents/resolved.toml",
+    "scripts/validate_agent_memory.py",
+}
 
 REQUIRED_NATIVE_KEYS = {
     "id",
@@ -403,30 +407,37 @@ def is_forbidden_tracked_runtime_path(path: str) -> bool:
 def check_legacy_state_owner_claims(
     tracked_paths: list[str], repo_root: Path = REPO_ROOT
 ) -> list[str]:
-    """Reject live guidance that promotes legacy journals to truth owners."""
+    """Reject active routes to legacy journals unless marked migration-only."""
 
     errors: list[str] = []
     for tracked_path in tracked_paths:
-        if tracked_path.startswith(LEGACY_STATE_SCAN_EXCLUDED_PREFIXES):
+        if tracked_path in LEGACY_STATE_SCAN_EXCLUDED_PATHS or tracked_path.startswith(
+            LEGACY_STATE_SCAN_EXCLUDED_PREFIXES
+        ):
             continue
         path = repo_root / tracked_path
-        if path.suffix not in LEGACY_STATE_SCAN_SUFFIXES or not path.is_file():
+        if path.suffix not in LEGACY_STATE_SCAN_SUFFIXES:
+            continue
+        if path.is_symlink() or not path.is_file():
+            errors.append(f"{tracked_path}: tracked ownership source is unreadable")
             continue
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeError):
-            continue
-        for line_number, line in enumerate(lines, start=1):
-            normalized = " ".join(line.lower().split())
-            if LEGACY_STATE_PATH not in normalized:
-                continue
-            if not any(term in normalized for term in LEGACY_STATE_OWNER_TERMS):
-                continue
-            if any(term in normalized for term in LEGACY_STATE_OWNER_EXEMPTIONS):
-                continue
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
             errors.append(
-                f"{tracked_path}:{line_number}: legacy state journals must not be "
-                "routed as current-truth owners"
+                f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}"
+            )
+            continue
+        for match in LEGACY_STATE_MENTION.finditer(text):
+            start = max(0, match.start() - LEGACY_STATE_CONTEXT_RADIUS)
+            end = min(len(text), match.end() + LEGACY_STATE_CONTEXT_RADIUS)
+            context = " ".join(text[start:end].lower().split())
+            if any(term in context for term in LEGACY_STATE_MIGRATION_TERMS):
+                continue
+            line_number = text.count("\n", 0, match.start()) + 1
+            errors.append(
+                f"{tracked_path}:{line_number}: legacy state journal route lacks "
+                "an explicit migration-only qualifier"
             )
     return errors
 

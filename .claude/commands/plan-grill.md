@@ -10,8 +10,8 @@ source for the decision.
 For "$ARGUMENTS":
 
 1. Search `.agents/resolved.toml` for prior decisions on this surface.
-2. Ground in the source-order owner (thesis roadmap/questions, glossary,
-   proposal Typst, or canonical memory state).
+2. Ground in the source-order owner: exact code/tests, the active Typst thesis,
+   the shared glossary, measured evidence, or the agents DB.
 3. Ask one material decision at a time. State the recommended answer with the
    tradeoff. Test fuzzy plans against three concrete scenarios (normal,
    boundary, failure).

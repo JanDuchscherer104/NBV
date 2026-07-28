@@ -341,7 +341,7 @@ def record_plan_answers(
         return
 
     for question_id, answer_payload in answers.items():
-        answer_list = []
+        answer_list: list[str] = []
         if isinstance(answer_payload, dict):
             answer_list = answer_payload.get("answers") or []
         if not answer_list:
@@ -655,7 +655,7 @@ def promotion_target_for(category: str) -> str | None:
         "technical decision",
         "working project decision",
     }:
-        return ".agents/memory/state/DECISIONS.md"
+        return None
     if category == "human-owner preference":
         return ".agents/references/human_owner_intent.md"
     if category == "backlog/action item":
@@ -717,17 +717,17 @@ def best_chunk_overlap(
 def review_distillates(
     distillates: list[dict[str, Any]],
     *,
-    canonical_text: str,
+    legacy_decision_text: str,
     preference_text: str = "",
 ) -> list[dict[str, Any]]:
     """Mark candidate distillates with a conservative promotion review status.
 
     The review pass is intentionally lexical and conservative: it can identify
-    candidates already reflected in canonical memory and candidates that still
-    need human/agent review, but it does not auto-promote transcript evidence.
+    candidates overlapping legacy migration evidence and candidates that still
+    need owner review, but it never promotes transcript evidence to current truth.
     """
 
-    canonical_chunks = indexed_doc_chunks(canonical_text)
+    legacy_decision_chunks = indexed_doc_chunks(legacy_decision_text)
     preference_chunks = indexed_doc_chunks(preference_text)
     reviewed: list[dict[str, Any]] = []
 
@@ -752,35 +752,42 @@ def review_distillates(
             reviewed.append(candidate)
             continue
 
+        is_preference = (
+            candidate.get("promotion_target")
+            == ".agents/references/human_owner_intent.md"
+        )
+        is_decision = candidate.get("category") in {
+            "durable repo decision",
+            "technical decision",
+            "working project decision",
+        }
         chunks = (
             preference_chunks
-            if candidate.get("promotion_target")
-            == ".agents/references/human_owner_intent.md"
-            else canonical_chunks
+            if is_preference
+            else legacy_decision_chunks
+            if is_decision
+            else []
         )
         overlap, matched_chunk = best_chunk_overlap(review_text, chunks)
-        candidate["canonical_overlap"] = round(overlap, 3)
+        candidate["supporting_overlap"] = round(overlap, 3)
         if matched_chunk:
-            candidate["canonical_match"] = matched_chunk[:280]
+            candidate["supporting_match"] = matched_chunk[:280]
 
-        if overlap >= 0.55:
+        if is_decision:
+            candidate.update(
+                {
+                    "review_status": "needs_owner_review",
+                    "review_reason": "compare transcript evidence with the source-order owner; legacy decision journals are migration evidence only",
+                }
+            )
+        elif is_preference and overlap >= 0.55:
             candidate.update(
                 {
                     "review_status": "already_reflected",
-                    "review_reason": "lexical overlap with the owning canonical surface is high enough for evidence-only indexing",
+                    "review_reason": "lexical overlap with the human-owner preference surface is high enough for evidence-only indexing",
                 }
             )
-        elif candidate.get("promotion_target") == ".agents/memory/state/DECISIONS.md":
-            candidate.update(
-                {
-                    "review_status": "needs_canonical_review",
-                    "review_reason": "not clearly reflected in DECISIONS.md; inspect against current source order before promotion",
-                }
-            )
-        elif (
-            candidate.get("promotion_target")
-            == ".agents/references/human_owner_intent.md"
-        ):
+        elif is_preference:
             candidate.update(
                 {
                     "review_status": "needs_preference_review",
@@ -894,7 +901,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--decisions-file",
         type=Path,
         default=REPO_ROOT / ".agents" / "memory" / "state" / "DECISIONS.md",
-        help="Canonical decisions file used to mark already-reflected candidates.",
+        help="Legacy decision journal used only as read-only migration evidence.",
     )
     parser.add_argument(
         "--preferences-file",
@@ -910,7 +917,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Compatibility flag. Writes are now the default; use --dry-run to only print counts.",
+        help="Explicitly write ignored transcript artifacts after printing counts.",
     )
     parser.add_argument(
         "--dry-run",
@@ -930,7 +937,7 @@ def main(argv: list[str] | None = None) -> int:
         roots, project_root
     )
     distillates = distill_records(user_messages, plan_answers)
-    canonical_text = (
+    legacy_decision_text = (
         args.decisions_file.read_text(encoding="utf-8")
         if args.decisions_file.exists()
         else ""
@@ -942,7 +949,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     reviewed_distillates = review_distillates(
         distillates,
-        canonical_text=canonical_text,
+        legacy_decision_text=legacy_decision_text,
         preference_text=preference_text,
     )
     counter["candidate_distillates"] = len(distillates)
@@ -965,7 +972,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    if args.dry_run:
+    if args.dry_run or not args.write:
         return 0
 
     batch = str(args.date)

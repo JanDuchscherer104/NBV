@@ -15,7 +15,7 @@ DOCS_ROOT = REPO_ROOT / "docs"
 OUTPUT_ROOT = REPO_ROOT / ".agents" / "generated" / "agent_scaffold"
 GITHUB_BLOB_BASE = "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main"
 GENERATED_NOTE = (
-    "This internal page is generated from canonical repo markdown. "
+    "This internal page is generated from tracked repo markdown. "
     "It is an operator aid under `.agents/generated/`, not public Quarto content. "
     "Refresh it with `./scripts/quarto_generate_agent_docs.py`."
 )
@@ -84,41 +84,9 @@ DOC_SPECS: tuple[DocSpec, ...] = (
         source=".agents/memory/README.md",
         output="state/memory_readme.qmd",
         title="Agent Memory README",
-        section="Canonical State",
+        section="References",
         nav_label="Memory README",
-        summary="Overview of the canonical memory layout and how history is organized.",
-    ),
-    DocSpec(
-        source=".agents/memory/state/PROJECT_STATE.md",
-        output="state/project_state.qmd",
-        title="Project State",
-        section="Canonical State",
-        nav_label="Project State",
-        summary="Current project truth for goals, architecture, and active working assumptions.",
-    ),
-    DocSpec(
-        source=".agents/memory/state/DECISIONS.md",
-        output="state/decisions.qmd",
-        title="Decisions",
-        section="Canonical State",
-        nav_label="Decisions",
-        summary="Durable repo and technical decisions that shape the active scaffold.",
-    ),
-    DocSpec(
-        source=".agents/memory/state/OPEN_QUESTIONS.md",
-        output="state/open_questions.qmd",
-        title="Open Questions",
-        section="Canonical State",
-        nav_label="Open Questions",
-        summary="Tracked unknowns, pending experiments, and unresolved design questions.",
-    ),
-    DocSpec(
-        source=".agents/memory/state/GOTCHAS.md",
-        output="state/gotchas.qmd",
-        title="Gotchas",
-        section="Canonical State",
-        nav_label="Gotchas",
-        summary="Maintained pitfalls, validation traps, and environment caveats.",
+        summary="Layout and migration policy for debriefs and legacy journals.",
     ),
     DocSpec(
         source=".agents/references/operator_quick_reference.md",
@@ -172,7 +140,6 @@ DOC_SPECS: tuple[DocSpec, ...] = (
 
 SECTION_ORDER = (
     "Instructions",
-    "Canonical State",
     "References",
     "Skills & Routing",
 )
@@ -356,7 +323,7 @@ def render_index() -> None:
         "This internal index mirrors maintained Codex guidance and scaffold",
         "markdown for operator use.",
         "",
-        "It includes the active `AGENTS.md` files, canonical memory state, agent",
+        "It includes the active `AGENTS.md` files, memory migration policy, agent",
         "references, and the `aria-nbv-context` routing skill. It intentionally",
         "excludes episodic history, `.agents/archive/`, and temporary workpads.",
         "",

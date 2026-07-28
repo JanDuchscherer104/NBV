@@ -200,7 +200,7 @@ context-literature-search: ## 🗺️ Search literature sources (set LITERATURE_
 migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into .agents/memory
 	@$(PYTHON_INTERPRETER) scripts/migrate_codex_memory.py $(MIGRATE_CODEX_MEMORY_ARGS)
 
-codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
+codex-transcripts: _check_python ## 🧠 Audit ARIA-NBV Codex transcripts (set CODEX_TRANSCRIPT_ARGS='--write' to emit ignored artifacts)
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
 
 scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures

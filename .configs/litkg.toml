@@ -6,7 +6,6 @@ generated_docs_root = ".agents/kg/generated/literature"
 registry_path = ".agents/kg/generated/literature/registry.jsonl"
 parsed_root = ".agents/kg/generated/literature/parsed"
 neo4j_export_root = ".agents/kg/generated/neo4j-export"
-memory_state_root = ".agents/memory/state"
 sink = "both"
 # ARIA-NBV does not use a local graphify watch/rebuild loop, so materialize
 # should complete without trying to rebuild an external graphify workspace.
@@ -61,7 +60,6 @@ embedding_dim = 2560
 chat_model = "gemma4:26b"
 
 [authority_tiers]
-".agents/memory/state/*.md" = 1.7
 "docs/contents/thesis/roadmap.qmd" = 1.6
 "docs/contents/thesis/questions.qmd" = 1.6
 "docs/contents/literature/**/*.qmd" = 1.5
@@ -111,26 +109,13 @@ include = [
 
 [sources.agent_memory]
 required = true
-authority = "agent_memory"
+authority = "backlog_evidence"
 include = [
-  ".agents/memory/state/*.md",
+  ".agents/memory/README.md",
   ".agents/issues.toml",
   ".agents/todos.toml",
   ".agents/refactors.toml",
   ".agents/resolved.toml",
-]
-
-# Agent-memory routing sources. The authority fields are intentionally
-# ARIA-facing metadata: current litkg-rs accepts them as descriptive config and
-# future retrieval should use them for freshness/authority ranking.
-[sources.agent_state]
-required = true
-authority = "canonical"
-include = [
-  ".agents/memory/state/PROJECT_STATE.md",
-  ".agents/memory/state/DECISIONS.md",
-  ".agents/memory/state/OPEN_QUESTIONS.md",
-  ".agents/memory/state/GOTCHAS.md",
 ]
 
 [sources.agent_backlog]

@@ -9,7 +9,7 @@
 # Detects which buckets changed since the last successful refresh and runs
 # only the matching narrow targets, in the background:
 #
-#   memory bucket  — .agents/memory/state/*.md, .agents/*.toml
+#   scaffold bucket — source-order/memory policy and .agents/*.toml
 #       → kg-export-neo4j + kg-load-bundle + kg-enrich
 #         (rebuilds JSONL bundle, MERGEs into live Neo4j, embeds new nodes)
 #   docs bucket    — docs/contents/**, docs/typst/**, docs/references.bib
@@ -97,7 +97,8 @@ bucket_dirty() {
 }
 
 memory_paths=(
-  .agents/memory/state
+  .agents/memory/README.md
+  .agents/references/source_order.md
   .agents/issues.toml
   .agents/todos.toml
   .agents/refactors.toml
