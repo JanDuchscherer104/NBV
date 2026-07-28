@@ -108,7 +108,7 @@ ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 LEGACY_STATE_MENTION = re.compile(
     r"(?:\.agents/memory/state(?:/[A-Z_]+\.md)?|"
     r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
-    r"\b(?:canonical memory|canonical state|memory state)\b)",
+    r"\b(?:canonical memory|canonical state|memory state|decision journal|state journals?)\b)",
     re.IGNORECASE,
 )
 LEGACY_STATE_MIGRATION_TERMS = (
@@ -121,7 +121,15 @@ LEGACY_STATE_MIGRATION_TERMS = (
     "not current-truth",
     "not a current-truth",
     "not current truth",
-    "supporting evidence",
+)
+LEGACY_STATE_OWNER_ASSERTION = re.compile(
+    r"\b(?:update|write|record|maintain)\b.*"
+    r"\b(?:canonical|current owner|current truth|source of truth)\b|"
+    r"\b(?:journal|state)\b.{0,80}\bowns?\b.{0,40}"
+    r"\b(?:current truth|source of truth)\b|"
+    r"\b(?:canonical|current owner|current truth|source of truth)\b.*"
+    r"\b(?:in|into|to)\b.*\b(?:journal|state)\b",
+    re.IGNORECASE,
 )
 LEGACY_STATE_SCAN_SUFFIXES = {".json", ".md", ".py", ".sh", ".toml", ".yaml", ".yml"}
 LEGACY_STATE_SCAN_FILENAMES = {"Makefile"}
@@ -437,7 +445,9 @@ def check_legacy_state_owner_claims(
             normalized = " ".join(line.lower().split())
             if not LEGACY_STATE_MENTION.search(line):
                 continue
-            if any(term in normalized for term in LEGACY_STATE_MIGRATION_TERMS):
+            if any(
+                term in normalized for term in LEGACY_STATE_MIGRATION_TERMS
+            ) and not (LEGACY_STATE_OWNER_ASSERTION.search(line)):
                 continue
             errors.append(
                 f"{tracked_path}:{line_number}: legacy state journal route lacks "

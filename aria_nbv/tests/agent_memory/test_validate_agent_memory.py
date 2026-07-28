@@ -88,7 +88,7 @@ def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> No
 
     errors = validator.check_legacy_state_owner_claims([".agents/todos.toml"], repo_root=tmp_path)
 
-    assert len(errors) == 2
+    assert len(errors) == 3
     assert all("migration-only qualifier" in error for error in errors)
 
 
@@ -114,6 +114,18 @@ def test_semantic_alias_and_makefile_route_are_rejected(tmp_path: Path) -> None:
     errors = validator.check_legacy_state_owner_claims(["Makefile"], repo_root=tmp_path)
 
     assert errors == ["Makefile:2: legacy state journal route lacks an explicit migration-only qualifier"]
+
+
+def test_migration_phrase_does_not_exempt_same_line_owner_assertion(tmp_path: Path) -> None:
+    path = tmp_path / "README.md"
+    path.write_text(
+        "The decision journal is legacy migration evidence; update it with current truth.\n",
+        encoding="utf-8",
+    )
+
+    assert validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path) == [
+        "README.md:1: legacy state journal route lacks an explicit migration-only qualifier"
+    ]
 
 
 def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:

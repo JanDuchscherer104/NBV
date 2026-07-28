@@ -2505,27 +2505,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             workflow,
             r"uses: actions/checkout@v4\s+with:\s+fetch-depth: 0",
         )
-        for path in (
-            ".claude/**",
-            ".omx/**",
-            ".mempalace",
-            ".mempalace/**",
-            ".palace",
-            ".palace/**",
-            ".gitignore",
-            "scripts/scaffold/**",
-            "scripts/codex_transcript_extract.py",
-            "scripts/kg/**",
-            "scripts/quarto_generate_agent_docs.py",
-            "scripts/tests/test_validate_omx_artifacts.py",
-        ):
-            with self.subTest(path=path):
-                self.assertGreaterEqual(workflow.count(f'- "{path}"'), 2)
+        self.assertNotRegex(workflow, r"(?m)^\s+paths:")
         self.assertIn("python scripts/tests/test_validate_omx_artifacts.py", workflow)
         self.assertIn("OMX_ARTIFACT_PREVIOUS_REF:", workflow)
         self.assertIn("github.event.pull_request.base.sha", workflow)
         self.assertIn("github.event.before", workflow)
-        self.assertGreaterEqual(workflow.count('- "CLAUDE.md"'), 2)
 
     def test_repository_successor_and_loc_manifest_are_reproducible(self) -> None:
         registry_path = REPO_ROOT / ".agents/omx_artifacts.toml"

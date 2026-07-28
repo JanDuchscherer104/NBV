@@ -33,7 +33,7 @@ alternatives and conflict evidence remain supporting records, not preferences.
   measurement iterations.
 - Do not restore the retired 21-skill domain catalog, LitKG routes, broad
   generated context snapshots, or a tracked generated wiki. Do not add new
-  truth to legacy current-state journals; PR2 must disposition their claims
+  truth to legacy migration journals; PR2 must disposition their claims
   before deleting them.
 - Preserve exact-source fallback when Graphify, MemPalace, OMX, Matt skills, or
   another optional operator tool is absent.
