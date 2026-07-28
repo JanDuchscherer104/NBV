@@ -109,7 +109,9 @@ WINDOWS_ABSOLUTE_PATH = re.compile(
     r"[^\\/\s`'\"<>|]+)[^\s`'\"<>|]*"
 )
 FILE_URI = re.compile(r"\bfile:(?://)?/[^\s`'\"),:;]+", re.IGNORECASE)
-URI_CANDIDATE = re.compile(r"(?<![A-Za-z0-9])(?P<uri>[A-Za-z0-9][A-Za-z0-9+.-]*:[^\s`'\"<>]+)")
+URI_CANDIDATE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<uri>[A-Za-z0-9][A-Za-z0-9+.-]*:[^\s`'\"<>]+)"
+)
 UNSUPPORTED_AUTHORITY_URI = re.compile(
     r"(?<![A-Za-z0-9])(?!(?:https?)://)[A-Za-z0-9][A-Za-z0-9+.-]*://",
     re.IGNORECASE,
@@ -140,7 +142,9 @@ SIMPLE_HTTP_URL = re.compile(
     r"(?:#[A-Za-z0-9._~!$&*+,;=:@%/?()\-]*)?",
     re.IGNORECASE,
 )
-FORWARD_UNC_PATH = re.compile(r"(?<!:)//[^/\\\s`'\"<>|]+[\\/][^\s`'\"<>|]+", re.IGNORECASE)
+FORWARD_UNC_PATH = re.compile(
+    r"(?<!:)//[^/\\\s`'\"<>|]+[\\/][^\s`'\"<>|]+", re.IGNORECASE
+)
 DOUBLE_SLASH_PATH = re.compile(r"(?<!:)//")
 ANGLE_ABSOLUTE_PATH = re.compile(r"</[^>\s]+>")
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -359,7 +363,9 @@ def _read_utf8(path: Path, label: str) -> str:
 def _contract_version(bundle: dict[str, Any]) -> int:
     version = bundle.get("contract_version", 1)
     if type(version) is not int or version not in {1, 2}:
-        raise ValidationError(f"invalid contract version for {bundle.get('id')}: {version}")
+        raise ValidationError(
+            f"invalid contract version for {bundle.get('id')}: {version}"
+        )
     return version
 
 
@@ -384,7 +390,8 @@ def _without_relative_globs(text: str) -> str:
             if "*" not in match.group() and "?" not in match.group():
                 continue
             if pattern is RELATIVE_GLOB and any(
-                "**" in segment and segment != "**" for segment in match.group().split("/")
+                "**" in segment and segment != "**"
+                for segment in match.group().split("/")
             ):
                 continue
             visible[match.start() : match.end()] = " " * (match.end() - match.start())
@@ -400,7 +407,9 @@ def _decoded_text_variants(text: str, subject: object) -> list[str]:
         if candidate in seen:
             continue
         if len(seen) >= MAX_DECODED_TEXT_VARIANTS:
-            raise ValidationError(f"decoded text exceeds variant limit in registered evidence: {subject}")
+            raise ValidationError(
+                f"decoded text exceeds variant limit in registered evidence: {subject}"
+            )
         seen.add(candidate)
         variants.append(candidate)
         try:
@@ -412,7 +421,9 @@ def _decoded_text_variants(text: str, subject: object) -> list[str]:
                 MARKDOWN_TOKEN.sub(r"\1\2\3\4", candidate),
             }
         except UnicodeError as exc:
-            raise ValidationError(f"invalid Unicode in registered evidence: {subject}") from exc
+            raise ValidationError(
+                f"invalid Unicode in registered evidence: {subject}"
+            ) from exc
         try:
             json_decoded = json.loads(f'"{candidate}"')
         except ValueError:
@@ -451,17 +462,25 @@ def _validate_http_uri(uri: str, subject: object, *, strict: bool) -> bool:
         port = parsed.group("port")
         malformed = port is not None and not 1 <= int(port) <= 65535
     if malformed and strict:
-        raise ValidationError(f"privacy threat (malformed HTTP URI) in registered evidence: {subject}")
+        raise ValidationError(
+            f"privacy threat (malformed HTTP URI) in registered evidence: {subject}"
+        )
     return not malformed
 
 
-def _validate_uri_candidates(text: str, subject: object, *, strict: bool = True) -> list[tuple[int, int]]:
+def _validate_uri_candidates(
+    text: str, subject: object, *, strict: bool = True
+) -> list[tuple[int, int]]:
     visible_text = _without_markdown_spans(text, MARKDOWN_LABEL)
     validated_http_spans: list[tuple[int, int]] = []
     if strict and OBFUSCATED_BARE_URI.search(text):
-        raise ValidationError(f"privacy threat (unsupported URI scheme) in registered evidence: {subject}")
+        raise ValidationError(
+            f"privacy threat (unsupported URI scheme) in registered evidence: {subject}"
+        )
     if strict and BARE_RESERVED_URI.search(visible_text):
-        raise ValidationError(f"privacy threat (unsupported or malformed URI) in registered evidence: {subject}")
+        raise ValidationError(
+            f"privacy threat (unsupported or malformed URI) in registered evidence: {subject}"
+        )
     for match in URI_CANDIDATE.finditer(visible_text):
         raw_uri = match.group("uri")
         if raw_uri.endswith(":") and raw_uri[-2:-1] in ")]}":
@@ -474,7 +493,9 @@ def _validate_uri_candidates(text: str, subject: object, *, strict: bool = True)
             if REPOSITORY_SOURCE_LOCATOR.fullmatch(uri):
                 continue
             if strict:
-                raise ValidationError(f"privacy threat (unsupported URI scheme) in registered evidence: {subject}")
+                raise ValidationError(
+                    f"privacy threat (unsupported URI scheme) in registered evidence: {subject}"
+                )
             continue
         if not _validate_http_uri(uri, subject, strict=strict):
             continue
@@ -497,7 +518,9 @@ def _validate_uri_candidates(text: str, subject: object, *, strict: bool = True)
                 break
         if nested_scheme:
             if strict:
-                raise ValidationError(f"privacy threat (unsupported URI scheme) in registered evidence: {subject}")
+                raise ValidationError(
+                    f"privacy threat (unsupported URI scheme) in registered evidence: {subject}"
+                )
             continue
         url_path = parsed_url.path.removeprefix("/")
         url_components = (
@@ -505,7 +528,11 @@ def _validate_uri_candidates(text: str, subject: object, *, strict: bool = True)
             (parsed_url.query, V2_PATH_CHECKS),
             (parsed_url.fragment, V2_PATH_CHECKS),
         )
-        component_threat = "absolute path" if parsed_url.path.startswith("//") or "//" in url_path else None
+        component_threat = (
+            "absolute path"
+            if parsed_url.path.startswith("//") or "//" in url_path
+            else None
+        )
         for component, checks in url_components:
             for pattern, label in checks:
                 if pattern.search(component):
@@ -515,7 +542,9 @@ def _validate_uri_candidates(text: str, subject: object, *, strict: bool = True)
                 break
         if component_threat is not None:
             if strict:
-                raise ValidationError(f"privacy threat ({component_threat}) in registered evidence: {subject}")
+                raise ValidationError(
+                    f"privacy threat ({component_threat}) in registered evidence: {subject}"
+                )
             continue
         start = match.start("uri")
         validated_http_spans.append((start, start + _http_mask_length(uri)))
@@ -533,13 +562,17 @@ def _scan_text(text: str, subject: object, contract_version: int = 2) -> None:
         )
         for pattern, label in checks:
             if pattern.search(text):
-                raise ValidationError(f"privacy threat ({label}) in registered evidence: {subject}")
+                raise ValidationError(
+                    f"privacy threat ({label}) in registered evidence: {subject}"
+                )
         return
 
     try:
         text.encode("utf-8")
     except UnicodeError as exc:
-        raise ValidationError(f"invalid Unicode in registered evidence: {subject}") from exc
+        raise ValidationError(
+            f"invalid Unicode in registered evidence: {subject}"
+        ) from exc
 
     content_checks = (
         (UNSUPPORTED_AUTHORITY_URI, "unsupported URI scheme"),
@@ -554,7 +587,9 @@ def _scan_text(text: str, subject: object, contract_version: int = 2) -> None:
         http_spans = _validate_uri_candidates(candidate, subject, strict=False)
         for pattern, label in content_checks:
             if pattern.search(candidate):
-                raise ValidationError(f"privacy threat ({label}) in registered evidence: {subject}")
+                raise ValidationError(
+                    f"privacy threat ({label}) in registered evidence: {subject}"
+                )
         portable_text = _without_relative_globs(_without_spans(candidate, http_spans))
         path_candidates = (
             portable_text,
@@ -563,7 +598,9 @@ def _scan_text(text: str, subject: object, contract_version: int = 2) -> None:
         for path_candidate in path_candidates:
             for pattern, label in V2_PATH_CHECKS:
                 if pattern.search(path_candidate):
-                    raise ValidationError(f"privacy threat ({label}) in registered evidence: {subject}")
+                    raise ValidationError(
+                        f"privacy threat ({label}) in registered evidence: {subject}"
+                    )
         _validate_uri_candidates(portable_text, subject)
         _validate_uri_candidates(candidate, subject)
 
@@ -578,7 +615,9 @@ def _scan(path: Path, contract_version: int) -> None:
         except ValidationError:
             raise
         except (ValueError, RecursionError) as exc:
-            raise ValidationError(f"invalid registered JSON evidence: {path}: {exc}") from exc
+            raise ValidationError(
+                f"invalid registered JSON evidence: {path}: {exc}"
+            ) from exc
         _scan_decoded_strings(payload, path, contract_version)
     elif contract_version >= 2:
         _scan_decoded_strings(text, path, contract_version)
@@ -602,15 +641,21 @@ def _embedded_json_values(text: str, subject: object) -> list[Any]:
             continue
         starts.append(index)
         if len(starts) > MAX_EMBEDDED_JSON_ATTEMPTS:
-            raise ValidationError(f"nested JSON exceeds attempt limit in registered evidence: {subject}")
+            raise ValidationError(
+                f"nested JSON exceeds attempt limit in registered evidence: {subject}"
+            )
     if not starts:
         return []
     try:
         encoded_bytes = len(text.encode("utf-8"))
     except UnicodeError as exc:
-        raise ValidationError(f"invalid Unicode in registered evidence: {subject}") from exc
+        raise ValidationError(
+            f"invalid Unicode in registered evidence: {subject}"
+        ) from exc
     if encoded_bytes > MAX_NESTED_JSON_BYTES:
-        raise ValidationError(f"nested JSON exceeds scan limit in registered evidence: {subject}")
+        raise ValidationError(
+            f"nested JSON exceeds scan limit in registered evidence: {subject}"
+        )
     decoder = json.JSONDecoder(object_pairs_hook=_unique_json_object)
     values: list[Any] = []
     for start in starts:
@@ -621,16 +666,24 @@ def _embedded_json_values(text: str, subject: object) -> list[Any]:
         except ValidationError:
             raise
         except ValueError as exc:
-            raise ValidationError(f"invalid nested JSON value in registered evidence: {subject}") from exc
+            raise ValidationError(
+                f"invalid nested JSON value in registered evidence: {subject}"
+            ) from exc
         except RecursionError as exc:
-            raise ValidationError(f"nested JSON exceeds parser depth in registered evidence: {subject}") from exc
+            raise ValidationError(
+                f"nested JSON exceeds parser depth in registered evidence: {subject}"
+            ) from exc
         values.append(value)
         if len(values) > MAX_EMBEDDED_JSON_VALUES:
-            raise ValidationError(f"nested JSON exceeds candidate limit in registered evidence: {subject}")
+            raise ValidationError(
+                f"nested JSON exceeds candidate limit in registered evidence: {subject}"
+            )
     return values
 
 
-def _scan_decoded_strings(value: Any, subject: object, contract_version: int, depth: int = 0) -> None:
+def _scan_decoded_strings(
+    value: Any, subject: object, contract_version: int, depth: int = 0
+) -> None:
     if contract_version < 2:
         return
     pending: list[tuple[Any, int, int]] = [(value, depth, 0)]
@@ -639,27 +692,39 @@ def _scan_decoded_strings(value: Any, subject: object, contract_version: int, de
         item, embedded_depth, structure_depth = pending.pop()
         visited += 1
         if visited > MAX_JSON_STRUCTURE_NODES:
-            raise ValidationError(f"nested JSON exceeds node limit in registered evidence: {subject}")
+            raise ValidationError(
+                f"nested JSON exceeds node limit in registered evidence: {subject}"
+            )
         if structure_depth > MAX_JSON_STRUCTURE_DEPTH:
-            raise ValidationError(f"nested JSON exceeds structure depth in registered evidence: {subject}")
+            raise ValidationError(
+                f"nested JSON exceeds structure depth in registered evidence: {subject}"
+            )
         if isinstance(item, str):
             _scan_text(item, subject, contract_version)
             for candidate in _decoded_text_variants(item, subject):
                 for nested in _embedded_json_values(candidate, subject):
                     if embedded_depth >= MAX_NESTED_JSON_DEPTH:
-                        raise ValidationError(f"nested JSON exceeds scan depth in registered evidence: {subject}")
+                        raise ValidationError(
+                            f"nested JSON exceeds scan depth in registered evidence: {subject}"
+                        )
                     pending.append((nested, embedded_depth + 1, structure_depth + 1))
         elif isinstance(item, dict):
             for key, nested in item.items():
                 pending.append((key, embedded_depth, structure_depth + 1))
                 pending.append((nested, embedded_depth, structure_depth + 1))
         elif isinstance(item, list):
-            pending.extend((nested, embedded_depth, structure_depth + 1) for nested in item)
+            pending.extend(
+                (nested, embedded_depth, structure_depth + 1) for nested in item
+            )
 
 
-def _json_payload(path: Path, bundle_id: str, label: str, contract_version: int) -> dict[str, Any]:
+def _json_payload(
+    path: Path, bundle_id: str, label: str, contract_version: int
+) -> dict[str, Any]:
     try:
-        payload = json.loads(_read_utf8(path, label), object_pairs_hook=_unique_json_object)
+        payload = json.loads(
+            _read_utf8(path, label), object_pairs_hook=_unique_json_object
+        )
     except ValidationError:
         raise
     except (ValueError, OSError, RecursionError) as exc:
@@ -684,22 +749,29 @@ def _validate_handoff(path: Path, bundle: dict[str, Any]) -> None:
     if _contract_version(bundle) >= 2 and (
         set(payload) != HANDOFF_FIELDS_V2
         or payload.get("predecessor_bundle_id") != bundle.get("predecessor_bundle_id")
-        or payload.get("predecessor_bundle_sha256") != bundle.get("predecessor_bundle_sha256")
-        or payload.get("predecessor_chain_sha256") != bundle.get("predecessor_chain_sha256")
+        or payload.get("predecessor_bundle_sha256")
+        != bundle.get("predecessor_bundle_sha256")
+        or payload.get("predecessor_chain_sha256")
+        != bundle.get("predecessor_chain_sha256")
         or not isinstance(payload.get("roles"), list)
         or not all(isinstance(value, str) for value in payload["roles"])
         or len(payload["roles"]) != len(REQUIRED_FAMILIES)
         or set(payload["roles"]) != REQUIRED_FAMILIES
         or not isinstance(payload.get("execution"), dict)
         or set(payload["execution"]) != {"mode", "next_package", "write_scope"}
-        or not all(isinstance(value, str) and value.strip() for value in payload["execution"].values())
+        or not all(
+            isinstance(value, str) and value.strip()
+            for value in payload["execution"].values()
+        )
         or not isinstance(payload.get("constraints"), list)
         or not all(isinstance(value, str) for value in payload["constraints"])
     ):
         raise ValidationError(f"handoff contract mismatch for {bundle_id}")
 
 
-def _validate_acceptance(path: Path, bundle_id: str, task: str, contract_version: int) -> None:
+def _validate_acceptance(
+    path: Path, bundle_id: str, task: str, contract_version: int
+) -> None:
     payload = _json_payload(path, bundle_id, "acceptance record", contract_version)
     if (
         type(payload.get("schema_version")) is not int
@@ -781,12 +853,16 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
             raise ValidationError("registry bundle must be a mapping")
         unknown = set(bundle) - BUNDLE_FIELDS
         if unknown:
-            raise ValidationError(f"unknown bundle fields for {bundle.get('id')}: {sorted(unknown)}")
+            raise ValidationError(
+                f"unknown bundle fields for {bundle.get('id')}: {sorted(unknown)}"
+            )
         artifacts = bundle.get("artifact")
         if not isinstance(artifacts, list):
             raise ValidationError(f"bundle {bundle.get('id')} artifacts must be a list")
         if len(artifacts) > MAX_ARTIFACTS_PER_BUNDLE:
-            raise ValidationError(f"bundle {bundle.get('id')} exceeds artifact-count limit")
+            raise ValidationError(
+                f"bundle {bundle.get('id')} exceeds artifact-count limit"
+            )
         artifact_count += len(artifacts)
         if artifact_count > MAX_REGISTRY_ARTIFACTS:
             raise ValidationError("registry exceeds total artifact-count limit")
@@ -803,23 +879,39 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
         )
         for field in string_fields:
             if field in bundle and not isinstance(bundle[field], str):
-                raise ValidationError(f"bundle {bundle.get('id')} field {field} must be a string")
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} field {field} must be a string"
+                )
         for artifact in artifacts:
             if not isinstance(artifact, dict):
-                raise ValidationError(f"bundle {bundle.get('id')} artifact must be a mapping")
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} artifact must be a mapping"
+                )
             unknown = set(artifact) - ARTIFACT_FIELDS
             if unknown:
-                raise ValidationError(f"unknown artifact fields for {bundle.get('id')}: {sorted(unknown)}")
+                raise ValidationError(
+                    f"unknown artifact fields for {bundle.get('id')}: {sorted(unknown)}"
+                )
             for field in ("family", "role", "path", "native_path", "sha256"):
                 if not isinstance(artifact.get(field), str):
-                    raise ValidationError(f"bundle {bundle.get('id')} artifact field {field} must be a string")
+                    raise ValidationError(
+                        f"bundle {bundle.get('id')} artifact field {field} must be a string"
+                    )
             if type(artifact.get("bytes")) is not int:
-                raise ValidationError(f"bundle {bundle.get('id')} artifact bytes must be an integer")
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} artifact bytes must be an integer"
+                )
             review_kinds = artifact.get("review_kinds", [])
-            if not isinstance(review_kinds, list) or not all(isinstance(value, str) for value in review_kinds):
-                raise ValidationError(f"bundle {bundle.get('id')} review_kinds must be a string list")
+            if not isinstance(review_kinds, list) or not all(
+                isinstance(value, str) for value in review_kinds
+            ):
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} review_kinds must be a string list"
+                )
             if len(review_kinds) != len(set(review_kinds)):
-                raise ValidationError(f"bundle {bundle.get('id')} review_kinds must be unique")
+                raise ValidationError(
+                    f"bundle {bundle.get('id')} review_kinds must be unique"
+                )
             if artifact.get("family") != "review" and review_kinds:
                 raise ValidationError("only review artifacts may declare review_kinds")
     return data
@@ -866,7 +958,9 @@ def _validate_baseline(repo: Path, bundle_id: str, baseline: object) -> None:
         capture_output=True,
     )
     if commit.returncode:
-        raise ValidationError(f"baseline is not a git commit for {bundle_id}: {baseline}")
+        raise ValidationError(
+            f"baseline is not a git commit for {bundle_id}: {baseline}"
+        )
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", str(baseline), "HEAD"],
         cwd=repo,
@@ -874,10 +968,14 @@ def _validate_baseline(repo: Path, bundle_id: str, baseline: object) -> None:
         capture_output=True,
     )
     if ancestor.returncode:
-        raise ValidationError(f"baseline is not an ancestor of HEAD for {bundle_id}: {baseline}")
+        raise ValidationError(
+            f"baseline is not an ancestor of HEAD for {bundle_id}: {baseline}"
+        )
 
 
-def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> set[str]:
+def validate_registry(
+    repo: Path, registry_path: Path, *, live: bool = True
+) -> set[str]:
     registry = load_registry(registry_path, live=live)
     bundles = registry["bundle"]
     ids: set[str] = set()
@@ -893,18 +991,30 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
         predecessor_id = bundle.get("predecessor_bundle_id")
         predecessor_digest = bundle.get("predecessor_bundle_sha256")
         predecessor_chain = bundle.get("predecessor_chain_sha256")
-        if not isinstance(bundle_id, str) or not ID.fullmatch(bundle_id) or bundle_id in ids:
+        if (
+            not isinstance(bundle_id, str)
+            or not ID.fullmatch(bundle_id)
+            or bundle_id in ids
+        ):
             raise ValidationError(f"duplicate or invalid bundle id: {bundle_id}")
         if not isinstance(task, str) or not ID.fullmatch(task):
             raise ValidationError(f"invalid task for {bundle_id}: {task}")
         if status not in {"current", "superseded"}:
             raise ValidationError(f"invalid status for {bundle_id}: {status}")
-        if registry["schema_version"] >= 2 and status == "current" and contract_version < 2:
-            raise ValidationError(f"schema v2 current bundle must use contract v2: {bundle_id}")
+        if (
+            registry["schema_version"] >= 2
+            and status == "current"
+            and contract_version < 2
+        ):
+            raise ValidationError(
+                f"schema v2 current bundle must use contract v2: {bundle_id}"
+            )
         if contract_version >= 2:
             if predecessor_id is None:
                 if predecessor_digest is not None or predecessor_chain is not None:
-                    raise ValidationError(f"contract v2 bundle {bundle_id} has orphan predecessor receipts")
+                    raise ValidationError(
+                        f"contract v2 bundle {bundle_id} has orphan predecessor receipts"
+                    )
             elif (
                 not isinstance(predecessor_id, str)
                 or not ID.fullmatch(predecessor_id)
@@ -913,9 +1023,13 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
                 or not isinstance(predecessor_chain, str)
                 or not HEX_64.fullmatch(predecessor_chain)
             ):
-                raise ValidationError(f"contract v2 bundle {bundle_id} lacks predecessor receipts")
+                raise ValidationError(
+                    f"contract v2 bundle {bundle_id} lacks predecessor receipts"
+                )
             if bundle.get("predecessor_registry_commit") is not None:
-                raise ValidationError(f"contract v2 bundle {bundle_id} uses a legacy predecessor commit")
+                raise ValidationError(
+                    f"contract v2 bundle {bundle_id} uses a legacy predecessor commit"
+                )
         _validate_baseline(repo, bundle_id, bundle.get("baseline_commit"))
         if bundle.get("classification") != "accepted-decision-evidence":
             raise ValidationError(f"invalid classification for {bundle_id}")
@@ -937,7 +1051,9 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
             raise ValidationError(f"bundle {bundle_id} role families differ")
         repeated = {family for family in families if families.count(family) > 1}
         if repeated - {"specification"}:
-            raise ValidationError(f"bundle {bundle_id} has invalid repeated role families")
+            raise ValidationError(
+                f"bundle {bundle_id} has invalid repeated role families"
+            )
         reviews = [a for a in artifacts if a.family == "review"]
         if (
             len(reviews) != 1
@@ -945,7 +1061,10 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
             or set(reviews[0].review_kinds) != {"architect", "critic"}
         ):
             raise ValidationError(f"bundle {bundle_id} lacks Architect+Critic review")
-        if _contract_version(bundle) >= 2 and PurePosixPath(reviews[0].path).suffix != ".json":
+        if (
+            _contract_version(bundle) >= 2
+            and PurePosixPath(reviews[0].path).suffix != ".json"
+        ):
             raise ValidationError(f"contract v2 review must be JSON for {bundle_id}")
         handoffs = [a for a in artifacts if a.family == "handoff"]
         if (
@@ -954,7 +1073,11 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
             or not HEX_64.fullmatch(str(bundle.get("handoff_sha256", "")))
         ):
             raise ValidationError(f"invalid handoff for {bundle_id}")
-        acceptances = [a for a in artifacts if a.family == "specification" and a.role == "acceptance-record"]
+        acceptances = [
+            a
+            for a in artifacts
+            if a.family == "specification" and a.role == "acceptance-record"
+        ]
         if (
             len(acceptances) != 1
             or PurePosixPath(acceptances[0].path).suffix != ".json"
@@ -966,23 +1089,43 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
         for artifact in artifacts:
             path = _safe_path(artifact.path)
             native = _safe_path(artifact.native_path)
-            if artifact.family not in REQUIRED_FAMILIES or not ID.fullmatch(artifact.role):
+            if artifact.family not in REQUIRED_FAMILIES or not ID.fullmatch(
+                artifact.role
+            ):
                 raise ValidationError(f"invalid role for {artifact.path}")
-            if contract_version >= 2 and not artifact.native_path.startswith(FAMILY_NATIVE_ROOT[artifact.family]):
-                raise ValidationError(f"invalid native role path for {artifact.family}: {artifact.native_path}")
+            if contract_version >= 2 and not artifact.native_path.startswith(
+                FAMILY_NATIVE_ROOT[artifact.family]
+            ):
+                raise ValidationError(
+                    f"invalid native role path for {artifact.family}: "
+                    f"{artifact.native_path}"
+                )
             if artifact.path in owned:
-                raise ValidationError(f"artifact path has multiple owners: {artifact.path}")
-            if not HEX_64.fullmatch(artifact.sha256) or type(artifact.bytes) is not int or artifact.bytes < 0:
+                raise ValidationError(
+                    f"artifact path has multiple owners: {artifact.path}"
+                )
+            if (
+                not HEX_64.fullmatch(artifact.sha256)
+                or type(artifact.bytes) is not int
+                or artifact.bytes < 0
+            ):
                 raise ValidationError(f"invalid digest metadata: {artifact.path}")
             if artifact.bytes > MAX_ARTIFACT_BYTES:
                 raise ValidationError(f"artifact exceeds byte limit: {artifact.path}")
             if status == "current":
-                if artifact.path != artifact.native_path or not artifact.path.startswith(CURRENT_ROOTS):
-                    raise ValidationError(f"current artifact not at native role path: {artifact.path}")
+                if (
+                    artifact.path != artifact.native_path
+                    or not artifact.path.startswith(CURRENT_ROOTS)
+                ):
+                    raise ValidationError(
+                        f"current artifact not at native role path: {artifact.path}"
+                    )
             else:
                 prefix = f".omx/archive/accepted-bundles/{bundle_id}/"
                 expected = prefix + artifact.native_path.removeprefix(".omx/")
-                if artifact.path != expected or not str(native).startswith(CURRENT_ROOTS):
+                if artifact.path != expected or not str(native).startswith(
+                    CURRENT_ROOTS
+                ):
                     raise ValidationError(f"invalid archive placement: {artifact.path}")
             disk = repo / path
             if not disk.is_file() or disk.is_symlink():
@@ -990,12 +1133,16 @@ def validate_registry(repo: Path, registry_path: Path, *, live: bool = True) -> 
             try:
                 actual_bytes = disk.stat().st_size
             except OSError as exc:
-                raise ValidationError(f"cannot stat registered artifact: {artifact.path}: {exc}") from exc
+                raise ValidationError(
+                    f"cannot stat registered artifact: {artifact.path}: {exc}"
+                ) from exc
             if actual_bytes > MAX_ARTIFACT_BYTES:
                 raise ValidationError(f"artifact exceeds byte limit: {artifact.path}")
             total_artifact_bytes += actual_bytes
             if total_artifact_bytes > MAX_TOTAL_ARTIFACT_BYTES:
-                raise ValidationError("registered artifacts exceed aggregate byte limit")
+                raise ValidationError(
+                    "registered artifacts exceed aggregate byte limit"
+                )
             if actual_bytes != artifact.bytes:
                 raise ValidationError(f"hash or byte drift: {artifact.path}")
             if _digest(disk) != (artifact.sha256, artifact.bytes):
@@ -1060,7 +1207,9 @@ def _membership(bundle: dict[str, Any]) -> set[tuple[Any, ...]]:
 def bundle_content_sha256(bundle: dict[str, Any]) -> str:
     """Hash the accepted bundle state independently of archive placement."""
     metadata = {
-        key: (_contract_version(bundle) if key == "contract_version" else bundle.get(key))
+        key: (
+            _contract_version(bundle) if key == "contract_version" else bundle.get(key)
+        )
         for key in IMMUTABLE_BUNDLE_FIELDS
     }
     artifacts = [
@@ -1109,7 +1258,9 @@ def _bundle_chain_digests(
             if current_id in local_ids:
                 raise ValidationError(f"cyclic predecessor chain for {current_id}")
             if len(chain) >= MAX_BUNDLE_CHAIN_LENGTH:
-                raise ValidationError(f"predecessor chain exceeds limit for {bundle_id}")
+                raise ValidationError(
+                    f"predecessor chain exceeds limit for {bundle_id}"
+                )
             bundle = bundles.get(current_id)
             if bundle is None:
                 raise ValidationError(f"missing predecessor bundle: {current_id}")
@@ -1123,14 +1274,18 @@ def _bundle_chain_digests(
         for current_id, bundle in reversed(chain):
             predecessor_depth += 1
             if predecessor_depth > MAX_BUNDLE_CHAIN_LENGTH:
-                raise ValidationError(f"predecessor chain exceeds limit for {bundle_id}")
+                raise ValidationError(
+                    f"predecessor chain exceeds limit for {bundle_id}"
+                )
             predecessor = _chain_link_sha256(bundle, predecessor)
             digests[current_id] = predecessor
             depths[current_id] = predecessor_depth
     return digests
 
 
-def bundle_chain_sha256(bundle_id: str, bundles: dict[str, dict[str, Any]], seen: set[str] | None = None) -> str:
+def bundle_chain_sha256(
+    bundle_id: str, bundles: dict[str, dict[str, Any]], seen: set[str] | None = None
+) -> str:
     """Hash one bundle and every predecessor named by the registry."""
     if seen:
         current_id: str | None = bundle_id
@@ -1145,7 +1300,9 @@ def bundle_chain_sha256(bundle_id: str, bundles: dict[str, dict[str, Any]], seen
     return _bundle_chain_digests(bundles)[bundle_id]
 
 
-def validate_transition(previous: dict[str, Any], current: dict[str, Any], *, live: bool = True) -> None:
+def validate_transition(
+    previous: dict[str, Any], current: dict[str, Any], *, live: bool = True
+) -> None:
     if live and current.get("schema_version") != 2:
         raise ValidationError("live registry schema_version must be 2")
     if current["schema_version"] < previous.get("schema_version", 1):
@@ -1177,8 +1334,14 @@ def validate_transition(previous: dict[str, Any], current: dict[str, Any], *, li
     for bundle_id, bundle in new.items():
         if bundle_id not in old and bundle["status"] != "current":
             raise ValidationError(f"new bundle must first be current: {bundle_id}")
-        if current.get("schema_version", 1) >= 2 and bundle["status"] == "current" and _contract_version(bundle) < 2:
-            raise ValidationError(f"schema v2 current bundle must use contract v2: {bundle_id}")
+        if (
+            current.get("schema_version", 1) >= 2
+            and bundle["status"] == "current"
+            and _contract_version(bundle) < 2
+        ):
+            raise ValidationError(
+                f"schema v2 current bundle must use contract v2: {bundle_id}"
+            )
 
 
 def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
@@ -1211,7 +1374,9 @@ def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
     try:
         registry_bytes = int(size.stdout.strip())
     except ValueError as exc:
-        raise ValidationError(f"invalid registry size for {object_name}: {size.stdout.strip()}") from exc
+        raise ValidationError(
+            f"invalid registry size for {object_name}: {size.stdout.strip()}"
+        ) from exc
     if registry_bytes > MAX_REGISTRY_BYTES:
         raise ValidationError("historical registry exceeds byte limit")
     shown = subprocess.run(
@@ -1239,11 +1404,15 @@ def _validate_archive_source(
         if digest != bundle_content_sha256(archived):
             raise ValidationError(f"predecessor content digest drift for {bundle_id}")
         expected_chain = (
-            chain_digests[bundle_id] if chain_digests is not None else bundle_chain_sha256(bundle_id, bundles)
+            chain_digests[bundle_id]
+            if chain_digests is not None
+            else bundle_chain_sha256(bundle_id, bundles)
         )
         if successor.get("predecessor_chain_sha256") != expected_chain:
             raise ValidationError(f"predecessor chain digest drift for {bundle_id}")
-    elif digest is not None and (not HEX_64.fullmatch(str(digest)) or digest != bundle_content_sha256(archived)):
+    elif digest is not None and (
+        not HEX_64.fullmatch(str(digest)) or digest != bundle_content_sha256(archived)
+    ):
         raise ValidationError(f"predecessor content digest drift for {bundle_id}")
     commit = successor.get("predecessor_registry_commit")
     if commit is not None and not HEX_40.fullmatch(str(commit)):
@@ -1259,17 +1428,21 @@ def validate_tracked(repo: Path, owned: set[str]) -> None:
     )
     if result.returncode != 0:
         raise ValidationError(
-            f"git ls-files failed while checking OMX membership: {os.fsdecode(result.stderr).strip()}"
+            "git ls-files failed while checking OMX membership: "
+            f"{os.fsdecode(result.stderr).strip()}"
         )
     tracked = {os.fsdecode(path) for path in result.stdout.split(b"\0") if path}
     if tracked != owned:
         raise ValidationError(
-            f"tracked OMX membership differs; extra={sorted(tracked - owned)}, missing={sorted(owned - tracked)}"
+            f"tracked OMX membership differs; extra={sorted(tracked - owned)}, "
+            f"missing={sorted(owned - tracked)}"
         )
 
 
 def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] | None:
-    resolved_previous = _run(repo, "git", "rev-parse", "--verify", f"{previous_ref}^{{commit}}").strip()
+    resolved_previous = _run(
+        repo, "git", "rev-parse", "--verify", f"{previous_ref}^{{commit}}"
+    ).strip()
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", resolved_previous, "HEAD"],
         cwd=repo,
@@ -1279,7 +1452,11 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
     if ancestor.returncode:
         raise ValidationError("previous_ref must be an ancestor of HEAD")
 
-    first_parent_commits = set(filter(None, _run(repo, "git", "rev-list", "--first-parent", "HEAD").splitlines()))
+    first_parent_commits = set(
+        filter(
+            None, _run(repo, "git", "rev-list", "--first-parent", "HEAD").splitlines()
+        )
+    )
     if resolved_previous not in first_parent_commits:
         raise ValidationError("previous_ref must be on HEAD's first-parent chain")
 
@@ -1355,7 +1532,9 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
                     registry = _previous_registry(repo, commit)
                     if registry is None:
                         if registry_seen:
-                            raise ValidationError("accepted OMX artifact registry must not disappear")
+                            raise ValidationError(
+                                "accepted OMX artifact registry must not disappear"
+                            )
                         if (
                             commit != resolved_previous
                             and _run(
@@ -1369,7 +1548,9 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
                                 ".omx",
                             ).strip()
                         ):
-                            raise ValidationError("registry-free OMX payload changed after previous_ref")
+                            raise ValidationError(
+                                "registry-free OMX payload changed after previous_ref"
+                            )
                         continue
 
                     registry_seen = True
@@ -1379,7 +1560,9 @@ def validate_committed_history(repo: Path, previous_ref: str) -> dict[str, Any] 
                         validate_transition(previous_registry, registry, live=False)
                     previous_registry = registry
                 except ValidationError as exc:
-                    raise ValidationError(f"committed snapshot {commit}: {exc}") from exc
+                    raise ValidationError(
+                        f"committed snapshot {commit}: {exc}"
+                    ) from exc
         finally:
             if added:
                 _run(repo, "git", "worktree", "remove", "--force", str(snapshot))
