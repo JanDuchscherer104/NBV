@@ -4,7 +4,7 @@
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
-.PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
+.PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts scaffold-review
 .PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary kg-up kg-down kg-status kg-capabilities kg-ollama-check kg-search kg-route kg-claim-check kg-consolidate kg-show-paper kg-sync kg-materialize kg-index-code kg-ingest-docs kg-load-bundle kg-mcp-install kg-doctor kg-enrich kg-ingest-papers kg-export-neo4j kg-semantic-enrich kg-refresh-light kg-refresh-code kg-refresh-lit kg-refresh-semantic kg-refresh-full
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
@@ -202,6 +202,9 @@ migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into 
 
 codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
+
+scaffold-review: _check_python ## 🧭 Build the private scaffold decision board (set SCAFFOLD_REVIEW_ARGS='...')
+	@$(PYTHON_INTERPRETER) scripts/scaffold_review.py build $(SCAFFOLD_REVIEW_ARGS)
 
 scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
