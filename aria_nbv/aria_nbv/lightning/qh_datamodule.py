@@ -5,15 +5,19 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sized
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 from pydantic import Field
-from torch.utils.data import DataLoader, Dataset, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler
 
-from ..data_handling.qh import QhBatch, QhDatasetConfig, QhRolloutChain, collate_qh_samples
+from ..data_handling.qh import QhBatch, QhDatasetConfig, collate_qh_samples
 from ..utils import Stage, TargetConfig
+
+if TYPE_CHECKING:
+    from ..data_handling.qh import QhDataset
 
 _LearningContract = tuple[tuple[tuple[str, object], ...], ...]
 
@@ -64,9 +68,9 @@ class QhDataModule(pl.LightningDataModule):
     def __init__(
         self,
         *,
-        train: Dataset[QhRolloutChain],
-        val: Dataset[QhRolloutChain] | None = None,
-        test: Dataset[QhRolloutChain] | None = None,
+        train: QhDataset,
+        val: QhDataset | None = None,
+        test: QhDataset | None = None,
         batch_size: int = 1,
         num_workers: int = 0,
         pin_memory: bool = False,
@@ -104,7 +108,7 @@ class QhDataModule(pl.LightningDataModule):
         """Return stage-invariant corpus semantics used by checkpoints."""
         return dict(zip(("rollout", "actor"), map(dict, self._learning_contract), strict=True))
 
-    def dataset_for_stage(self, stage: Stage | str) -> Dataset[QhRolloutChain] | None:
+    def dataset_for_stage(self, stage: Stage | str) -> QhDataset | None:
         """Return the configured dataset for one lifecycle stage."""
         resolved = Stage.from_str(stage)
         return {
@@ -138,7 +142,7 @@ class QhDataModule(pl.LightningDataModule):
         """Build a sequential held-out loader eligible for sampler replacement."""
         return [] if self.test_dataset is None else self._loader(self.test_dataset, shuffle=False)
 
-    def _loader(self, dataset: Dataset[QhRolloutChain], *, shuffle: bool) -> DataLoader[QhBatch]:
+    def _loader(self, dataset: QhDataset, *, shuffle: bool) -> DataLoader[QhBatch]:
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -152,7 +156,7 @@ class QhDataModule(pl.LightningDataModule):
         )
 
 
-def _validate_stages(**stages: Dataset[QhRolloutChain] | None) -> _LearningContract:
+def _validate_stages(**stages: QhDataset | None) -> _LearningContract:
     configured = {name: value for name, value in stages.items() if value is not None}
     if len(contracts := {_learning_contract(value.provenance) for value in configured.values()}) != 1:
         raise ValueError("Q_H corpus stages have incompatible learning contracts.")
