@@ -1,11 +1,10 @@
 {
   "schema_version": 1,
-  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-review-correction-20260727",
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726",
   "task": "aria-nbv-scaffold-lifecycle",
   "status": "accepted",
-  "predecessor_bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726",
-  "predecessor_bundle_sha256": "86c56fbbb2ce74692b9353c3179ffd7367e2c2317f16474884d5d358c3560865",
-  "predecessor_chain_sha256": "dd24c10093a8790f4b4678deccb9f601bf31ec7b7e344fc7dd3ecc77eaca6e34",
+  "predecessor_bundle_id": "aria-nbv-scaffold-five-pr-rebuild-20260726",
+  "predecessor_registry_commit": "1a48952f527149c1f295121c2208da440a29d8f4",
   "roles": [
     "context",
     "specification",
@@ -25,11 +24,10 @@
   },
   "constraints": [
     "keep successor evidence in native OMX role paths",
-    "archive the accepted predecessor byte-identically and bind it through a content-derived receipt",
+    "archive the accepted predecessor byte-identically and prove its native Git blobs",
     "remove unaccepted pre-policy payloads that contain machine-local paths",
     "compare accepted registry state against the merge base in hosted CI",
-    "validate acceptance, review, and handoff approval semantics for every bundle",
-    "remain valid after squash or rebase history rewriting",
+    "bind acceptance and handoff JSON identity to bundle and task",
     "use one LOC manifest for selection rules and path-level rows",
     "exclude runtime state, transcripts, and machine identifiers"
   ]

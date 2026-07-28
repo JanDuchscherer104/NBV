@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import importlib.util
 import json
@@ -104,7 +105,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "test-specification",
             ),
             (
-                f".omx/plans/{prefix}review.md",
+                f".omx/plans/{prefix}review.json",
                 "review",
                 "independent-review",
             ),
@@ -112,22 +113,74 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ]
         artifacts = []
         for path, family, role in definitions:
-            identity = (
-                json.dumps({"bundle_id": bundle_id, "task": "task"}) + "\n"
-                if role in {"acceptance-record", "handoff"}
-                else None
-            )
             if family == "review":
                 artifacts.append(
                     self.artifact(
                         path,
                         family,
                         role,
+                        text=json.dumps(
+                            {
+                                "schema_version": 1,
+                                "bundle_id": bundle_id,
+                                "task": "task",
+                                "status": "approved",
+                                "architect": "APPROVED",
+                                "critic": "APPROVED",
+                            }
+                        )
+                        + "\n",
                         review_kinds=["architect", "critic"],
                     )
                 )
             else:
-                artifacts.append(self.artifact(path, family, role, text=identity))
+                text = None
+                if role == "acceptance-record":
+                    text = (
+                        json.dumps(
+                            {
+                                "schema_version": 1,
+                                "bundle_id": bundle_id,
+                                "task": "task",
+                                "status": "accepted",
+                                "accepted_scope": "fixture contract",
+                                "excluded_scope": [],
+                                "actor_class": "repository-owner",
+                                "instruction_channel": "direct-user-instruction",
+                                "date": "2026-07-27",
+                                "request_digest": "0" * 64,
+                                "request_digest_normalization": "fixture",
+                            }
+                        )
+                        + "\n"
+                    )
+                elif role == "handoff":
+                    text = (
+                        json.dumps(
+                            {
+                                "schema_version": 1,
+                                "bundle_id": bundle_id,
+                                "task": "task",
+                                "status": "accepted",
+                                "predecessor_bundle_id": None,
+                                "predecessor_bundle_sha256": None,
+                                "predecessor_chain_sha256": None,
+                                "roles": sorted(MODULE.REQUIRED_FAMILIES),
+                                "review": {
+                                    "architect": "APPROVED",
+                                    "critic": "APPROVED",
+                                },
+                                "execution": {
+                                    "mode": "sequential",
+                                    "next_package": "fixture",
+                                    "write_scope": "fixture",
+                                },
+                                "constraints": [],
+                            }
+                        )
+                        + "\n"
+                    )
+                artifacts.append(self.artifact(path, family, role, text=text))
         handoff = next(item for item in artifacts if item["family"] == "handoff")
         acceptance = next(
             item for item in artifacts if item["role"] == "acceptance-record"
@@ -136,6 +189,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             "id": bundle_id,
             "task": "task",
             "status": "current",
+            "contract_version": 2,
             "classification": "accepted-decision-evidence",
             "baseline_commit": self.baseline,
             "handoff_sha256": handoff["sha256"],
@@ -144,26 +198,38 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         }
 
     def write_registry(
-        self, bundles: list[dict[str, Any]], relative: str = "registry.toml"
+        self,
+        bundles: list[dict[str, Any]],
+        relative: str = "registry.toml",
+        schema_version: int = 2,
     ) -> Path:
         path = self.repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["schema_version = 1"]
+        lines = [f"schema_version = {schema_version}"]
         for bundle in bundles:
             lines.extend(["", "[[bundle]]"])
             for key in (
                 "id",
                 "task",
                 "status",
+                "contract_version",
                 "classification",
                 "baseline_commit",
                 "handoff_sha256",
                 "acceptance_sha256",
                 "predecessor_bundle_id",
+                "predecessor_bundle_sha256",
+                "predecessor_chain_sha256",
                 "predecessor_registry_commit",
                 "superseded_by",
             ):
-                if key in bundle:
+                if key in bundle and (
+                    key == "contract_version" or isinstance(bundle[key], bool)
+                ):
+                    value = bundle[key]
+                    rendered = str(value).lower() if isinstance(value, bool) else value
+                    lines.append(f"{key} = {rendered}")
+                elif key in bundle:
                     lines.append(f'{key} = "{bundle[key]}"')
             for artifact in bundle["artifact"]:
                 lines.extend(["", "[[bundle.artifact]]"])
@@ -186,8 +252,13 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.write_registry([bundle], ".agents/omx_artifacts.toml")
         self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
 
-    def commit_registry(self, bundle: dict[str, Any], message: str) -> None:
-        self.stage_registry(bundle)
+    def commit_registry(
+        self, bundle: dict[str, Any], message: str, schema_version: int = 2
+    ) -> None:
+        self.write_registry(
+            [bundle], ".agents/omx_artifacts.toml", schema_version=schema_version
+        )
+        self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
         self.git("commit", "-qm", message)
 
     def archived(self, bundle: dict[str, Any], successor_id: str) -> dict[str, Any]:
@@ -201,16 +272,42 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             )
         return archived
 
+    def bind_predecessor(
+        self,
+        successor: dict[str, Any],
+        predecessor: dict[str, Any],
+        bundles: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        chain_bundles = {predecessor["id"]: predecessor} if bundles is None else bundles
+        successor["predecessor_bundle_id"] = predecessor["id"]
+        successor["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(
+            predecessor
+        )
+        successor["predecessor_chain_sha256"] = MODULE.bundle_chain_sha256(
+            predecessor["id"], chain_bundles
+        )
+        handoff = next(
+            item for item in successor["artifact"] if item["family"] == "handoff"
+        )
+        path = self.repo / handoff["path"]
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["predecessor_bundle_id"] = predecessor["id"]
+        payload["predecessor_bundle_sha256"] = successor["predecessor_bundle_sha256"]
+        payload["predecessor_chain_sha256"] = successor["predecessor_chain_sha256"]
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        content = path.read_bytes()
+        handoff["sha256"] = hashlib.sha256(content).hexdigest()
+        handoff["bytes"] = len(content)
+        successor["handoff_sha256"] = handoff["sha256"]
+
     def commit_supersession(
         self,
         original: dict[str, Any],
         successor: dict[str, Any],
         mutation: str | None = None,
     ) -> None:
-        predecessor_commit = self.git("rev-parse", "HEAD").stdout.strip()
         archived = self.archived(original, successor["id"])
-        successor["predecessor_bundle_id"] = original["id"]
-        successor["predecessor_registry_commit"] = predecessor_commit
+        self.bind_predecessor(successor, original)
         for artifact in archived["artifact"]:
             source = self.repo / artifact["native_path"]
             destination = self.repo / artifact["path"]
@@ -255,10 +352,11 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             item for item in registry["bundle"] if item["status"] == "current"
         )
         archived = self.archived(current, successor["id"])
-        successor["predecessor_bundle_id"] = current["id"]
-        successor["predecessor_registry_commit"] = self.git(
-            "rev-parse", "HEAD"
-        ).stdout.strip()
+        self.bind_predecessor(
+            successor,
+            current,
+            {item["id"]: item for item in registry["bundle"]},
+        )
         for artifact in archived["artifact"]:
             source = self.repo / artifact["native_path"]
             destination = self.repo / artifact["path"]
@@ -297,15 +395,398 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ] = ["architect"]
         self.assert_invalid(bundle, r"Architect\+Critic")
 
+    def test_acceptance_handoff_and_review_semantics_are_required(self) -> None:
+        for role, text, message in (
+            (
+                "acceptance-record",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "task-current",
+                        "task": "task",
+                        "accepted_scope": "fixture contract",
+                        "actor_class": "unknown",
+                        "instruction_channel": "direct-user-instruction",
+                    }
+                )
+                + "\n",
+                "acceptance record semantics mismatch",
+            ),
+            (
+                "handoff",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "task-current",
+                        "task": "task",
+                        "status": "draft",
+                        "review": {
+                            "architect": "APPROVED",
+                            "critic": "APPROVED",
+                        },
+                    }
+                )
+                + "\n",
+                "handoff acceptance mismatch",
+            ),
+            (
+                "independent-review",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "task-current",
+                        "task": "task",
+                        "status": "approved",
+                        "architect": "APPROVED",
+                        "critic": "BLOCK",
+                    }
+                )
+                + "\n",
+                "review contract mismatch",
+            ),
+        ):
+            with self.subTest(role=role):
+                bundle = self.bundle()
+                artifact = next(
+                    item for item in bundle["artifact"] if item["role"] == role
+                )
+                path = self.repo / artifact["path"]
+                path.write_text(text, encoding="utf-8")
+                payload = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                artifact["bytes"] = len(payload)
+                if role == "acceptance-record":
+                    bundle["acceptance_sha256"] = artifact["sha256"]
+                elif role == "handoff":
+                    bundle["handoff_sha256"] = artifact["sha256"]
+                self.assert_invalid(bundle, message)
+
+        bundle = self.bundle()
+        acceptance = next(
+            item for item in bundle["artifact"] if item["role"] == "acceptance-record"
+        )
+        acceptance_path = self.repo / acceptance["path"]
+        duplicate = acceptance_path.read_text(encoding="utf-8").replace(
+            '"status": "accepted"',
+            '"status": "rejected", "status": "accepted"',
+            1,
+        )
+        acceptance_path.write_text(duplicate, encoding="utf-8")
+        content = acceptance_path.read_bytes()
+        acceptance["sha256"] = hashlib.sha256(content).hexdigest()
+        acceptance["bytes"] = len(content)
+        bundle["acceptance_sha256"] = acceptance["sha256"]
+        self.assert_invalid(bundle, "duplicate JSON key")
+
+        bundle = self.bundle()
+        review = next(item for item in bundle["artifact"] if item["family"] == "review")
+        review_path = self.repo / review["path"]
+        duplicate = review_path.read_text(encoding="utf-8").replace(
+            '"critic": "APPROVED"',
+            '"critic": "BLOCK", "critic": "APPROVED"',
+            1,
+        )
+        review_path.write_text(duplicate, encoding="utf-8")
+        content = review_path.read_bytes()
+        review["sha256"] = hashlib.sha256(content).hexdigest()
+        review["bytes"] = len(content)
+        self.assert_invalid(bundle, "duplicate JSON key")
+
+        bundle = self.bundle()
+        bundle["contract_version"] = True
+        self.assert_invalid(bundle, "invalid contract version")
+
+        bundle = self.bundle()
+        bundle["predecessor_bundle_id"] = False
+        bundle["predecessor_bundle_sha256"] = False
+        bundle["predecessor_chain_sha256"] = False
+        handoff = next(
+            item for item in bundle["artifact"] if item["family"] == "handoff"
+        )
+        handoff_path = self.repo / handoff["path"]
+        payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        payload["predecessor_bundle_id"] = False
+        payload["predecessor_bundle_sha256"] = False
+        payload["predecessor_chain_sha256"] = False
+        handoff_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        content = handoff_path.read_bytes()
+        handoff["sha256"] = hashlib.sha256(content).hexdigest()
+        handoff["bytes"] = len(content)
+        bundle["handoff_sha256"] = handoff["sha256"]
+        self.assert_invalid(bundle, "lacks predecessor receipts")
+
+        registry = self.write_registry([self.bundle()])
+        registry.write_text(
+            registry.read_text(encoding="utf-8").replace(
+                "schema_version = 2", "schema_version = true", 1
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "registry schema_version must be 1 or 2"
+        ):
+            MODULE._parse_registry(registry.read_bytes())
+
+        for predecessor_id in ("ghost-bundle", "task-current"):
+            with self.subTest(predecessor_id=predecessor_id):
+                bundle = self.bundle()
+                bundle["predecessor_bundle_id"] = predecessor_id
+                bundle["predecessor_bundle_sha256"] = "0" * 64
+                bundle["predecessor_chain_sha256"] = "1" * 64
+                handoff = next(
+                    item for item in bundle["artifact"] if item["family"] == "handoff"
+                )
+                handoff_path = self.repo / handoff["path"]
+                payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+                payload["predecessor_bundle_id"] = predecessor_id
+                payload["predecessor_bundle_sha256"] = "0" * 64
+                payload["predecessor_chain_sha256"] = "1" * 64
+                handoff_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                content = handoff_path.read_bytes()
+                handoff["sha256"] = hashlib.sha256(content).hexdigest()
+                handoff["bytes"] = len(content)
+                bundle["handoff_sha256"] = handoff["sha256"]
+                self.assert_invalid(bundle, "invalid predecessor link")
+
+        for role, key, value, message in (
+            ("acceptance-record", "status", "rejected", "acceptance record contract"),
+            (
+                "acceptance-record",
+                "excluded_scope",
+                "not-a-list",
+                "acceptance record contract",
+            ),
+            ("acceptance-record", "date", 20260727, "acceptance record contract"),
+            (
+                "acceptance-record",
+                "request_digest",
+                0,
+                "acceptance record contract",
+            ),
+            ("handoff", "schema_version", 999, "handoff acceptance mismatch"),
+            ("handoff", "execution", None, "handoff contract mismatch"),
+            ("handoff", "constraints", "not-a-list", "handoff contract mismatch"),
+        ):
+            with self.subTest(role=role, key=key):
+                bundle = self.bundle()
+                artifact = next(
+                    item for item in bundle["artifact"] if item["role"] == role
+                )
+                path = self.repo / artifact["path"]
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                payload[key] = value
+                path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                content = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(content).hexdigest()
+                artifact["bytes"] = len(content)
+                bundle[
+                    "acceptance_sha256"
+                    if role == "acceptance-record"
+                    else "handoff_sha256"
+                ] = artifact["sha256"]
+                self.assert_invalid(bundle, message)
+
     def test_privacy_scan_covers_current_and_superseded_artifacts(self) -> None:
         samples = (
             ("machine /home/example/repo/file\n", "absolute path"),
+            ("machine /tmp\n", "absolute path"),
+            ("machine /root\n", "absolute path"),
+            ("machine /etc\n", "absolute path"),
+            ("machine /home/user/@private/file.txt\n", "privacy threat"),
+            ("machine file:///home/user/@private/file.txt\n", "privacy threat"),
+            ("machine file:///home/user/%40private/file.txt\n", "privacy threat"),
+            (
+                "machine file:%2F%2F%2Fhome%2Fuser%2Fprivate%2Fsecret.txt\n",
+                "privacy threat",
+            ),
+            ("machine %252Fhome%252Fuser%252Fsecret.txt\n", "absolute path"),
+            ("machine -/home/alice/secret.txt\n", "absolute path"),
+            ("machine :/home/alice/secret.txt\n", "absolute path"),
+            ("machine */home/alice/secret.txt\n", "absolute path"),
+            ("machine !/home/alice/secret.txt\n", "absolute path"),
+            ("machine x-/home/alice/secret.txt\n", "absolute path"),
+            ("machine x!/home/alice/secret.txt\n", "absolute path"),
+            ("machine x*/home/alice/secret.txt\n", "absolute path"),
+            ("machine x(/home/alice/secret.txt\n", "absolute path"),
+            ("machine x./home/alice/secret.txt\n", "absolute path"),
+            ("machine x%252D%252Fhome%252Falice%252Fsecret.txt\n", "absolute path"),
+            ("machine path=/tmp/secret.txt\n", "absolute path"),
+            ("machine %2570ath%253D%252Ftmp%252Fsecret.txt\n", "absolute path"),
+            ("machine %252D%252Fhome%252Falice%252Fsecret.txt\n", "absolute path"),
+            ("machine </home/alice/secret.txt\n", "absolute path"),
+            ("machine x</home/alice/secret.txt\n", "absolute path"),
+            ("see docs/%70rivate/secret.txt\n", "private or raw path part"),
+            ("see docs/%72aw/messages.jsonl\n", "private or raw path part"),
+            ("machine C:/Users/alice/project/file.txt\n", "absolute path"),
+            ("machine C:\\Users\\alice\\project\\file.txt\n", "absolute path"),
+            ("machine \\\\server\\share\\project\\file.txt\n", "absolute path"),
+            ("machine //server/share/project/file.txt\n", "absolute path"),
+            (
+                "machine C:%2FUsers%2Falice%2Fsecret.txt\n",
+                "unsupported URI scheme",
+            ),
+            (
+                "machine %255C%255Cserver%255Cshare%255Csecret.txt\n",
+                "absolute path",
+            ),
+            (
+                "machine %252F%252Fserver%252Fshare%252Fsecret.txt\n",
+                "absolute path",
+            ),
+            ("machine path:/home/alice/project/file.txt\n", "absolute path"),
+            ("machine workspace:/home/alice/project/file.txt\n", "absolute path"),
+            ("machine javascript:alert(1)\n", "unsupported URI scheme"),
+            ("machine javascript:*\n", "unsupported URI scheme"),
+            ("machine javascript:**\n", "unsupported URI scheme"),
+            ("machine file:**\n", "unsupported URI scheme"),
+            ("machine 123:**\n", "unsupported URI scheme"),
+            ("machine custom:__\n", "unsupported URI scheme"),
+            ("custom**:**opaque\n", "unsupported URI scheme"),
+            ("123**:**opaque\n", "unsupported URI scheme"),
+            ("**safe ** javascript:**\n", "unsupported URI scheme"),
+            ("**Owner:** javascript:**\n", "unsupported URI scheme"),
+            ("__Owner:__ file:__\n", "unsupported URI scheme"),
+            ("**Owner:**=javascript:opaque\n", "unsupported URI scheme"),
+            ("**Owner:**=123:opaque\n", "unsupported URI scheme"),
+            ("**Owner:**=https://\n", "malformed HTTP URI"),
+            ("**Owner:** java**script:**alert(1)\n", "unsupported URI scheme"),
+            ("[x](java**script:**alert(1))\n", "unsupported URI scheme"),
+            ("**Owner:** javascript\\:alert(1)\n", "unsupported URI scheme"),
+            ("**Owner:** \\/home/alice/secret\n", "absolute path"),
+            ("**Owner:**/home/alice/secret\n", "absolute path"),
+            ("__Owner:__/home/alice/secret\n", "absolute path"),
+            ("**safe**/home/alice/secret\n", "absolute path"),
+            ("**sa*fe**/home/alice/secret\n", "absolute path"),
+            ("**sa\nfe**/home/alice/secret\n", "absolute path"),
+            ("**Owner:\ncontinued**/home/alice/secret\n", "absolute path"),
+            ("**safe /home/alice/secret**\n", "absolute path"),
+            (
+                "%252A%252AOwner%253A%252A%252A%252Fhome%252Falice%252Fsecret\n",
+                "absolute path",
+            ),
+            (
+                "%252A%252Asa%252Afe%252A%252A%252Fhome%252Falice%252Fsecret\n",
+                "absolute path",
+            ),
+            (
+                "&#42;&#42;Owner:&#42;&#42;/home/alice/secret\n",
+                "absolute path",
+            ),
+            ("\\*\\*Owner:\\*\\*\\/home/alice/secret\n", "privacy threat"),
+            (
+                "%252A%252Asafe%2520%252A%252A%2520javascript%253A%252A%252A\n",
+                "unsupported URI scheme",
+            ),
+            ("machine urn:isbn:9780000000000\n", "unsupported URI scheme"),
+            ("machine urn:1234\n", "unsupported URI scheme"),
+            ("machine tel:+49123\n", "unsupported URI scheme"),
+            ("machine geo:48,11\n", "unsupported URI scheme"),
+            ("machine data:,hello\n", "unsupported URI scheme"),
+            ("machine custom:%31\n", "unsupported URI scheme"),
+            ("machine 123:opaque\n", "unsupported URI scheme"),
+            ("machine %2531%2532%2533%253Aopaque\n", "unsupported URI scheme"),
+            ("machine custom:?query\n", "unsupported URI scheme"),
+            ("machine javascript:AGENTS.md:1\n", "unsupported URI scheme"),
+            ("machine file:AGENTS.md:1\n", "unsupported URI scheme"),
+            (
+                "machine %256aavascript%253Aalert%25281%2529\n",
+                "unsupported URI scheme",
+            ),
+            ("machine https://\n", "malformed HTTP URI"),
+            ("machine http:\n", "unsupported or malformed URI"),
+            ("machine http%253A\n", "unsupported or malformed URI"),
+            ("machine https://?q=value\n", "malformed HTTP URI"),
+            ("machine https:443\n", "malformed HTTP URI"),
+            ("machine https://example.invalid:abc/path\n", "malformed HTTP URI"),
+            ("machine https://example.invalid:0\n", "malformed HTTP URI"),
+            ("machine https://example.invalid:65536\n", "malformed HTTP URI"),
+            ("machine https://example.invalid:65536/path\n", "malformed HTTP URI"),
+            ("machine https://example.invalid:\n", "malformed HTTP URI"),
+            (
+                "machine https%253A%252F%252Fexample.invalid%253A\n",
+                "malformed HTTP URI",
+            ),
+            ("machine https://example.invalid/%ZZ\n", "malformed HTTP URI"),
+            (
+                "machine https://example.invalid%253A\n",
+                "malformed HTTP URI",
+            ),
+            (
+                "machine %2568ttps%253A%252F%252Fexample.invalid%252F%2525ZZ\n",
+                "malformed HTTP URI",
+            ),
+            ("machine </home/alice/project/file.txt>\n", "privacy threat"),
+            (
+                "machine https://example.invalid/docs,/home/alice/secret\n",
+                "absolute path",
+            ),
+            (
+                "machine https://example.invalid/docs)/home/alice/secret\n",
+                "absolute path",
+            ),
+            (
+                "machine [x](https://example.invalid/docs)/home/alice/secret\n",
+                "absolute path",
+            ),
+            ("machine https://)/home/alice/secret\n", "absolute path"),
+            ("machine https://[bad]/home/alice/secret\n", "absolute path"),
             ("runtime 019f9e3a-169a-7673-9df2-c4bd0277bd35\n", "runtime UUID"),
+            (
+                "runtime session_019f9e3a-169a-7673-9df2-c4bd0277bd35\n",
+                "runtime UUID",
+            ),
+            ("see private/file.txt\n", "private or raw path part"),
+            ("see raw/file.txt\n", "private or raw path part"),
             ("see private/project/notes.md\n", "private or raw path part"),
             ("see local/raw/messages.jsonl\n", "private or raw path part"),
+            ("see local\\raw\\messages.jsonl\n", "private or raw path part"),
+            ("private**/**file\n", "private or raw path part"),
+            ("raw**/**file\n", "private or raw path part"),
+            ("**/**home/alice\n", "absolute path"),
+            (
+                "https://example.invalid/private?download=1\n",
+                "private or raw path part",
+            ),
+            ("https://example.invalid/raw#part\n", "private or raw path part"),
+            ("https://example.invalid/?private=value\n", "private or raw path part"),
+            ("https://example.invalid/?raw=value\n", "private or raw path part"),
+            ("HEAD:path/private:1\n", "private or raw path part"),
+            ("main:raw:2\n", "private or raw path part"),
+            ("deadbeef:folder/raw:3\n", "private or raw path part"),
+            (
+                "https://example.invalid/%2570rivate%253Fdownload=1\n",
+                "private or raw path part",
+            ),
             ("<!doctype html><html>bad</html>\n", "HTML content"),
+            ("<script src=x>bad</script>\n", "HTML content"),
+            ("<meta charset=utf-8>\n", "HTML content"),
+            ("<meta\ncharset=x\ncontent=y>\n", "HTML content"),
+            ("<svg/onload=alert(1)>\n", "HTML content"),
+            ("<img/src=x>\n", "HTML content"),
+            ("%253Csvg%252Fonload%253Dalert%25281%2529%253E\n", "HTML content"),
+            ("&lt;script src=x&gt;\n", "HTML content"),
+            ("%253Cmeta%250Acharset=x%250Acontent=y%253E\n", "HTML content"),
+            (
+                r'note: {"path":"\u002fhome\u002falice\u002fsecret"}' + "\n",
+                "absolute path",
+            ),
+            (
+                "note%253A%2520%257B%2522path%2522%253A%2522%255Cu002fhome"
+                "%255Cu002falice%255Cu002fsecret%2522%257D\n",
+                "absolute path",
+            ),
             (_fixture("-----BEGIN OPENSSH ", "PRIVATE KEY-----\n"), "private key"),
             (_fixture("token ghp_", "abcdefghijklmnopqrstuvwxyz\n"), "GitHub token"),
+            (
+                _fixture("token_ghp_", "abcdefghijklmnopqrstuvwxyz\n"),
+                "GitHub token",
+            ),
+            (
+                _fixture(
+                    "https://example.invalid/ghp_", "abcdefghijklmnopqrstuvwxyz\n"
+                ),
+                "GitHub token",
+            ),
             (
                 _fixture("token sk-proj-", "abcdefghijklmnopqrstuvwxyz\n"),
                 "OpenAI API key",
@@ -330,9 +811,10 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 "bearer token",
             ),
             ("contact owner@example.com\n", "email address"),
+            ("https://owner@example.com/path\n", "email address"),
         )
         for text, message in samples:
-            with self.subTest(message=message):
+            with self.subTest(message=message, text=text):
                 bundle = self.bundle()
                 target = self.repo / bundle["artifact"][0]["path"]
                 target.write_text(text, encoding="utf-8")
@@ -341,7 +823,311 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 bundle["artifact"][0]["bytes"] = len(payload)
                 self.assert_invalid(bundle, message)
 
+        extension_payloads = (
+            (r"\\server\share\secret.txt", "absolute path"),
+            (r"\\\\server\\share\\secret.txt", "absolute path"),
+            (r"//server\share\secret.txt", "absolute path"),
+            ("%252F%252Fserver%255Cshare%255Csecret.txt", "absolute path"),
+            (r"\/\/server\\share\\secret.txt", "absolute path"),
+            (r"Bearer\%20abcdefghijklmnopqrstuvwx", "bearer token"),
+            (r"ghp_\%61bcdefghijklmnopqrstuvwxyz", "GitHub token"),
+            (r"r**a**w/file.txt", "private or raw path part"),
+            (r"pr**iv**ate/file.txt", "private or raw path part"),
+            (r"java**script**:alert(1)", "unsupported URI scheme"),
+            (r"cust**om**:opaque", "unsupported URI scheme"),
+            (r"cust**om**:", "unsupported URI scheme"),
+            (r"cust*om*:", "unsupported URI scheme"),
+            (r"c*u*s*t*o*m*:", "unsupported URI scheme"),
+            (r"java*script*:alert(1)", "unsupported URI scheme"),
+            (r"**/home/alice/secret**", "absolute path"),
+            (r"__/home/alice/secret__", "absolute path"),
+            (r"x**/home/alice/secret", "absolute path"),
+            (r"**src/file**/home/alice/secret", "absolute path"),
+            (r"**src/*/module.py**/home/alice/secret", "absolute path"),
+            (r"src/**module.py**/home/alice/secret", "absolute path"),
+            (r"**https://example.invalid/docs**/home/alice/secret", "absolute path"),
+            (
+                r"src/%252A%252Amodule.py%252A%252A%252Fhome%252Falice%252Fsecret",
+                "absolute path",
+            ),
+            (r"**custom:**?opaque", "unsupported URI scheme"),
+            (
+                r"%252A%252Acustom%253A%252A%252A%253Fopaque",
+                "unsupported URI scheme",
+            ),
+            (r"*https://example.invalid/docs*/home/alice/secret", "absolute path"),
+            (r"_https://example.invalid/docs_/home/alice/secret", "absolute path"),
+            (r"src/*module.py*/home/alice/secret", "absolute path"),
+            (r"src/_module.py_/home/alice/secret", "absolute path"),
+            (r"**custom:**,opaque", "unsupported URI scheme"),
+            (r"src/*/module.py**/home/alice/secret", "absolute path"),
+            (
+                r"https://example.invalid/src/*/module.py**/home/alice/secret",
+                "absolute path",
+            ),
+            (r"**custom:**//opaque", "unsupported URI scheme"),
+            (r"__123:__//opaque", "unsupported URI scheme"),
+            (
+                r"[x](https://example.invalid/src/*/module.py)-/home/alice/secret",
+                "absolute path",
+            ),
+            (
+                r"[x](https://example.invalid/src/*/module.py)-custom://opaque",
+                "unsupported URI scheme",
+            ),
+            (
+                r"[x](https://example.invalid/src/*/module.py)-123://opaque",
+                "unsupported URI scheme",
+            ),
+            (
+                r"[x](https://example.invalid/src/*/module.py)-**custom:**//opaque",
+                "unsupported URI scheme",
+            ),
+            (
+                r"[x](https://example.invalid/?next=custom://opaque)",
+                "unsupported URI scheme",
+            ),
+            (
+                r"field,https://example.invalid/?next=123://opaque",
+                "unsupported URI scheme",
+            ),
+            (
+                r"https://example.invalid/path/custom://opaque",
+                "unsupported URI scheme",
+            ),
+            (
+                r"[x](https://example.invalid/docs)_/home/alice/secret",
+                "absolute path",
+            ),
+            (r"custom.scheme:123", "unsupported URI scheme"),
+            (r"123.456:789", "unsupported URI scheme"),
+            (r"https://example.invalid/?next=/home/alice/secret", "absolute path"),
+            (r"https://example.invalid/#/home/alice/secret", "absolute path"),
+            (r"https://example.invalid/docs//home/alice/secret", "absolute path"),
+            (
+                r"https://example.invalid/?next=%252Fhome%252Falice%252Fsecret",
+                "absolute path",
+            ),
+            (r"https://example.invalid//home/alice", "absolute path"),
+            (r"https://example.invalid//server/share", "absolute path"),
+            (r"https://example.invalid/a//b", "absolute path"),
+            (r"https://example.invalid/a/%2Fb", "absolute path"),
+            (r"https://example.invalid/a/%252Fb", "absolute path"),
+            (r"https://example.invalid/?next=//machine", "absolute path"),
+            (r"https://example.invalid/#//machine", "absolute path"),
+            (
+                r"https://example.invalid/?next=%252F%252Fmachine",
+                "absolute path",
+            ),
+            (
+                r"https://outer.invalid/?next=https://:443/x",
+                "malformed HTTP URI",
+            ),
+            (
+                r"https://outer.invalid/?next=https%253A%252F%252F%253A443%252Fx",
+                "malformed HTTP URI",
+            ),
+        )
+        for extension in (".md", ".csv", ".json"):
+            for index, (unsafe_text, message) in enumerate(extension_payloads):
+                bundle = self.bundle(f"layered-{extension[1:]}-{index}")
+                content = f"header\n{unsafe_text}\ntrailer\n"
+                if extension == ".json":
+                    content = json.dumps({"note": content}) + "\n"
+                bundle["artifact"].append(
+                    self.artifact(
+                        f".omx/specs/layered-{index}{extension}",
+                        "specification",
+                        f"layered-{extension[1:]}-{index}",
+                        text=content,
+                    )
+                )
+                self.assert_invalid(bundle, message)
+
+        safe_texts = (
+            "https://example.invalid/a_(b)/index",
+            "https://example.invalid/a_(b_(c))/index",
+            "[spec](https://example.invalid/a_(b)/index)",
+            "<https://example.invalid/a_(b)/index>",
+            "src/*/module.py",
+            "src/a*/module.py",
+            "src/?/module.py",
+            "**/*.pdf",
+            "**/__pycache__/**",
+            "*note*:",
+            "_note_:",
+            "AGENTS.md:6-12",
+        )
+        for extension in (".md", ".csv", ".json"):
+            bundle = self.bundle(f"safe-http-{extension[1:]}")
+            content = "\n".join(safe_texts) + "\n"
+            if extension == ".json":
+                content = json.dumps({"text": safe_texts}) + "\n"
+            bundle["artifact"].append(
+                self.artifact(
+                    f".omx/specs/safe-http{extension}",
+                    "specification",
+                    f"safe-http-{extension[1:]}",
+                    text=content,
+                )
+            )
+            MODULE.validate_registry(self.repo, self.write_registry([bundle]))
+
+        deep_payloads = (
+            "[" * 80 + '"safe"' + "]" * 80,
+            "[" * 80 + r'"\u002fhome\u002falice\u002fsecret"' + "]" * 80,
+            "[" * 1_100 + '"safe"' + "]" * 1_100,
+        )
+        for extension in (".md", ".csv", ".json"):
+            for index, deep_json in enumerate(deep_payloads):
+                bundle = self.bundle(f"deep-json-{extension[1:]}-{index}")
+                content = deep_json if extension == ".json" else f"note: {deep_json}\n"
+                bundle["artifact"].append(
+                    self.artifact(
+                        f".omx/specs/deep-json-{index}{extension}",
+                        "specification",
+                        f"deep-json-{extension[1:]}-{index}",
+                        text=content,
+                    )
+                )
+                expected = "nested JSON|invalid registered JSON evidence"
+                if index == 1:
+                    expected = f"privacy threat|{expected}"
+                self.assert_invalid(
+                    bundle,
+                    expected,
+                )
+
+        large_integer_json = '{"value":' + "9" * 5_000 + "}"
+        for extension in (".md", ".csv", ".json"):
+            bundle = self.bundle(f"large-integer-{extension[1:]}")
+            content = (
+                large_integer_json
+                if extension == ".json"
+                else f"note: {large_integer_json}\n"
+            )
+            bundle["artifact"].append(
+                self.artifact(
+                    f".omx/specs/large-integer{extension}",
+                    "specification",
+                    f"large-integer-{extension[1:]}",
+                    text=content,
+                )
+            )
+            self.assert_invalid(
+                bundle, "invalid registered JSON evidence|invalid nested JSON value"
+            )
+
+        bundle = self.bundle("embedded-json-attempts")
+        bundle["artifact"].append(
+            self.artifact(
+                ".omx/specs/malformed-embedded.md",
+                "specification",
+                "malformed-embedded",
+                text='\\"' * (MODULE.MAX_EMBEDDED_JSON_ATTEMPTS + 1),
+            )
+        )
+        self.assert_invalid(bundle, "nested JSON exceeds attempt limit")
+
+        bundle = self.bundle("unicode-json")
+        acceptance = next(
+            item for item in bundle["artifact"] if item["role"] == "acceptance-record"
+        )
+        acceptance_path = self.repo / acceptance["path"]
+        acceptance_payload = json.loads(acceptance_path.read_text(encoding="utf-8"))
+        acceptance_payload["accepted_scope"] = "UNICODE_PATH"
+        encoded = json.dumps(acceptance_payload).replace(
+            "UNICODE_PATH", r"\u002fhome\u002falice\u002fsecret"
+        )
+        acceptance_path.write_text(encoded + "\n", encoding="utf-8")
+        payload = acceptance_path.read_bytes()
+        acceptance["sha256"] = hashlib.sha256(payload).hexdigest()
+        acceptance["bytes"] = len(payload)
+        bundle["acceptance_sha256"] = acceptance["sha256"]
+        self.assert_invalid(bundle, "absolute path")
+
+        for index, nested_json in enumerate(
+            (
+                r'{"path":"\u002fhome\u002falice\u002fsecret"}',
+                r'{"path":"\/home\/alice\/secret"}',
+                r'{"note":"**sa*fe**\/home\/alice\/secret"}',
+                r'{"note":"\\u002fhome\\u002falice\\u002fsecret"}',
+                r'note: {"path":"\u002fhome\u002falice\u002fsecret"}',
+                r'note: {"path":"**sa*fe**\u002fhome\u002falice\u002fsecret"}',
+                "%7B%22path%22%3A%22%5Cu002fhome%5Cu002falice%5Cu002fsecret%22%7D",
+            )
+        ):
+            bundle = self.bundle(f"nested-json-{index}")
+            acceptance = next(
+                item
+                for item in bundle["artifact"]
+                if item["role"] == "acceptance-record"
+            )
+            acceptance_path = self.repo / acceptance["path"]
+            acceptance_payload = json.loads(acceptance_path.read_text(encoding="utf-8"))
+            acceptance_payload["accepted_scope"] = nested_json
+            acceptance_path.write_text(
+                json.dumps(acceptance_payload) + "\n", encoding="utf-8"
+            )
+            payload = acceptance_path.read_bytes()
+            acceptance["sha256"] = hashlib.sha256(payload).hexdigest()
+            acceptance["bytes"] = len(payload)
+            bundle["acceptance_sha256"] = acceptance["sha256"]
+            self.assert_invalid(bundle, "absolute path")
+
+        bundle = self.bundle("generic-json")
+        bundle["artifact"].append(
+            self.artifact(
+                ".omx/specs/generic.json",
+                "specification",
+                "generic-json",
+                text=r'{"note":"\u002fhome\u002falice\u002fsecret"}' + "\n",
+            )
+        )
+        self.assert_invalid(bundle, "absolute path")
+
+        bundle = self.bundle("duplicate-json")
+        bundle["artifact"].append(
+            self.artifact(
+                ".omx/specs/duplicate.json",
+                "specification",
+                "duplicate-json",
+                text='{"note":"first","note":"second"}\n',
+            )
+        )
+        self.assert_invalid(bundle, "duplicate JSON key")
+
+        safe_glob_values = (
+            "src/*/module.py",
+            "src/a*/module.py",
+            "src/?/module.py",
+            "**/*.pdf",
+            "**/__pycache__/**",
+        )
+        safe_globs = "\n".join(safe_glob_values) + "\n"
+        safe_globs_json = json.dumps({"text": safe_glob_values}) + "\n"
         old = self.bundle("task-old")
+        old_path = self.repo / old["artifact"][0]["path"]
+        old_path.write_text(safe_globs, encoding="utf-8")
+        payload = old_path.read_bytes()
+        old["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        old["artifact"][0]["bytes"] = len(payload)
+        old["artifact"].extend(
+            (
+                self.artifact(
+                    ".omx/specs/globs.csv",
+                    "specification",
+                    "glob-csv",
+                    text=safe_globs,
+                ),
+                self.artifact(
+                    ".omx/specs/globs.json",
+                    "specification",
+                    "glob-json",
+                    text=safe_globs_json,
+                ),
+            )
+        )
         self.commit_registry(old, "accepted base")
         current = self.bundle("task-new", "successor")
         self.commit_supersession(old, current)
@@ -356,6 +1142,371 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         archived["artifact"][0]["bytes"] = len(payload)
         with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
             MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
+        unsafe.write_text("r**a**w/file.txt\n", encoding="utf-8")
+        payload = unsafe.read_bytes()
+        archived["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        archived["artifact"][0]["bytes"] = len(payload)
+        with self.assertRaisesRegex(MODULE.ValidationError, "private or raw path part"):
+            MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
+        unsafe.write_text("cust**om**:\n", encoding="utf-8")
+        payload = unsafe.read_bytes()
+        archived["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        archived["artifact"][0]["bytes"] = len(payload)
+        with self.assertRaisesRegex(MODULE.ValidationError, "unsupported URI scheme"):
+            MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
+        unsafe.write_text(safe_globs, encoding="utf-8")
+        payload = unsafe.read_bytes()
+        archived["artifact"][0]["sha256"] = hashlib.sha256(payload).hexdigest()
+        archived["artifact"][0]["bytes"] = len(payload)
+
+        archived_by_role = {item["role"]: item for item in archived["artifact"]}
+        archived_path_payloads = (
+            {
+                "context": ("**src/file**/home/alice/secret\n", safe_globs),
+                "glob-csv": (
+                    'field,"**src/*/module.py**/home/alice/secret"\n',
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "**src/file**/home/alice/secret"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("src/**module.py**/home/alice/secret\n", safe_globs),
+                "glob-csv": (
+                    'field,"**https://example.invalid/docs**/home/alice/secret"\n',
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {
+                            "note": "src/%252A%252Amodule.py%252A%252A%252Fhome"
+                            "%252Falice%252Fsecret"
+                        }
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "*https://example.invalid/docs*/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    'field,"src/*module.py*/home/alice/secret"\n',
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {"note": "_https://example.invalid/docs_/home/alice/secret"}
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("src/*/module.py**/home/alice/secret\n", safe_globs),
+                "glob-csv": (
+                    "field,https://example.invalid/src/*/module.py**/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "src/*/module.py**/home/alice/secret"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "[x](https://example.invalid/src/*/module.py)-/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,[x](https://example.invalid/src/*/module.py)-/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {
+                            "note": "[x](https://example.invalid/src/*/module.py)"
+                            "-/home/alice/secret"
+                        }
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "[x](https://example.invalid/docs)_/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,[x](https://example.invalid/docs)_/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {"note": "[x](https://example.invalid/docs)_/home/alice/secret"}
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "https://example.invalid/?next=/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,https://example.invalid/#/home/alice/secret\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {
+                            "note": "https://example.invalid/"
+                            "?next=%252Fhome%252Falice%252Fsecret"
+                        }
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("https://example.invalid//home/alice\n", safe_globs),
+                "glob-csv": (
+                    "field,https://example.invalid//server/share\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "https://example.invalid//home/alice"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("https://example.invalid/a//b\n", safe_globs),
+                "glob-csv": (
+                    "field,https://example.invalid/a/%2Fb\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "https://example.invalid/a/%252Fb"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "https://example.invalid/?next=//machine\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,https://example.invalid/#//machine\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {"note": "https://example.invalid/?next=%252F%252Fmachine"}
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+        )
+        for archived_payloads in archived_path_payloads:
+            for role, (unsafe_text, safe_text) in archived_payloads.items():
+                artifact = archived_by_role[role]
+                path = self.repo / artifact["path"]
+                path.write_text(unsafe_text, encoding="utf-8")
+                payload = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                artifact["bytes"] = len(payload)
+                with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
+                    MODULE.validate_registry(
+                        self.repo, self.write_registry(registry["bundle"])
+                    )
+                path.write_text(safe_text, encoding="utf-8")
+                payload = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                artifact["bytes"] = len(payload)
+
+        archived_http_payloads = {
+            "context": (
+                "https://outer.invalid/?next=https://:443/x\n",
+                safe_globs,
+            ),
+            "glob-csv": (
+                "field,https://outer.invalid/?next=https%253A%252F%252F%253A443%252Fx\n",
+                safe_globs,
+            ),
+            "glob-json": (
+                json.dumps({"note": "https://outer.invalid/path/https://:443/x"})
+                + "\n",
+                safe_globs_json,
+            ),
+        }
+        for role, (unsafe_text, safe_text) in archived_http_payloads.items():
+            artifact = archived_by_role[role]
+            path = self.repo / artifact["path"]
+            path.write_text(unsafe_text, encoding="utf-8")
+            payload = path.read_bytes()
+            artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+            artifact["bytes"] = len(payload)
+            with self.assertRaisesRegex(MODULE.ValidationError, "malformed HTTP URI"):
+                MODULE.validate_registry(
+                    self.repo, self.write_registry(registry["bundle"])
+                )
+            path.write_text(safe_text, encoding="utf-8")
+            payload = path.read_bytes()
+            artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+            artifact["bytes"] = len(payload)
+
+        archived_scheme_payloads = (
+            {
+                "context": ("cust*om*:\n", safe_globs),
+                "glob-csv": ("field,java*script*:alert(1)\n", safe_globs),
+                "glob-json": (
+                    json.dumps({"note": "cust*om*:"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("**custom:**?opaque\n", safe_globs),
+                "glob-csv": (
+                    "field,%252A%252Acustom%253A%252A%252A%253Fopaque\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "**custom:**?opaque"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("**custom:**,opaque\n", safe_globs),
+                "glob-csv": ("field,**custom:**.opaque\n", safe_globs),
+                "glob-json": (
+                    json.dumps({"note": "**custom:**;opaque"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("**custom:**//opaque\n", safe_globs),
+                "glob-csv": ("field,__custom:__//opaque\n", safe_globs),
+                "glob-json": (
+                    json.dumps({"note": "**123:**//opaque"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "[x](https://example.invalid/src/*/module.py)-custom://opaque\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,[x](https://example.invalid/src/*/module.py)-123://opaque\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps(
+                        {
+                            "note": "[x](https://example.invalid/src/*/module.py)"
+                            "-**custom:**//opaque"
+                        }
+                    )
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": (
+                    "[x](https://example.invalid/?next=custom://opaque)\n",
+                    safe_globs,
+                ),
+                "glob-csv": (
+                    "field,https://example.invalid/?next=123://opaque\n",
+                    safe_globs,
+                ),
+                "glob-json": (
+                    json.dumps({"note": "https://example.invalid/path/custom://opaque"})
+                    + "\n",
+                    safe_globs_json,
+                ),
+            },
+            {
+                "context": ("custom.scheme:123\n", safe_globs),
+                "glob-csv": ("field,123.456:789\n", safe_globs),
+                "glob-json": (
+                    json.dumps({"note": "custom.scheme:123"}) + "\n",
+                    safe_globs_json,
+                ),
+            },
+        )
+        for archived_payloads in archived_scheme_payloads:
+            for role, (unsafe_text, safe_text) in archived_payloads.items():
+                artifact = archived_by_role[role]
+                path = self.repo / artifact["path"]
+                path.write_text(unsafe_text, encoding="utf-8")
+                payload = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                artifact["bytes"] = len(payload)
+                with self.assertRaisesRegex(
+                    MODULE.ValidationError, "unsupported URI scheme"
+                ):
+                    MODULE.validate_registry(
+                        self.repo, self.write_registry(registry["bundle"])
+                    )
+                path.write_text(safe_text, encoding="utf-8")
+                payload = path.read_bytes()
+                artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+                artifact["bytes"] = len(payload)
+        MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
+        MODULE._scan_text(
+            (
+                "https://example.invalid/docs and "
+                "https://example.invalid:443/a%20b?q=value#section plus "
+                "<https://example.invalid/docs> plus "
+                "[spec](https://example.invalid/docs_(v2)) plus "
+                "<https://example.invalid/docs_(v2)> plus "
+                "aria_nbv/**/AGENTS.md, AGENTS.md:6-12, "
+                "__pycache__/module.pyc, "
+                "main:.graphifyignore:34-51, Makefile:181-194, "
+                "main:Makefile:181-194, origin/main:AGENTS.md:30-31, "
+                "HEAD:src/pkg.module.py:12-20, HEAD:src/tool:12, HEAD:LICENSE:1, "
+                "HEAD:scripts/run_checks:42, origin/main:Dockerfile:8-9, "
+                "**Architect/Critic:**, and **owner:**\n"
+            ),
+            "non-path syntax",
+            contract_version=2,
+        )
+        MODULE._scan_text(
+            "./relative ../parent\n", "relative paths", contract_version=2
+        )
+        MODULE._scan_text("historical /tmp reference\n", "legacy", contract_version=1)
+        MODULE._scan_text(
+            "legacy <bundle-id> placeholder\n", "legacy", contract_version=1
+        )
+        for legacy in (
+            "C:/Users/alice/project/file.txt",
+            "\\\\server\\share\\project\\file.txt",
+            "file:///tmp",
+            "%252Fhome%252Falice%252Fsecret.txt",
+            "<div>legacy HTML fragment</div>",
+            "session_019f9e3a-169a-7673-9df2-c4bd0277bd35",
+            _fixture("token_ghp_", "abcdefghijklmnopqrstuvwxyz"),
+        ):
+            MODULE._scan_text(legacy, "legacy", contract_version=1)
+
+        with self.assertRaisesRegex(MODULE.ValidationError, "absolute path"):
+            MODULE._scan_decoded_strings(
+                json.loads(r'{"path":"\u002fhome\u002falice\u002fsecret"}'),
+                "decoded JSON",
+                contract_version=2,
+            )
 
     def test_registry_schema_and_privacy_cover_metadata(self) -> None:
         for insertion, message in (
@@ -383,6 +1534,111 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         registry.write_text(text, encoding="utf-8")
         with self.assertRaisesRegex(MODULE.ValidationError, "unknown artifact fields"):
             MODULE.load_registry(registry)
+
+        for old, new, message in (
+            ('status = "current"', 'status = ["current"]', "status must be a string"),
+            (
+                'path = ".omx/context/context.md"',
+                "path = 7",
+                "artifact field path must be a string",
+            ),
+            (
+                'review_kinds = ["architect", "critic"]',
+                'review_kinds = [["architect"], "critic"]',
+                "review_kinds must be a string list",
+            ),
+            (
+                'review_kinds = ["architect", "critic"]',
+                'review_kinds = ["architect", "critic", "critic"]',
+                "review_kinds must be unique",
+            ),
+        ):
+            registry = self.write_registry([self.bundle()])
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace(old, new, 1),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(MODULE.ValidationError, message):
+                MODULE.load_registry(registry)
+
+        with self.assertRaisesRegex(MODULE.ValidationError, "invalid UTF-8 registry"):
+            MODULE._parse_registry(b"\xff")
+
+        bundle = self.bundle("invalid-utf8")
+        target = self.repo / bundle["artifact"][0]["path"]
+        target.write_bytes(b"\xff")
+        content = target.read_bytes()
+        bundle["artifact"][0]["sha256"] = hashlib.sha256(content).hexdigest()
+        bundle["artifact"][0]["bytes"] = len(content)
+        self.assert_invalid(bundle, "invalid UTF-8 registered evidence")
+
+        bundle = self.bundle("surrogate-json")
+        bundle["artifact"].append(
+            self.artifact(
+                ".omx/specs/surrogate.json",
+                "specification",
+                "surrogate-json",
+                text=r'{"note":"\ud800"}' + "\n",
+            )
+        )
+        self.assert_invalid(bundle, "invalid Unicode")
+
+        bundle = self.bundle("nested-handoff-role")
+        handoff = next(
+            item for item in bundle["artifact"] if item["family"] == "handoff"
+        )
+        handoff_path = self.repo / handoff["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["roles"][0] = ["context"]
+        handoff_path.write_text(json.dumps(handoff_payload) + "\n", encoding="utf-8")
+        content = handoff_path.read_bytes()
+        handoff["sha256"] = hashlib.sha256(content).hexdigest()
+        handoff["bytes"] = len(content)
+        bundle["handoff_sha256"] = handoff["sha256"]
+        self.assert_invalid(bundle, "handoff contract mismatch")
+
+        stale = self.bundle("oversized-stale-metadata")
+        stale_target = self.repo / stale["artifact"][0]["path"]
+        stale_target.write_text("x" * (MODULE.MAX_ARTIFACT_BYTES + 1), encoding="utf-8")
+        self.assert_invalid(stale, "artifact exceeds byte limit")
+
+        bundle = self.bundle("oversized-artifact")
+        target = self.repo / bundle["artifact"][0]["path"]
+        target.write_text("x" * (MODULE.MAX_ARTIFACT_BYTES + 1), encoding="utf-8")
+        content = target.read_bytes()
+        bundle["artifact"][0]["sha256"] = hashlib.sha256(content).hexdigest()
+        bundle["artifact"][0]["bytes"] = len(content)
+        self.assert_invalid(bundle, "artifact exceeds byte limit")
+
+    def test_predecessor_chain_has_a_hard_limit(self) -> None:
+        bundles: dict[str, dict[str, Any]] = {}
+        predecessor: str | None = None
+        for index in range(MODULE.MAX_BUNDLE_CHAIN_LENGTH + 1):
+            bundle_id = f"bundle-{index}"
+            bundle: dict[str, Any] = {
+                "id": bundle_id,
+                "task": "bounded-chain",
+                "status": "superseded",
+                "contract_version": 2,
+                "classification": "accepted-decision-evidence",
+                "baseline_commit": self.baseline,
+                "handoff_sha256": "0" * 64,
+                "acceptance_sha256": "0" * 64,
+                "artifact": [],
+            }
+            if predecessor is not None:
+                bundle["predecessor_bundle_id"] = predecessor
+            bundles[bundle_id] = bundle
+            predecessor = bundle_id
+        bounded = dict(list(bundles.items())[:200])
+        original_digest = MODULE.bundle_content_sha256
+        with patch.object(
+            MODULE, "bundle_content_sha256", wraps=original_digest
+        ) as digest:
+            self.assertEqual(len(MODULE._bundle_chain_digests(bounded)), len(bounded))
+            self.assertEqual(digest.call_count, len(bounded))
+        with self.assertRaisesRegex(MODULE.ValidationError, "chain exceeds limit"):
+            MODULE.bundle_chain_sha256(predecessor, bundles)
 
     def test_unregistered_tracked_artifact_fails(self) -> None:
         bundle = self.bundle()
@@ -436,22 +1692,21 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     for role, bundle_key in (
                         ("handoff", "handoff_sha256"),
                         ("acceptance-record", "acceptance_sha256"),
+                        ("independent-review", None),
                     ):
                         artifact = next(
                             item for item in bundle["artifact"] if item["role"] == role
                         )
                         target = self.repo / artifact["path"]
-                        target.write_text(
-                            json.dumps(
-                                {"bundle_id": bundle["id"], "task": bundle["task"]}
-                            )
-                            + "\n",
-                            encoding="utf-8",
-                        )
+                        identity = json.loads(target.read_text(encoding="utf-8"))
+                        identity["bundle_id"] = bundle["id"]
+                        identity["task"] = bundle["task"]
+                        target.write_text(json.dumps(identity) + "\n", encoding="utf-8")
                         payload = target.read_bytes()
                         artifact["sha256"] = hashlib.sha256(payload).hexdigest()
                         artifact["bytes"] = len(payload)
-                        bundle[bundle_key] = artifact["sha256"]
+                        if bundle_key is not None:
+                            bundle[bundle_key] = artifact["sha256"]
                 self.commit_registry(bundle, change)
                 with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
                     errors = MEMORY_MODULE.check_registered_omx_artifacts(
@@ -493,26 +1748,211 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(by_id[second["id"]]["superseded_by"], third["id"])
         self.assertEqual(by_id[third["id"]]["status"], "current")
 
-    def test_predecessor_registry_commit_must_be_an_ancestor(self) -> None:
+    def test_predecessor_bundle_digest_detects_drift(self) -> None:
         original = self.bundle("task-old")
         self.commit_registry(original, "accepted base")
-        self.git("checkout", "-qb", "sibling")
-        (self.repo / "sibling.txt").write_text("sibling\n", encoding="utf-8")
-        self.git("add", "sibling.txt")
-        self.git("commit", "-qm", "sibling evidence tree")
-        sibling = self.git("rev-parse", "HEAD").stdout.strip()
-
-        self.git("checkout", "-q", "main")
-        self.git("checkout", "-qb", "feature-sibling-predecessor")
         successor = self.bundle("task-new", "successor")
         self.commit_supersession(original, successor)
         registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
         current = next(
             item for item in registry["bundle"] if item["status"] == "current"
         )
-        current["predecessor_registry_commit"] = sibling
+        current["predecessor_bundle_sha256"] = "0" * 64
+        handoff = next(
+            item for item in current["artifact"] if item["family"] == "handoff"
+        )
+        handoff_path = self.repo / handoff["path"]
+        payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        payload["predecessor_bundle_sha256"] = "0" * 64
+        handoff_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        content = handoff_path.read_bytes()
+        handoff["sha256"] = hashlib.sha256(content).hexdigest()
+        handoff["bytes"] = len(content)
+        current["handoff_sha256"] = handoff["sha256"]
         self.write_registry(registry["bundle"], ".agents/omx_artifacts.toml")
-        with self.assertRaisesRegex(MODULE.ValidationError, "not an ancestor"):
+        with self.assertRaisesRegex(MODULE.ValidationError, "content digest drift"):
+            MODULE.validate_registry(
+                self.repo, self.repo / ".agents/omx_artifacts.toml"
+            )
+
+    def test_contract_v2_cannot_downgrade_to_v1(self) -> None:
+        original = self.bundle("task-old")
+        self.commit_registry(original, "accepted base")
+        successor = self.bundle("task-new", "successor")
+        self.commit_supersession(original, successor)
+        registry_path = self.repo / ".agents/omx_artifacts.toml"
+        registry = MODULE.load_registry(registry_path)
+        current = next(
+            item for item in registry["bundle"] if item["status"] == "current"
+        )
+        current.pop("contract_version")
+        current.pop("predecessor_bundle_sha256")
+        current.pop("predecessor_chain_sha256")
+        self.write_registry(
+            registry["bundle"],
+            ".agents/omx_artifacts.toml",
+            schema_version=1,
+        )
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "live registry schema_version must be 2"
+        ):
+            MODULE.validate_registry(self.repo, registry_path)
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "live registry schema_version must be 2"
+        ):
+            MODULE.validate_transition(
+                {"schema_version": 2, "bundle": []},
+                MODULE._parse_registry(registry_path.read_bytes()),
+            )
+
+    def test_head_receipt_binds_the_complete_predecessor_chain(self) -> None:
+        first = self.bundle("task-first")
+        self.commit_registry(first, "first accepted bundle")
+        second = self.bundle("task-second", "second")
+        self.commit_supersession(first, second)
+        third = self.bundle("task-third", "third")
+        self.commit_second_supersession(third)
+
+        registry_path = self.repo / ".agents/omx_artifacts.toml"
+        registry = MODULE.load_registry(registry_path)
+        by_id = {item["id"]: item for item in registry["bundle"]}
+        first_archived = by_id[first["id"]]
+        second_archived = by_id[second["id"]]
+
+        first_artifact = first_archived["artifact"][0]
+        target = self.repo / first_artifact["path"]
+        target.write_text("rewritten oldest evidence\n", encoding="utf-8")
+        content = target.read_bytes()
+        first_artifact["sha256"] = hashlib.sha256(content).hexdigest()
+        first_artifact["bytes"] = len(content)
+
+        second_archived["predecessor_bundle_sha256"] = MODULE.bundle_content_sha256(
+            first_archived
+        )
+        second_handoff = next(
+            item for item in second_archived["artifact"] if item["family"] == "handoff"
+        )
+        handoff_path = self.repo / second_handoff["path"]
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff["predecessor_bundle_sha256"] = second_archived[
+            "predecessor_bundle_sha256"
+        ]
+        handoff_path.write_text(json.dumps(handoff) + "\n", encoding="utf-8")
+        content = handoff_path.read_bytes()
+        second_handoff["sha256"] = hashlib.sha256(content).hexdigest()
+        second_handoff["bytes"] = len(content)
+        second_archived["handoff_sha256"] = second_handoff["sha256"]
+
+        self.write_registry(registry["bundle"], ".agents/omx_artifacts.toml")
+        with self.assertRaisesRegex(MODULE.ValidationError, "chain digest drift"):
+            MODULE.validate_registry(self.repo, registry_path)
+
+    def test_v2_migration_receipt_binds_legacy_v1_prefix(self) -> None:
+        first = self.bundle("task-first")
+        first.pop("contract_version")
+        self.commit_registry(first, "legacy first", schema_version=1)
+        predecessor_commit = self.git("rev-parse", "HEAD").stdout.strip()
+
+        second = self.bundle("task-second", "second")
+        second.pop("contract_version")
+        second["predecessor_bundle_id"] = first["id"]
+        second["predecessor_registry_commit"] = predecessor_commit
+        first_archived = self.archived(first, second["id"])
+        for artifact in first_archived["artifact"]:
+            source = self.repo / artifact["native_path"]
+            destination = self.repo / artifact["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+            source.unlink()
+        self.write_registry(
+            [first_archived, second],
+            ".agents/omx_artifacts.toml",
+            schema_version=1,
+        )
+        self.git("add", "-f", ".agents/omx_artifacts.toml", ".omx")
+        self.git("commit", "-qm", "legacy second")
+
+        legacy_registry = MODULE._parse_registry(
+            (self.repo / ".agents/omx_artifacts.toml").read_bytes()
+        )
+        third = self.bundle("task-third", "third")
+        second_archived = self.archived(second, third["id"])
+        self.bind_predecessor(
+            third,
+            second,
+            {item["id"]: item for item in legacy_registry["bundle"]},
+        )
+        for artifact in second_archived["artifact"]:
+            source = self.repo / artifact["native_path"]
+            destination = self.repo / artifact["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+            source.unlink()
+        registry_path = self.write_registry(
+            [first_archived, second_archived, third],
+            ".agents/omx_artifacts.toml",
+            schema_version=2,
+        )
+        MODULE.validate_registry(self.repo, registry_path)
+
+        first_archived["contract_version"] = 2
+        self.write_registry(
+            [first_archived, second_archived, third],
+            ".agents/omx_artifacts.toml",
+            schema_version=2,
+        )
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "contract version downgrade"
+        ):
+            MODULE.validate_registry(self.repo, registry_path)
+        first_archived.pop("contract_version")
+
+        oldest_artifact = first_archived["artifact"][0]
+        target = self.repo / oldest_artifact["path"]
+        target.write_text("rewritten legacy evidence\n", encoding="utf-8")
+        content = target.read_bytes()
+        oldest_artifact["sha256"] = hashlib.sha256(content).hexdigest()
+        oldest_artifact["bytes"] = len(content)
+        self.write_registry(
+            [first_archived, second_archived, third],
+            ".agents/omx_artifacts.toml",
+            schema_version=2,
+        )
+        with self.assertRaisesRegex(MODULE.ValidationError, "chain digest drift"):
+            MODULE.validate_registry(self.repo, registry_path)
+
+    def test_content_receipt_survives_squash_like_history(self) -> None:
+        original = self.bundle("task-old")
+        self.commit_registry(original, "accepted base")
+        internal_predecessor = self.git("rev-parse", "HEAD").stdout.strip()
+        successor = self.bundle("task-new", "successor")
+        self.commit_supersession(original, successor)
+
+        tree = self.git("rev-parse", "HEAD^{tree}").stdout.strip()
+        squashed = self.git(
+            "commit-tree", tree, "-p", self.baseline, "-m", "squashed result"
+        ).stdout.strip()
+        self.git("branch", "-f", "squashed", squashed)
+        self.git("checkout", "-q", "squashed")
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", internal_predecessor, "HEAD"],
+            cwd=self.repo,
+            check=False,
+        )
+        self.assertNotEqual(ancestor.returncode, 0)
+        MODULE.validate_registry(self.repo, self.repo / ".agents/omx_artifacts.toml")
+
+    def test_superseded_bundle_must_have_been_complete(self) -> None:
+        original = self.bundle("task-old")
+        review = next(
+            item for item in original["artifact"] if item["family"] == "review"
+        )
+        original["artifact"].remove(review)
+        (self.repo / review["path"]).unlink()
+        self.commit_registry(original, "invalid accepted base")
+        successor = self.bundle("task-new", "successor")
+        self.commit_supersession(original, successor)
+        with self.assertRaisesRegex(MODULE.ValidationError, "role families differ"):
             MODULE.validate_registry(
                 self.repo, self.repo / ".agents/omx_artifacts.toml"
             )
@@ -563,7 +2003,7 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                     )
                 self.assertRegex(
                     errors[0],
-                    "invalid or non-identical supersession|predecessor artifact metadata drift",
+                    "invalid or non-identical supersession|predecessor content digest drift|lacks Architect\\+Critic review",
                 )
 
     def test_production_gate_allows_pr1_bootstrap_without_base_registry(self) -> None:
@@ -607,6 +2047,22 @@ class OmxArtifactValidatorTests(unittest.TestCase):
                 repo_root=self.repo, validator_path=SCRIPT
             )
         self.assertRegex(errors[0], "hosted CI requires transition comparison")
+
+    def test_explicit_invalid_local_ref_fails_closed(self) -> None:
+        bundle = self.bundle()
+        self.stage_registry(bundle)
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTIONS": "",
+                "GITHUB_BASE_REF": "",
+                "OMX_ARTIFACT_PREVIOUS_REF": "definitely-missing-ref",
+            },
+        ):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertRegex(errors[0], "explicit OMX artifact transition ref is invalid")
 
     def test_hosted_ci_uses_explicit_previous_sha_and_rejects_self(self) -> None:
         original = self.bundle("task-current")
@@ -685,9 +2141,157 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             item for item in registry["bundle"] if item["status"] == "current"
         )
         archived = next(
-            item for item in registry["bundle"] if item["status"] == "superseded"
+            item
+            for item in registry["bundle"]
+            if item["id"] == current["predecessor_bundle_id"]
         )
         self.assertEqual(current["predecessor_bundle_id"], archived["id"])
+        self.assertEqual(
+            current["predecessor_bundle_sha256"],
+            MODULE.bundle_content_sha256(archived),
+        )
+        self.assertEqual(
+            current["predecessor_chain_sha256"],
+            MODULE.bundle_chain_sha256(
+                archived["id"], {item["id"]: item for item in registry["bundle"]}
+            ),
+        )
+
+        inventory_path = REPO_ROOT / next(
+            item["path"]
+            for item in current["artifact"]
+            if item["role"] == "path-inventory"
+        )
+        with inventory_path.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            path_fields = reader.fieldnames
+            inventory = list(reader)
+        history_base = "b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c"
+        history_head = "5bc48d461eb6679a28d45fc0f2bf7fc6a1222121"
+        history_range = f"{history_base}..{history_head}"
+        history_paths = subprocess.run(
+            [
+                "git",
+                "log",
+                "--first-parent",
+                "--format=",
+                "--name-only",
+                history_range,
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        expected_history_paths = sorted({path for path in history_paths if path})
+        net_paths = set(
+            subprocess.run(
+                ["git", "diff", "--name-only", history_range],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines()
+        )
+        allowed_dispositions = {
+            "retain-as-is",
+            "reimplement-minimally",
+            "replace-with-upstream",
+            "prune-redundant",
+            "transient-or-reverted",
+            "defer-with-owner",
+        }
+        allowed_states = {"final-net", "transient-or-reverted"}
+        allowed_target_prs = {"PR1", "PR2", "PR3", "PR4", "PR5"}
+        self.assertEqual(
+            path_fields,
+            [
+                "source",
+                "type",
+                "final_state",
+                "target_pr",
+                "disposition",
+                "owner",
+                "reason",
+                "verification",
+            ],
+        )
+        self.assertEqual(len(inventory), 391)
+        self.assertEqual([row["source"] for row in inventory], expected_history_paths)
+        self.assertEqual(len({row["source"] for row in inventory}), len(inventory))
+        self.assertEqual(len(net_paths), 366)
+        self.assertEqual(
+            {row["source"] for row in inventory if row["final_state"] == "final-net"},
+            net_paths,
+        )
+        self.assertEqual(
+            {row["disposition"] for row in inventory} - allowed_dispositions,
+            set(),
+        )
+        for row in inventory:
+            self.assertEqual(row["type"], "path")
+            self.assertIn(row["final_state"], allowed_states)
+            self.assertEqual(
+                row["final_state"],
+                "final-net" if row["source"] in net_paths else "transient-or-reverted",
+            )
+            self.assertIn(row["target_pr"], allowed_target_prs)
+            self.assertTrue(all(row[field].strip() for field in row))
+
+        commit_inventory_path = REPO_ROOT / next(
+            item["path"]
+            for item in current["artifact"]
+            if item["role"] == "commit-inventory"
+        )
+        with commit_inventory_path.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            commit_fields = reader.fieldnames
+            commit_inventory = list(reader)
+        expected_commits = subprocess.run(
+            ["git", "rev-list", "--first-parent", "--reverse", history_range],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        expected_subjects = [
+            subprocess.run(
+                ["git", "show", "-s", "--format=%s", commit],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.rstrip("\n")
+            for commit in expected_commits
+        ]
+        self.assertEqual(
+            commit_fields,
+            [
+                "source",
+                "type",
+                "subject",
+                "final_state",
+                "target_pr",
+                "disposition",
+                "owner",
+                "reason",
+                "verification",
+            ],
+        )
+        self.assertEqual(len(commit_inventory), 130)
+        self.assertEqual([row["source"] for row in commit_inventory], expected_commits)
+        self.assertEqual(
+            [row["subject"] for row in commit_inventory], expected_subjects
+        )
+        self.assertEqual(
+            len({row["source"] for row in commit_inventory}), len(commit_inventory)
+        )
+        for row in commit_inventory:
+            self.assertEqual(row["type"], "commit")
+            self.assertIn(row["final_state"], allowed_states)
+            self.assertIn(row["target_pr"], allowed_target_prs)
+            self.assertIn(row["disposition"], allowed_dispositions)
+            self.assertTrue(all(row[field].strip() for field in row))
 
         manifest_item = next(
             item for item in current["artifact"] if item["role"] == "loc-manifest"

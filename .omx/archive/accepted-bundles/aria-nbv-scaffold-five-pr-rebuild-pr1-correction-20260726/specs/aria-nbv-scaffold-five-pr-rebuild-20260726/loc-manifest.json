@@ -1304,7 +1304,7 @@
       {
         "category": "test",
         "contains_any": [
-          "tests/"
+          "/tests/"
         ],
         "prefix_any": [
           "scripts/tests/"

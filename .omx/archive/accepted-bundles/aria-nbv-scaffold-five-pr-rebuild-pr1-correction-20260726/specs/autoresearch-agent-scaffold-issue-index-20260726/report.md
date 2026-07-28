@@ -250,8 +250,8 @@ accepted OMX evidence, and debrief policy are explicit repository decisions.
   navigation instruction has a substantial filesystem side effect.
 - **Previous evidence:** the previous root pointed agents first to query/path/
   explain and optionally to generated wiki/report artifacts.
-- **Smallest remedy:** document an explicit ignored temporary `--output`
-  directory; do not wrap Graphify.
+- **Smallest remedy:** document an explicit temporary `--output` path or provide
+  the exact native command with output under `/tmp`; do not wrap Graphify.
 - **Measurable check:** the documented hierarchy command leaves the worktree and
   `graphify-out` unchanged.
 
@@ -279,8 +279,8 @@ accepted OMX evidence, and debrief policy are explicit repository decisions.
   `new_debrief.py`, all five current `scripts/scaffold/*.py` files,
   `scaffold_audit.py`, `validate_agent_memory.py`, and
   `validate_scaffold_wp0_baseline.py`. Counts use
-  `git ls-tree -r --name-only {ref} -- scripts`, then
-  `git show {ref}:{path}` with `bytes.splitlines()`. The 534 and 3,930 test-line
+  `git ls-tree -r --name-only <ref> -- scripts`, then
+  `git show <ref>:<path>` with `bytes.splitlines()`. The 534 and 3,930 test-line
   totals apply the same operation to every `scripts/tests/**` blob at each ref.
 - **Previous evidence:** previous behavior was distributed across too many prose
   owners and skills, so raw total LOC was legitimately higher. The regression is

@@ -268,8 +268,10 @@ def check_registered_omx_artifacts(
             previous_ref = merge_base.stdout.strip()
         elif hosted:
             return [f"hosted CI could not determine merge base against {base_ref}"]
-    elif hosted:
+    elif explicit_ref and hosted:
         return [f"hosted CI requires transition comparison against {base_ref}"]
+    elif explicit_ref:
+        return [f"explicit OMX artifact transition ref is invalid: {base_ref}"]
 
     command = [
         sys.executable,

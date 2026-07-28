@@ -2,19 +2,13 @@
 
 ## Successor correction
 
-Commit `1a48952f527149c1f295121c2208da440a29d8f4` is historical provenance for
-the older contract-v1 generation. Independent review verified its twelve
-registered artifacts byte-identically against the archived bundle while that
-history was available. Live contract-v2 validation instead checks immediate and
-transitive content receipts and does not require that branch-local commit to
-remain reachable after squash or rebase.
-
-This PR is the registry bootstrap: its base has no accepted registry against
-which the imported chain can be authenticated. The exact independently reviewed
-tree that merges to the mainline establishes the first trust root. Receipts
-prove internal chain consistency during bootstrap and enforce immutability for
-all later transitions whose merge base contains that root; they cannot by
-themselves authenticate a coordinated rewrite of the bootstrap tree.
+The accepted predecessor is commit
+`1a48952f527149c1f295121c2208da440a29d8f4`. Its twelve registered artifacts
+are retained byte-identically under
+`.omx/archive/accepted-bundles/aria-nbv-scaffold-five-pr-rebuild-20260726/`.
+The lifecycle validator resolves that commit, reads its registry and native
+artifact blobs, and compares their hashes and byte counts with the archived
+bundle before accepting this successor.
 
 PR1's frozen evidence corpus is the 130-commit scaffold branch, its history and
 path inventories, the accepted SCAFF report, and aggregate transcript-manifest

@@ -1,9 +1,8 @@
 {
   "schema_version": 1,
-  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-review-correction-20260727",
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-correction-20260726",
   "task": "aria-nbv-scaffold-lifecycle",
-  "status": "accepted",
-  "accepted_scope": "the review-corrected content-addressed PR1 evidence contract for the five-PR ARIA-NBV scaffold rebuild",
+  "accepted_scope": "the corrected PR1 evidence contract for the five-PR ARIA-NBV scaffold rebuild",
   "excluded_scope": [
     "implementation acceptance",
     "pull request publication or merge",
@@ -12,7 +11,7 @@
   ],
   "actor_class": "repository-owner",
   "instruction_channel": "direct-user-instruction",
-  "date": "2026-07-27",
+  "date": "2026-07-26",
   "request_digest": "90894cdcddd9705f0bbd2dede171df3dfdf89cb7b63882874cfec3cebfb86915",
   "request_digest_normalization": "SHA-256 over UTF-8 bytes for the exact two lowercase instruction lines separated by one LF, with no trailing LF"
 }

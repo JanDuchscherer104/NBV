@@ -281,7 +281,7 @@ description of the implementing or deferring PR.
 
 Current accepted artifacts remain at their native role paths. Privacy-safe
 accepted bundles may later move byte-identically to
-`.omx/archive/accepted-bundles/{bundle-id}/`; unaccepted pre-policy payloads
+`.omx/archive/accepted-bundles/<bundle-id>/`; unaccepted pre-policy payloads
 containing machine-local paths are removed and represented by a concise
 registered disposition specification.
 
@@ -303,14 +303,10 @@ Git/report corpus; transcript completeness and reviewed owner promotion remain
 explicit PR2 blockers; accepted bundle hashes, predecessor byte identity, LOC
 regeneration, and privacy scanning pass; no raw or machine-local evidence is
 tracked. Hosted CI checks out complete history because transition validation
-compares against the merge-base registry and the frozen commit/path inventories
-are regenerated from their declared history range. Contract-v2 predecessor
-validation itself is content-addressed and does not require branch-local
-predecessor commits to remain reachable.
+must resolve Git ancestors and predecessor blobs.
 
-The privacy threat model rejects plain or percent-encoded POSIX, Windows-drive,
-and UNC machine paths, runtime UUIDs, private and raw evidence paths, HTML payloads,
-email addresses, private-key blocks,
+The privacy threat model rejects absolute machine paths, runtime UUIDs,
+private/raw evidence paths, HTML payloads, email addresses, private-key blocks,
 and explicit GitHub, OpenAI, AWS, Slack, Google, GitLab, Hugging Face, or bearer
 credential formats. It deliberately avoids a generic entropy regex because that
 would reject ordinary hashes and technical evidence without a reviewable threat
@@ -473,7 +469,7 @@ Every PR body uses this reviewer-first structure:
 
 ```markdown
 ## Summary
-{one paragraph: responsibility moved, why, and what remains unchanged}
+<one paragraph: responsibility moved, why, and what remains unchanged>
 
 ## Responsibility Matrix
 | Surface | Before | Current source branch | This PR / final target |
@@ -485,19 +481,19 @@ Every PR body uses this reviewer-first structure:
 | SCAFF ID | Status | Change or deferral | Verification |
 
 ## User Invariants And Conflicts
-{reviewed current preferences, superseded alternatives, unresolved ambiguity}
+<reviewed current preferences, superseded alternatives, unresolved ambiguity>
 
 ## External Basis
-{primary links, version/commit/license, linked/paraphrased/copied classification}
+<primary links, version/commit/license, linked/paraphrased/copied classification>
 
 ## Verification
-{commands and fresh results}
+<commands and fresh results>
 
 ## Risks And Rollback
-{remaining uncertainty, behavioral rollback through a successor, immutable evidence rule}
+<remaining uncertainty, reverse-order rollback, immutable evidence rule>
 
 ## Series
-{predecessor, successor, PR #28 supersession context}
+<predecessor, successor, PR #28 supersession context>
 ```
 
 PR1 includes the complete 20-issue index and full responsibility matrix. Later
@@ -505,11 +501,10 @@ PRs repeat the relevant subset and link the immutable accepted bundle.
 
 ## Rollback And Stop Conditions
 
-Merge sequentially. Restore implementation behavior in a dedicated commit when
-needed, but do not revert accepted registry history. Record the changed decision
-as a new current bundle that supersedes the previous current bundle; accepted
-and archived bundles stay immutable. A literal revert that removes a successor
-is invalid.
+Merge sequentially. Roll back implementation behavior in reverse order, but do
+not revert accepted registry history. Record a rollback as a new current bundle
+that supersedes the previous current bundle; accepted and archived bundles stay
+immutable. A literal revert that removes a successor is invalid.
 
 Stop before push or PR creation when:
 
