@@ -28,10 +28,8 @@ metadata:
   must_read:
     - "AGENTS.md"
     - ".agents/references/litkg_quick_reference.md"
-    - ".agents/external/litkg-rs/AGENTS.md"
     - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
   canonical_sources:
-    - ".agents/external/litkg-rs/AGENTS.md"
     - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
     - ".agents/references/litkg_quick_reference.md#default-commands"
     - ".configs/litkg.toml"
@@ -61,11 +59,11 @@ Use this skill when changing or operating the KG tooling itself.
 ## Read First
 
 1. `AGENTS.md` and `.agents/references/litkg_quick_reference.md`
-2. `.agents/external/litkg-rs/AGENTS.md`
-3. `.agents/external/litkg-rs/README.md`, `docs/architecture.md`, and
-   `docs/kg-stack.md` when toolkit code changes
-4. `references/integration-spec.md` for source coverage, TOML shape, backend
+2. `references/integration-spec.md` for source coverage, TOML shape, backend
    selection, Semantic Scholar behavior, or adapter contracts
+3. When the optional submodule is initialized, read its nearest `AGENTS.md`,
+   `README.md`, `docs/architecture.md`, and `docs/kg-stack.md` before toolkit
+   code changes.
 
 ## Rules
 

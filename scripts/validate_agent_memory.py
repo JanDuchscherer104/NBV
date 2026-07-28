@@ -41,6 +41,22 @@ ALIGNMENT_LINK_TARGETS = (
 )
 SCAFFOLD_REQUIRED_SNIPPETS = (
     (
+        REPO_ROOT / "AGENTS.md",
+        "Current thesis direction and interpretation are owned by the active Typst",
+    ),
+    (
+        REPO_ROOT / "docs" / "AGENTS.md",
+        "Current thesis direction and interpretation live in the active Typst thesis",
+    ),
+    (
+        REPO_ROOT / ".agents" / "memory" / "README.md",
+        "legacy journals awaiting claim-level PR2 disposition",
+    ),
+    (
+        REPO_ROOT / ".agents" / "AGENTS_INTERNAL_DB.md",
+        "not current-truth owners",
+    ),
+    (
         REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md",
         "## Autoresearch Adapter",
     ),

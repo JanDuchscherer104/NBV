@@ -1,6 +1,34 @@
 ---
 name: measured-autoresearch
 description: Measure executable candidates inside an active OMX autoresearch or autoresearch-goal mission. Use when a frozen evaluator can decide an empirical hypothesis; do not use for literature-only work.
+metadata:
+  mode: implementation
+  not_when:
+    - "literature-only research without an executable evaluator"
+    - "work outside an active OMX autoresearch mission"
+  handoff_to:
+    - "agent-behavior when mission ownership is ambiguous"
+    - "diagnose-aria when the evaluator or environment is failing"
+  evidence_required:
+    - "one unambiguous active mission root"
+    - "a frozen evaluator and candidate budget"
+    - "recorded baseline and keep/discard measurements"
+  applies_to:
+    - ".omx/specs/autoresearch-*/measurements/**"
+    - ".omx/goals/autoresearch/*/measurements/**"
+    - ".agents/skills/measured-autoresearch/**"
+  triggers:
+    - "measured autoresearch"
+    - "measurement-gated candidate iteration"
+  must_read:
+    - ".agents/references/alignment_tools_contract.md#autoresearch-adapter"
+    - ".agents/skills/measured-autoresearch/scripts/experiment.py"
+  canonical_sources:
+    - ".agents/references/alignment_tools_contract.md#autoresearch-adapter"
+    - ".agents/skills/measured-autoresearch/scripts/experiment.py"
+  verification:
+    - "python3 .agents/skills/measured-autoresearch/scripts/experiment.py --help"
+    - "python3 -m unittest discover -s .agents/skills/measured-autoresearch/tests"
 ---
 
 # Measured Autoresearch

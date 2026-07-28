@@ -6,9 +6,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 ## Source Order
 - Use `.agents/references/source_order.md` for current truth and conflict
   resolution.
-- Current thesis direction is owned by thesis roadmap/questions plus canonical
-  memory. The seminar paper is historical implemented evidence, not current
-  thesis priority.
+- Current thesis direction and interpretation are owned by the active Typst
+  thesis include closure. Quarto roadmap/questions and legacy memory journals
+  are supporting evidence, not co-owners. The seminar paper is historical
+  implemented evidence, not current thesis priority.
 
 ## Routing
 - Non-trivial coding, docs, scaffold, research, or memory edits: apply
@@ -61,7 +62,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.
 - Repeatable workflow: update or add a compact `.agents/skills/*/SKILL.md`.
 - Human-owner preference: update `.agents/references/human_owner_intent.md`.
-- Current truth: update `.agents/memory/state/`.
+- Current truth: update the smallest owner named by
+  `.agents/references/source_order.md`; do not add new truth to legacy state
+  journals.
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: update Quarto or Typst docs.

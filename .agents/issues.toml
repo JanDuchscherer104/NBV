@@ -241,3 +241,14 @@ references = [
   "repo:.configs/build_rollouts_v1_realistic.toml",
   "repo:Makefile",
 ]
+
+[[issue]]
+id = "issue-033"
+title = "Private transcript artifacts remain reachable in public Git history"
+description = "Removing raw ARIA-NBV transcript and plan-answer files from the current tree prevents continued tracking but does not remove their blobs from the public repository history; coordinated incident review and an owner-approved history rewrite are still required."
+type = "security"
+priority = "high"
+status = "open"
+labels = ["privacy", "security", "git-history", "transcripts", "scaffold"]
+context = ["PR1 removes the raw transcript surfaces from the current tree, ignores future raw/session/palace paths, and fails CI when those paths are force-tracked.", "Count-only exact-head review found the deleted files remain reachable through origin/main ancestry and contain machine-local paths, runtime identifiers, or email-like text; raw content must not be copied into tracked evidence while the incident is assessed.", "A history rewrite changes commit IDs, requires collaborator and fork coordination, can recontaminate from old clones, and may require GitHub Support to clear cached pull-request references. It is an irreversible repository-owner action and is not performed by PR1.", "Credentials discovered by a private secret audit must be revoked or rotated before deciding whether a history rewrite is also required. PR descriptions and scaffold reports must distinguish current-tree prevention from historical purge."]
+references = ["repo:.agents/references/human_owner_intent.md#current-preferences", "repo:.gitignore", "repo:scripts/validate_agent_memory.py", "repo:.github/workflows/ci.yml", "repo:.omx/plans/prometheus-strict/aria-nbv-scaffold-five-pr-rebuild.md#codex-sessions", "url:https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository", "url:https://docs.github.com/en/repositories/working-with-files/managing-files/deleting-files-in-a-repository"]

@@ -21,6 +21,10 @@ transcripts, OMX runtime state, Graphify, MemPalace, and agent output are not
 current-truth owners. They can locate or explain an owner, but the exact owner
 must be checked before acting.
 
+The existing `.agents/memory/state/` journals are legacy migration inputs until
+PR2 completes claim-level disposition. Do not add new truth to them or treat
+their presence as authority.
+
 ## Conflict And Time Rule
 
 Resolve each disputed statement through the owner for its information class.
