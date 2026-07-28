@@ -249,10 +249,10 @@ graphify-out/
 # OMC local memory/replay state is operator-local unless promoted into .agents.
 .omc/
 .agents/generated/
-.agents/memory/transcripts/
-.agents/memory/session-manifests/
-.mempalace/
-.palace/
+/.agents/memory/transcripts
+/.agents/memory/session-manifests
+/.mempalace
+/.palace
 .agents/kg/generated/
 .agents/kg/.refresh.log
 .agents/kg/.refresh.lock

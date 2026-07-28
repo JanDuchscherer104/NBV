@@ -1576,6 +1576,12 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         ):
             MODULE.load_registry(oversized_registry)
 
+        symlink_target = self.write_registry([self.bundle("symlink-registry")])
+        symlink_registry = self.repo / "registry-link.toml"
+        symlink_registry.symlink_to(symlink_target.name)
+        with self.assertRaisesRegex(MODULE.ValidationError, "regular file"):
+            MODULE.load_registry(symlink_registry)
+
         bundle = self.bundle("invalid-utf8")
         target = self.repo / bundle["artifact"][0]["path"]
         target.write_bytes(b"\xff")
@@ -2069,6 +2075,27 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             )
         self.assertEqual(errors, ["accepted OMX artifact registry must not be removed"])
 
+    def test_production_gate_rejects_symlinked_registry(self) -> None:
+        bundle = self.bundle()
+        self.commit_registry(bundle, "accepted base")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.git("checkout", "-qb", "feature-symlink")
+        registry = self.repo / ".agents/omx_artifacts.toml"
+        target = self.repo / ".agents/omx_artifacts-target.toml"
+        registry.replace(target)
+        registry.symlink_to(target.name)
+        self.git("add", "-A")
+        self.git("commit", "-qm", "replace registry with symlink")
+        with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertRegex(errors[0], "registry must be a regular file")
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "historical registry must be a regular file"
+        ):
+            MODULE._previous_registry(self.repo, "HEAD")
+
     def test_local_only_snapshot_fallback_is_explicit(self) -> None:
         bundle = self.bundle()
         self.stage_registry(bundle)
@@ -2155,14 +2182,34 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         errors = MEMORY_MODULE.check_forbidden_tracked_paths(
             [
                 ".agents/memory/transcripts/raw/messages.jsonl",
+                ".agents/memory/transcripts",
                 ".agents/memory/session-manifests/corpus.json",
+                ".agents/memory/session-manifests",
                 ".mempalace/palace.db",
+                ".mempalace",
                 ".palace/runtime.json",
+                ".palace",
                 ".agents/memory/history/2026/07/debrief.md",
             ]
         )
-        self.assertEqual(len(errors), 4)
+        self.assertEqual(len(errors), 8)
         self.assertTrue(all("must not be tracked" in error for error in errors))
+
+    def test_force_tracked_private_root_symlinks_are_rejected(self) -> None:
+        roots = (
+            ".agents/memory/transcripts",
+            ".agents/memory/session-manifests",
+            ".mempalace",
+            ".palace",
+        )
+        for root in roots:
+            path = self.repo / root
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to("private-runtime-target")
+            self.git("add", "-f", root)
+        tracked = self.git("ls-files").stdout.splitlines()
+        errors = MEMORY_MODULE.check_forbidden_tracked_paths(tracked)
+        self.assertEqual(len(errors), len(roots))
 
     def test_workflow_runs_lifecycle_checks_with_full_history(self) -> None:
         workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text(
@@ -2174,7 +2221,9 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         )
         for path in (
             ".omx/**",
+            ".mempalace",
             ".mempalace/**",
+            ".palace",
             ".palace/**",
             ".gitignore",
             "scripts/scaffold/**",

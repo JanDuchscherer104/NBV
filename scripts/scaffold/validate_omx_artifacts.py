@@ -899,6 +899,8 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
 
 
 def load_registry(path: Path) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise ValidationError(f"registry must be a regular file: {path}")
     with path.open("rb") as stream:
         registry = _parse_registry(stream.read(MAX_REGISTRY_BYTES + 1))
     if registry["schema_version"] != 2:
@@ -1314,44 +1316,45 @@ def validate_transition(previous: dict[str, Any], current: dict[str, Any]) -> No
 def _previous_registry(repo: Path, ref: str) -> dict[str, Any] | None:
     _run(repo, "git", "rev-parse", "--verify", f"{ref}^{{commit}}")
     object_name = f"{ref}:{REGISTRY}"
-    size = subprocess.run(
-        ["git", "cat-file", "-s", object_name],
-        cwd=repo,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if size.returncode == 0:
-        try:
-            registry_bytes = int(size.stdout.strip())
-        except ValueError as exc:
-            raise ValidationError(
-                f"invalid registry size for {object_name}: {size.stdout.strip()}"
-            ) from exc
-        if registry_bytes > MAX_REGISTRY_BYTES:
-            raise ValidationError("historical registry exceeds byte limit")
-        shown = subprocess.run(
-            ["git", "show", object_name],
-            cwd=repo,
-            check=True,
-            capture_output=True,
-        )
-        return _parse_registry(shown.stdout)
-    shown = subprocess.run(
-        ["git", "show", object_name], cwd=repo, check=False, capture_output=True
-    )
     tree = subprocess.run(
-        ["git", "ls-tree", "--name-only", ref, "--", REGISTRY],
+        ["git", "ls-tree", ref, "--", REGISTRY],
         cwd=repo,
         check=True,
         capture_output=True,
         text=True,
     )
-    if not tree.stdout.strip():
+    entry = tree.stdout.strip()
+    if not entry:
         return None
-    raise ValidationError(
-        f"git show failed for {object_name}: {shown.stderr.decode().strip()}"
+    try:
+        metadata, path = entry.split("\t", 1)
+        mode, kind, object_id = metadata.split()
+    except ValueError as exc:
+        raise ValidationError(f"invalid historical registry entry: {entry}") from exc
+    if path != REGISTRY or mode not in {"100644", "100755"} or kind != "blob":
+        raise ValidationError("historical registry must be a regular file")
+    size = subprocess.run(
+        ["git", "cat-file", "-s", object_id],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     )
+    try:
+        registry_bytes = int(size.stdout.strip())
+    except ValueError as exc:
+        raise ValidationError(
+            f"invalid registry size for {object_name}: {size.stdout.strip()}"
+        ) from exc
+    if registry_bytes > MAX_REGISTRY_BYTES:
+        raise ValidationError("historical registry exceeds byte limit")
+    shown = subprocess.run(
+        ["git", "cat-file", "-p", object_id],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    return _parse_registry(shown.stdout)
 
 
 def _validate_archive_source(

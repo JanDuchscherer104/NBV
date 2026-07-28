@@ -86,6 +86,10 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
     ".codex/hooks.json",
+    ".agents/memory/session-manifests",
+    ".agents/memory/transcripts",
+    ".mempalace",
+    ".palace",
 }
 FORBIDDEN_TRACKED_RUNTIME_PREFIXES = (
     ".agents/memory/session-manifests/",
