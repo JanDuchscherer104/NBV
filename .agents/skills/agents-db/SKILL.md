@@ -70,7 +70,7 @@ or durable maintenance debt capture.
 5. Route extracted requirements to the smallest owner named by
    `.agents/references/source_order.md`: `.agents/*.toml` for active work and
    dated history debriefs for episodic task records. Do not add facts to the
-   legacy state journals.
+   retired migration journals.
 6. Resolve or retire completed records into `.agents/resolved.toml`; do not
    delete records outright.
 

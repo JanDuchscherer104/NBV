@@ -1964,6 +1964,32 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertRegex(result.stderr, "first-parent chain")
 
+    def test_pr_head_checkout_exposes_transient_commits_behind_merge_ref(self) -> None:
+        previous = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "-qb", "feature")
+        payload = self.repo / ".omx/plans/unregistered.md"
+        payload.parent.mkdir(parents=True)
+        payload.write_text("transient unregistered payload\n", encoding="utf-8")
+        self.git("add", "-f", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "transient registry-free payload")
+        self.git("rm", "-q", ".omx/plans/unregistered.md")
+        self.git("commit", "-qm", "remove transient payload")
+        self.commit_registry(self.bundle("task-current"), "accepted registry")
+        feature = self.git("rev-parse", "HEAD").stdout.strip()
+
+        self.git("checkout", "-q", "main")
+        self.git("merge", "--no-ff", "-qm", "synthetic pull request merge", feature)
+        self.assertEqual(self.git("rev-parse", "HEAD^1").stdout.strip(), previous)
+        self.assertEqual(self.git("rev-parse", "HEAD^2").stdout.strip(), feature)
+
+        self.git("checkout", "--detach", "-q", feature)
+        result = self.run_validator(previous)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(
+            result.stderr, "registry-free OMX payload changed after previous_ref"
+        )
+
     def test_full_history_disables_lfs_process_filter(self) -> None:
         bundle = self.bundle("task-current")
         self.git("config", "filter.lfs.clean", "cat")
@@ -2505,7 +2531,16 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             workflow,
             r"uses: actions/checkout@v4\s+with:\s+fetch-depth: 0",
         )
-        self.assertNotRegex(workflow, r"(?m)^\s+paths:")
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.head.sha || github.sha }}", workflow
+        )
+        trigger_block = workflow.split("\npermissions:", maxsplit=1)[0]
+        self.assertRegex(
+            trigger_block,
+            r"(?ms)^on:\s*\n  pull_request:\s*\n  push:\s*\n    branches:\s*\n"
+            r"      - main\s*\n  workflow_dispatch:",
+        )
+        self.assertNotRegex(trigger_block, r"(?m)^\s+(?:paths|paths-ignore):")
         self.assertIn("python scripts/tests/test_validate_omx_artifacts.py", workflow)
         self.assertIn("OMX_ARTIFACT_PREVIOUS_REF:", workflow)
         self.assertIn("github.event.pull_request.base.sha", workflow)

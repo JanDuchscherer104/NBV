@@ -95,12 +95,12 @@ def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> No
 def test_qualifier_does_not_exempt_a_later_owner_route(tmp_path: Path) -> None:
     path = tmp_path / "README.md"
     path.write_text(
-        "DECISIONS.md is legacy migration evidence only.\nUpdate DECISIONS.md with durable current truth.\n",
+        "DECISIONS.md is legacy migration evidence only.\n\nUpdate DECISIONS.md with durable current truth.\n",
         encoding="utf-8",
     )
 
     assert validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path) == [
-        "README.md:2: legacy state journal route lacks an explicit migration-only qualifier"
+        "README.md:3: legacy state journal route lacks an explicit migration-only qualifier"
     ]
 
 
@@ -126,6 +126,38 @@ def test_migration_phrase_does_not_exempt_same_line_owner_assertion(tmp_path: Pa
     assert validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path) == [
         "README.md:1: legacy state journal route lacks an explicit migration-only qualifier"
     ]
+
+
+@pytest.mark.parametrize("suffix", [".qmd", ".typ"])
+def test_wrapped_and_alternative_owner_claims_are_rejected(tmp_path: Path, suffix: str) -> None:
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(
+        "The decision journals are legacy migration evidence, but remain\nauthoritative for current decisions.\n",
+        encoding="utf-8",
+    )
+
+    assert validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path) == [
+        f"{path.name}:1: legacy state journal route lacks an explicit migration-only qualifier"
+    ]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "The decision journals are migration evidence; update them with current truth.",
+        "DECISIONS.md is migration evidence but owns current truth.",
+        "DECISIONS.md is migration evidence; use it as the source of truth.",
+        "The state journal is migration evidence but remains canonical.",
+        "PROJECT_STATE.md is migration evidence but remains the source of truth.",
+    ],
+)
+def test_migration_qualifier_does_not_exempt_owner_variants(tmp_path: Path, claim: str) -> None:
+    path = tmp_path / "README.md"
+    path.write_text(f"{claim}\n", encoding="utf-8")
+
+    errors = validator.check_legacy_state_owner_claims(["README.md"], repo_root=tmp_path)
+
+    assert errors == ["README.md:1: legacy state journal route lacks an explicit migration-only qualifier"]
 
 
 def test_unreadable_tracked_ownership_source_fails_closed(tmp_path: Path) -> None:

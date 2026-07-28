@@ -17,4 +17,4 @@ Then open the file and fill in:
 
 Keep the body short. If the work changed durable truth, list and update the
 smallest current owner named by `.agents/references/source_order.md`. Never add
-facts to the legacy `.agents/memory/state/` migration journals.
+facts to retired migration journals.

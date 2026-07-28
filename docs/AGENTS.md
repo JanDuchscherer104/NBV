@@ -19,7 +19,7 @@ Apply this file when working under `docs/`.
 - Keep `docs/references.bib` as the single bibliography source of truth.
 - Preserve established Quarto and Typst structure unless the task explicitly changes it.
 - Resolve current claims through `.agents/references/source_order.md`; do not
-  treat legacy state journals as current-truth owners.
+  treat retired migration journals as current-truth owners.
 - Keep internal agent guidance, generated context, and OMX runtime notes out of
   public Quarto navigation. If a generated agent mirror is needed, regenerate
   it under `.agents/generated/`; do not write agent mirrors under

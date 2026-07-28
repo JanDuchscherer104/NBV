@@ -153,10 +153,10 @@
     [
       #color-block(title: [Owner after this consolidation], spacing: 0.4em)[
         #slide-small[
-          This deck is the _advisor-facing thesis contract_: it owns current RQ order, target-RRI/$Q_H$ scope, state boundaries, evidence gates, and open advisor locks.
+          This deck records advisor-facing evidence from 22 May 2026. The active Typst thesis owns current RQ order, target-RRI/$Q_H$ scope, state boundaries, evidence gates, and open advisor locks.
 
           #v(0.2em)
-          Public mirrors should follow it: #link("contents/thesis/questions.qmd")[questions], #link("contents/thesis/roadmap.qmd")[roadmap], and canonical memory. Historical seminar and outlook decks remain evidence, not priority.
+          Public mirrors should follow the active thesis and exact implementation owners. Historical seminar and outlook decks remain evidence, not priority.
         ]
       ]
     ],
@@ -165,13 +165,13 @@
         #slide-small[
           - Current deck claim beats historical seminar/outlook wording.
           - Current code and generated API pages beat planned implementation claims.
-          - `OPEN_QUESTIONS.md` remains the mirror for unresolved advisor decisions.
+          - Unresolved advisor decisions belong in the active thesis source and owning backlog record.
           - Any imported historical claim must be marked as conflict, WIP, optional, or prune.
         ]
       ]
       #v(0.18em)
       #decision_todo(
-        [After advisor acceptance, mirror this owner promotion into source-order docs, roadmap/questions, and memory.],
+        [After advisor acceptance, update the active Typst thesis and owning backlog record.],
         sources: [`source_order.md`; autoresearch report],
       )
     ],
@@ -197,7 +197,7 @@
         [this deck], [WIP necessary], [Must land before thesis-grade quantitative claims.],
         [roadmap/backlog mirror], [Optional ablation], [Useful only if schedule/support allows.],
         [appendix or roadmap], [Open decision], [Advisor-facing unresolved choice.],
-        [`OPEN_QUESTIONS.md` mirror],
+        [`main.typ` owner],
         [Conflict / historical],
         [Older source that contradicts the current contract unless demoted.],
 
@@ -217,7 +217,7 @@
         #slide-small[
           #decision_todo(
             [Advisor must choose or accept the contract before this becomes thesis-grade truth.],
-            sources: [deck; `OPEN_QUESTIONS.md`],
+            sources: [deck; `main.typ`],
           )
           #v(0.25em)
           #conflict_todo(
@@ -459,7 +459,7 @@
         ]
         #decision_todo(
           [Lock numeric acceptance thresholds, ambiguity gap, and target-interest sampling policy.],
-          sources: [`main.typ`; archived advisor handout; `OPEN_QUESTIONS.md`],
+          sources: [`main.typ`; archived advisor handout],
         )
       ]
     ],
@@ -857,7 +857,7 @@
         ]
         #decision_todo(
           [Lock privileged-critic permissions and whether VIN may become a critic/surrogate beyond mesh-backed subsets.],
-          sources: [historical outlook deck; `OPEN_QUESTIONS.md`],
+          sources: [historical outlook deck; `main.typ`],
         )
       ]
     ],
@@ -896,17 +896,17 @@
         #slide-small[
           #decision_todo(
             [Pass/fail threshold for positive $Q_H$ recovery and no-headroom interpretation.],
-            sources: [questions; `OPEN_QUESTIONS.md`],
+            sources: [`main.typ`],
           )
           #v(0.22em)
           #decision_todo(
             [Horizon, symbolic gamma, clipping, and near-solved-target handling.],
-            sources: [questions; `OPEN_QUESTIONS.md`],
+            sources: [`main.typ`],
           )
           #v(0.22em)
           #decision_todo(
             [V1 target matching thresholds and ambiguity policy for observed/predicted targets.],
-            sources: [questions; `OPEN_QUESTIONS.md`],
+            sources: [`main.typ`],
           )
         ]
       ]
@@ -1028,7 +1028,7 @@
             sources: [roadmap],
           )
           #v(0.18em)
-          #decision_todo([Target matching thresholds and ambiguity policy.], sources: [`OPEN_QUESTIONS.md`])
+          #decision_todo([Target matching thresholds and ambiguity policy.], sources: [`main.typ`])
           #v(0.18em)
           #decision_todo(
             [RQ5/RQ6 extension wording and optional $Q_H$-as-critic bridge.],

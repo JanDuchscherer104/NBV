@@ -27,7 +27,7 @@ Interview rules:
   and the active Typst thesis.
 - Resolved terminology updates `docs/typst/shared/glossary.typ`; other durable
   outcomes update the smallest owner named by `source_order.md`. Do not create
-  parallel ADR trees or add facts to legacy state journals.
+  parallel ADR trees or add facts to retired migration journals.
 
 End with a decision-complete plan naming:
 - goal and success criteria

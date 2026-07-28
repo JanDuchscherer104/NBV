@@ -723,7 +723,7 @@ writing so the repository can support later knowledge-graph construction.
 - Give every major concept a stable anchor, a one-sentence definition, known
   aliases, and links to related internal nodes.
 - Prefer internal links to Quarto pages, Typst sections, API reference pages,
-  configs, and canonical memory over repeating the same explanation.
+  configs, and the exact source-order owner over repeating the same explanation.
 - Prefer BibTeX citations from `docs/references.bib` for papers and datasets;
   use raw external URLs only for tools or libraries without bibliography keys.
 - Public Python docstrings should state tensor shapes, coordinate frames, units,

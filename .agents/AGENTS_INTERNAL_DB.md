@@ -14,7 +14,7 @@ This file tracks the active engineering and research backlog for ARIA-NBV.
 The legacy `.agents/memory/state/` journals are supporting migration evidence,
 not current-truth owners. This DB holds the **active maintenance debt**.
 Extracted proposal, transcript, or review requirements become agents-DB work
-when they are actionable. Current truth belongs in the smallest owner named by
+when they are actionable. Durable facts belong in the smallest owner named by
 `.agents/references/source_order.md`; execution history belongs in dated memory
 debriefs.
 

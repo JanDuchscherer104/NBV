@@ -108,30 +108,43 @@ ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
 LEGACY_STATE_MENTION = re.compile(
     r"(?:\.agents/memory/state(?:/[A-Z_]+\.md)?|"
     r"(?<![A-Za-z0-9_/.])(?:DECISIONS|PROJECT_STATE|OPEN_QUESTIONS|GOTCHAS)\.md|"
-    r"\b(?:canonical memory|canonical state|memory state|decision journal|state journals?)\b)",
+    r"\b(?:canonical memory|canonical state|memory state|decision journals?|state journals?)\b)",
     re.IGNORECASE,
 )
-LEGACY_STATE_MIGRATION_TERMS = (
-    "legacy migration",
-    "legacy state journal",
-    "legacy state evidence",
-    "migration evidence",
-    "migration journal",
-    "read-only migration",
-    "not current-truth",
-    "not a current-truth",
-    "not current truth",
+LEGACY_STATE_MIGRATION_ONLY = (
+    re.compile(r"\bmigration(?:-only)? evidence\b", re.IGNORECASE),
+    re.compile(r"\blegacy migration\b", re.IGNORECASE),
+    re.compile(r"\bread-only migration\b", re.IGNORECASE),
+    re.compile(r"\bnot (?:a )?current[- ]truth\b", re.IGNORECASE),
+    re.compile(
+        r"\blegacy (?:state )?journals?\b.{0,120}\b(?:removed|retired|archived)\b|"
+        r"\b(?:removed|retired|archived)\b.{0,120}\blegacy (?:state )?journals?\b",
+        re.IGNORECASE,
+    ),
+)
+LEGACY_STATE_NEGATED_OWNER = re.compile(
+    r"\b(?:not|never) (?:a )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
+    r"\brather than (?:the )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
+    r"\bdo not (?:add|update|write|record|maintain)\b[^.;]*",
+    re.IGNORECASE,
 )
 LEGACY_STATE_OWNER_ASSERTION = re.compile(
-    r"\b(?:update|write|record|maintain)\b.*"
-    r"\b(?:canonical|current owner|current truth|source of truth)\b|"
-    r"\b(?:journal|state)\b.{0,80}\bowns?\b.{0,40}"
-    r"\b(?:current truth|source of truth)\b|"
-    r"\b(?:canonical|current owner|current truth|source of truth)\b.*"
-    r"\b(?:in|into|to)\b.*\b(?:journal|state)\b",
+    r"\b(?:authoritative|canonical|current owner|current[- ]truth|source of truth|"
+    r"current decisions?|current contract)\b|"
+    r"\b(?:add|update|write|record|maintain)\b.{0,120}\b(?:facts?|it|journal|state|truth)\b",
     re.IGNORECASE,
 )
-LEGACY_STATE_SCAN_SUFFIXES = {".json", ".md", ".py", ".sh", ".toml", ".yaml", ".yml"}
+LEGACY_STATE_SCAN_SUFFIXES = {
+    ".json",
+    ".md",
+    ".py",
+    ".qmd",
+    ".sh",
+    ".toml",
+    ".typ",
+    ".yaml",
+    ".yml",
+}
 LEGACY_STATE_SCAN_FILENAMES = {"Makefile"}
 LEGACY_STATE_SCAN_EXCLUDED_PREFIXES = (
     ".agents/archive/",
@@ -441,16 +454,36 @@ def check_legacy_state_owner_claims(
                 f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}"
             )
             continue
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            normalized = " ".join(line.lower().split())
+        lines = text.splitlines()
+        prose = path.suffix in {".md", ".qmd"}
+        for line_index, line in enumerate(lines):
             if not LEGACY_STATE_MENTION.search(line):
                 continue
-            if any(
-                term in normalized for term in LEGACY_STATE_MIGRATION_TERMS
-            ) and not (LEGACY_STATE_OWNER_ASSERTION.search(line)):
+            if prose:
+                start = line_index
+                while start > 0 and lines[start - 1].strip():
+                    start -= 1
+                end = line_index + 1
+                while end < len(lines) and lines[end].strip():
+                    end += 1
+            else:
+                radius = 2 if path.suffix == ".typ" else 1
+                start = max(0, line_index - radius)
+                end = min(len(lines), line_index + radius + 1)
+            context = " ".join(part.strip() for part in lines[start:end])
+            normalized = " ".join(context.lower().split())
+            migration_only = any(
+                pattern.search(normalized) for pattern in LEGACY_STATE_MIGRATION_ONLY
+            )
+            assertion_text = LEGACY_STATE_MENTION.sub(
+                "", LEGACY_STATE_NEGATED_OWNER.sub("", normalized)
+            )
+            if migration_only and not LEGACY_STATE_OWNER_ASSERTION.search(
+                assertion_text
+            ):
                 continue
             errors.append(
-                f"{tracked_path}:{line_number}: legacy state journal route lacks "
+                f"{tracked_path}:{line_index + 1}: legacy state journal route lacks "
                 "an explicit migration-only qualifier"
             )
     return errors
