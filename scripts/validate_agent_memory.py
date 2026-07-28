@@ -296,7 +296,17 @@ def check_registered_omx_artifacts(
         return [f"explicit OMX artifact transition ref is invalid: {base_ref}"]
 
     registry_path = repo_root / ".agents" / "omx_artifacts.toml"
+    if registry_path.is_symlink():
+        return ["OMX artifact registry must be a regular file"]
     if not registry_path.exists():
+        tracked_registry = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", ".agents/omx_artifacts.toml"],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+        )
+        if tracked_registry.returncode == 0:
+            return ["tracked OMX artifact registry is missing from the worktree"]
         if previous_ref:
             prior_registry = subprocess.run(
                 ["git", "cat-file", "-e", f"{previous_ref}:.agents/omx_artifacts.toml"],

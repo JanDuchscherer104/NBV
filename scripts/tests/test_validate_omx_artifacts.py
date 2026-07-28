@@ -1535,6 +1535,26 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ValidationError, "unknown artifact fields"):
             MODULE.load_registry(registry)
 
+        for encoded, message in (
+            (r"\u002Foperator\u002Fsecret", "absolute path"),
+            (r"owner\u0040example.com", "email address"),
+            (_fixture(r"ghp_\u0061", "bcdefghijklmnopqrstuvwxyz"), "GitHub token"),
+        ):
+            with self.subTest(decoded_registry_value=message):
+                bundle = self.bundle()
+                bundle["artifact"][0]["review_kinds"] = [encoded]
+                registry = self.write_registry([bundle])
+                with self.assertRaisesRegex(MODULE.ValidationError, message):
+                    MODULE.load_registry(registry)
+
+        bundle = self.bundle()
+        bundle["artifact"][0]["review_kinds"] = ["architect"]
+        registry = self.write_registry([bundle])
+        with self.assertRaisesRegex(
+            MODULE.ValidationError, "only review artifacts may declare review_kinds"
+        ):
+            MODULE.load_registry(registry)
+
         for old, new, message in (
             ('status = "current"', 'status = ["current"]', "status must be a string"),
             (
@@ -2095,6 +2115,20 @@ class OmxArtifactValidatorTests(unittest.TestCase):
             MODULE.ValidationError, "historical registry must be a regular file"
         ):
             MODULE._previous_registry(self.repo, "HEAD")
+
+    def test_bootstrap_rejects_dangling_registry_symlink(self) -> None:
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.git("checkout", "-qb", "feature-dangling-registry")
+        registry = self.repo / ".agents/omx_artifacts.toml"
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.symlink_to("missing-registry.toml")
+        self.git("add", ".agents/omx_artifacts.toml")
+        self.git("commit", "-qm", "add dangling registry symlink")
+        with patch.dict(os.environ, LOCAL_TRANSITION_ENV):
+            errors = MEMORY_MODULE.check_registered_omx_artifacts(
+                repo_root=self.repo, validator_path=SCRIPT
+            )
+        self.assertEqual(errors, ["OMX artifact registry must be a regular file"])
 
     def test_local_only_snapshot_fallback_is_explicit(self) -> None:
         bundle = self.bundle()

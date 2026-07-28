@@ -817,6 +817,7 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ValidationError(f"invalid registry TOML: {exc}") from exc
+    _scan_decoded_strings(data, REGISTRY, contract_version=2)
     unknown = set(data) - REGISTRY_FIELDS
     if unknown:
         raise ValidationError(f"unknown registry fields: {sorted(unknown)}")
@@ -895,6 +896,8 @@ def _parse_registry(payload: bytes) -> dict[str, Any]:
                 raise ValidationError(
                     f"bundle {bundle.get('id')} review_kinds must be unique"
                 )
+            if artifact.get("family") != "review" and review_kinds:
+                raise ValidationError("only review artifacts may declare review_kinds")
     return data
 
 
