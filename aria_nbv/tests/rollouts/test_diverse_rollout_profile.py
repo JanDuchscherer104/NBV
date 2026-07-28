@@ -127,7 +127,7 @@ def test_paired_rollout_profiles_bind_the_exact_source_manifest_and_shared_recip
 
 
 def test_paired_rollout_profile_rejects_source_manifest_drift() -> None:
-    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    config_path = _repo_root() / ".configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml"
     payload = tomllib.loads(config_path.read_text())
     payload["max_samples"] = 49
     with pytest.raises(ValidationError, match="manifest row count"):
@@ -146,7 +146,7 @@ def test_paired_rollout_profile_rejects_source_manifest_drift() -> None:
 
 def test_multihorizon_highgain_profile_selects_exact_ordered_cross_scene_roots() -> None:
     config = RolloutDatasetWriterConfig.from_toml(
-        _repo_root() / ".configs" / "build_rollouts_v1_multihorizon_highgain.toml"
+        _repo_root() / ".configs/generation/rollouts/campaigns/build_rollouts_v1_multihorizon_highgain.toml"
     )
 
     assert config.sample_keys == _HIGH_GAIN_SAMPLE_KEYS
@@ -166,7 +166,7 @@ def test_multihorizon_highgain_profile_selects_exact_ordered_cross_scene_roots()
 
 
 def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() -> None:
-    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    config_path = _repo_root() / ".configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml"
     payload = tomllib.loads(config_path.read_text())
     payload["max_samples"] = 2
     payload["sample_keys"] = ["ASE_81283_Atek_000005", "ASE_81283_Atek_000005"]
@@ -179,14 +179,14 @@ def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() ->
 
 
 def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> None:
-    config_names = (
-        "build_rollouts_v1_realistic.toml",
-        "build_rollouts_v1_diverse.toml",
-        "build_rollouts_v1_lrz.template.toml",
+    config_paths = (
+        Path("generation/rollouts/paired/build_rollouts_v1_realistic.toml"),
+        Path("generation/rollouts/paired/build_rollouts_v1_diverse.toml"),
+        Path("generation/rollouts/templates/build_rollouts_v1_lrz.template.toml"),
     )
 
-    for config_name in config_names:
-        payload = tomllib.loads((_repo_root() / ".configs" / config_name).read_text())
+    for config_path in config_paths:
+        payload = tomllib.loads((_repo_root() / ".configs" / config_path).read_text())
         assert "target_source" not in payload
         assert "target_selector" not in payload
         assert set(payload["oracle_target_task_sampler"]) == {
@@ -195,7 +195,7 @@ def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> N
             "policy",
         }
         assert "max_targets_per_sample" not in payload
-        if config_name in {"build_rollouts_v1_realistic.toml", "build_rollouts_v1_diverse.toml"}:
+        if config_path.name in {"build_rollouts_v1_realistic.toml", "build_rollouts_v1_diverse.toml"}:
             assert payload["oracle_target_task_sampler"]["max_targets_per_sample"] == 1
             assert "oversample_factor" not in payload["candidate_mixture"]["base"]
             assert "max_resamples" not in payload["candidate_mixture"]["base"]
@@ -203,8 +203,12 @@ def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> N
 
 
 def test_lrz_profile_keeps_realistic_generation_semantics_without_smoke_caps() -> None:
-    realistic = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_realistic.toml")
-    lrz = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_lrz.template.toml")
+    realistic = RolloutDatasetWriterConfig.from_toml(
+        _repo_root() / ".configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml"
+    )
+    lrz = RolloutDatasetWriterConfig.from_toml(
+        _repo_root() / ".configs/generation/rollouts/templates/build_rollouts_v1_lrz.template.toml"
+    )
 
     assert lrz.max_samples is None
     assert lrz.source.limit is None
@@ -235,7 +239,7 @@ def _repo_root() -> Path:
 def _paired_pilot_configs() -> tuple[RolloutDatasetWriterConfig, RolloutDatasetWriterConfig]:
     """Parse the two profile TOMLs through the production config model."""
 
-    config_dir = _repo_root() / ".configs"
+    config_dir = _repo_root() / ".configs/generation/rollouts/paired"
     return (
         RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_realistic.toml"),
         RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_diverse.toml"),

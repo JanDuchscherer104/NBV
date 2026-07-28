@@ -54,14 +54,32 @@ class RolloutStoreInvocation:
         return cls(mode="programmatic")
 
     @classmethod
+    def from_config(cls, *, config_path: Path) -> "RolloutStoreInvocation":
+        """Build programmatic invocation metadata from a TOML source."""
+
+        return cls._from_config_source(mode="programmatic", argv=(), config_path=config_path)
+
+    @classmethod
     def from_cli(cls, *, argv: list[str], config_path: Path) -> "RolloutStoreInvocation":
         """Build CLI invocation metadata from parsed arguments and TOML source."""
+
+        return cls._from_config_source(mode="cli", argv=tuple(argv), config_path=config_path)
+
+    @classmethod
+    def _from_config_source(
+        cls,
+        *,
+        mode: Literal["programmatic", "cli"],
+        argv: tuple[str, ...],
+        config_path: Path,
+    ) -> "RolloutStoreInvocation":
+        """Read one config source into immutable invocation provenance."""
 
         resolved = config_path.expanduser().resolve()
         raw_toml = resolved.read_text(encoding="utf-8")
         return cls(
-            mode="cli",
-            argv=tuple(argv),
+            mode=mode,
+            argv=argv,
             config_path=resolved.as_posix(),
             raw_toml_text=raw_toml,
             raw_toml_sha256=hashlib.sha256(raw_toml.encode("utf-8")).hexdigest(),

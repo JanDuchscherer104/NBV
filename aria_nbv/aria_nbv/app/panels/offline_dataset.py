@@ -29,7 +29,8 @@ from ...dataset_topology import build_dataset_topology
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rollouts.inspection import discover_rollout_store_paths
 from ...rri_metrics.ordinal import RriOrdinalBinner
-from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
+from ...utils.config_paths import discover_config_toml_paths
+from ..rerun_launch import build_rerun_offline_spawn_command, format_command, spawn_background_command
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
@@ -51,15 +52,15 @@ def _resolve_store(
     *,
     source_mode: str,
     store_dir_text: str,
-    toml_choice: str,
+    toml_choice: Path | None,
     paths: PathConfig,
 ) -> VinOfflineStoreConfig:
     """Resolve a store from sidebar controls."""
 
     if source_mode == "Experiment config TOML":
-        if toml_choice == "(none)":
+        if toml_choice is None:
             raise ValueError("Select an experiment config TOML.")
-        return _load_offline_store_from_toml(paths.configs_dir / toml_choice)
+        return _load_offline_store_from_toml(toml_choice)
     return VinOfflineStoreConfig(store_dir=Path(store_dir_text).expanduser())
 
 
@@ -506,7 +507,7 @@ def render_offline_dataset_page() -> None:
     )
     paths = PathConfig()
     config_paths = sorted(
-        paths.configs_dir.glob("*.toml"),
+        discover_config_toml_paths(paths.configs_dir),
         key=lambda item: item.stat().st_mtime,
         reverse=True,
     )
@@ -525,11 +526,11 @@ def render_offline_dataset_page() -> None:
             disabled=source_mode != "Store directory",
             key="vin_offline_dataset_store_dir",
         )
-        toml_options = ["(none)"] + [path.name for path in config_paths]
         toml_choice = st.selectbox(
             "Experiment config TOML",
-            options=toml_options,
+            options=(None, *config_paths),
             index=0,
+            format_func=lambda path: "(none)" if path is None else path.relative_to(paths.configs_dir).as_posix(),
             disabled=source_mode != "Experiment config TOML",
             key="vin_offline_dataset_toml",
         )
@@ -586,7 +587,7 @@ def render_offline_dataset_page() -> None:
         log_y = st.checkbox("Log-scale histogram counts", value=False, key="vin_offline_dataset_log_y")
         rerun_config_text = st.text_input(
             "Rerun inspector config",
-            value=str(repo_root() / ".configs" / "rerun_offline.toml"),
+            value=str(paths.resolve_config_toml_path("rerun_offline.toml")),
             key="vin_offline_dataset_rerun_config",
         )
         rerun_split = st.selectbox(

@@ -415,7 +415,7 @@ Rerun offline inspector, and the available VIN offline store.
   into the [VIN diagnostics/API surface](../../reference/lightning.qmd)
   once corrected command behavior and validation land;
 - save one Rerun recording from a validation sample once the inspector CLI and
-  `.configs/rerun_offline.toml` are present;
+  `.configs/inspection/rerun/rerun_offline.toml` are present;
 - record KG-friendly authoring rules in this roadmap and use them in new public
   docstrings;
 - keep thesis scope aligned with [RQ1](questions.qmd#rq1-objective) through

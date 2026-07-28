@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -16,13 +17,27 @@ from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
+    candidate_evidence_availability_rows,
+    candidate_family_composition_rows,
     candidate_flow_rows,
+    candidate_geometry_evidence_rows,
     candidate_group_summary_rows,
+    candidate_plot_availability_rows,
+    candidate_proposal_calibration_rows,
+    candidate_selection_family_rows,
+    candidate_selection_rank_family_rows,
     comparable_policy_cohorts,
+    discounted_rollout_return_rows,
     discover_rollout_store_paths,
+    exact_policy_role_rows,
     mask_combination_rows,
+    oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    reconstruction_endpoint_rows,
+    reconstruction_endpoint_summary_rows,
+    reconstruction_metric_summary_rows,
     rollout_endpoint_metric_summary,
+    rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
@@ -97,6 +112,98 @@ def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discov
     assert row["observed_candidates"] == current.num_candidates
 
 
+def test_rollout_header_summary_keeps_coverage_and_split_denominators_distinct(tmp_path, monkeypatch) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=43)
+    source_locations = (
+        ("scene-a", "snippet-a", "train"),
+        ("scene-a", "snippet-b", "val"),
+        ("scene-b", "snippet-c", "test"),
+    )
+    records = [
+        replace(
+            record,
+            lineage=replace(
+                record.lineage,
+                source=replace(
+                    record.lineage.source,
+                    scene_id=scene_id,
+                    snippet_id=snippet_id,
+                    split=split,
+                ),
+            ),
+        )
+        for record, (scene_id, snippet_id, split) in zip(records, source_locations, strict=True)
+    ]
+    written = write_rollout_zarr_store(tmp_path / "header.zarr", records)
+    reader = RolloutZarrStoreReader(written.store_dir)
+    array_calls: list[str] = []
+    reader_array = reader.array
+
+    def tracked_array(name: str):
+        array_calls.append(name)
+        return reader_array(name)
+
+    monkeypatch.setattr(reader, "array", tracked_array)
+
+    summary = rollout_header_summary(reader)
+
+    assert array_calls == [
+        "targets/target_row_id",
+        "targets/target_valid_mask",
+        "targets/gt_label_valid_mask",
+        "rollouts/target_row_id",
+        "rollouts/scene_id",
+        "dictionaries/scene",
+        "rollouts/split_id",
+        "dictionaries/split",
+    ]
+    assert summary["source_scenes"] == 2
+    assert summary["source_rows"] == 3
+    assert summary["source_split_counts"] == {"test": 1, "train": 1, "val": 1}
+    assert summary["rollout_split_counts"] == {"test": 1, "train": 1, "val": 1}
+    assert summary["horizon"] == 2
+    assert summary["rollouts"] == written.num_rollouts
+    assert summary["steps"] == written.num_steps
+    assert summary["candidates"] == written.num_candidates
+    assert summary["candidate_capacity"] == 12
+    assert summary["target_protocol"] == "v0_gt_input"
+    assert summary["steps_per_scene"] == 3.0
+    assert summary["snippets_per_scene"] == (1, 1.5, 2)
+    assert summary["target_tasks"] == 3
+    assert summary["actor_valid_targets"] == 3
+    assert summary["gt_supervised_targets"] == 3
+    assert summary["actor_valid_targets_with_rollouts"] == 3
+    assert summary["actor_valid_targets_per_scene"] == (1, 1.5, 2)
+    assert summary["actor_valid_targets_with_rollouts_per_scene"] == (1, 1.5, 2)
+    assert summary["rollouts_per_source_row"] == 1.0
+    assert summary["candidates_per_step"] == 12.0
+    assert summary["q_h_return_semantics"]
+    assert summary["discount_gamma"] == 1.0
+
+    missing = rollout_header_summary(reader, manifest_payload={"root_attrs": {}, "manifest": {}})
+    assert missing["source_scenes"] is None
+    assert missing["source_rows"] is None
+    assert missing["source_split_counts"] is None
+    assert missing["rollout_split_counts"] == {"test": 1, "train": 1, "val": 1}
+    assert missing["steps_per_scene"] is None
+    assert missing["snippets_per_scene"] is None
+    assert missing["target_tasks"] is None
+    assert missing["actor_valid_targets"] is None
+    assert missing["actor_valid_targets_with_rollouts"] is None
+    assert missing["actor_valid_targets_per_scene"] is None
+    assert missing["rollouts_per_source_row"] is None
+    assert missing["candidates_per_step"] is None
+    assert missing["q_h_return_semantics"] is None
+    assert missing["discount_gamma"] is None
+
+    malformed = reader.manifest()
+    malformed["manifest"]["source_coverage"] = {"num_source_rows": 0, "scene_counts": {}, "sources": [{}]}
+    malformed_summary = rollout_header_summary(reader, manifest_payload=malformed)
+    assert malformed_summary["steps_per_scene"] is None
+    assert malformed_summary["snippets_per_scene"] is None
+    assert malformed_summary["rollouts_per_source_row"] is None
+
+
 def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None:
     """Discovery should recursively find candidate Zarr directories only."""
 
@@ -130,6 +237,13 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert "motion_step_length_m" in first
     assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
     assert first["units"] == "m"
+    assert first["root_to_target_x_m"] is not None
+    assert first["root_to_target_y_m"] is not None
+    assert first["generation_cohort_id"]
+    assert first["acquisition_budget_steps"] == first["horizon"]
+    assert first["candidate_config"] == records[0].lineage.policy.candidate_config_hash
+    assert first["rollout_config"] == records[0].lineage.policy.rollout_config_hash
+    assert first["branch_schedule"] == (records[0].lineage.policy.branch_schedule_id or "")
 
     target_rows = target_audit_rows(reader)
     assert len(target_rows) == 1
@@ -651,7 +765,11 @@ def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path) -> No
     assert projection["eligible_cohort_rows"][0]["comparison_count"] == 3
     assert projection["mismatch_rows"] == []
     assert "candidate_config" in projection["key_fields"]
-    assert "horizon" in projection["key_fields"]
+    assert "evaluation_horizon" in projection["key_fields"]
+    assert "acquisition_budget_steps" in projection["key_fields"]
+    assert "branch_schedule" not in projection["key_fields"]
+    assert "branch_factor" not in projection["key_fields"]
+    assert "beam_width" not in projection["key_fields"]
 
     mismatched_records = build_rollout_records(horizon=2, num_samples=6, seed=54)[:2]
     mismatched_records[1].lineage.source = copy.deepcopy(mismatched_records[0].lineage.source)
@@ -665,6 +783,70 @@ def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path) -> No
     assert blocked["eligible_cohort_rows"] == []
     assert blocked["mismatch_rows"]
     assert "candidate_config" in blocked["mismatch_rows"][0]["mismatched_fields"]
+
+
+def test_oracle_headroom_pairs_persisted_schedule_treatments_and_blocks_invalid_context(tmp_path) -> None:
+    """Reader-backed headroom should pair recipes while failing closed on invalid cohorts."""
+
+    template = build_rollout_records(horizon=2, num_samples=6, seed=70)[0]
+    one_step = copy.deepcopy(template)
+    one_step.rollout_id_prefix = "fixture-oracle-one-step"
+    one_step.lineage.policy.branch_schedule_id = "oracle_greedy"
+    one_step.lineage.policy.rollout_config_hash = "rollout-config-one-step"
+    one_step.evaluated.result.branch_factor = 1
+    one_step.evaluated.result.beam_width = None
+    lookahead = copy.deepcopy(template)
+    lookahead.rollout_id_prefix = "fixture-oracle-lookahead"
+    lookahead.lineage.policy.branch_schedule_id = "oracle_lookahead"
+    lookahead.lineage.policy.rollout_config_hash = "rollout-config-lookahead"
+    lookahead.evaluated.result.branch_factor = 2
+    lookahead.evaluated.result.beam_width = 2
+
+    matched = write_rollout_zarr_store(tmp_path / "oracle-matched.zarr", [one_step, lookahead])
+    projection = comparable_policy_cohorts(RolloutZarrStoreReader(matched.store_dir))
+    evidence = oracle_headroom_evidence(projection)
+
+    assert projection["eligible"] is True
+    assert len(projection["eligible_cohort_rows"]) == 1
+    assert projection["eligible_cohort_rows"][0]["comparison_count"] == 2
+    assert {row["branch_schedule"] for row in projection["cohort_rows"]} == {
+        "oracle_greedy",
+        "oracle_lookahead",
+    }
+    assert {row["rollout_config_hash"] for row in projection["cohort_rows"]} == {
+        "rollout-config-one-step",
+        "rollout-config-lookahead",
+    }
+    assert len(evidence["oracle_rows"]) == 1
+    oracle_blocker = next(row for row in evidence["blocker_rows"] if row["prerequisite"] == "exact oracle cohorts")
+    assert oracle_blocker["status"] == "PASS"
+
+    mismatched_lookahead = copy.deepcopy(lookahead)
+    mismatched_lookahead.lineage.policy.candidate_config_hash = "different-candidate-config"
+    mismatched = write_rollout_zarr_store(
+        tmp_path / "oracle-mismatched.zarr",
+        [one_step, mismatched_lookahead],
+    )
+    mismatched_projection = comparable_policy_cohorts(RolloutZarrStoreReader(mismatched.store_dir))
+    mismatched_evidence = oracle_headroom_evidence(mismatched_projection)
+
+    assert mismatched_projection["eligible"] is False
+    assert "candidate_config" in mismatched_projection["mismatch_rows"][0]["mismatched_fields"]
+    assert mismatched_evidence["oracle_rows"] == []
+
+    duplicate_one_step = copy.deepcopy(one_step)
+    duplicate_one_step.rollout_id_prefix = "fixture-oracle-one-step-duplicate"
+    duplicate_one_step.lineage.policy.rollout_config_hash = "rollout-config-one-step-duplicate"
+    ambiguous = write_rollout_zarr_store(
+        tmp_path / "oracle-ambiguous.zarr",
+        [one_step, duplicate_one_step, lookahead],
+    )
+    ambiguous_projection = comparable_policy_cohorts(RolloutZarrStoreReader(ambiguous.store_dir))
+    ambiguous_evidence = oracle_headroom_evidence(ambiguous_projection)
+
+    assert ambiguous_projection["eligible"] is False
+    assert "ambiguous" in str(ambiguous_projection["cohort_summary_rows"][0]["reason"])
+    assert ambiguous_evidence["oracle_rows"] == []
 
 
 def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) -> None:
@@ -703,6 +885,440 @@ def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) ->
     assert all(row["median_paired_delta"] == row["paired_delta_median"] for row in first)
     assert all(row["bootstrap_ci_low"] is not None for row in first)
     assert all(row["bootstrap_ci_high"] is not None for row in first)
+
+
+def test_reconstruction_metric_plan_is_automatic_and_excludes_validity_metrics() -> None:
+    rows = [
+        {
+            "rollout_row_id": 0,
+            "step_index": 0,
+            "scene": "scene-a",
+            "policy": "policy-a",
+            "horizon": 2,
+            "cumulative_target_root_gain": 0.1,
+            "cumulative_target_rri": 0.2,
+            "selected_target_root_gain": 0.1,
+            "selected_target_rri": 0.2,
+            "selected_probability": 0.75,
+            "selected_entropy": 0.5,
+            "num_valid_candidates": 4,
+            "invalid_fraction": 0.5,
+        },
+        {
+            "rollout_row_id": 0,
+            "step_index": 1,
+            "scene": "scene-a",
+            "policy": "policy-a",
+            "horizon": 2,
+            "cumulative_target_root_gain": 0.4,
+            "cumulative_target_rri": 0.6,
+            "selected_target_root_gain": 0.3,
+            "selected_target_rri": 0.4,
+            "selected_probability": None,
+            "selected_entropy": 0.25,
+            "num_valid_candidates": 2,
+            "invalid_fraction": 0.75,
+        },
+    ]
+
+    summaries = reconstruction_metric_summary_rows(rows)
+    metrics = {str(row["metric"]) for row in summaries}
+    root_gain = next(row for row in summaries if row["metric"] == "cumulative_target_root_gain")
+    probability = next(row for row in summaries if row["metric"] == "selected_probability")
+
+    assert len(summaries) == 6
+    assert "valid_fanout" not in metrics
+    assert "invalid_fraction" not in metrics
+    assert root_gain["row_count"] == 2
+    assert root_gain["rollout_count"] == 1
+    assert root_gain["mean"] == pytest.approx(0.25)
+    assert root_gain["median"] == pytest.approx(0.25)
+    assert root_gain["q25"] == pytest.approx(0.175)
+    assert root_gain["q75"] == pytest.approx(0.325)
+    assert root_gain["endpoint_median"] == pytest.approx(0.4)
+    assert probability["finite_count"] == 1
+    assert probability["missing_count"] == 1
+
+
+def test_reconstruction_endpoint_helpers_use_terminal_row_and_policy_horizon() -> None:
+    rows = [
+        {
+            "rollout_row_id": rollout,
+            "step_index": step,
+            "scene": "scene-a",
+            "policy": policy,
+            "horizon": 2,
+            "cumulative_target_root_gain": value,
+        }
+        for rollout, policy, step, value in (
+            (0, "a", 0, 0.1),
+            (0, "a", 1, 0.4),
+            (1, "b", 0, 0.2),
+            (1, "b", 1, 0.6),
+        )
+    ]
+
+    endpoints = reconstruction_endpoint_rows(rows)
+    summaries = reconstruction_endpoint_summary_rows(rows)
+
+    assert [row["cumulative_target_root_gain"] for row in endpoints] == pytest.approx([0.4, 0.6])
+    root_summaries = [row for row in summaries if row["metric"] == "cumulative_target_root_gain"]
+    assert {(row["policy"], row["horizon"]) for row in root_summaries} == {("a", 2), ("b", 2)}
+    assert all(row["finite_count"] == 1 for row in root_summaries)
+
+
+def test_exact_policy_roles_do_not_use_fuzzy_identifiers() -> None:
+    rows = [
+        {"policy": "oracle_greedy", "branch_schedule": "oracle_greedy"},
+        {"policy": "oracle_greedy", "branch_schedule": "oracle_lookahead"},
+        {"policy": "oracle_greedy", "branch_schedule": "oracle_lookaheadish"},
+        {"policy": "my_q_h_policy", "branch_schedule": "q_h"},
+    ]
+
+    resolved = exact_policy_role_rows(rows)
+
+    assert [row["semantic_role"] for row in resolved] == ["oracle_one_step", "oracle_lookahead"]
+
+
+def test_oracle_headroom_uses_only_same_exact_cohort() -> None:
+    cohort_key = "exact-cohort"
+    base = {
+        "cohort_key": cohort_key,
+        "cohort_id": "cohort-1",
+        "horizon": 3,
+        "final_cumulative_target_rri": 0.5,
+    }
+    rows = [
+        {
+            **base,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_greedy",
+            "final_cumulative_target_root_gain": 0.4,
+        },
+        {
+            **base,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_lookahead",
+            "final_cumulative_target_root_gain": 0.7,
+            "final_cumulative_target_rri": 0.8,
+        },
+        {
+            **base,
+            "policy": "learned_one_step",
+            "branch_schedule": "learned_one_step",
+            "final_cumulative_target_root_gain": 0.2,
+        },
+        {
+            **base,
+            "policy": "q_h",
+            "branch_schedule": "q_h",
+            "final_cumulative_target_root_gain": 0.5,
+        },
+    ]
+    projection = {"cohort_rows": rows, "eligible_cohort_rows": [{"cohort_key": cohort_key}]}
+
+    evidence = oracle_headroom_evidence(projection)
+
+    assert evidence["oracle_rows"][0]["delta_look"] == pytest.approx(0.3)
+    assert evidence["oracle_rows"][0]["delta_look_target_rri"] == pytest.approx(0.3)
+    assert evidence["qh_rows"][0]["eta_q"] == pytest.approx(0.6)
+    assert all(row["status"] == "PASS" for row in evidence["blocker_rows"])
+
+
+def test_oracle_headroom_blocks_zero_exact_matches() -> None:
+    projection = {
+        "cohort_rows": [
+            {
+                "cohort_key": "one",
+                "policy": "oracle_greedy",
+                "branch_schedule": "oracle_greedy",
+                "final_cumulative_target_root_gain": 0.4,
+            },
+            {
+                "cohort_key": "look",
+                "policy": "oracle_greedy",
+                "branch_schedule": "oracle_lookahead",
+                "final_cumulative_target_root_gain": 0.7,
+            },
+        ],
+        "eligible_cohort_rows": [],
+    }
+
+    evidence = oracle_headroom_evidence(projection)
+
+    assert evidence["oracle_rows"] == []
+    assert evidence["qh_rows"] == []
+    assert evidence["role_identifiers"]["oracle_one_step"]
+    assert evidence["role_identifiers"]["oracle_lookahead"]
+    exact = next(row for row in evidence["blocker_rows"] if row["prerequisite"] == "exact oracle cohorts")
+    assert exact == {
+        "prerequisite": "exact oracle cohorts",
+        "status": "BLOCKED",
+        "detail": "zero exact finite matches",
+    }
+
+
+def test_discounted_return_requires_declared_semantics_and_complete_rewards() -> None:
+    rows = [
+        {"rollout_row_id": 0, "step_index": 0, "selected_target_root_gain": 0.2},
+        {"rollout_row_id": 0, "step_index": 1, "selected_target_root_gain": 0.4},
+    ]
+
+    evidence = discounted_rollout_return_rows(
+        rows,
+        return_semantics="cumulative_target_root_gain",
+        discount_gamma=0.5,
+    )
+    blocked = discounted_rollout_return_rows(rows, return_semantics=None, discount_gamma=0.5)
+
+    assert evidence["available"] is True
+    assert evidence["rows"][0]["discounted_return"] == pytest.approx(0.4)
+    assert blocked["available"] is False
+
+
+def test_candidate_family_composition_is_lightweight_and_normalizes_selection(tmp_path, monkeypatch) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "candidate-composition.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=71)[:1],
+    )
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.inspection.candidate_audit_rows",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("full candidate audit must stay unloaded")),
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    rows = candidate_family_composition_rows(reader)
+    availability = candidate_evidence_availability_rows(reader)
+
+    assert {row["dimension"] for row in rows} == {"policy", "strategy", "position", "mixture", "recipe"}
+    assert sum(row["sampled_count"] for row in rows if row["dimension"] == "policy") == result.num_candidates
+    recipes = [row for row in rows if row["dimension"] == "recipe"]
+    assert sum(row["sampled_count"] for row in recipes) == result.num_candidates
+    assert all("mixture=" in str(row["family"]) and "position=" in str(row["family"]) for row in recipes)
+    assert all("view=" in str(row["family"]) for row in recipes)
+    assert all(0.0 <= float(row["actor_valid_rate"]) <= 1.0 for row in rows)
+    assert sum(row["selected_count"] for row in rows if row["dimension"] == "policy") == result.num_steps
+    assert {row["evidence"] for row in availability} >= {"proposal calibration", "root-relative geometry"}
+    assert all(row["generation_cohort_id"] for row in rows)
+    assert all(
+        {
+            "policy",
+            "horizon",
+            "acquisition_budget_steps",
+            "branch_factor",
+            "beam_width",
+            "temperature",
+            "candidate_config",
+            "rollout_config",
+            "branch_schedule",
+        }.issubset(row)
+        for row in rows
+    )
+
+
+def test_candidate_proposal_calibration_compares_mass_with_empirical_frequency() -> None:
+    rows = [
+        {"policy": "p", "strategy": "a", "position": "x", "mixture": "m", "sampler_probability": 0.1},
+        {"policy": "p", "strategy": "a", "position": "x", "mixture": "m", "sampler_probability": 0.2},
+        {"policy": "p", "strategy": "b", "position": "y", "mixture": "n", "sampler_probability": 0.3},
+        {"policy": "p", "strategy": "b", "position": "y", "mixture": "n", "sampler_probability": 0.4},
+    ]
+
+    calibration = candidate_proposal_calibration_rows(rows)
+    strategy_a = next(row for row in calibration if row["dimension"] == "strategy" and row["family"] == "a")
+
+    assert strategy_a["empirical_frequency"] == pytest.approx(0.5)
+    assert strategy_a["proposal_mass"] == pytest.approx(0.3)
+    assert strategy_a["calibration_gap"] == pytest.approx(0.2)
+
+
+def test_candidate_reducers_isolate_exact_generation_cohorts() -> None:
+    base = {
+        "policy": "temperature_softmax",
+        "horizon": 2,
+        "acquisition_budget_steps": 2,
+        "branch_factor": 4,
+        "beam_width": 2,
+        "temperature": 0.5,
+        "candidate_config": "candidate-v1",
+        "rollout_config": "rollout-v1",
+        "branch_schedule": "4x2",
+        "position": "radial",
+        "mixture": "target",
+        "target_root_gain": 0.2,
+    }
+    rows = [
+        {
+            **base,
+            "generation_cohort_id": "first",
+            "strategy": "a",
+            "sampler_probability": 0.9,
+            "actor_action": True,
+            "selected": True,
+        },
+        {
+            **base,
+            "generation_cohort_id": "first",
+            "strategy": "b",
+            "sampler_probability": 0.1,
+            "actor_action": True,
+            "selected": False,
+        },
+        {
+            **base,
+            "generation_cohort_id": "second",
+            "candidate_config": "candidate-v2",
+            "strategy": "a",
+            "sampler_probability": 0.1,
+            "actor_action": True,
+            "selected": False,
+        },
+        {
+            **base,
+            "generation_cohort_id": "second",
+            "candidate_config": "candidate-v2",
+            "strategy": "b",
+            "sampler_probability": 0.9,
+            "actor_action": True,
+            "selected": True,
+        },
+    ]
+
+    calibration = candidate_proposal_calibration_rows(rows)
+    strategy_a = {
+        row["generation_cohort_id"]: row
+        for row in calibration
+        if row["dimension"] == "strategy" and row["family"] == "a"
+    }
+    selection = candidate_selection_family_rows(rows)
+    selected_a = {
+        row["generation_cohort_id"]: row for row in selection if row["dimension"] == "strategy" and row["family"] == "a"
+    }
+
+    assert strategy_a["first"]["proposal_mass"] == pytest.approx(0.9)
+    assert strategy_a["second"]["proposal_mass"] == pytest.approx(0.1)
+    assert strategy_a["first"]["empirical_frequency"] == pytest.approx(0.5)
+    assert strategy_a["second"]["empirical_frequency"] == pytest.approx(0.5)
+    assert selected_a["first"]["selected_share_of_valid_availability"] == pytest.approx(1.0)
+    assert selected_a["second"]["selected_share_of_valid_availability"] == pytest.approx(0.0)
+
+
+def test_candidate_geometry_is_root_relative_and_wraps_target_bearing() -> None:
+    rows = candidate_geometry_evidence_rows(
+        [
+            {
+                "candidate_row_id": 1,
+                "root_relative_x_m": 3.0,
+                "root_relative_y_m": 4.0,
+                "root_relative_z_m": 5.0,
+                "root_to_target_x_m": 4.0,
+                "root_to_target_y_m": 3.0,
+                "motion_yaw_delta_deg": 170.0,
+                "target_bearing_yaw_deg": -170.0,
+            },
+            {
+                "candidate_row_id": 2,
+                "root_relative_x_m": -8.0,
+                "root_relative_y_m": 6.0,
+                "root_relative_z_m": 5.0,
+                "root_to_target_x_m": -6.0,
+                "root_to_target_y_m": 8.0,
+            },
+        ]
+    )
+    row, transformed = rows
+
+    assert row["root_radius_m"] == pytest.approx(5.0)
+    assert row["root_azimuth_deg"] == pytest.approx(np.degrees(np.arctan2(4.0, 3.0)))
+    assert row["root_elevation_deg"] == pytest.approx(45.0)
+    assert row["orientation_to_target_bearing_deg"] == pytest.approx(-20.0)
+    assert row["root_target_xy_distance_m"] == pytest.approx(5.0)
+    assert row["target_normalized_forward"] == pytest.approx(24.0 / 25.0)
+    assert row["target_normalized_lateral"] == pytest.approx(7.0 / 25.0)
+    assert transformed["target_normalized_forward"] == pytest.approx(row["target_normalized_forward"])
+    assert transformed["target_normalized_lateral"] == pytest.approx(row["target_normalized_lateral"])
+    assert "center_x" not in row
+
+
+def test_candidate_selection_is_normalized_by_actor_valid_family_availability() -> None:
+    rows = [
+        {
+            "policy": "p",
+            "strategy": "a",
+            "position": "x",
+            "mixture": "m",
+            "actor_action": True,
+            "selected": True,
+            "target_root_gain": 0.2,
+        },
+        {
+            "policy": "p",
+            "strategy": "a",
+            "position": "x",
+            "mixture": "m",
+            "actor_action": True,
+            "selected": False,
+            "target_root_gain": 0.4,
+        },
+        {
+            "policy": "p",
+            "strategy": "b",
+            "position": "x",
+            "mixture": "m",
+            "actor_action": True,
+            "selected": False,
+            "target_root_gain": 0.9,
+        },
+    ]
+
+    strategy = next(
+        row for row in candidate_selection_family_rows(rows) if row["dimension"] == "strategy" and row["family"] == "a"
+    )
+
+    assert strategy["candidate_count"] == 2
+    assert strategy["actor_valid_count"] == 2
+    assert strategy["selected_share_of_valid_availability"] == pytest.approx(0.5)
+    assert strategy["mean_valid_target_root_gain"] == pytest.approx(0.3)
+    assert strategy["valid_availability_share"] == pytest.approx(2.0 / 3.0)
+    assert strategy["selected_share"] == pytest.approx(1.0)
+    assert strategy["selection_enrichment_vs_valid_availability"] == pytest.approx(1.5)
+
+
+def test_candidate_rank_rows_join_exact_selected_generation_family() -> None:
+    audit = [
+        {
+            "candidate_row_id": 7,
+            "selected": True,
+            "strategy": "toward_target",
+            "position": "radial",
+            "mixture": "target",
+        }
+    ]
+    ranks = [
+        {
+            "selected_candidate_row_id": 7,
+            "selection_score_rank": 1,
+            "selected_rank": 2,
+            "target_rri_rank": 3,
+            "regret_to_best": 0.25,
+        }
+    ]
+
+    joined = candidate_selection_rank_family_rows(audit, ranks)
+
+    assert joined == [{**ranks[0], "strategy": "toward_target", "position": "radial", "mixture": "target"}]
+
+
+def test_candidate_plot_availability_reports_missing_fields() -> None:
+    blockers = candidate_plot_availability_rows(
+        [{"root_relative_x_m": 1.0, "root_relative_y_m": 2.0}],
+        [],
+    )
+    by_name = {row["evidence"]: row for row in blockers}
+
+    assert by_name["root-relative XY"]["available"] is True
+    assert by_name["proposal calibration"]["available"] is False
+    assert by_name["selection rank / regret"]["available"] is False
 
 
 def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invalidity(tmp_path) -> None:

@@ -10,7 +10,7 @@ This appendix summarizes the SE(3) frames provided to `VinModelV3.forward`,
 using the notation from the coordinate conventions section.
 // <rm>
 // Internal dev setup references (debug launcher, VSCode). Remove from paper.
-We verify the conventions with offline-cache data loaded via `.configs/offline_only.toml`
+We verify the conventions with offline-cache data loaded via `.configs/training/vin/offline_only.toml`
 (the debug config in `.vscode/launch.json`).
 // </rm>
 // TODO(paper-cleanup): Keep this appendix as the canonical “CW90 consistency” reference and

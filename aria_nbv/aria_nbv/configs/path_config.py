@@ -427,12 +427,31 @@ class PathConfig(SingletonConfig):
         """Resolve a TOML experiment config path.
 
         Relative paths are resolved as:
-        - bare filenames (no parent) are interpreted as under `configs_dir`
-        - other relative paths are interpreted as under `root`
+
+        - bare filenames first target `configs_dir`, then a unique recursive
+          match below it;
+        - other relative paths are interpreted as under `root`.
         """
         cfg_path = Path(path)
         if not cfg_path.is_absolute():
-            cfg_path = (self.configs_dir / cfg_path) if cfg_path.parent == Path() else (self.root / cfg_path)
+            if cfg_path.parent == Path():
+                direct = self.configs_dir / cfg_path
+                if must_exist and not direct.exists():
+                    matches = sorted(
+                        candidate
+                        for candidate in self.configs_dir.rglob(cfg_path.name)
+                        if candidate.is_file() and candidate.suffix == ".toml"
+                    )
+                    if len(matches) > 1:
+                        relative_matches = [candidate.relative_to(self.configs_dir).as_posix() for candidate in matches]
+                        raise ValueError(
+                            f"Config name {cfg_path.name!r} is ambiguous below {self.configs_dir}: {relative_matches}"
+                        )
+                    cfg_path = matches[0] if matches else direct
+                else:
+                    cfg_path = direct
+            else:
+                cfg_path = self.root / cfg_path
         cfg_path = cfg_path.expanduser().resolve()
         if cfg_path.suffix != ".toml":
             raise ValueError(f"Config path must be a .toml file, got {cfg_path}.")

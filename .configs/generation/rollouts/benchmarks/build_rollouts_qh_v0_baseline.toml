@@ -1,0 +1,90 @@
+# Frozen one-source V0 corpus for the H/F loader comparison.
+#
+# Run from `aria_nbv` with:
+#   uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/benchmarks/build_rollouts_qh_v0_baseline.toml
+#
+# The output name is intentionally V0-specific. It is a newly generated,
+# untracked corpus; this config must never be used to relabel a V1 store.
+
+max_samples = 1
+max_targets_per_sample = 1
+require_label_valid = true
+min_valid_root_candidates = 1
+log_timing = true
+verbosity = 1
+
+[source]
+split = "all"
+limit = 1
+return_format = "sample"
+include_efm_snippet = true
+include_gt_mesh = true
+load_backbone = true
+load_candidates = false
+load_depths = false
+load_candidate_pcs = false
+load_gt_obbs = true
+load_detected_obbs = true
+load_trajectory_metadata = true
+map_location = "cuda"
+verbosity = 1
+
+[source.store]
+store_dir = "vin_offline"
+
+[candidate_mixture.base]
+num_samples = 8
+oversample_factor = 1.0
+ensure_collision_free = true
+ensure_free_space = true
+min_distance_to_mesh = 0.2
+device = "cuda"
+verbosity = 1
+collect_rule_masks = true
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "target_point"
+count = 4
+strategy = "target_point"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "forward_rig"
+count = 4
+strategy = "forward_rig"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[target_scorer]
+backprojection_stride = 12
+target_crop_margin_m = 0.05
+min_current_target_points = 1
+include_scene_rri = false
+log_timing = true
+verbosity = 1
+
+[target_scorer.depth]
+device = "cuda"
+max_candidates_final = 8
+resolution_scale = 0.2
+verbosity = 1
+
+[store]
+store_dir = "rollouts_qh_v0_baseline.zarr"
+target_protocol_version = "v0_gt_input"
+field_retention_policy = "compact_selected_heavy"
+source_offline_store_version = "vin-offline-v7"
+split_manifest_hash = "configured-at-runtime"
+discount_gamma = 1.0
+
+[[recipes]]
+name = "oracle_lookahead"
+[recipes.policy]
+selection_policy = "oracle_greedy"
+horizon = 2
+branch_factor = 2
+beam_width = 2
+seed = 0

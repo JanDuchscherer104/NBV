@@ -17,6 +17,7 @@ from aria_nbv.rollouts.read_model import (
     target_rows,
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.targets.protocol import ORACLE_GT_TARGET_SOURCE
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -83,7 +84,11 @@ def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:
 
     target = target_rows(reader)[0]
 
-    assert (target.target_row_id, target.target_id, target.source) == (0, "fixture-target-0", "fixture_obbs")
+    assert (target.target_row_id, target.target_id, target.source) == (
+        0,
+        "fixture-target-0",
+        ORACLE_GT_TARGET_SOURCE,
+    )
     assert target.class_name == "fixture_object"
     assert (target.selection_rank, target.selection_score) == (0, 1.0)
     assert target.target_valid is True

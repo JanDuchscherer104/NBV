@@ -15,6 +15,19 @@ if TYPE_CHECKING:
     from pydantic import ValidationInfo
 
 
+def discover_config_toml_paths(config_dir: str | Path) -> tuple[Path, ...]:
+    """Return every repository config TOML below one directory.
+
+    Paths are absolute and sorted by their POSIX representation so nested
+    config selectors remain deterministic across Streamlit reruns.
+    """
+
+    root = Path(config_dir).expanduser().resolve()
+    if not root.is_dir():
+        return ()
+    return tuple(sorted((path.resolve() for path in root.rglob("*.toml") if path.is_file()), key=Path.as_posix))
+
+
 def resolve_config_toml_path(path: str | Path, *, paths: PathConfig | None = None) -> Path:
     """Resolve a TOML config path from an absolute path, shell path, or config name."""
 
@@ -40,4 +53,4 @@ def resolve_cache_artifact_dir(value: str | Path, info: "ValidationInfo") -> Pat
     return paths.resolve_cache_artifact_dir(value)
 
 
-__all__ = ["resolve_cache_artifact_dir", "resolve_config_toml_path"]
+__all__ = ["discover_config_toml_paths", "resolve_cache_artifact_dir", "resolve_config_toml_path"]

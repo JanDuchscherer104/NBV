@@ -57,7 +57,7 @@ def test_build_experiment_config_defaults_to_online_source(tmp_path: Path) -> No
 
 
 def test_build_experiment_config_preserves_toml_source() -> None:
-    toml_path = Path(__file__).resolve().parents[3] / ".configs" / "offline_only.toml"
+    toml_path = Path(__file__).resolve().parents[3] / ".configs/training/vin/offline_only.toml"
     cfg = runtime.build_vin_diagnostics_config(toml_path=str(toml_path), stage=Stage.VAL)
 
     assert cfg.run_mode == "summarize_vin"

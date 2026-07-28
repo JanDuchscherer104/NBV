@@ -44,18 +44,27 @@ from .zarr_store import (
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
-_POLICY_COHORT_KEY_FIELDS = (
-    "source_sample_key",
-    "target_id",
-    "target_protocol",
+CANDIDATE_GENERATION_COHORT_FIELDS = (
+    "policy",
     "horizon",
     "acquisition_budget_steps",
     "branch_factor",
     "beam_width",
+    "temperature",
     "candidate_config",
-    "oracle_config",
+    "rollout_config",
     "branch_schedule",
 )
+_POLICY_COHORT_KEY_FIELDS = (
+    "source_sample_key",
+    "target_id",
+    "target_protocol",
+    "evaluation_horizon",
+    "acquisition_budget_steps",
+    "candidate_config",
+    "oracle_config",
+)
+_POLICY_TREATMENT_FIELDS = ("branch_schedule", "branch_factor", "beam_width")
 _TEMPORAL_METRICS = {
     "cumulative_target_rri": ("cumulative_target_rri", "RRI"),
     "marginal_target_rri": ("marginal_target_rri", "RRI"),
@@ -83,6 +92,21 @@ _TEMPORAL_GROUP_FIELDS = frozenset(
         "selected_mixture",
     }
 )
+_RECONSTRUCTION_METRIC_SPECS = (
+    ("cumulative", "cumulative_target_root_gain", "Cumulative root-normalized target gain"),
+    ("cumulative", "cumulative_target_rri", "Cumulative target RRI"),
+    ("selected marginal", "selected_target_root_gain", "Selected one-step root-normalized gain"),
+    ("selected marginal", "selected_target_rri", "Selected one-step target RRI"),
+    ("selection", "selected_probability", "Selected-action probability"),
+    ("selection", "selected_entropy", "Policy entropy"),
+)
+_EXACT_POLICY_ROLE_IDENTIFIERS = {
+    ("oracle_greedy", "oracle_greedy"): "oracle_one_step",
+    ("oracle_greedy", "oracle_lookahead"): "oracle_lookahead",
+    ("oracle_greedy", "oracle_lookahead_diverse"): "oracle_lookahead",
+    ("q_h", "q_h"): "q_h",
+    ("learned_one_step", "learned_one_step"): "learned_one_step",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +242,128 @@ def rollout_statistics(
     }
 
 
+def rollout_header_summary(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest_payload: dict[str, Any] | None = None,
+) -> dict[str, object]:
+    """Return lightweight selected-store facts for a rollout-inspection header.
+
+    The summary reads manifest/root metadata plus compact target-to-rollout
+    linkage. It deliberately avoids candidate and step audit projections, but
+    exposes the target-task coverage needed to interpret the stored traces.
+    """
+
+    manifest_payload = reader.manifest() if manifest_payload is None else manifest_payload
+    root_attrs = manifest_payload.get("root_attrs")
+    manifest = manifest_payload.get("manifest")
+    root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    counts = manifest.get("counts")
+    counts = counts if isinstance(counts, dict) else {}
+    coverage = manifest.get("source_coverage")
+    coverage = coverage if isinstance(coverage, dict) else {}
+    scene_counts = coverage.get("scene_counts")
+    source_scenes = len(scene_counts) if isinstance(scene_counts, dict) else None
+    source_rows = _nonnegative_int(coverage.get("num_source_rows"))
+    rollouts = _nonnegative_int(counts.get("rollouts"), root_attrs.get("num_rollouts"))
+    steps = _nonnegative_int(counts.get("steps"), root_attrs.get("num_steps"))
+    candidates = _nonnegative_int(counts.get("candidates"), root_attrs.get("num_candidates"))
+    target_tasks = _nonnegative_int(counts.get("targets"), root_attrs.get("num_targets"))
+    target_coverage = (
+        _target_rollout_header_coverage(reader)
+        if target_tasks is not None
+        else _unavailable_target_rollout_header_coverage()
+    )
+
+    return {
+        "source_scenes": source_scenes,
+        "source_rows": source_rows,
+        "source_split_counts": _split_counts(coverage.get("split_counts")),
+        "rollout_split_counts": _rollout_split_counts(reader),
+        "horizon": _nonnegative_int(root_attrs.get("q_h_horizon")),
+        "rollouts": rollouts,
+        "steps": steps,
+        "candidates": candidates,
+        "candidate_capacity": _nonnegative_int(counts.get("q_h_max_candidates"), root_attrs.get("q_h_max_candidates")),
+        "target_protocol": _nonempty_text(root_attrs.get("target_protocol_version")),
+        "steps_per_scene": _ratio(steps, source_scenes),
+        "snippets_per_scene": _snippets_per_scene(coverage),
+        "target_tasks": target_tasks,
+        **target_coverage,
+        "rollouts_per_source_row": _ratio(rollouts, source_rows),
+        "candidates_per_step": _ratio(candidates, steps),
+        "q_h_return_semantics": _nonempty_text(root_attrs.get("return_semantics")),
+        "discount_gamma": _nonnegative_float(root_attrs.get("discount_gamma")),
+    }
+
+
+def _target_rollout_header_coverage(reader: RolloutZarrStoreReader) -> dict[str, object]:
+    """Summarize persisted target-task validity and rollout coverage by scene.
+
+    Target rows do not persist their source scene directly. The scene view
+    therefore follows the validated target-to-rollout link and names its scope
+    explicitly as *represented scenes* in the presentation layer.
+    """
+
+    unavailable = _unavailable_target_rollout_header_coverage()
+    try:
+        target_ids = np.asarray(reader.array("targets/target_row_id"), dtype=np.int64).reshape(-1)
+        target_valid = np.asarray(reader.array("targets/target_valid_mask"), dtype=np.bool_).reshape(-1)
+        gt_label_valid = np.asarray(reader.array("targets/gt_label_valid_mask"), dtype=np.bool_).reshape(-1)
+        rollout_target_ids = np.asarray(reader.array("rollouts/target_row_id"), dtype=np.int64).reshape(-1)
+        rollout_scene_ids = np.asarray(reader.array("rollouts/scene_id"), dtype=np.int64).reshape(-1)
+        scene_names = _read_string_array(reader, "dictionaries/scene")
+    except (KeyError, TypeError, ValueError):
+        return unavailable
+    if target_ids.shape != target_valid.shape or target_ids.shape != gt_label_valid.shape:
+        return unavailable
+    if rollout_target_ids.shape != rollout_scene_ids.shape:
+        return unavailable
+
+    actor_valid_ids = {int(target_id) for target_id, valid in zip(target_ids, target_valid, strict=True) if valid}
+    supervised_ids = {
+        int(target_id)
+        for target_id, valid, label_valid in zip(target_ids, target_valid, gt_label_valid, strict=True)
+        if valid and label_valid
+    }
+    known_target_ids = {int(target_id) for target_id in target_ids.tolist()}
+    rollout_target_id_set = {int(target_id) for target_id in rollout_target_ids.tolist()}
+    target_ids_by_scene: dict[str, set[int]] = {}
+    for target_id, scene_id in zip(rollout_target_ids, rollout_scene_ids, strict=True):
+        if int(target_id) not in known_target_ids or not 0 <= int(scene_id) < len(scene_names):
+            continue
+        target_ids_by_scene.setdefault(scene_names[int(scene_id)], set()).add(int(target_id))
+
+    def per_scene_count(target_id_set: set[int]) -> tuple[int, float, int] | None:
+        counts_by_scene = [len(targets & target_id_set) for targets in target_ids_by_scene.values()]
+        return _min_median_max(counts_by_scene)
+
+    return {
+        "actor_valid_targets": len(actor_valid_ids),
+        "gt_supervised_targets": len(supervised_ids),
+        "actor_valid_targets_with_rollouts": len(actor_valid_ids & rollout_target_id_set),
+        "gt_supervised_targets_with_rollouts": len(supervised_ids & rollout_target_id_set),
+        "target_tasks_per_scene": per_scene_count(known_target_ids),
+        "actor_valid_targets_per_scene": per_scene_count(actor_valid_ids),
+        "actor_valid_targets_with_rollouts_per_scene": per_scene_count(actor_valid_ids & rollout_target_id_set),
+    }
+
+
+def _unavailable_target_rollout_header_coverage() -> dict[str, None]:
+    """Preserve stable target-coverage keys when the compact linkage is absent."""
+
+    return {
+        "actor_valid_targets": None,
+        "gt_supervised_targets": None,
+        "actor_valid_targets_with_rollouts": None,
+        "gt_supervised_targets_with_rollouts": None,
+        "target_tasks_per_scene": None,
+        "actor_valid_targets_per_scene": None,
+        "actor_valid_targets_with_rollouts_per_scene": None,
+    }
+
+
 def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict[str, float | int]:
     """Return compact file-count and byte-cost statistics for one store.
 
@@ -268,12 +414,19 @@ def candidate_audit_rows(
     motion_backward_step_m = np.asarray(reader.array("candidate_diagnostics/motion_backward_step_m"))
     motion_yaw_delta_deg = np.asarray(reader.array("candidate_diagnostics/motion_yaw_delta_deg"))
     target_bearing_yaw_deg = np.asarray(reader.array("candidate_diagnostics/target_bearing_yaw_deg"))
+    generation_cohorts = _candidate_generation_cohort_by_rollout(reader)
+    target_centers = {
+        target.target_row_id: np.asarray(target.center_world, dtype=np.float64) for target in target_rows(reader)
+    }
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
         if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        target_center = target_centers.get(rollout.target_row_id)
+        root_to_target = None if target_center is None else target_center - root_center
+        generation_cohort = generation_cohorts[rollout.rollout_row_id]
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -293,7 +446,7 @@ def candidate_audit_rows(
                         "compact_valid_index": int(step.compact_valid_indices[local]),
                         "scene": rollout.scene,
                         "split": rollout.split,
-                        "policy": rollout.policy,
+                        **generation_cohort,
                         "target_row_id": rollout.target_row_id,
                         "selected": bool(step.selected_mask[local]),
                         "actor_action": bool(step.actor_action_mask[local]),
@@ -322,6 +475,9 @@ def candidate_audit_rows(
                         "root_relative_y_m": float(relative[1]),
                         "root_relative_z_m": float(relative[2]),
                         "root_distance_m": float(np.linalg.norm(relative)),
+                        "root_to_target_x_m": None if root_to_target is None else float(root_to_target[0]),
+                        "root_to_target_y_m": None if root_to_target is None else float(root_to_target[1]),
+                        "root_to_target_z_m": None if root_to_target is None else float(root_to_target[2]),
                         "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
                         "units": "m",
                         "mesh_distance_m": _finite_or_none(step.mesh_distance_m[local]),
@@ -466,6 +622,293 @@ def rollout_endpoint_metric_summary(
         "finite_count": finite_count,
         "missing_count": total_count - finite_count,
         "median": None if not finite_count else float(np.median(finite_values)),
+    }
+
+
+def reconstruction_metric_summary_rows(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Summarize the fixed reconstruction/selection metric plan.
+
+    The plan deliberately excludes fanout and invalidity metrics, which belong
+    to validity/support evidence. Every supported metric is returned even when
+    it is entirely missing so callers can distinguish absence from filtering.
+    """
+
+    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
+    rollout_count = len({int(row["rollout_row_id"]) for row in source_rows if row.get("rollout_row_id") is not None})
+    endpoints = reconstruction_endpoint_rows(source_rows)
+    output: list[dict[str, object]] = []
+    for family, metric, label in _RECONSTRUCTION_METRIC_SPECS:
+        values = [_finite_or_none(row.get(metric)) for row in source_rows]
+        finite = np.asarray([value for value in values if value is not None], dtype=np.float64)
+        endpoint_values = [_finite_or_none(row.get(metric)) for row in endpoints]
+        finite_endpoints = np.asarray(
+            [value for value in endpoint_values if value is not None],
+            dtype=np.float64,
+        )
+        endpoint_count = len(endpoint_values)
+        finite_endpoint_count = int(finite_endpoints.size)
+        output.append(
+            {
+                "family": family,
+                "metric": metric,
+                "label": label,
+                "units": _TEMPORAL_METRICS[metric][1],
+                "row_count": len(source_rows),
+                "rollout_count": rollout_count,
+                "finite_count": int(finite.size),
+                "missing_count": len(values) - int(finite.size),
+                **_finite_summary(finite),
+                "endpoint_total_count": endpoint_count,
+                "endpoint_finite_count": finite_endpoint_count,
+                "endpoint_missing_count": endpoint_count - finite_endpoint_count,
+                **{f"endpoint_{key}": value for key, value in _finite_summary(finite_endpoints).items()},
+            }
+        )
+    return output
+
+
+def reconstruction_endpoint_rows(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Return one terminal factual row per rollout with fixed endpoint metrics."""
+
+    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
+    endpoints: dict[int, tuple[int, int, dict[str, object]]] = {}
+    for position, row in enumerate(source_rows):
+        if row.get("rollout_row_id") is None or row.get("step_index") is None:
+            raise ValueError("Endpoint source rows require rollout_row_id and step_index.")
+        rollout_row_id = int(row["rollout_row_id"])
+        candidate = (int(row["step_index"]), position, row)
+        current = endpoints.get(rollout_row_id)
+        if current is None or candidate[:2] > current[:2]:
+            endpoints[rollout_row_id] = candidate
+    fields = tuple(metric for _family, metric, _label in _RECONSTRUCTION_METRIC_SPECS)
+    context = ("rollout_row_id", "scene", "policy", "horizon", "step_index")
+    return [
+        {
+            **{field: row.get(field) for field in context},
+            **{field: _finite_or_none(row.get(field)) for field in fields},
+        }
+        for _depth, _position, row in sorted(endpoints.values(), key=lambda item: int(item[2]["rollout_row_id"]))
+    ]
+
+
+def reconstruction_endpoint_summary_rows(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    *,
+    group_fields: Iterable[str] = ("policy", "horizon"),
+) -> list[dict[str, object]]:
+    """Summarize terminal reconstruction evidence over exact display strata."""
+
+    groups = tuple(group_fields)
+    unsupported = tuple(field for field in groups if field not in {"policy", "horizon", "scene"})
+    if unsupported:
+        raise ValueError(f"Unsupported endpoint group field(s): {unsupported!r}.")
+    endpoints = reconstruction_endpoint_rows(source)
+    output: list[dict[str, object]] = []
+    for family, metric, label in _RECONSTRUCTION_METRIC_SPECS:
+        grouped: dict[tuple[object, ...], list[object]] = {}
+        for row in endpoints:
+            grouped.setdefault(tuple(row.get(field) for field in groups), []).append(row.get(metric))
+        for key, values in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+            normalized = [_finite_or_none(value) for value in values]
+            finite = np.asarray([value for value in normalized if value is not None], dtype=np.float64)
+            output.append(
+                {
+                    **{field: key[index] for index, field in enumerate(groups)},
+                    "family": family,
+                    "metric": metric,
+                    "label": label,
+                    "units": _TEMPORAL_METRICS[metric][1],
+                    "total_count": len(values),
+                    "finite_count": int(finite.size),
+                    "missing_count": len(values) - int(finite.size),
+                    **_finite_summary(finite),
+                }
+            )
+    return output
+
+
+def discounted_rollout_return_rows(
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    *,
+    return_semantics: object,
+    discount_gamma: object,
+) -> dict[str, object]:
+    """Derive discounted selected-chain return under the persisted contract."""
+
+    if return_semantics != "cumulative_target_root_gain":
+        return {"available": False, "reason": f"unsupported return_semantics={return_semantics!r}", "rows": []}
+    gamma = _finite_or_none(discount_gamma)
+    if gamma is None or gamma < 0.0 or gamma > 1.0:
+        return {"available": False, "reason": f"invalid discount_gamma={discount_gamma!r}", "rows": []}
+    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
+    grouped: dict[int, list[dict[str, object]]] = {}
+    for row in source_rows:
+        if row.get("rollout_row_id") is not None:
+            grouped.setdefault(int(row["rollout_row_id"]), []).append(row)
+    output: list[dict[str, object]] = []
+    for rollout_row_id, rows in sorted(grouped.items()):
+        ordered = sorted(rows, key=lambda row: int(row["step_index"]))
+        rewards = [_finite_or_none(row.get("selected_target_root_gain")) for row in ordered]
+        if any(reward is None for reward in rewards):
+            discounted = None
+        else:
+            discounted = float(sum((gamma**index) * float(reward) for index, reward in enumerate(rewards)))
+        first = ordered[0]
+        output.append(
+            {
+                "rollout_row_id": rollout_row_id,
+                "scene": first.get("scene"),
+                "policy": first.get("policy"),
+                "horizon": first.get("horizon"),
+                "discount_gamma": gamma,
+                "discounted_return": discounted,
+            }
+        )
+    return {"available": True, "reason": "derived from factual selected_target_root_gain steps", "rows": output}
+
+
+def exact_policy_role_rows(cohort_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Attach semantic roles only to exact persisted policy/schedule identifiers."""
+
+    output: list[dict[str, object]] = []
+    for source_row in cohort_rows:
+        row = dict(source_row)
+        identifier = (str(row.get("policy", "")), str(row.get("branch_schedule", "")))
+        role = _EXACT_POLICY_ROLE_IDENTIFIERS.get(identifier)
+        if role is not None:
+            output.append({**row, "semantic_role": role, "role_identifier": f"{identifier[0]} / {identifier[1]}"})
+    return output
+
+
+def oracle_headroom_evidence(
+    projection: Mapping[str, object],
+    *,
+    epsilon: float = 1e-8,
+) -> dict[str, object]:
+    """Compute exact-cohort oracle headroom and recovered QH headroom.
+
+    Endpoint gain is the root-normalized target gain. Target RRI is retained as
+    a diagnostic delta but is never substituted for the primary endpoint.
+    """
+
+    if epsilon <= 0.0:
+        raise ValueError("epsilon must be positive.")
+    cohort_rows = [dict(row) for row in projection.get("cohort_rows", [])]
+    eligible_keys = {str(row["cohort_key"]) for row in projection.get("eligible_cohort_rows", [])}
+    all_role_rows = exact_policy_role_rows(cohort_rows)
+    role_rows = [row for row in all_role_rows if str(row.get("cohort_key")) in eligible_keys]
+    grouped: dict[str, dict[str, list[dict[str, object]]]] = {}
+    for row in role_rows:
+        grouped.setdefault(str(row["cohort_key"]), {}).setdefault(str(row["semantic_role"]), []).append(row)
+
+    oracle_rows: list[dict[str, object]] = []
+    qh_rows: list[dict[str, object]] = []
+    for cohort_key, roles in sorted(grouped.items()):
+        one = _unique_role_row(roles, "oracle_one_step")
+        look = _unique_role_row(roles, "oracle_lookahead")
+        if one is not None and look is not None:
+            one_gain = _finite_or_none(one.get("final_cumulative_target_root_gain"))
+            look_gain = _finite_or_none(look.get("final_cumulative_target_root_gain"))
+            if one_gain is not None and look_gain is not None:
+                one_rri = _finite_or_none(one.get("final_cumulative_target_rri"))
+                look_rri = _finite_or_none(look.get("final_cumulative_target_rri"))
+                oracle_rows.append(
+                    {
+                        "cohort_id": one.get("cohort_id"),
+                        "cohort_key": cohort_key,
+                        "horizon": one.get("horizon"),
+                        "oracle_one_step_endpoint_gain": one_gain,
+                        "oracle_lookahead_endpoint_gain": look_gain,
+                        "delta_look": look_gain - one_gain,
+                        "oracle_one_step_target_rri": one_rri,
+                        "oracle_lookahead_target_rri": look_rri,
+                        "delta_look_target_rri": None if one_rri is None or look_rri is None else look_rri - one_rri,
+                    }
+                )
+        learned = _unique_role_row(roles, "learned_one_step")
+        qh = _unique_role_row(roles, "q_h")
+        if look is not None and learned is not None and qh is not None:
+            look_gain = _finite_or_none(look.get("final_cumulative_target_root_gain"))
+            learned_gain = _finite_or_none(learned.get("final_cumulative_target_root_gain"))
+            qh_gain = _finite_or_none(qh.get("final_cumulative_target_root_gain"))
+            if look_gain is not None and learned_gain is not None and qh_gain is not None:
+                qh_rows.append(
+                    {
+                        "cohort_id": learned.get("cohort_id"),
+                        "cohort_key": cohort_key,
+                        "horizon": learned.get("horizon"),
+                        "learned_one_step_endpoint_gain": learned_gain,
+                        "q_h_endpoint_gain": qh_gain,
+                        "oracle_lookahead_endpoint_gain": look_gain,
+                        "eta_q": (qh_gain - learned_gain) / (look_gain - learned_gain + float(epsilon)),
+                    }
+                )
+
+    identifiers_by_role = {
+        role: tuple(sorted({str(row["role_identifier"]) for row in all_role_rows if row["semantic_role"] == role}))
+        for role in ("oracle_one_step", "oracle_lookahead", "learned_one_step", "q_h")
+    }
+    blockers = [
+        {
+            "prerequisite": role,
+            "status": "PASS" if identifiers else "BLOCKED",
+            "detail": ", ".join(identifiers) if identifiers else "no exact persisted identifier",
+        }
+        for role, identifiers in identifiers_by_role.items()
+    ]
+    blockers.extend(
+        (
+            {
+                "prerequisite": "exact oracle cohorts",
+                "status": "PASS" if oracle_rows else "BLOCKED",
+                "detail": f"{len(oracle_rows)} matched finite cohort(s)"
+                if oracle_rows
+                else "zero exact finite matches",
+            },
+            {
+                "prerequisite": "exact QH recovery cohorts",
+                "status": "PASS" if qh_rows else "BLOCKED",
+                "detail": f"{len(qh_rows)} matched finite cohort(s)" if qh_rows else "zero exact finite matches",
+            },
+        )
+    )
+    return {
+        "role_rows": role_rows,
+        "role_identifiers": identifiers_by_role,
+        "oracle_rows": oracle_rows,
+        "qh_rows": qh_rows,
+        "blocker_rows": blockers,
+        "eligible_cohort_count": len(eligible_keys),
+    }
+
+
+def _unique_role_row(
+    roles: Mapping[str, list[dict[str, object]]],
+    role: str,
+) -> dict[str, object] | None:
+    """Return an exact role only when its cohort assignment is unambiguous."""
+
+    matches = roles.get(role, [])
+    return matches[0] if len(matches) == 1 else None
+
+
+def _finite_summary(values: np.ndarray) -> dict[str, float | None]:
+    """Return stable descriptive statistics for an already-finite vector."""
+
+    if not values.size:
+        return dict.fromkeys(("mean", "median", "q25", "q75", "min", "max"))
+    q25, median, q75 = np.quantile(np.sort(values), (0.25, 0.5, 0.75), method="linear").tolist()
+    return {
+        "mean": float(np.mean(values)),
+        "median": float(median),
+        "q25": float(q25),
+        "q75": float(q75),
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
     }
 
 
@@ -844,13 +1287,423 @@ def candidate_group_summary_rows(
     return output
 
 
+def _candidate_generation_cohort_by_rollout(
+    reader: RolloutZarrStoreReader,
+) -> dict[int, dict[str, object]]:
+    """Decode the exact persisted generation cohort for every rollout row."""
+
+    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    lineage_rollout_ids = np.asarray(reader.array("lineage/rollout_row_id"), dtype=np.int64).reshape(-1)
+    if rollout_ids.size != lineage_rollout_ids.size or set(rollout_ids.tolist()) != set(lineage_rollout_ids.tolist()):
+        raise ValueError("Candidate generation cohorts require one lineage row per rollout row.")
+    lineage_positions = {int(row_id): index for index, row_id in enumerate(lineage_rollout_ids.tolist())}
+    policy_names = _read_string_array(reader, "dictionaries/policy")
+    policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
+    horizons = np.asarray(reader.array("rollouts/horizon"), dtype=np.int64).reshape(-1)
+    branch_factors = np.asarray(reader.array("rollouts/branch_factor"), dtype=np.int64).reshape(-1)
+    beam_widths = np.asarray(reader.array("rollouts/beam_width"), dtype=np.int64).reshape(-1)
+    temperatures = np.asarray(reader.array("rollouts/temperature"), dtype=np.float64).reshape(-1)
+    candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
+    rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
+    branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
+    cohort_by_rollout: dict[int, dict[str, object]] = {}
+    for rollout_position, rollout_id_value in enumerate(rollout_ids.tolist()):
+        rollout_id = int(rollout_id_value)
+        lineage_position = lineage_positions[rollout_id]
+        fields: dict[str, object] = {
+            "policy": _decoded_id(
+                int(policy_ids[rollout_position]),
+                names=dict(enumerate(policy_names)),
+                prefix="policy",
+            ),
+            "horizon": int(horizons[rollout_position]),
+            "acquisition_budget_steps": int(horizons[rollout_position]),
+            "branch_factor": int(branch_factors[rollout_position]),
+            "beam_width": int(beam_widths[rollout_position]),
+            "temperature": _finite_or_none(temperatures[rollout_position]),
+            "candidate_config": candidate_configs[lineage_position],
+            "rollout_config": rollout_configs[lineage_position],
+            "branch_schedule": branch_schedules[lineage_position],
+        }
+        encoded = json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str)
+        fields["generation_cohort_id"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:12]
+        cohort_by_rollout[rollout_id] = fields
+    return cohort_by_rollout
+
+
+def _candidate_generation_cohort(row: Mapping[str, object]) -> tuple[object, ...]:
+    """Return the exact cohort key, retaining a stable unknown cohort for legacy rows."""
+
+    return tuple(row.get(field) for field in CANDIDATE_GENERATION_COHORT_FIELDS)
+
+
+def _candidate_generation_cohort_fields(row: Mapping[str, object]) -> dict[str, object]:
+    """Project exact cohort fields and a stable identifier from one candidate row."""
+
+    fields = {field: row.get(field) for field in CANDIDATE_GENERATION_COHORT_FIELDS}
+    cohort_id = row.get("generation_cohort_id")
+    if cohort_id is None:
+        encoded = json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str)
+        cohort_id = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:12]
+    return {"generation_cohort_id": str(cohort_id), **fields}
+
+
+def candidate_family_composition_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Return lightweight candidate composition and valid availability.
+
+    This projection reads only categorical lineage, policy linkage, actor mask,
+    and selected mask arrays. It never constructs full candidate audit rows.
+    """
+
+    cohort_by_rollout = _candidate_generation_cohort_by_rollout(reader)
+    candidate_rollouts = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    position_ids = np.asarray(reader.array("candidates/position_id"), dtype=np.int64).reshape(-1)
+    mixture_ids = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
+    actor_valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
+    selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
+    arrays = (strategy_ids, position_ids, mixture_ids, actor_valid, selected)
+    if any(values.size != candidate_rollouts.size for values in arrays):
+        raise ValueError("Candidate composition arrays must align one-to-one.")
+    component_names = _component_names(reader.manifest())
+    strategies = [decode_strategy_id(int(value)) for value in strategy_ids.tolist()]
+    positions = [decode_position_id(int(value)) for value in position_ids.tolist()]
+    mixtures = [_decoded_id(int(value), names=component_names, prefix="mixture") for value in mixture_ids.tolist()]
+    dimensions = {
+        "policy": [cohort_by_rollout[int(value)]["policy"] for value in candidate_rollouts.tolist()],
+        "strategy": strategies,
+        "position": positions,
+        "mixture": mixtures,
+        "recipe": [
+            f"mixture={mixture} → position={position} → view={strategy}"
+            for mixture, position, strategy in zip(mixtures, positions, strategies, strict=True)
+        ],
+    }
+    candidate_cohort_ids = [
+        str(cohort_by_rollout[int(rollout_id)]["generation_cohort_id"]) for rollout_id in candidate_rollouts.tolist()
+    ]
+    cohort_counts = Counter(candidate_cohort_ids)
+    output: list[dict[str, object]] = []
+    for dimension, values in dimensions.items():
+        groups: dict[tuple[str, str], list[int]] = {}
+        for index, value in enumerate(values):
+            cohort_id = candidate_cohort_ids[index]
+            groups.setdefault((cohort_id, str(value)), []).append(index)
+        for (cohort_id, value), indices in sorted(groups.items()):
+            row_positions = np.asarray(indices, dtype=np.int64)
+            total = int(row_positions.size)
+            valid_count = int(actor_valid[row_positions].sum())
+            selected_count = int(selected[row_positions].sum())
+            cohort = cohort_by_rollout[int(candidate_rollouts[int(row_positions[0])])]
+            cohort_count = cohort_counts[cohort_id]
+            output.append(
+                {
+                    **cohort,
+                    "dimension": dimension,
+                    "family": value,
+                    "sampled_count": total,
+                    "sampled_fraction": _safe_fraction(total, cohort_count),
+                    "actor_valid_count": valid_count,
+                    "actor_valid_rate": _safe_fraction(valid_count, total),
+                    "selected_count": selected_count,
+                    "selected_share_of_valid_availability": _safe_fraction(selected_count, valid_count),
+                }
+            )
+    return output
+
+
+def candidate_evidence_availability_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+    """Report persisted field availability without loading candidate payloads."""
+
+    requirements = {
+        "proposal calibration": ("candidates/sampler_probability",),
+        "root-relative geometry": ("candidates/pose_world_cam", "rollouts/root_pose_world"),
+        "orientation to target": (
+            "candidate_diagnostics/motion_yaw_delta_deg",
+            "candidate_diagnostics/target_bearing_yaw_deg",
+        ),
+        "motion support": (
+            "candidates/motion_step_length_m",
+            "candidates/path_min_clearance_m",
+            "candidate_diagnostics/motion_backward_step_m",
+            "candidate_diagnostics/path_collision_mask",
+        ),
+        "oracle rank and regret": (
+            "candidates/target_root_gain",
+            "candidates/target_rri",
+            "candidates/selection_logits",
+        ),
+    }
+    output: list[dict[str, object]] = []
+    for evidence, paths in requirements.items():
+        missing = tuple(path for path in paths if path not in reader.root)
+        output.append(
+            {
+                "evidence": evidence,
+                "available": not missing,
+                "required_fields": paths,
+                "missing_fields": missing,
+                "detail": "persisted fields present" if not missing else f"missing: {', '.join(missing)}",
+            }
+        )
+    return output
+
+
+def candidate_proposal_calibration_rows(
+    audit_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Compare empirical family frequency with proposal mass within exact cohorts."""
+
+    rows = [dict(row) for row in audit_rows]
+    output: list[dict[str, object]] = []
+    cohorts: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in rows:
+        cohorts.setdefault(_candidate_generation_cohort(row), []).append(row)
+    for cohort_rows in cohorts.values():
+        cohort_fields = _candidate_generation_cohort_fields(cohort_rows[0])
+        finite_total = sum(
+            float(value)
+            for row in cohort_rows
+            if (value := _finite_or_none(row.get("sampler_probability"))) is not None
+        )
+        for dimension in ("policy", "strategy", "position", "mixture"):
+            groups: dict[str, list[dict[str, object]]] = {}
+            for row in cohort_rows:
+                groups.setdefault(str(row.get(dimension, "unknown")), []).append(row)
+            for family, values in sorted(groups.items()):
+                probabilities = [
+                    value for row in values if (value := _finite_or_none(row.get("sampler_probability"))) is not None
+                ]
+                proposal_mass = (
+                    None if not probabilities or finite_total <= 0.0 else float(sum(probabilities) / finite_total)
+                )
+                empirical = _safe_fraction(len(values), len(cohort_rows))
+                output.append(
+                    {
+                        **cohort_fields,
+                        "dimension": dimension,
+                        "family": family,
+                        "cohort_candidate_count": len(cohort_rows),
+                        "candidate_count": len(values),
+                        "finite_probability_count": len(probabilities),
+                        "empirical_frequency": empirical,
+                        "proposal_mass": proposal_mass,
+                        "calibration_gap": None if proposal_mass is None else empirical - proposal_mass,
+                    }
+                )
+    return output
+
+
+def candidate_geometry_evidence_rows(
+    audit_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    r"""Derive root-relative and target-normalized candidate geometry diagnostics.
+
+    The target-normalized XY coordinates rotate and scale each root-centered
+    candidate displacement so the target center is always at $(1, 0)$. For
+    candidate displacement $c$ and root-to-target XY vector $t$, the emitted
+    forward and lateral coordinates are
+
+    $$
+    (u, v) = \left(
+        \frac{c \cdot t}{\lVert t \rVert^2},
+        \frac{-c_x t_y + c_y t_x}{\lVert t \rVert^2}
+    \right).
+    $$
+
+    This display-only transform removes global XY translation, yaw, and
+    root-target distance. It leaves the persisted rollout coordinates unchanged.
+
+    Args:
+        audit_rows: Candidate audit rows with root-relative candidate positions
+            and the root-to-target vector in right-handed Z-up metres.
+
+    Returns:
+        Geometry rows with cylindrical root-relative quantities and unitless
+        target-normalized forward/lateral coordinates. Normalized coordinates
+        are `None` when the target vector is missing or has zero XY length.
+    """
+
+    output: list[dict[str, object]] = []
+    for source_row in audit_rows:
+        row = dict(source_row)
+        x = _finite_or_none(row.get("root_relative_x_m"))
+        y = _finite_or_none(row.get("root_relative_y_m"))
+        z = _finite_or_none(row.get("root_relative_z_m"))
+        radius = None if x is None or y is None else float(np.hypot(x, y))
+        azimuth = None if x is None or y is None else float(np.degrees(np.arctan2(y, x)))
+        elevation = None if radius is None or z is None else float(np.degrees(np.arctan2(z, radius)))
+        yaw = _finite_or_none(row.get("motion_yaw_delta_deg"))
+        bearing = _finite_or_none(row.get("target_bearing_yaw_deg"))
+        orientation = None if yaw is None or bearing is None else float((yaw - bearing + 180.0) % 360.0 - 180.0)
+        target_x = _finite_or_none(row.get("root_to_target_x_m"))
+        target_y = _finite_or_none(row.get("root_to_target_y_m"))
+        target_xy_squared = None if target_x is None or target_y is None else target_x**2 + target_y**2
+        target_xy_distance = None if target_xy_squared is None else float(np.sqrt(target_xy_squared))
+        target_normalized_forward = (
+            None
+            if x is None or y is None or target_xy_squared is None or target_xy_squared <= 0.0
+            else float((x * target_x + y * target_y) / target_xy_squared)
+        )
+        target_normalized_lateral = (
+            None
+            if x is None or y is None or target_xy_squared is None or target_xy_squared <= 0.0
+            else float((-x * target_y + y * target_x) / target_xy_squared)
+        )
+        output.append(
+            {
+                **row,
+                "root_radius_m": radius,
+                "root_azimuth_deg": azimuth,
+                "root_elevation_deg": elevation,
+                "orientation_to_target_bearing_deg": orientation,
+                "root_target_xy_distance_m": target_xy_distance,
+                "target_normalized_forward": target_normalized_forward,
+                "target_normalized_lateral": target_normalized_lateral,
+                "target_normalized_coordinate_frame": "root=(0,0), target=(1,0), right-handed lateral axis",
+            }
+        )
+    return output
+
+
+def candidate_selection_family_rows(
+    audit_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Normalize selection counts by actor-valid availability within exact cohorts."""
+
+    rows = [dict(row) for row in audit_rows]
+    output: list[dict[str, object]] = []
+    cohorts: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in rows:
+        cohorts.setdefault(_candidate_generation_cohort(row), []).append(row)
+    for cohort_rows in cohorts.values():
+        cohort_fields = _candidate_generation_cohort_fields(cohort_rows[0])
+        cohort_valid_count = sum(bool(row.get("actor_action")) for row in cohort_rows)
+        cohort_selected_count = sum(bool(row.get("selected")) for row in cohort_rows)
+        for dimension in ("policy", "strategy", "position", "mixture"):
+            groups: dict[str, list[dict[str, object]]] = {}
+            for row in cohort_rows:
+                groups.setdefault(str(row.get(dimension, "unknown")), []).append(row)
+            for family, values in sorted(groups.items()):
+                valid = [row for row in values if bool(row.get("actor_action"))]
+                selected = [row for row in values if bool(row.get("selected"))]
+                valid_gains = [
+                    value for row in valid if (value := _finite_or_none(row.get("target_root_gain"))) is not None
+                ]
+                selected_gains = [
+                    value for row in selected if (value := _finite_or_none(row.get("target_root_gain"))) is not None
+                ]
+                valid_availability_share = _safe_fraction(len(valid), cohort_valid_count)
+                selected_share = _safe_fraction(len(selected), cohort_selected_count)
+                selection_enrichment = (
+                    None
+                    if valid_availability_share in (None, 0.0) or selected_share is None
+                    else selected_share / valid_availability_share
+                )
+                output.append(
+                    {
+                        **cohort_fields,
+                        "dimension": dimension,
+                        "family": family,
+                        "cohort_candidate_count": len(cohort_rows),
+                        "candidate_count": len(values),
+                        "actor_valid_count": len(valid),
+                        "selected_count": len(selected),
+                        "selected_share_of_valid_availability": _safe_fraction(len(selected), len(valid)),
+                        "valid_availability_share": valid_availability_share,
+                        "selected_share": selected_share,
+                        "selection_enrichment_vs_valid_availability": selection_enrichment,
+                        "mean_valid_target_root_gain": None if not valid_gains else float(np.mean(valid_gains)),
+                        "mean_selected_target_root_gain": None
+                        if not selected_gains
+                        else float(np.mean(selected_gains)),
+                    }
+                )
+    return output
+
+
+def candidate_selection_rank_family_rows(
+    audit_rows: Iterable[Mapping[str, object]],
+    rank_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Join selected rank/regret evidence to its exact generation family."""
+
+    selected = {
+        int(row["candidate_row_id"]): dict(row)
+        for row in audit_rows
+        if bool(row.get("selected")) and row.get("candidate_row_id") is not None
+    }
+    output: list[dict[str, object]] = []
+    for source_row in rank_rows:
+        row = dict(source_row)
+        candidate = selected.get(int(row.get("selected_candidate_row_id", -1)))
+        if candidate is None:
+            continue
+        cohort_fields = (
+            _candidate_generation_cohort_fields(candidate)
+            if "generation_cohort_id" in candidate
+            or any(field in candidate for field in CANDIDATE_GENERATION_COHORT_FIELDS)
+            else {}
+        )
+        output.append(
+            {
+                **row,
+                **cohort_fields,
+                "strategy": candidate.get("strategy"),
+                "position": candidate.get("position"),
+                "mixture": candidate.get("mixture"),
+            }
+        )
+    return output
+
+
+def candidate_plot_availability_rows(
+    audit_rows: Iterable[Mapping[str, object]],
+    rank_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Return explicit blockers for heavy candidate plots."""
+
+    rows = [dict(row) for row in audit_rows]
+    ranks = [dict(row) for row in rank_rows]
+    geometry_rows = candidate_geometry_evidence_rows(rows)
+    requirements = {
+        "proposal calibration": (rows, ("sampler_probability",)),
+        "root-relative XY": (rows, ("root_relative_x_m", "root_relative_y_m")),
+        "radius / height / angles": (
+            geometry_rows,
+            ("root_radius_m", "root_relative_z_m", "root_azimuth_deg", "root_elevation_deg"),
+        ),
+        "orientation to target bearing": (
+            geometry_rows,
+            ("orientation_to_target_bearing_deg",),
+        ),
+        "motion support": (rows, ("motion_step_length_m", "motion_backward_step_m", "path_min_clearance_m")),
+        "selection rank / regret": (ranks, ("selected_rank", "target_rri_rank", "regret_to_best")),
+    }
+    output: list[dict[str, object]] = []
+    for evidence, (population, fields) in requirements.items():
+        missing = tuple(
+            field for field in fields if not any(_finite_or_none(row.get(field)) is not None for row in population)
+        )
+        output.append(
+            {
+                "evidence": evidence,
+                "available": not missing,
+                "missing_or_nonfinite_fields": missing,
+                "detail": "finite evidence present" if not missing else f"unavailable: {', '.join(missing)}",
+            }
+        )
+    return output
+
+
 def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, object]:
     """Build exact matched cohorts for scientifically valid policy comparison.
 
-    Cohorts match on source sample, target identity/protocol, horizon and search
-    budget, candidate/oracle configuration, and branch schedule. Policy and
-    rollout recipe identify the comparison dimension and are never averaged as
-    if they were independent unmatched populations.
+    Cohorts match on source sample, target identity/protocol, evaluation
+    horizon, acquisition budget, and candidate/oracle configuration. Policy,
+    human recipe/schedule, branch factor, and beam width identify the treatment
+    dimension and are never averaged as if they were independent unmatched
+    populations. The rollout config hash remains provenance, not a role label.
 
     Args:
         reader: Read-only rollout-store adapter.
@@ -875,8 +1728,9 @@ def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, objec
             by_label.setdefault(str(row["comparison_label"]), []).append(row)
         labels = tuple(sorted(by_label))
         duplicate_labels = tuple(sorted(label for label, values in by_label.items() if len(values) != 1))
-        eligible = len(labels) >= 2 and not duplicate_labels
         first = cohort_rows[0]
+        missing_context_fields = tuple(field for field in key_fields if _missing_cohort_value(first.get(field)))
+        eligible = len(labels) >= 2 and not duplicate_labels and not missing_context_fields
         summary = {
             "cohort_id": str(first["cohort_id"]),
             "cohort_key": cohort_key,
@@ -884,8 +1738,11 @@ def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, objec
             "comparison_labels": labels,
             "comparison_count": len(labels),
             "rollout_count": len(cohort_rows),
+            "missing_context_fields": missing_context_fields,
             "eligible": eligible,
-            "reason": "matched" if eligible else _cohort_ineligibility_reason(labels, duplicate_labels),
+            "reason": "matched"
+            if eligible
+            else _cohort_ineligibility_reason(labels, duplicate_labels, missing_context_fields),
         }
         cohort_summaries.append(summary)
         if eligible:
@@ -2460,6 +3317,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
     chain_ids = np.asarray(reader.array("rollouts/chain_id"), dtype=np.int64).reshape(-1)
     final_rri = np.asarray(reader.array("rollouts/final_cumulative_target_rri"), dtype=np.float64).reshape(-1)
     final_gain = np.asarray(reader.array("rollouts/final_cumulative_target_root_gain"), dtype=np.float64).reshape(-1)
+    evaluation_horizon = int(reader.root.attrs.get("q_h_horizon", -1))
 
     rows: list[dict[str, object]] = []
     for index, rollout_row_id in enumerate(rollout_ids.tolist()):
@@ -2473,6 +3331,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
             "target_row_id": int(target_ids[index]),
             "target_id": target_by_id.get(int(target_ids[index]), f"target_row:{target_ids[index]}"),
             "target_protocol": protocols[index],
+            "evaluation_horizon": evaluation_horizon,
             "horizon": int(horizons[index]),
             "acquisition_budget_steps": int(horizons[index]),
             "branch_factor": int(branch_factors[index]),
@@ -2481,7 +3340,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
             "oracle_config": oracle_configs[index],
             "branch_schedule": schedules[index],
             "policy": policies[index],
-            "rollout_recipe": rollout_configs[index],
+            "rollout_config_hash": rollout_configs[index],
             "final_cumulative_target_rri": _finite_or_none(final_rri[index]),
             "final_cumulative_target_root_gain": _finite_or_none(final_gain[index]),
         }
@@ -2490,13 +3349,9 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
         row["cohort_id"] = _cohort_id_from_key(cohort_key)
         rows.append(row)
 
-    recipes_by_policy: dict[str, set[str]] = {}
     for row in rows:
-        recipes_by_policy.setdefault(str(row["policy"]), set()).add(str(row["rollout_recipe"]))
-    for row in rows:
-        policy = str(row["policy"])
-        recipe = str(row["rollout_recipe"])
-        row["comparison_label"] = policy if len(recipes_by_policy[policy]) == 1 else f"{policy}@{recipe[:12]}"
+        treatment = ",".join(f"{field}={row[field]}" for field in _POLICY_TREATMENT_FIELDS)
+        row["comparison_label"] = f"{row['policy']}@{treatment}"
     return rows
 
 
@@ -2506,12 +3361,22 @@ def _decoded_array(reader: RolloutZarrStoreReader, path: str, dictionary: str) -
     return [values[int(value)] if 0 <= int(value) < len(values) else "" for value in ids.tolist()]
 
 
-def _cohort_ineligibility_reason(labels: tuple[str, ...], duplicates: tuple[str, ...]) -> str:
+def _cohort_ineligibility_reason(
+    labels: tuple[str, ...],
+    duplicates: tuple[str, ...],
+    missing_context_fields: tuple[str, ...],
+) -> str:
+    if missing_context_fields:
+        return f"exact comparison context is missing: {', '.join(missing_context_fields)}"
     if len(labels) < 2:
-        return "only one policy/recipe is represented for this exact cohort"
+        return "only one policy treatment is represented for this exact cohort"
     if duplicates:
-        return f"multiple rollout chains make policy/recipe rows ambiguous: {', '.join(duplicates)}"
+        return f"multiple rollout chains make policy-treatment rows ambiguous: {', '.join(duplicates)}"
     return "not comparable"
+
+
+def _missing_cohort_value(value: object) -> bool:
+    return value is None or value == "" or value == -1
 
 
 def _nearest_policy_mismatch_rows(
@@ -2735,26 +3600,138 @@ def _safe_fraction(numerator: int, denominator: int) -> float | None:
     return float(numerator) / float(denominator)
 
 
+def _nonnegative_int(*values: object) -> int | None:
+    """Return the first non-negative integer-like value, if present."""
+
+    for value in values:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed >= 0:
+            return parsed
+    return None
+
+
+def _nonempty_text(value: object) -> str | None:
+    """Return non-empty persisted text without fabricating a fallback."""
+
+    if value is None:
+        return None
+    rendered = str(value).strip()
+    return rendered or None
+
+
+def _nonnegative_float(value: object) -> float | None:
+    """Return one finite non-negative float, if present."""
+
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if np.isfinite(parsed) and parsed >= 0.0 else None
+
+
+def _ratio(numerator: int | None, denominator: int | None) -> float | None:
+    """Return a finite metadata ratio without fabricating zero-denominator values."""
+
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return float(numerator) / float(denominator)
+
+
+def _snippets_per_scene(coverage: dict[str, Any]) -> tuple[int, float, int] | None:
+    """Summarize unique manifest snippets per scene without opening Zarr tables."""
+
+    sources = coverage.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return None
+    snippets_by_scene: dict[str, set[str]] = {}
+    for source in sources:
+        if not isinstance(source, dict):
+            return None
+        scene = _nonempty_text(source.get("scene_id"))
+        snippet = _nonempty_text(source.get("snippet_id"))
+        if scene is None or snippet is None:
+            return None
+        snippets_by_scene.setdefault(scene, set()).add(snippet)
+    return _min_median_max(len(snippets) for snippets in snippets_by_scene.values())
+
+
+def _min_median_max(values: Iterable[int]) -> tuple[int, float, int] | None:
+    """Return an integer min/median/max summary without inventing an empty population."""
+
+    sizes = sorted(int(value) for value in values)
+    if not sizes:
+        return None
+    return sizes[0], float(np.median(sizes)), sizes[-1]
+
+
+def _split_counts(value: object) -> dict[str, int] | None:
+    """Normalize persisted split counts or preserve unavailable metadata."""
+
+    if not isinstance(value, dict):
+        return None
+    output: dict[str, int] = {}
+    for split, count in value.items():
+        parsed = _nonnegative_int(count)
+        if parsed is None:
+            return None
+        output[str(split)] = parsed
+    return output
+
+
+def _rollout_split_counts(reader: RolloutZarrStoreReader) -> dict[str, int] | None:
+    """Count persisted rollout rows by their decoded split identifier."""
+
+    try:
+        split_ids = np.asarray(reader.array("rollouts/split_id"), dtype=np.int64).reshape(-1)
+        encoded_names = np.asarray(reader.array("dictionaries/split"), dtype=np.uint8)
+        names = json.loads(encoded_names.tobytes().decode("utf-8"))
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(names, list) or any(not isinstance(name, str) for name in names):
+        return None
+    if np.any(split_ids < 0) or np.any(split_ids >= len(names)):
+        return None
+    counts: Counter[str] = Counter(str(names[int(split_id)]) for split_id in split_ids)
+    return dict(sorted(counts.items()))
+
+
 __all__ = [
     "RolloutSuspiciousQueryConfig",
     "candidate_audit_rows",
+    "candidate_evidence_availability_rows",
+    "candidate_family_composition_rows",
     "candidate_flow_rows",
+    "candidate_geometry_evidence_rows",
     "candidate_group_summary_rows",
+    "candidate_plot_availability_rows",
+    "candidate_proposal_calibration_rows",
     "candidate_result_diagnostic_counts",
+    "candidate_selection_family_rows",
+    "candidate_selection_rank_family_rows",
     "comparable_policy_cohorts",
     "decode_invalid_reason",
     "decode_position_id",
     "decode_strategy_id",
     "decode_target_invalid_reason",
+    "discounted_rollout_return_rows",
     "discover_rollout_store_paths",
+    "exact_policy_role_rows",
     "mask_combination_rows",
     "paired_policy_comparison_rows",
+    "oracle_headroom_evidence",
+    "reconstruction_endpoint_rows",
+    "reconstruction_endpoint_summary_rows",
+    "reconstruction_metric_summary_rows",
     "root_relative_candidate_rows",
     "rollout_store_inventory_rows",
     "rollout_statistics",
     "runtime_storage_statistics",
     "rollout_step_objective_rows",
     "rollout_endpoint_metric_summary",
+    "rollout_header_summary",
     "selected_candidate_rank_rows",
     "selected_depth_preview",
     "selected_depth_summary_rows",
