@@ -76,7 +76,7 @@ def test_legacy_state_may_remain_explicit_migration_evidence(tmp_path: Path) -> 
     assert not validator.check_legacy_state_owner_claims([".agents/references/source_order.md"], repo_root=tmp_path)
 
 
-def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> None:
+def test_multiline_toml_table_routes_are_rejected_as_one_record(tmp_path: Path) -> None:
     path = tmp_path / ".agents" / "todos.toml"
     path.parent.mkdir(parents=True)
     path.write_text(
@@ -88,7 +88,7 @@ def test_multiline_and_semantic_legacy_routes_are_rejected(tmp_path: Path) -> No
 
     errors = validator.check_legacy_state_owner_claims([".agents/todos.toml"], repo_root=tmp_path)
 
-    assert len(errors) == 3
+    assert len(errors) == 1
     assert all("migration-only qualifier" in error for error in errors)
 
 
@@ -249,11 +249,13 @@ def test_logical_record_allows_an_explicit_different_owner(tmp_path: Path, suffi
 
 
 @pytest.mark.parametrize(("pronoun", "verb"), [("It", "is"), ("This", "is"), ("They", "are")])
-@pytest.mark.parametrize("suffix", [".toml", ".typ"])
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
 def test_logical_record_rejects_capitalized_legacy_anaphors(
     tmp_path: Path, pronoun: str, verb: str, suffix: str
 ) -> None:
-    if suffix == ".toml":
+    if suffix == ".md":
+        body = f"DECISIONS is legacy migration evidence. {pronoun} {verb} authoritative for current decisions.\n"
+    elif suffix == ".toml":
         body = (
             'notes = ["DECISIONS is legacy migration evidence", '
             f'"{pronoun} {verb} authoritative for current decisions."]\n'
@@ -269,6 +271,66 @@ def test_logical_record_rejects_capitalized_legacy_anaphors(
     path.write_text(body, encoding="utf-8")
 
     assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize("claim", ["It is authoritative.", "They are canonical."])
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_logical_record_rejects_capitalized_owner_anaphor(tmp_path: Path, claim: str, suffix: str) -> None:
+    if suffix == ".md":
+        body = f"DECISIONS is legacy migration evidence. {claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["DECISIONS is legacy migration evidence", "{claim}"]\n'
+    else:
+        body = f"#let notes = [DECISIONS is legacy migration evidence. {claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+def test_toml_table_fields_are_classified_as_one_record(tmp_path: Path) -> None:
+    path = tmp_path / "owner.toml"
+    path.write_text(
+        '[[route]]\nsource = "DECISIONS is legacy migration evidence."\naction = "write current truth here."\n',
+        encoding="utf-8",
+    )
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+def test_toml_table_fields_allow_an_explicit_active_owner(tmp_path: Path) -> None:
+    path = tmp_path / "owner.toml"
+    path.write_text(
+        '[[route]]\nsource = "DECISIONS is legacy migration evidence and not current truth."\n'
+        'owner = "The active Typst thesis is authoritative."\n',
+        encoding="utf-8",
+    )
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+def test_typst_apostrophe_does_not_split_balanced_owner_record(tmp_path: Path) -> None:
+    path = tmp_path / "owner.typ"
+    path.write_text(
+        "#let note = [\n"
+        "  DECISIONS is legacy migration evidence.\n\n"
+        "  It's retained for traceability.\n\n"
+        "  It is authoritative.\n"
+        "]\n",
+        encoding="utf-8",
+    )
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+def test_write_verb_does_not_cross_sentence_boundary(tmp_path: Path) -> None:
+    path = tmp_path / "owner.md"
+    path.write_text(
+        "Write the report. DECISIONS is legacy migration evidence, not current truth.\n",
+        encoding="utf-8",
+    )
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
 
 @pytest.mark.parametrize(

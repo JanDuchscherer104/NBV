@@ -15,8 +15,9 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
@@ -491,7 +492,7 @@ def _explicit_different_owner(prefix: str) -> bool:
     if subject_match is None:
         return False
     subject = subject_match.group("subject").strip()
-    words = subject.lower().split()
+    words = subject.casefold().split()
     return bool(
         words
         and words[-1] not in ANAPHORIC_OWNER_SUBJECTS
@@ -504,9 +505,17 @@ def _has_legacy_owner_assertion(text: str) -> bool:
 
     assertion_text = LEGACY_STATE_NEGATED_OWNER.sub("", text)
     for write_verb in LEGACY_STATE_WRITE_VERB.finditer(assertion_text):
-        if _has_legacy_state_mention(
-            assertion_text[write_verb.start() : write_verb.end() + 120]
-        ):
+        clause_start = max(
+            assertion_text.rfind(delimiter, 0, write_verb.start())
+            for delimiter in (".", ";", "!", "?")
+        )
+        following_delimiters = [
+            offset
+            for delimiter in (".", ";", "!", "?")
+            if (offset := assertion_text.find(delimiter, write_verb.end())) >= 0
+        ]
+        clause_end = min(following_delimiters, default=len(assertion_text))
+        if _has_legacy_state_mention(assertion_text[clause_start + 1 : clause_end]):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
         clause_start = max(
@@ -537,6 +546,8 @@ def _paragraph_record(lines: list[str], line_index: int) -> tuple[int, str]:
 
 
 def _toml_string_records(value: Any) -> Iterator[str]:
+    """Yield one joined string record per TOML table or array entry."""
+
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):
@@ -547,8 +558,21 @@ def _toml_string_records(value: Any) -> Iterator[str]:
             if not isinstance(entry, str):
                 yield from _toml_string_records(entry)
     elif isinstance(value, dict):
+        table_strings: list[str] = []
         for entry in value.values():
-            yield from _toml_string_records(entry)
+            if isinstance(entry, str):
+                table_strings.append(entry)
+            elif isinstance(entry, list):
+                table_strings.extend(item for item in entry if isinstance(item, str))
+        if table_strings:
+            yield " . ".join(table_strings)
+        for entry in value.values():
+            if isinstance(entry, dict):
+                yield from _toml_string_records(entry)
+            elif isinstance(entry, list):
+                for item in entry:
+                    if not isinstance(item, str):
+                        yield from _toml_string_records(item)
 
 
 def _toml_records(text: str) -> list[tuple[int, str]]:
@@ -624,7 +648,7 @@ def _typst_bracket_spans(text: str) -> list[tuple[int, int]]:
             block_comment_depth = 1
             index += 2
             continue
-        if char in {'"', "'"}:
+        if char == '"':
             quote = char
         elif char in opening:
             stack.append((char, index))
