@@ -53,7 +53,7 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
   consumes Oracle target-task fields.
 - Run Rerun/Streamlit tests when changing rollout reader arrays or launcher
   surfaces.
-- Run `uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run`
+- Run `uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml --dry-run`
   for CLI/config wiring changes.
 
 ## Completion Criteria

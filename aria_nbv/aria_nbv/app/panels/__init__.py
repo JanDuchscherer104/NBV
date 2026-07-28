@@ -13,12 +13,12 @@ _EXPORT_MODULES = {
     "render_candidates_page": ".candidates",
     "render_counterfactual_rollouts_page": ".counterfactual_rollouts",
     "render_data_page": ".data",
+    "render_data_generation_page": ".data_generation",
     "render_depth_page": ".depth",
     "render_offline_dataset_page": ".offline_dataset",
     "render_rri_binning_page": ".rri_binning",
     "render_rri_page": ".rri",
     "render_stored_rollouts_panel": ".stored_rollouts",
-    "render_training_dataset_page": ".training_dataset",
     "render_vin_diagnostics_page": ".vin_diagnostics",
     "render_wandb_analysis_page": ".wandb",
 }

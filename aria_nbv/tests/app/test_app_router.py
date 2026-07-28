@@ -59,9 +59,9 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
         "Foundations / Single-step",
     ]
     assert [[page.title for page in pages] for pages in frame.pages.values()] == [
-        ["Training Dataset"],
-        ["Root Observation Store", "Rollout Supervision"],
-        ["Live Rollout Lab", "Candidate Proposals"],
+        ["Rollout Supervision"],
+        ["Root Observation Store"],
+        ["Data Generation", "Live Rollout Lab", "Candidate Proposals"],
         ["VIN Diagnostics", "RRI Binning", "W&B Runs", "Optuna Studies"],
         ["Observed Snippet", "Candidate Renders", "Single-step Oracle RRI"],
     ]
@@ -81,11 +81,12 @@ def test_root_store_page_has_no_nested_rollout_route() -> None:
 def test_internal_page_headings_match_navigation_labels() -> None:
     """Keep page content headings aligned with the grouped navigation."""
 
-    from aria_nbv.app.panels import candidates, counterfactual_rollouts, data, optuna_sweep, rri, wandb
+    from aria_nbv.app.panels import candidates, counterfactual_rollouts, data, data_generation, optuna_sweep, rri, wandb
     from aria_nbv.app.panels._stored_rollouts_page import render_stored_rollouts_page
 
     heading_contracts = (
         (render_stored_rollouts_page, 'st.header("Rollout Supervision")'),
+        (data_generation.render_data_generation_page, 'st.header("Data Generation")'),
         (counterfactual_rollouts._render_live_rollouts_tab, 'st.header("Live Rollout Lab")'),
         (candidates._render_live_candidates_page, 'st.header("Candidate Proposals")'),
         (data.render_data_page, 'st.header("Observed Snippet")'),

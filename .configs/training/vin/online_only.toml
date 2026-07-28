@@ -1,0 +1,152 @@
+run_mode = "train"
+
+[datamodule_config]
+# Online oracle labels (no offline cache). Iterable dataset => no batch_size here.
+num_workers = 0
+use_train_as_val = false
+
+  [datamodule_config.source]
+  kind = "online"
+
+    [datamodule_config.source.dataset]
+    # Customize these to restrict to a subset of scenes/snippets.
+    # scene_ids = ["81022"]
+    # snippet_key_filter = ["000024"]
+    wds_shuffle = true
+    wds_repeat = true
+    load_meshes = true
+    require_mesh = true
+    batch_size = 1
+
+    [datamodule_config.source.labeler]
+    device = "cuda"
+
+[trainer_config]
+# Default training config; adjust as needed
+enable_validation       = true
+check_val_every_n_epoch = 1
+num_sanity_val_steps    = 2
+fast_dev_run            = false
+max_epochs              = 50
+accelerator             = "auto"
+devices                 = "auto"
+log_every_n_steps       = 1
+gradient_clip_val       = 3.0
+use_wandb               = true
+
+    [trainer_config.callbacks]
+    use_early_stopping      = true
+    use_model_checkpoint    = true
+    checkpoint_monitor      = "val/loss"
+    checkpoint_mode         = "min"
+    checkpoint_save_top_k   = 1
+    early_stopping_monitor  = "val/loss"
+    early_stopping_mode     = "min"
+    early_stopping_patience = 5
+    use_lr_monitor          = true
+    lr_logging_interval     = "step"
+    use_rich_progress_bar   = true
+    use_tqdm_progress_bar   = false
+    tqdm_refresh_rate       = 1
+    use_rich_model_summary  = true
+    rich_summary_max_depth  = 4
+[module_config]
+num_classes                 = 15
+save_binner                 = true
+binner_path                 = ".logs/vin/rri_binner.json"
+aux_regression_loss         = "huber"
+aux_regression_weight       = 10.0
+aux_regression_weight_gamma = 0.90
+aux_regression_weight_min   = 0.1
+log_grad_norms              = true
+coral_bias_init             = "prior_logits"
+coral_loss_variant          = "coral"
+coral_balance_source        = "binner"
+
+    [module_config.optimizer]
+    learning_rate = 3e-4
+    weight_decay  = 1e-3
+
+    [module_config.lr_scheduler]
+    max_lr          = 3e-4
+    pct_start       = 0.15  # max lr reached at 15% of training
+    anneal_strategy = "cos"
+    div_factor      = 15.0
+    # OneCycleLR: final_lr = max_lr / (div_factor * final_div_factor)
+    final_div_factor = 5e3
+
+    [module_config.vin]
+    # VIN v2 core knobs
+    num_classes = 15
+    head_hidden_dim = 192
+    head_num_layers = 3
+    head_dropout = 0.05
+    head_activation = "gelu"
+    coral_preinit_bias = true
+    field_dim = 16
+    field_gn_groups = 4
+    apply_cw90_correction = true
+    global_pool_grid_size = 6
+    scene_field_channels = [
+        "occ_pr",
+        "occ_input",
+        "counts_norm",
+        "cent_pr",
+        "free_input",
+        "new_surface_prior",
+    ]
+
+        [module_config.vin.backbone]
+        model_cfg     = ".configs/models/evl/evl_inf_desktop.yaml"
+        model_ckpt    = ".logs/ckpts/model_lite.pth"
+        device        = "cuda"
+        freeze        = true
+        features_mode = "heads"
+
+        [module_config.vin.pose_encoder]
+        kind                 = "r6d_lff"
+        pose_scale_init      = [1.0, 1.0]
+        pose_scale_learnable = true
+        pose_scale_eps       = 1e-6
+
+            [module_config.vin.pose_encoder.pose_encoder_lff]
+            input_dim     = 9     # 3 for position, 6 for rotation matrix
+            fourier_dim   = 64
+            hidden_dim    = 128
+            output_dim    = 32
+            gamma         = 1.0
+            include_input = false
+
+        [module_config.vin.pos_grid_encoder_lff]
+        input_dim     = 3     # 3 for position
+        fourier_dim   = 24
+        hidden_dim    = 16
+        output_dim    = 12
+        gamma         = 1.0
+        include_input = false
+
+        # [module_config.vin.point_encoder]
+        # # PointNeXt-S semidense encoder (uses include_inv_dist_std in VinModelV2)
+        # cfg_path        = "PointNeXt/cfgs/s3dis/pointnext-s.yaml"
+        # checkpoint_path = "s3dis-train-pointnext-s-ngpus1-seed1742-20220525-162639-Gz4ViiL95b6KP9MMH2ytG3_ckpt_best.pth"
+        # out_dim         = 128
+        # max_points      = 3000
+        # freeze          = true
+        # strict_load     = false
+
+        [module_config.vin.traj_encoder]
+        pool_mode = "mean"
+
+            [module_config.vin.traj_encoder.pose_encoder]
+            kind                 = "r6d_lff"
+            pose_scale_init      = [1.0, 1.0]
+            pose_scale_learnable = true
+            pose_scale_eps       = 1e-6
+
+                [module_config.vin.traj_encoder.pose_encoder.pose_encoder_lff]
+                input_dim     = 9
+                fourier_dim   = 64
+                hidden_dim    = 128
+                output_dim    = 32
+                gamma         = 1.0
+                include_input = false

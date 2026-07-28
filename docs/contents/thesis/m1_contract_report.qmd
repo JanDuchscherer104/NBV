@@ -26,7 +26,7 @@ evidence that must be collected before scale-up.
 | Candidate-label alignment | Pass for synthetic guard | `prepare_vin_offline_sample()` validates candidate poses, depth rows, camera rows, RRI vectors, optional point clouds, and candidate shell indices before writing rows. |
 | Rollout replay alignment | Pass for synthetic guard | The historical wide trace DTO was superseded by pipeline-local `EvaluatedRolloutRecord` plus factual `steps/` and `candidates/` tables; invalid rows remain masked with false action/train masks and `NaN` labels. |
 | Frame and CW90 semantics | Pass for documented source contract | Candidate generation applies `rotate_yaw_cw90` once to the reference pose; plotting/Rerun display corrections remain display-only. `VinModelV3` requires a `cw90_corrected` camera tag if model-side CW90 undo is enabled. |
-| Current local store evidence | Blocked for M1 exit | `.configs/offline_only.toml` resolves to `.data/offline_cache/vin_offline`; the evidence snapshot below records manifest v7, 48 sample-index rows, and a partial one-scene diagnostic store. |
+| Current local store evidence | Blocked for M1 exit | `.configs/training/vin/offline_only.toml` resolves to `.data/offline_cache/vin_offline`; the evidence snapshot below records manifest v7, 48 sample-index rows, and a partial one-scene diagnostic store. |
 | Scene-level split evidence | Blocked | The local store has one scene (`81286`) and a 38/10 train/val sample split, so it cannot prove the final scene-level split contract. |
 | Rerun smoke recordings | Blocked | Normal, boundary, and failure `.rrd` recordings are not collected in this pass. |
 | Oracle throughput | Blocked | No representative GPU/dataset timing was run in this pass. |
@@ -38,7 +38,7 @@ training evidence.
 
 | Evidence item | Status | Value |
 |---|---|---|
-| Config source | Pass for local smoke | `.configs/offline_only.toml` uses `datamodule_config.source.kind = "offline"` and `store_dir = "vin_offline"`. |
+| Config source | Pass for local smoke | `.configs/training/vin/offline_only.toml` uses `datamodule_config.source.kind = "offline"` and `store_dir = "vin_offline"`. |
 | Resolved store root | Pass for local smoke | `.data/offline_cache/vin_offline`; the manifest records the same repo-local store as an operator-local absolute path. |
 | Manifest version | Pass for reader compatibility | `version = 6`, matching the current immutable reader contract. |
 | Manifest hash | Recorded | `sha256:9b72f7203942db28f613f4c921ee26eba7ba753c91c5967aae404a933bb3ff00` for `manifest.json`. |
@@ -151,7 +151,7 @@ uv run pytest tests/vin/test_vin_model_v3_methods.py
 
 ```sh
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml --split val --index 0 --save ../.artifacts/rerun/m1-val-000.rrd
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline.toml --split val --index 0 --save ../.artifacts/rerun/m1-val-000.rrd
 ```
 
 ```sh

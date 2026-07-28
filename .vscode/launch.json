@@ -10,7 +10,7 @@
                 "--run-mode",
                 "summarize-vin",
                 "--config-path",
-                "${workspaceFolder}/.configs/offline_only.toml"
+                "${workspaceFolder}/.configs/training/vin/offline_only.toml"
             ],
             "env": {
                 "CONDA_PREFIX": "/home/jd/.local/share/mamba/envs/aria-nbv",
@@ -31,7 +31,7 @@
             "justMyCode": false,
             "args": [
                 "--config-path",
-                "${workspaceFolder}/.configs/build_rollouts_v1_smoke.toml"
+                "${workspaceFolder}/.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml"
             ],
             "env": {
                 "PYTHONUNBUFFERED": "1",

@@ -1,0 +1,18 @@
+# .configs/training/vin/offline_only.toml
+run_mode = "fit_binner"
+
+[datamodule_config]
+num_workers      = 16
+use_train_as_val = true
+
+    [datamodule_config.source]
+    kind = "offline"
+    train_split = "all"
+    val_split = "all"
+
+        [datamodule_config.source.offline]
+        load_backbone = false
+        map_location  = "cpu"
+
+            [datamodule_config.source.offline.store]
+            store_dir = "vin_offline"

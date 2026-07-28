@@ -10,7 +10,7 @@ def main() -> None:
     mesh_root = repo_root / ".data" / "ase_meshes"
     ckpt = repo_root / ".logs" / "ckpts" / "model_lite.pth"
     model_cfg = (
-        repo_root / ".configs" / "evl_inf_desktop.yaml"  # instead of evl_inf.yaml
+        repo_root / ".configs/models/evl/evl_inf_desktop.yaml"  # instead of evl_inf.yaml
     )
     out_root = repo_root / ".logs" / "efm3d_inference"
 

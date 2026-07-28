@@ -738,7 +738,7 @@ def test_rollout_zarr_rejects_missing_root_lineage(tmp_path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         records,
-        target_protocol_version="v1-observed",
+        target_protocol_version="v0_gt_input",
         source_offline_store_version="",
     )
 

@@ -14,7 +14,7 @@ topics:
 confidence: high
 canonical_updates_needed:
   - docs/contents/thesis/questions.qmd
-  - .configs/build_rollouts_v1_realistic.toml
+  - .configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml
   - docs/contents/theory/candidate_sampling_target_selection.qmd
 ---
 

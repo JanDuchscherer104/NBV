@@ -33,7 +33,7 @@ metadata:
     - ".agents/references/litkg_quick_reference.md#fallback"
     - ".agents/references/litkg_quick_reference.md#mandatory-claim-checks"
     - ".agents/references/alignment_tools_contract.md#tool-boundaries"
-    - ".configs/litkg.toml"
+    - ".configs/infrastructure/litkg.toml"
   literature_refs:
     - "docs/contents/literature/index.qmd"
     - "docs/literature/sources.jsonl"

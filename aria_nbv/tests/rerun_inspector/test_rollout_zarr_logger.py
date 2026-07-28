@@ -175,7 +175,7 @@ def _fixture_rollout_store(tmp_path: Path, *, selected_depth_enabled: bool = Tru
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         records,
-        target_protocol_version="v1-observed",
+        target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
         split_manifest_hash="fixture-split-manifest",
         selected_depth_enabled=selected_depth_enabled,

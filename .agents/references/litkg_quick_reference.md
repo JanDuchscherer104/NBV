@@ -103,7 +103,7 @@ The following legacy fields are emitted only under `KG_VERBOSE=1`
 `missing_context_leaves`, and `backend_status`. The default lean JSON
 payload for a trivial smoke task is ~42 KB (vs ~230 KB legacy).
 
-Authority is configured in `.configs/litkg.toml`. Current canonical memory,
+Authority is configured in `.configs/infrastructure/litkg.toml`. Current canonical memory,
 current thesis QMDs, thesis proposal Typst, and implementation code should rank
 above historical seminar paper evidence and episodic history for comparable
 matches.
@@ -119,7 +119,7 @@ and code become current truth.
 - Emit a full JSON context pack:
   `make kg-route KG_TASK="<task>" KG_FORMAT=json`
 - Use a specific context-pack profile directly:
-  `.agents/external/litkg-rs/target/debug/litkg-cli context-pack --config .configs/litkg.toml --repo-root . --task "<task>" --profile thesis-coding --format json`
+  `.agents/external/litkg-rs/target/debug/litkg-cli context-pack --config .configs/infrastructure/litkg.toml --repo-root . --task "<task>" --profile thesis-coding --format json`
 - Inspect a broad source/backlog query:
   `make kg-search KG_QUERY="<terms>" KG_FORMAT=json KG_LIMIT=10`
 - Search only literature/paper nodes:

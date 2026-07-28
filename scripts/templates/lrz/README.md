@@ -18,7 +18,7 @@ Before converting any template into a real job:
 4. Keep all large outputs, logs, caches, checkpoints, and containers under
    `$ARIA_DSS`.
 5. Preserve the atomic-write and resume expectations documented in
-   `.configs/lrz/README.md`.
+   `.configs/infrastructure/lrz/README.md`.
 
 ## Template Variables
 

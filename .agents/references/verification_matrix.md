@@ -45,7 +45,7 @@ compact command index.
   `make rollouts-stats`
   `make rollouts-rerun-random`
 - Direct Rerun inspector:
-  `cd aria_nbv && uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml ...`
+  `cd aria_nbv && uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline.toml ...`
 
 ## KG And Optional Tooling
 

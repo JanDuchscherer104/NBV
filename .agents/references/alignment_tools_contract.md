@@ -21,7 +21,7 @@ surface for the kind of information being changed.
 - Public narrative: Quarto or Typst docs.
 - Verification gates: `.agents/references/verification_matrix.md`.
 - KG/backend operating details: `.agents/external/litkg-rs/docs/` and
-  `.configs/litkg.toml`.
+  `.configs/infrastructure/litkg.toml`.
 - OMX operator usage: `.agents/references/omx_quick_reference.md`.
 
 ## Tool Boundaries

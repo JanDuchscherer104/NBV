@@ -113,7 +113,7 @@ Build immutable stores through the Oracle pipeline CLI:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml
 ```
 
 Use `--dry-run` to validate a generation TOML and inspect the resolved store path
@@ -682,8 +682,8 @@ snippets, EVL, or writing shards.
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml
 ```
 
 The default config writes `store_dir = "vin_offline"` under
@@ -697,8 +697,8 @@ Small Rerun smoke store:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml
 ```
 
 Validate with `nbv-summary` and, when visual trust matters, save a Rerun
@@ -707,7 +707,7 @@ recording:
 ```sh
 cd aria_nbv
 uv run nbv-rerun-inspect \
-  --config-path ../.configs/rerun_offline.toml \
+  --config-path ../.configs/inspection/rerun/rerun_offline.toml \
   --split val \
   --index 0 \
   --save ../.artifacts/rerun/offline_sample.rrd
@@ -720,14 +720,14 @@ artifacts. First run a config-only smoke:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
+uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml --dry-run
 ```
 
 Then build the local smoke store:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml
+uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml
 uv run nbv-rollouts-info --store ../.data/offline_cache/rollouts_v1_smoke.zarr --validate
 ```
 
@@ -741,7 +741,7 @@ Plan source-row shards from the same rollout writer TOML:
 ```sh
 cd aria_nbv
 uv run nbv-plan-rollout-shards \
-  --config-path ../.configs/build_rollouts_v1_smoke.toml \
+  --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml \
   --rows-per-shard 1 \
   --output-manifest /tmp/rollout_shards.jsonl
 ```
@@ -751,7 +751,7 @@ Run one local shard through temp-to-final promotion:
 ```sh
 cd aria_nbv
 uv run nbv-build-rollouts \
-  --config-path ../.configs/build_rollouts_v1_smoke.toml \
+  --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml \
   --shard-manifest /tmp/rollout_shards.jsonl \
   --shard-id shard-000000 \
   --output-tmp /tmp/aria-rollouts/shard-000000.tmp \
@@ -798,7 +798,7 @@ Use LRZ only after the local one-row smoke succeeds.
 
    ```sh
    cd "$ARIA_REPO"
-   cp .configs/build_rollouts_v1_lrz.template.toml "$ARIA_DSS/data/staging/rollouts/build_rollouts_${RUN_ID}.toml"
+   cp .configs/generation/rollouts/templates/build_rollouts_v1_lrz.template.toml "$ARIA_DSS/data/staging/rollouts/build_rollouts_${RUN_ID}.toml"
    ```
 
    The copied config should point `[source.store].store_dir` at a VIN offline
@@ -917,7 +917,7 @@ cd aria_nbv
 uv run nbv-rollouts-info --store ../.data/offline_cache/rollouts_v1_smoke.zarr --json
 uv run nbv-rollouts-info --store ../.data/offline_cache/rollouts_v1_smoke.zarr --validate
 uv run nbv-rerun-inspect \
-  --config-path ../.configs/rerun_offline.toml \
+  --config-path ../.configs/inspection/rerun/rerun_offline.toml \
   --rollout-store ../.data/offline_cache/rollouts_v1_smoke.zarr \
   --rollout-index 0 \
   --rollout-context required \
@@ -945,7 +945,7 @@ For rollout-store work, include rollout and target-selection checks:
 ```sh
 uv run pytest tests/oracle/test_target_selection.py
 uv run pytest tests/rollouts
-uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v1_smoke.toml --dry-run
+uv run nbv-build-rollouts --config-path ../.configs/generation/rollouts/smoke/build_rollouts_v1_smoke.toml --dry-run
 ```
 
 For diagram or README updates, validate and render Mermaid sources:

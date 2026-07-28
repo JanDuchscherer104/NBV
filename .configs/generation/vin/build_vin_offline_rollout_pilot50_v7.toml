@@ -1,0 +1,152 @@
+# Strict-v7 profile-independent VIN source for paired rollout pilots.
+#
+# This source cache preserves full root VIN points, GT OBBs, trajectory metadata,
+# and full-resolution GT meshes for live rollout reattachment. Its one stored
+# one-step oracle candidate exists only to satisfy the strict-v7 cache schema;
+# rollout campaigns regenerate their scientific 60-action candidate mixtures.
+#
+# Usage from the repository root:
+#   aria_nbv/.venv/bin/nbv-build-offline \
+#     --config-path .configs/generation/vin/build_vin_offline_rollout_pilot50_v7.toml
+
+include_backbone = false
+include_depths = false
+include_pointclouds = false
+include_diagnostic_payloads = false
+include_gt_obbs = true
+include_detected_obbs = false
+include_trajectory_metadata = true
+vin_pad_points = 50000
+semidense_max_points = 50000
+semidense_include_obs_count = false
+max_candidates = 1
+samples_per_shard = 10
+max_samples = 50
+train_val_split = 0.0
+overwrite = false
+num_failures_allowed = 0
+
+[store]
+store_dir = "vin_offline_rollout_pilot50_v7"
+
+[dataset]
+atek_variant = "efm"
+scene_ids = ["81283", "81286", "82004", "83515", "83550"]
+# Explicit shard paths avoid the repeated tar-header scan performed when sample
+# keys are supplied through snippet_ids. Each listed shard contains eight rows.
+snippet_ids = [
+  ".data/ase_efm/81283/shards-0000.tar",
+  ".data/ase_efm/81283/shards-0001.tar",
+  ".data/ase_efm/81286/shards-0000.tar",
+  ".data/ase_efm/81286/shards-0001.tar",
+  ".data/ase_efm/82004/shards-0000.tar",
+  ".data/ase_efm/82004/shards-0001.tar",
+  ".data/ase_efm/83515/shards-0000.tar",
+  ".data/ase_efm/83515/shards-0001.tar",
+  ".data/ase_efm/83550/shards-0000.tar",
+  ".data/ase_efm/83550/shards-0001.tar",
+]
+snippet_key_filter = [
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000000",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000001",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000002",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000003",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000004",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000005",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000006",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000007",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000008",
+  "AriaSyntheticEnvironment_81283_AtekDataSample_000009",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000000",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000001",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000002",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000003",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000004",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000005",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000006",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000007",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000008",
+  "AriaSyntheticEnvironment_81286_AtekDataSample_000009",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000000",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000001",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000002",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000003",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000004",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000005",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000006",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000007",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000008",
+  "AriaSyntheticEnvironment_82004_AtekDataSample_000009",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000000",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000001",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000002",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000003",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000004",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000005",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000006",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000007",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000008",
+  "AriaSyntheticEnvironment_83515_AtekDataSample_000009",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000000",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000001",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000002",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000003",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000004",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000005",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000006",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000007",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000008",
+  "AriaSyntheticEnvironment_83550_AtekDataSample_000009",
+]
+batch_size = 1
+wds_shuffle = false
+wds_repeat = false
+load_meshes = true
+require_mesh = true
+mesh_simplify_ratio = 1.0
+crop_mesh = false
+device = "cpu"
+
+[labeler]
+device = "cuda"
+backprojection_stride = 16
+
+    [labeler.generator]
+    device = "cuda"
+    camera_label = "rgb"
+    num_samples = 4
+    oversample_factor = 2.0
+    max_resamples = 2
+    align_to_gravity = true
+    min_radius = 0.5
+    max_radius = 1.8
+    min_elev_deg = -20.0
+    max_elev_deg = 25.0
+    delta_azimuth_deg = 170.0
+    sampling_strategy = "uniform_sphere"
+    min_distance_to_mesh = 0.2
+    ensure_collision_free = false
+    ensure_free_space = true
+    collision_backend = "pytorch3d"
+    view_direction_mode = "radial_away"
+    view_max_azimuth_deg = 60.0
+    view_max_elevation_deg = 30.0
+    view_roll_jitter_deg = 0.0
+    seed = 0
+
+    [labeler.depth]
+    max_candidates_final = 1
+    resolution_scale = 0.05
+
+        [labeler.depth.renderer]
+        device = "cuda"
+        znear = 0.001
+        zfar = 20.0
+        cull_backfaces = true
+        blur_radius = 0.0
+        bin_size = 0
+        dtype = "float32"
+
+    [labeler.oracle]
+    fusion_voxel_size_m = 0.05
+    fusion_max_points = 1024

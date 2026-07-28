@@ -277,7 +277,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
     def radial_target_backtrack_family(cls) -> "CandidateMixtureViewGeneratorConfig":
         """Build the radial/backtrack rollout-diversity sampler.
 
-        This preset mirrors `.configs/build_rollouts_v1_diverse.toml`: most
+        This preset mirrors `.configs/generation/rollouts/paired/build_rollouts_v1_diverse.toml`: most
         rows probe radial-towards, radial-away, and revisit-backtrack action
         families, with a small target-point anchor group for continuity with
         the target-conditioned default sampler. It is a named data-generation

@@ -74,7 +74,7 @@ LRZ_SCRIPTS_DIR ?= $(LRZ_SKILL_DIR)/scripts
 LRZ_RESOURCES_ARGS ?= summary
 LRZ_CMD ?=
 LITKG_MANIFEST ?= .agents/external/litkg-rs/Cargo.toml
-LITKG_CONFIG ?= .configs/litkg.toml
+LITKG_CONFIG ?= .configs/infrastructure/litkg.toml
 LITKG_REPO_ROOT ?= .
 LITKG_PROFILE ?= thesis-coding
 KG_BUNDLE_ROOT ?= .agents/kg/generated/neo4j-export
@@ -167,7 +167,7 @@ ROLLOUT_STORE ?= rollouts_v1_realistic.zarr
 ROLLOUT_MIN_HORIZON ?= 2
 ROLLOUT_SEED ?=
 RERUN_MODE ?= view
-RERUN_CONFIG ?= ../.configs/rerun_offline.toml
+RERUN_CONFIG ?= ../.configs/inspection/rerun/rerun_offline.toml
 RERUN_SAVE ?= ../.artifacts/rerun/offline_random.rrd
 ROLLOUT_RERUN_SAVE ?= ../.artifacts/rerun/rollout_random.rrd
 
