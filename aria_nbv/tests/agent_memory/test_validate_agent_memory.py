@@ -317,6 +317,8 @@ def test_toml_table_fields_allow_an_explicit_active_owner(tmp_path: Path) -> Non
     [
         'DECISIONS = "canonical current owner"\n',
         '[DECISIONS]\nroute = "write current truth here"\n',
+        "DECISIONS = true\n",
+        "[DECISIONS]\ncurrent_truth = 1\n",
     ],
 )
 def test_toml_keys_and_table_names_are_part_of_owner_records(tmp_path: Path, body: str) -> None:
@@ -341,6 +343,22 @@ def test_git_tracked_paths_preserve_control_characters(tmp_path: Path, separator
     assert relative in tracked_paths
     assert validator.check_forbidden_tracked_paths(tracked_paths) == [
         f"runtime or transcript evidence must not be tracked: {relative}"
+    ]
+
+
+def test_codex_note_scan_preserves_control_characters(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    relative = ".codex/forbidden\nnote.md"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_text("legacy note\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", "--", relative], cwd=tmp_path, check=True)
+
+    errors = validator.check_codex_notes(repo_root=tmp_path)
+
+    assert errors == [
+        "legacy `.codex/*.md` notes are not allowed outside approved project skills:",
+        f"  - {relative}",
     ]
 
 
@@ -400,6 +418,28 @@ def test_connector_keeps_write_targets_clause_local(
     errors = validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
     assert len(errors) == expected_errors
+
+
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Do not update README—write DECISIONS instead.",
+        "Do not update README, only write DECISIONS.",
+        "Do not only update README, write DECISIONS.",
+    ],
+)
+def test_positive_legacy_write_after_scope_reset_is_rejected(tmp_path: Path, suffix: str, claim: str) -> None:
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'notes = ["{claim}"]\n'
+    else:
+        body = f"#let notes = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
 
 
 @pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])

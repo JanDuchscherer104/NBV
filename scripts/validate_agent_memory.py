@@ -21,13 +21,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
-ALIGNMENT_CONTRACT = (
-    REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
-)
+ALIGNMENT_CONTRACT = REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
 OMX_ARTIFACT_REGISTRY = REPO_ROOT / ".agents" / "omx_artifacts.toml"
-OMX_ARTIFACT_VALIDATOR = (
-    REPO_ROOT / "scripts" / "scaffold" / "validate_omx_artifacts.py"
-)
+OMX_ARTIFACT_VALIDATOR = REPO_ROOT / "scripts" / "scaffold" / "validate_omx_artifacts.py"
 ALIGNMENT_LINK_TARGETS = (
     (
         REPO_ROOT / "AGENTS.md",
@@ -139,7 +135,7 @@ LEGACY_STATE_NEGATED_OWNER = re.compile(
 )
 WRITE_NEGATION = re.compile(r"\b(?:do\s+not|don't|never)\b", re.IGNORECASE)
 WRITE_SCOPE_RESET = re.compile(
-    r"(?:\b(?:but|then|however|instead|yet|nevertheless|nonetheless|still|"
+    r"(?:\b(?:but|only|then|however|instead|yet|nevertheless|nonetheless|still|"
     r"because|although|while|whereas)\b[\s,]*)",
     re.IGNORECASE,
 )
@@ -274,9 +270,7 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         if list_match and current_key is not None:
             current_value = data.get(current_key)
             if not isinstance(current_value, list):
-                raise ValueError(
-                    f"`{current_key}` must be a list when using list items"
-                )
+                raise ValueError(f"`{current_key}` must be a list when using list items")
             current_value.append(list_match.group(1).strip().strip("\"'"))
             continue
 
@@ -291,39 +285,31 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
     return data
 
 
-def check_codex_notes() -> list[str]:
-    result = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            ".codex",
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
+def check_codex_notes(repo_root: Path = REPO_ROOT) -> list[str]:
+    paths, git_error = _git_paths(
+        repo_root,
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--",
+        ".codex",
     )
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
+    if git_error is not None:
+        stderr = git_error
         suffix = f": {stderr}" if stderr else ""
         return [f"git ls-files failed while checking visible .codex notes{suffix}"]
 
     notes = sorted(
         rel
-        for line in result.stdout.splitlines()
-        if (rel := line.strip()).endswith(".md")
-        and not any(rel.startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES)
+        for rel in paths
+        if rel.endswith(".md") and not any(rel.startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES)
     )
     if not notes:
         return []
 
-    errors = [
-        "legacy `.codex/*.md` notes are not allowed outside approved project skills:"
-    ] + [f"  - {note}" for note in notes]
+    errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
+        f"  - {note}" for note in notes
+    ]
     return errors
 
 
@@ -334,11 +320,7 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
             continue
 
         expected_kind = next(
-            (
-                kind
-                for prefix, kind in OMX_RECORD_PATHS.items()
-                if tracked_path.startswith(prefix)
-            ),
+            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
             None,
         )
         if expected_kind is None or not tracked_path.endswith(".md"):
@@ -355,9 +337,7 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
         if frontmatter.get("kind") != expected_kind:
             errors.append(f"{tracked_path}: `kind` must be `{expected_kind}`")
         if frontmatter.get("status") not in OMX_RECORD_STATUSES:
-            errors.append(
-                f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}"
-            )
+            errors.append(f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}")
     return errors
 
 
@@ -507,18 +487,12 @@ def _has_legacy_state_mention(text: str) -> bool:
 
 
 def _explicit_different_owner(prefix: str) -> bool:
-    subject_match = EXPLICIT_OWNER_SUBJECT.search(
-        prefix
-    ) or EXPLICIT_USE_SUBJECT.search(prefix)
+    subject_match = EXPLICIT_OWNER_SUBJECT.search(prefix) or EXPLICIT_USE_SUBJECT.search(prefix)
     if subject_match is None:
         return False
     subject = subject_match.group("subject").strip()
     words = subject.casefold().split()
-    return bool(
-        words
-        and words[-1] not in ANAPHORIC_OWNER_SUBJECTS
-        and not _has_legacy_state_mention(subject)
-    )
+    return bool(words and words[-1] not in ANAPHORIC_OWNER_SUBJECTS and not _has_legacy_state_mention(subject))
 
 
 def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
@@ -529,12 +503,8 @@ def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
     def is_protected(index: int) -> bool:
         return any(start <= index < end for start, end in protected)
 
-    delimiters = ".;!?"
-    starts = [
-        index + 1
-        for index, char in enumerate(text[:offset])
-        if char in delimiters and not is_protected(index)
-    ]
+    delimiters = ".;!?—–"
+    starts = [index + 1 for index, char in enumerate(text[:offset]) if char in delimiters and not is_protected(index)]
     ends = [
         index
         for index, char in enumerate(text[offset:], start=offset)
@@ -565,10 +535,7 @@ def _owner_assertion_is_negated(text: str, offset: int) -> bool:
 
     clause_start, _ = _clause_bounds(text, offset)
     prefix = text[clause_start:offset]
-    return (
-        NEGATED_OWNER_COMPLEMENT.search(prefix) is not None
-        or NEGATED_DIRECT_LEGACY_OWNER.search(prefix) is not None
-    )
+    return NEGATED_OWNER_COMPLEMENT.search(prefix) is not None or NEGATED_DIRECT_LEGACY_OWNER.search(prefix) is not None
 
 
 def _has_legacy_owner_assertion(text: str) -> bool:
@@ -586,9 +553,7 @@ def _has_legacy_owner_assertion(text: str) -> bool:
             continue
         clause_start, _ = _clause_bounds(assertion_text, assertion.start())
         clause_prefix = assertion_text[clause_start : assertion.start()].strip()
-        if not clause_prefix and _has_legacy_state_mention(
-            assertion_text[: assertion.start()]
-        ):
+        if not clause_prefix and _has_legacy_state_mention(assertion_text[: assertion.start()]):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
         if _owner_assertion_is_negated(assertion_text, assertion.start()):
@@ -635,9 +600,10 @@ def _toml_string_records(value: Any, *, context: tuple[str, ...] = ()) -> Iterat
             if isinstance(entry, str):
                 table_strings.extend((key, entry))
             elif isinstance(entry, list):
-                strings = [item for item in entry if isinstance(item, str)]
-                if strings:
-                    table_strings.extend((key, *strings))
+                scalars = [str(item) for item in entry if not isinstance(item, (dict, list))]
+                table_strings.extend((key, *scalars))
+            elif not isinstance(entry, dict):
+                table_strings.extend((key, str(entry)))
         if len(table_strings) > len(context):
             yield " . ".join(table_strings)
         for key, entry in value.items():
@@ -649,11 +615,11 @@ def _toml_string_records(value: Any, *, context: tuple[str, ...] = ()) -> Iterat
                         yield from _toml_string_records(item, context=(*context, key))
 
 
-def _git_tracked_paths(repo_root: Path) -> tuple[list[str], str | None]:
-    """Return tracked paths without Git's quoting or line-delimiter ambiguity."""
+def _git_paths(repo_root: Path, *args: str) -> tuple[list[str], str | None]:
+    """Return Git paths without quoting or line-delimiter ambiguity."""
 
     result = subprocess.run(
-        ["git", "ls-files", "-z"],
+        ["git", "ls-files", "-z", *args],
         cwd=repo_root,
         check=False,
         capture_output=True,
@@ -661,6 +627,12 @@ def _git_tracked_paths(repo_root: Path) -> tuple[list[str], str | None]:
     if result.returncode != 0:
         return [], os.fsdecode(result.stderr).strip() or None
     return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path], None
+
+
+def _git_tracked_paths(repo_root: Path) -> tuple[list[str], str | None]:
+    """Return all tracked paths."""
+
+    return _git_paths(repo_root)
 
 
 def _toml_records(text: str) -> list[tuple[int, str]]:
@@ -747,9 +719,7 @@ def _typst_bracket_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _typst_record(
-    text: str, mention_offset: int, spans: list[tuple[int, int]]
-) -> tuple[int, str]:
+def _typst_record(text: str, mention_offset: int, spans: list[tuple[int, int]]) -> tuple[int, str]:
     candidates = sorted(
         (span for span in spans if span[0] <= mention_offset < span[1]),
         key=lambda span: span[1] - span[0],
@@ -772,18 +742,14 @@ def _logical_owner_records(path: Path, text: str) -> list[tuple[int, str]]:
     lines = text.splitlines()
     if path.suffix in {".md", ".qmd"}:
         prose_records = {
-            _paragraph_record(lines, _line_number(text, match.start()) - 1)
-            for match in _legacy_state_mentions(text)
+            _paragraph_record(lines, _line_number(text, match.start()) - 1) for match in _legacy_state_mentions(text)
         }
         return sorted(prose_records)
     if path.suffix == ".toml":
         return _toml_records(text)
     if path.suffix == ".typ":
         spans = _typst_bracket_spans(text)
-        typst_records = {
-            _typst_record(text, match.start(), spans)
-            for match in _legacy_state_mentions(text)
-        }
+        typst_records = {_typst_record(text, match.start(), spans) for match in _legacy_state_mentions(text)}
         return sorted(typst_records)
 
     fallback_records: set[tuple[int, str]] = set()
@@ -792,15 +758,11 @@ def _logical_owner_records(path: Path, text: str) -> list[tuple[int, str]]:
             continue
         start = max(0, line_index - 1)
         end = min(len(lines), line_index + 2)
-        fallback_records.add(
-            (line_index + 1, " ".join(part.strip() for part in lines[start:end]))
-        )
+        fallback_records.add((line_index + 1, " ".join(part.strip() for part in lines[start:end])))
     return sorted(fallback_records)
 
 
-def check_legacy_state_owner_claims(
-    tracked_paths: list[str], repo_root: Path = REPO_ROOT
-) -> list[str]:
+def check_legacy_state_owner_claims(tracked_paths: list[str], repo_root: Path = REPO_ROOT) -> list[str]:
     """Reject active routes to legacy journals unless marked migration-only."""
 
     errors: list[str] = []
@@ -810,10 +772,7 @@ def check_legacy_state_owner_claims(
         ):
             continue
         path = repo_root / tracked_path
-        if (
-            path.suffix not in LEGACY_STATE_SCAN_SUFFIXES
-            and path.name not in LEGACY_STATE_SCAN_FILENAMES
-        ):
+        if path.suffix not in LEGACY_STATE_SCAN_SUFFIXES and path.name not in LEGACY_STATE_SCAN_FILENAMES:
             continue
         if path.is_symlink() or not path.is_file():
             errors.append(f"{tracked_path}: tracked ownership source is unreadable")
@@ -821,24 +780,18 @@ def check_legacy_state_owner_claims(
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
-            errors.append(
-                f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}"
-            )
+            errors.append(f"{tracked_path}: cannot inspect legacy-state ownership routes: {exc}")
             continue
         if not _has_legacy_state_mention(text):
             continue
         try:
             records = _logical_owner_records(path, text)
         except tomllib.TOMLDecodeError as exc:
-            errors.append(
-                f"{tracked_path}: cannot parse tracked TOML ownership source: {exc}"
-            )
+            errors.append(f"{tracked_path}: cannot parse tracked TOML ownership source: {exc}")
             continue
         for line_number, context in records:
             normalized = " ".join(context.split())
-            migration_only = any(
-                pattern.search(normalized) for pattern in LEGACY_STATE_MIGRATION_ONLY
-            )
+            migration_only = any(pattern.search(normalized) for pattern in LEGACY_STATE_MIGRATION_ONLY)
             if migration_only and not _has_legacy_owner_assertion(normalized):
                 continue
             errors.append(
@@ -850,9 +803,7 @@ def check_legacy_state_owner_claims(
 def check_history_records() -> list[str]:
     errors: list[str] = []
     if not HISTORY_ROOT.exists():
-        return [
-            f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"
-        ]
+        return [f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"]
 
     for path in sorted(HISTORY_ROOT.rglob("*.md")):
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -868,9 +819,7 @@ def check_history_records() -> list[str]:
 
         missing_keys = sorted(REQUIRED_NATIVE_KEYS - frontmatter.keys())
         if missing_keys:
-            errors.append(
-                f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}"
-            )
+            errors.append(f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}")
             continue
 
         canonical_updates = frontmatter.get("canonical_updates_needed")
@@ -885,9 +834,7 @@ def check_history_records() -> list[str]:
                 continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists():
-                errors.append(
-                    f"{rel}: canonical update path does not exist: {update_text}"
-                )
+                errors.append(f"{rel}: canonical update path does not exist: {update_text}")
 
     return errors
 
@@ -896,9 +843,7 @@ def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
 
     if not ALIGNMENT_CONTRACT.exists():
-        errors.append(
-            f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}"
-        )
+        errors.append(f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}")
 
     for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -916,17 +861,13 @@ def check_scaffold_alignment() -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         if expected_snippet not in text:
-            errors.append(
-                f"{rel}: missing scaffold ownership snippet: {expected_snippet}"
-            )
+            errors.append(f"{rel}: missing scaffold ownership snippet: {expected_snippet}")
 
     tracked_paths, git_error = _git_tracked_paths(REPO_ROOT)
     if git_error is not None:
         stderr = git_error
         suffix = f": {stderr}" if stderr else ""
-        errors.append(
-            f"git ls-files failed while checking tracked runtime state{suffix}"
-        )
+        errors.append(f"git ls-files failed while checking tracked runtime state{suffix}")
         return errors
     errors.extend(check_forbidden_tracked_paths(tracked_paths))
     errors.extend(check_legacy_state_owner_claims(tracked_paths))
