@@ -1,6 +1,5 @@
-"""Chain-native :class:`QhDataset` loaders with deterministic, resumable shuffling.
-Lightning replaces samplers; metrics include padding duplicates rather than a deduplicated corpus.
-"""
+"""Owns deterministic, resumable loaders for chain-native :class:`QhDataset` stages.
+Lightning replaces samplers; metrics include padding duplicates rather than a deduplicated corpus."""
 
 from __future__ import annotations
 
@@ -40,12 +39,10 @@ class QhDataModuleConfig(TargetConfig["QhDataModule"]):
     @property
     def target_type(self) -> type[QhDataModule]:
         """Runtime adapter constructed by :meth:`setup_target`."""
-
         return QhDataModule
 
     def setup_target(self, *, seed: int) -> QhDataModule:
         """Construct and admit every configured chain dataset."""
-
         return QhDataModule(
             train=self.train.setup_target(),
             val=None if self.val is None else self.val.setup_target(),
@@ -62,8 +59,7 @@ class QhDataModule(pl.LightningDataModule):
     """Build stage loaders without interpreting storage or training labels.
 
     :class:`QhDataset` owns admission and :func:`collate_qh_samples` owns padding;
-    ``use_distributed_sampler=True`` lets Lightning partition every stage.
-    """
+    ``use_distributed_sampler=True`` lets Lightning partition every stage."""
 
     def __init__(
         self,
@@ -98,12 +94,9 @@ class QhDataModule(pl.LightningDataModule):
     def provenance(self) -> dict[str, object]:
         """Return compact preflighted provenance for every configured stage."""
         return {
-            name: None if dataset is None else dataset.provenance
-            for name, dataset in (
-                ("train", self.train_dataset),
-                ("val", self.val_dataset),
-                ("test", self.test_dataset),
-            )
+            "train": self.train_dataset.provenance,
+            "val": None if self.val_dataset is None else self.val_dataset.provenance,
+            "test": None if self.test_dataset is None else self.test_dataset.provenance,
         }
 
     @property
@@ -189,14 +182,12 @@ def _learning_contract(provenance: dict[str, object]) -> _LearningContract:
 
 def distributed_padding_rows(dataset: Sized, *, world_size: int) -> int:
     """Return the duplicate rows Lightning's default sampler must pad globally."""
-
     if world_size < 1:
         raise ValueError("world_size must be positive.")
     return (-len(dataset)) % world_size
 
 
-def _seed_worker(worker_id: int) -> None:
-    del worker_id
+def _seed_worker(_worker_id: int) -> None:
     seed = torch.initial_seed() % (2**32)
     random.seed(seed)
     np.random.seed(seed)

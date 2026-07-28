@@ -2,8 +2,7 @@
 This module owns admission of complete non-empty chains and bounded
 [Zarr](https://zarr.readthedocs.io/) reads; workers reopen handles for row and candidate slices.
 Tensor conversion, VIN composition, padding, and the public five-DTO interface
-belong to :mod:`aria_nbv.data_handling.qh`.
-"""
+belong to :mod:`aria_nbv.data_handling.qh`."""
 
 from __future__ import annotations
 
@@ -102,7 +101,6 @@ class QhRolloutReaderConfig(TargetConfig["QhRolloutReader"]):
     @property
     def target_type(self) -> type[QhRolloutReader]:
         """Runtime reader constructed by :meth:`setup_target`."""
-
         return QhRolloutReader
 
 
@@ -155,7 +153,6 @@ class QhRolloutReader:
 
     def __len__(self) -> int:
         """Return the number of complete non-empty persisted chains."""
-
         return self._chain_prefix_ends[-1]
 
     def __getitem__(self, index: int) -> _StoredChain:
@@ -172,13 +169,11 @@ class QhRolloutReader:
     @property
     def source_lineage(self) -> tuple[_QhSourceLineage, ...]:
         """Return compact source rows validated without reading state payloads."""
-
         return self._source_lineage
 
     @property
     def scene_ids(self) -> frozenset[str]:
         """Return scenes referenced by states using preflighted 1D joins."""
-
         return self._scene_ids
 
     @property
@@ -189,7 +184,6 @@ class QhRolloutReader:
         preflight, as required by the persisted ``q_h_horizon`` compatibility
         contract. Reading it does not open a Zarr store or materialize a state.
         """
-
         return int(dict(self._stores[0].compatibility)["q_h_horizon"])
 
     @property
@@ -200,7 +194,6 @@ class QhRolloutReader:
         construction. It is JSON serializable and never materializes a rollout
         state, candidate matrix, or actor observation.
         """
-
         return {
             "stores": [
                 {
@@ -215,7 +208,6 @@ class QhRolloutReader:
 
     def __getstate__(self) -> dict[str, Any]:
         """Drop process-owned Zarr handles before worker pickling."""
-
         state = self.__dict__.copy()
         state["_open_pid"] = None
         state["_roots"] = {}
@@ -406,7 +398,6 @@ def _read_source_lineage(
     dictionaries: dict[str, tuple[str, ...]],
 ) -> tuple[_QhSourceLineage, ...]:
     """Decode bounded source-table vectors and validate their split provenance."""
-
     sources = root["sources"]
     source_ids = np.asarray(sources["source_row_id"], dtype=np.int64).reshape(-1)
     if source_ids.size == 0 or np.any(source_ids[1:] <= source_ids[:-1]):
@@ -458,7 +449,6 @@ def _validate_lineage_provenance(
     dictionaries: dict[str, tuple[str, ...]],
 ) -> None:
     """Require per-rollout protocol and reason versions to match root truth."""
-
     config = dictionaries["config"]
     for array_path, root_attr in (
         ("lineage/target_protocol_version_id", "target_protocol_version"),
@@ -481,7 +471,6 @@ def _config_hashes(
     array_path: str,
 ) -> tuple[str, ...]:
     """Return the bounded set of persisted lineage-config hashes."""
-
     ids = np.asarray(root[array_path], dtype=np.int64).reshape(-1)
     return tuple(sorted({_decoded(dictionaries["config"], int(value_id), array_path) for value_id in ids}))
 
@@ -563,7 +552,6 @@ def _validate_shapes(
 
 def _build_chain_index(root: zarr.Group, path: Path) -> tuple[_ChainIndexEntry, ...]:
     """Validate chains with scalar state scans and bounded padded-row reads."""
-
     rollout_count = int(root["rollouts/rollout_row_id"].shape[0])
     state_count = int(root["steps/step_row_id"].shape[0])
     if rollout_count == 0:
@@ -670,7 +658,7 @@ def _array_equal(left: np.ndarray, right: np.ndarray) -> bool:
 def _validate_candidate_poses(root_row: np.ndarray, candidates: dict[str, np.ndarray], row: int) -> None:
     root = PoseTW(torch.as_tensor(root_row, dtype=torch.float32))
     world = PoseTW(torch.as_tensor(candidates["pose_world_cam"], dtype=torch.float32))
-    relative = PoseTW(torch.tensor(candidates["candidate_pose_relative_root"], dtype=torch.float32))
+    relative = PoseTW(torch.tensor(candidates["pose_relative_root"], dtype=torch.float32))
     poses = PoseTW(torch.cat((root.tensor().reshape(1, 12), world.tensor(), relative.tensor())))
     if (
         not torch.allclose(poses.inverse().compose(poses).tensor(), PoseTW().tensor(), atol=1e-4, rtol=1e-4)
@@ -682,13 +670,16 @@ def _validate_candidate_poses(root_row: np.ndarray, candidates: dict[str, np.nda
 
 def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry) -> _StoredChain:
     """Decode one preflighted root-to-leaf chain without a terminal empty state."""
-
     rows = range(entry.state_start, entry.state_stop)
     steps = root["steps"]
     q_h = root["q_h"]
+    rollout = root["rollouts"]
+    rollout_position = entry.rollout_position
+    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
     candidate_rows = tuple(
         _read_chain_candidate_row(
             root,
+            root_pose_world=root_pose_world,
             row=row,
             width=int(steps["num_candidates"][row]),
             step_row_id=step_row_id,
@@ -697,8 +688,6 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     )
     selected_index = np.asarray(q_h["selected_candidate_index"][entry.state_start : entry.state_stop], dtype=np.int64)
 
-    rollout = root["rollouts"]
-    rollout_position = entry.rollout_position
     source_row_id = int(rollout["source_row_id"][rollout_position])
     target_row_id = int(rollout["target_row_id"][rollout_position])
     source_row = _find_sorted_row(root["sources/source_row_id"], source_row_id, "sources/source_row_id")
@@ -707,11 +696,8 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
     target = root["targets"]
     dictionaries = store.dictionaries
     target_source = _decode_id(root, dictionaries, "target_source", "targets/target_source_id", target_row)
-    root_pose_world = np.asarray(rollout["root_pose_world"][rollout_position], dtype=np.float32)
     target_extents = np.asarray(target["target_extents"][target_row], dtype=np.float32)
     target_pose = np.asarray(target["target_pose_world_object"][target_row], dtype=np.float32)
-    for row, candidates in zip(rows, candidate_rows, strict=True):
-        _validate_candidate_poses(root_pose_world, candidates, row)
     if (
         target_extents.shape != (3,)
         or target_pose.shape != (12,)
@@ -794,6 +780,7 @@ def _read_chain(root: zarr.Group, store: _StoreMetadata, entry: _ChainIndexEntry
 def _read_chain_candidate_row(
     root: zarr.Group,
     *,
+    root_pose_world: np.ndarray,
     row: int,
     width: int,
     step_row_id: int,
@@ -801,9 +788,9 @@ def _read_chain_candidate_row(
     q_rows = _read_padded_qh_row(root, row)
     candidate_ids = q_rows["candidate_row_id"][:width].astype(np.int64, copy=False)
     candidates = _candidate_slice(root, candidate_ids, row, step_row_id)
+    _validate_candidate_poses(root_pose_world, candidates, row)
     return {
         "candidate_row_id": _readonly(candidate_ids),
-        "pose_world_cam": candidates["pose_world_cam"],
         "candidate_pose_relative_root": _readonly(candidates["pose_relative_root"].astype(np.float32, copy=False)),
         "candidate_position_id": _readonly(q_rows["position_id"][:width].astype(np.int32, copy=False)),
         "actor_action_mask": _readonly(q_rows["valid_action_mask"][:width].astype(np.bool_, copy=False)),
