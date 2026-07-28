@@ -3,15 +3,18 @@
 The module composes :class:`QhDataModule`, :class:`QhLightningModule`, and
 Lightning's [Trainer](https://lightning.ai/docs/pytorch/stable/common/trainer.html)
 without widening the scene-wise one-step experiment. It admits every configured
-corpus stage and atomically records the resolved run identity before model or Trainer state.
-It owns run-level seeding, paths, provenance, and one-loop dispatch; lower
-modules retain data, model, optimizer, and Trainer policy.
+corpus stage, creates an immutable preflight manifest, and records the terminal
+loop result separately. It owns run-level seeding, paths, checkpoint admission,
+provenance, and one-loop dispatch; lower modules retain data, model, optimizer,
+and Trainer policy.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -56,10 +59,10 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
     """Seed shared by Lightning, the DataLoader generator, and train sampler."""
 
     out_dir: Path = Field(default_factory=lambda: Path(".logs") / "qh")
-    """Run root containing checkpoints and the atomic ``run_manifest.json``."""
+    """Run root containing checkpoints and create-only lifecycle artifacts."""
 
     ckpt_path: Path | None = None
-    """Optional full-state checkpoint forwarded unchanged to the selected loop."""
+    """Full-state parent checkpoint; required for standalone validation or test."""
 
     trainer_config: TrainerFactoryConfig = Field(default_factory=_default_trainer_config)
     """Trainer policy; default distributed sampling is required."""
@@ -98,8 +101,9 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
         """Admit the requested stage and persist provenance before construction.
 
         Corpus setup is metadata-only. A missing validation or test stage,
-        horizon mismatch, or provenance-write failure therefore fails before
-        :class:`QhLightningModule` or Lightning Trainer exists.
+        horizon mismatch, incompatible checkpoint, or provenance-write failure
+        therefore fails before :class:`QhLightningModule` or Lightning Trainer
+        exists.
         External ``torchrun`` launches one CLI process per rank; only launcher
         rank zero writes the manifest, without requiring an initialized process
         group.
@@ -108,6 +112,7 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
         resolved_stage = Stage.from_str(setup_stage) if setup_stage is not None else self.stage
         if resolved_stage is Stage.VAL and not self.trainer_config.enable_validation:
             raise ValueError("Q_H validation requires trainer_config.enable_validation=true.")
+        checkpoint_path = self._resolved_checkpoint_path(resolved_stage)
         pl.seed_everything(self.seed, workers=False)
         out_dir = self.out_dir.expanduser().resolve()
         if self.trainer_config.default_root_dir is None:
@@ -119,7 +124,6 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
         requested_dataset = data.dataset_for_stage(resolved_stage)
         if requested_dataset is None:
             raise ValueError(f"Q_H stage={resolved_stage!s} requires a configured {resolved_stage!s} corpus.")
-        launched_world_size = _positive_env_int("WORLD_SIZE", default=1)
         launcher_rank = _launcher_rank()
 
         scorer_horizon = self.module_config.scorer.horizon
@@ -128,19 +132,24 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
                 f"Q_H scorer horizon {scorer_horizon} does not match "
                 f"training rollout corpus maximum {data.training_horizon}."
             )
+        checkpoint = _admit_checkpoint(
+            checkpoint_path,
+            module_config=self.module_config,
+            learning_contract=data.learning_contract,
+        )
         if launcher_rank == 0:
             out_dir.mkdir(parents=True, exist_ok=True)
-            _atomic_write_json(
+            _create_json(
                 out_dir / "run_manifest.json",
                 self._run_manifest(
                     data,
                     resolved_stage,
                     launcher_rank=launcher_rank,
-                    launched_world_size=launched_world_size,
+                    checkpoint=checkpoint,
                 ),
             )
 
-        module = self.module_config.setup_target()
+        module = self.module_config.setup_target(learning_contract=data.learning_contract)
         trainer = self.trainer_config.setup_target()
         return trainer, module, data
 
@@ -149,15 +158,52 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
 
         resolved_stage = Stage.from_str(stage) if stage is not None else self.stage
         trainer, module, data = self.setup_target(resolved_stage)
-        checkpoint = None if self.ckpt_path is None else str(self.ckpt_path.expanduser().resolve())
-        match resolved_stage:
-            case Stage.TRAIN:
-                trainer.fit(module, datamodule=data, ckpt_path=checkpoint)
-            case Stage.VAL:
-                trainer.validate(module, datamodule=data, ckpt_path=checkpoint)
-            case Stage.TEST:
-                trainer.test(module, datamodule=data, ckpt_path=checkpoint)
+        checkpoint_path = self._resolved_checkpoint_path(resolved_stage)
+        checkpoint = None if checkpoint_path is None else str(checkpoint_path)
+        checkpoint_reference = _checkpoint_reference(checkpoint_path)
+        error: BaseException | None = None
+        try:
+            match resolved_stage:
+                case Stage.TRAIN:
+                    trainer.fit(module, datamodule=data, ckpt_path=checkpoint)
+                case Stage.VAL:
+                    trainer.validate(module, datamodule=data, ckpt_path=checkpoint)
+                case Stage.TEST:
+                    trainer.test(module, datamodule=data, ckpt_path=checkpoint)
+        except BaseException as caught:
+            error = caught
+        finally:
+            if trainer.is_global_zero:
+                try:
+                    _create_json(
+                        self.out_dir.expanduser().resolve() / "run_result.json",
+                        self._run_result(
+                            trainer,
+                            data,
+                            resolved_stage,
+                            checkpoint=checkpoint_reference,
+                            error=error,
+                        ),
+                    )
+                except BaseException as result_error:
+                    if error is None:
+                        raise
+                    error.add_note(f"Failed to create run_result.json: {result_error}")
+        if error is not None:
+            raise error
         return trainer
+
+    def _resolved_checkpoint_path(self, stage: Stage) -> Path | None:
+        """Resolve and require the parent checkpoint for standalone evaluation."""
+
+        if self.ckpt_path is None:
+            if stage in (Stage.VAL, Stage.TEST):
+                raise ValueError(f"Q_H standalone stage={stage!s} requires ckpt_path to a full-state checkpoint.")
+            return None
+        checkpoint = self.ckpt_path.expanduser().resolve()
+        if not checkpoint.is_file():
+            raise ValueError(f"Q_H checkpoint does not exist or is not a file: {checkpoint}.")
+        return checkpoint
 
     def _run_manifest(
         self,
@@ -165,7 +211,7 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
         stage: Stage,
         *,
         launcher_rank: int,
-        launched_world_size: int,
+        checkpoint: dict[str, str] | None,
     ) -> dict[str, object]:
         """Build the JSON run identity from already admitted metadata."""
 
@@ -180,27 +226,67 @@ class QhExperimentConfig(TargetConfig[QhExperimentTarget]):
             launcher_kind = "torchrun"
         if os.environ.get("SLURM_JOB_ID"):
             launcher_kind = "slurm-torchrun"
-        padding_rows = distributed_padding_rows(data.train_dataset, world_size=launched_world_size)
-        emitted_rows = len(data.train_dataset) + padding_rows
+        effective_config = self.model_copy(update={"stage": stage})
         return {
-            "config": self.model_dump_jsonable(),
-            "config_hash": stable_config_hash(self),
+            "config": effective_config.model_dump_jsonable(),
+            "config_hash": stable_config_hash(effective_config),
             "run": {
                 "stage": str(stage),
                 "seed": self.seed,
                 "launcher_rank": launcher_rank,
                 "launcher_kind": launcher_kind,
                 "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-                "launched_world_size": launched_world_size,
                 "configured_devices": self.trainer_config.devices,
                 "batch_size_per_rank": data.batch_size,
-                "effective_emitted_batch_size": data.batch_size * launched_world_size,
-                "training_padding_rows": padding_rows,
-                "training_padding_fraction": 0.0 if emitted_rows == 0 else padding_rows / emitted_rows,
                 "container_image": os.environ.get("LRZ_CONTAINER_IMAGE"),
             },
+            "checkpoint": checkpoint,
             "corpus": data.provenance,
             "runtime": runtime,
+        }
+
+    def _run_result(
+        self,
+        trainer: pl.Trainer,
+        data: QhDataModule,
+        stage: Stage,
+        *,
+        checkpoint: dict[str, str] | None,
+        error: BaseException | None,
+    ) -> dict[str, object]:
+        """Build terminal evidence from the initialized Trainer's actual topology."""
+
+        world_size = int(trainer.world_size)
+        dataset = data.dataset_for_stage(stage)
+        if dataset is None:
+            raise RuntimeError(f"Q_H stage={stage!s} lost its admitted dataset before result recording.")
+        padding_rows = distributed_padding_rows(dataset, world_size=world_size)
+        emitted_rows = len(dataset) + padding_rows
+        effective_config = self.model_copy(update={"stage": stage})
+        return {
+            "status": "success" if error is None else "failure",
+            "config_hash": stable_config_hash(effective_config),
+            "run": {
+                "stage": str(stage),
+                "world_size": world_size,
+                "global_step": int(trainer.global_step),
+                "batch_size_per_rank": data.batch_size,
+                "effective_emitted_batch_size": data.batch_size * world_size,
+                "padding_rows": padding_rows,
+                "padding_fraction": 0.0 if emitted_rows == 0 else padding_rows / emitted_rows,
+            },
+            "checkpoint": {
+                "parent": checkpoint,
+                "evaluated": checkpoint if stage in (Stage.VAL, Stage.TEST) else None,
+                "best": _trainer_checkpoint_reference(trainer, "best_model_path") if stage is Stage.TRAIN else None,
+                "last": _trainer_checkpoint_reference(trainer, "last_model_path") if stage is Stage.TRAIN else None,
+            },
+            "error": None
+            if error is None
+            else {
+                "type": f"{type(error).__module__}.{type(error).__qualname__}",
+                "message": str(error),
+            },
         }
 
 
@@ -221,8 +307,60 @@ def _positive_env_int(name: str, *, default: int, allow_zero: bool = False) -> i
     return value
 
 
-def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
-    """Atomically replace one plain JSON artifact on the destination filesystem."""
+def _admit_checkpoint(
+    path: Path | None,
+    *,
+    module_config: QhLightningModuleConfig,
+    learning_contract: dict[str, object],
+) -> dict[str, str] | None:
+    """Load one Lightning checkpoint and reject semantic contract drift."""
+
+    if path is None:
+        return None
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+    except Exception as error:
+        raise ValueError(f"Q_H checkpoint is not a readable full-state Lightning checkpoint: {path}.") from error
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("state_dict"), Mapping):
+        raise ValueError(f"Q_H checkpoint is not a readable full-state Lightning checkpoint: {path}.")
+    hyper_parameters = payload.get("hyper_parameters")
+    expected = {
+        "config": module_config.model_dump_jsonable(),
+        "learning_contract": learning_contract,
+    }
+    if not isinstance(hyper_parameters, Mapping) or dict(hyper_parameters) != expected:
+        raise ValueError(
+            "Q_H checkpoint hyper_parameters do not match the current module config "
+            f"and corpus learning contract: {path}."
+        )
+    return _checkpoint_reference(path)
+
+
+def _checkpoint_reference(path: Path | None) -> dict[str, str] | None:
+    """Return a content-addressed parent reference for one checkpoint."""
+
+    if path is None:
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return {"parent_reference": str(path), "sha256": digest.hexdigest()}
+
+
+def _trainer_checkpoint_reference(trainer: pl.Trainer, attribute: str) -> dict[str, str] | None:
+    """Content-address a checkpoint path exposed by Lightning's callback."""
+
+    callback = getattr(trainer, "checkpoint_callback", None)
+    raw_path = None if callback is None else getattr(callback, attribute, None)
+    if not raw_path:
+        return None
+    path = Path(raw_path).expanduser().resolve()
+    return _checkpoint_reference(path) if path.is_file() else None
+
+
+def _create_json(path: Path, payload: dict[str, object]) -> None:
+    """Atomically create one JSON artifact without overwriting prior evidence."""
 
     temporary: Path | None = None
     try:
@@ -234,11 +372,12 @@ def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        os.link(temporary, path)
     except BaseException:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
         raise
+    temporary.unlink()
 
 
 __all__ = ["QhExperimentConfig", "QhExperimentTarget"]
