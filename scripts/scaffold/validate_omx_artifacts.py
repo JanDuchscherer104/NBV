@@ -1045,6 +1045,7 @@ def validate_registry(
         parsed[bundle_id] = (bundle, _artifacts(bundle))
     for bundle_id, (bundle, artifacts) in parsed.items():
         status = bundle["status"]
+        contract_version = _contract_version(bundle)
         families = [artifact.family for artifact in artifacts]
         if set(families) != REQUIRED_FAMILIES:
             raise ValidationError(f"bundle {bundle_id} role families differ")

@@ -441,9 +441,13 @@ def test_full_legacy_path_write_routes_are_rejected(tmp_path: Path, suffix: str)
     assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
 
 
+@pytest.mark.parametrize("connector", ["but", "then", "however", "instead", "yet"])
 @pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
-def test_positive_write_after_negated_unrelated_write_is_rejected(tmp_path: Path, suffix: str) -> None:
-    claim = "DECISIONS is legacy migration evidence and not current truth. Do not update README, but write DECISIONS."
+def test_positive_write_after_negated_unrelated_write_is_rejected(tmp_path: Path, suffix: str, connector: str) -> None:
+    claim = (
+        "DECISIONS is legacy migration evidence and not current truth. "
+        f"Do not update README, {connector} write DECISIONS."
+    )
     if suffix == ".md":
         body = f"{claim}\n"
     elif suffix == ".toml":
@@ -454,6 +458,34 @@ def test_positive_write_after_negated_unrelated_write_is_rejected(tmp_path: Path
     path.write_text(body, encoding="utf-8")
 
     assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_negated_legacy_write_is_not_an_owner_route(tmp_path: Path, suffix: str) -> None:
+    claim = "DECISIONS is legacy migration evidence. Do not write DECISIONS."
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
+
+
+def test_negated_parallel_owner_instruction_is_not_a_legacy_owner_route(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "owner.md"
+    path.write_text(
+        "Legacy state journals are supporting migration evidence only. "
+        "Do not add a parallel context file as a second source of truth.\n",
+        encoding="utf-8",
+    )
+
+    assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
 
 def test_domain_canonical_state_is_not_a_legacy_journal_alias(tmp_path: Path) -> None:

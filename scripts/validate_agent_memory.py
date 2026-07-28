@@ -132,9 +132,12 @@ LEGACY_STATE_MIGRATION_ONLY = (
 )
 LEGACY_STATE_NEGATED_OWNER = re.compile(
     r"\b(?:not|never) (?:a )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
-    r"\brather than (?:the )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
-    r"\bdo not (?:add|update|write|record|maintain)\b"
-    r"(?:(?!\b(?:but|then)\b|[.;])[\s\S])*",
+    r"\brather than (?:the )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b",
+    re.IGNORECASE,
+)
+WRITE_NEGATION = re.compile(r"\b(?:do\s+not|don't|never)\b", re.IGNORECASE)
+WRITE_SCOPE_RESET = re.compile(
+    r"(?:\b(?:but|then|however|instead|yet|nevertheless|nonetheless|still)\b[\s,]*)",
     re.IGNORECASE,
 )
 LEGACY_STATE_OWNER_ASSERTION = re.compile(
@@ -526,15 +529,29 @@ def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
     return (max(starts, default=-1) + 1, min(ends, default=len(text)))
 
 
+def _is_locally_negated(text: str, offset: int) -> bool:
+    """Return whether the expression at ``offset`` remains under local negation."""
+
+    clause_start, _ = _clause_bounds(text, offset)
+    prefix = text[clause_start:offset]
+    resets = list(WRITE_SCOPE_RESET.finditer(prefix))
+    local_prefix = prefix[resets[-1].end() :] if resets else prefix
+    return WRITE_NEGATION.search(local_prefix) is not None
+
+
 def _has_legacy_owner_assertion(text: str) -> bool:
     """Return whether an owner assertion refers to the legacy mention."""
 
     assertion_text = LEGACY_STATE_NEGATED_OWNER.sub("", text)
     for write_verb in LEGACY_STATE_WRITE_VERB.finditer(assertion_text):
+        if _is_locally_negated(assertion_text, write_verb.start()):
+            continue
         clause_start, clause_end = _clause_bounds(assertion_text, write_verb.start())
         if _has_legacy_state_mention(assertion_text[clause_start:clause_end]):
             return True
     for assertion in LEGACY_STATE_ANAPHORIC_WRITE.finditer(assertion_text):
+        if _is_locally_negated(assertion_text, assertion.start()):
+            continue
         clause_start, _ = _clause_bounds(assertion_text, assertion.start())
         clause_prefix = assertion_text[clause_start : assertion.start()].strip()
         if not clause_prefix and _has_legacy_state_mention(
@@ -542,6 +559,8 @@ def _has_legacy_owner_assertion(text: str) -> bool:
         ):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
+        if _is_locally_negated(assertion_text, assertion.start()):
+            continue
         clause_start, _ = _clause_bounds(assertion_text, assertion.start())
         clause = assertion_text[clause_start : assertion.end()]
         if _has_legacy_state_mention(clause):

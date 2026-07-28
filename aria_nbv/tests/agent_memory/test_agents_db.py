@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -16,6 +17,10 @@ sys.modules[SPEC.name] = agents_db
 SPEC.loader.exec_module(agents_db)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+OMX_PATH = re.compile(
+    r"(?:repo:)?(?P<path>\.omx/(?:archive/accepted-bundles/[^/\s\"']+/)?"
+    r"(?:context|specs|plans)/[^\s\"'&#]+)"
+)
 
 
 def test_validate_rejects_active_id_reused_by_resolved_record(
@@ -70,8 +75,11 @@ def test_scaffold_records_reference_existing_accepted_artifacts(relative: str, t
     payload = tomllib.loads((REPO_ROOT / relative).read_text(encoding="utf-8"))
     record = next(item for item in payload[table] if item["id"] == record_id)
 
-    for reference in record["references"]:
-        if not reference.startswith("repo:.omx/"):
-            continue
-        target = reference.removeprefix("repo:").split("#", maxsplit=1)[0]
-        assert (REPO_ROOT / target).exists(), reference
+    values = [value for value in record.values() if isinstance(value, str)]
+    values.extend(
+        item for value in record.values() if isinstance(value, list) for item in value if isinstance(item, str)
+    )
+    for value in values:
+        for match in OMX_PATH.finditer(value):
+            target = match.group("path")
+            assert (REPO_ROOT / target).exists(), value

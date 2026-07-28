@@ -426,6 +426,37 @@ class OmxArtifactValidatorTests(unittest.TestCase):
 
                 self.assert_invalid(bundle, "invalid native role path")
 
+    def test_contract_v2_native_root_check_is_independent_of_bundle_order(self) -> None:
+        current = self.bundle()
+        context = next(
+            item for item in current["artifact"] if item["family"] == "context"
+        )
+        wrong_path = ".omx/plans/context.md"
+        (self.repo / context["path"]).replace(self.repo / wrong_path)
+        context["path"] = wrong_path
+        context["native_path"] = wrong_path
+
+        legacy = self.bundle("task-legacy", "legacy")
+        legacy["contract_version"] = 1
+        legacy["status"] = "superseded"
+        legacy["superseded_by"] = current["id"]
+        for artifact in legacy["artifact"]:
+            source = self.repo / artifact["path"]
+            artifact["path"] = (
+                f".omx/archive/accepted-bundles/{legacy['id']}/"
+                + artifact["native_path"].removeprefix(".omx/")
+            )
+            destination = self.repo / artifact["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(destination)
+
+        for bundles in ([current, legacy], [legacy, current]):
+            with self.subTest(order=[bundle["id"] for bundle in bundles]):
+                with self.assertRaisesRegex(
+                    MODULE.ValidationError, "invalid native role path"
+                ):
+                    MODULE.validate_registry(self.repo, self.write_registry(bundles))
+
     def test_archived_contract_v2_family_keeps_native_root(self) -> None:
         original = self.bundle()
         successor = self.bundle("task-next", "next")

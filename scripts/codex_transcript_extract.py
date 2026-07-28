@@ -12,14 +12,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import secrets
 import subprocess
 import sys
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator, TextIO
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROJECT_ROOT = REPO_ROOT
@@ -857,11 +860,72 @@ def gather_records(
     return chat_messages, user_messages, plan_answers, counter
 
 
+def _open_directory_no_follow(path: Path) -> int:
+    """Open an absolute directory path without following symlink components."""
+
+    absolute = _absolute_without_symlink_resolution(path)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    current = os.open(absolute.anchor, flags)
+    try:
+        for part in absolute.parts[1:]:
+            child = os.open(part, flags, dir_fd=current)
+            os.close(current)
+            current = child
+    except BaseException:
+        os.close(current)
+        raise
+    return current
+
+
+@contextmanager
+def atomic_text_writer(path: Path) -> Iterator[TextIO]:
+    """Yield a private file and atomically replace ``path`` without symlink writes."""
+
+    parent_fd = _open_directory_no_follow(path.parent)
+    temporary_name = f".{path.name}.{secrets.token_hex(8)}.tmp"
+    file_fd = -1
+    temporary_exists = False
+    try:
+        file_fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        temporary_exists = True
+        handle = os.fdopen(file_fd, "w", encoding="utf-8")
+        file_fd = -1
+        with handle:
+            yield handle
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        temporary_exists = False
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        if temporary_exists:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        os.close(parent_fd)
+
+
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
+    with atomic_text_writer(path) as handle:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def write_text(path: Path, content: str) -> None:
+    with atomic_text_writer(path) as handle:
+        handle.write(content)
 
 
 def parse_batch_date(value: str) -> str:
@@ -1060,11 +1124,6 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"transcript output rejected: {exc}", file=sys.stderr)
         return 2
-    write_jsonl(outputs["chat"], chat_messages)
-    write_jsonl(outputs["user"], user_messages)
-    write_jsonl(outputs["plans"], plan_answers)
-    write_jsonl(outputs["candidates"], distillates)
-    write_jsonl(outputs["reviewed"], reviewed_distillates)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "batch": batch,
@@ -1079,10 +1138,19 @@ def main(argv: list[str] | None = None) -> int:
             output_path_label(outputs["reviewed"]),
         ],
     }
-    outputs["manifest"].write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        write_jsonl(outputs["chat"], chat_messages)
+        write_jsonl(outputs["user"], user_messages)
+        write_jsonl(outputs["plans"], plan_answers)
+        write_jsonl(outputs["candidates"], distillates)
+        write_jsonl(outputs["reviewed"], reviewed_distillates)
+        write_text(
+            outputs["manifest"],
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        )
+    except OSError as exc:
+        print(f"transcript output rejected: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 

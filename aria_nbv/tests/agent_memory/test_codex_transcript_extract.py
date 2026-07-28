@@ -422,6 +422,44 @@ def test_main_rejects_symlinked_output_without_truncating_target(tmp_path: Path)
     assert outside.read_text(encoding="utf-8") == "preserve me\n"
 
 
+@pytest.mark.parametrize("output_name", ["chat", "manifest"])
+def test_main_does_not_follow_output_symlink_swapped_after_preparation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output_name: str
+) -> None:
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    output_root = tmp_path / "transcripts"
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("preserve me\n", encoding="utf-8")
+    original_prepare = extractor.prepare_output_paths
+
+    def prepare_and_swap(root: Path, batch: str) -> dict[str, Path]:
+        outputs = original_prepare(root, batch)
+        outputs[output_name].symlink_to(outside)
+        return outputs
+
+    monkeypatch.setattr(extractor, "prepare_output_paths", prepare_and_swap)
+
+    result = extractor.main(
+        [
+            "--sessions-root",
+            sessions_root.as_posix(),
+            "--project-root",
+            tmp_path.as_posix(),
+            "--output-root",
+            output_root.as_posix(),
+            "--date",
+            "2026-06-18",
+            "--write",
+        ]
+    )
+
+    assert result == 0
+    assert outside.read_text(encoding="utf-8") == "preserve me\n"
+    assert not (output_root / "raw" / "2026-06-18" / "chat_messages.jsonl").is_symlink()
+    assert not (output_root / "distilled" / "2026-06-18" / "manifest.json").is_symlink()
+
+
 def test_distillates_do_not_choose_a_decision_owner() -> None:
     plan_answer = {
         "kind": "plan_mode_answer",
