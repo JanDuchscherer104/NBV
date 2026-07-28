@@ -21,3 +21,17 @@ Verification covered the focused validator against the real merge base, the
 integration/unit suite, LOC regeneration from Git blobs, the production memory
 gate, tracked-artifact privacy, repository memory checks, root CI, and diff
 hygiene. The approved SCAFF report remained byte-identical.
+
+Later exact-head review found four additional merge-boundary gaps. Registry
+bytes and entry counts are now bounded before parsing, complete registry
+erasure is rejected, palace runtime paths are forbidden and CI-triggering, and
+live root/docs/memory routes agree that Typst/code owners outrank legacy state
+journals. The inherited scaffold audit now passes after metadata-only repairs;
+skill consolidation remains PR3 work.
+
+Deleting the transcript files protects the current tree but does not purge
+their blobs from the public Git history. `issue-033` owns the required private
+incident audit, credential rotation if needed, and any coordinated owner-
+approved history rewrite. PR1 must not claim historical purge. The post-commit
+Graphify hook still fails to import `graphify_adapter`; SCAFF-014/015 and PR4
+own that pre-existing integration defect.
