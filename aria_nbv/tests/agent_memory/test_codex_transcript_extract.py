@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "codex_transcript_extract.py"
 SPEC = importlib.util.spec_from_file_location("codex_transcript_extract", SCRIPT_PATH)
@@ -367,6 +370,56 @@ def test_main_writes_raw_chat_manifest_only_when_explicit(tmp_path: Path) -> Non
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["counts"]["chat_messages_deduped"] == 1
     assert raw_path.as_posix() in manifest["outputs"]
+
+
+@pytest.mark.parametrize("batch", ["../../escaped", "2026-6-18", "not-a-date"])
+def test_parse_args_rejects_non_iso_batch_dates(batch: str) -> None:
+    with pytest.raises(SystemExit):
+        extractor.parse_args(["--date", batch])
+
+
+def test_validate_output_root_requires_ignored_in_repo_destination(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    (repo / ".gitignore").write_text("ignored/\n", encoding="utf-8")
+
+    ignored = repo / "ignored" / "transcripts"
+    assert extractor.validate_output_root(ignored, repo_root=repo) == ignored.resolve()
+
+    with pytest.raises(ValueError, match="must be ignored"):
+        extractor.validate_output_root(repo / "tracked", repo_root=repo)
+
+
+def test_main_rejects_symlinked_output_without_truncating_target(tmp_path: Path) -> None:
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    output_root = tmp_path / "transcripts"
+    batch = "2026-06-18"
+    raw_root = output_root / "raw" / batch
+    raw_root.mkdir(parents=True)
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("preserve me\n", encoding="utf-8")
+    (raw_root / "chat_messages.jsonl").symlink_to(outside)
+
+    result = extractor.main(
+        [
+            "--sessions-root",
+            sessions_root.as_posix(),
+            "--project-root",
+            tmp_path.as_posix(),
+            "--output-root",
+            output_root.as_posix(),
+            "--date",
+            batch,
+            "--write",
+        ]
+    )
+
+    assert result == 2
+    assert outside.read_text(encoding="utf-8") == "preserve me\n"
 
 
 def test_distillates_do_not_choose_a_decision_owner() -> None:

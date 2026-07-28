@@ -33,6 +33,14 @@ REQUIRED_FAMILIES = {
     "handoff",
 }
 CURRENT_ROOTS = (".omx/context/", ".omx/specs/", ".omx/plans/")
+FAMILY_NATIVE_ROOT = {
+    "context": ".omx/context/",
+    "specification": ".omx/specs/",
+    "test_specification": ".omx/specs/",
+    "plan": ".omx/plans/",
+    "review": ".omx/plans/",
+    "handoff": ".omx/plans/",
+}
 PRIVATE_PARTS = {
     "cache",
     "logs",
@@ -1084,6 +1092,13 @@ def validate_registry(
                 artifact.role
             ):
                 raise ValidationError(f"invalid role for {artifact.path}")
+            if contract_version >= 2 and not artifact.native_path.startswith(
+                FAMILY_NATIVE_ROOT[artifact.family]
+            ):
+                raise ValidationError(
+                    f"invalid native role path for {artifact.family}: "
+                    f"{artifact.native_path}"
+                )
             if artifact.path in owned:
                 raise ValidationError(
                     f"artifact path has multiple owners: {artifact.path}"

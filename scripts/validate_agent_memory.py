@@ -133,7 +133,8 @@ LEGACY_STATE_MIGRATION_ONLY = (
 LEGACY_STATE_NEGATED_OWNER = re.compile(
     r"\b(?:not|never) (?:a )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
     r"\brather than (?:the )?(?:authoritative|canonical|current owner|current[- ]truth|source of truth)\b|"
-    r"\bdo not (?:add|update|write|record|maintain)\b[^.;]*",
+    r"\bdo not (?:add|update|write|record|maintain)\b"
+    r"(?:(?!\b(?:but|then)\b|[.;])[\s\S])*",
     re.IGNORECASE,
 )
 LEGACY_STATE_OWNER_ASSERTION = re.compile(
@@ -503,42 +504,49 @@ def _explicit_different_owner(prefix: str) -> bool:
     )
 
 
+def _clause_bounds(text: str, offset: int) -> tuple[int, int]:
+    """Return clause bounds without splitting recognized legacy path aliases."""
+
+    protected = [match.span() for match in _legacy_state_mentions(text)]
+
+    def is_protected(index: int) -> bool:
+        return any(start <= index < end for start, end in protected)
+
+    delimiters = ".;!?"
+    starts = [
+        index
+        for index, char in enumerate(text[:offset])
+        if char in delimiters and not is_protected(index)
+    ]
+    ends = [
+        index
+        for index, char in enumerate(text[offset:], start=offset)
+        if char in delimiters and not is_protected(index)
+    ]
+    return (max(starts, default=-1) + 1, min(ends, default=len(text)))
+
+
 def _has_legacy_owner_assertion(text: str) -> bool:
     """Return whether an owner assertion refers to the legacy mention."""
 
     assertion_text = LEGACY_STATE_NEGATED_OWNER.sub("", text)
     for write_verb in LEGACY_STATE_WRITE_VERB.finditer(assertion_text):
-        clause_start = max(
-            assertion_text.rfind(delimiter, 0, write_verb.start())
-            for delimiter in (".", ";", "!", "?")
-        )
-        following_delimiters = [
-            offset
-            for delimiter in (".", ";", "!", "?")
-            if (offset := assertion_text.find(delimiter, write_verb.end())) >= 0
-        ]
-        clause_end = min(following_delimiters, default=len(assertion_text))
-        if _has_legacy_state_mention(assertion_text[clause_start + 1 : clause_end]):
+        clause_start, clause_end = _clause_bounds(assertion_text, write_verb.start())
+        if _has_legacy_state_mention(assertion_text[clause_start:clause_end]):
             return True
     for assertion in LEGACY_STATE_ANAPHORIC_WRITE.finditer(assertion_text):
-        clause_start = max(
-            assertion_text.rfind(delimiter, 0, assertion.start())
-            for delimiter in (".", ";", "!", "?")
-        )
-        clause_prefix = assertion_text[clause_start + 1 : assertion.start()].strip()
+        clause_start, _ = _clause_bounds(assertion_text, assertion.start())
+        clause_prefix = assertion_text[clause_start : assertion.start()].strip()
         if not clause_prefix and _has_legacy_state_mention(
             assertion_text[: assertion.start()]
         ):
             return True
     for assertion in LEGACY_STATE_OWNER_ASSERTION.finditer(assertion_text):
-        clause_start = max(
-            assertion_text.rfind(delimiter, 0, assertion.start())
-            for delimiter in (".", ";", "!", "?")
-        )
-        clause = assertion_text[clause_start + 1 : assertion.end()]
+        clause_start, _ = _clause_bounds(assertion_text, assertion.start())
+        clause = assertion_text[clause_start : assertion.end()]
         if _has_legacy_state_mention(clause):
             return True
-        prefix = clause[: assertion.start() - clause_start - 1].strip()
+        prefix = clause[: assertion.start() - clause_start].strip()
         if not _explicit_different_owner(prefix):
             return True
     return False

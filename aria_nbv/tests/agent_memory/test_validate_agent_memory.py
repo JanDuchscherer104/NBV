@@ -423,6 +423,39 @@ def test_short_paths_and_additional_write_verbs_are_rejected(tmp_path: Path, cla
     assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
 
 
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_full_legacy_path_write_routes_are_rejected(tmp_path: Path, suffix: str) -> None:
+    claim = (
+        "DECISIONS is legacy migration evidence and not current truth. "
+        "Write decisions to .agents/memory/state/DECISIONS.md."
+    )
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
+@pytest.mark.parametrize("suffix", [".md", ".toml", ".typ"])
+def test_positive_write_after_negated_unrelated_write_is_rejected(tmp_path: Path, suffix: str) -> None:
+    claim = "DECISIONS is legacy migration evidence and not current truth. Do not update README, but write DECISIONS."
+    if suffix == ".md":
+        body = f"{claim}\n"
+    elif suffix == ".toml":
+        body = f'instruction = "{claim}"\n'
+    else:
+        body = f"#let instruction = [{claim}]\n"
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
 def test_domain_canonical_state_is_not_a_legacy_journal_alias(tmp_path: Path) -> None:
     path = tmp_path / "model.typ"
     path.write_text(

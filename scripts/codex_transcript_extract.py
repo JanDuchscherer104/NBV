@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -863,6 +864,78 @@ def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def parse_batch_date(value: str) -> str:
+    """Parse one canonical ISO calendar date for an output batch."""
+
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "expected an ISO date in YYYY-MM-DD form"
+        ) from exc
+    if parsed.isoformat() != value:
+        raise argparse.ArgumentTypeError("expected an ISO date in YYYY-MM-DD form")
+    return value
+
+
+def _absolute_without_symlink_resolution(path: Path) -> Path:
+    expanded = path.expanduser()
+    return expanded if expanded.is_absolute() else Path.cwd() / expanded
+
+
+def _reject_symlink_components(path: Path) -> None:
+    absolute = _absolute_without_symlink_resolution(path)
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"output path contains a symlink: {current}")
+
+
+def validate_output_root(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
+    """Resolve a safe output root and require in-repo output to be ignored."""
+
+    _reject_symlink_components(path)
+    resolved = _absolute_without_symlink_resolution(path).resolve(strict=False)
+    repository = repo_root.resolve()
+    try:
+        relative = resolved.relative_to(repository)
+    except ValueError:
+        return resolved
+    ignored = subprocess.run(
+        ["git", "check-ignore", "--quiet", "--no-index", "--", relative.as_posix()],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+    )
+    if ignored.returncode != 0:
+        raise ValueError("in-repository transcript output root must be ignored by Git")
+    return resolved
+
+
+def prepare_output_paths(output_root: Path, batch: str) -> dict[str, Path]:
+    """Create safe output directories and reject symlinked output files."""
+
+    relative_files = {
+        "chat": Path("raw") / batch / "chat_messages.jsonl",
+        "user": Path("user") / batch / "user_messages.jsonl",
+        "plans": Path("user") / batch / "plan_mode_answers.jsonl",
+        "candidates": Path("distilled") / batch / "candidate_decisions.jsonl",
+        "reviewed": Path("distilled") / batch / "reviewed_decisions.jsonl",
+        "manifest": Path("distilled") / batch / "manifest.json",
+    }
+    paths = {name: output_root / relative for name, relative in relative_files.items()}
+    for path in paths.values():
+        resolved = path.resolve(strict=False)
+        if output_root != resolved and output_root not in resolved.parents:
+            raise ValueError(f"transcript output escapes its root: {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _reject_symlink_components(path)
+        if path.exists() and not path.is_file():
+            raise ValueError(f"transcript output is not a regular file: {path}")
+    return paths
+
+
 def output_path_label(path: Path) -> str:
     try:
         return path.relative_to(REPO_ROOT).as_posix()
@@ -915,6 +988,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--date",
+        type=parse_batch_date,
         default=date.today().isoformat(),
         help="Batch date used in output paths.",
     )
@@ -980,14 +1054,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     batch = str(args.date)
-    raw_root = args.output_root / "raw" / batch
-    user_root = args.output_root / "user" / batch
-    distilled_root = args.output_root / "distilled" / batch
-    write_jsonl(raw_root / "chat_messages.jsonl", chat_messages)
-    write_jsonl(user_root / "user_messages.jsonl", user_messages)
-    write_jsonl(user_root / "plan_mode_answers.jsonl", plan_answers)
-    write_jsonl(distilled_root / "candidate_decisions.jsonl", distillates)
-    write_jsonl(distilled_root / "reviewed_decisions.jsonl", reviewed_distillates)
+    try:
+        output_root = validate_output_root(args.output_root)
+        outputs = prepare_output_paths(output_root, batch)
+    except (OSError, ValueError) as exc:
+        print(f"transcript output rejected: {exc}", file=sys.stderr)
+        return 2
+    write_jsonl(outputs["chat"], chat_messages)
+    write_jsonl(outputs["user"], user_messages)
+    write_jsonl(outputs["plans"], plan_answers)
+    write_jsonl(outputs["candidates"], distillates)
+    write_jsonl(outputs["reviewed"], reviewed_distillates)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "batch": batch,
@@ -995,14 +1072,14 @@ def main(argv: list[str] | None = None) -> int:
         "project_root": project_root.as_posix(),
         "counts": dict(counter),
         "outputs": [
-            output_path_label(raw_root / "chat_messages.jsonl"),
-            output_path_label(user_root / "user_messages.jsonl"),
-            output_path_label(user_root / "plan_mode_answers.jsonl"),
-            output_path_label(distilled_root / "candidate_decisions.jsonl"),
-            output_path_label(distilled_root / "reviewed_decisions.jsonl"),
+            output_path_label(outputs["chat"]),
+            output_path_label(outputs["user"]),
+            output_path_label(outputs["plans"]),
+            output_path_label(outputs["candidates"]),
+            output_path_label(outputs["reviewed"]),
         ],
     }
-    (distilled_root / "manifest.json").write_text(
+    outputs["manifest"].write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

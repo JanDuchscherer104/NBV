@@ -402,6 +402,57 @@ class OmxArtifactValidatorTests(unittest.TestCase):
         bundle.pop("acceptance_sha256")
         self.assert_invalid(bundle, "invalid acceptance record")
 
+    def test_contract_v2_artifact_families_are_bound_to_native_roots(self) -> None:
+        wrong_roots = {
+            "context": ".omx/plans/context.md",
+            "specification": ".omx/context/report.md",
+            "test_specification": ".omx/plans/test.md",
+            "plan": ".omx/specs/plan.md",
+            "review": ".omx/specs/review.json",
+            "handoff": ".omx/specs/handoff.json",
+        }
+        for family, wrong_path in wrong_roots.items():
+            with self.subTest(family=family):
+                bundle = self.bundle()
+                artifact = next(
+                    item for item in bundle["artifact"] if item["family"] == family
+                )
+                source = self.repo / artifact["path"]
+                destination = self.repo / wrong_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                source.replace(destination)
+                artifact["path"] = wrong_path
+                artifact["native_path"] = wrong_path
+
+                self.assert_invalid(bundle, "invalid native role path")
+
+    def test_archived_contract_v2_family_keeps_native_root(self) -> None:
+        original = self.bundle()
+        successor = self.bundle("task-next", "next")
+        self.commit_supersession(original, successor)
+        registry = MODULE.load_registry(self.repo / ".agents/omx_artifacts.toml")
+        archived = next(
+            item for item in registry["bundle"] if item["status"] == "superseded"
+        )
+        context = next(
+            item for item in archived["artifact"] if item["family"] == "context"
+        )
+        source = self.repo / context["path"]
+        context["native_path"] = ".omx/plans/context.md"
+        context["path"] = (
+            f".omx/archive/accepted-bundles/{archived['id']}/plans/context.md"
+        )
+        destination = self.repo / context["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source.replace(destination)
+        current = next(
+            item for item in registry["bundle"] if item["status"] == "current"
+        )
+        self.bind_predecessor(current, archived)
+
+        with self.assertRaisesRegex(MODULE.ValidationError, "invalid native role path"):
+            MODULE.validate_registry(self.repo, self.write_registry(registry["bundle"]))
+
     def test_repeated_non_specification_and_incomplete_review_fail(self) -> None:
         bundle = self.bundle()
         bundle["artifact"].append(
