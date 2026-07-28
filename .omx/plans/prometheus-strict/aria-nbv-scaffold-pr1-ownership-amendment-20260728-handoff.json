@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-ownership-amendment-20260728",
+  "task": "aria-nbv-scaffold-lifecycle",
+  "status": "accepted",
+  "predecessor_bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-review-correction-20260727",
+  "predecessor_bundle_sha256": "d80a008d4fc2ca88d0a41321159ae7976bda6bb6bbe797fee4c6144d51866fe8",
+  "predecessor_chain_sha256": "d3ba2290bd07dda063390f8e6a6b7a2e1cdb1216fe8d2430d5d4a175dd36a829",
+  "roles": [
+    "context",
+    "specification",
+    "plan",
+    "test_specification",
+    "review",
+    "handoff"
+  ],
+  "review": {
+    "architect": "APPROVED",
+    "critic": "APPROVED"
+  },
+  "execution": {
+    "mode": "sequential",
+    "next_package": "PR1 publication and hosted verification",
+    "write_scope": "scaffold-series worktree only"
+  },
+  "constraints": [
+    "keep successor evidence in native OMX role paths",
+    "archive the accepted predecessor byte-identically",
+    "bind predecessor content and chain receipts",
+    "keep runtime state and private transcript payloads untracked",
+    "preserve PR2 through PR5 ownership",
+    "require fresh exact-final-HEAD code and architecture review"
+  ]
+}

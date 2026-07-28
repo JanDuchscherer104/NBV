@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "bundle_id": "aria-nbv-scaffold-five-pr-rebuild-pr1-ownership-amendment-20260728",
+  "task": "aria-nbv-scaffold-lifecycle",
+  "status": "accepted",
+  "accepted_scope": "the reviewed PR1 ownership amendment and content-addressed successor contract for the five-PR ARIA-NBV scaffold rebuild",
+  "excluded_scope": [
+    "pull request merge",
+    "PR2 memory architecture, transcript completeness, retrieval, or claim promotion",
+    "PR3 skill and routing consolidation",
+    "PR4 Graphify implementation and hook replacement",
+    "PR5 integration and broad documentation changes",
+    "raw prompts, runtime state, private transcripts, machine-local evidence, and public history purge"
+  ],
+  "actor_class": "repository-owner",
+  "instruction_channel": "direct-user-instruction",
+  "date": "2026-07-28",
+  "request_digest": "bde8d50807a333dd3eb44a449be5bedb70052bdd670b2b4de020222d98ab5b83",
+  "request_digest_normalization": "SHA-256 over UTF-8 bytes for the exact lowercase instruction proceed with the ultra-goal implementation! with no trailing LF"
+}

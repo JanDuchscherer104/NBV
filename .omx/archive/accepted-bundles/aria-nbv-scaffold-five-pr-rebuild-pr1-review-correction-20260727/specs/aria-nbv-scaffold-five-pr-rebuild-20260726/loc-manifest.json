@@ -1,0 +1,1366 @@
+{
+  "baseline_commit": "b8166fc8ab60c41d0f8a6eecfef8e4a2bf3b161c",
+  "counting_method": "Physical lines are bytes.splitlines(); categories are disjoint.",
+  "rows": [
+    {
+      "category": "generated",
+      "path": ".omx/plans/measured-autoresearch-sidecar.md",
+      "physical_lines": 264
+    },
+    {
+      "category": "generated",
+      "path": ".omx/plans/thesis-method-registry-restoration-ledger.md",
+      "physical_lines": 124
+    },
+    {
+      "category": "generated",
+      "path": "docs/_generated/context/.gitignore",
+      "physical_lines": 3
+    },
+    {
+      "category": "generated",
+      "path": "docs/_generated/context/glossary.jsonl",
+      "physical_lines": 56
+    },
+    {
+      "category": "production",
+      "path": ".agents/AGENTS_INTERNAL_DB.md",
+      "physical_lines": 60
+    },
+    {
+      "category": "production",
+      "path": ".agents/issues.toml",
+      "physical_lines": 243
+    },
+    {
+      "category": "production",
+      "path": ".agents/kg/README.md",
+      "physical_lines": 49
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/README.md",
+      "physical_lines": 22
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/index/codex_migration_manifest.md",
+      "physical_lines": 435
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/state/DECISIONS.md",
+      "physical_lines": 333
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/state/GOTCHAS.md",
+      "physical_lines": 55
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/state/OPEN_QUESTIONS.md",
+      "physical_lines": 50
+    },
+    {
+      "category": "production",
+      "path": ".agents/memory/state/PROJECT_STATE.md",
+      "physical_lines": 84
+    },
+    {
+      "category": "production",
+      "path": ".agents/refactors.toml",
+      "physical_lines": 239
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/agent_memory_templates.md",
+      "physical_lines": 66
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/alignment_tools_contract.md",
+      "physical_lines": 94
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/context7_library_ids.md",
+      "physical_lines": 33
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/external_stack_contracts.md",
+      "physical_lines": 119
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/human_owner_intent.md",
+      "physical_lines": 31
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/litkg_quick_reference.md",
+      "physical_lines": 252
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/mattpocock_skills_contract.md",
+      "physical_lines": 58
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/mattpocock_skills_manifest.toml",
+      "physical_lines": 360
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/omx_artifact_policy.md",
+      "physical_lines": 21
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/omx_quick_reference.md",
+      "physical_lines": 90
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/operator_quick_reference.md",
+      "physical_lines": 110
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/python_conventions.md",
+      "physical_lines": 58
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/rollout_zarr_q_invalidity_contract.md",
+      "physical_lines": 455
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/scaffold_routing_fixtures.json",
+      "physical_lines": 144
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/skill_prune_merge_verdict.md",
+      "physical_lines": 55
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/skill_style_guide.md",
+      "physical_lines": 123
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/source_order.md",
+      "physical_lines": 62
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/thesis_code_links.md",
+      "physical_lines": 54
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/verification_matrix.md",
+      "physical_lines": 97
+    },
+    {
+      "category": "production",
+      "path": ".agents/references/worktree_policy.md",
+      "physical_lines": 53
+    },
+    {
+      "category": "production",
+      "path": ".agents/resolved.toml",
+      "physical_lines": 1108
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agent-behavior/SKILL.md",
+      "physical_lines": 72
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agent-behavior/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agents-db/SKILL.md",
+      "physical_lines": 98
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agents-db/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agents-db/references/modes.md",
+      "physical_lines": 27
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agents-db/references/provenance.md",
+      "physical_lines": 25
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/agents-db/references/schema.md",
+      "physical_lines": 45
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-litkg-memory/SKILL.md",
+      "physical_lines": 95
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-litkg-memory/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/SKILL.md",
+      "physical_lines": 77
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/references/context_map.md",
+      "physical_lines": 32
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/get_context.py",
+      "physical_lines": 17
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_context_index.sh",
+      "physical_lines": 161
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_get_context.sh",
+      "physical_lines": 51
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_literature_index.sh",
+      "physical_lines": 173
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_literature_search.sh",
+      "physical_lines": 25
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_qmd_outline.py",
+      "physical_lines": 96
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_qmd_outline.sh",
+      "physical_lines": 16
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-context/scripts/nbv_typst_includes.py",
+      "physical_lines": 144
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/aria-nbv-mermaid/SKILL.md",
+      "physical_lines": 111
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/code-review-aria-nbv/SKILL.md",
+      "physical_lines": 150
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/code-review-aria-nbv/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/code-review-aria-nbv/references/upstream-mattpocock.md",
+      "physical_lines": 21
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/counterfactual-rollout-planner/SKILL.md",
+      "physical_lines": 120
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/counterfactual-rollout-planner/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/dataset-cache-ops/SKILL.md",
+      "physical_lines": 146
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/dataset-cache-ops/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/diagnose-aria/SKILL.md",
+      "physical_lines": 150
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/diagnose-aria/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/diagnose-aria/references/upstream-mattpocock.md",
+      "physical_lines": 20
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/docs-curator/SKILL.md",
+      "physical_lines": 91
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/docs-curator/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/entity-aware-rri/SKILL.md",
+      "physical_lines": 104
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/entity-aware-rri/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/SKILL.md",
+      "physical_lines": 96
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/aria-workflows.md",
+      "physical_lines": 66
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/cheatsheet.md",
+      "physical_lines": 80
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/containers-pyxis.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/decision-map.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/efm3d-aria-workloads.md",
+      "physical_lines": 50
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/lrz-original-sources.md",
+      "physical_lines": 49
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/service-desk-templates.md",
+      "physical_lines": 42
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/slurm-job-patterns.md",
+      "physical_lines": 59
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/slurm-partitions.md",
+      "physical_lines": 48
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/storage-dss.md",
+      "physical_lines": 47
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/references/troubleshooting-slurm.md",
+      "physical_lines": 39
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-aria-env.sh",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-container-shell.sh",
+      "physical_lines": 38
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-dss-init.sh",
+      "physical_lines": 29
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-probe.sh",
+      "physical_lines": 48
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-resources.sh",
+      "physical_lines": 53
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-sbatch-cpu.sh",
+      "physical_lines": 59
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-sbatch-multigpu.sh",
+      "physical_lines": 74
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/scripts/lrz-sbatch-single-gpu.sh",
+      "physical_lines": 72
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/templates/sbatch_cpu_dataset_prep.sh",
+      "physical_lines": 23
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/templates/sbatch_multigpu_torchrun_aria.sh",
+      "physical_lines": 31
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/lrz-ai-systems/templates/sbatch_single_gpu_aria.sh",
+      "physical_lines": 30
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/measured-autoresearch/SKILL.md",
+      "physical_lines": 170
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/measured-autoresearch/scripts/experiment.py",
+      "physical_lines": 574
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/nbv-geometry-contracts/SKILL.md",
+      "physical_lines": 114
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/nbv-geometry-contracts/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/plan-grill/SKILL.md",
+      "physical_lines": 145
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md",
+      "physical_lines": 156
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/plan-grill/references/upstream-mattpocock.md",
+      "physical_lines": 21
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/SKILL.md",
+      "physical_lines": 238
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/references/config-datamodel-fields.md",
+      "physical_lines": 45
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/references/cross-references.md",
+      "physical_lines": 91
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/references/quartodoc-contract.md",
+      "physical_lines": 54
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/references/theory-rich-docstrings.md",
+      "physical_lines": 51
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/references/type-shape-jaxtyping.md",
+      "physical_lines": 81
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/python-docstrings/scripts/audit_docstrings.py",
+      "physical_lines": 212
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/SKILL.md",
+      "physical_lines": 158
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/references/context7-queries.md",
+      "physical_lines": 58
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md",
+      "physical_lines": 85
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/references/official-examples-map.md",
+      "physical_lines": 69
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/rerun-nbv-inspector/references/rerun-python-patterns.md",
+      "physical_lines": 86
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/semantic-scholar-litkg/SKILL.md",
+      "physical_lines": 108
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/semantic-scholar-litkg/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/semantic-scholar-litkg/references/integration-spec.md",
+      "physical_lines": 114
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/SKILL.md",
+      "physical_lines": 96
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/agents/openai.yaml",
+      "physical_lines": 4
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/references/redundancy-discovery.md",
+      "physical_lines": 80
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/references/ruthless.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/references/tool-decision-tree.md",
+      "physical_lines": 26
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/simplification/references/upstream-mattpocock.md",
+      "physical_lines": 20
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/SKILL.md",
+      "physical_lines": 143
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/attachments-and-operators.typ",
+      "physical_lines": 38
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/maquette-octahedron.obj",
+      "physical_lines": 15
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/maquette-smoke.typ",
+      "physical_lines": 26
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/scenery-smoke.typ",
+      "physical_lines": 28
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/shared-notation.typ",
+      "physical_lines": 30
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/fixtures/thesis-prose-before-after.md",
+      "physical_lines": 100
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/assets/templates/claim-ledger.md",
+      "physical_lines": 14
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/issues.md",
+      "physical_lines": 197
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/aria-nbv-notation.md",
+      "physical_lines": 180
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/claim-citation-discipline.md",
+      "physical_lines": 93
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/data-loading.md",
+      "physical_lines": 59
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/external-research.md",
+      "physical_lines": 34
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/figures-tables.md",
+      "physical_lines": 110
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/layout.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/math-attachments.md",
+      "physical_lines": 91
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/notation-migration.md",
+      "physical_lines": 40
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/booktabs-01-basic.typ",
+      "physical_lines": 24
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/booktabs-02-grouped.typ",
+      "physical_lines": 39
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/booktabs.md",
+      "physical_lines": 44
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/cetz.md",
+      "physical_lines": 54
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher-01-ml-architecture.typ",
+      "physical_lines": 42
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher-02-residual-block.typ",
+      "physical_lines": 56
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher-03-unet.typ",
+      "physical_lines": 42
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher-manual.md",
+      "physical_lines": 740
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher-manual.typ",
+      "physical_lines": 1351
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/fletcher.md",
+      "physical_lines": 29
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/index.md",
+      "physical_lines": 33
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/maquette.md",
+      "physical_lines": 27
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/neural-netz-example.typ",
+      "physical_lines": 27
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/neural-netz.md",
+      "physical_lines": 65
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/packages/scenery.md",
+      "physical_lines": 30
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/scientific-visualizations.md",
+      "physical_lines": 191
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/scripting.md",
+      "physical_lines": 126
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/slides.md",
+      "physical_lines": 334
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/thesis-section-contracts.md",
+      "physical_lines": 50
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/thesis-writing.md",
+      "physical_lines": 171
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/typst-data-structures.md",
+      "physical_lines": 59
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/typst-docs-notes.md",
+      "physical_lines": 66
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/typst-essentials.md",
+      "physical_lines": 16
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/typst-symbols.md",
+      "physical_lines": 40
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/upstream-matt-writing.md",
+      "physical_lines": 36
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/references/workflow.md",
+      "physical_lines": 70
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/scripts/hygiene_checks.sh",
+      "physical_lines": 146
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/scripts/render_mermaid.sh",
+      "physical_lines": 101
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/typst-authoring/scripts/render_png.sh",
+      "physical_lines": 90
+    },
+    {
+      "category": "production",
+      "path": ".agents/skills/zarr-python/SKILL.md",
+      "physical_lines": 111
+    },
+    {
+      "category": "production",
+      "path": ".agents/todos.toml",
+      "physical_lines": 953
+    },
+    {
+      "category": "production",
+      "path": ".claude/agents/aria-debrief-writer.md",
+      "physical_lines": 24
+    },
+    {
+      "category": "production",
+      "path": ".claude/agents/aria-diagnoser.md",
+      "physical_lines": 40
+    },
+    {
+      "category": "production",
+      "path": ".claude/agents/aria-plan-grill.md",
+      "physical_lines": 39
+    },
+    {
+      "category": "production",
+      "path": ".claude/agents/aria-reviewer.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/agents-db.md",
+      "physical_lines": 12
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/check-memory.md",
+      "physical_lines": 7
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/context-refresh.md",
+      "physical_lines": 18
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/debrief.md",
+      "physical_lines": 20
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/diagnose.md",
+      "physical_lines": 18
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/kg-claim-check.md",
+      "physical_lines": 18
+    },
+    {
+      "category": "production",
+      "path": ".claude/commands/plan-grill.md",
+      "physical_lines": 23
+    },
+    {
+      "category": "production",
+      "path": ".claude/settings.json",
+      "physical_lines": 43
+    },
+    {
+      "category": "production",
+      "path": ".codex-plugin/README.md",
+      "physical_lines": 30
+    },
+    {
+      "category": "production",
+      "path": ".codex-plugin/hooks.json",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": ".codex-plugin/hooks/mempal-hook.sh",
+      "physical_lines": 14
+    },
+    {
+      "category": "production",
+      "path": ".codex-plugin/plugin.json",
+      "physical_lines": 50
+    },
+    {
+      "category": "production",
+      "path": ".codex/config.example.toml",
+      "physical_lines": 18
+    },
+    {
+      "category": "production",
+      "path": ".codex/hooks.example.json",
+      "physical_lines": 41
+    },
+    {
+      "category": "production",
+      "path": ".configs/litkg.toml",
+      "physical_lines": 342
+    },
+    {
+      "category": "production",
+      "path": ".gemini/settings.json",
+      "physical_lines": 61
+    },
+    {
+      "category": "production",
+      "path": ".github/workflows/ci.yml",
+      "physical_lines": 102
+    },
+    {
+      "category": "production",
+      "path": ".graphifyignore",
+      "physical_lines": 126
+    },
+    {
+      "category": "production",
+      "path": "AGENTS.md",
+      "physical_lines": 133
+    },
+    {
+      "category": "production",
+      "path": "CLAUDE.md",
+      "physical_lines": 49
+    },
+    {
+      "category": "production",
+      "path": "Makefile",
+      "physical_lines": 903
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/AGENTS.md",
+      "physical_lines": 90
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/aria_nbv/data_handling/AGENTS.md",
+      "physical_lines": 43
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/aria_nbv/rollouts/AGENTS.md",
+      "physical_lines": 65
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/aria_nbv/rri_metrics/AGENTS.md",
+      "physical_lines": 37
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/aria_nbv/vin/AGENTS.md",
+      "physical_lines": 32
+    },
+    {
+      "category": "production",
+      "path": "aria_nbv/scripts/get_context.py",
+      "physical_lines": 435
+    },
+    {
+      "category": "production",
+      "path": "docs/AGENTS.md",
+      "physical_lines": 89
+    },
+    {
+      "category": "production",
+      "path": "scripts/agents_db.py",
+      "physical_lines": 432
+    },
+    {
+      "category": "production",
+      "path": "scripts/check_graphify_freshness.py",
+      "physical_lines": 130
+    },
+    {
+      "category": "production",
+      "path": "scripts/check_graphify_integration.py",
+      "physical_lines": 314
+    },
+    {
+      "category": "production",
+      "path": "scripts/codex_transcript_extract.py",
+      "physical_lines": 1002
+    },
+    {
+      "category": "production",
+      "path": "scripts/debrief_nudge.sh",
+      "physical_lines": 41
+    },
+    {
+      "category": "production",
+      "path": "scripts/git_hooks/post-commit",
+      "physical_lines": 53
+    },
+    {
+      "category": "production",
+      "path": "scripts/graphify_refresh.py",
+      "physical_lines": 127
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/auto_refresh.sh",
+      "physical_lines": 188
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/compact_claim_check.jq",
+      "physical_lines": 43
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/compact_route.jq",
+      "physical_lines": 133
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/compact_search.jq",
+      "physical_lines": 93
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/doctor.py",
+      "physical_lines": 462
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/index_code.sh",
+      "physical_lines": 18
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/ingest_docs.sh",
+      "physical_lines": 32
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/ingest_papers.sh",
+      "physical_lines": 56
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/install_mcp_profile.sh",
+      "physical_lines": 89
+    },
+    {
+      "category": "production",
+      "path": "scripts/kg/status.sh",
+      "physical_lines": 31
+    },
+    {
+      "category": "production",
+      "path": "scripts/nbv_context_index.sh",
+      "physical_lines": 7
+    },
+    {
+      "category": "production",
+      "path": "scripts/nbv_get_context.sh",
+      "physical_lines": 8
+    },
+    {
+      "category": "production",
+      "path": "scripts/nbv_literature_index.sh",
+      "physical_lines": 8
+    },
+    {
+      "category": "production",
+      "path": "scripts/nbv_literature_search.sh",
+      "physical_lines": 8
+    },
+    {
+      "category": "production",
+      "path": "scripts/nbv_qmd_outline.sh",
+      "physical_lines": 8
+    },
+    {
+      "category": "production",
+      "path": "scripts/new_debrief.py",
+      "physical_lines": 88
+    },
+    {
+      "category": "production",
+      "path": "scripts/quarto_generate_agent_docs.py",
+      "physical_lines": 401
+    },
+    {
+      "category": "production",
+      "path": "scripts/scaffold_audit.py",
+      "physical_lines": 1038
+    },
+    {
+      "category": "production",
+      "path": "scripts/sync_claude_skills.sh",
+      "physical_lines": 63
+    },
+    {
+      "category": "production",
+      "path": "scripts/validate_agent_memory.py",
+      "physical_lines": 297
+    },
+    {
+      "category": "test",
+      "path": ".agents/skills/measured-autoresearch/tests/test_experiment.py",
+      "physical_lines": 151
+    },
+    {
+      "category": "test",
+      "path": "scripts/tests/test_graphify_freshness.py",
+      "physical_lines": 162
+    },
+    {
+      "category": "test",
+      "path": "scripts/tests/test_graphify_integration.py",
+      "physical_lines": 266
+    },
+    {
+      "category": "test",
+      "path": "scripts/tests/test_post_commit_graph_dispatch.sh",
+      "physical_lines": 37
+    },
+    {
+      "category": "test",
+      "path": "scripts/tests/test_quarto_generate_api_docs.sh",
+      "physical_lines": 69
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/.graphify_version",
+      "physical_lines": 1
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/SKILL.md",
+      "physical_lines": 769
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/add-watch.md",
+      "physical_lines": 56
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/exports.md",
+      "physical_lines": 87
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/extraction-spec.md",
+      "physical_lines": 31
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/github-and-merge.md",
+      "physical_lines": 46
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/hooks.md",
+      "physical_lines": 33
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/query.md",
+      "physical_lines": 311
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/transcribe.md",
+      "physical_lines": 52
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/references/update.md",
+      "physical_lines": 192
+    },
+    {
+      "category": "upstream",
+      "path": ".codex/skills/graphify/scripts/check_run_isolation.py",
+      "physical_lines": 88
+    }
+  ],
+  "schema_version": 1,
+  "scope": "tracked Git blobs selected by the embedded rules",
+  "selection": {
+    "active_exclude": [
+      "**/*.pdf",
+      "**/__pycache__/**",
+      ".agents/archive/**",
+      ".agents/memory/history/**",
+      ".agents/memory/transcripts/**",
+      ".agents/work/**",
+      ".claude/skills/**",
+      ".omx/**",
+      "docs/_generated/**",
+      "graphify-out/**",
+      "scripts/tests/**"
+    ],
+    "active_include": [
+      ".agents/baselines/**",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "aria_nbv/AGENTS.md",
+      "aria_nbv/**/AGENTS.md",
+      "docs/AGENTS.md",
+      ".agents/AGENTS_INTERNAL_DB.md",
+      ".agents/*.toml",
+      ".agents/kg/README.md",
+      ".agents/memory/README.md",
+      ".agents/memory/index/*.md",
+      ".agents/memory/state/*.md",
+      ".agents/references/**",
+      ".agents/skills/**",
+      ".claude/agents/**",
+      ".claude/commands/**",
+      ".claude/settings.json",
+      ".codex-plugin/**",
+      ".codex/config.example.toml",
+      ".codex/hooks.example.json",
+      ".codex/skills/graphify/**",
+      ".configs/litkg.toml",
+      ".gemini/settings.json",
+      ".github/workflows/ci.yml",
+      ".graphify*",
+      "Makefile",
+      "aria_nbv/scripts/get_context.py",
+      "scripts/agents_db.py",
+      "scripts/*graphify*.py",
+      "scripts/codex_transcript_extract.py",
+      "scripts/debrief_nudge.sh",
+      "scripts/git_hooks/**",
+      "scripts/kg/**",
+      "scripts/nbv_*.py",
+      "scripts/nbv_*.sh",
+      "scripts/new_debrief.py",
+      "scripts/quarto_generate_agent_docs.py",
+      "scripts/scaffold/**",
+      "scripts/scaffold_audit.py",
+      "scripts/sync_claude_skills.sh",
+      "scripts/validate_agent_memory.py",
+      "scripts/validate_scaffold_wp0_baseline.py"
+    ],
+    "category_rules": [
+      {
+        "category": "upstream",
+        "prefix_any": [
+          ".codex/skills/graphify/"
+        ]
+      },
+      {
+        "category": "generated",
+        "prefix_any": [
+          ".agents/baselines/"
+        ]
+      },
+      {
+        "category": "test",
+        "contains_any": [
+          "tests/"
+        ],
+        "prefix_any": [
+          "scripts/tests/"
+        ]
+      },
+      {
+        "category": "production",
+        "default": true
+      }
+    ],
+    "supplemental_rules": [
+      {
+        "category": "test",
+        "prefix_any": [
+          "scripts/tests/"
+        ]
+      },
+      {
+        "category": "generated",
+        "prefix_any": [
+          "docs/_generated/",
+          ".omx/"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "active_scaffold": {
+      "file_count": 237,
+      "physical_lines": 27550
+    },
+    "categories": {
+      "generated": {
+        "file_count": 4,
+        "path_lines_sha256": "1afa62dc0751292c54ed19a8249564dde0d3fe7846ce90e733d7a81e1e3bd97f",
+        "paths_sha256": "c2149078120e4debb502de467e3bb22b0141c43165cf8a8060a51eff15ae4004",
+        "physical_lines": 447
+      },
+      "production": {
+        "file_count": 225,
+        "path_lines_sha256": "ae31dc7ef53728eea19c8494a6fea670254ac361e85f29b94f5bd568d74bd2a0",
+        "paths_sha256": "4947fb936b6f80a5894a088ad9d21efe7735f15bbab3a19e209ac4928ec1d7ce",
+        "physical_lines": 25733
+      },
+      "test": {
+        "file_count": 5,
+        "path_lines_sha256": "a7e196056e854395860ecdf2fa9885d39081961174b6d8827690851a022dc68c",
+        "paths_sha256": "6df7103209d6d15c1f710c56932071e64faf91521b644982df4cb3d988575e03",
+        "physical_lines": 685
+      },
+      "upstream": {
+        "file_count": 11,
+        "path_lines_sha256": "b81088e93f8b5599fe09f6fcdc9c82270a7c37ca4b5642e65b539ed6a161acc8",
+        "paths_sha256": "f84c33699e7eee00b7355588333d95770353246fcd5864591f04f06c146bc70b",
+        "physical_lines": 1666
+      }
+    }
+  }
+}
