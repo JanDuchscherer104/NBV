@@ -491,7 +491,7 @@ def _explicit_different_owner(prefix: str) -> bool:
     if subject_match is None:
         return False
     subject = subject_match.group("subject").strip()
-    words = subject.split()
+    words = subject.lower().split()
     return bool(
         words
         and words[-1] not in ANAPHORIC_OWNER_SUBJECTS

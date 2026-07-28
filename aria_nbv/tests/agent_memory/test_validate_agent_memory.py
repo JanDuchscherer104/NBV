@@ -248,6 +248,29 @@ def test_logical_record_allows_an_explicit_different_owner(tmp_path: Path, suffi
     assert not validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)
 
 
+@pytest.mark.parametrize(("pronoun", "verb"), [("It", "is"), ("This", "is"), ("They", "are")])
+@pytest.mark.parametrize("suffix", [".toml", ".typ"])
+def test_logical_record_rejects_capitalized_legacy_anaphors(
+    tmp_path: Path, pronoun: str, verb: str, suffix: str
+) -> None:
+    if suffix == ".toml":
+        body = (
+            'notes = ["DECISIONS is legacy migration evidence", '
+            f'"{pronoun} {verb} authoritative for current decisions."]\n'
+        )
+    else:
+        body = (
+            "#let notes = [\n"
+            "  [DECISIONS is legacy migration evidence.]\n"
+            f"  [{pronoun} {verb} authoritative for current decisions.]\n"
+            "]\n"
+        )
+    path = tmp_path / f"owner{suffix}"
+    path.write_text(body, encoding="utf-8")
+
+    assert len(validator.check_legacy_state_owner_claims([path.name], repo_root=tmp_path)) == 1
+
+
 @pytest.mark.parametrize(
     ("suffix", "body"),
     [
