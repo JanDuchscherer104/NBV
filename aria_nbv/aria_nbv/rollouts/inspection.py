@@ -14,11 +14,12 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from itertools import combinations, pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
 import zarr
+from scipy.spatial import cKDTree
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
@@ -32,7 +33,21 @@ from .read_model import (
     selected_depth_for_step,
     target_rows,
 )
-from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
+from .scientific_audit import (
+    AuditComparisonProtocol,
+    AuditReadiness,
+    AuditStatus,
+    EndpointAuditRow,
+    EquivalenceVerdict,
+    MandatoryCohortStatus,
+    PolicySemanticRole,
+    RowEvaluationStatus,
+    ScientificAuditArtifact,
+    ValidityAuditRow,
+    named_sha256_context_hash,
+    verify_scientific_audit_sha256,
+)
+from .trace import INVALID_REASON_CODES, INVALID_REASON_VERSION, _candidate_invalid_reasons
 from .zarr_store import (
     Q_H_ARRAY_NAMES,
     Q_H_REWARD_METRIC,
@@ -92,6 +107,11 @@ _TEMPORAL_GROUP_FIELDS = frozenset(
         "selected_mixture",
     }
 )
+
+# The project-wide mesh-supervised ASE target is a fixed experimental reference,
+# not a claim that every local checkout has materialized every raw tar shard.
+_FULL_GT_MESH_ASE_SCENE_COUNT = 100
+_FULL_GT_MESH_ASE_SNIPPET_COUNT = 4_608
 _RECONSTRUCTION_METRIC_SPECS = (
     ("cumulative", "cumulative_target_root_gain", "Cumulative root-normalized target gain"),
     ("cumulative", "cumulative_target_rri", "Cumulative target RRI"),
@@ -106,6 +126,10 @@ _EXACT_POLICY_ROLE_IDENTIFIERS = {
     ("oracle_greedy", "oracle_lookahead_diverse"): "oracle_lookahead",
     ("q_h", "q_h"): "q_h",
     ("learned_one_step", "learned_one_step"): "learned_one_step",
+}
+_POLICY_EFFECT_CONTRASTS = {
+    "raw_qh": (PolicySemanticRole.LEARNED_ONE_STEP, PolicySemanticRole.LEARNED_QH),
+    "delta_look": (PolicySemanticRole.ORACLE_ONE_STEP, PolicySemanticRole.ORACLE_LOOKAHEAD),
 }
 
 
@@ -275,10 +299,21 @@ def rollout_header_summary(
         if target_tasks is not None
         else _unavailable_target_rollout_header_coverage()
     )
+    source_footprint = _source_footprint(coverage)
+    storage = runtime_storage_statistics(reader.store_dir, candidate_count=candidates or 0)
 
     return {
         "source_scenes": source_scenes,
         "source_rows": source_rows,
+        "source_snippets": source_footprint.get("snippet_count") if source_footprint is not None else None,
+        "source_footprint_by_scene": source_footprint.get("by_scene") if source_footprint is not None else None,
+        "reference_scene_count": _FULL_GT_MESH_ASE_SCENE_COUNT,
+        "reference_snippet_count": _FULL_GT_MESH_ASE_SNIPPET_COUNT,
+        "source_scene_coverage": _ratio(source_scenes, _FULL_GT_MESH_ASE_SCENE_COUNT),
+        "source_snippet_coverage": _ratio(
+            source_footprint.get("snippet_count") if source_footprint is not None else None,
+            _FULL_GT_MESH_ASE_SNIPPET_COUNT,
+        ),
         "source_split_counts": _split_counts(coverage.get("split_counts")),
         "rollout_split_counts": _rollout_split_counts(reader),
         "horizon": _nonnegative_int(root_attrs.get("q_h_horizon")),
@@ -293,8 +328,47 @@ def rollout_header_summary(
         **target_coverage,
         "rollouts_per_source_row": _ratio(rollouts, source_rows),
         "candidates_per_step": _ratio(candidates, steps),
+        "store_files": storage["file_count"],
+        "store_bytes": storage["total_bytes"],
+        "bytes_per_rollout": _ratio(int(storage["total_bytes"]), rollouts),
+        "bytes_per_step": _ratio(int(storage["total_bytes"]), steps),
+        "bytes_per_candidate": storage["bytes_per_candidate"],
         "q_h_return_semantics": _nonempty_text(root_attrs.get("return_semantics")),
         "discount_gamma": _nonnegative_float(root_attrs.get("discount_gamma")),
+    }
+
+
+def _source_footprint(coverage: dict[str, Any]) -> dict[str, object] | None:
+    """Return unique source snippet counts and their scene decomposition.
+
+    The persisted manifest may have several source-row references to the same
+    source snippet. Coverage therefore uses the unique ``(scene, snippet)``
+    population rather than treating source rows as dataset windows.
+    """
+
+    sources = coverage.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return None
+    snippets_by_scene: dict[str, set[str]] = {}
+    rows_by_scene: Counter[str] = Counter()
+    for source in sources:
+        if not isinstance(source, dict):
+            return None
+        scene = _nonempty_text(source.get("scene_id"))
+        snippet = _nonempty_text(source.get("snippet_id"))
+        if scene is None or snippet is None:
+            return None
+        rows_by_scene[scene] += 1
+        snippets_by_scene.setdefault(scene, set()).add(snippet)
+    return {
+        "snippet_count": sum(len(snippets) for snippets in snippets_by_scene.values()),
+        "by_scene": {
+            scene: {
+                "source_rows": int(rows_by_scene[scene]),
+                "source_snippets": len(snippets),
+            }
+            for scene, snippets in sorted(snippets_by_scene.items())
+        },
     }
 
 
@@ -418,6 +492,7 @@ def candidate_audit_rows(
     target_centers = {
         target.target_row_id: np.asarray(target.center_world, dtype=np.float64) for target in target_rows(reader)
     }
+    reason_code_version = _nonempty_text(reader.root.attrs.get("reason_code_version"))
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -461,6 +536,7 @@ def candidate_audit_rows(
                         "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
                         "invalid_reason": str(step.primary_invalid_reason_names[local]),
                         "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
+                        "reason_code_version": reason_code_version,
                         "target_rri": _finite_or_none(step.target_rri[local]),
                         "target_root_gain": _finite_or_none(step.target_root_gain[local]),
                         "target_log_error_gain": _finite_or_none(target_log_error_gain[row]),
@@ -789,10 +865,11 @@ def oracle_headroom_evidence(
     *,
     epsilon: float = 1e-8,
 ) -> dict[str, object]:
-    """Compute exact-cohort oracle headroom and recovered QH headroom.
+    """Compute diagnostic persisted-return headroom proxies.
 
-    Endpoint gain is the root-normalized target gain. Target RRI is retained as
-    a diagnostic delta but is never substituted for the primary endpoint.
+    These rows use persisted cumulative root gain, not independently audited
+    endpoint $J$, and are explicitly labelled ``diagnostic_proxy``. Target RRI
+    is retained as a diagnostic delta but is never a confirmatory endpoint.
     """
 
     if epsilon <= 0.0:
@@ -818,6 +895,8 @@ def oracle_headroom_evidence(
                 look_rri = _finite_or_none(look.get("final_cumulative_target_rri"))
                 oracle_rows.append(
                     {
+                        "evidence_status": "diagnostic_proxy",
+                        "metric_source": "persisted_cumulative_root_gain",
                         "cohort_id": one.get("cohort_id"),
                         "cohort_key": cohort_key,
                         "horizon": one.get("horizon"),
@@ -838,6 +917,8 @@ def oracle_headroom_evidence(
             if look_gain is not None and learned_gain is not None and qh_gain is not None:
                 qh_rows.append(
                     {
+                        "evidence_status": "diagnostic_proxy",
+                        "metric_source": "persisted_cumulative_root_gain",
                         "cohort_id": learned.get("cohort_id"),
                         "cohort_key": cohort_key,
                         "horizon": learned.get("horizon"),
@@ -877,6 +958,8 @@ def oracle_headroom_evidence(
         )
     )
     return {
+        "evidence_status": "diagnostic_proxy",
+        "metric_source": "persisted_cumulative_root_gain",
         "role_rows": role_rows,
         "role_identifiers": identifiers_by_role,
         "oracle_rows": oracle_rows,
@@ -1334,7 +1417,7 @@ def _candidate_generation_cohort_by_rollout(
 def _candidate_generation_cohort(row: Mapping[str, object]) -> tuple[object, ...]:
     """Return the exact cohort key, retaining a stable unknown cohort for legacy rows."""
 
-    return tuple(row.get(field) for field in CANDIDATE_GENERATION_COHORT_FIELDS)
+    return (row.get("generation_cohort_id"), *(row.get(field) for field in CANDIDATE_GENERATION_COHORT_FIELDS))
 
 
 def _candidate_generation_cohort_fields(row: Mapping[str, object]) -> dict[str, object]:
@@ -1488,7 +1571,9 @@ def candidate_proposal_calibration_rows(
                         "finite_probability_count": len(probabilities),
                         "empirical_frequency": empirical,
                         "proposal_mass": proposal_mass,
-                        "calibration_gap": None if proposal_mass is None else empirical - proposal_mass,
+                        "calibration_gap": None
+                        if proposal_mass is None or empirical is None
+                        else empirical - proposal_mass,
                     }
                 )
     return output
@@ -1542,12 +1627,22 @@ def candidate_geometry_evidence_rows(
         target_xy_distance = None if target_xy_squared is None else float(np.sqrt(target_xy_squared))
         target_normalized_forward = (
             None
-            if x is None or y is None or target_xy_squared is None or target_xy_squared <= 0.0
+            if x is None
+            or y is None
+            or target_x is None
+            or target_y is None
+            or target_xy_squared is None
+            or target_xy_squared <= 0.0
             else float((x * target_x + y * target_y) / target_xy_squared)
         )
         target_normalized_lateral = (
             None
-            if x is None or y is None or target_xy_squared is None or target_xy_squared <= 0.0
+            if x is None
+            or y is None
+            or target_x is None
+            or target_y is None
+            or target_xy_squared is None
+            or target_xy_squared <= 0.0
             else float((-x * target_y + y * target_x) / target_xy_squared)
         )
         output.append(
@@ -1598,7 +1693,7 @@ def candidate_selection_family_rows(
                 selection_enrichment = (
                     None
                     if valid_availability_share in (None, 0.0) or selected_share is None
-                    else selected_share / valid_availability_share
+                    else selected_share / cast(float, valid_availability_share)
                 )
                 output.append(
                     {
@@ -1629,14 +1724,14 @@ def candidate_selection_rank_family_rows(
     """Join selected rank/regret evidence to its exact generation family."""
 
     selected = {
-        int(row["candidate_row_id"]): dict(row)
+        int(cast(int, row["candidate_row_id"])): dict(row)
         for row in audit_rows
         if bool(row.get("selected")) and row.get("candidate_row_id") is not None
     }
     output: list[dict[str, object]] = []
     for source_row in rank_rows:
         row = dict(source_row)
-        candidate = selected.get(int(row.get("selected_candidate_row_id", -1)))
+        candidate = selected.get(int(cast(int, row.get("selected_candidate_row_id", -1))))
         if candidate is None:
             continue
         cohort_fields = (
@@ -1655,6 +1750,1742 @@ def candidate_selection_rank_family_rows(
             }
         )
     return output
+
+
+def candidate_validity_evidence(
+    candidate_rows: Iterable[Mapping[str, object]],
+) -> dict[str, list[dict[str, object]]]:
+    """Reduce a full projected candidate table into exact validity evidence.
+
+    The reducer never opens a rollout store. It conserves every projected row
+    through explicit missing buckets, keeps all four masks as separate Boolean
+    contracts, decodes the complete versioned invalid-reason bitset, and
+    aggregates conditional availability within state, then scene, then exact
+    generation cohort. Missing masks are unavailable observations, never
+    negative labels, and target RRI is deliberately ignored.
+    """
+
+    rows = _sorted_candidate_rows(candidate_rows)
+    evidence: dict[str, list[dict[str, object]]] = {
+        "flow_rows": [],
+        "conservation_rows": [],
+        "missing_stage_rows": [],
+        "mask_intersection_rows": [],
+        "invalid_implication_rows": [],
+        "reason_intersection_rows": [],
+        "conditional_availability_rows": [],
+    }
+    for cohort_rows in _candidate_cohort_groups(rows):
+        if not cohort_rows:
+            continue
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        root_count = len(cohort_rows)
+        transitions: Counter[tuple[str, str, str, str]] = Counter()
+        missing_counts: Counter[str] = Counter()
+        for row in cohort_rows:
+            proposal = _validity_proposal_bucket(row)
+            actor = _optional_bool(row.get("actor_action"))
+            oracle = _optional_bool(row.get("oracle_label"))
+            q_train = _optional_bool(row.get("q_train"))
+            selected = _optional_bool(row.get("selected"))
+            if proposal == "missing_proposal":
+                missing_counts["proposal"] += 1
+            for field, value in (
+                ("actor_action", actor),
+                ("oracle_label", oracle),
+                ("q_train", q_train),
+                ("selected", selected),
+            ):
+                if value is None:
+                    missing_counts[field] += 1
+            actor_bucket = "actor_unavailable" if actor is None else "actor_valid" if actor else "actor_invalid"
+            outcome = _validity_outcome_bucket(row, actor=actor, selected=selected)
+            transitions[("sampled", "all_sampled", "proposal", proposal)] += 1
+            transitions[("proposal", proposal, "actor_validity", actor_bucket)] += 1
+            transitions[("actor_validity", actor_bucket, "outcome", outcome)] += 1
+
+        for (source_stage, source, target_stage, target), count in sorted(transitions.items()):
+            evidence["flow_rows"].append(
+                {
+                    **cohort,
+                    "source_stage": source_stage,
+                    "source": source,
+                    "target_stage": target_stage,
+                    "target": target,
+                    "count": count,
+                    "root_denominator": root_count,
+                    "fraction_of_root": _safe_fraction(count, root_count),
+                }
+            )
+        for source_stage, target_stage in (
+            ("sampled", "proposal"),
+            ("proposal", "actor_validity"),
+            ("actor_validity", "outcome"),
+        ):
+            observed = sum(
+                count
+                for (source_stage_value, _, target_stage_value, _), count in transitions.items()
+                if source_stage_value == source_stage and target_stage_value == target_stage
+            )
+            evidence["conservation_rows"].append(
+                {
+                    **cohort,
+                    "transition": f"{source_stage} -> {target_stage}",
+                    "expected_count": root_count,
+                    "observed_count": observed,
+                    "difference": observed - root_count,
+                    "conserved": observed == root_count,
+                    "status": "pass" if observed == root_count else "fail",
+                }
+            )
+        for stage in ("proposal", "actor_action", "oracle_label", "q_train", "selected"):
+            count = missing_counts[stage]
+            evidence["missing_stage_rows"].append(
+                {
+                    **cohort,
+                    "stage": stage,
+                    "missing_count": count,
+                    "root_denominator": root_count,
+                    "available": count == 0,
+                }
+            )
+        _append_mask_intersections(evidence, cohort, cohort_rows)
+        evidence["reason_intersection_rows"].extend(_reason_intersection_evidence(cohort, cohort_rows))
+        evidence["conditional_availability_rows"].extend(_conditional_validity_evidence(cohort, cohort_rows))
+    return evidence
+
+
+def validity_audit_evidence(
+    artifact: ScientificAuditArtifact,
+    *,
+    boundary_edges: tuple[float, ...] = (float("-inf"), -0.1, 0.0, 0.1, float("inf")),
+) -> dict[str, object]:
+    r"""Summarize frozen weighted validity audits without treating rows as IID.
+
+    Weighted state/path/combined confusion uses the sealed per-row
+    inverse-inclusion weight $1/\pi_h$. Soundness-style eligibility requires an
+    intact confirmatory artifact under the exact same predicate contract.
+    Changed-contract audits retain weighted characterization only. Blocked
+    independent labels remain unavailable and never enter a false-label cell.
+    """
+
+    verify_scientific_audit_sha256(artifact)
+    if len(boundary_edges) < 2 or any(
+        right <= left for left, right in pairwise(float(value) for value in boundary_edges)
+    ):
+        raise ValueError("boundary_edges must be strictly increasing.")
+    same_contract = artifact.comparison_protocol is AuditComparisonProtocol.SAME_CONTRACT
+    confirmatory = same_contract and artifact.readiness is AuditReadiness.CONFIRMATORY
+    evidence_status = "confirmatory" if confirmatory else "characterization_only"
+    rows = sorted(artifact.validity_rows, key=lambda row: row.unit_id)
+    confusion_rows: list[dict[str, object]] = []
+    for cohort_id in sorted({row.cohort_id for row in rows}):
+        cohort_rows = [row for row in rows if row.cohort_id == cohort_id]
+        for predicate_kind in ("state", "path", "combined_actor"):
+            kind_rows = [row for row in cohort_rows if row.predicate_kind == predicate_kind]
+            complete = [row for row in kind_rows if row.independent_valid is not None]
+            cells = Counter((bool(row.persisted_valid), bool(row.independent_valid)) for row in complete)
+            weighted_cells: dict[tuple[bool, bool], float] = {}
+            for row in complete:
+                cell = (bool(row.persisted_valid), bool(row.independent_valid))
+                weighted_cells[cell] = weighted_cells.get(cell, 0.0) + float(row.inverse_probability_weight)
+            weighted_total = float(sum(weighted_cells.values()))
+            tp = weighted_cells.get((True, True), 0.0)
+            fp = weighted_cells.get((True, False), 0.0)
+            fn = weighted_cells.get((False, True), 0.0)
+            tn = weighted_cells.get((False, False), 0.0)
+            missing_count = len(kind_rows) - len(complete)
+            confusion_rows.append(
+                {
+                    "cohort_id": cohort_id,
+                    "predicate_kind": predicate_kind,
+                    "evidence_status": evidence_status,
+                    "same_contract": same_contract,
+                    "eligible": confirmatory and bool(complete) and missing_count == 0,
+                    "available": bool(complete),
+                    "sampled_count": len(kind_rows),
+                    "labeled_count": len(complete),
+                    "missing_label_count": missing_count,
+                    "unweighted_true_positive": cells[(True, True)],
+                    "unweighted_false_positive": cells[(True, False)],
+                    "unweighted_false_negative": cells[(False, True)],
+                    "unweighted_true_negative": cells[(False, False)],
+                    "weighted_true_positive": float(tp),
+                    "weighted_false_positive": float(fp),
+                    "weighted_false_negative": float(fn),
+                    "weighted_true_negative": float(tn),
+                    "weighted_population": weighted_total,
+                    "weighted_agreement": None if weighted_total == 0 else float((tp + tn) / weighted_total),
+                    "weighted_persisted_precision": None if tp + fp == 0 else float(tp / (tp + fp)),
+                    "weighted_persisted_recall": None if tp + fn == 0 else float(tp / (tp + fn)),
+                    "unavailable_reason": (
+                        "no independent labels"
+                        if not complete
+                        else "independent labels missing for frozen sampled rows"
+                        if missing_count
+                        else None
+                    ),
+                }
+            )
+
+    margin_rows = [
+        {
+            "cohort_id": row.cohort_id,
+            "unit_id": row.unit_id,
+            "scene_id": row.scene_id,
+            "predicate_kind": row.predicate_kind,
+            "predicate_owner": row.predicate_owner,
+            "predicate_name": row.predicate_name,
+            "comparison_operator": row.comparison_operator,
+            "threshold": float(row.threshold),
+            "unit": row.unit,
+            "raw_measurement": None if row.raw_measurement is None else float(row.raw_measurement),
+            "signed_margin": None if row.signed_margin is None else float(row.signed_margin),
+            "available": row.raw_measurement is not None and row.signed_margin is not None,
+            "missing_reason": row.missing_reason,
+            "evidence_status": evidence_status,
+        }
+        for row in rows
+    ]
+    boundary_rows = _weighted_boundary_agreement(rows, boundary_edges, evidence_status=evidence_status)
+    return {
+        "comparison_protocol": artifact.comparison_protocol.value,
+        "audit_readiness": artifact.readiness.value,
+        "evidence_status": evidence_status,
+        "same_contract_eligible": confirmatory,
+        "fallback_reason": None
+        if confirmatory
+        else "predicate contract changed; weighted results are characterization only"
+        if not same_contract
+        else "audit is not confirmatory-ready",
+        "confusion_rows": confusion_rows,
+        "margin_rows": margin_rows,
+        "boundary_rows": boundary_rows,
+    }
+
+
+_CANDIDATE_EVIDENCE_PROTOCOL_VERSION = "candidate-scientific-evidence-v1"
+_DIRECTION_AZIMUTH_BINS = 12
+_DIRECTION_SIN_ELEVATION_BINS = 6
+_CAP_REFERENCE_COUNT = 128
+_COVERING_REFERENCE_COUNT = 512
+_CAP_RADII_DEG = (30.0, 60.0, 90.0, 120.0, 150.0)
+
+
+def candidate_state_composition_evidence(
+    audit_rows: Iterable[Mapping[str, object]],
+    *,
+    family_fields: tuple[str, ...] = ("strategy", "position", "mixture"),
+) -> list[dict[str, object]]:
+    """Summarize candidate-family composition with equal state weighting.
+
+    Candidate counts do not define the experimental sampling unit. For each
+    exact generation cohort, family shares are computed within state, averaged
+    equally within scene, and then averaged equally across scenes. States with
+    no actor-valid or selected population remain explicit undefined
+    denominators.
+    """
+
+    rows = _sorted_candidate_rows(audit_rows)
+    output: list[dict[str, object]] = []
+    for cohort_rows in _candidate_cohort_groups(rows):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        states = _candidate_state_groups(cohort_rows)
+        state_scenes = {
+            state_key: str(state_rows[0].get("scene", "unknown")) for state_key, state_rows in states.items()
+        }
+        for family_field in family_fields:
+            families = tuple(sorted({str(row.get(family_field, "unknown")) for row in cohort_rows}))
+            for family in families:
+                population_state_shares: dict[str, dict[str, float | None]] = {
+                    "sampled": {},
+                    "actor_valid": {},
+                    "selected": {},
+                }
+                population_state_counts: dict[str, dict[str, tuple[int, int, int]]] = {
+                    "sampled": {},
+                    "actor_valid": {},
+                    "selected": {},
+                }
+                enrichment_values: dict[str, float | None] = {}
+                enrichment_counts: dict[str, tuple[int, int, int]] = {}
+                for state_key, state_rows in states.items():
+                    family_rows = [row for row in state_rows if str(row.get(family_field, "unknown")) == family]
+                    populations = {
+                        "sampled": state_rows,
+                        "actor_valid": [row for row in state_rows if bool(row.get("actor_action"))],
+                        "selected": [row for row in state_rows if bool(row.get("selected"))],
+                    }
+                    family_populations = {
+                        name: [
+                            row
+                            for row in family_rows
+                            if name == "sampled"
+                            or (name == "actor_valid" and bool(row.get("actor_action")))
+                            or (name == "selected" and bool(row.get("selected")))
+                        ]
+                        for name in populations
+                    }
+                    for population, population_rows in populations.items():
+                        family_count = len(family_populations[population])
+                        population_state_shares[population][state_key] = (
+                            None if not population_rows else family_count / len(population_rows)
+                        )
+                        population_state_counts[population][state_key] = (
+                            len(population_rows),
+                            family_count,
+                            0,
+                        )
+                    valid_share = (
+                        None
+                        if not populations["actor_valid"]
+                        else len(family_populations["actor_valid"]) / len(populations["actor_valid"])
+                    )
+                    selected_share = (
+                        None
+                        if not populations["selected"]
+                        else len(family_populations["selected"]) / len(populations["selected"])
+                    )
+                    enrichment = (
+                        None
+                        if valid_share in (None, 0.0) or selected_share is None
+                        else selected_share / cast(float, valid_share)
+                    )
+                    enrichment_values[state_key] = enrichment
+                    enrichment_counts[state_key] = (
+                        len(state_rows),
+                        int(enrichment is not None),
+                        int(enrichment is None),
+                    )
+
+                for population in ("sampled", "actor_valid", "selected"):
+                    output.extend(
+                        _composition_macro_rows(
+                            cohort,
+                            population=population,
+                            family_dimension=family_field,
+                            family=family,
+                            state_values=population_state_shares[population],
+                            state_scenes=state_scenes,
+                            state_counts=population_state_counts[population],
+                            value_field="mean_state_family_share",
+                            units="fraction",
+                            unavailable_reason=f"no defined {population} state denominator",
+                            count_semantics="population denominator, family numerator, missing persisted values",
+                        )
+                    )
+                output.extend(
+                    _composition_macro_rows(
+                        cohort,
+                        population="selected_to_valid_enrichment",
+                        family_dimension=family_field,
+                        family=family,
+                        state_values=enrichment_values,
+                        state_scenes=state_scenes,
+                        state_counts=enrichment_counts,
+                        value_field="mean_state_selection_enrichment",
+                        units="ratio",
+                        unavailable_reason="no state has both selected support and nonzero actor-valid family share",
+                        count_semantics="candidate rows, defined state enrichments, undefined state enrichments",
+                    )
+                )
+    return sorted(output, key=_candidate_evidence_sort_key)
+
+
+def candidate_direction_evidence(
+    geometry_rows: Iterable[Mapping[str, object]],
+) -> dict[str, list[dict[str, object]]]:
+    r"""Measure equal-area directional support within exact generation cohorts.
+
+    Direction density bins azimuth and $\sin(\mathrm{elevation})$, whose grid
+    cells have equal solid angle. Spherical-cap discrepancy is approximated on
+    a fixed Fibonacci reference grid and fixed cap radii; it is evidence
+    against a uniform-sphere reference, not proof that uniform sampling is the
+    intended proposal distribution.
+    """
+
+    rows = _sorted_candidate_rows(geometry_rows)
+    density_rows: list[dict[str, object]] = []
+    cap_rows: list[dict[str, object]] = []
+    angular_rows: list[dict[str, object]] = []
+    cap_centers = _fibonacci_sphere(_CAP_REFERENCE_COUNT)
+    covering_reference = _fibonacci_sphere(_COVERING_REFERENCE_COUNT)
+    for cohort_rows in _candidate_cohort_groups(rows):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        states = _candidate_state_groups(cohort_rows)
+        for population, selector in _candidate_populations():
+            state_directions: dict[str, np.ndarray] = {}
+            state_scenes: dict[str, str] = {}
+            state_counts: dict[str, tuple[int, int]] = {}
+            for state_key, state_rows in states.items():
+                selected_rows = [row for row in state_rows if selector(row)]
+                directions = _finite_unit_directions(selected_rows)
+                state_directions[state_key] = directions
+                state_scenes[state_key] = str(state_rows[0].get("scene", "unknown"))
+                state_counts[state_key] = (len(selected_rows), int(directions.shape[0]))
+            for azimuth_bin in range(_DIRECTION_AZIMUTH_BINS):
+                for elevation_bin in range(_DIRECTION_SIN_ELEVATION_BINS):
+                    fractions: dict[str, float | None] = {}
+                    for state_key, directions in state_directions.items():
+                        if directions.shape[0] == 0:
+                            fractions[state_key] = None
+                            continue
+                        azimuth = (np.arctan2(directions[:, 1], directions[:, 0]) + np.pi) / (2.0 * np.pi)
+                        sin_elevation = (directions[:, 2] + 1.0) / 2.0
+                        azimuth_indices = np.minimum(
+                            (azimuth * _DIRECTION_AZIMUTH_BINS).astype(np.int64),
+                            _DIRECTION_AZIMUTH_BINS - 1,
+                        )
+                        elevation_indices = np.minimum(
+                            (sin_elevation * _DIRECTION_SIN_ELEVATION_BINS).astype(np.int64),
+                            _DIRECTION_SIN_ELEVATION_BINS - 1,
+                        )
+                        fractions[state_key] = float(
+                            np.mean((azimuth_indices == azimuth_bin) & (elevation_indices == elevation_bin))
+                        )
+                    density_rows.extend(
+                        _direction_macro_rows(
+                            cohort,
+                            population,
+                            evidence="equal_area_direction_density",
+                            state_values=fractions,
+                            state_scenes=state_scenes,
+                            state_counts=state_counts,
+                            value_field="mean_state_fraction",
+                            units="solid-angle fraction",
+                            unavailable_reason="no finite nonzero root-relative XYZ directions",
+                            protocol={
+                                "azimuth_bins": _DIRECTION_AZIMUTH_BINS,
+                                "sin_elevation_bins": _DIRECTION_SIN_ELEVATION_BINS,
+                                "binning": "azimuth x sin(elevation)",
+                                "macro_order": "candidate fraction per state, equal-state scene mean, equal-scene cohort mean",
+                                "state_row_sparsity": "only nonzero state-bin fractions are emitted; omitted defined state bins are implicit zero",
+                                "aggregate_completeness": "every bin is emitted at scene and cohort levels over all eligible states",
+                            },
+                            extra={"azimuth_bin": azimuth_bin, "sin_elevation_bin": elevation_bin},
+                            sparse_state_zeros=True,
+                            include_aggregate_state_keys=False,
+                        )
+                    )
+            for radius_deg in _CAP_RADII_DEG:
+                discrepancies = {
+                    state_key: None
+                    if values.shape[0] == 0
+                    else _spherical_cap_discrepancy(values, cap_centers, radius_deg)
+                    for state_key, values in state_directions.items()
+                }
+                cap_rows.extend(
+                    _direction_macro_rows(
+                        cohort,
+                        population,
+                        evidence="uniform_spherical_cap_discrepancy",
+                        state_values=discrepancies,
+                        state_scenes=state_scenes,
+                        state_counts=state_counts,
+                        value_field="mean_state_max_abs_discrepancy",
+                        units="fraction",
+                        unavailable_reason="no finite nonzero root-relative XYZ directions",
+                        protocol={
+                            "reference": "fixed Fibonacci sphere",
+                            "reference_count": _CAP_REFERENCE_COUNT,
+                            "cap_radii_deg": _CAP_RADII_DEG,
+                            "limitation": "grid approximation against a uniform-sphere reference only",
+                            "macro_order": "per-state discrepancy, equal-state scene mean, equal-scene cohort mean",
+                        },
+                        extra={
+                            "cap_radius_deg": radius_deg,
+                            "uniform_reference_fraction": float((1.0 - np.cos(np.radians(radius_deg))) / 2.0),
+                        },
+                    )
+                )
+            angular_rows.extend(
+                _angular_support_rows(
+                    cohort,
+                    population,
+                    state_directions,
+                    state_scenes=state_scenes,
+                    state_counts=state_counts,
+                    covering_reference=covering_reference,
+                )
+            )
+    return {
+        "density_rows": sorted(density_rows, key=_candidate_evidence_sort_key),
+        "cap_rows": sorted(cap_rows, key=_candidate_evidence_sort_key),
+        "angular_support_rows": sorted(angular_rows, key=_candidate_evidence_sort_key),
+    }
+
+
+def candidate_spatial_support_evidence(
+    geometry_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Summarize root-relative spatial shells with state and scene macros."""
+
+    rows = _sorted_candidate_rows(geometry_rows)
+    metrics = {
+        "root_xy_radius": ("root_radius_m", "m"),
+        "root_3d_distance": ("root_distance_m", "m"),
+        "root_height": ("root_relative_z_m", "m"),
+    }
+    output: list[dict[str, object]] = []
+    for cohort_rows in _candidate_cohort_groups(rows):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        for population, selector in _candidate_populations():
+            population_rows = [row for row in cohort_rows if selector(row)]
+            shells = tuple(sorted({str(row.get("position", "unknown")) for row in population_rows})) or ("unknown",)
+            for shell in shells:
+                shell_rows = [row for row in population_rows if str(row.get("position", "unknown")) == shell]
+                for metric, (field, units) in metrics.items():
+                    output.extend(
+                        _candidate_numeric_macro_rows(
+                            cohort,
+                            shell_rows,
+                            metric=metric,
+                            field=field,
+                            population=population,
+                            units=units,
+                            frame="root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                            extra={"declared_shell": shell, "zero_radius_policy": "included"},
+                        )
+                    )
+    return sorted(output, key=_candidate_evidence_sort_key)
+
+
+def candidate_target_view_evidence(
+    geometry_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Summarize target distance and mark unobserved view evidence unavailable."""
+
+    rows = _sorted_candidate_rows(geometry_rows)
+    output: list[dict[str, object]] = []
+    for cohort_rows in _candidate_cohort_groups(rows):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        for population, selector in _candidate_populations():
+            population_rows = [row for row in cohort_rows if selector(row)]
+            output.extend(
+                _candidate_numeric_macro_rows(
+                    cohort,
+                    population_rows,
+                    metric="target_distance",
+                    field="target_distance_m",
+                    population=population,
+                    units="m",
+                    frame="root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                )
+            )
+            for metric, missing_fields, reason in (
+                (
+                    "target_orientation_alignment",
+                    ("candidate_forward_world", "target_vector_framed"),
+                    "candidate forward and framed target vector are not persisted; yaw delta and global bearing are not commensurate",
+                ),
+                (
+                    "target_3d_bearing_error",
+                    ("candidate_forward_world", "target_center_world"),
+                    "3D camera forward and target bearing are not persisted",
+                ),
+                (
+                    "target_fov_margin",
+                    ("camera_calibration", "target_projection"),
+                    "camera FOV and projected target support are not persisted per candidate",
+                ),
+                (
+                    "target_pixel_margin",
+                    ("target_pixel_bounds",),
+                    "target image-plane bounds are not persisted per candidate",
+                ),
+                (
+                    "target_line_of_sight",
+                    ("target_los_query",),
+                    "target-specific LOS is not persisted; path collision is not LOS",
+                ),
+            ):
+                output.append(
+                    {
+                        **cohort,
+                        **_candidate_evidence_metadata(
+                            population=population,
+                            frame="unavailable",
+                            units="unavailable",
+                            available=False,
+                            reason=reason,
+                        ),
+                        "evidence": metric,
+                        "state_key": None,
+                        "state_keys": tuple(sorted(_candidate_state_groups(population_rows))),
+                        "state_count": len(_candidate_state_groups(population_rows)),
+                        "defined_state_count": 0,
+                        "undefined_state_count": len(_candidate_state_groups(population_rows)),
+                        "full_count": len(population_rows),
+                        "finite_count": 0,
+                        "missing_count": len(population_rows),
+                        "missing_fields": missing_fields,
+                        "mean": None,
+                    }
+                )
+    return sorted(output, key=_candidate_evidence_sort_key)
+
+
+def candidate_motion_support_evidence(
+    audit_rows: Iterable[Mapping[str, object]],
+    *,
+    joint_support_conjunction: tuple[str, ...] | None = None,
+) -> list[dict[str, object]]:
+    """Summarize actor-valid motion support with explicit missingness.
+
+    Joint support is emitted only when the caller supplies an explicit
+    conjunction of ``actor_valid``, ``path_collision_free``, and/or
+    ``finite_motion``. No implicit conjunction is treated as scientific data.
+    """
+
+    allowed_joint = {"actor_valid", "path_collision_free", "finite_motion"}
+    if joint_support_conjunction is not None:
+        unknown = set(joint_support_conjunction) - allowed_joint
+        if unknown or not joint_support_conjunction:
+            raise ValueError(f"Unsupported joint support conjunction terms: {sorted(unknown)}")
+    rows = _sorted_candidate_rows(audit_rows)
+    output: list[dict[str, object]] = []
+    metrics = {
+        "motion_step_length": ("motion_step_length_m", "m"),
+        "motion_height_delta": ("motion_height_delta_m", "m"),
+        "motion_backward_step": ("motion_backward_step_m", "m"),
+        "motion_yaw_delta": ("motion_yaw_delta_deg", "deg"),
+        "path_min_clearance": ("path_min_clearance_m", "m"),
+        "free_space_margin": ("free_space_margin_m", "m"),
+    }
+    for cohort_rows in _candidate_cohort_groups(rows):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        actor_rows = [row for row in cohort_rows if bool(row.get("actor_action"))]
+        output.extend(
+            _candidate_boolean_macro_rows(
+                cohort,
+                actor_rows,
+                metric="path_collision_rate",
+                field="path_collision",
+                population="actor_valid",
+                true_is_support=True,
+                availability_field="path_min_clearance_m",
+            )
+        )
+        for metric, (field, units) in metrics.items():
+            output.extend(
+                _candidate_numeric_macro_rows(
+                    cohort,
+                    actor_rows,
+                    metric=metric,
+                    field=field,
+                    population="actor_valid",
+                    units=units,
+                    frame="root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                )
+            )
+        if joint_support_conjunction is not None:
+            output.extend(_joint_motion_support_rows(cohort, cohort_rows, joint_support_conjunction))
+    return sorted(output, key=_candidate_evidence_sort_key)
+
+
+def candidate_regret_evidence(
+    audit_rows: Iterable[Mapping[str, object]],
+    rank_rows: Iterable[Mapping[str, object]],
+) -> dict[str, list[dict[str, object]]]:
+    """Summarize selected-action regret and expose selection-contract violations."""
+
+    candidates = _sorted_candidate_rows(audit_rows)
+    ranks = [dict(row) for row in rank_rows]
+    selected_id_groups: dict[int, list[dict[str, object]]] = {}
+    for row in candidates:
+        if bool(row.get("selected")) and row.get("candidate_row_id") is not None:
+            selected_id_groups.setdefault(int(cast(int, row["candidate_row_id"])), []).append(row)
+    selected_by_id = {
+        candidate_id: values[0] for candidate_id, values in selected_id_groups.items() if len(values) == 1
+    }
+    joined: list[dict[str, object]] = []
+    violations: list[dict[str, object]] = []
+    invalid_states: set[str] = set()
+    selected_by_state = _candidate_state_groups([row for row in candidates if bool(row.get("selected"))])
+    for state_key, state_rows in selected_by_state.items():
+        if len(state_rows) != 1:
+            invalid_states.add(state_key)
+            violations.append(
+                _selection_violation_row(state_rows[0], state_key, "selected_count_not_one", len(state_rows))
+            )
+        elif not bool(state_rows[0].get("actor_action")):
+            invalid_states.add(state_key)
+            violations.append(_selection_violation_row(state_rows[0], state_key, "selected_actor_invalid", 1))
+    for rank in ranks:
+        candidate_id = rank.get("selected_candidate_row_id")
+        candidate = None if candidate_id is None else selected_by_id.get(int(cast(int, candidate_id)))
+        if candidate is None:
+            violations.append(
+                {
+                    **_candidate_evidence_metadata(
+                        population="selected_actor_valid",
+                        frame="selection state",
+                        units="count",
+                        available=False,
+                        reason="rank row has no unique selected candidate audit row",
+                    ),
+                    "generation_cohort_id": str(rank.get("generation_cohort_id", "unknown")),
+                    "state_key": _candidate_state_key(rank),
+                    "state_count": 1,
+                    "full_count": 1,
+                    "finite_count": 0,
+                    "missing_count": 1,
+                    "violation": "missing_selected_candidate_join",
+                    "count": 1,
+                }
+            )
+            continue
+        state_key = _candidate_state_key(candidate)
+        if state_key in invalid_states:
+            continue
+        valid_candidate_count = _nonnegative_int(rank.get("valid_candidate_count")) or 0
+        if not bool(rank.get("selected_actor_valid")) or valid_candidate_count <= 0:
+            violations.append(_selection_violation_row(candidate, state_key, "no_actor_valid_selected_support", 1))
+            continue
+        if (_nonnegative_int(rank.get("finite_valid_label_count")) or 0) <= 0:
+            violations.append(_selection_violation_row(candidate, state_key, "no_finite_actor_valid_alternative", 1))
+            continue
+        joined.append({**candidate, **rank, "state_key": state_key})
+
+    summary_rows: list[dict[str, object]] = []
+    for cohort_rows in _candidate_cohort_groups(joined):
+        cohort = _candidate_generation_cohort_fields(cohort_rows[0])
+        for metric, field, units in (
+            ("regret_to_best", "regret_to_best", "dimensionless root-normalized target gain"),
+            ("selected_rank", "selected_rank", "rank"),
+            ("target_rri_rank", "target_rri_rank", "rank"),
+        ):
+            summary_rows.extend(
+                _candidate_numeric_macro_rows(
+                    cohort,
+                    cohort_rows,
+                    metric=metric,
+                    field=field,
+                    population="selected_actor_valid",
+                    units=units,
+                    frame="finite actor-valid alternatives within selection state",
+                )
+            )
+    return {
+        "summary_rows": sorted(summary_rows, key=_candidate_evidence_sort_key),
+        "violation_rows": sorted(violations, key=_candidate_evidence_sort_key),
+    }
+
+
+def _sorted_candidate_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Materialize the full input once and impose a canonical row order."""
+
+    materialized = [dict(row) for row in rows]
+    return sorted(materialized, key=lambda row: json.dumps(row, sort_keys=True, default=str, separators=(",", ":")))
+
+
+def _optional_bool(value: object) -> bool | None:
+    """Return a persisted Boolean or explicit unavailable value."""
+
+    return bool(value) if isinstance(value, (bool, np.bool_)) else None
+
+
+def _validity_proposal_bucket(row: Mapping[str, object]) -> str:
+    """Return an exact proposal signature or an explicit missing stage."""
+
+    values = tuple(row.get(field) for field in ("mixture", "position", "strategy"))
+    if any(value is None or str(value) == "" for value in values):
+        return "missing_proposal"
+    return "proposal:" + "|".join(str(value) for value in values)
+
+
+def _validity_outcome_bucket(
+    row: Mapping[str, object],
+    *,
+    actor: bool | None,
+    selected: bool | None,
+) -> str:
+    """Return one terminal flow bucket without substituting scores for masks."""
+
+    if selected is None:
+        return "selection_unavailable"
+    if selected and actor is None:
+        return "selected_actor_implication_unavailable"
+    if selected and actor is False:
+        return "selected_actor_contract_violation"
+    if selected:
+        return "selected"
+    if actor is None:
+        return "actor_validity_unavailable"
+    if actor:
+        return "unselected_actor_valid"
+    bitset = row.get("invalid_reason_bitset")
+    if not isinstance(bitset, (int, np.integer)) or isinstance(bitset, (bool, np.bool_)) or int(bitset) < 0:
+        return "invalid_reason_unavailable"
+    return "invalid:" + "&".join(_invalid_reason_names(int(bitset)))
+
+
+def _append_mask_intersections(
+    evidence: dict[str, list[dict[str, object]]],
+    cohort: Mapping[str, object],
+    rows: list[dict[str, object]],
+) -> None:
+    """Append all Boolean mask cells plus missing-mask and implication evidence."""
+
+    fields = ("actor_action", "oracle_label", "q_train", "selected")
+    observed: Counter[tuple[bool | None, ...]] = Counter(
+        tuple(_optional_bool(row.get(field)) for field in fields) for row in rows
+    )
+    complete_patterns = tuple(
+        (actor, oracle, q_train, selected)
+        for actor in (False, True)
+        for oracle in (False, True)
+        for q_train in (False, True)
+        for selected in (False, True)
+    )
+    missing_patterns = tuple(sorted((pattern for pattern in observed if None in pattern), key=repr))
+    for pattern in (*complete_patterns, *missing_patterns):
+        actor, oracle, q_train, selected = pattern
+        count = observed[pattern]
+        contract_valid = (
+            None
+            if None in pattern
+            else (not bool(selected) or bool(actor)) and (not bool(q_train) or (bool(actor) and bool(oracle)))
+        )
+        evidence["mask_intersection_rows"].append(
+            {
+                **cohort,
+                "actor_action": actor,
+                "oracle_label": oracle,
+                "q_train": q_train,
+                "selected": selected,
+                "count": count,
+                "denominator": len(rows),
+                "fraction_of_all": _safe_fraction(count, len(rows)),
+                "available": None not in pattern,
+                "contract_valid": contract_valid,
+            }
+        )
+    implications = {
+        "selected_implies_actor_valid": (
+            "selected",
+            "actor_action",
+        ),
+        "q_train_implies_actor_valid": (
+            "q_train",
+            "actor_action",
+        ),
+        "q_train_implies_oracle_label": (
+            "q_train",
+            "oracle_label",
+        ),
+    }
+    for implication, (antecedent_field, consequent_field) in implications.items():
+        applicable = [row for row in rows if _optional_bool(row.get(antecedent_field)) is True]
+        count = sum(_optional_bool(row.get(consequent_field)) is False for row in applicable)
+        unavailable = sum(_optional_bool(row.get(consequent_field)) is None for row in applicable)
+        evidence["invalid_implication_rows"].append(
+            {
+                **cohort,
+                "implication": implication,
+                "violation_count": int(count),
+                "unavailable_count": int(unavailable),
+                "denominator": len(rows),
+                "status": "fail" if count else "unavailable" if unavailable else "pass",
+            }
+        )
+
+
+def _invalid_reason_names(bitset: int) -> tuple[str, ...]:
+    """Decode every set invalidity bit without choosing a primary reason."""
+
+    names_by_bit = {bit: name for name, bit in INVALID_REASON_CODES.items()}
+    names = [
+        names_by_bit.get(bit, f"UNKNOWN_BIT_{bit}") for bit in range(max(1, bitset.bit_length())) if bitset & (1 << bit)
+    ]
+    return tuple(names or ("NO_REASON_BITS",))
+
+
+def _reason_intersection_evidence(
+    cohort: dict[str, object],
+    rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Aggregate complete reason-bitset intersections through state and scene."""
+
+    states = _candidate_state_groups(rows)
+    state_scenes = {key: str(value[0].get("scene", "unknown")) for key, value in states.items()}
+    observed_bitsets = sorted(
+        {
+            int(value)
+            for row in rows
+            if isinstance((value := row.get("invalid_reason_bitset")), (int, np.integer))
+            and not isinstance(value, (bool, np.bool_))
+            and int(value) >= 0
+        }
+    )
+    output: list[dict[str, object]] = []
+    for bitset in observed_bitsets:
+        state_values: dict[str, float | None] = {}
+        state_counts: dict[str, tuple[int, int, int]] = {}
+        for state_key, state_rows in states.items():
+            values = [
+                int(value)
+                for row in state_rows
+                if isinstance((value := row.get("invalid_reason_bitset")), (int, np.integer))
+                and not isinstance(value, (bool, np.bool_))
+                and int(value) >= 0
+            ]
+            state_values[state_key] = None if not values else values.count(bitset) / len(values)
+            state_counts[state_key] = (len(state_rows), len(values), len(state_rows) - len(values))
+        reason_names = _invalid_reason_names(bitset)
+        macro_rows = _composition_macro_rows(
+            cohort,
+            population="full_candidate_table",
+            family_dimension="invalid_reason_bitset_intersection",
+            family=" & ".join(reason_names),
+            state_values=state_values,
+            state_scenes=state_scenes,
+            state_counts=state_counts,
+            value_field="mean_state_fraction",
+            units="fraction",
+            unavailable_reason="invalid_reason_bitset unavailable",
+            count_semantics="finite_count is the number of rows with a complete versioned reason bitset",
+        )
+        for row in macro_rows:
+            row.update(
+                {
+                    "reason_version": INVALID_REASON_VERSION,
+                    "invalid_reason_bitset": bitset,
+                    "reason_names": reason_names,
+                    "intersection_size": len(reason_names),
+                }
+            )
+        output.extend(macro_rows)
+    if not observed_bitsets:
+        output.append(
+            {
+                **cohort,
+                "family_dimension": "invalid_reason_bitset_intersection",
+                "family": "unavailable",
+                "aggregation_level": "cohort_scene_macro",
+                "reason_version": INVALID_REASON_VERSION,
+                "invalid_reason_bitset": None,
+                "reason_names": (),
+                "available": False,
+                "reason": "invalid_reason_bitset unavailable for every candidate row",
+                "full_count": len(rows),
+                "finite_count": 0,
+                "missing_count": len(rows),
+                "mean_state_fraction": None,
+            }
+        )
+    return output
+
+
+def _conditional_validity_evidence(
+    cohort: dict[str, object],
+    rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Aggregate actor admission and oracle coverage with exact denominators."""
+
+    output: list[dict[str, object]] = []
+    dimensions = (("all", "all"),) + tuple(
+        (field, family)
+        for field in ("strategy", "position", "mixture")
+        for family in sorted({str(row.get(field, "unknown")) for row in rows})
+    )
+    for family_dimension, family in dimensions:
+        family_rows = (
+            rows
+            if family_dimension == "all"
+            else [row for row in rows if str(row.get(family_dimension, "unknown")) == family]
+        )
+        states = _candidate_state_groups(family_rows)
+        state_scenes = {key: str(value[0].get("scene", "unknown")) for key, value in states.items()}
+        for evidence_name in ("actor_valid_availability", "oracle_label_coverage_among_actor_valid"):
+            state_values: dict[str, float | None] = {}
+            state_counts: dict[str, tuple[int, int, int]] = {}
+            for state_key, state_rows in states.items():
+                if evidence_name == "actor_valid_availability":
+                    values = [
+                        value for row in state_rows if (value := _optional_bool(row.get("actor_action"))) is not None
+                    ]
+                    denominator_count = len(state_rows)
+                else:
+                    eligible = [row for row in state_rows if _optional_bool(row.get("actor_action")) is True]
+                    values = [
+                        value for row in eligible if (value := _optional_bool(row.get("oracle_label"))) is not None
+                    ]
+                    denominator_count = len(eligible)
+                state_values[state_key] = None if not values else sum(values) / len(values)
+                state_counts[state_key] = (denominator_count, len(values), denominator_count - len(values))
+            macro_rows = _composition_macro_rows(
+                cohort,
+                population="full_candidate_table" if evidence_name == "actor_valid_availability" else "actor_valid",
+                family_dimension=family_dimension,
+                family=family,
+                state_values=state_values,
+                state_scenes=state_scenes,
+                state_counts=state_counts,
+                value_field="mean_state_fraction",
+                units="fraction",
+                unavailable_reason=(
+                    "actor_action mask unavailable"
+                    if evidence_name == "actor_valid_availability"
+                    else "no actor-valid row with an available oracle-label mask"
+                ),
+                count_semantics=(
+                    "actor-valid count divided by available actor masks"
+                    if evidence_name == "actor_valid_availability"
+                    else "oracle-label count divided by available oracle masks among actor-valid rows"
+                ),
+            )
+            for row in macro_rows:
+                row["evidence"] = evidence_name
+                row["metric"] = evidence_name
+            output.extend(macro_rows)
+    return output
+
+
+def _weighted_boundary_agreement(
+    rows: list[ValidityAuditRow],
+    edges: tuple[float, ...],
+    *,
+    evidence_status: str,
+) -> list[dict[str, object]]:
+    """Return inverse-probability-weighted agreement in signed-margin bins."""
+
+    groups: dict[tuple[str, str, str, str, str, float, str, int], list[ValidityAuditRow]] = {}
+    for row in rows:
+        if row.signed_margin is None or row.independent_valid is None:
+            continue
+        margin = float(row.signed_margin)
+        bin_index = next(
+            (
+                index
+                for index, (left, right) in enumerate(pairwise(edges))
+                if margin >= left and (margin < right or (index == len(edges) - 2 and margin <= right))
+            ),
+            None,
+        )
+        if bin_index is None:
+            continue
+        boundary_key = (
+            row.cohort_id,
+            row.predicate_kind,
+            row.predicate_owner,
+            row.predicate_name,
+            row.comparison_operator,
+            float(row.threshold),
+            row.unit,
+            bin_index,
+        )
+        groups.setdefault(boundary_key, []).append(row)
+    output: list[dict[str, object]] = []
+    for group_key, group in sorted(groups.items(), key=lambda item: repr(item[0])):
+        cohort_id, kind, owner, name, operator, threshold, unit, bin_index = group_key
+        total_weight = sum(float(row.inverse_probability_weight) for row in group)
+        agreement_weight = sum(
+            float(row.inverse_probability_weight)
+            for row in group
+            if bool(row.persisted_valid) is bool(row.independent_valid)
+        )
+        output.append(
+            {
+                "cohort_id": cohort_id,
+                "predicate_kind": kind,
+                "predicate_owner": owner,
+                "predicate_name": name,
+                "comparison_operator": operator,
+                "threshold": threshold,
+                "unit": unit,
+                "boundary_bin_index": bin_index,
+                "boundary_bin_left": (None if not np.isfinite(edges[int(bin_index)]) else edges[int(bin_index)]),
+                "boundary_bin_right": (
+                    None if not np.isfinite(edges[int(bin_index) + 1]) else edges[int(bin_index) + 1]
+                ),
+                "sampled_count": len(group),
+                "weighted_population": float(total_weight),
+                "weighted_agreement": float(agreement_weight / total_weight),
+                "evidence_status": evidence_status,
+            }
+        )
+    return output
+
+
+def _candidate_cohort_groups(rows: list[dict[str, object]]) -> list[list[dict[str, object]]]:
+    """Partition candidate evidence without pooling exact generation cohorts."""
+
+    groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in rows:
+        groups.setdefault(_candidate_generation_cohort(row), []).append(row)
+    return [groups[key] for key in sorted(groups, key=repr)]
+
+
+def _candidate_state_key(row: Mapping[str, object]) -> str:
+    """Return the persisted rollout-step state identity or an explicit missing key."""
+
+    rollout = row.get("rollout_row_id")
+    step = row.get("step_row_id")
+    if rollout is None or step is None:
+        return f"missing-state:{row.get('candidate_row_id', 'unknown')}"
+    return f"rollout={rollout}:step={step}"
+
+
+def _candidate_state_groups(rows: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    """Group candidate rows by persisted decision state."""
+
+    groups: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        groups.setdefault(_candidate_state_key(row), []).append(row)
+    return groups
+
+
+def _candidate_populations() -> tuple[tuple[str, Any], ...]:
+    """Return the fixed all-versus-actor-valid support populations."""
+
+    return (
+        ("all", lambda _row: True),
+        ("actor_valid", lambda row: bool(row.get("actor_action"))),
+    )
+
+
+def _candidate_evidence_metadata(
+    *,
+    population: str,
+    frame: str,
+    units: str,
+    available: bool,
+    reason: str | None,
+) -> dict[str, object]:
+    """Return the shared protocol and availability fields for evidence rows."""
+
+    return {
+        "protocol_version": _CANDIDATE_EVIDENCE_PROTOCOL_VERSION,
+        "population": population,
+        "coordinate_frame": frame,
+        "units": units,
+        "available": available,
+        "reason": reason,
+    }
+
+
+def _candidate_evidence_sort_key(row: Mapping[str, object]) -> tuple[str, ...]:
+    """Return a stable heterogeneous evidence-row ordering."""
+
+    fields = (
+        "generation_cohort_id",
+        "population",
+        "evidence",
+        "metric",
+        "aggregation_level",
+        "scene",
+        "state_key",
+        "family_dimension",
+        "family",
+        "declared_shell",
+        "cap_radius_deg",
+        "azimuth_bin",
+        "sin_elevation_bin",
+        "violation",
+    )
+    return tuple(str(row.get(field, "")) for field in fields)
+
+
+def _finite_unit_directions(rows: list[dict[str, object]]) -> np.ndarray:
+    """Return finite nonzero unit directions from root-relative XYZ rows."""
+
+    vectors: list[tuple[float, float, float]] = []
+    for row in rows:
+        x = _finite_or_none(row.get("root_relative_x_m"))
+        y = _finite_or_none(row.get("root_relative_y_m"))
+        z = _finite_or_none(row.get("root_relative_z_m"))
+        if x is None or y is None or z is None:
+            continue
+        norm = float(np.linalg.norm((x, y, z)))
+        if norm <= 0.0:
+            continue
+        vectors.append((x / norm, y / norm, z / norm))
+    if not vectors:
+        return np.empty((0, 3), dtype=np.float64)
+    return np.asarray(vectors, dtype=np.float64)
+
+
+def _fibonacci_sphere(count: int) -> np.ndarray:
+    """Return a deterministic approximately equal-area unit-sphere grid."""
+
+    indices = np.arange(count, dtype=np.float64)
+    z = 1.0 - 2.0 * (indices + 0.5) / float(count)
+    radius = np.sqrt(np.maximum(0.0, 1.0 - z * z))
+    golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+    azimuth = indices * golden_angle
+    return np.column_stack((radius * np.cos(azimuth), radius * np.sin(azimuth), z))
+
+
+def _spherical_cap_discrepancy(
+    directions: np.ndarray,
+    centers: np.ndarray,
+    radius_deg: float,
+) -> float:
+    """Return maximum empirical-minus-uniform cap mass on a fixed grid."""
+
+    cosine = float(np.cos(np.radians(radius_deg)))
+    expected = (1.0 - cosine) / 2.0
+    dots = np.clip(centers @ directions.T, -1.0, 1.0)
+    empirical = np.mean(dots >= cosine, axis=1)
+    return float(np.max(np.abs(empirical - expected)))
+
+
+def _composition_macro_rows(
+    cohort: dict[str, object],
+    *,
+    population: str,
+    family_dimension: str,
+    family: str,
+    state_values: Mapping[str, float | None],
+    state_scenes: Mapping[str, str],
+    state_counts: Mapping[str, tuple[int, int, int]],
+    value_field: str,
+    units: str,
+    unavailable_reason: str,
+    count_semantics: str,
+) -> list[dict[str, object]]:
+    """Aggregate categorical state evidence through equal-weight scenes."""
+
+    state_rows: list[dict[str, object]] = []
+    defined_by_scene: dict[str, list[float]] = {}
+    for state_key in sorted(state_values):
+        value = state_values[state_key]
+        scene = state_scenes[state_key]
+        full_count, finite_count, missing_count = state_counts[state_key]
+        if value is not None:
+            defined_by_scene.setdefault(scene, []).append(value)
+        state_rows.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame="categorical generation family",
+                    units=units,
+                    available=value is not None,
+                    reason=None if value is not None else unavailable_reason,
+                ),
+                "family_dimension": family_dimension,
+                "family": family,
+                "aggregation_level": "state",
+                "scene": scene,
+                "state_key": state_key,
+                "state_keys": (state_key,),
+                "state_count": 1,
+                "defined_state_count": int(value is not None),
+                "undefined_state_count": int(value is None),
+                "full_count": full_count,
+                "finite_count": finite_count,
+                "missing_count": missing_count,
+                "count_semantics": count_semantics,
+                value_field: value,
+            }
+        )
+
+    scene_rows: list[dict[str, object]] = []
+    scene_values: list[float] = []
+    for scene in sorted(set(state_scenes.values())):
+        state_keys = tuple(sorted(key for key, value in state_scenes.items() if value == scene))
+        values = defined_by_scene.get(scene, [])
+        scene_value = None if not values else float(np.mean(values))
+        if scene_value is not None:
+            scene_values.append(scene_value)
+        scene_rows.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame="categorical generation family",
+                    units=units,
+                    available=scene_value is not None,
+                    reason=None if scene_value is not None else unavailable_reason,
+                ),
+                "family_dimension": family_dimension,
+                "family": family,
+                "aggregation_level": "scene_macro",
+                "scene": scene,
+                "state_key": None,
+                "state_keys": state_keys,
+                "state_count": len(state_keys),
+                "defined_state_count": len(values),
+                "undefined_state_count": len(state_keys) - len(values),
+                "full_count": sum(state_counts[key][0] for key in state_keys),
+                "finite_count": sum(state_counts[key][1] for key in state_keys),
+                "missing_count": sum(state_counts[key][2] for key in state_keys),
+                "count_semantics": count_semantics,
+                value_field: scene_value,
+            }
+        )
+
+    all_state_keys = tuple(sorted(state_values))
+    cohort_value = None if not scene_values else float(np.mean(scene_values))
+    cohort_row = {
+        **cohort,
+        **_candidate_evidence_metadata(
+            population=population,
+            frame="categorical generation family",
+            units=units,
+            available=cohort_value is not None,
+            reason=None if cohort_value is not None else unavailable_reason,
+        ),
+        "family_dimension": family_dimension,
+        "family": family,
+        "aggregation_level": "cohort_scene_macro",
+        "scene": None,
+        "state_key": None,
+        "state_keys": all_state_keys,
+        "state_count": len(all_state_keys),
+        "scene_count": len(scene_values),
+        "defined_state_count": sum(value is not None for value in state_values.values()),
+        "undefined_state_count": sum(value is None for value in state_values.values()),
+        "full_count": sum(counts[0] for counts in state_counts.values()),
+        "finite_count": sum(counts[1] for counts in state_counts.values()),
+        "missing_count": sum(counts[2] for counts in state_counts.values()),
+        "count_semantics": count_semantics,
+        value_field: cohort_value,
+    }
+    return [*state_rows, *scene_rows, cohort_row]
+
+
+def _direction_macro_rows(
+    cohort: dict[str, object],
+    population: str,
+    *,
+    evidence: str,
+    state_values: Mapping[str, float | None],
+    state_scenes: Mapping[str, str],
+    state_counts: Mapping[str, tuple[int, int]],
+    value_field: str,
+    units: str,
+    unavailable_reason: str,
+    protocol: Mapping[str, object],
+    extra: Mapping[str, object] | None = None,
+    sparse_state_zeros: bool = False,
+    include_aggregate_state_keys: bool = True,
+) -> list[dict[str, object]]:
+    """Aggregate per-state direction statistics through equal-weight scenes.
+
+    When ``sparse_state_zeros`` is true, defined zero-valued state rows are
+    omitted. Their zero remains included in every scene/cohort denominator;
+    absence of a state-bin row therefore means an implicit zero, not missing
+    evidence. Aggregate rows remain complete.
+    """
+
+    details = {} if extra is None else dict(extra)
+    state_rows: list[dict[str, object]] = []
+    state_values_by_scene: dict[str, list[float]] = {}
+    for state_key in sorted(state_values):
+        value = state_values[state_key]
+        scene = state_scenes[state_key]
+        full_count, finite_count = state_counts[state_key]
+        if value is not None:
+            state_values_by_scene.setdefault(scene, []).append(value)
+        if sparse_state_zeros and value == 0.0:
+            continue
+        state_rows.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame="unit sphere in root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                    units=units,
+                    available=value is not None,
+                    reason=None if value is not None else unavailable_reason,
+                ),
+                "evidence": evidence,
+                "metric": evidence,
+                "protocol": dict(protocol),
+                "aggregation_level": "state",
+                "scene": scene,
+                "state_key": state_key,
+                "state_keys": (state_key,),
+                "state_count": 1,
+                "defined_state_count": int(value is not None),
+                "undefined_state_count": int(value is None),
+                "full_count": full_count,
+                "finite_count": finite_count,
+                "missing_count": full_count - finite_count,
+                value_field: value,
+                **details,
+            }
+        )
+
+    scene_rows: list[dict[str, object]] = []
+    scene_values: list[float] = []
+    for scene in sorted(set(state_scenes.values())):
+        scene_state_keys = tuple(sorted(key for key, value in state_scenes.items() if value == scene))
+        values = state_values_by_scene.get(scene, [])
+        scene_value = None if not values else float(np.mean(values))
+        if scene_value is not None:
+            scene_values.append(scene_value)
+        full_count = sum(state_counts[key][0] for key in scene_state_keys)
+        finite_count = sum(state_counts[key][1] for key in scene_state_keys)
+        scene_rows.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame="unit sphere in root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                    units=units,
+                    available=scene_value is not None,
+                    reason=None if scene_value is not None else unavailable_reason,
+                ),
+                "evidence": evidence,
+                "metric": evidence,
+                "protocol": dict(protocol),
+                "aggregation_level": "scene_macro",
+                "scene": scene,
+                "state_key": None,
+                "state_keys": scene_state_keys if include_aggregate_state_keys else None,
+                "state_count": len(scene_state_keys),
+                "defined_state_count": len(values),
+                "undefined_state_count": len(scene_state_keys) - len(values),
+                "full_count": full_count,
+                "finite_count": finite_count,
+                "missing_count": full_count - finite_count,
+                value_field: scene_value,
+                **details,
+            }
+        )
+
+    all_state_keys = tuple(sorted(state_values))
+    full_count = sum(counts[0] for counts in state_counts.values())
+    finite_count = sum(counts[1] for counts in state_counts.values())
+    cohort_row = {
+        **cohort,
+        **_candidate_evidence_metadata(
+            population=population,
+            frame="unit sphere in root-centered ARIA world (RIGHT_HAND_Z_UP)",
+            units=units,
+            available=bool(scene_values),
+            reason=None if scene_values else unavailable_reason,
+        ),
+        "evidence": evidence,
+        "metric": evidence,
+        "protocol": dict(protocol),
+        "aggregation_level": "cohort_scene_macro",
+        "scene": None,
+        "state_key": None,
+        "state_keys": all_state_keys if include_aggregate_state_keys else None,
+        "state_count": len(all_state_keys),
+        "scene_count": len(scene_values),
+        "defined_state_count": sum(value is not None for value in state_values.values()),
+        "undefined_state_count": sum(value is None for value in state_values.values()),
+        "full_count": full_count,
+        "finite_count": finite_count,
+        "missing_count": full_count - finite_count,
+        value_field: None if not scene_values else float(np.mean(scene_values)),
+        **details,
+    }
+    return [*state_rows, *scene_rows, cohort_row]
+
+
+def _angular_support_rows(
+    cohort: dict[str, object],
+    population: str,
+    state_directions: Mapping[str, np.ndarray],
+    *,
+    state_scenes: Mapping[str, str],
+    state_counts: Mapping[str, tuple[int, int]],
+    covering_reference: np.ndarray,
+) -> list[dict[str, object]]:
+    """Return state, equal-state scene, and equal-scene angular summaries."""
+
+    covering_values: dict[str, float | None] = {}
+    nn_values: dict[str, dict[str, float | None]] = {
+        "q25": {},
+        "median": {},
+        "q75": {},
+    }
+    singleton_states: set[str] = set()
+    for state_key, directions in state_directions.items():
+        if directions.shape[0] == 0:
+            covering_values[state_key] = None
+            for values in nn_values.values():
+                values[state_key] = None
+            continue
+        tree = cKDTree(directions)
+        probes = np.vstack((covering_reference, -directions))
+        covering_chords, _ = tree.query(probes, k=1, workers=1)
+        covering_angles = np.degrees(2.0 * np.arcsin(np.clip(covering_chords / 2.0, 0.0, 1.0)))
+        covering_values[state_key] = float(np.max(covering_angles))
+        if directions.shape[0] < 2:
+            singleton_states.add(state_key)
+            for values in nn_values.values():
+                values[state_key] = None
+            continue
+        neighbor_chords, _ = tree.query(directions, k=2, workers=1)
+        separations = np.degrees(2.0 * np.arcsin(np.clip(neighbor_chords[:, 1] / 2.0, 0.0, 1.0)))
+        q25, median, q75 = np.quantile(separations, (0.25, 0.5, 0.75)).tolist()
+        nn_values["q25"][state_key] = float(q25)
+        nn_values["median"][state_key] = float(median)
+        nn_values["q75"][state_key] = float(q75)
+    protocol = {
+        "reference": "fixed Fibonacci sphere plus candidate antipodes",
+        "covering_reference_count": _COVERING_REFERENCE_COUNT,
+        "nearest_search": "exact scipy.spatial.cKDTree Euclidean chord distance",
+        "angular_conversion": "2 asin(clamp(chord / 2, 0, 1))",
+        "macro_order": "per-state statistic, equal-state scene mean, equal-scene cohort mean",
+    }
+    output = _direction_macro_rows(
+        cohort,
+        population,
+        evidence="reference_grid_covering_radius",
+        state_values=covering_values,
+        state_scenes=state_scenes,
+        state_counts=state_counts,
+        value_field="mean_state_value",
+        units="deg",
+        unavailable_reason="no finite nonzero directions",
+        protocol=protocol,
+    )
+    for quantile in ("q25", "median", "q75"):
+        values = nn_values[quantile]
+        output.extend(
+            _direction_macro_rows(
+                cohort,
+                population,
+                evidence=f"nearest_neighbor_angular_separation_{quantile}",
+                state_values=values,
+                state_scenes=state_scenes,
+                state_counts=state_counts,
+                value_field="mean_state_value",
+                units="deg",
+                unavailable_reason="nearest-neighbor separation requires at least two directions per state",
+                protocol=protocol,
+                extra={"singleton_state_count": len(singleton_states)},
+            )
+        )
+    return output
+
+
+def _candidate_numeric_macro_rows(
+    cohort: dict[str, object],
+    rows: list[dict[str, object]],
+    *,
+    metric: str,
+    field: str,
+    population: str,
+    units: str,
+    frame: str,
+    extra: Mapping[str, object] | None = None,
+) -> list[dict[str, object]]:
+    """Aggregate a finite candidate metric by state, then scene, then cohort."""
+
+    states = _candidate_state_groups(rows)
+    state_output: list[dict[str, object]] = []
+    state_means_by_scene: dict[str, list[float]] = {}
+    finite_count = 0
+    for state_key, state_rows in sorted(states.items()):
+        values = [value for row in state_rows if (value := _finite_or_none(row.get(field))) is not None]
+        finite_count += len(values)
+        scene = str(state_rows[0].get("scene", "unknown"))
+        mean = None if not values else float(np.mean(values))
+        if mean is not None:
+            state_means_by_scene.setdefault(scene, []).append(mean)
+        state_output.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame=frame,
+                    units=units,
+                    available=bool(values),
+                    reason=None if values else f"no finite {field} values in state",
+                ),
+                "evidence": metric,
+                "metric": metric,
+                "source_field": field,
+                "aggregation_level": "state",
+                "scene": scene,
+                "state_key": state_key,
+                "state_count": 1,
+                "full_count": len(state_rows),
+                "finite_count": len(values),
+                "missing_count": len(state_rows) - len(values),
+                "mean": mean,
+                "median": None if not values else float(np.median(values)),
+                "min": None if not values else float(np.min(values)),
+                "max": None if not values else float(np.max(values)),
+                **({} if extra is None else dict(extra)),
+            }
+        )
+    scene_output: list[dict[str, object]] = []
+    scene_means: list[float] = []
+    for scene, values in sorted(state_means_by_scene.items()):
+        scene_mean = float(np.mean(values))
+        scene_means.append(scene_mean)
+        scene_output.append(
+            {
+                **cohort,
+                **_candidate_evidence_metadata(
+                    population=population,
+                    frame=frame,
+                    units=units,
+                    available=True,
+                    reason=None,
+                ),
+                "evidence": metric,
+                "metric": metric,
+                "source_field": field,
+                "aggregation_level": "scene_macro",
+                "scene": scene,
+                "state_key": None,
+                "state_keys": tuple(
+                    row["state_key"] for row in state_output if row["scene"] == scene and row["available"]
+                ),
+                "state_count": len(values),
+                "full_count": sum(int(cast(int, row["full_count"])) for row in state_output if row["scene"] == scene),
+                "finite_count": sum(
+                    int(cast(int, row["finite_count"])) for row in state_output if row["scene"] == scene
+                ),
+                "missing_count": sum(
+                    int(cast(int, row["missing_count"])) for row in state_output if row["scene"] == scene
+                ),
+                "mean": scene_mean,
+                **({} if extra is None else dict(extra)),
+            }
+        )
+    cohort_row = {
+        **cohort,
+        **_candidate_evidence_metadata(
+            population=population,
+            frame=frame,
+            units=units,
+            available=bool(scene_means),
+            reason=None if scene_means else f"no finite {field} values",
+        ),
+        "evidence": metric,
+        "metric": metric,
+        "source_field": field,
+        "aggregation_level": "cohort_scene_macro",
+        "scene": None,
+        "state_key": None,
+        "state_keys": tuple(sorted(states)),
+        "state_count": len(states),
+        "scene_count": len(scene_means),
+        "full_count": len(rows),
+        "finite_count": finite_count,
+        "missing_count": len(rows) - finite_count,
+        "mean": None if not scene_means else float(np.mean(scene_means)),
+        **({} if extra is None else dict(extra)),
+    }
+    return [*state_output, *scene_output, cohort_row]
+
+
+def _candidate_boolean_macro_rows(
+    cohort: dict[str, object],
+    rows: list[dict[str, object]],
+    *,
+    metric: str,
+    field: str,
+    population: str,
+    true_is_support: bool,
+    availability_field: str | None = None,
+) -> list[dict[str, object]]:
+    """Aggregate an observed Boolean by state, scene, then cohort."""
+
+    prepared = []
+    for row in rows:
+        value = row.get(field)
+        observed = isinstance(value, (bool, np.bool_))
+        if availability_field is not None:
+            observed = observed and _finite_or_none(row.get(availability_field)) is not None
+        prepared.append(
+            {
+                **row,
+                "_boolean_metric": None if not observed else float(bool(value) is true_is_support),
+            }
+        )
+    return _candidate_numeric_macro_rows(
+        cohort,
+        prepared,
+        metric=metric,
+        field="_boolean_metric",
+        population=population,
+        units="fraction",
+        frame="candidate path-validity contract",
+        extra={
+            "source_field": field,
+            "true_is_support": true_is_support,
+            "availability_field": availability_field,
+        },
+    )
+
+
+def _joint_motion_support_rows(
+    cohort: dict[str, object],
+    rows: list[dict[str, object]],
+    conjunction: tuple[str, ...],
+) -> list[dict[str, object]]:
+    """Evaluate only an explicitly requested motion-support conjunction."""
+
+    prepared: list[dict[str, object]] = []
+    motion_fields = (
+        "motion_step_length_m",
+        "motion_height_delta_m",
+        "motion_backward_step_m",
+        "motion_yaw_delta_deg",
+        "path_min_clearance_m",
+        "free_space_margin_m",
+    )
+    for row in rows:
+        path_collision = row.get("path_collision")
+        collision_observed = (
+            isinstance(path_collision, (bool, np.bool_))
+            and _finite_or_none(row.get("path_min_clearance_m")) is not None
+        )
+        terms = {
+            "actor_valid": bool(row.get("actor_action")),
+            "path_collision_free": None if not collision_observed else not bool(path_collision),
+            "finite_motion": all(_finite_or_none(row.get(field)) is not None for field in motion_fields),
+        }
+        requested_terms = [terms[term] for term in conjunction]
+        prepared.append(
+            {
+                **row,
+                "_joint_support": None
+                if any(term is None for term in requested_terms)
+                else float(all(requested_terms)),
+            }
+        )
+    return _candidate_numeric_macro_rows(
+        cohort,
+        prepared,
+        metric="explicit_joint_motion_support",
+        field="_joint_support",
+        population="explicit_conjunction",
+        units="fraction",
+        frame="candidate motion-support contract",
+        extra={"conjunction": conjunction},
+    )
+
+
+def _selection_violation_row(
+    candidate: Mapping[str, object],
+    state_key: str,
+    violation: str,
+    count: int,
+) -> dict[str, object]:
+    """Return one explicit selection-contract violation row."""
+
+    return {
+        **_candidate_generation_cohort_fields(candidate),
+        **_candidate_evidence_metadata(
+            population="selected_actor_valid",
+            frame="selection state",
+            units="count",
+            available=False,
+            reason=violation,
+        ),
+        "state_key": state_key,
+        "state_count": 1,
+        "full_count": count,
+        "finite_count": 0,
+        "missing_count": count,
+        "violation": violation,
+        "count": count,
+    }
 
 
 def candidate_plot_availability_rows(
@@ -1761,6 +3592,544 @@ def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, objec
     }
 
 
+def policy_effect_evidence(
+    artifact: ScientificAuditArtifact,
+    *,
+    bootstrap_samples: int = 2_000,
+    confidence: float = 0.95,
+    seed: int = 0,
+) -> dict[str, object]:
+    r"""Estimate exact-pair scene-macro policy effects from an independent audit.
+
+    The bundle SHA-256 is verified before parameter checks or reduction. Only a
+    PASS/CONFIRMATORY same-contract artifact can contribute. Within it,
+    each endpoint must be complete, effect-eligible, equivalence-PASS, and
+    covered by a mandatory-PASS cohort summary. Pairing then uses the complete
+    pre-treatment match identity: normalized configs, root action set,
+    persisted context, and raw assets. Selected poses and all downstream
+    candidate/validity tables are outcomes and never enter the key.
+
+    For contrast $B-A$, the scene-macro estimand is
+
+    $$
+    \hat\tau_{B-A}=\frac{1}{S}\sum_s\frac{1}{n_s}
+    \sum_i\left(J_{s,i,B}-J_{s,i,A}\right).
+    $$
+
+    Confidence intervals resample scenes while retaining every pair within a
+    sampled scene. They are suppressed below the audit's frozen 20-scene gate.
+    Recovered headroom uses no numerical stabilizer and is emitted only when
+    $J_{\mathrm{oracle-look}}-J_{\mathrm{learned-1}}$ is strictly greater than
+    the artifact's frozen ``eta_q_min_headroom`` config value.
+
+    Args:
+        artifact: Sealed independent scientific-audit artifact.
+        bootstrap_samples: Number of deterministic scene-cluster resamples.
+        confidence: Central percentile interval probability in ``(0, 1)``.
+        seed: Base seed; each contrast derives a stable independent seed.
+    Returns:
+        JSON-ready evidence containing exact pair rows, equal-weight scene
+        means, per-contrast summaries, denominator diagnostics, and explicit
+        fail-closed exclusions.
+
+    Raises:
+        ValueError: If inference parameters are invalid.
+    """
+
+    verify_scientific_audit_sha256(artifact)
+    if int(bootstrap_samples) < 1:
+        raise ValueError("bootstrap_samples must be positive.")
+    if not 0.0 < float(confidence) < 1.0:
+        raise ValueError("confidence must lie strictly between zero and one.")
+    artifact_exclusions = _artifact_effect_gate_exclusions(artifact)
+    exclusions = list(artifact_exclusions)
+    eligible_rows: list[EndpointAuditRow] = []
+    for row in artifact.endpoint_rows:
+        row_exclusions = _endpoint_effect_exclusions(artifact, row)
+        if artifact_exclusions or row_exclusions:
+            exclusions.extend(row_exclusions)
+        else:
+            eligible_rows.append(row)
+
+    grouped: dict[str, list[EndpointAuditRow]] = {}
+    for row in eligible_rows:
+        grouped.setdefault(row.match_identity.exact_match_sha256, []).append(row)
+
+    exclusions.extend(_identity_mismatch_exclusions(eligible_rows))
+    pair_rows: list[dict[str, object]] = []
+    for contrast, roles in _POLICY_EFFECT_CONTRASTS.items():
+        contrast_pairs, contrast_exclusions = _exact_contrast_pairs(grouped, contrast=contrast, roles=roles)
+        pair_rows.extend(contrast_pairs)
+        exclusions.extend(contrast_exclusions)
+
+    eta_rows, denominator_rows, eta_exclusions = _eta_q_rows(
+        grouped,
+        threshold=float(artifact.config.eta_q_min_headroom),
+    )
+    pair_rows.extend(eta_rows)
+    exclusions.extend(eta_exclusions)
+
+    scene_rows: list[dict[str, object]] = []
+    summary_rows: list[dict[str, object]] = []
+    for contrast_index, contrast in enumerate((*_POLICY_EFFECT_CONTRASTS, "eta_q")):
+        contrast_pairs = [row for row in pair_rows if row["contrast"] == contrast]
+        contrast_exclusions = [row for row in exclusions if row["contrast"] in {contrast, "all"}]
+        contrast_scene_rows, summary = _scene_macro_summary(
+            contrast,
+            contrast_pairs,
+            contrast_exclusions,
+            min_scenes=artifact.config.min_scenes_for_cluster_ci,
+            bootstrap_samples=int(bootstrap_samples),
+            confidence=float(confidence),
+            seed=_contrast_seed(int(seed), contrast, contrast_index),
+        )
+        scene_rows.extend(contrast_scene_rows)
+        summary_rows.append(summary)
+
+    denominator_values = np.asarray(
+        [float(cast(float, row["headroom_denominator"])) for row in denominator_rows],
+        dtype=np.float64,
+    )
+    eligible_denominators = sum(bool(row["eta_eligible"]) for row in denominator_rows)
+    return {
+        "artifact_status": artifact.status.value,
+        "comparison_protocol": artifact.comparison_protocol.value,
+        "endpoint_row_count": len(artifact.endpoint_rows),
+        "eligible_endpoint_row_count": len(eligible_rows),
+        "validity_row_count_ignored": len(artifact.validity_rows),
+        "eta_headroom_threshold": float(artifact.config.eta_q_min_headroom),
+        "eta_headroom_threshold_provenance": "artifact.config.eta_q_min_headroom",
+        "min_scenes_for_cluster_ci": artifact.config.min_scenes_for_cluster_ci,
+        "pair_rows": pair_rows,
+        "scene_rows": scene_rows,
+        "summary_rows": summary_rows,
+        "exclusion_rows": exclusions,
+        "headroom_denominator_rows": denominator_rows,
+        "headroom_denominator_summary": {
+            "count": int(denominator_values.size),
+            "eligible_count": int(eligible_denominators),
+            "excluded_count": int(denominator_values.size - eligible_denominators),
+            **_distribution_summary(denominator_values),
+        },
+    }
+
+
+def _artifact_effect_gate_exclusions(artifact: ScientificAuditArtifact) -> list[dict[str, object]]:
+    """Return artifact-wide blockers that suppress every confirmatory effect."""
+
+    blockers: list[dict[str, object]] = []
+    if artifact.status is not AuditStatus.PASS:
+        blockers.append(
+            {
+                "contrast": "all",
+                "cohort_id": None,
+                "reason": "artifact_status_not_pass",
+                "detail": artifact.status.value,
+            }
+        )
+    if artifact.readiness is not AuditReadiness.CONFIRMATORY:
+        blockers.append(
+            {
+                "contrast": "all",
+                "cohort_id": None,
+                "reason": "artifact_not_confirmatory",
+                "detail": artifact.readiness.value,
+            }
+        )
+    if artifact.comparison_protocol is not AuditComparisonProtocol.SAME_CONTRACT:
+        blockers.append(
+            {
+                "contrast": "all",
+                "cohort_id": None,
+                "reason": "comparison_protocol_mismatch",
+                "detail": artifact.comparison_protocol.value,
+            }
+        )
+    return blockers
+
+
+def _endpoint_effect_exclusions(
+    artifact: ScientificAuditArtifact,
+    row: EndpointAuditRow,
+) -> list[dict[str, object]]:
+    """Return row-level reasons that prevent endpoint-effect admission."""
+
+    role = row.match_identity.treatment.semantic_role
+    contrasts = _contrasts_for_role(role)
+    base = {
+        "unit_id": row.unit_id,
+        "scene_id": row.scene_id,
+        "cohort_id": row.match_identity.exact_match_sha256,
+        "semantic_role": role.value,
+    }
+    reasons: list[str] = []
+    if row.evaluation_status is not RowEvaluationStatus.COMPLETE or not row.effect_eligible:
+        reasons.append("blocked_endpoint")
+    if row.equivalence_verdict is not EquivalenceVerdict.PASS:
+        reasons.append("endpoint_equivalence_not_pass")
+    if row.endpoint_gain is None or not np.isfinite(float(row.endpoint_gain)):
+        reasons.append("missing_endpoint_gain")
+    if role in {PolicySemanticRole.LEARNED_ONE_STEP, PolicySemanticRole.LEARNED_QH}:
+        if row.match_identity.treatment.model_checkpoint_sha256 is None:
+            reasons.append("missing_checkpoint")
+    if row.source_store_sha256 != artifact.provenance.source_store_sha256:
+        reasons.append("source_store_mismatch")
+    if row.split_manifest_sha256 != artifact.provenance.split_manifest_sha256:
+        reasons.append("split_manifest_mismatch")
+    try:
+        measured_raw_asset_context = named_sha256_context_hash(row.raw_assets)
+    except ValueError:
+        measured_raw_asset_context = None
+    if measured_raw_asset_context != row.match_identity.raw_asset_context_sha256:
+        reasons.append("raw_asset_context_mismatch")
+    cohort_summaries = [summary for summary in artifact.cohort_summaries if summary.cohort_id == row.cohort_id]
+    if not cohort_summaries:
+        reasons.append("missing_cohort_summary")
+    elif len(cohort_summaries) > 1:
+        reasons.append("duplicate_cohort_summary")
+    elif cohort_summaries[0].mandatory_status is not MandatoryCohortStatus.PASS:
+        reasons.append("cohort_mandatory_not_pass")
+    return [
+        {**base, "contrast": contrast, "reason": reason, "detail": row.missing_reason}
+        for contrast in contrasts
+        for reason in reasons
+    ]
+
+
+def _contrasts_for_role(role: PolicySemanticRole) -> tuple[str, ...]:
+    """Return predeclared contrasts that require one semantic role."""
+
+    contrasts = tuple(contrast for contrast, roles in _POLICY_EFFECT_CONTRASTS.items() if role in roles)
+    if role in {
+        PolicySemanticRole.LEARNED_ONE_STEP,
+        PolicySemanticRole.LEARNED_QH,
+        PolicySemanticRole.ORACLE_LOOKAHEAD,
+    }:
+        return (*contrasts, "eta_q")
+    return contrasts
+
+
+def _exact_contrast_pairs(
+    grouped: Mapping[str, list[EndpointAuditRow]],
+    *,
+    contrast: str,
+    roles: tuple[PolicySemanticRole, PolicySemanticRole],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Pair unique semantic roles inside exact non-treatment cohorts."""
+
+    pairs: list[dict[str, object]] = []
+    exclusions: list[dict[str, object]] = []
+    for cohort_id, rows in sorted(grouped.items()):
+        by_role: dict[PolicySemanticRole, list[EndpointAuditRow]] = {}
+        for row in rows:
+            by_role.setdefault(row.match_identity.treatment.semantic_role, []).append(row)
+        missing = tuple(role.value for role in roles if not by_role.get(role))
+        duplicate = tuple(role.value for role in roles if len(by_role.get(role, ())) > 1)
+        if missing or duplicate:
+            scene_ids = tuple(sorted({row.scene_id for row in rows}))
+            if missing:
+                exclusions.append(
+                    {
+                        "contrast": contrast,
+                        "cohort_id": cohort_id,
+                        "scene_ids": scene_ids,
+                        "reason": "missing_role",
+                        "roles": missing,
+                    }
+                )
+            if duplicate:
+                exclusions.append(
+                    {
+                        "contrast": contrast,
+                        "cohort_id": cohort_id,
+                        "scene_ids": scene_ids,
+                        "reason": "duplicate_role",
+                        "roles": duplicate,
+                    }
+                )
+            continue
+        baseline = by_role[roles[0]][0]
+        treatment = by_role[roles[1]][0]
+        identity_reason = _same_exact_identity_reason(baseline, treatment)
+        if identity_reason is not None:
+            exclusions.append(
+                {
+                    "contrast": contrast,
+                    "cohort_id": cohort_id,
+                    "scene_ids": tuple(sorted({baseline.scene_id, treatment.scene_id})),
+                    "reason": identity_reason,
+                }
+            )
+            continue
+        assert baseline.endpoint_gain is not None and treatment.endpoint_gain is not None
+        pairs.append(
+            {
+                "contrast": contrast,
+                "cohort_id": cohort_id,
+                "scene_id": baseline.scene_id,
+                "baseline_role": roles[0].value,
+                "treatment_role": roles[1].value,
+                "baseline_unit_id": baseline.unit_id,
+                "treatment_unit_id": treatment.unit_id,
+                "baseline_endpoint_gain": float(baseline.endpoint_gain),
+                "treatment_endpoint_gain": float(treatment.endpoint_gain),
+                "effect": float(treatment.endpoint_gain - baseline.endpoint_gain),
+            }
+        )
+    return pairs, exclusions
+
+
+def _same_exact_identity_reason(left: EndpointAuditRow, right: EndpointAuditRow) -> str | None:
+    """Return a fail-closed reason if a purported exact pair drifts."""
+
+    if left.scene_id != right.scene_id:
+        return "scene_mismatch"
+    if left.source_sample_key != right.source_sample_key or left.target_id != right.target_id:
+        return "source_target_context_mismatch"
+    left_identity = left.match_identity
+    right_identity = right.match_identity
+    if left_identity.root_action_set_sha256 != right_identity.root_action_set_sha256:
+        return "root_action_set_mismatch"
+    if left_identity.configs.normalized_context_sha256 != right_identity.configs.normalized_context_sha256:
+        return "normalized_config_mismatch"
+    if left_identity.persisted_context_sha256 != right_identity.persisted_context_sha256:
+        return "persisted_context_mismatch"
+    if left_identity.raw_asset_context_sha256 != right_identity.raw_asset_context_sha256:
+        return "raw_asset_context_mismatch"
+    if left_identity.exact_match_sha256 != right_identity.exact_match_sha256:
+        return "exact_match_mismatch"
+    return None
+
+
+def _identity_mismatch_exclusions(rows: list[EndpointAuditRow]) -> list[dict[str, object]]:
+    """Explain why otherwise corresponding policy rows land in different cohorts."""
+
+    by_logical_unit: dict[tuple[str, str, str, int | None], list[EndpointAuditRow]] = {}
+    for row in rows:
+        key = (row.scene_id, row.source_sample_key, row.target_id, row.budget)
+        by_logical_unit.setdefault(key, []).append(row)
+
+    exclusions: list[dict[str, object]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    mismatch_role_pairs = (
+        *_POLICY_EFFECT_CONTRASTS.items(),
+        ("eta_q", (PolicySemanticRole.LEARNED_ONE_STEP, PolicySemanticRole.LEARNED_QH)),
+        ("eta_q", (PolicySemanticRole.LEARNED_ONE_STEP, PolicySemanticRole.ORACLE_LOOKAHEAD)),
+    )
+    for logical_key, logical_rows in sorted(by_logical_unit.items()):
+        for contrast, roles in mismatch_role_pairs:
+            left_rows = [row for row in logical_rows if row.match_identity.treatment.semantic_role is roles[0]]
+            right_rows = [row for row in logical_rows if row.match_identity.treatment.semantic_role is roles[1]]
+            for left in left_rows:
+                for right in right_rows:
+                    if left.match_identity.exact_match_sha256 == right.match_identity.exact_match_sha256:
+                        continue
+                    for reason in _identity_component_mismatches(left, right):
+                        pair_key = (contrast, left.unit_id, right.unit_id, reason, repr(logical_key))
+                        if pair_key in seen:
+                            continue
+                        seen.add(pair_key)
+                        exclusions.append(
+                            {
+                                "contrast": contrast,
+                                "cohort_id": None,
+                                "scene_ids": (logical_key[0],),
+                                "reason": reason,
+                                "left_unit_id": left.unit_id,
+                                "right_unit_id": right.unit_id,
+                            }
+                        )
+    return exclusions
+
+
+def _identity_component_mismatches(left: EndpointAuditRow, right: EndpointAuditRow) -> tuple[str, ...]:
+    """Return every exact-match component that differs between two rows."""
+
+    reasons: list[str] = []
+    if left.source_store_sha256 != right.source_store_sha256:
+        reasons.append("source_store_mismatch")
+    if left.split_manifest_sha256 != right.split_manifest_sha256:
+        reasons.append("split_manifest_mismatch")
+    if left.match_identity.root_action_set_sha256 != right.match_identity.root_action_set_sha256:
+        reasons.append("root_action_set_mismatch")
+    if left.match_identity.configs.normalized_context_sha256 != right.match_identity.configs.normalized_context_sha256:
+        reasons.append("normalized_config_mismatch")
+    if left.match_identity.persisted_context_sha256 != right.match_identity.persisted_context_sha256:
+        reasons.append("persisted_context_mismatch")
+    if left.match_identity.raw_asset_context_sha256 != right.match_identity.raw_asset_context_sha256:
+        reasons.append("raw_asset_context_mismatch")
+    return tuple(reasons or ("exact_match_mismatch",))
+
+
+def _eta_q_rows(
+    grouped: Mapping[str, list[EndpointAuditRow]],
+    *,
+    threshold: float,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    """Return gated recovered-headroom rows without an epsilon denominator."""
+
+    roles = (
+        PolicySemanticRole.LEARNED_ONE_STEP,
+        PolicySemanticRole.LEARNED_QH,
+        PolicySemanticRole.ORACLE_LOOKAHEAD,
+    )
+    eta_rows: list[dict[str, object]] = []
+    denominator_rows: list[dict[str, object]] = []
+    exclusions: list[dict[str, object]] = []
+    for cohort_id, rows in sorted(grouped.items()):
+        by_role: dict[PolicySemanticRole, list[EndpointAuditRow]] = {}
+        for row in rows:
+            by_role.setdefault(row.match_identity.treatment.semantic_role, []).append(row)
+        missing = tuple(role.value for role in roles if not by_role.get(role))
+        duplicate = tuple(role.value for role in roles if len(by_role.get(role, ())) > 1)
+        if missing or duplicate:
+            if missing:
+                exclusions.append(
+                    {"contrast": "eta_q", "cohort_id": cohort_id, "reason": "missing_role", "roles": missing}
+                )
+            if duplicate:
+                exclusions.append(
+                    {"contrast": "eta_q", "cohort_id": cohort_id, "reason": "duplicate_role", "roles": duplicate}
+                )
+            continue
+        learned, qh, look = (by_role[role][0] for role in roles)
+        identity_reason = _same_exact_identity_reason(learned, qh) or _same_exact_identity_reason(learned, look)
+        if identity_reason is not None:
+            exclusions.append({"contrast": "eta_q", "cohort_id": cohort_id, "reason": identity_reason})
+            continue
+        assert learned.endpoint_gain is not None and qh.endpoint_gain is not None and look.endpoint_gain is not None
+        numerator = float(qh.endpoint_gain - learned.endpoint_gain)
+        denominator = float(look.endpoint_gain - learned.endpoint_gain)
+        exclusion_reason: str | None = None
+        if denominator < 0.0:
+            exclusion_reason = "eta_denominator_negative"
+        elif denominator == 0.0:
+            exclusion_reason = "eta_denominator_zero"
+        elif denominator <= threshold:
+            exclusion_reason = "eta_denominator_below_threshold"
+        denominator_rows.append(
+            {
+                "cohort_id": cohort_id,
+                "scene_id": learned.scene_id,
+                "headroom_denominator": denominator,
+                "threshold": threshold,
+                "eta_eligible": exclusion_reason is None,
+                "exclusion_reason": exclusion_reason,
+            }
+        )
+        if exclusion_reason is not None:
+            exclusions.append(
+                {
+                    "contrast": "eta_q",
+                    "cohort_id": cohort_id,
+                    "scene_ids": (learned.scene_id,),
+                    "reason": exclusion_reason,
+                    "headroom_denominator": denominator,
+                    "threshold": threshold,
+                }
+            )
+            continue
+        eta_rows.append(
+            {
+                "contrast": "eta_q",
+                "cohort_id": cohort_id,
+                "scene_id": learned.scene_id,
+                "baseline_role": PolicySemanticRole.LEARNED_ONE_STEP.value,
+                "treatment_role": PolicySemanticRole.LEARNED_QH.value,
+                "baseline_unit_id": learned.unit_id,
+                "treatment_unit_id": qh.unit_id,
+                "baseline_endpoint_gain": float(learned.endpoint_gain),
+                "treatment_endpoint_gain": float(qh.endpoint_gain),
+                "oracle_lookahead_endpoint_gain": float(look.endpoint_gain),
+                "headroom_denominator": denominator,
+                "raw_qh_effect": numerator,
+                "effect": numerator / denominator,
+            }
+        )
+    return eta_rows, denominator_rows, exclusions
+
+
+def _scene_macro_summary(
+    contrast: str,
+    pair_rows: list[dict[str, object]],
+    exclusions: list[dict[str, object]],
+    *,
+    min_scenes: int,
+    bootstrap_samples: int,
+    confidence: float,
+    seed: int,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Aggregate paired effects within scene and then equally across scenes."""
+
+    effects_by_scene: dict[str, list[float]] = {}
+    for row in pair_rows:
+        effects_by_scene.setdefault(str(row["scene_id"]), []).append(float(cast(float, row["effect"])))
+    scene_rows: list[dict[str, object]] = [
+        {
+            "contrast": contrast,
+            "scene_id": scene_id,
+            "pair_count": len(effects),
+            "scene_mean_effect": float(np.mean(np.asarray(effects, dtype=np.float64))),
+        }
+        for scene_id, effects in sorted(effects_by_scene.items())
+    ]
+    scene_means = np.asarray(
+        [float(cast(float, row["scene_mean_effect"])) for row in scene_rows],
+        dtype=np.float64,
+    )
+    scene_count = int(scene_means.size)
+    effect = float(np.mean(scene_means)) if scene_count else None
+    ci_low: float | None = None
+    ci_high: float | None = None
+    if scene_count >= min_scenes:
+        rng = np.random.default_rng(seed)
+        samples = np.empty(bootstrap_samples, dtype=np.float64)
+        for index in range(bootstrap_samples):
+            sampled_indices = rng.integers(0, scene_count, size=scene_count)
+            samples[index] = float(np.mean(scene_means[sampled_indices]))
+        alpha = (1.0 - confidence) / 2.0
+        ci_low, ci_high = (float(value) for value in np.quantile(samples, (alpha, 1.0 - alpha)))
+    reason_counts = Counter(str(row["reason"]) for row in exclusions)
+    return scene_rows, {
+        "contrast": contrast,
+        "estimable": scene_count > 0,
+        "inference_status": "cluster_ci" if ci_low is not None else "descriptive" if scene_count else "no_estimate",
+        "pair_count": len(pair_rows),
+        "scene_count": scene_count,
+        "missing_role_count": reason_counts["missing_role"],
+        "duplicate_role_count": reason_counts["duplicate_role"],
+        "exclusion_count": len(exclusions),
+        "exclusion_reason_counts": dict(sorted(reason_counts.items())),
+        "scene_macro_mean": effect,
+        "cluster_ci_low": ci_low,
+        "cluster_ci_high": ci_high,
+        "cluster_ci_confidence": confidence if ci_low is not None else None,
+        "cluster_bootstrap_samples": bootstrap_samples if ci_low is not None else 0,
+        "cluster_ci_min_scenes": min_scenes,
+    }
+
+
+def _contrast_seed(seed: int, contrast: str, index: int) -> int:
+    """Derive a stable NumPy seed without process-randomized Python hashing."""
+
+    digest = hashlib.sha256(f"{seed}:{index}:{contrast}".encode()).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=False)
+
+
+def _distribution_summary(values: np.ndarray) -> dict[str, float | None]:
+    """Return compact finite distribution statistics for denominator audit."""
+
+    if values.size == 0:
+        return {"min": None, "q25": None, "median": None, "q75": None, "max": None}
+    return {
+        "min": float(np.min(values)),
+        "q25": float(np.percentile(values, 25)),
+        "median": float(np.median(values)),
+        "q75": float(np.percentile(values, 75)),
+        "max": float(np.max(values)),
+    }
+
+
 def paired_policy_comparison_rows(
     reader: RolloutZarrStoreReader,
     *,
@@ -1768,7 +4137,11 @@ def paired_policy_comparison_rows(
     confidence: float = 0.95,
     seed: int = 0,
 ) -> list[dict[str, object]]:
-    """Summarize paired endpoint differences over exact policy cohorts.
+    """Summarize diagnostic persisted-return differences over exact cohorts.
+
+    This legacy reducer never supplies confirmatory inference. Every row is
+    labelled ``diagnostic_proxy`` with persisted cumulative root gain as its
+    metric source; use :func:`policy_effect_evidence` for audited endpoint $J$.
 
     Args:
         reader: Read-only rollout-store adapter.
@@ -1834,6 +4207,8 @@ def paired_policy_comparison_rows(
             )
             output.append(
                 {
+                    "evidence_status": "diagnostic_proxy",
+                    "metric_source": "persisted_cumulative_root_gain",
                     "policy_a": policy_a,
                     "policy_b": policy_b,
                     "policy_pair": f"{policy_b} - {policy_a}",
@@ -3702,15 +6077,22 @@ __all__ = [
     "RolloutSuspiciousQueryConfig",
     "candidate_audit_rows",
     "candidate_evidence_availability_rows",
+    "candidate_direction_evidence",
     "candidate_family_composition_rows",
     "candidate_flow_rows",
     "candidate_geometry_evidence_rows",
     "candidate_group_summary_rows",
     "candidate_plot_availability_rows",
     "candidate_proposal_calibration_rows",
+    "candidate_motion_support_evidence",
+    "candidate_regret_evidence",
     "candidate_result_diagnostic_counts",
     "candidate_selection_family_rows",
     "candidate_selection_rank_family_rows",
+    "candidate_spatial_support_evidence",
+    "candidate_state_composition_evidence",
+    "candidate_target_view_evidence",
+    "candidate_validity_evidence",
     "comparable_policy_cohorts",
     "decode_invalid_reason",
     "decode_position_id",
@@ -3721,6 +6103,7 @@ __all__ = [
     "exact_policy_role_rows",
     "mask_combination_rows",
     "paired_policy_comparison_rows",
+    "policy_effect_evidence",
     "oracle_headroom_evidence",
     "reconstruction_endpoint_rows",
     "reconstruction_endpoint_summary_rows",
@@ -3740,4 +6123,5 @@ __all__ = [
     "target_audit_rows",
     "temporal_metric_summary_rows",
     "validity_waterfall_rows",
+    "validity_audit_evidence",
 ]

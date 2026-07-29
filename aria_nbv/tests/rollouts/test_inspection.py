@@ -159,6 +159,14 @@ def test_rollout_header_summary_keeps_coverage_and_split_denominators_distinct(t
     ]
     assert summary["source_scenes"] == 2
     assert summary["source_rows"] == 3
+    assert summary["reference_scene_count"] == 100
+    assert summary["reference_snippet_count"] == 4_608
+    assert summary["source_snippets"] == 3
+    assert summary["source_scene_coverage"] == pytest.approx(2 / 100)
+    assert summary["source_snippet_coverage"] == pytest.approx(3 / 4_608)
+    assert summary["store_bytes"] > 0
+    assert summary["store_files"] > 0
+    assert summary["bytes_per_rollout"] == pytest.approx(summary["store_bytes"] / written.num_rollouts)
     assert summary["source_split_counts"] == {"test": 1, "train": 1, "val": 1}
     assert summary["rollout_split_counts"] == {"test": 1, "train": 1, "val": 1}
     assert summary["horizon"] == 2
@@ -183,6 +191,9 @@ def test_rollout_header_summary_keeps_coverage_and_split_denominators_distinct(t
     missing = rollout_header_summary(reader, manifest_payload={"root_attrs": {}, "manifest": {}})
     assert missing["source_scenes"] is None
     assert missing["source_rows"] is None
+    assert missing["source_snippets"] is None
+    assert missing["source_scene_coverage"] is None
+    assert missing["source_snippet_coverage"] is None
     assert missing["source_split_counts"] is None
     assert missing["rollout_split_counts"] == {"test": 1, "train": 1, "val": 1}
     assert missing["steps_per_scene"] is None
@@ -806,6 +817,8 @@ def test_oracle_headroom_pairs_persisted_schedule_treatments_and_blocks_invalid_
     projection = comparable_policy_cohorts(RolloutZarrStoreReader(matched.store_dir))
     evidence = oracle_headroom_evidence(projection)
 
+    assert evidence["evidence_status"] == "diagnostic_proxy"
+    assert evidence["metric_source"] == "persisted_cumulative_root_gain"
     assert projection["eligible"] is True
     assert len(projection["eligible_cohort_rows"]) == 1
     assert projection["eligible_cohort_rows"][0]["comparison_count"] == 2
@@ -881,6 +894,8 @@ def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) ->
         "final_cumulative_target_root_gain",
     }
     assert all(row["matched_cohort_count"] == 3 for row in first)
+    assert all(row["evidence_status"] == "diagnostic_proxy" for row in first)
+    assert all(row["metric_source"] == "persisted_cumulative_root_gain" for row in first)
     assert all(row["policy_pair"] for row in first)
     assert all(row["median_paired_delta"] == row["paired_delta_median"] for row in first)
     assert all(row["bootstrap_ci_low"] is not None for row in first)

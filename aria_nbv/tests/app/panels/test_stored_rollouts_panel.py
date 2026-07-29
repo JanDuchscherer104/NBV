@@ -22,6 +22,7 @@ from aria_nbv.app.panels._stored_rollouts import (
     candidate_generation,
     inspect_rerun,
     oracle_headroom,
+    overview_topology,
     reconstruction_return,
     shared,
     validity_support,
@@ -115,9 +116,31 @@ def test_current_store_renders_overview_and_a_single_segmented_section(isolated_
     assert _metric_values(app)["Candidate Rows"] == "32"
     assert _metric_values(app)["Actor-Valid Target Tasks"] == "2 / 2"
     assert _metric_values(app)["Actor-Valid Tasks with Rollouts"] == "2 / 2"
+    assert _metric_values(app)["GT-Mesh Scene Coverage"] == "1 / 100 (1.00%)"
+    assert _metric_values(app)["GT-Mesh Snippet Coverage"] == "1 / 4,608 (0.02%)"
+    assert _metric_values(app)["Physical Store Footprint"] != "Unavailable"
     assert {button.label for button in app.get("download_button")} >= {
         "Download invariant CSV",
         "Download topology JSON",
+    }
+
+
+def test_reference_coverage_figure_composes_represented_and_unrepresented_populations() -> None:
+    figure = overview_topology._reference_coverage_figure(
+        {
+            "source_scenes": 2,
+            "reference_scene_count": 100,
+            "source_snippets": 3,
+            "reference_snippet_count": 4_608,
+        }
+    )
+
+    represented = next(trace for trace in figure.data if trace.name == "Represented")
+    unrepresented = next(trace for trace in figure.data if trace.name == "Unrepresented")
+    assert dict(zip(represented.y, represented.x, strict=True)) == {"GT-Mesh Scenes": 2, "GT-Mesh Snippet Windows": 3}
+    assert dict(zip(unrepresented.y, unrepresented.x, strict=True)) == {
+        "GT-Mesh Scenes": 98,
+        "GT-Mesh Snippet Windows": 4_605,
     }
 
 
