@@ -1,0 +1,3589 @@
+{
+  "inventory_hash": "d3385c4e26bf714d",
+  "num_candidates": 576,
+  "num_scenes": 100,
+  "scenes": [
+    {
+      "candidates": [
+        {
+          "rank_digest": "007d6831d9538a7c492a637c5f03053d913b0f2fbf012e97e07dff7bf0f0e13c",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/889/shards-0001.tar"
+        },
+        {
+          "rank_digest": "1ae8c6d200a2ca67af1f5ca893550a07c5788b3c34da573ecb5a82456e258e3e",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/889/shards-0000.tar"
+        },
+        {
+          "rank_digest": "3cec00f4849d8e9122a221d4798739c22c7a964d3f097a0e0af8fab0afd0fb64",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/889/shards-0010.tar"
+        },
+        {
+          "rank_digest": "4929e7f9ad945f44a39192208bb13d655f44bab36be15b1a5ba135333c264268",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/889/shards-0011.tar"
+        },
+        {
+          "rank_digest": "4c96fb486a728973e84b6ee64a9f9583415589060b5c0b07bf3b2fbd9d943c8b",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/889/shards-0002.tar"
+        },
+        {
+          "rank_digest": "58c1cdc7461dd8e4583d54fb8718ab9e262557cf1c4f76475f76ccc410ae0568",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/889/shards-0006.tar"
+        },
+        {
+          "rank_digest": "6c152873e354020ecace69ecc0119c3af25f5f56c6d043202655d9d39a636dd5",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/889/shards-0005.tar"
+        },
+        {
+          "rank_digest": "87912c2094b83f5e7312671ec3131b1961bb1fbc5bce37b6cad6b50152000072",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/889/shards-0004.tar"
+        },
+        {
+          "rank_digest": "8a06193bb06afa9e0485863a5a0e6a1046e72bf2db895282099d921a4ffcd7d0",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/889/shards-0009.tar"
+        },
+        {
+          "rank_digest": "9b5b88f1d9da75051e5bd092f1546e590ae7676c3dbb95680652f5a16704731b",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/889/shards-0008.tar"
+        },
+        {
+          "rank_digest": "be160adf855916b16a4d19a47b56bdb981f89e336662896ec67cded35d914f2d",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/889/shards-0003.tar"
+        },
+        {
+          "rank_digest": "e924ba6de28cd0677b4ce4273c85ed8ccf4a2fef08db6d1cd819b5ca5e88dfd7",
+          "sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/889/shards-0007.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_889.ply",
+      "scene_id": "889",
+      "selected_sample_key": "AriaSyntheticEnvironment_889_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "12a3e2d3fe370ad6d2f4da750a411f076413b01ab869563d777277acf284e2a8",
+          "sample_key": "AriaSyntheticEnvironment_8517_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8517/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8517.ply",
+      "scene_id": "8517",
+      "selected_sample_key": "AriaSyntheticEnvironment_8517_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "42adab01b3cd27515e4024bb6ff682b21fe97a5354625515f64b6a1d2f3face4",
+          "sample_key": "AriaSyntheticEnvironment_8559_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8559/shards-0000.tar"
+        },
+        {
+          "rank_digest": "956c84387b755b927cadc6adc04c40c48c8d1a07b5f16beb647fa21e20694ac3",
+          "sample_key": "AriaSyntheticEnvironment_8559_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8559/shards-0002.tar"
+        },
+        {
+          "rank_digest": "d82ea4c3cff975d16b4f47c2f5a8d746c021874dc2f0a7e1e4856be8ac7ee94f",
+          "sample_key": "AriaSyntheticEnvironment_8559_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8559/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8559.ply",
+      "scene_id": "8559",
+      "selected_sample_key": "AriaSyntheticEnvironment_8559_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0581d9956f186482fc796915bd0dcab707dedddea34f0aced80c9ef2f1611e22",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/8671/shards-0008.tar"
+        },
+        {
+          "rank_digest": "1ff020c0e0e04625bf79f563bb83d1e5d87815672ba323ce1dfd742da1ad5d6a",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8671/shards-0005.tar"
+        },
+        {
+          "rank_digest": "346e9544b34de2a731bd698a5321d47c6410dda0b3aa833311be413bd38bc45c",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/8671/shards-0009.tar"
+        },
+        {
+          "rank_digest": "46ee62b5caf4d636f5c1ac09d430b816de577ebd997adc1b5b082e59e6532991",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8671/shards-0003.tar"
+        },
+        {
+          "rank_digest": "b01e48768c14b98fcd7a08c938fb8fe0db7f9ebb419c7fe22cdde1bd2d1b8763",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/8671/shards-0007.tar"
+        },
+        {
+          "rank_digest": "c8644b7f1a3789850cf3ca6a150400340d1db6f95670987c97307ee234e448b9",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8671/shards-0001.tar"
+        },
+        {
+          "rank_digest": "cc19e9adc2735e88733a3a62d05e8f18b283f0147f6bbc1f6b7ee419db510b21",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/8671/shards-0010.tar"
+        },
+        {
+          "rank_digest": "cd1b1f18f7b5eedd1558ff1e4d0177f884d3988df5bc8b879fb6c88f39eca8d3",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/8671/shards-0006.tar"
+        },
+        {
+          "rank_digest": "d827f9206e46842af96cfe5c3b0aa88152d73d2df8c500097372013e2eb5bd87",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8671/shards-0000.tar"
+        },
+        {
+          "rank_digest": "dace50e4ca512a593f389d7204f4948e08a111258030b4d4a283d8827ca6cca5",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8671/shards-0004.tar"
+        },
+        {
+          "rank_digest": "e8380c0d85e1e190b7b7e63d64f5dfa3dd2638b441daa039b8d6f9369f9c41b3",
+          "sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8671/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8671.ply",
+      "scene_id": "8671",
+      "selected_sample_key": "AriaSyntheticEnvironment_8671_AtekDataSample_000064"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "06eb1959c3181052c6ea0b30634366ebd0a43479069723a01f1739ec9e3eaa67",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8694/shards-0003.tar"
+        },
+        {
+          "rank_digest": "1b74348957f791bddca1756a6d99eb298e1ddacc8c75b9231ba082cbc48fbb5b",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8694/shards-0002.tar"
+        },
+        {
+          "rank_digest": "360f5dbdd903fba7133e0f385a80614be99c1ab9a2f38013881d69fff2ea7143",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8694/shards-0000.tar"
+        },
+        {
+          "rank_digest": "3bb2ab71ce2313a0ffed5ede49baafb442e48badcbaa8b1117a2e1922749fddd",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8694/shards-0004.tar"
+        },
+        {
+          "rank_digest": "81d2497c1db305b90fecfac3c4d88613dd28f63a62ee52e87f2f800e4a931a04",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/8694/shards-0006.tar"
+        },
+        {
+          "rank_digest": "cd42008096078e21b81a07e42f598d3e62d98b4ebddf1197cb88970c3f4784e2",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8694/shards-0001.tar"
+        },
+        {
+          "rank_digest": "d80df9a1e8a3ab80e633ec39a1ac6fbc8e591556b3856d1b68b8d83362309120",
+          "sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8694/shards-0005.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8694.ply",
+      "scene_id": "8694",
+      "selected_sample_key": "AriaSyntheticEnvironment_8694_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "7c2cdc6ab11b2b85ad4baad53e56e92516b1b7eb0737477f4aea6f9b491a040b",
+          "sample_key": "AriaSyntheticEnvironment_8715_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8715/shards-0001.tar"
+        },
+        {
+          "rank_digest": "9118192ceaafd4c343af61c5ec1365650b7f26231c5921d43f582e696cfb7946",
+          "sample_key": "AriaSyntheticEnvironment_8715_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8715/shards-0002.tar"
+        },
+        {
+          "rank_digest": "cf6d6dbc3499f530e8ca6d7cc669892835208339f78aae1f1d3110c1cebc404d",
+          "sample_key": "AriaSyntheticEnvironment_8715_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8715/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8715.ply",
+      "scene_id": "8715",
+      "selected_sample_key": "AriaSyntheticEnvironment_8715_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "4d2d7fa8e987979be314173fd283220d8eb2b029708ed30645c761282fb03ba2",
+          "sample_key": "AriaSyntheticEnvironment_8777_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8777/shards-0001.tar"
+        },
+        {
+          "rank_digest": "b63cba3c3f0669ac18720b71a19e1e9552619216d61cef0d77fab144aeb21052",
+          "sample_key": "AriaSyntheticEnvironment_8777_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8777/shards-0000.tar"
+        },
+        {
+          "rank_digest": "d12c55347aa5cbb315aca1fbf5421390b5040b52bdd1cf397c5a44d51f67e6ca",
+          "sample_key": "AriaSyntheticEnvironment_8777_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8777/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8777.ply",
+      "scene_id": "8777",
+      "selected_sample_key": "AriaSyntheticEnvironment_8777_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "04c8e932bfadc7fb5dcc9d880859463963677d9f40e1256cb5b2234508c8d9a9",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8822/shards-0002.tar"
+        },
+        {
+          "rank_digest": "0e3238c381d965357722ab4d9d267d6082ad103e0856e58cb51f3843a5730aab",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/8822/shards-0007.tar"
+        },
+        {
+          "rank_digest": "1f22274c6d26060caf9b71c74f4fd01551b1247b921e0c732bbe418606217bf3",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8822/shards-0003.tar"
+        },
+        {
+          "rank_digest": "20848ba6178568d09986f494afb8d8cd31d633f9256b0d87f7a336a00ebe832e",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8822/shards-0000.tar"
+        },
+        {
+          "rank_digest": "29ffbdd55399c60d26a6ced5a9768b17a14c0c77de14a9c30bab99bfd56f0e19",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8822/shards-0005.tar"
+        },
+        {
+          "rank_digest": "3f6651fc16bc0e20220024a24a101c0512d709ddb2648943d84b843582e48955",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8822/shards-0001.tar"
+        },
+        {
+          "rank_digest": "7bb49e53cffda1f88036d6c23696bdeee110edd26bcef51b45a10c498c874043",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8822/shards-0004.tar"
+        },
+        {
+          "rank_digest": "85a7ee01324762fe1484da7ffea46f591a6240603b4c670147d2a40e9ca56ff0",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/8822/shards-0008.tar"
+        },
+        {
+          "rank_digest": "dcca015a224e9759ebd96ba1bce28d75e1bf7e1837ffe1babce5d4365e24b3f9",
+          "sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/8822/shards-0006.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8822.ply",
+      "scene_id": "8822",
+      "selected_sample_key": "AriaSyntheticEnvironment_8822_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "12aa40e0f9645240d4d2aeef3d9d894fdacac948e387e41ee0fe2097b7e92b3a",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8857/shards-0004.tar"
+        },
+        {
+          "rank_digest": "48e26bd90e7abd34db2eb69597cc84279c8daa66e4555974a6c486cd6267295e",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8857/shards-0001.tar"
+        },
+        {
+          "rank_digest": "62a01d229e13afc0695778589a13c18be034ce2e25fc35425ce94579553c7189",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8857/shards-0002.tar"
+        },
+        {
+          "rank_digest": "bcb69e1f4f32daed547016dabd37715ac225e6f80dc197366a2159fa2bce54bc",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8857/shards-0000.tar"
+        },
+        {
+          "rank_digest": "ef31c31f5281cf5756b2202ac99c2585e3c4644716a336b9cd961a5dcade115c",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8857/shards-0003.tar"
+        },
+        {
+          "rank_digest": "fd5b7d0e16f48f6577bd1e89e85233e09c1870bbc65dde6484a43876c20040b4",
+          "sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8857/shards-0005.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8857.ply",
+      "scene_id": "8857",
+      "selected_sample_key": "AriaSyntheticEnvironment_8857_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "156087830f1e74d3c91b33a3a31d32cf81c98b1e4fc56e716496da5c74e10f78",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8860/shards-0005.tar"
+        },
+        {
+          "rank_digest": "35fcebaa4de46af89d46065f4efe316fe652fb5cc3ce40c2da5302534dc2869b",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8860/shards-0002.tar"
+        },
+        {
+          "rank_digest": "53a7d76a1305ce3ce7ac943bcb1f619a5a1163474909936ae6771362b587aa52",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/8860/shards-0006.tar"
+        },
+        {
+          "rank_digest": "5e1c794d859f795b26add808b6b6cd772c317aebca1e1db308765799694a2357",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8860/shards-0004.tar"
+        },
+        {
+          "rank_digest": "7c8bb228df5a8012db84b3219e280a552c1889312c86ab36b3d900cfc8b87b30",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/8860/shards-0007.tar"
+        },
+        {
+          "rank_digest": "996527cc596f8dfa2287ec1bd26288f13571761ba0c7922c8b6f4f0a6fbacd02",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/8860/shards-0009.tar"
+        },
+        {
+          "rank_digest": "a51bddb508b1f46babac503854f48fe489f336243aef8348fd324bd0cd8d6b10",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8860/shards-0000.tar"
+        },
+        {
+          "rank_digest": "aa7112a574c856bdeccc0205fd1099795c4a78225a3878f6a686153f462b214d",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8860/shards-0003.tar"
+        },
+        {
+          "rank_digest": "b50c19d0eff499a4ed34e1903e2460d43ff28c3f4b8cf3f1aff4394cf1042524",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/8860/shards-0008.tar"
+        },
+        {
+          "rank_digest": "f125831b99735d7c37486c20a59993808f4c1f138b8b1ab61f6a49bc72a66645",
+          "sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8860/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8860.ply",
+      "scene_id": "8860",
+      "selected_sample_key": "AriaSyntheticEnvironment_8860_AtekDataSample_000040"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "5a77590c624bfb25f92c763ee7f6f7d6f2b921453bc311d6bf18a7ea5e64cb4a",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/8938/shards-0006.tar"
+        },
+        {
+          "rank_digest": "781f88259805f2a6e07761b918c44ebf971f402678546df1e220a8f68c654456",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/8938/shards-0000.tar"
+        },
+        {
+          "rank_digest": "b4ec7769fd8bafb097410630b5e5fdf6c9b30440e36c2a6b51b29f69eded5e50",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/8938/shards-0003.tar"
+        },
+        {
+          "rank_digest": "be555df6057acebaa8cbf9395fe42331e6f4933849da848d3b5ec23d4035fa4a",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/8938/shards-0005.tar"
+        },
+        {
+          "rank_digest": "c37e404dd2caef08890ca39626a79492b392c98e9ce24df38eb0c9e6f0c544bc",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/8938/shards-0001.tar"
+        },
+        {
+          "rank_digest": "dc61327e9d3fda5766ce543938d99fb202be5e63a8dbfa9dc0b14297fa27dd72",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/8938/shards-0002.tar"
+        },
+        {
+          "rank_digest": "ffcbe5b9f749411ba7d1c5a0f7742ede0803590a046ee62d998daafa055fe726",
+          "sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/8938/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_8938.ply",
+      "scene_id": "8938",
+      "selected_sample_key": "AriaSyntheticEnvironment_8938_AtekDataSample_000048"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "64be36432728f9c441b80136bedc93bb14006bd388c241646b85747cc5f677a1",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81022/shards-0002.tar"
+        },
+        {
+          "rank_digest": "64f27b93eebab0a5209fb129697ba5ef4a712551e35ec3fda0a11744bde2fbd6",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81022/shards-0004.tar"
+        },
+        {
+          "rank_digest": "6aecead11da3d74d05546faf1c1db2c2ee81bd726b34d6979636228f41a02858",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81022/shards-0000.tar"
+        },
+        {
+          "rank_digest": "96bfd60ed6b203e45dcef0d83792eb0b9617918679341ca42d65ff668b6e891e",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81022/shards-0003.tar"
+        },
+        {
+          "rank_digest": "d30ee236717281b630e5684c9de68098394c13191b6639a1d28747911289994a",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81022/shards-0005.tar"
+        },
+        {
+          "rank_digest": "d934be3f584a387b09ac41b17c84c94e2065c3e8ab36171bfed530482ada572d",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81022/shards-0001.tar"
+        },
+        {
+          "rank_digest": "f5bed0c7883f24dd9f09abe44e876a40cfd6ecadb416b1c1e2505bf93059182a",
+          "sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81022/shards-0006.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81022.ply",
+      "scene_id": "81022",
+      "selected_sample_key": "AriaSyntheticEnvironment_81022_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1db60300db7e84de8e0adb288a80925e4fd7cc8addc4f89bcfa0ee8f28b316f2",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81048/shards-0005.tar"
+        },
+        {
+          "rank_digest": "2f61f2a8ce3f51164e609276f3bf8b7b53e67ee79d3f03be6a06acbc8eee8411",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81048/shards-0006.tar"
+        },
+        {
+          "rank_digest": "4ad3050e52fc10d86b6bb86dfab85dbf53d2982c54c4d615faa43f05206e8865",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81048/shards-0000.tar"
+        },
+        {
+          "rank_digest": "63d793072c831ff3bfba15264c6e4cd7c4a49627c9728e08daf2fdbb20cee551",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81048/shards-0003.tar"
+        },
+        {
+          "rank_digest": "71c3533b1c2521f6eb99b8aa035034088a5f566ad1ae607d57c7eed301517b70",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81048/shards-0002.tar"
+        },
+        {
+          "rank_digest": "96e4cb7dd49ff951f21256cf19afcbd3da0abc419dccaa48d78d6df4fd9878b3",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81048/shards-0004.tar"
+        },
+        {
+          "rank_digest": "a792a3f635c2b6cc6e558f9a328f81062f3461d557947a0218b4c42a1486cde9",
+          "sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81048/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81048.ply",
+      "scene_id": "81048",
+      "selected_sample_key": "AriaSyntheticEnvironment_81048_AtekDataSample_000040"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1af70fb9b5ca70be23c5847db797d16d8a27b334aa6c660879adf653223568bb",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81056/shards-0002.tar"
+        },
+        {
+          "rank_digest": "65d833fa81e31cfc082d8acfb55b8416f7041d1ef4b6fe17aeaa05b63c5f0d5d",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81056/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8af2a5a3dacf0ab67bec04eec928e6dfaa26260da23f513212f676b6d5f9e07f",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81056/shards-0004.tar"
+        },
+        {
+          "rank_digest": "8dd79bef0b73c1fd2187d4829c0da9c0da941e0acca9b3ab7da8e8822da56ad9",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81056/shards-0005.tar"
+        },
+        {
+          "rank_digest": "9bd20dfb74be83fd70bda2cd45c72359d8b0771716cb9f468453f55544be0160",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81056/shards-0003.tar"
+        },
+        {
+          "rank_digest": "a51b84a19f43057ecf79531235c5092702a6cd57807a7f87b963c193a1b57db3",
+          "sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81056/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81056.ply",
+      "scene_id": "81056",
+      "selected_sample_key": "AriaSyntheticEnvironment_81056_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "01abdb59ec19858d1de8d5704310f749c2a4c4cc95f8d06276be5c65cf6bd6f9",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81128/shards-0003.tar"
+        },
+        {
+          "rank_digest": "221bac55273cfd1d0d4277bb2038a9a91bcd99c54aab5905f3293151469d8c9d",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81128/shards-0004.tar"
+        },
+        {
+          "rank_digest": "2c25a364ce250b1dfea5fc28a2fdee5451443f9ff1c74bdfdc4cfc441067cc09",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81128/shards-0006.tar"
+        },
+        {
+          "rank_digest": "562b41de8b2ce6469983ecd2bac79ceded6da860efa3b59cda8187199a86887c",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81128/shards-0001.tar"
+        },
+        {
+          "rank_digest": "59072be062bb472a2518b3195db217ca11c4904deaead100d2f91edfb87598b8",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81128/shards-0002.tar"
+        },
+        {
+          "rank_digest": "6e255bbae3ef7714996532eb252413413798fe1179e1de66a8e71e5cfde57054",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81128/shards-0005.tar"
+        },
+        {
+          "rank_digest": "fa8c689fb4ccf32c235cd036b0e6732198fcc92cab6458e41c6da536f6a6ecad",
+          "sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81128/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81128.ply",
+      "scene_id": "81128",
+      "selected_sample_key": "AriaSyntheticEnvironment_81128_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "55d63b261abdc934ba5e3170f69aab07382433891e70af51f22f0a0f4ee7ba0a",
+          "sample_key": "AriaSyntheticEnvironment_81161_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81161/shards-0002.tar"
+        },
+        {
+          "rank_digest": "5c8fcc443b8b40105f0a6ec160c9d5909747ac44e73cc8afd18add58f3d481fc",
+          "sample_key": "AriaSyntheticEnvironment_81161_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81161/shards-0000.tar"
+        },
+        {
+          "rank_digest": "7d29130d2bcf984abb72abd0a29272f7c37d225a014fec6f6543af7e3a6f4f10",
+          "sample_key": "AriaSyntheticEnvironment_81161_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81161/shards-0003.tar"
+        },
+        {
+          "rank_digest": "ed9c238bf74f71f2e80b2dea062dd0e1b404fdf3b840aded9e1b6569d52d2d1f",
+          "sample_key": "AriaSyntheticEnvironment_81161_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81161/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81161.ply",
+      "scene_id": "81161",
+      "selected_sample_key": "AriaSyntheticEnvironment_81161_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "8e0d6e3a95efef68b2d1cc7f9a033bfef72bc4745dbb908cdbc20c31030939c9",
+          "sample_key": "AriaSyntheticEnvironment_81180_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81180/shards-0001.tar"
+        },
+        {
+          "rank_digest": "cd2d407c0a849498f740c4db5f7a9868c1005f080799d1bd99dca170105455e1",
+          "sample_key": "AriaSyntheticEnvironment_81180_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81180/shards-0000.tar"
+        },
+        {
+          "rank_digest": "fa3862d045c06e6e1d374a829effd2ff5b7307e50a7e34d2c03a79f74bc40c3c",
+          "sample_key": "AriaSyntheticEnvironment_81180_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81180/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81180.ply",
+      "scene_id": "81180",
+      "selected_sample_key": "AriaSyntheticEnvironment_81180_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "4d159598dc766632c7c3157df7af717077252bd18b1233bb68d0560f5e36cb12",
+          "sample_key": "AriaSyntheticEnvironment_81181_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81181/shards-0002.tar"
+        },
+        {
+          "rank_digest": "c46f8f550ac917d06ce9bb1f6a70af276ba6f08276d17a728ae336a97f91a7c6",
+          "sample_key": "AriaSyntheticEnvironment_81181_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81181/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e6765d3f3bae938f97ab6a309d94dcc46da08949b82d377d288f381a49ebcbe6",
+          "sample_key": "AriaSyntheticEnvironment_81181_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81181/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81181.ply",
+      "scene_id": "81181",
+      "selected_sample_key": "AriaSyntheticEnvironment_81181_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "460d5554955081f376f56cd7be008cbe5509ecae7d3209f48f55903dfecf2786",
+          "sample_key": "AriaSyntheticEnvironment_81184_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81184/shards-0000.tar"
+        },
+        {
+          "rank_digest": "c7136d0d4249db106ad7c7396f155b50f7ffe93ec50130f66928ba3d37a33c6e",
+          "sample_key": "AriaSyntheticEnvironment_81184_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81184/shards-0002.tar"
+        },
+        {
+          "rank_digest": "d3ff79865a41dc9ef7ca407e53608ea98d6587e09f9a8984f4f26bb17b2d9176",
+          "sample_key": "AriaSyntheticEnvironment_81184_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81184/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81184.ply",
+      "scene_id": "81184",
+      "selected_sample_key": "AriaSyntheticEnvironment_81184_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "31082c3d443ad0d772919314ece99d65ab2b2c14434740f2c5e799e3e04d2531",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81188/shards-0003.tar"
+        },
+        {
+          "rank_digest": "78b8c5c8aebd0e07e019bfd1be2eed1bd5a992aac201b9eb256812644696d86d",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81188/shards-0002.tar"
+        },
+        {
+          "rank_digest": "87107f1ccf21bd80e7b5acddaab6d5ff675e8344abe48e3a940ee36e25faf4c5",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81188/shards-0001.tar"
+        },
+        {
+          "rank_digest": "9ee68263c1642ae03c71ff8d6520f3817da3decfaaf87dc2245ce65c6cb6457a",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81188/shards-0000.tar"
+        },
+        {
+          "rank_digest": "a06c614d627ebfcb850b49387cbba69015da830a66bf5ab795dd18c9874dcab0",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81188/shards-0005.tar"
+        },
+        {
+          "rank_digest": "ea40a4cc85f326eee38c6a61ff68149a5fa5121e4ed45391c52b7aa8308e9626",
+          "sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81188/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81188.ply",
+      "scene_id": "81188",
+      "selected_sample_key": "AriaSyntheticEnvironment_81188_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "5e09449f623d1305d1b700b4a4e9e8487be64d3e92a7b920e07830fe6dcf1015",
+          "sample_key": "AriaSyntheticEnvironment_81226_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81226/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81226.ply",
+      "scene_id": "81226",
+      "selected_sample_key": "AriaSyntheticEnvironment_81226_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2ac4b3fc4493436cb2050539b758e0cbd64b2a322bb2b20326ed7a6c148911bd",
+          "sample_key": "AriaSyntheticEnvironment_81272_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81272/shards-0000.tar"
+        },
+        {
+          "rank_digest": "502879dff14b30d51bdf2a8b914b76a48de6e1965622d7bc2810f5570146e45c",
+          "sample_key": "AriaSyntheticEnvironment_81272_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81272/shards-0002.tar"
+        },
+        {
+          "rank_digest": "b0a42a415e3a1cb5cb4d3c68f0a59057957843b9e4a4c863820294de32ea2437",
+          "sample_key": "AriaSyntheticEnvironment_81272_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81272/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81272.ply",
+      "scene_id": "81272",
+      "selected_sample_key": "AriaSyntheticEnvironment_81272_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "07d3fee67380c97c32392225fa53eafb56b1f228e4f005f315beff9171200f41",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81283/shards-0002.tar"
+        },
+        {
+          "rank_digest": "80e0e0b6b92b9665a639c6c0afe4350c6a35ba81c5a5fdf7d35be794638efaf3",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/81283/shards-0009.tar"
+        },
+        {
+          "rank_digest": "830c45b294f72bddb9e063617052770f91f3fac517a7d858b3b6fb5db228b889",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81283/shards-0003.tar"
+        },
+        {
+          "rank_digest": "973baf4168ce3d8bd65f45971bc605358a1d05e0ec76d46bd315b705f6537715",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/81283/shards-0012.tar"
+        },
+        {
+          "rank_digest": "9c8900a041f00271f3bfd259f8d1a5f8be2f747ae6f415027274e6381f7fdb8c",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/81283/shards-0007.tar"
+        },
+        {
+          "rank_digest": "9ce6545ae7a7e7c928fb2fe483b52a851e920624f5c0914d1b468422d741c0e8",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000120",
+          "shard_path": ".data/ase_efm/81283/shards-0015.tar"
+        },
+        {
+          "rank_digest": "b24729897268986207820346377f7eb2561be10ccece929ba4ab3edcaa2fdb3c",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/81283/shards-0010.tar"
+        },
+        {
+          "rank_digest": "b8bfaec07ea7afea4911c1f64d5627af4b6b329535998bdddde89d2a151eb92f",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/81283/shards-0011.tar"
+        },
+        {
+          "rank_digest": "c44d4aa11cbf362f45b1c8051660194b2471dee4c3bdaf33997f284f030801e5",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/81283/shards-0014.tar"
+        },
+        {
+          "rank_digest": "ca41b13731c630a0fe71cf1f01f67b7cf50c721ff579b104e08c41e282bf9127",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81283/shards-0000.tar"
+        },
+        {
+          "rank_digest": "dfc47eb3236044ad7488f8f8a63af6746bf361403b141fd7b6bd33e15bc8d43b",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/81283/shards-0013.tar"
+        },
+        {
+          "rank_digest": "e362a80fadcf7cff5e4cb71d3cf7fe1fb0b2bcc6ac471f861cbc1ab0a6f84c89",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81283/shards-0001.tar"
+        },
+        {
+          "rank_digest": "eb64cbd444d9e554318ff913625b046b77ce632a96be305e20617c87c3366156",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/81283/shards-0008.tar"
+        },
+        {
+          "rank_digest": "ed629c0fc126211461fa15beada44b214a4e250754141cf9692a2063c3220ded",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81283/shards-0005.tar"
+        },
+        {
+          "rank_digest": "ee6a21634e8b0f399cd8462de62c566904a0a7684b4c21777f3fdd2c53ab3dde",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000128",
+          "shard_path": ".data/ase_efm/81283/shards-0016.tar"
+        },
+        {
+          "rank_digest": "efecb639825ba8d44db718808cdb6d032a8d887ecc39a524e1348d6a0ea82054",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81283/shards-0004.tar"
+        },
+        {
+          "rank_digest": "fa5c6a0fb402445f0f02d4bc2f42cfefeac7083db2db0c144a0b4c7ed516efbc",
+          "sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81283/shards-0006.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81283.ply",
+      "scene_id": "81283",
+      "selected_sample_key": "AriaSyntheticEnvironment_81283_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "01626fa937829531f28e04bbb444f13ecdf2510a753c7184e592b79528d0cef6",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/81286/shards-0014.tar"
+        },
+        {
+          "rank_digest": "19f303aee11821cd263f020ef95476a69da9d5a541f76a3789c51a8b6ae40794",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000128",
+          "shard_path": ".data/ase_efm/81286/shards-0016.tar"
+        },
+        {
+          "rank_digest": "525e7d70edce038760f72c801c39cba82c10ad9642a789a5f9d51ad526b44b29",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/81286/shards-0007.tar"
+        },
+        {
+          "rank_digest": "54e23822cbef8f01f17ba1be98222c2a40a68f2917378c1b61eeffd1b1939790",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81286/shards-0003.tar"
+        },
+        {
+          "rank_digest": "56291e292ffa3ea2232dfc0d23183ffc62102d4f5a0b565c4a79fa11d2e486de",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81286/shards-0002.tar"
+        },
+        {
+          "rank_digest": "63138308ed9b7ba296b0f51aed870e1761145da275e09d43772a22be80b7b1f4",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/81286/shards-0010.tar"
+        },
+        {
+          "rank_digest": "68276977e37d20071ffa42ec17d0197b67aed21574447319a462874dd20f4b4c",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/81286/shards-0013.tar"
+        },
+        {
+          "rank_digest": "7097a726a071b42f9bab183ea93d4a228de3059df643bf6cb7d4c9b74b33cc98",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/81286/shards-0012.tar"
+        },
+        {
+          "rank_digest": "70ce7524bbf53c02cb43eed88a60efa5cb8efa55f7d53340ed7d8650d5c87eb1",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000120",
+          "shard_path": ".data/ase_efm/81286/shards-0015.tar"
+        },
+        {
+          "rank_digest": "7257a8fc8b41dc57220bab6fa9a439d4f9fbec571b1bb321b5622f1a83004901",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/81286/shards-0008.tar"
+        },
+        {
+          "rank_digest": "814c014f5cdc84d2e90426c9b529a6f7b73e62ed8b724345fa7edf6fa1f5abd3",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81286/shards-0000.tar"
+        },
+        {
+          "rank_digest": "9620b91555135f3b8e48ce812962363a484fcf0e6bfde63b2726180545c9a084",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81286/shards-0001.tar"
+        },
+        {
+          "rank_digest": "ad79103607d2ab78f5271e1dbbed6987e9786cd824c374826aae7ae6eb1c087d",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/81286/shards-0009.tar"
+        },
+        {
+          "rank_digest": "cba4d21eb7b83b2275513ee94372d1868d6faef8da6934fdcb1175b3a13811d0",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81286/shards-0004.tar"
+        },
+        {
+          "rank_digest": "d30a60656f808bfd28653155b94061adcb0e9ca31efa1849f1f5dd31cc8433d9",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/81286/shards-0011.tar"
+        },
+        {
+          "rank_digest": "e2bd63235f164f3ec7649bb8656d3f84b81d40a2efe9db8962c7283bfd130964",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81286/shards-0005.tar"
+        },
+        {
+          "rank_digest": "fb660de2f3cfe8d9a87ad503e4804a74f4de7927d7dd369736b6d58f9d3affac",
+          "sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81286/shards-0006.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81286.ply",
+      "scene_id": "81286",
+      "selected_sample_key": "AriaSyntheticEnvironment_81286_AtekDataSample_000112"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "243913c7128a5c301fc575f2f1ef5b599cbeabdc29297164d4fddfeafb46e505",
+          "sample_key": "AriaSyntheticEnvironment_81366_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81366/shards-0001.tar"
+        },
+        {
+          "rank_digest": "34c740f4dffd9e5271b113cd9805cd4bc183c0f0d2ddb14075705f6ae7cfeca5",
+          "sample_key": "AriaSyntheticEnvironment_81366_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81366/shards-0003.tar"
+        },
+        {
+          "rank_digest": "c3f54b32fa40776af55eda017714e61efe6fb9848bdd0f6f6501e6dc8fd8eb34",
+          "sample_key": "AriaSyntheticEnvironment_81366_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81366/shards-0000.tar"
+        },
+        {
+          "rank_digest": "e9dc6e129d4d521edd1df1c3d8c5db6e2fb63680188df8a5ab5b5516cc610238",
+          "sample_key": "AriaSyntheticEnvironment_81366_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81366/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81366.ply",
+      "scene_id": "81366",
+      "selected_sample_key": "AriaSyntheticEnvironment_81366_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "39e3fb01cf2ae5bb8306e5f0aa70674b5a4541356d79be03dc522f45eba8609b",
+          "sample_key": "AriaSyntheticEnvironment_81387_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81387/shards-0003.tar"
+        },
+        {
+          "rank_digest": "4232e64fbd1ce4c91afe7533073717b91324f291a03823aae387ca1a8171150d",
+          "sample_key": "AriaSyntheticEnvironment_81387_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81387/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8477af5a17c0604b67f297c53eb2b22b81684ed82acf183df91e34edd74ff6cb",
+          "sample_key": "AriaSyntheticEnvironment_81387_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81387/shards-0002.tar"
+        },
+        {
+          "rank_digest": "aa0955a41998f4536d7384bae67eec0c2427b9500a5ad0d53994b364306ecb61",
+          "sample_key": "AriaSyntheticEnvironment_81387_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81387/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81387.ply",
+      "scene_id": "81387",
+      "selected_sample_key": "AriaSyntheticEnvironment_81387_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "51a7693b4389ea9f62a6aad27900f46dfface791fba6801da33f302c79126994",
+          "sample_key": "AriaSyntheticEnvironment_81426_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81426/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81426.ply",
+      "scene_id": "81426",
+      "selected_sample_key": "AriaSyntheticEnvironment_81426_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "053365722e605740ceddea30eef6b9adc4ee30fbe9b8e54ddc2afec23c1c2448",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/81477/shards-0010.tar"
+        },
+        {
+          "rank_digest": "2956720848e4ce35a4aaa140f14d959b0c38b2722a4ca955f2f7fbf649e442bd",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81477/shards-0003.tar"
+        },
+        {
+          "rank_digest": "405d2ebb5b5e269df11cc0a453f1863210fed1511a8f8cfed46875c6dd1fb91a",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/81477/shards-0007.tar"
+        },
+        {
+          "rank_digest": "4306c363c864cb16fad5f5594f1b5ccfa2caf469727cf4fdb61b86e8aa4529ec",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/81477/shards-0008.tar"
+        },
+        {
+          "rank_digest": "71f2e19fe9f86d0554f3583d6f78e20db0c4d5dc5e387f6c74d559d46ee97c85",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81477/shards-0005.tar"
+        },
+        {
+          "rank_digest": "7384dd3577ed0968c45032a804a006107771a61ad0b848309505d6447629fba3",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81477/shards-0002.tar"
+        },
+        {
+          "rank_digest": "753f0a0b670fcc94c810be299bb11fcdb2514c3bf3122a8e6a4978c5bcf6cc66",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81477/shards-0004.tar"
+        },
+        {
+          "rank_digest": "8d3a9d30a8620beb933e881bb0fe4bbba4c4eb26f256b2865e5d9aaf5c2ae8a9",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81477/shards-0001.tar"
+        },
+        {
+          "rank_digest": "b34aae18d7061c270eee1e1dd950f551ccf70203b8576acc374fc086161483fb",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/81477/shards-0009.tar"
+        },
+        {
+          "rank_digest": "bfdc718f9b8faf1ff147914e758c1ed5385929bf5c04dc86bcc9a306d9e167f3",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81477/shards-0000.tar"
+        },
+        {
+          "rank_digest": "f293f3530d8defd12ab134a5be84a271329b9c09b11e44b69c19edf11f82df1b",
+          "sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81477/shards-0006.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81477.ply",
+      "scene_id": "81477",
+      "selected_sample_key": "AriaSyntheticEnvironment_81477_AtekDataSample_000080"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "16701e9f7b9c649c117f755da04306c9a258748434c3c4690fbcf0b625e14ed7",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81483/shards-0006.tar"
+        },
+        {
+          "rank_digest": "1b825f9e6f04cf8659689a4159bdd9c162c31c16dff020d6e3819acda34871da",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81483/shards-0004.tar"
+        },
+        {
+          "rank_digest": "7864f5ff1b2343ed47c8e334689fd071c1f8de21bdd6740c6c55881534041fe2",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/81483/shards-0007.tar"
+        },
+        {
+          "rank_digest": "89e128adcbd24dd760040e99001508e64f94e0824891e8a6d2b2948b3d6a702b",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81483/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8e87619ce2b18430fd4cbdb8007a533cfbe0d3408fe96a09639d4486f4e6c350",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81483/shards-0003.tar"
+        },
+        {
+          "rank_digest": "bdce3504f0c8c5820f4a8b3b82b08c3a5c86ad41bc9bcf0d8335786e0e6d96fd",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81483/shards-0002.tar"
+        },
+        {
+          "rank_digest": "cd5812c826c83920df8d515f246bf6694e92b59976b7097ae5163b04e75289d7",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81483/shards-0005.tar"
+        },
+        {
+          "rank_digest": "d9e60a8df1142e6b43b0b573b305a5681a8131f7ce6d5a6754df5f3e2fb5eef9",
+          "sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81483/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81483.ply",
+      "scene_id": "81483",
+      "selected_sample_key": "AriaSyntheticEnvironment_81483_AtekDataSample_000048"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "7ff9a3183f3a85af9ffc0ddbc0c59d80792842d90611e395a8b79eda41009724",
+          "sample_key": "AriaSyntheticEnvironment_81625_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81625/shards-0000.tar"
+        },
+        {
+          "rank_digest": "fd3d49ae38f4c014885f8d7bbb52afdc5d2efd1f0efcdd474428def9d0a8280a",
+          "sample_key": "AriaSyntheticEnvironment_81625_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81625/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81625.ply",
+      "scene_id": "81625",
+      "selected_sample_key": "AriaSyntheticEnvironment_81625_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0ac3729c70c1ffee377e1e493f710ea87ef927379697ba6ad846e0fa23f9aeaf",
+          "sample_key": "AriaSyntheticEnvironment_81693_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81693/shards-0001.tar"
+        },
+        {
+          "rank_digest": "a969441fb71fe1958f4c51009cc565ffadc66c2cc396406d414c103564a0bb58",
+          "sample_key": "AriaSyntheticEnvironment_81693_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81693/shards-0003.tar"
+        },
+        {
+          "rank_digest": "d5a4082d3fe4c94a0e387d07f97f6f8c5eaa670dac4d6b2973d9d416ad015eeb",
+          "sample_key": "AriaSyntheticEnvironment_81693_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81693/shards-0000.tar"
+        },
+        {
+          "rank_digest": "d6c0914336f53d3fe1077d2f288b5cdb91d83ff0bad1e4d402100862c952de40",
+          "sample_key": "AriaSyntheticEnvironment_81693_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81693/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81693.ply",
+      "scene_id": "81693",
+      "selected_sample_key": "AriaSyntheticEnvironment_81693_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2caf292fb245634aa5fa487e68ad5f1a2171ba2954b3f6f728a7c443843d93df",
+          "sample_key": "AriaSyntheticEnvironment_81772_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81772/shards-0000.tar"
+        },
+        {
+          "rank_digest": "8f557f80b30ceb06157eb3cb14f9db5ea1bbcc09ef13a9afb91a20141bc96020",
+          "sample_key": "AriaSyntheticEnvironment_81772_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81772/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81772.ply",
+      "scene_id": "81772",
+      "selected_sample_key": "AriaSyntheticEnvironment_81772_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "c23c2adba418b500818b79348f081b463c7172507b20ce8ccc8b58b6ea4cc4e4",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81807/shards-0003.tar"
+        },
+        {
+          "rank_digest": "c784bfff74b1a8f8c891a70792566d664f3cfb640e9f8e4800e7a088c271310d",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81807/shards-0000.tar"
+        },
+        {
+          "rank_digest": "cac19fa8ae4bb7cfb70a32eb4ebe98af2cdf52327fa717fb59ee07403e9119bc",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81807/shards-0006.tar"
+        },
+        {
+          "rank_digest": "dec15896db9fa07e39dc82a301da45c2acb558cf50932a86ec216d5d7ac97da5",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81807/shards-0005.tar"
+        },
+        {
+          "rank_digest": "e82bacfc4b99e551fd4be27a88ab30c4dcb52a36106c053d3a81fedaa6a01e3b",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81807/shards-0004.tar"
+        },
+        {
+          "rank_digest": "e881b2bb4cff937e3f20f08b39bab6c56ef88c23431f157fdf443cf5d560f1a1",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81807/shards-0001.tar"
+        },
+        {
+          "rank_digest": "f6886f53a272be002c580e69b95435974e026107821807145102cd2cd2063b26",
+          "sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81807/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81807.ply",
+      "scene_id": "81807",
+      "selected_sample_key": "AriaSyntheticEnvironment_81807_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "04b06bf3f9309b250ee5a2abb99bd15b215a7a1dd33db6bdcdafbba8a3a539f9",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/81964/shards-0009.tar"
+        },
+        {
+          "rank_digest": "11bbb1e3656d457db46e97df1612789904ec879b676e2b194eeda6366bef9a24",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/81964/shards-0010.tar"
+        },
+        {
+          "rank_digest": "155753811e3e1a7bfbaae16f9a1982891653ba4293e6253ca7d236c9d810c000",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/81964/shards-0000.tar"
+        },
+        {
+          "rank_digest": "4574b499e20add84a2f6ee20a545d07af481658b50c227b6af445b998548e428",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/81964/shards-0005.tar"
+        },
+        {
+          "rank_digest": "4c11b561db5999ffc1be1ab884b695afa0b15784b0f8cce7074c3dc5c6774ae6",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/81964/shards-0004.tar"
+        },
+        {
+          "rank_digest": "51a825c69ef2198eee9fbb6f703144ff88773858248598d1dc5311a155733118",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/81964/shards-0003.tar"
+        },
+        {
+          "rank_digest": "5b8b84b1ac13c587fabc43621065ec666f15ef12491d9ef97f4ed647e1d0f366",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/81964/shards-0002.tar"
+        },
+        {
+          "rank_digest": "af7733165ce2eeac6243d0b9b2e5372c6e0648a255c4f9cf34a43b0b7043a5a6",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/81964/shards-0006.tar"
+        },
+        {
+          "rank_digest": "c4650bf0f5acab8e89edaf45deb11d1ffc07a7642097e58370b43b4624c0f037",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/81964/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e2b0aff86ba875ca9850b4926bdc735900af682ded8598bc0564a914b70beb17",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/81964/shards-0007.tar"
+        },
+        {
+          "rank_digest": "eec75bfe5f6b8039e616a92f752ac9b09ea2cb861bb770b043ff30232f5e5339",
+          "sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/81964/shards-0008.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_81964.ply",
+      "scene_id": "81964",
+      "selected_sample_key": "AriaSyntheticEnvironment_81964_AtekDataSample_000072"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "09afcdd3672b7adf57503d7bae01a2358d7409e6878d64b8124d4d062f3e0220",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82004/shards-0004.tar"
+        },
+        {
+          "rank_digest": "13bddcb6ea966f191d18be147643d0a4b3e8fb600745b8155caa145ac0678c2e",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82004/shards-0005.tar"
+        },
+        {
+          "rank_digest": "20020aae7f8fcc8e69b594da938157735229d505f4a5de5e60b4a0691adbbcf0",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82004/shards-0003.tar"
+        },
+        {
+          "rank_digest": "39c419b9a0f9bf2b2d0be4932279617026de3a349b4e95b4ea1e1f34a600d2c7",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82004/shards-0000.tar"
+        },
+        {
+          "rank_digest": "526daa31bf13fbc18192651833f676f1b8ac2f2f4380542de16bcf94323f8ba9",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/82004/shards-0013.tar"
+        },
+        {
+          "rank_digest": "5aa41a6350906a58a6e62cf6f903cdb2b44be538bea3da5fa571debec92efc4b",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/82004/shards-0011.tar"
+        },
+        {
+          "rank_digest": "6c29e27dbc5384d39956b6078b2b21d2ff889d2454929eb9da54d4cf18f9668b",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/82004/shards-0007.tar"
+        },
+        {
+          "rank_digest": "79826dfcac7dc55a12a9ac08dc976b9b26e0e8a60d66aa8658f7997c63178a28",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82004/shards-0002.tar"
+        },
+        {
+          "rank_digest": "859f9d6ef77230e11e079036ac614a6329fd65144cef6da5fa4188d62cc60e44",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82004/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8ad4caebe7764aa8a23b63de80d53f8808cb85674ee4797446c8058f95a99116",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82004/shards-0006.tar"
+        },
+        {
+          "rank_digest": "918ab4c6ac8ba043c372af694a4a6bf923f0d337e6772c82ce1a573b6f2ebb25",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/82004/shards-0009.tar"
+        },
+        {
+          "rank_digest": "bd5eeffd0b49a8e0c04e1acb80bf6a59019fcb1533161d22376e784b1752b4cb",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/82004/shards-0008.tar"
+        },
+        {
+          "rank_digest": "cbe9c2ad547b57590def4a391df4a3b7be0cf8982049db60f6bfd419f3d39f1f",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/82004/shards-0010.tar"
+        },
+        {
+          "rank_digest": "f18ff90e469a335ca04c9b3fe91c8f9f17055a3c969767409a23e35bf1ccf058",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/82004/shards-0012.tar"
+        },
+        {
+          "rank_digest": "f1b824d602be3ea09635ade762ee22500662f5a0b58c86bfc3e756af3168a3f1",
+          "sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/82004/shards-0014.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82004.ply",
+      "scene_id": "82004",
+      "selected_sample_key": "AriaSyntheticEnvironment_82004_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "37d7ca9cb9319436f362c3cf58d54850ba1cf3de5e48410722274b8efd72be12",
+          "sample_key": "AriaSyntheticEnvironment_82254_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82254/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e30e5e36e6f1433ea6616d350c8fc19c6c75e8fedc7dcec6eda10fcfbf9c5275",
+          "sample_key": "AriaSyntheticEnvironment_82254_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82254/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82254.ply",
+      "scene_id": "82254",
+      "selected_sample_key": "AriaSyntheticEnvironment_82254_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0257e38f71c65cc82dbe18455559a315c05b4ca6cc857381d4fb4f042d7bcb95",
+          "sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82257/shards-0002.tar"
+        },
+        {
+          "rank_digest": "1480ca6138c3da186cf0a994c2a70800ad86f355df920f3e8dbf2d4fbdac4cec",
+          "sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82257/shards-0004.tar"
+        },
+        {
+          "rank_digest": "1d9128f9f5a25b6420c8bb888a5934c0b1021e8d59f3fa747cb4c99c0ce13c6b",
+          "sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82257/shards-0000.tar"
+        },
+        {
+          "rank_digest": "3bcfaa38f07b05b4ea2df72fbff23c23589b650d95d361b1a8f0de257be540a3",
+          "sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82257/shards-0003.tar"
+        },
+        {
+          "rank_digest": "ac93a44808e796cdbe54f1f908632f44e2a6f268eca893de704ed4f90b863147",
+          "sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82257/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82257.ply",
+      "scene_id": "82257",
+      "selected_sample_key": "AriaSyntheticEnvironment_82257_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2c7aa53ebbc973e7198d909d950c08683485a192227e352830506561dc88fb1d",
+          "sample_key": "AriaSyntheticEnvironment_82258_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82258/shards-0000.tar"
+        },
+        {
+          "rank_digest": "2fa0a82c88d996ac4ee37fd0f3611338a4cd56bebc84666923e0c030602cdcd7",
+          "sample_key": "AriaSyntheticEnvironment_82258_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82258/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82258.ply",
+      "scene_id": "82258",
+      "selected_sample_key": "AriaSyntheticEnvironment_82258_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0a60ef51b9fe77a685f305aaf325c9e59df43e2d9763489d2b0255ebd3a84ffd",
+          "sample_key": "AriaSyntheticEnvironment_82271_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82271/shards-0002.tar"
+        },
+        {
+          "rank_digest": "4e499538265ffa13bd9a79eeb9c3aa84ceb8fea501de12cbfce15ad2ecc95a66",
+          "sample_key": "AriaSyntheticEnvironment_82271_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82271/shards-0001.tar"
+        },
+        {
+          "rank_digest": "bdeeee377b8fb6b88643ca5f912f030c1822bb70691848963878244ead410da0",
+          "sample_key": "AriaSyntheticEnvironment_82271_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82271/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82271.ply",
+      "scene_id": "82271",
+      "selected_sample_key": "AriaSyntheticEnvironment_82271_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "215e68ee5e171f31b71aecdd0322d776f7e1bf935bcdd1efd8f1991d76448c74",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82294/shards-0001.tar"
+        },
+        {
+          "rank_digest": "531a596ebf91d870231a4fc8a6ba02bc85a317769c23ce16c7c931ea6aa20e07",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82294/shards-0004.tar"
+        },
+        {
+          "rank_digest": "6755e11f9faac7574abb1da1aec7eb23160c749387d4daedc18112a8802f7e1a",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82294/shards-0005.tar"
+        },
+        {
+          "rank_digest": "a3aa9cda628da7c2389e7898b0e936fa9382dfabff2819311cfef0b8b4dbc9b0",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82294/shards-0002.tar"
+        },
+        {
+          "rank_digest": "adb09510eb7b065a74d6435ae81b79c9bb3b57f0162e82d0fc0a9d36c9ad97f9",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82294/shards-0006.tar"
+        },
+        {
+          "rank_digest": "e7b4466b6faa6ccc8e3b90c038c22f2fda70446b74be30297554e2e401f91f98",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82294/shards-0003.tar"
+        },
+        {
+          "rank_digest": "ee4dd66e738d08774b32ef7170a49b4f323db3b51245a0bedc067079d7b2f3ba",
+          "sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82294/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82294.ply",
+      "scene_id": "82294",
+      "selected_sample_key": "AriaSyntheticEnvironment_82294_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "009c28ae85c73d87c9053afeeb503ec128e0bb3c9e6fa9cacdb699ac017c922c",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82309/shards-0000.tar"
+        },
+        {
+          "rank_digest": "50a6745493381cd709ec3ca7b2a909f1cc77c457c2a46e1412d22e1d18254d64",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82309/shards-0001.tar"
+        },
+        {
+          "rank_digest": "a700306250f2afeefffc9eaa2b02fb03dfcf6d40755bd0d28e60af57f692b52c",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82309/shards-0002.tar"
+        },
+        {
+          "rank_digest": "aa0bd23920dccf67031669a8df1f116475609d887157fb509d50903662622725",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82309/shards-0003.tar"
+        },
+        {
+          "rank_digest": "aaef5d3bc88fec150c376f45229ccfe91f111d91a103341cbc1d0b8d577af5c0",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82309/shards-0004.tar"
+        },
+        {
+          "rank_digest": "c703b738c9ad4cd0830a232619ac4d898dff13de93a7e32d57bac0c74b65faa0",
+          "sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82309/shards-0005.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82309.ply",
+      "scene_id": "82309",
+      "selected_sample_key": "AriaSyntheticEnvironment_82309_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1ea93d98b1458abdb56e92ab1bd23837fac0748bcec43fe24067228207a35c72",
+          "sample_key": "AriaSyntheticEnvironment_82311_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82311/shards-0000.tar"
+        },
+        {
+          "rank_digest": "97094b032cffc635671cbd29102d80aa3912c4b13e1d9664266aa95f57a8a426",
+          "sample_key": "AriaSyntheticEnvironment_82311_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82311/shards-0002.tar"
+        },
+        {
+          "rank_digest": "9bfe937283cb7a9361948e0e48d3abfe2db6477a22e224562fe14c9bb711cba3",
+          "sample_key": "AriaSyntheticEnvironment_82311_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82311/shards-0003.tar"
+        },
+        {
+          "rank_digest": "dc06ace35992cd630319848ac642b26a61ae31c81ea77a8a3e0041d3c86592b1",
+          "sample_key": "AriaSyntheticEnvironment_82311_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82311/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82311.ply",
+      "scene_id": "82311",
+      "selected_sample_key": "AriaSyntheticEnvironment_82311_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "040a8e7e5db26324f426347e1c3f1dfef202d7bb1026462e5dcf479631675e32",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82342/shards-0004.tar"
+        },
+        {
+          "rank_digest": "38ca00856ec8ac3297b3bd1cc84734daad4b7fcf3eab1cb9929d10e5ec2451ac",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82342/shards-0000.tar"
+        },
+        {
+          "rank_digest": "57eaa05880cc81c52588c78595fbdf8ba945aaa145661092be041552da456861",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82342/shards-0005.tar"
+        },
+        {
+          "rank_digest": "95cd68b0527d4ed66c26a140f4982568e4e632257579c7a22b55d6a1499e7909",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82342/shards-0002.tar"
+        },
+        {
+          "rank_digest": "bca2c1d2272f61122fa3a2714a380b4ed72a674f74e2cb9584c09794cc5bc824",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82342/shards-0001.tar"
+        },
+        {
+          "rank_digest": "c0adb9ee7234237d7676fac5dec7d74cce954f83e85d9bf48dcd11c5196a810b",
+          "sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82342/shards-0003.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82342.ply",
+      "scene_id": "82342",
+      "selected_sample_key": "AriaSyntheticEnvironment_82342_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "48e5c0568c861ebd3abc77afe1f150df4129ebc47a7e42aecf9920aaca37ecad",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82448/shards-0001.tar"
+        },
+        {
+          "rank_digest": "678e49c1e7c45f7d93f9cd0825b8ffce20b6433addd27abe4d864a9ae984fe74",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/82448/shards-0007.tar"
+        },
+        {
+          "rank_digest": "6cdb78f58c2782f63a309c2b7fa4f937c487ceea2dd94f90a57d4ba5e0b69e8c",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82448/shards-0006.tar"
+        },
+        {
+          "rank_digest": "952672e58cedd6fef5bad6b423529e2992af4a3f718eb29452979c1fbf1c5a52",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82448/shards-0003.tar"
+        },
+        {
+          "rank_digest": "955139c9242ab2c31086d12eb725c46023d7a4d33afa60a998c5ea14841ea45b",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82448/shards-0000.tar"
+        },
+        {
+          "rank_digest": "9ca3f464433d27cf0c7f9ec717931059c7bf41779ab5773bf96bc9ad2e69a1b2",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82448/shards-0002.tar"
+        },
+        {
+          "rank_digest": "a32c26f5705e78455a2f3a8df4d4c0013aeface70eef35e1f2a9859841e2fb2b",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82448/shards-0004.tar"
+        },
+        {
+          "rank_digest": "a9d9b2453b14164df2989db5878f5f5e29dcbf489831d8da432d8f0fbc43e7a9",
+          "sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82448/shards-0005.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82448.ply",
+      "scene_id": "82448",
+      "selected_sample_key": "AriaSyntheticEnvironment_82448_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "5e1fa56818311b723612ce70412de8e39a7eb811adf14562009b647e69fefeff",
+          "sample_key": "AriaSyntheticEnvironment_82517_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82517/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82517.ply",
+      "scene_id": "82517",
+      "selected_sample_key": "AriaSyntheticEnvironment_82517_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0ca4b71f0834ae83900d49510908bc2324391d06af83a5091aa9285483751c9d",
+          "sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82545/shards-0002.tar"
+        },
+        {
+          "rank_digest": "7d745fe099b6fab5d8bff2065c6f246844ddedd8c1dddcf280058900f6cdb7fe",
+          "sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82545/shards-0004.tar"
+        },
+        {
+          "rank_digest": "8331bbccc5bc27e4f78010edfd439d2c28068bd9f99b34d179cc0cb89a0cce6d",
+          "sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82545/shards-0003.tar"
+        },
+        {
+          "rank_digest": "950cb94592f94ae255efb4babcb8d8d0baf6315866d0c52a8a231e7d974db226",
+          "sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82545/shards-0001.tar"
+        },
+        {
+          "rank_digest": "eadc13877d691c4a1b1f976cf71ed5ad7e2d86f8940d2fd0db1b8336bb25eea3",
+          "sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82545/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82545.ply",
+      "scene_id": "82545",
+      "selected_sample_key": "AriaSyntheticEnvironment_82545_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1a13f209a18537d65be383356521ed3d277524374b4a996a660bca99a687afd5",
+          "sample_key": "AriaSyntheticEnvironment_82555_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82555/shards-0001.tar"
+        },
+        {
+          "rank_digest": "62a867ff4a740c71b6a1f092edb880dfcaa1ce643420c7cb7b3cdab9a5daa4bf",
+          "sample_key": "AriaSyntheticEnvironment_82555_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82555/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82555.ply",
+      "scene_id": "82555",
+      "selected_sample_key": "AriaSyntheticEnvironment_82555_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "408c4622666272daa3927875199006ff6329acd0a5cae4537180df27b501266b",
+          "sample_key": "AriaSyntheticEnvironment_82620_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82620/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82620.ply",
+      "scene_id": "82620",
+      "selected_sample_key": "AriaSyntheticEnvironment_82620_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "29570206184173a4652a025393526da6188d03e42caef23573d06d6428192cd9",
+          "sample_key": "AriaSyntheticEnvironment_82630_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82630/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8f9fe288f87dd8cff0782ba4dce648af0d14b8d2785be40b3d54d1edc30f389f",
+          "sample_key": "AriaSyntheticEnvironment_82630_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82630/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82630.ply",
+      "scene_id": "82630",
+      "selected_sample_key": "AriaSyntheticEnvironment_82630_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "09cc9114e6f1687bb8063555c95eb7f8105452ab65f537192ced5af1aea33413",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82647/shards-0001.tar"
+        },
+        {
+          "rank_digest": "13782589087530c5537e5792a785662a548c47663c156b9daa73c61143b079ef",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82647/shards-0004.tar"
+        },
+        {
+          "rank_digest": "2fb940eb86d5f3374746ae625495855f86c90813d8209ca00736e795a10e06d6",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82647/shards-0002.tar"
+        },
+        {
+          "rank_digest": "3d04016145e6fd98d68fd3364c99a096cee843c2f306377c99b922ca662629d5",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/82647/shards-0009.tar"
+        },
+        {
+          "rank_digest": "3e6679b5212f5b46b61233e414da58a30177efa20f8b1a25ee70432b98879bbe",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/82647/shards-0007.tar"
+        },
+        {
+          "rank_digest": "57320d029c63bab6018be792c5d0a75da0e0db93b34cf07ab5ef642151467ffa",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/82647/shards-0010.tar"
+        },
+        {
+          "rank_digest": "5ff413dc11a37ca2e9301fcb3a2071d4ae2d4b62a69d7a7486f1a207f4fcfea9",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/82647/shards-0013.tar"
+        },
+        {
+          "rank_digest": "61b6c3b9b0c8f2f33c43283723d1da3d30abdb598025f96e0ec772fdd7cfd937",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82647/shards-0006.tar"
+        },
+        {
+          "rank_digest": "743b748f5075639bf67972948d5c19f20e4a916c58225131eb5dd4fdd7e3bddd",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82647/shards-0005.tar"
+        },
+        {
+          "rank_digest": "755505a2143dd3136cdc5c46bdb696cf8942a583fe01bacd26a880ef7d897f90",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/82647/shards-0008.tar"
+        },
+        {
+          "rank_digest": "803a29eb4311fbc9bb1fec34c9b7eb877840fb8433614c243d4577fc5540cc86",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82647/shards-0003.tar"
+        },
+        {
+          "rank_digest": "9ea69dd63f238dd06617fadefd2dcb961c0ce6cd07399ae5faf88eafd0ae978c",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/82647/shards-0012.tar"
+        },
+        {
+          "rank_digest": "c6b2b1b4747ca69d71fedfccd73fb659e0ce0b1659b1940fd36602fc2b952f97",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82647/shards-0000.tar"
+        },
+        {
+          "rank_digest": "db98ff3f09b83ac0e005b13b4e046c495e693948d5102ae3c5966c3a724d961b",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/82647/shards-0011.tar"
+        },
+        {
+          "rank_digest": "f6c2a2042fa623f620903b0ec62017de6013b8da6326a8febdff478d52f612b9",
+          "sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/82647/shards-0014.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82647.ply",
+      "scene_id": "82647",
+      "selected_sample_key": "AriaSyntheticEnvironment_82647_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "6576467b9e960a5ebcdeb46010d19040393bcbbc0b1b29e47372d611bd483d66",
+          "sample_key": "AriaSyntheticEnvironment_82658_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82658/shards-0000.tar"
+        },
+        {
+          "rank_digest": "6bdc2ddea542851dd1e3b0855442662e38484a2a77ff316bf9d163ad4036b2b5",
+          "sample_key": "AriaSyntheticEnvironment_82658_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82658/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82658.ply",
+      "scene_id": "82658",
+      "selected_sample_key": "AriaSyntheticEnvironment_82658_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0c4b5edf8e95ba717270cbee2cb69522bfe99519354409cb4c6b399c7e7ad20c",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82700/shards-0003.tar"
+        },
+        {
+          "rank_digest": "1851bfaa866d3e2a111d8568241b0bc2551fc8840ee2dc843fa64b20cb04d429",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82700/shards-0002.tar"
+        },
+        {
+          "rank_digest": "2c12c17936786abf5485b36455c9b3ab0a13efdfa53bed7bf5516ca3ef4ab679",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82700/shards-0005.tar"
+        },
+        {
+          "rank_digest": "9539457580ba80d36e1e45d7241bdbd14cbbc161030425638a0886cfc9706693",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82700/shards-0004.tar"
+        },
+        {
+          "rank_digest": "b10170469cbdb37f71bfc9e60855b05682ecac6e2334e3ce31eb1bb1a53c3fe3",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82700/shards-0001.tar"
+        },
+        {
+          "rank_digest": "faf09a4a0859282951cc42f010babcb9ba069e26e8fcc5ee6f32a81463eaab8c",
+          "sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82700/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82700.ply",
+      "scene_id": "82700",
+      "selected_sample_key": "AriaSyntheticEnvironment_82700_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "4103caed69ff3a394469e311f31311284463001382c8620221e992db668571ed",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82832/shards-0005.tar"
+        },
+        {
+          "rank_digest": "4755da070ea27fe480e27db7b8c7baa6934411e68f4a735ad6aa601033e2d0aa",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82832/shards-0003.tar"
+        },
+        {
+          "rank_digest": "89cf5af090c4b736efde01b5f88b151fb2f4a2187f88d37274897783b8afc2b2",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82832/shards-0006.tar"
+        },
+        {
+          "rank_digest": "8b703f050ad24af3586fc00ebff8554568004ffa08d34f133bf97e0f2ac04f25",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82832/shards-0001.tar"
+        },
+        {
+          "rank_digest": "b41fb7cb648894f1f6df1c4678781611615c7b48a84f971acfeeebeb88f62845",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/82832/shards-0007.tar"
+        },
+        {
+          "rank_digest": "b65513dae40d9908b127961e4f52716273f4cb15fd891adfd8dd0ad7d750ba77",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82832/shards-0002.tar"
+        },
+        {
+          "rank_digest": "ceee83427d23fbcf2f4499be20d0771be1aabafcc14a3fa4e8bdae01174015f4",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82832/shards-0000.tar"
+        },
+        {
+          "rank_digest": "ec62da52cec7a053b10101216e3fbe795915441848bc044f609ca7809ec91de4",
+          "sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82832/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82832.ply",
+      "scene_id": "82832",
+      "selected_sample_key": "AriaSyntheticEnvironment_82832_AtekDataSample_000040"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "094fcd336d9689358bd5e0266780ddb459fd357f3b5b5db13f88d547eee7ec17",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82889/shards-0001.tar"
+        },
+        {
+          "rank_digest": "1762777cf55bc62b0c6552a169199db16188d20b9e5e6e23235efbcfe5980da0",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82889/shards-0003.tar"
+        },
+        {
+          "rank_digest": "17a28b6b26eb438e7ccf6d6d0d0e6bc5d444fcd09e4196246da4cd0e43cb233a",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/82889/shards-0006.tar"
+        },
+        {
+          "rank_digest": "1df0e901e333960dab6013f3f0013e43cd3eaa93a6dcf25ee6e393b2206779b6",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/82889/shards-0012.tar"
+        },
+        {
+          "rank_digest": "2b3252cd05ce764e186f9222fa69e397d0122aef9ba8834f96fe9c03ce376fc6",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/82889/shards-0013.tar"
+        },
+        {
+          "rank_digest": "32ed8b44f55e3064f915a2a7c897c53c7ef52791bae5f5230b389d4a5da0532a",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/82889/shards-0014.tar"
+        },
+        {
+          "rank_digest": "4110a4712e0123d8d106855c4922cd7b0ae1213bcc1b052520ebadd6bc9ddc8c",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82889/shards-0005.tar"
+        },
+        {
+          "rank_digest": "8acba2036d8f41ca74bdbbf92683c900e27de632d5a1239748738aaf0ae3dc5c",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82889/shards-0000.tar"
+        },
+        {
+          "rank_digest": "96ef7b6122ad259803d470d3891f5936ccb662d76a3179af3220835f87c7e099",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/82889/shards-0010.tar"
+        },
+        {
+          "rank_digest": "9e4b2f49d9b28488f54c8af46d1853564c0e701ff80fb33e0450d135c87e6153",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/82889/shards-0009.tar"
+        },
+        {
+          "rank_digest": "c531c142963029758551f96cd3b88b7e10de07fcd2673469383e038c57bdee48",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/82889/shards-0007.tar"
+        },
+        {
+          "rank_digest": "d151559d67ab55fa8bd1668506c150273bf3148e1b3d9aad243f10e9546156c8",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82889/shards-0002.tar"
+        },
+        {
+          "rank_digest": "db1dd40d97ef61e6d79ed5e74cd3e7f1a4f924ceeaf11dcf111a740f6f3b02b9",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82889/shards-0004.tar"
+        },
+        {
+          "rank_digest": "e81319e9612bf3fb28b8d6ad43951b93df8c8d9845e5f20ad2f0361c7ba1f8e7",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/82889/shards-0008.tar"
+        },
+        {
+          "rank_digest": "feadbb6a27bb84a63a8ca19243a012d6ee3ae37a4f375150765ec1b5a8930b6b",
+          "sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/82889/shards-0011.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82889.ply",
+      "scene_id": "82889",
+      "selected_sample_key": "AriaSyntheticEnvironment_82889_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0c7dd5cd87ead3bcaa51856a5b4f86c84f8c226508f08f4d246b0c10492bd8b7",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82902/shards-0000.tar"
+        },
+        {
+          "rank_digest": "2515ecbb7bcbbb4b11588e7757641bc42c258652b82a68bfb418cf852b17de1e",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/82902/shards-0001.tar"
+        },
+        {
+          "rank_digest": "26a0df16ea9e6379dd35301934b50d5bd572159bab08fd669ba1af24c9e56c33",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/82902/shards-0005.tar"
+        },
+        {
+          "rank_digest": "69eb873f6983c3e4d9444ecebd7d9c968e0a6e342c4f2b236af5c3732ec40262",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/82902/shards-0003.tar"
+        },
+        {
+          "rank_digest": "9f85d53ec874b6cdc258f61bf2053bf01d6d9555c31e92c03d9ceafca660cbec",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/82902/shards-0004.tar"
+        },
+        {
+          "rank_digest": "b4e9242b38aa1e2019f536d3600842350300d5e33fa0a6f78e27c1c9150a7a19",
+          "sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/82902/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82902.ply",
+      "scene_id": "82902",
+      "selected_sample_key": "AriaSyntheticEnvironment_82902_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "50c461d3424bb9a4dad35fe402b90ad802a1de1d049330602e5ea291f3cb346c",
+          "sample_key": "AriaSyntheticEnvironment_82953_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/82953/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_82953.ply",
+      "scene_id": "82953",
+      "selected_sample_key": "AriaSyntheticEnvironment_82953_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "174f29e0f68ee9dd804af6099d2694ccfc435c9e7707aede591747e3a0f6a5ee",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83036/shards-0004.tar"
+        },
+        {
+          "rank_digest": "33ed1fcf0946460341c30c29e4c727d73f2239154a90a7a8bcc7ef87f2b1bc93",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83036/shards-0005.tar"
+        },
+        {
+          "rank_digest": "41ef82582c466622e244b8ff8f0beaffd9d524d0f8cbb905930572f006671f43",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83036/shards-0002.tar"
+        },
+        {
+          "rank_digest": "677053ec5bb942e4bb98c3082a83a5022c52f70e66a9f6ea8aff87ac61fbd616",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83036/shards-0003.tar"
+        },
+        {
+          "rank_digest": "6fbac7ad0d20497aa5cfc3d3c3cbc98dbf5192d9edd83d758a39f9792525165f",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83036/shards-0007.tar"
+        },
+        {
+          "rank_digest": "7a6cfeac1e8787bb0165faa5567751d23c9864dd834ca6de1b0e052a765d03fb",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83036/shards-0000.tar"
+        },
+        {
+          "rank_digest": "923cee6e9d3129fecd7fde9de7abf493b5aba5ca1392d7b2e9de90c388b1609d",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83036/shards-0001.tar"
+        },
+        {
+          "rank_digest": "a17b6c7ae7e16c2c157591b55404143d7f9ab124bfc8865d673cb5062049b658",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83036/shards-0006.tar"
+        },
+        {
+          "rank_digest": "fbfc6aaaa3f1e26e3ef6cc20829651d717430452cf48d005d1cffa4ce4ef9dab",
+          "sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83036/shards-0008.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83036.ply",
+      "scene_id": "83036",
+      "selected_sample_key": "AriaSyntheticEnvironment_83036_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "a6b4475b9ec61dc4a0aec2ef83c5613612fccc7300b55045533db03c64620ce0",
+          "sample_key": "AriaSyntheticEnvironment_83078_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83078/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83078.ply",
+      "scene_id": "83078",
+      "selected_sample_key": "AriaSyntheticEnvironment_83078_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0a865d83f91d583a42810c44c3275a1e0ac00d651c8677aa60f0b99850207851",
+          "sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83086/shards-0003.tar"
+        },
+        {
+          "rank_digest": "56f3197ad9b3851e9b07c7e58bcc5eb2bf88d543fce17e51ae19727a2298aed9",
+          "sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83086/shards-0002.tar"
+        },
+        {
+          "rank_digest": "64f27d9694fa9980b91cca0a52a1ef06b3a6c2278f1cab3fd1b27ad59b514d3d",
+          "sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83086/shards-0000.tar"
+        },
+        {
+          "rank_digest": "73c45bb0f77b8e58ff70d02bd0239ebc325f9a8a196a9249f71a33d99edfc77c",
+          "sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83086/shards-0001.tar"
+        },
+        {
+          "rank_digest": "876751277434084b773437c7ee2b1f992d8bc0693b8b339b449cede1a55d236b",
+          "sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83086/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83086.ply",
+      "scene_id": "83086",
+      "selected_sample_key": "AriaSyntheticEnvironment_83086_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "469d4fed56550dbb43dec49c26a4aa0efb4be65e697b71152fbcd68f0dac31ba",
+          "sample_key": "AriaSyntheticEnvironment_83098_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83098/shards-0000.tar"
+        },
+        {
+          "rank_digest": "7e57185ec29f2628c2157d738f12f78e867c1514ffc0ed0ed6f8057d3650281e",
+          "sample_key": "AriaSyntheticEnvironment_83098_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83098/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83098.ply",
+      "scene_id": "83098",
+      "selected_sample_key": "AriaSyntheticEnvironment_83098_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0d89231f183dd1bee66749d51738b9b34f233e4b5073e6f73ddb1c54aead063e",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83121/shards-0006.tar"
+        },
+        {
+          "rank_digest": "12af836a01e2600c067254896dab7c3fbe26f73de2e7f1e3560023a73f0356a0",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83121/shards-0001.tar"
+        },
+        {
+          "rank_digest": "28a1059152835b3aa9ba248eec101f28c652153946eb805a5a408badec89b5ac",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83121/shards-0004.tar"
+        },
+        {
+          "rank_digest": "32e491e14f459cc5205d62ededa92f4cd5bd02d9bb3e86512cb15fa3621954b4",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83121/shards-0000.tar"
+        },
+        {
+          "rank_digest": "4840114b84e4791e9da1029a001fcfdcc6862f3da1044b0d575bdddeb23e3a04",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83121/shards-0008.tar"
+        },
+        {
+          "rank_digest": "73e1a5f07037a9a7ca3c0b0adff4e9498e4cd112bd39a09c1ea042abb9f407f5",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83121/shards-0005.tar"
+        },
+        {
+          "rank_digest": "a85cac683a23551a050c26067e9c6459474b5f85a63fa7f8c2bd8dc47580e4ad",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83121/shards-0003.tar"
+        },
+        {
+          "rank_digest": "bf9d3ac1276c05acdefbdb0c08839db6e7b3202759614b70db783e96b0c3f891",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83121/shards-0002.tar"
+        },
+        {
+          "rank_digest": "e792cc6a9ef095b29049c5318139cc7a4e34439fd73e179dc9de44db1f8d6c71",
+          "sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83121/shards-0007.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83121.ply",
+      "scene_id": "83121",
+      "selected_sample_key": "AriaSyntheticEnvironment_83121_AtekDataSample_000048"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "266de28dd7092c20904dd6d98ea12725b1d1a421b96d8043277322ff2119031b",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83269/shards-0007.tar"
+        },
+        {
+          "rank_digest": "2777ce9ba005fbc137e0276c551f8f48a25f307f4a83500dab197c2fe6ac6ead",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83269/shards-0005.tar"
+        },
+        {
+          "rank_digest": "3cfb52a86e538bcc01aad2ce9861107b145afccfe79cfd298fc65673b0eabd78",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83269/shards-0004.tar"
+        },
+        {
+          "rank_digest": "4357eeab7ddd8b33f0f7e29eeb0440e2b8fc0ae6c36364d05640ff75992cee35",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83269/shards-0000.tar"
+        },
+        {
+          "rank_digest": "4f478c5370f841e63a6400ea80ecd7407cb9a480a140e9b626f620b50ff823ef",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83269/shards-0008.tar"
+        },
+        {
+          "rank_digest": "9e5fd230373d7d5b4d2f232b9f6d3906c2e6a657644d59d573a68ad7e4eb1167",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83269/shards-0009.tar"
+        },
+        {
+          "rank_digest": "a3d8d8076fade04d4b5e78cf28bd7101deea1948d867153be4b07c33206556dd",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83269/shards-0003.tar"
+        },
+        {
+          "rank_digest": "a99e514e950aadf0f95463ed56300bd9b38b9279f7e1e7d4d5108abaca718566",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83269/shards-0006.tar"
+        },
+        {
+          "rank_digest": "c5f078bc915064a436725f794e18a9692528e52ecc27d42ff106b059c7a235b8",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83269/shards-0002.tar"
+        },
+        {
+          "rank_digest": "d17a390b6dcf5ca0d807a1c274c38ba377707302b962db73ac3d57e655ec2950",
+          "sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83269/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83269.ply",
+      "scene_id": "83269",
+      "selected_sample_key": "AriaSyntheticEnvironment_83269_AtekDataSample_000056"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2453d7c1a35d19df0d85fd2e5d635eb26439f80d581d6ade4cb3f9965e032aad",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83307/shards-0002.tar"
+        },
+        {
+          "rank_digest": "4c42b90598fb4eeae8daef32a44312a820e606084b8136a0684bcfba208f4ec9",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83307/shards-0005.tar"
+        },
+        {
+          "rank_digest": "52a8ae1b2a1ae094559be06c4ed752b2fd39e3416f1dde4647d0d0e215a930c4",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83307/shards-0001.tar"
+        },
+        {
+          "rank_digest": "69d9d5e695c1dda98f205dbe69df6d966a2e73052e2e696f4188f8192f16ac05",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83307/shards-0003.tar"
+        },
+        {
+          "rank_digest": "a307ef0acd7675019a2967707bc4d59522b69fdfac6c962146277628067e61ae",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83307/shards-0000.tar"
+        },
+        {
+          "rank_digest": "d03a547d349c29e0d825705eb3a25cddb1085447883bf9355b06eb78958156cd",
+          "sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83307/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83307.ply",
+      "scene_id": "83307",
+      "selected_sample_key": "AriaSyntheticEnvironment_83307_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "172925bb4b22e85de4d3db4e0f0a7b9ace6a60cefb81515caf53dec6d0185463",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83317/shards-0007.tar"
+        },
+        {
+          "rank_digest": "198153d32cb226171bd990696022bcbed3519a8a1e76c7226f26680e3da6371e",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83317/shards-0006.tar"
+        },
+        {
+          "rank_digest": "3a3b7bfd024e82e59c20652a632deb2e026839e1afa4966fe3aa932e1c865c57",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83317/shards-0000.tar"
+        },
+        {
+          "rank_digest": "44afb2c27f0e335f7167e2cab0ef4bf09e5943238c71538fc8aaf80dbd93145d",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83317/shards-0002.tar"
+        },
+        {
+          "rank_digest": "7b070511f5dcd63bae64be3673c8925af423b3131d803a0e8ca4c1bc4d58e66d",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83317/shards-0004.tar"
+        },
+        {
+          "rank_digest": "7e1a1f863d621db0242a51cde016894d4f7671f29f7f9bfc0f89e1b951b950e3",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83317/shards-0005.tar"
+        },
+        {
+          "rank_digest": "a47d6581ca7a834ff55637a036d402f40a2dd7c6665985237921d0890246767d",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83317/shards-0008.tar"
+        },
+        {
+          "rank_digest": "a6aebc34aa8545872adf1fd651847f8262de98134a21cb96963a4b60d1160282",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83317/shards-0009.tar"
+        },
+        {
+          "rank_digest": "d64fd2433851bef093be28ea6e47a2d513ddcfaa068424db3e29e37f71a53a39",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83317/shards-0003.tar"
+        },
+        {
+          "rank_digest": "fc4631fd9829ec1074e53015087a2a0a2afe0867e53a4afe25e3c1eafb322ee8",
+          "sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83317/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83317.ply",
+      "scene_id": "83317",
+      "selected_sample_key": "AriaSyntheticEnvironment_83317_AtekDataSample_000056"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "03c13838a0ce1af474c8bfe719b022aa32fb559be0bf61bf85a1aefda24aed09",
+          "sample_key": "AriaSyntheticEnvironment_83379_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83379/shards-0000.tar"
+        },
+        {
+          "rank_digest": "43fdf7ba084173028f169db68128c3ea131f72113a64d3253a75fc805d3bb99a",
+          "sample_key": "AriaSyntheticEnvironment_83379_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83379/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83379.ply",
+      "scene_id": "83379",
+      "selected_sample_key": "AriaSyntheticEnvironment_83379_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1c4911b5f95cac444b98b2a97ba06181662f376c4fe6f97f02c37630cca15caa",
+          "sample_key": "AriaSyntheticEnvironment_83393_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83393/shards-0002.tar"
+        },
+        {
+          "rank_digest": "43908e084ddaf56bc453aa4f2cc4b21b9b5ee11a0984ada39709b19563b3c485",
+          "sample_key": "AriaSyntheticEnvironment_83393_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83393/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8e57b62f38d35ea562b0471e559c502403dacbd5685e6b312366df82dfe6b6c1",
+          "sample_key": "AriaSyntheticEnvironment_83393_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83393/shards-0000.tar"
+        },
+        {
+          "rank_digest": "f98b11c5394a30e727c7acf97a8470f6794f9397c12445843898bb2f567c46e6",
+          "sample_key": "AriaSyntheticEnvironment_83393_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83393/shards-0003.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83393.ply",
+      "scene_id": "83393",
+      "selected_sample_key": "AriaSyntheticEnvironment_83393_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0e3e4a3fbe36db19a32de258ee6e79d9b46033cd460a6e004ad588f45c666b13",
+          "sample_key": "AriaSyntheticEnvironment_83397_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83397/shards-0000.tar"
+        },
+        {
+          "rank_digest": "2878c5c9a3539db44f5c9cc3af85337d7ec2b70a9951eb28503a5873a1096cda",
+          "sample_key": "AriaSyntheticEnvironment_83397_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83397/shards-0001.tar"
+        },
+        {
+          "rank_digest": "d17278db2c64c21530fa0442d1f5314079c5383272638cb212491375882f8f99",
+          "sample_key": "AriaSyntheticEnvironment_83397_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83397/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83397.ply",
+      "scene_id": "83397",
+      "selected_sample_key": "AriaSyntheticEnvironment_83397_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "18121aa01f1da7c6573ba72d4f4b7758e4881cc4ae7f73da7e7dc3e7b69604c6",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83400/shards-0004.tar"
+        },
+        {
+          "rank_digest": "4a36eb2b7cc4bf03be8dfc03e979111bc8fa12e71ac5af0fee8e3b836138e007",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83400/shards-0006.tar"
+        },
+        {
+          "rank_digest": "5024e9cadbce0338419d14f89654801d7329d7ee488b8a6d2dec28345461b227",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83400/shards-0002.tar"
+        },
+        {
+          "rank_digest": "a672148169bcb369b73e80eac1bc554fe22db6a699739d1475659dde0af57af6",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83400/shards-0001.tar"
+        },
+        {
+          "rank_digest": "a8f5d2cc417c324fcdb628609b70c32215a280bd99482df490a4acd69ad30c82",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83400/shards-0003.tar"
+        },
+        {
+          "rank_digest": "b19d94f71208295c3a345cc6b237311947f8465c5bd85cfa1945dd014c79bf22",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83400/shards-0005.tar"
+        },
+        {
+          "rank_digest": "d5d07b7344317552cee419e779942d0afe38562dbdc7676a42468392ba0b96cf",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83400/shards-0007.tar"
+        },
+        {
+          "rank_digest": "f1cdb1935d12bbd52a23ed65c38dcb7aebbb307cda4f827192fc580f75d31278",
+          "sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83400/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83400.ply",
+      "scene_id": "83400",
+      "selected_sample_key": "AriaSyntheticEnvironment_83400_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "31e7a14f648c5a0abcdd4d91abcc4b1384fe86c152b76c0cb6d11b6b3eb55e4e",
+          "sample_key": "AriaSyntheticEnvironment_83448_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83448/shards-0001.tar"
+        },
+        {
+          "rank_digest": "b89c15adc4d68a76c41c5e3eb7c83b0f33719cda04d84869cc02025daa1682d0",
+          "sample_key": "AriaSyntheticEnvironment_83448_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83448/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83448.ply",
+      "scene_id": "83448",
+      "selected_sample_key": "AriaSyntheticEnvironment_83448_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "5ca7e8d473dd616b0ce14dd92dea21d65b98fbb1756911fca29eb61641e3a6f0",
+          "sample_key": "AriaSyntheticEnvironment_83467_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83467/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83467.ply",
+      "scene_id": "83467",
+      "selected_sample_key": "AriaSyntheticEnvironment_83467_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0bd253c59d153996aee6d4445c99a6ae2d5a48986dcd51dfb84102549300cdd8",
+          "sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83506/shards-0004.tar"
+        },
+        {
+          "rank_digest": "0ed6bbe130e341a47d309c2182e3f7f98fd3f190f9a6cf02177b74aad69f7fe2",
+          "sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83506/shards-0003.tar"
+        },
+        {
+          "rank_digest": "11b70683de117b290baf27f10d84ed8deb320824fb87d6776e48c5713fb3d5e9",
+          "sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83506/shards-0001.tar"
+        },
+        {
+          "rank_digest": "bf42f0b129ab2139194bcdc4f2feb337efef6fb06abeb4c72e80de61c3fbf1f5",
+          "sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83506/shards-0000.tar"
+        },
+        {
+          "rank_digest": "f9d1d111234705d4e1a64650d287ceca82d4b054681f7192569d5960b05c8266",
+          "sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83506/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83506.ply",
+      "scene_id": "83506",
+      "selected_sample_key": "AriaSyntheticEnvironment_83506_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "041ab2a2cd0ca82e23960020fb0121fa0fad0e1955c70b4587d03ad4ad3a5735",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/83515/shards-0010.tar"
+        },
+        {
+          "rank_digest": "0de9404f85aa64ea750014cb16bf4e434cac2e21db663edd7a2cbef5fb826a64",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83515/shards-0003.tar"
+        },
+        {
+          "rank_digest": "0e62fcd62123e7d6e114c46366f4e02d1eb2c5bb3ea1f6b9d31993826459ffd2",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83515/shards-0009.tar"
+        },
+        {
+          "rank_digest": "23a942f1a07e088893fb5da0cb2790c1ef5f1f8693fa2d8c53ed2b223846310e",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/83515/shards-0012.tar"
+        },
+        {
+          "rank_digest": "32074a26468bd44cd127b52a14cf07da5dac93dfa8508675cd64193b19063875",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83515/shards-0006.tar"
+        },
+        {
+          "rank_digest": "361f86a2369a93f8975fbd9b30986a39c6c044fa1efbfc6e044ff9097dc23081",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83515/shards-0008.tar"
+        },
+        {
+          "rank_digest": "3c5afbb2d1dc57dea65b824a783c2a2d94cedefc16521ef877ccc64505cc34dd",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83515/shards-0005.tar"
+        },
+        {
+          "rank_digest": "52323795793a6e0cfc2b61aae66f862807caf0cb3313ea94dde6dc8203f6c33e",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83515/shards-0002.tar"
+        },
+        {
+          "rank_digest": "6f60b64f0b7b66baf685b69c8ba67b7cd925c57511c698c9a741944ed4de055c",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/83515/shards-0011.tar"
+        },
+        {
+          "rank_digest": "9053912d4aeb104ca6542d589f27c8f3ef0b6d49ce156bff68b790fe5e4f68cf",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000120",
+          "shard_path": ".data/ase_efm/83515/shards-0015.tar"
+        },
+        {
+          "rank_digest": "adcb4e1164ec3df9fa35660a699344fce622d8ed073d74d5e1f6b861573f3484",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/83515/shards-0014.tar"
+        },
+        {
+          "rank_digest": "c343d72883f8c92f36587338fba5bbc155505bd1e57331e280b798465ed72a9d",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83515/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e9f198849f0c6763e59dae87287806a846d420ff647aa371575c1fe526fed4bc",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83515/shards-0000.tar"
+        },
+        {
+          "rank_digest": "ed38939982c48c768014825bb735107f2f1d9a58b2208852b1f0222c92779dbf",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83515/shards-0004.tar"
+        },
+        {
+          "rank_digest": "f0d5e0d1c8301e902624f0b80f6d84181b9b190345f5e61ab6b31d7212e4a866",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/83515/shards-0013.tar"
+        },
+        {
+          "rank_digest": "f62fc2e17ac64b469ec0f7c648118ade25211ffb48c39b9e3fdb2bc8b719cd6f",
+          "sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83515/shards-0007.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83515.ply",
+      "scene_id": "83515",
+      "selected_sample_key": "AriaSyntheticEnvironment_83515_AtekDataSample_000080"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "6e72cbb1403ff430c64da44b8a63ca1a7a52cc3b6d7ad5dce20458d2e3103386",
+          "sample_key": "AriaSyntheticEnvironment_83522_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83522/shards-0003.tar"
+        },
+        {
+          "rank_digest": "86dd7cd138cd5317f354e7b8472c770e3510dcd6d54727885ac07c8aaa0e9835",
+          "sample_key": "AriaSyntheticEnvironment_83522_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83522/shards-0000.tar"
+        },
+        {
+          "rank_digest": "9c1b37f5a519199eb209b7dbdd21dd7fd349b0903eed5f96795ea5def18a2ebc",
+          "sample_key": "AriaSyntheticEnvironment_83522_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83522/shards-0001.tar"
+        },
+        {
+          "rank_digest": "fed52157d24ef8a489b3ab1a56c3d4489d359c96219e5f5ee0be99f04e12c788",
+          "sample_key": "AriaSyntheticEnvironment_83522_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83522/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83522.ply",
+      "scene_id": "83522",
+      "selected_sample_key": "AriaSyntheticEnvironment_83522_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "02167f874254e6ad5e3bd408a83a389ce624518c4c803b2601abc837c957f5ec",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000144",
+          "shard_path": ".data/ase_efm/83550/shards-0018.tar"
+        },
+        {
+          "rank_digest": "0a56081eaf70252f7863c1e1e11e01d89598b5bd89c7c780e59a3e699913112b",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000136",
+          "shard_path": ".data/ase_efm/83550/shards-0017.tar"
+        },
+        {
+          "rank_digest": "17b16eed994f37fad44aa69988608295a864d796b3d9855d575c77889caf3811",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83550/shards-0007.tar"
+        },
+        {
+          "rank_digest": "19b382851ba07c15e7d0d20a1c5894f5ce7a66614a0336e398c61ceb6bd07d64",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83550/shards-0001.tar"
+        },
+        {
+          "rank_digest": "240ef7931bfe849521b8c484a800cc17ddf5a4cc77a496401fe9472a89ab5df7",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83550/shards-0009.tar"
+        },
+        {
+          "rank_digest": "2770b222a141ef964478dcec7a61a064faf9d7ec25dd6d23527670a3dc54d432",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000128",
+          "shard_path": ".data/ase_efm/83550/shards-0016.tar"
+        },
+        {
+          "rank_digest": "278ff303f7d00ae58b1939e4a7824be12c9442821cafc50c7fa05ea228fbce26",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/83550/shards-0010.tar"
+        },
+        {
+          "rank_digest": "2ace745e5f6cfd331726b634e02d554058ededbf1a256b1b94ad5bcb4d83056e",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83550/shards-0006.tar"
+        },
+        {
+          "rank_digest": "59176375923fd86923ec3dc658906bf09dbeccc85a06d9e94e3aa81e99d9b0c1",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83550/shards-0000.tar"
+        },
+        {
+          "rank_digest": "5de602464a75e8f761713146818e76dd04638b041fb27c8f198e56e81d064054",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83550/shards-0005.tar"
+        },
+        {
+          "rank_digest": "74fbc34604b0ef10bfa1f55630224785a57dc5f1e6b14c2f299438860fb38686",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83550/shards-0003.tar"
+        },
+        {
+          "rank_digest": "827952f67f180950ac173d3916eed7149000f4b3a1ecda82cf2dd4cadaebf25b",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83550/shards-0002.tar"
+        },
+        {
+          "rank_digest": "959b4ff01fd4764b5542b401f04b002fff367fe7b674eca805379ee955f16e14",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/83550/shards-0011.tar"
+        },
+        {
+          "rank_digest": "a624d605ebdf442758bd5b5bc9c25e28bd2fbcf577302ea31b3862e74fd2857f",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000120",
+          "shard_path": ".data/ase_efm/83550/shards-0015.tar"
+        },
+        {
+          "rank_digest": "c9b7474cb85740313551f49ea93a1031d031f45c67e3f88c56376f3142a7731d",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83550/shards-0008.tar"
+        },
+        {
+          "rank_digest": "cd907d8c32a2e3dbff7b98ad25ca5a1b2718cca4d678efd22218ecf52f12d852",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83550/shards-0004.tar"
+        },
+        {
+          "rank_digest": "cde2d7cfa3f52172b05839c39db06e87a8af07534edea53eca38991e9b625eb1",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/83550/shards-0012.tar"
+        },
+        {
+          "rank_digest": "d5453c52908a4f4fd9da67b5b7749ee5f76006a8755c95d7cbce1c09872d7c47",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/83550/shards-0013.tar"
+        },
+        {
+          "rank_digest": "dc8d88ccd010d5500dcdf8c6b2ff727feda65703195eaedd5dc9566d42f73be4",
+          "sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000112",
+          "shard_path": ".data/ase_efm/83550/shards-0014.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83550.ply",
+      "scene_id": "83550",
+      "selected_sample_key": "AriaSyntheticEnvironment_83550_AtekDataSample_000144"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "052fc925e104763bc2bc13121ee949fbd345de249c3d00c0f8a7cb76f8a002f0",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83560/shards-0002.tar"
+        },
+        {
+          "rank_digest": "0a1ab9ed5a25e249cbac97d01f8f0807f466c2b05c59edabdf610372e97d6367",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83560/shards-0001.tar"
+        },
+        {
+          "rank_digest": "0fbfad3b5690c3fa084389904d0f0e10c0549d89f7e3b7ac0fdf9eb1d63de373",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83560/shards-0006.tar"
+        },
+        {
+          "rank_digest": "a53da389747a3f0666adf0bb3000ddcd5bdfbef5c5e26659fdd7f5cd5c79108b",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83560/shards-0003.tar"
+        },
+        {
+          "rank_digest": "cdef82959ff00087bf35f53f0528ed9d3a513156a53003a621d82c5cc5574cfa",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83560/shards-0000.tar"
+        },
+        {
+          "rank_digest": "e33b457bd08fdbda11be67dcf932f65a4467d1628f12e09bc0dced7a6fa5c0d3",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83560/shards-0005.tar"
+        },
+        {
+          "rank_digest": "f424227f2f98e35c15f2c1df2de8b65ea1707b52480a87d9f4369b0b11e9702f",
+          "sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83560/shards-0004.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83560.ply",
+      "scene_id": "83560",
+      "selected_sample_key": "AriaSyntheticEnvironment_83560_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1d206b96798f7c9b7abee533528204635463c675f24b8803f9f1b476165fc08e",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83577/shards-0009.tar"
+        },
+        {
+          "rank_digest": "1f5394e074eeef9088923a819e1db5e2620193e70c7f7dbb132c3d73a7d58964",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83577/shards-0002.tar"
+        },
+        {
+          "rank_digest": "4056d4e727fa12d55b7b3a1b067cc0a4c25b70bef715d31514b6f56613ee4bca",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83577/shards-0005.tar"
+        },
+        {
+          "rank_digest": "89f1082ba1e4913e845673aebf19733d827919785e9646c2db695bf0fbc9b1d6",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83577/shards-0006.tar"
+        },
+        {
+          "rank_digest": "8ab93006fc4fa64206a85493b8e0a54770177975e2e105a3fa722588f08e94f7",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/83577/shards-0011.tar"
+        },
+        {
+          "rank_digest": "c27f093ced6bbcebc81584a4e9947fc570760f36a7d85927b15eeb56e51a1818",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/83577/shards-0013.tar"
+        },
+        {
+          "rank_digest": "c7010e4487dbe79116762e9a54461a9a8a41de68c02f77676d146ceb09182b29",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/83577/shards-0012.tar"
+        },
+        {
+          "rank_digest": "c74772e669ce4d19c8837a06ded44130a08174c262c150c030192e73dfadeed8",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83577/shards-0008.tar"
+        },
+        {
+          "rank_digest": "cdf448deb87d61e0c52f68f1e970cc60345192f8a56a87f55f46515bc4ac5680",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83577/shards-0007.tar"
+        },
+        {
+          "rank_digest": "cf5e55abf2d462fd262a4b15ab100c105fa02327b4f76d5c41c8143adb9a704f",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83577/shards-0004.tar"
+        },
+        {
+          "rank_digest": "e139c9b283bef29fd02890bd1b332c06e33e92b26b02002c0ad88fb7079906c6",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83577/shards-0001.tar"
+        },
+        {
+          "rank_digest": "f03bfde65e688e5001b874f4b0bb70608db385c285eb86ef26e06e38b514957b",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83577/shards-0003.tar"
+        },
+        {
+          "rank_digest": "f4416b8be75cfd754759e3fef8316764ae3221cabb9cf179028dd5cd0fbaffe3",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83577/shards-0000.tar"
+        },
+        {
+          "rank_digest": "f8bab8f406b0200b87b832854ac5c288d97f582a21e8edbd257c4258e7148e8c",
+          "sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/83577/shards-0010.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83577.ply",
+      "scene_id": "83577",
+      "selected_sample_key": "AriaSyntheticEnvironment_83577_AtekDataSample_000072"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "965e93a87bf92954b76415fe627b3419ad9144693e3e7cd3da899653fb041e55",
+          "sample_key": "AriaSyntheticEnvironment_83598_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83598/shards-0000.tar"
+        },
+        {
+          "rank_digest": "aef284c1be208eaf9a9e0ed19fe7637f682301099c2c9283aa73920f8fd444b7",
+          "sample_key": "AriaSyntheticEnvironment_83598_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83598/shards-0001.tar"
+        },
+        {
+          "rank_digest": "af473e06dea736c68f02752c13d036dab155a1bc9bc9179f6bb786dbc8fc641b",
+          "sample_key": "AriaSyntheticEnvironment_83598_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83598/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83598.ply",
+      "scene_id": "83598",
+      "selected_sample_key": "AriaSyntheticEnvironment_83598_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1cb6a569d91bc2cd13b3df0b9230ab2ad762173f04af4f9afc7bc704bd1a4b3d",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83678/shards-0004.tar"
+        },
+        {
+          "rank_digest": "5e93f82373d1f8145ef130af85a096001569be83ccaa909a369a3484561dea95",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83678/shards-0003.tar"
+        },
+        {
+          "rank_digest": "995fd0cff22d6f78001941261f7875f8c835a17bbfdc472764f5a9dff4482fc0",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83678/shards-0000.tar"
+        },
+        {
+          "rank_digest": "a5f69f3ff9dd56b45f89408547fbc44df96d77295cb91667bfeb0c6b28e3bd86",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83678/shards-0002.tar"
+        },
+        {
+          "rank_digest": "aced894f851683981bed916c92fc0a38ade2f2062fb1b456d3f9416e7f30110e",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83678/shards-0005.tar"
+        },
+        {
+          "rank_digest": "d5a7ec770e1de917b427803fb3c948c66950d6901c454caf5a7d6172d15ffcf5",
+          "sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83678/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83678.ply",
+      "scene_id": "83678",
+      "selected_sample_key": "AriaSyntheticEnvironment_83678_AtekDataSample_000032"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "08c926e226ba046ddae32717f0e58dbe125a51c45c5b0d7a3593186059c10121",
+          "sample_key": "AriaSyntheticEnvironment_83692_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83692/shards-0001.tar"
+        },
+        {
+          "rank_digest": "1d16e32ba68867ce517c8ec66d49746fdf611b9e26cb724acaca17f86ffc536d",
+          "sample_key": "AriaSyntheticEnvironment_83692_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83692/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83692.ply",
+      "scene_id": "83692",
+      "selected_sample_key": "AriaSyntheticEnvironment_83692_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "3335ce0aac4f1de4cecde4b84cbe808ae93f4db3e91b80b3f21b0fed6c48b79b",
+          "sample_key": "AriaSyntheticEnvironment_83713_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83713/shards-0002.tar"
+        },
+        {
+          "rank_digest": "bafc41575fcc8d5a3899a89cf93acf6319536d8d9773011e87e1029546bea132",
+          "sample_key": "AriaSyntheticEnvironment_83713_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83713/shards-0003.tar"
+        },
+        {
+          "rank_digest": "c282c01a156e3c61c8c98402d44da40a36c9efcfc5e7debb61ff362309f1f8d5",
+          "sample_key": "AriaSyntheticEnvironment_83713_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83713/shards-0000.tar"
+        },
+        {
+          "rank_digest": "ff0eb80a6950ae9181e2d1e491822e9d96d2a2aaf0ad21263e7369cf0e9a919a",
+          "sample_key": "AriaSyntheticEnvironment_83713_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83713/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83713.ply",
+      "scene_id": "83713",
+      "selected_sample_key": "AriaSyntheticEnvironment_83713_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2590de519f3ce8631cc61b260f6c05698626efb3d0feaa3545b4b22abe0c33aa",
+          "sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83730/shards-0000.tar"
+        },
+        {
+          "rank_digest": "29a046e24822f46675136556dbd3ad2b1793b862e336972ecd79ab51f9a5ab9b",
+          "sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83730/shards-0003.tar"
+        },
+        {
+          "rank_digest": "4be575a535b1bfd8a32bead8daa9518e9cf8828153c26cd04dd159df7f9080d1",
+          "sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83730/shards-0004.tar"
+        },
+        {
+          "rank_digest": "cdf6d6104b29c4f2066ba44f254a0f4cce588e6ceaae3d05348fe7a69a39255e",
+          "sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83730/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e447ba8279d4efb350efb60de32f3ad9e53332acb8b7247baf7bedbba3948261",
+          "sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83730/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83730.ply",
+      "scene_id": "83730",
+      "selected_sample_key": "AriaSyntheticEnvironment_83730_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0d3fac23bb742ed6e2dfaed4f063b209ec30ffc685c05b8b7185f8eed1d17a98",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83746/shards-0001.tar"
+        },
+        {
+          "rank_digest": "3418ce134f9442e19a80798444401394d36bb3e0341c28693313d86312a6d3e1",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83746/shards-0006.tar"
+        },
+        {
+          "rank_digest": "430ce2091411523b9c942046f646e43de2f7ca4fb7ffa1437a23c1936613670f",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83746/shards-0005.tar"
+        },
+        {
+          "rank_digest": "462fc0354b0ba55893ac450d56dde427ab2edfe89f5c08c8b8a4272c9c111232",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83746/shards-0004.tar"
+        },
+        {
+          "rank_digest": "5d86154556939d11adadb091bdce7bc580a2855a7ee8121a5ac5ceeee50d2cca",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83746/shards-0002.tar"
+        },
+        {
+          "rank_digest": "9100918041894e9e47a0aae9add888b096168c46b5bf5c967f2ea391ce2ddc95",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83746/shards-0000.tar"
+        },
+        {
+          "rank_digest": "9e23d3b2eb07e48a9059f674f4330710f0bf15c2c911cb34afeb1cfc27ec895c",
+          "sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83746/shards-0003.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83746.ply",
+      "scene_id": "83746",
+      "selected_sample_key": "AriaSyntheticEnvironment_83746_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "dbcf803587dbf2c493af93232ebf59017e3b189451cf63c309b1dd8255945846",
+          "sample_key": "AriaSyntheticEnvironment_83780_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83780/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83780.ply",
+      "scene_id": "83780",
+      "selected_sample_key": "AriaSyntheticEnvironment_83780_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "f2e53aa8577e2768fa620c0310032378e59c5c9a0806b920d4fed5d275b48b34",
+          "sample_key": "AriaSyntheticEnvironment_83803_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83803/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83803.ply",
+      "scene_id": "83803",
+      "selected_sample_key": "AriaSyntheticEnvironment_83803_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "1be3c01168e46144dcda32e31485173d14d55a4d13e92f48bcb885f9e71f30fa",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/83833/shards-0006.tar"
+        },
+        {
+          "rank_digest": "2d9b4f95e42fb6d8c973e24701d37e1180a5e1f4008060cba1361bcadd935604",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/83833/shards-0009.tar"
+        },
+        {
+          "rank_digest": "6f7f99ca70ffa486441a82c069758e7b63d5ae7f5a83cbae2cf20dee779f143f",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/83833/shards-0007.tar"
+        },
+        {
+          "rank_digest": "7379062e5494e3b068a5e74636c7e854ee0abcbfdca6575d69d9d0cdb2fd0edb",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000088",
+          "shard_path": ".data/ase_efm/83833/shards-0011.tar"
+        },
+        {
+          "rank_digest": "79546ce9d14ce5e6b62725aa17d2d3f4da577d526a65ee5c5480fdfa7baef3f8",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/83833/shards-0005.tar"
+        },
+        {
+          "rank_digest": "7f74f5c2fccc0358d15f20806a9a12e2d991fa3932210527d02d80252c876c32",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/83833/shards-0008.tar"
+        },
+        {
+          "rank_digest": "a3a2e636425ed3a068884356b7395a2a438d420ea5da0d72a6f452f8de07a20c",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000104",
+          "shard_path": ".data/ase_efm/83833/shards-0013.tar"
+        },
+        {
+          "rank_digest": "a9eca2f5c5ae7d77124a0fb0502deb15d17b4a23544af492ae0ef75d83a0f7c4",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83833/shards-0002.tar"
+        },
+        {
+          "rank_digest": "b843a9bddfd79c0206c4425238883a5aeeda795b7a700478f3cbedee20143801",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83833/shards-0001.tar"
+        },
+        {
+          "rank_digest": "bc40568a1160455b24223bbafe22783bc73736acbe7d06e00e02a0eac703b607",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/83833/shards-0010.tar"
+        },
+        {
+          "rank_digest": "ca161d1e5c009c540de50a5a7019330b28174ae813a296c7248172050dd99d72",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83833/shards-0004.tar"
+        },
+        {
+          "rank_digest": "cdc9496ee42ccfe01884186ab0675a86ec1a43ded6838916f95f5bd1531e4455",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000096",
+          "shard_path": ".data/ase_efm/83833/shards-0012.tar"
+        },
+        {
+          "rank_digest": "d575d867fb2441d4dab4b22afe02eebecf2f2d6a292676fb1101af6c055feab5",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83833/shards-0003.tar"
+        },
+        {
+          "rank_digest": "e58651840cea87464483ab12dd1d524ab49857577094d88ebf9956814b3c41d5",
+          "sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83833/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83833.ply",
+      "scene_id": "83833",
+      "selected_sample_key": "AriaSyntheticEnvironment_83833_AtekDataSample_000048"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2d8505748f09dc1e3b14e132ad64544f015959dd3a331444c5b93e5d4ed9b781",
+          "sample_key": "AriaSyntheticEnvironment_83836_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83836/shards-0002.tar"
+        },
+        {
+          "rank_digest": "3c93ba7cee0e30074b29614641615c5a05ab386d1b5109e81ae6bec003c00c57",
+          "sample_key": "AriaSyntheticEnvironment_83836_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83836/shards-0001.tar"
+        },
+        {
+          "rank_digest": "967be3b39fa988943ec8b46d50cdc07ffccdaea35b85c1118ffda4ce7b66ea54",
+          "sample_key": "AriaSyntheticEnvironment_83836_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83836/shards-0003.tar"
+        },
+        {
+          "rank_digest": "b1b6de25969d366b9c60cedc9e3144142d0f69584247a0819a5e6486b1d2ed63",
+          "sample_key": "AriaSyntheticEnvironment_83836_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83836/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83836.ply",
+      "scene_id": "83836",
+      "selected_sample_key": "AriaSyntheticEnvironment_83836_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2d5ae034dd4b8d456e63f2173f5cd6ba250b9f96b267911f1c8b0d7dfb926e56",
+          "sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/83998/shards-0003.tar"
+        },
+        {
+          "rank_digest": "80c4366454becc4f8e21a061041d7c57685302f6bbd1ee48dc80397e9bba96d5",
+          "sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/83998/shards-0004.tar"
+        },
+        {
+          "rank_digest": "89fe31dd62b3b84e68064b7d9bf12780752307501e663e5a8d892b9391d78be4",
+          "sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/83998/shards-0000.tar"
+        },
+        {
+          "rank_digest": "c699a4d906585e9bf7c5a7d0a3afcc869aa5777558f1d173c8254c38508d88bb",
+          "sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/83998/shards-0002.tar"
+        },
+        {
+          "rank_digest": "faceea11e73f3b3ddc15bdc14e723e66ce2667c73783a428d4bb74aec5f9d637",
+          "sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/83998/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_83998.ply",
+      "scene_id": "83998",
+      "selected_sample_key": "AriaSyntheticEnvironment_83998_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "161fe6d0004a1367b5a375bca33ee9ae9f662f7cc61ea29a79ec5c6b693b91e0",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84001/shards-0000.tar"
+        },
+        {
+          "rank_digest": "3485810d7448dae8d843d94c8fb9b78c4a71a7e2ca2d833c4817a14118c4fca4",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84001/shards-0001.tar"
+        },
+        {
+          "rank_digest": "78ac7c934944d2f8761d8c12ecd547d4d79ee6bf3fecfbbc5173d34ad28e2946",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/84001/shards-0004.tar"
+        },
+        {
+          "rank_digest": "99261b1f8d08d6478b7aa7dae9949348908c586d1e6cf46f3f02594cdec44084",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/84001/shards-0005.tar"
+        },
+        {
+          "rank_digest": "ad6a98077bedfaf41f2ef6a62b5cf8849ad4ba07da7dba9ff2132c236bf75eeb",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84001/shards-0002.tar"
+        },
+        {
+          "rank_digest": "f4852df998e1ab8a5186934f68ad142855c3952903c4c94085f6b28d8fcbc1cf",
+          "sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84001/shards-0003.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84001.ply",
+      "scene_id": "84001",
+      "selected_sample_key": "AriaSyntheticEnvironment_84001_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "a14694958320d6a2aa5256d5681c34cee0bd4557294f495df45decb6043c84f8",
+          "sample_key": "AriaSyntheticEnvironment_84003_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84003/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84003.ply",
+      "scene_id": "84003",
+      "selected_sample_key": "AriaSyntheticEnvironment_84003_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "0361b3f7ddfdf44137211b23ca823a6ac15977c5f1ffadc95aa05a728bc9aba4",
+          "sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84009/shards-0003.tar"
+        },
+        {
+          "rank_digest": "5dc40d96d250e0ceb8668df7b95c99c4c863ec467a4f27e824eaa41f7598ec32",
+          "sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/84009/shards-0004.tar"
+        },
+        {
+          "rank_digest": "88dd085bcb1760315475449aa8df6be7d49e1cb110da3ec39191251a58cb500e",
+          "sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84009/shards-0000.tar"
+        },
+        {
+          "rank_digest": "b23d4e0a30fd8ded749b581418bac036730573371eb466068c8cd9160a0e4b1b",
+          "sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84009/shards-0001.tar"
+        },
+        {
+          "rank_digest": "fdef157f4f7321ff3655d7f13a3168d52755e0c76e9d19587c32025eafe26896",
+          "sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84009/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84009.ply",
+      "scene_id": "84009",
+      "selected_sample_key": "AriaSyntheticEnvironment_84009_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "71673f15b838b1479e7fc81d4142056c6741e46b7966d9f1bfc9148081dd8ff5",
+          "sample_key": "AriaSyntheticEnvironment_84052_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84052/shards-0001.tar"
+        },
+        {
+          "rank_digest": "8cfca45e16edbbe8e078e09aa235be017434b6969a2e621ff2df868363cc9510",
+          "sample_key": "AriaSyntheticEnvironment_84052_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84052/shards-0000.tar"
+        },
+        {
+          "rank_digest": "a4a95613aa332900a01ee816af4ad43c8cd66f6a0c713d76e188ae6c54e3e60c",
+          "sample_key": "AriaSyntheticEnvironment_84052_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84052/shards-0003.tar"
+        },
+        {
+          "rank_digest": "c555de6105cc526ae0560584f8d1ebc3f1e81e03ddf6ee9d112cf7453ef11101",
+          "sample_key": "AriaSyntheticEnvironment_84052_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84052/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84052.ply",
+      "scene_id": "84052",
+      "selected_sample_key": "AriaSyntheticEnvironment_84052_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "02394a31a39a7d2f7d11311a60e8049a968cdc8ad0b179c4342f93608650241c",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84074/shards-0003.tar"
+        },
+        {
+          "rank_digest": "081f2f402a8ea605d32ad83c22187205ea53cc0f521ce49b1ac36c890ea8695e",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84074/shards-0002.tar"
+        },
+        {
+          "rank_digest": "31e0a06e7afc3848f25a954b668e4e379020ce5d553ef4b9ed729fa6a5cda525",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/84074/shards-0006.tar"
+        },
+        {
+          "rank_digest": "5e2e2c686dd22e5466593d3803c9a862632b0ae6cf5474d9b47c0f4b63fe4284",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84074/shards-0001.tar"
+        },
+        {
+          "rank_digest": "a1af535049768950e10aabcfca0e661c582837923917f2199c33ab6710f16af6",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/84074/shards-0007.tar"
+        },
+        {
+          "rank_digest": "a36139a927313bc569debeea50851c91db1542afe18a113c8efbde8f912b53ca",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84074/shards-0000.tar"
+        },
+        {
+          "rank_digest": "ade580670915cd974ac09f0347488f0d79145c31905c34218cff5d390e46e6c0",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/84074/shards-0005.tar"
+        },
+        {
+          "rank_digest": "c5d0d7270d2055c972fcce42e8c3e9423398e4a3e82ee112a2169a9471576fec",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/84074/shards-0008.tar"
+        },
+        {
+          "rank_digest": "cd36538ee4b563cce0e09bf3e46acb5b52ccdec4ae927004c2ad0c9b06a82be9",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/84074/shards-0004.tar"
+        },
+        {
+          "rank_digest": "f58c708a53760c5c6f69315d99d3cb7aef7f80485d07af2b2bb8a71ca768d86a",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/84074/shards-0009.tar"
+        },
+        {
+          "rank_digest": "f7690d11e59f23c0c5f3fb7395eb66e0369f29f9f8a7f09533f0ea71636b703c",
+          "sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000080",
+          "shard_path": ".data/ase_efm/84074/shards-0010.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84074.ply",
+      "scene_id": "84074",
+      "selected_sample_key": "AriaSyntheticEnvironment_84074_AtekDataSample_000024"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "42507e31a84cf73cb603fc382b154c52456b1d229651a64ebb80a8fa3843c134",
+          "sample_key": "AriaSyntheticEnvironment_84080_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84080/shards-0000.tar"
+        },
+        {
+          "rank_digest": "737ee1946d5c89ede7919ec7015d1ccf2a2a9a1c1e1571d4a8523e08758e0e7e",
+          "sample_key": "AriaSyntheticEnvironment_84080_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84080/shards-0001.tar"
+        },
+        {
+          "rank_digest": "75c24e68d83b101331ecdbc680d37a90e3c1c73957e11ce4fe05606fff373551",
+          "sample_key": "AriaSyntheticEnvironment_84080_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84080/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84080.ply",
+      "scene_id": "84080",
+      "selected_sample_key": "AriaSyntheticEnvironment_84080_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2ee9f57d86e746b62a888cfdbf0d28360996d615438423ea2939df066c36a221",
+          "sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84171/shards-0001.tar"
+        },
+        {
+          "rank_digest": "965e4e05c51103ed1baad04ceaa5f4f646e380b2dd5cda606568a07618faa7ed",
+          "sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84171/shards-0003.tar"
+        },
+        {
+          "rank_digest": "971a114a8b78bdfb69772e6fb11e27917f5ffd5ac42303c7c3e3e70b469d6529",
+          "sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84171/shards-0002.tar"
+        },
+        {
+          "rank_digest": "9b43fe97137d3fe0b2ee97ed06e9f59c36c8f20310ff527e7dd9f813a60ec90d",
+          "sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/84171/shards-0004.tar"
+        },
+        {
+          "rank_digest": "cd9c0eb848959c3d6fbf689007632b402b0d823c769c3df702add89447d09ecc",
+          "sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84171/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84171.ply",
+      "scene_id": "84171",
+      "selected_sample_key": "AriaSyntheticEnvironment_84171_AtekDataSample_000008"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "2b37c2704386d037b38b9e11be17dec68f17dd0b2b74c4cefa32f6e185a7dded",
+          "sample_key": "AriaSyntheticEnvironment_84185_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84185/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84185.ply",
+      "scene_id": "84185",
+      "selected_sample_key": "AriaSyntheticEnvironment_84185_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "9d979ad9e5485c0264f573e5bbaa2c249e3dcf9726ee4117763db2b5d2268fd6",
+          "sample_key": "AriaSyntheticEnvironment_84186_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84186/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84186.ply",
+      "scene_id": "84186",
+      "selected_sample_key": "AriaSyntheticEnvironment_84186_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "7d67209153a9ec4e605728aea42ede456a492ed29f649b0c52666b9294e543a1",
+          "sample_key": "AriaSyntheticEnvironment_84230_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84230/shards-0002.tar"
+        },
+        {
+          "rank_digest": "898438bff095e590584926d67c2df7a4588ba67290b9b8dbda659d6d7cc0f2e0",
+          "sample_key": "AriaSyntheticEnvironment_84230_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84230/shards-0001.tar"
+        },
+        {
+          "rank_digest": "e9f9c91c769bf00532cd0802e8053b055381691a2ff5be5676cc7fc8fadfd730",
+          "sample_key": "AriaSyntheticEnvironment_84230_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84230/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84230.ply",
+      "scene_id": "84230",
+      "selected_sample_key": "AriaSyntheticEnvironment_84230_AtekDataSample_000016"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "94e9aae5fb7d9de260ce833dfecb1606fe99975c038a99222a3f13c8bebe2676",
+          "sample_key": "AriaSyntheticEnvironment_84271_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84271/shards-0000.tar"
+        },
+        {
+          "rank_digest": "95582e1a87df3c07dcdfc3f9940e2820132ead5fcd020d7074c15ef9d29d5eec",
+          "sample_key": "AriaSyntheticEnvironment_84271_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84271/shards-0001.tar"
+        },
+        {
+          "rank_digest": "ee4f2ad1f9035f7c06427587ca07398c8636a4a5b23b246dca3df1618eb17f2f",
+          "sample_key": "AriaSyntheticEnvironment_84271_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84271/shards-0002.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84271.ply",
+      "scene_id": "84271",
+      "selected_sample_key": "AriaSyntheticEnvironment_84271_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "7490551ca72f6d5302c43308f68a5123455b1fdf42e15ef1c9ac35d8c2a198d1",
+          "sample_key": "AriaSyntheticEnvironment_84309_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84309/shards-0000.tar"
+        },
+        {
+          "rank_digest": "a9235d5e125bc1c5ce6a87c59c8befbef6c73474793d2a8f2a8f11b99f35abd5",
+          "sample_key": "AriaSyntheticEnvironment_84309_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84309/shards-0001.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84309.ply",
+      "scene_id": "84309",
+      "selected_sample_key": "AriaSyntheticEnvironment_84309_AtekDataSample_000000"
+    },
+    {
+      "candidates": [
+        {
+          "rank_digest": "00e939b2b5cb564e8faa1268fd4ec5513559a8f88adb8b9ef28e833a42b303cf",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000048",
+          "shard_path": ".data/ase_efm/84320/shards-0006.tar"
+        },
+        {
+          "rank_digest": "381dfb74dc6f231678c1aee5c7aafa0542d6e74a7b62978ef1443e4bddb5983a",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000040",
+          "shard_path": ".data/ase_efm/84320/shards-0005.tar"
+        },
+        {
+          "rank_digest": "57f8004465ad570ab9b627af35a41b2231cc9ef64d11534ee717dad0ff9600c1",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000056",
+          "shard_path": ".data/ase_efm/84320/shards-0007.tar"
+        },
+        {
+          "rank_digest": "8395529f8bf699a044e6e53b86ff222407172cc2db9fa4a7dfb2f56e9fc1a968",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000024",
+          "shard_path": ".data/ase_efm/84320/shards-0003.tar"
+        },
+        {
+          "rank_digest": "a60bc26e148eee13f97d1172b1f843baea2c39d176c9f50d908d7ca789ae066a",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000016",
+          "shard_path": ".data/ase_efm/84320/shards-0002.tar"
+        },
+        {
+          "rank_digest": "ad0c33c3df9018efe15c8d283dbac23570041afe194d0c7ee050c56edc2b2ce2",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000072",
+          "shard_path": ".data/ase_efm/84320/shards-0009.tar"
+        },
+        {
+          "rank_digest": "b227c305e31ec80c17fd402794e69bfd1d523720bab83996ed73150cc4449431",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000064",
+          "shard_path": ".data/ase_efm/84320/shards-0008.tar"
+        },
+        {
+          "rank_digest": "b7f9218a8d361b233013183f27b2df94061e6fed95246256146fd084b3debf93",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000032",
+          "shard_path": ".data/ase_efm/84320/shards-0004.tar"
+        },
+        {
+          "rank_digest": "dea9cef44f1b34a32d8181ade45c3dfdb9639efaf787894b09ae52049aec07e3",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000008",
+          "shard_path": ".data/ase_efm/84320/shards-0001.tar"
+        },
+        {
+          "rank_digest": "fcceed1098b85918318adce14a7e1390a85d54e4bcbf214a5ba2942f19191391",
+          "sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000000",
+          "shard_path": ".data/ase_efm/84320/shards-0000.tar"
+        }
+      ],
+      "mesh_path": ".data/ase_meshes/scene_ply_84320.ply",
+      "scene_id": "84320",
+      "selected_sample_key": "AriaSyntheticEnvironment_84320_AtekDataSample_000048"
+    }
+  ],
+  "seed": 20260728,
+  "version": "ase-root-inventory-v1"
+}
