@@ -16,9 +16,10 @@ runner = CliRunner()
 def _fake_rollout_config(tmp_path):
     return SimpleNamespace(
         source=SimpleNamespace(store=SimpleNamespace(store_dir=tmp_path / "vin_offline")),
-        store=SimpleNamespace(store_dir=tmp_path / "rollouts.zarr"),
+        store=SimpleNamespace(store_dir=tmp_path / "rollouts.zarr", target_protocol_version="v0_gt_input"),
         max_targets_per_sample=2,
         oracle_target_task_sampler=SimpleNamespace(max_targets_per_sample=2),
+        observed_target_task_sampler=SimpleNamespace(max_targets_per_sample=None),
         candidate_mixture=SimpleNamespace(total_count=60),
         setup_target=lambda: SimpleNamespace(run=lambda **kwargs: None),
     )

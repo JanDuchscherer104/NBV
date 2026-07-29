@@ -28,9 +28,13 @@ from ...configs import PathConfig
 from ...data_handling.vin_store.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
+    OBSERVED_TARGET_TASK_SOURCE,
     ORACLE_TARGET_TASK_SOURCE,
     TARGET_INVALID_REASON_CODES,
     TARGET_INVALID_REASON_VERSION,
+    ObservedTargetTask,
+    ObservedTargetTaskSampler,
+    ObservedTargetTaskSamplerConfig,
     OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
@@ -374,6 +378,11 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
     """Oracle GT target-task sampler used by default for rollout data generation."""
 
+    observed_target_task_sampler: ObservedTargetTaskSamplerConfig = Field(
+        default_factory=ObservedTargetTaskSamplerConfig
+    )
+    """Actor-visible observed-to-GT matcher used by ``v1_observed`` generation."""
+
     candidate_mixture: CandidateMixtureViewGeneratorConfig = Field(default_factory=CandidateMixtureViewGeneratorConfig)
     """Fixed-count mixed finite-candidate generator regenerated at every rollout step."""
 
@@ -419,14 +428,29 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     @model_validator(mode="after")
     def _validate_target_protocol(self) -> "RolloutDatasetWriterConfig":
-        """Reject actor-visible protocol claims from the Oracle GT generator."""
+        """Validate target-source ownership for the configured protocol."""
 
-        validate_target_protocol_admission(
-            self.store.target_protocol_version,
-            target_source=ORACLE_TARGET_TASK_SOURCE,
-            descriptor_source=ORACLE_TARGET_TASK_SOURCE,
-            descriptor_provenance=TargetDescriptorProvenance.ORACLE_GT,
-        )
+        protocol = TargetInputProtocol(self.store.target_protocol_version)
+        if protocol is TargetInputProtocol.V1_OBSERVED:
+            validate_target_protocol_admission(
+                protocol,
+                target_source=OBSERVED_TARGET_TASK_SOURCE,
+                descriptor_source=OBSERVED_TARGET_TASK_SOURCE,
+                descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
+            )
+            if self.max_targets_per_sample is not None:
+                raise ValueError("v1_observed campaign generation requires max_targets_per_sample=None.")
+            if self.observed_target_task_sampler.max_targets_per_sample is not None:
+                raise ValueError(
+                    "v1_observed campaign generation requires observed_target_task_sampler.max_targets_per_sample=None."
+                )
+        else:
+            validate_target_protocol_admission(
+                protocol,
+                target_source=ORACLE_TARGET_TASK_SOURCE,
+                descriptor_source=ORACLE_TARGET_TASK_SOURCE,
+                descriptor_provenance=TargetDescriptorProvenance.ORACLE_GT,
+            )
         return self
 
     @field_validator("source_manifest_path", mode="before")
@@ -659,7 +683,7 @@ class RolloutDatasetWriter:
             self._apply_source_manifest(dataset, source_manifest, sample_keys=self.config.sample_keys)
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
-        oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
+        target_sampler = self._target_sampler()
         max_samples = (
             len(dataset)
             if shard_entry is not None or self.config.max_samples is None
@@ -704,9 +728,9 @@ class RolloutDatasetWriter:
                         )
                     )
                 continue
-            target_result = oracle_sampler.sample(sample)
+            target_result = target_sampler.sample(sample)
             if not target_result.selected_rows:
-                reason = "no_geometry_valid_oracle_target_tasks" if target_result.rows else "no_oracle_target_tasks"
+                reason = "no_admissible_target_tasks" if target_result.rows else "no_target_tasks"
                 self.stats.skip(reason)
                 self.console.warn(
                     f"Skipping sample scene={sample.scene_id} snippet={sample.snippet_id}: {reason}; "
@@ -877,11 +901,13 @@ class RolloutDatasetWriter:
         self,
         *,
         sample: VinOfflineSample,
-        target: OracleTargetTask,
+        target: OracleTargetTask | ObservedTargetTask,
         target_rank: int,
         source_lineage: _RolloutSourceLineageBuilder,
     ) -> list[EvaluatedRolloutRecord]:
         records: list[EvaluatedRolloutRecord] = []
+        if target.descriptor is None:
+            raise ValueError("Selected rollout targets must carry an actor-safe descriptor.")
         runtime_context = CandidateGenerationRuntimeContext(descriptor=target.descriptor)
         scorer = self.config.target_scorer.setup_target(
             sample=sample.efm_snippet_view,
@@ -984,7 +1010,12 @@ class RolloutDatasetWriter:
             )
         return records
 
-    def _target_lineage(self, target: OracleTargetTask, *, target_rank: int) -> TargetLineage:
+    def _target_lineage(
+        self,
+        target: OracleTargetTask | ObservedTargetTask,
+        *,
+        target_rank: int,
+    ) -> TargetLineage:
         """Encode one Oracle task into the frozen rollout target columns."""
 
         gt_valid = target.identity_status == TargetTaskIdentityStatus.MATCHED.value
@@ -997,6 +1028,10 @@ class RolloutDatasetWriter:
         else:
             primary_reason = TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
         descriptor = target.descriptor
+        if descriptor is None:
+            raise ValueError("Selected rollout targets must carry an actor-safe descriptor.")
+        observed = isinstance(target, ObservedTargetTask)
+        target_source = OBSERVED_TARGET_TASK_SOURCE if observed else ORACLE_TARGET_TASK_SOURCE
         return TargetLineage(
             target_row_id=target.target_row_id,
             target_id=target.target_id,
@@ -1007,7 +1042,7 @@ class RolloutDatasetWriter:
             target_selection_score=float("nan"),
             target_selection_probability=target.selection_probability,
             target_selection_temperature=None,
-            target_source=ORACLE_TARGET_TASK_SOURCE,
+            target_source=target_source,
             target_source_index=target.source_index,
             target_sem_id=descriptor.sem_id,
             target_inst_id=target.inst_id,
@@ -1028,12 +1063,24 @@ class RolloutDatasetWriter:
             target_invalid_reason_bitset=1 << primary_reason,
             target_primary_invalid_reason=primary_reason,
             target_reason_code_version=TARGET_INVALID_REASON_VERSION,
-            matched_gt_target_row_id=target.source_index if gt_valid else None,
-            matched_gt_target_id=target.target_id if gt_valid else None,
-            gt_match_iou=None,
-            gt_match_score=None,
-            gt_match_status="matched" if gt_valid else target.identity_status,
+            matched_gt_target_row_id=(
+                target.matched_gt_target_row_id if observed else target.source_index if gt_valid else None
+            ),
+            matched_gt_target_id=(target.matched_gt_target_id if observed else target.target_id if gt_valid else None),
+            gt_match_iou=target.gt_match_iou if observed else None,
+            gt_match_score=target.gt_match_iou if observed else None,
+            gt_match_status=target.gt_match_status if observed else "matched" if gt_valid else target.identity_status,
         )
+
+    def _target_sampler(self) -> OracleTargetTaskSampler | ObservedTargetTaskSampler:
+        """Construct the sampler owned by the configured target-input protocol."""
+
+        protocol = TargetInputProtocol(
+            getattr(self.config.store, "target_protocol_version", TargetInputProtocol.V0_GT_INPUT)
+        )
+        if protocol is TargetInputProtocol.V1_OBSERVED:
+            return ObservedTargetTaskSampler(self.config.observed_target_task_sampler)
+        return OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
 
     def _low_valid_root_reason(self, result: CounterfactualRolloutResult) -> str | None:
         """Return a skip reason when the root step falls below the valid-action gate."""

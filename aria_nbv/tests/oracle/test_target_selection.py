@@ -19,12 +19,18 @@ from aria_nbv.data_handling import VinSnippetView
 from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
 from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle.target_selection import (
+    OBSERVED_TARGET_TASK_SOURCE,
     ORACLE_TARGET_TASK_SOURCE,
+    ObservedTargetMatchReason,
+    ObservedTargetTask,
+    ObservedTargetTaskSampler,
+    ObservedTargetTaskSamplerConfig,
     OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetTaskIdentityStatus,
 )
+from aria_nbv.targets.protocol import TargetInputProtocol
 
 
 def _poses(translations: list[list[float]]) -> PoseTW:
@@ -117,6 +123,10 @@ def _oracle_sampler(**kwargs: object) -> OracleTargetTaskSampler:
     return OracleTargetTaskSampler(OracleTargetTaskSamplerConfig(**kwargs))
 
 
+def _observed_sampler(**kwargs: object) -> ObservedTargetTaskSampler:
+    return ObservedTargetTaskSampler(ObservedTargetTaskSamplerConfig(**kwargs))
+
+
 def test_oracle_target_task_sampler_config_has_only_selection_controls() -> None:
     assert set(OracleTargetTaskSamplerConfig.model_fields) == {
         "max_targets_per_sample",
@@ -196,3 +206,157 @@ def test_oracle_target_task_sampler_rejects_non_offline_sample_input() -> None:
     assert not hasattr(sample, "to_vin_oracle_batch")
     with pytest.raises(TypeError, match="VinOfflineSample"):
         _oracle_sampler().sample(sample.vin_snippet)  # type: ignore[arg-type]
+
+
+def test_oracle_target_task_sampler_none_cap_admits_every_valid_gt_task() -> None:
+    sample = _sample(
+        gt_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
+            inst_ids=[10, 11, 12],
+        )
+    )
+
+    result = _oracle_sampler(max_targets_per_sample=None, seed=7).sample(sample)
+
+    assert result.max_targets_per_sample is None
+    assert len(result.selected_rows) == 3
+    assert {row.selected_rank for row in result.selected_rows} == {0, 1, 2}
+    assert all(row.selection_probability == 1.0 for row in result.selected_rows)
+
+
+def test_observed_target_sampler_config_is_closed_to_v1_and_admits_all_by_default() -> None:
+    config = ObservedTargetTaskSamplerConfig()
+
+    assert config.target_protocol_version is TargetInputProtocol.V1_OBSERVED
+    assert config.gt_iou_threshold == pytest.approx(0.20)
+    assert config.max_targets_per_sample is None
+
+    with pytest.raises(ValueError, match="v1_observed"):
+        ObservedTargetTaskSamplerConfig(target_protocol_version="v0_gt_input")
+
+
+def test_observed_target_sampler_uses_only_observed_geometry_in_actor_descriptor() -> None:
+    sample = _sample(
+        detected_obbs=_obb_block([[0.1, 0.0, 0.0]], sem_ids=[0], inst_ids=[20], probs=[0.01]),
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0], inst_ids=[10]),
+    )
+
+    result = _observed_sampler().sample(sample)
+
+    assert result.source == OBSERVED_TARGET_TASK_SOURCE
+    assert len(result.rows) == 1
+    assert len(result.selected_rows) == 1
+    row = result.selected_rows[0]
+    assert row.descriptor is not None
+    assert row.descriptor.center_world == pytest.approx((0.1, 0.0, 0.0))
+    assert row.confidence == pytest.approx(0.01)
+    assert row.matched_gt_target_row_id == 0
+    assert row.matched_gt_target_id is not None
+    assert ORACLE_TARGET_TASK_SOURCE in row.matched_gt_target_id
+    assert row.gt_match_iou == pytest.approx(0.8181818)
+    assert row.gt_match_status == TargetTaskIdentityStatus.MATCHED.value
+    assert row.gt_match_reason == ObservedTargetMatchReason.VALID.value
+    assert {field.name for field in fields(ObservedTargetTask)} == {
+        "source_index",
+        "target_row_id",
+        "target_id",
+        "descriptor",
+        "inst_id",
+        "confidence",
+        "matched_gt_target_row_id",
+        "matched_gt_target_id",
+        "gt_match_iou",
+        "gt_match_status",
+        "gt_match_reason",
+        "selected_rank",
+        "selection_probability",
+    }
+
+
+def test_observed_target_sampler_requires_class_match_and_strictly_greater_iou() -> None:
+    class_mismatch = _sample(
+        detected_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0]),
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[1]),
+    )
+    threshold_equality = _sample(
+        detected_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0]),
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0]),
+    )
+
+    class_result = _observed_sampler().sample(class_mismatch)
+    threshold_result = _observed_sampler(gt_iou_threshold=1.0).sample(threshold_equality)
+
+    assert class_result.selected_rows == ()
+    assert class_result.rows[0].gt_match_iou is None
+    assert class_result.rows[0].gt_match_status == TargetTaskIdentityStatus.UNMATCHED.value
+    assert class_result.rows[0].gt_match_reason == ObservedTargetMatchReason.TARGET_GT_UNMATCHED.value
+    assert threshold_result.selected_rows == ()
+    assert threshold_result.rows[0].gt_match_iou == pytest.approx(1.0)
+    assert threshold_result.rows[0].gt_match_status == TargetTaskIdentityStatus.UNMATCHED.value
+
+
+def test_observed_target_sampler_resolves_gt_conflict_by_confidence() -> None:
+    sample = _sample(
+        detected_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            sem_ids=[0, 0],
+            inst_ids=[20, 21],
+            probs=[0.2, 0.9],
+        ),
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0], inst_ids=[10]),
+    )
+
+    result = _observed_sampler().sample(sample)
+
+    assert len(result.selected_rows) == 1
+    assert result.selected_rows[0].inst_id == 21
+    assert result.selected_rows[0].confidence == pytest.approx(0.9)
+    loser = next(row for row in result.rows if row.inst_id == 20)
+    assert loser.gt_match_status == TargetTaskIdentityStatus.AMBIGUOUS.value
+    assert loser.gt_match_reason == ObservedTargetMatchReason.TARGET_GT_AMBIGUOUS.value
+    assert loser.matched_gt_target_id is None
+    assert result.diagnostic_summary()["num_ambiguous"] == 1
+
+
+def test_observed_target_sampler_resolves_conflict_by_iou_when_confidence_is_absent() -> None:
+    sample = _sample(
+        detected_obbs=_obb_block(
+            [[0.3, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            sem_ids=[0, 0],
+            inst_ids=[20, 21],
+            probs=[-1.0, -1.0],
+        ),
+        gt_obbs=_obb_block([[0.0, 0.0, 0.0]], sem_ids=[0], inst_ids=[10]),
+    )
+
+    result = _observed_sampler().sample(sample)
+
+    assert len(result.selected_rows) == 1
+    assert result.selected_rows[0].inst_id == 21
+    assert result.selected_rows[0].gt_match_iou == pytest.approx(1.0)
+
+
+def test_observed_target_sampler_optional_cap_is_seeded_and_without_replacement() -> None:
+    sample = _sample(
+        detected_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
+            sem_ids=[0, 1, 2],
+            inst_ids=[20, 21, 22],
+        ),
+        gt_obbs=_obb_block(
+            [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
+            sem_ids=[0, 1, 2],
+            inst_ids=[10, 11, 12],
+        ),
+    )
+
+    all_rows = _observed_sampler().sample(sample)
+    first = _observed_sampler(max_targets_per_sample=2, seed=7).sample(sample)
+    second = _observed_sampler(max_targets_per_sample=2, seed=7).sample(sample)
+
+    assert len(all_rows.selected_rows) == 3
+    assert all(row.selection_probability == 1.0 for row in all_rows.selected_rows)
+    assert len(first.selected_rows) == 2
+    assert [row.target_id for row in first.selected_rows] == [row.target_id for row in second.selected_rows]
+    assert len({row.target_id for row in first.selected_rows}) == 2
+    assert all(row.selection_probability == pytest.approx(2.0 / 3.0) for row in first.selected_rows)

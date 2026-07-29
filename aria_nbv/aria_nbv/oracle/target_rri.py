@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from ..data_handling.ase_efm.views import EfmSnippetView
     from ..data_handling.vin_store.dataset import VinOfflineSample
-    from ..oracle.target_selection import OracleTargetTask
+    from ..oracle.target_selection import ObservedTargetTask, OracleTargetTask
     from ..pose_generation.types import CandidateSamplingResult
 
 TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v1"
@@ -170,7 +170,7 @@ class TargetRriScorer:
         *,
         sample: EfmSnippetView,
         target_sample: "VinOfflineSample",
-        target_task: OracleTargetTask,
+        target_task: OracleTargetTask | ObservedTargetTask,
     ) -> None:
         self.config = config
         self.sample = sample
