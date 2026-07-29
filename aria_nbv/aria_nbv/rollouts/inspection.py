@@ -1874,12 +1874,82 @@ def validity_audit_evidence(
         right <= left for left, right in pairwise(float(value) for value in boundary_edges)
     ):
         raise ValueError("boundary_edges must be strictly increasing.")
-    same_contract = artifact.comparison_protocol is AuditComparisonProtocol.SAME_CONTRACT
-    confirmatory = same_contract and artifact.readiness is AuditReadiness.CONFIRMATORY
-    evidence_status = "confirmatory" if confirmatory else "characterization_only"
     rows = sorted(artifact.validity_rows, key=lambda row: row.unit_id)
+    required_kinds = ("state", "path", "combined_actor")
+    cohort_ids = tuple(sorted(summary.cohort_id for summary in artifact.cohort_summaries))
+    coverage_rows: list[dict[str, object]] = []
+    blocker_rows: list[dict[str, object]] = []
+    for cohort_id in cohort_ids:
+        cohort_rows = [row for row in rows if row.cohort_id == cohort_id]
+        for predicate_kind in required_kinds:
+            kind_rows = [row for row in cohort_rows if row.predicate_kind == predicate_kind]
+            complete = [
+                row
+                for row in kind_rows
+                if row.evaluation_status is RowEvaluationStatus.COMPLETE
+                and row.independent_valid is not None
+                and row.raw_measurement is not None
+                and row.signed_margin is not None
+            ]
+            changed = [
+                row
+                for row in kind_rows
+                if row.persisted_contract.identity_sha256 != row.independent_contract.identity_sha256
+            ]
+            reason = (
+                "missing_required_predicate_kind"
+                if not kind_rows
+                else "changed_predicate_contract"
+                if changed
+                else "incomplete_independent_labels"
+                if len(complete) != len(kind_rows)
+                else None
+            )
+            covered = reason is None
+            coverage_rows.append(
+                {
+                    "cohort_id": cohort_id,
+                    "predicate_kind": predicate_kind,
+                    "sampled_count": len(kind_rows),
+                    "complete_count": len(complete),
+                    "missing_count": len(kind_rows) - len(complete),
+                    "changed_contract_count": len(changed),
+                    "covered": covered,
+                    "status": "pass" if covered else "blocked",
+                    "blocker": reason,
+                }
+            )
+            if reason is not None:
+                blocker_rows.append(
+                    {
+                        "cohort_id": cohort_id,
+                        "predicate_kind": predicate_kind,
+                        "blocker": reason,
+                        "sampled_count": len(kind_rows),
+                        "complete_count": len(complete),
+                    }
+                )
+    typed_contract_match = all(
+        row.persisted_contract.identity_sha256 == row.independent_contract.identity_sha256 for row in rows
+    )
+    declared_same_contract = artifact.comparison_protocol is AuditComparisonProtocol.SAME_CONTRACT
+    coverage_complete = bool(coverage_rows) and all(bool(row["covered"]) for row in coverage_rows)
+    confirmatory = (
+        declared_same_contract
+        and typed_contract_match
+        and artifact.status is AuditStatus.PASS
+        and artifact.readiness is AuditReadiness.CONFIRMATORY
+        and coverage_complete
+    )
+    evidence_status = (
+        "confirmatory"
+        if confirmatory
+        else "characterization_only"
+        if not declared_same_contract or not typed_contract_match
+        else "unavailable"
+    )
     confusion_rows: list[dict[str, object]] = []
-    for cohort_id in sorted({row.cohort_id for row in rows}):
+    for cohort_id in cohort_ids:
         cohort_rows = [row for row in rows if row.cohort_id == cohort_id]
         for predicate_kind in ("state", "path", "combined_actor"):
             kind_rows = [row for row in cohort_rows if row.predicate_kind == predicate_kind]
@@ -1900,7 +1970,7 @@ def validity_audit_evidence(
                     "cohort_id": cohort_id,
                     "predicate_kind": predicate_kind,
                     "evidence_status": evidence_status,
-                    "same_contract": same_contract,
+                    "same_contract": declared_same_contract and typed_contract_match,
                     "eligible": confirmatory and bool(complete) and missing_count == 0,
                     "available": bool(complete),
                     "sampled_count": len(kind_rows),
@@ -1928,36 +1998,25 @@ def validity_audit_evidence(
                 }
             )
 
-    margin_rows = [
-        {
-            "cohort_id": row.cohort_id,
-            "unit_id": row.unit_id,
-            "scene_id": row.scene_id,
-            "predicate_kind": row.predicate_kind,
-            "predicate_owner": row.predicate_owner,
-            "predicate_name": row.predicate_name,
-            "comparison_operator": row.comparison_operator,
-            "threshold": float(row.threshold),
-            "unit": row.unit,
-            "raw_measurement": None if row.raw_measurement is None else float(row.raw_measurement),
-            "signed_margin": None if row.signed_margin is None else float(row.signed_margin),
-            "available": row.raw_measurement is not None and row.signed_margin is not None,
-            "missing_reason": row.missing_reason,
-            "evidence_status": evidence_status,
-        }
-        for row in rows
-    ]
+    margin_rows = _signed_margin_summary_rows(rows, evidence_status=evidence_status)
     boundary_rows = _weighted_boundary_agreement(rows, boundary_edges, evidence_status=evidence_status)
     return {
         "comparison_protocol": artifact.comparison_protocol.value,
+        "artifact_status": artifact.status.value,
         "audit_readiness": artifact.readiness.value,
         "evidence_status": evidence_status,
         "same_contract_eligible": confirmatory,
+        "typed_contract_match": typed_contract_match,
+        "required_predicate_coverage_complete": coverage_complete,
         "fallback_reason": None
         if confirmatory
         else "predicate contract changed; weighted results are characterization only"
-        if not same_contract
+        if not declared_same_contract or not typed_contract_match
+        else "required predicate coverage is incomplete"
+        if not coverage_complete
         else "audit is not confirmatory-ready",
+        "coverage_rows": coverage_rows,
+        "blocker_rows": blocker_rows,
         "confusion_rows": confusion_rows,
         "margin_rows": margin_rows,
         "boundary_rows": boundary_rows,
@@ -2607,18 +2666,49 @@ def _reason_intersection_evidence(
 ) -> list[dict[str, object]]:
     """Aggregate complete reason-bitset intersections through state and scene."""
 
+    version_counts = Counter(
+        str(version) if isinstance(version, str) and version else "missing"
+        for row in rows
+        for version in (row.get("reason_code_version"),)
+    )
+    supported_rows = [row for row in rows if row.get("reason_code_version") == INVALID_REASON_VERSION]
     states = _candidate_state_groups(rows)
     state_scenes = {key: str(value[0].get("scene", "unknown")) for key, value in states.items()}
     observed_bitsets = sorted(
         {
             int(value)
-            for row in rows
+            for row in supported_rows
             if isinstance((value := row.get("invalid_reason_bitset")), (int, np.integer))
             and not isinstance(value, (bool, np.bool_))
             and int(value) >= 0
         }
     )
     output: list[dict[str, object]] = []
+    for version, count in sorted(version_counts.items()):
+        if version == INVALID_REASON_VERSION:
+            continue
+        output.append(
+            {
+                **cohort,
+                "family_dimension": "invalid_reason_bitset_intersection",
+                "family": "unavailable",
+                "aggregation_level": "cohort_scene_macro",
+                "reason_version": None if version == "missing" else version,
+                "invalid_reason_bitset": None,
+                "reason_names": (),
+                "available": False,
+                "blocker": "missing_reason_code_version" if version == "missing" else "unsupported_reason_code_version",
+                "reason": (
+                    "reason_code_version is absent; bit positions cannot be decoded"
+                    if version == "missing"
+                    else f"reason_code_version {version!r} is not supported by this decoder"
+                ),
+                "full_count": count,
+                "finite_count": 0,
+                "missing_count": count,
+                "mean_state_fraction": None,
+            }
+        )
     for bitset in observed_bitsets:
         state_values: dict[str, float | None] = {}
         state_counts: dict[str, tuple[int, int, int]] = {}
@@ -2626,6 +2716,7 @@ def _reason_intersection_evidence(
             values = [
                 int(value)
                 for row in state_rows
+                if row.get("reason_code_version") == INVALID_REASON_VERSION
                 if isinstance((value := row.get("invalid_reason_bitset")), (int, np.integer))
                 and not isinstance(value, (bool, np.bool_))
                 and int(value) >= 0
@@ -2649,14 +2740,14 @@ def _reason_intersection_evidence(
         for row in macro_rows:
             row.update(
                 {
-                    "reason_version": INVALID_REASON_VERSION,
+                    "reason_version": str(supported_rows[0]["reason_code_version"]),
                     "invalid_reason_bitset": bitset,
                     "reason_names": reason_names,
                     "intersection_size": len(reason_names),
                 }
             )
         output.extend(macro_rows)
-    if not observed_bitsets:
+    if not observed_bitsets and supported_rows:
         output.append(
             {
                 **cohort,
@@ -2667,10 +2758,10 @@ def _reason_intersection_evidence(
                 "invalid_reason_bitset": None,
                 "reason_names": (),
                 "available": False,
-                "reason": "invalid_reason_bitset unavailable for every candidate row",
-                "full_count": len(rows),
+                "reason": "invalid_reason_bitset unavailable for every candidate row with the supported version",
+                "full_count": len(supported_rows),
                 "finite_count": 0,
-                "missing_count": len(rows),
+                "missing_count": len(supported_rows),
                 "mean_state_fraction": None,
             }
         )
@@ -2742,6 +2833,229 @@ def _conditional_validity_evidence(
     return output
 
 
+def _signed_margin_summary_rows(
+    rows: list[ValidityAuditRow],
+    *,
+    evidence_status: str,
+) -> list[dict[str, object]]:
+    """Project per-unit signed margins without treating them as IID evidence."""
+
+    return [
+        {
+            "cohort_id": row.cohort_id,
+            "unit_id": row.unit_id,
+            "scene_id": row.scene_id,
+            "predicate_kind": row.predicate_kind,
+            "predicate_owner": row.predicate_owner,
+            "predicate_name": row.predicate_name,
+            "comparison_operator": row.comparison_operator,
+            "threshold": float(row.threshold),
+            "unit": row.unit,
+            "raw_measurement": None if row.raw_measurement is None else float(row.raw_measurement),
+            "signed_margin": None if row.signed_margin is None else float(row.signed_margin),
+            "available": row.raw_measurement is not None and row.signed_margin is not None,
+            "missing_reason": row.missing_reason,
+            "evidence_status": evidence_status,
+        }
+        for row in rows
+    ]
+
+
+def _signed_margin_summary_rows(
+    rows: list[ValidityAuditRow],
+    *,
+    evidence_status: str,
+) -> list[dict[str, object]]:
+    """Aggregate weighted margins within state, then equally by scene and cohort."""
+
+    output: list[dict[str, object]] = []
+    state_groups: dict[tuple[str, str, str, int, str, str], list[ValidityAuditRow]] = {}
+    for row in rows:
+        state_id = (
+            f"scene={row.scene_id}:rollout={row.rollout_id}:depth={row.depth}:"
+            f"predicate={row.persisted_contract.identity_sha256}:independent={row.independent_contract.identity_sha256}"
+        )
+        output.append(
+            {
+                "cohort_id": row.cohort_id,
+                "aggregation_level": "candidate_predicate",
+                "unit_id": row.unit_id,
+                "scene_id": row.scene_id,
+                "rollout_id": row.rollout_id,
+                "depth": row.depth,
+                "state_id": state_id,
+                "predicate_kind": row.predicate_kind,
+                "predicate_owner": row.predicate_owner,
+                "predicate_name": row.predicate_name,
+                "persisted_contract_sha256": row.persisted_contract.identity_sha256,
+                "independent_contract_sha256": row.independent_contract.identity_sha256,
+                "comparison_operator": row.comparison_operator,
+                "threshold": float(row.threshold),
+                "unit": row.unit,
+                "frame": row.independent_contract.frame,
+                "raw_measurement": None if row.raw_measurement is None else float(row.raw_measurement),
+                "signed_margin": None if row.signed_margin is None else float(row.signed_margin),
+                "inverse_probability_weight": float(row.inverse_probability_weight),
+                "sampled_count": 1,
+                "complete_count": int(row.signed_margin is not None),
+                "missing_count": int(row.signed_margin is None),
+                "available": row.signed_margin is not None,
+                "missing_reason": row.missing_reason,
+                "evidence_status": evidence_status,
+            }
+        )
+        state_groups.setdefault(
+            (
+                row.cohort_id,
+                row.scene_id,
+                row.rollout_id,
+                row.depth,
+                row.persisted_contract.identity_sha256,
+                row.independent_contract.identity_sha256,
+            ),
+            [],
+        ).append(row)
+
+    state_rows: list[dict[str, object]] = []
+    for state_key, state_group in sorted(state_groups.items()):
+        cohort_id, scene_id, rollout_id, depth, persisted_identity, independent_identity = state_key
+        complete = [row for row in state_group if row.signed_margin is not None]
+        total_weight = sum(float(row.inverse_probability_weight) for row in complete)
+        weighted_mean = (
+            None
+            if total_weight == 0.0
+            else sum(float(cast(float, row.signed_margin)) * float(row.inverse_probability_weight) for row in complete)
+            / total_weight
+        )
+        representative = state_group[0]
+        state_id = (
+            f"scene={scene_id}:rollout={rollout_id}:depth={depth}:"
+            f"predicate={persisted_identity}:independent={independent_identity}"
+        )
+        state_rows.append(
+            {
+                "cohort_id": cohort_id,
+                "aggregation_level": "state",
+                "scene_id": scene_id,
+                "rollout_id": rollout_id,
+                "depth": depth,
+                "state_id": state_id,
+                "predicate_kind": representative.predicate_kind,
+                "predicate_owner": representative.predicate_owner,
+                "predicate_name": representative.predicate_name,
+                "persisted_contract_sha256": persisted_identity,
+                "independent_contract_sha256": independent_identity,
+                "comparison_operator": representative.comparison_operator,
+                "threshold": float(representative.threshold),
+                "unit": representative.unit,
+                "frame": representative.independent_contract.frame,
+                "sampled_count": len(state_group),
+                "complete_count": len(complete),
+                "missing_count": len(state_group) - len(complete),
+                "inverse_probability_weight_sum": float(total_weight),
+                "weighted_mean_signed_margin": weighted_mean,
+                "available": weighted_mean is not None,
+                "evidence_status": evidence_status,
+            }
+        )
+    output.extend(state_rows)
+
+    scene_groups: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+    for row in state_rows:
+        scene_groups.setdefault(
+            (
+                str(row["cohort_id"]),
+                str(row["scene_id"]),
+                str(row["persisted_contract_sha256"]),
+                str(row["independent_contract_sha256"]),
+            ),
+            [],
+        ).append(row)
+    scene_rows: list[dict[str, object]] = []
+    for scene_key, group in sorted(scene_groups.items()):
+        cohort_id, scene_id, persisted_identity, independent_identity = scene_key
+        defined = [row for row in group if row["weighted_mean_signed_margin"] is not None]
+        scene_mean = (
+            None
+            if not defined
+            else float(np.mean([float(cast(float, row["weighted_mean_signed_margin"])) for row in defined]))
+        )
+        representative = group[0]
+        scene_rows.append(
+            {
+                "cohort_id": cohort_id,
+                "aggregation_level": "scene_macro",
+                "scene_id": scene_id,
+                "persisted_contract_sha256": persisted_identity,
+                "independent_contract_sha256": independent_identity,
+                "predicate_kind": representative["predicate_kind"],
+                "predicate_owner": representative["predicate_owner"],
+                "predicate_name": representative["predicate_name"],
+                "comparison_operator": representative["comparison_operator"],
+                "threshold": representative["threshold"],
+                "unit": representative["unit"],
+                "frame": representative["frame"],
+                "sampled_count": sum(int(cast(int, row["sampled_count"])) for row in group),
+                "complete_count": sum(int(cast(int, row["complete_count"])) for row in group),
+                "missing_count": sum(int(cast(int, row["missing_count"])) for row in group),
+                "state_count": len(group),
+                "defined_state_count": len(defined),
+                "missing_state_count": len(group) - len(defined),
+                "mean_state_signed_margin": scene_mean,
+                "available": scene_mean is not None,
+                "evidence_status": evidence_status,
+            }
+        )
+    output.extend(scene_rows)
+
+    cohort_groups: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in scene_rows:
+        cohort_groups.setdefault(
+            (
+                str(row["cohort_id"]),
+                str(row["persisted_contract_sha256"]),
+                str(row["independent_contract_sha256"]),
+            ),
+            [],
+        ).append(row)
+    for cohort_key, group in sorted(cohort_groups.items()):
+        cohort_id, persisted_identity, independent_identity = cohort_key
+        defined = [row for row in group if row["mean_state_signed_margin"] is not None]
+        cohort_mean = (
+            None
+            if not defined
+            else float(np.mean([float(cast(float, row["mean_state_signed_margin"])) for row in defined]))
+        )
+        representative = group[0]
+        output.append(
+            {
+                "cohort_id": cohort_id,
+                "aggregation_level": "cohort_scene_macro",
+                "scene_id": None,
+                "persisted_contract_sha256": persisted_identity,
+                "independent_contract_sha256": independent_identity,
+                "predicate_kind": representative["predicate_kind"],
+                "predicate_owner": representative["predicate_owner"],
+                "predicate_name": representative["predicate_name"],
+                "comparison_operator": representative["comparison_operator"],
+                "threshold": representative["threshold"],
+                "unit": representative["unit"],
+                "frame": representative["frame"],
+                "sampled_count": sum(int(cast(int, row["sampled_count"])) for row in group),
+                "complete_count": sum(int(cast(int, row["complete_count"])) for row in group),
+                "missing_count": sum(int(cast(int, row["missing_count"])) for row in group),
+                "state_count": sum(int(cast(int, row["state_count"])) for row in group),
+                "scene_count": len(group),
+                "defined_scene_count": len(defined),
+                "missing_scene_count": len(group) - len(defined),
+                "mean_scene_signed_margin": cohort_mean,
+                "available": cohort_mean is not None,
+                "evidence_status": evidence_status,
+            }
+        )
+    return output
+
+
 def _weighted_boundary_agreement(
     rows: list[ValidityAuditRow],
     edges: tuple[float, ...],
@@ -2750,7 +3064,7 @@ def _weighted_boundary_agreement(
 ) -> list[dict[str, object]]:
     """Return inverse-probability-weighted agreement in signed-margin bins."""
 
-    groups: dict[tuple[str, str, str, str, str, float, str, int], list[ValidityAuditRow]] = {}
+    groups: dict[tuple[str, str, str, str, str, str, str, float, str, int], list[ValidityAuditRow]] = {}
     for row in rows:
         if row.signed_margin is None or row.independent_valid is None:
             continue
@@ -2770,6 +3084,8 @@ def _weighted_boundary_agreement(
             row.predicate_kind,
             row.predicate_owner,
             row.predicate_name,
+            row.persisted_contract.identity_sha256,
+            row.independent_contract.identity_sha256,
             row.comparison_operator,
             float(row.threshold),
             row.unit,
@@ -2778,7 +3094,9 @@ def _weighted_boundary_agreement(
         groups.setdefault(boundary_key, []).append(row)
     output: list[dict[str, object]] = []
     for group_key, group in sorted(groups.items(), key=lambda item: repr(item[0])):
-        cohort_id, kind, owner, name, operator, threshold, unit, bin_index = group_key
+        cohort_id, kind, owner, name, persisted_identity, independent_identity, operator, threshold, unit, bin_index = (
+            group_key
+        )
         total_weight = sum(float(row.inverse_probability_weight) for row in group)
         agreement_weight = sum(
             float(row.inverse_probability_weight)
@@ -2791,6 +3109,8 @@ def _weighted_boundary_agreement(
                 "predicate_kind": kind,
                 "predicate_owner": owner,
                 "predicate_name": name,
+                "persisted_contract_sha256": persisted_identity,
+                "independent_contract_sha256": independent_identity,
                 "comparison_operator": operator,
                 "threshold": threshold,
                 "unit": unit,
