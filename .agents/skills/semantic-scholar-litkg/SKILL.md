@@ -17,7 +17,7 @@ metadata:
     - "KG capability or smoke output for ARIA config changes"
   applies_to:
     - ".agents/external/litkg-rs/**"
-    - ".configs/litkg.toml"
+    - ".configs/infrastructure/litkg.toml"
     - ".agents/kg/**"
     - ".agents/skills/semantic-scholar-litkg/**"
   triggers:
@@ -34,7 +34,7 @@ metadata:
     - ".agents/external/litkg-rs/AGENTS.md"
     - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
     - ".agents/references/litkg_quick_reference.md#default-commands"
-    - ".configs/litkg.toml"
+    - ".configs/infrastructure/litkg.toml"
     - ".agents/references/context7_library_ids.md"
   context7_refs:
     - "/pytorch/pytorch"
@@ -71,7 +71,7 @@ Use this skill when changing or operating the KG tooling itself.
 
 - Keep repo-independent implementation in `.agents/external/litkg-rs`.
 - Keep ARIA-NBV paths, authority tiers, and source-selection assumptions in
-  `.configs/litkg.toml`, ARIA docs, or skills.
+  `.configs/infrastructure/litkg.toml`, ARIA docs, or skills.
 - Prefer existing litkg-rs adapters and external libraries before adding new
   parsers or schemas.
 - Treat graphify/JSONL as durable generated artifacts, Neo4j export as optional

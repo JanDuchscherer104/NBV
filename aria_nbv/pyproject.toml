@@ -90,6 +90,7 @@ dependencies = [
     nbv-rollouts-info         = "aria_nbv.rollouts.info_cli:main"
     nbv-rerun-inspect         = "aria_nbv.rerun_inspector._cli:main"
     nbv-train                 = "aria_nbv.lightning.cli:train_main"
+    nbv-train-qh              = "aria_nbv.lightning.qh_cli:main"
     nbv-optuna                = "aria_nbv.lightning.cli:optuna_main"
     nbv-wandb                 = "aria_nbv.lightning.cli:wandb_main"
     nbv-cli                   = "aria_nbv.lightning.cli:main"

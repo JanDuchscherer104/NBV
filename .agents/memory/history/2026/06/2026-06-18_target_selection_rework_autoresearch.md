@@ -15,7 +15,7 @@ canonical_updates_needed:
   - docs/contents/thesis/questions.qmd
   - .agents/memory/state/DECISIONS.md
   - .agents/memory/state/OPEN_QUESTIONS.md
-  - .configs/build_rollouts_v1_realistic.toml
+  - .configs/generation/rollouts/paired/build_rollouts_v1_realistic.toml
 artifacts:
   - .omx/specs/autoresearch-target-selection-rework/mission.md
   - .omx/specs/autoresearch-target-selection-rework/sandbox.md

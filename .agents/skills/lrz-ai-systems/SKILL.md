@@ -17,7 +17,7 @@ metadata:
     - "dry-run, syntax check, or exact Slurm/job log excerpt"
     - "explicit credential/access blocker when remote verification cannot run"
   applies_to:
-    - ".configs/lrz/**"
+    - ".configs/infrastructure/lrz/**"
     - "scripts/templates/**"
     - ".agents/skills/lrz-ai-systems/**"
     - "docs/contents/setup.qmd"

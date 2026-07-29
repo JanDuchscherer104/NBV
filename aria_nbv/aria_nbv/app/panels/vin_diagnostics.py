@@ -17,6 +17,7 @@ from ...data_handling import VinOracleBatch
 from ...data_handling.offline.source import VinOfflineSourceConfig
 from ...lightning.lit_datamodule import VinDataModule
 from ...utils import Stage
+from ...utils.config_paths import discover_config_toml_paths
 from ..state import VIN_DIAG_STATE_KEY, get_vin_state
 from ..state_types import config_signature
 from .vin_diag_tabs import (
@@ -62,17 +63,17 @@ def render_vin_diagnostics_page() -> None:
         paths = PathConfig()
         config_dir = paths.configs_dir
         config_paths = sorted(
-            config_dir.glob("*.toml"),
+            discover_config_toml_paths(config_dir),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
-        toml_options = ["(none)"] + [path.name for path in config_paths]
         toml_choice = st.selectbox(
             "Experiment config TOML (optional)",
-            options=toml_options,
+            options=(None, *config_paths),
             index=0,
+            format_func=lambda path: "(none)" if path is None else path.relative_to(config_dir).as_posix(),
         )
-        toml_path = None if toml_choice == "(none)" else str(config_dir / toml_choice)
+        toml_path = None if toml_choice is None else str(toml_choice)
         stage = st.selectbox(
             "Stage",
             options=[Stage.TRAIN, Stage.VAL, Stage.TEST],

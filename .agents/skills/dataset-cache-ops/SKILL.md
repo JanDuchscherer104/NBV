@@ -140,7 +140,7 @@ updated to the current reader contract.
 ## Verification
 
 - `cd aria_nbv && uv run nbv-downloader -m list`
-- `cd aria_nbv && uv run nbv-summary --config-path ../.configs/offline_only.toml`
+- `cd aria_nbv && uv run nbv-summary --config-path ../.configs/training/vin/offline_only.toml`
 - `cd aria_nbv && uv run pytest tests/data_handling/test_vin_offline_store.py tests/data_handling/test_public_api_contract.py`
 - `cd aria_nbv && uv run pytest tests/vin/test_vin_utils.py`
 - `rg -n "allow_legacy|accepted_versions|legacy.*version|v5" aria_nbv/aria_nbv/data_handling aria_nbv/tests/data_handling`

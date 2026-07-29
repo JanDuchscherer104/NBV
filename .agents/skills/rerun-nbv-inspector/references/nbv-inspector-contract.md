@@ -5,7 +5,7 @@ Use this reference before changing or reviewing:
 - `aria_nbv/aria_nbv/rerun_inspector/`
 - `aria_nbv/tests/rerun_inspector/`
 - `aria_nbv/aria_nbv/data_handling/_offline_visual_inventory.py`
-- `.configs/rerun_offline.toml`
+- `.configs/inspection/rerun/rerun_offline.toml`
 - generated API docs under `docs/reference/`
 
 ## Purpose
@@ -67,7 +67,7 @@ The saved smoke command is:
 
 ```bash
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml \
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline.toml \
   --split val --index 0 --save ../.artifacts/rerun/sample.rrd
 ```
 

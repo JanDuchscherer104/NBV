@@ -108,13 +108,6 @@ class NbvStreamlitApp:
             safe_rerun()
         return console, state, controller
 
-    def _page_training_dataset(self) -> None:
-        """Render the training-dataset composition hub."""
-
-        from aria_nbv.app.panels.training_dataset import render_training_dataset_page
-
-        render_training_dataset_page()
-
     def _page_root_observation_store(self) -> None:
         """Render immutable root-observation-store diagnostics."""
 
@@ -135,6 +128,13 @@ class NbvStreamlitApp:
         from aria_nbv.app.panels.counterfactual_rollouts import render_counterfactual_rollouts_page
 
         render_counterfactual_rollouts_page()
+
+    def _page_data_generation(self) -> None:
+        """Render config-driven local dataset generation."""
+
+        from aria_nbv.app.panels.data_generation import render_data_generation_page
+
+        render_data_generation_page()
 
     def _page_candidate_proposals(self) -> None:
         """Render proposal diagnostics with page-owned single-step controls."""
@@ -294,12 +294,12 @@ class NbvStreamlitApp:
 
         st.set_page_config(page_title="ARIA-NBV Training Data", layout="wide")
         pages = {
-            "": [st.Page(self._page_training_dataset, title="Training Dataset", default=True)],
+            "": [st.Page(self._page_rollout_supervision, title="Rollout Supervision", default=True)],
             "Training Data": [
                 st.Page(self._page_root_observation_store, title="Root Observation Store"),
-                st.Page(self._page_rollout_supervision, title="Rollout Supervision"),
             ],
             "Generation": [
+                st.Page(self._page_data_generation, title="Data Generation"),
                 st.Page(self._page_live_rollout_lab, title="Live Rollout Lab"),
                 st.Page(self._page_candidate_proposals, title="Candidate Proposals"),
             ],

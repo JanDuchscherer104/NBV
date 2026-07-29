@@ -16,6 +16,7 @@ import torch
 
 from aria_nbv.oracle.evidence import OracleEvidenceInvalidReason
 from aria_nbv.oracle.pipelines.evaluated_rollout import OracleReplayInvalidityError
+from aria_nbv.oracle.pipelines.progress import GenerationProgress
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
@@ -56,6 +57,106 @@ from tests.rollout_fixtures import build_rollout_records
 
 class _FakeManifest(msgspec.Struct):
     version: int = 7
+
+
+def test_generation_progress_is_immutable() -> None:
+    event = GenerationProgress(stage="generating", completed=1, total=None, message="Generated one sample")
+
+    with pytest.raises(AttributeError):
+        event.completed = 2  # type: ignore[misc]
+
+
+def test_rollout_writer_reports_generation_write_and_validation_progress(tmp_path: Path, monkeypatch) -> None:
+    class _FakeSample:
+        efm_snippet_view = SimpleNamespace(has_mesh=True)
+        scene_id = "scene-a"
+        snippet_id = "snippet-000"
+
+    class _FakeDataset:
+        manifest = _FakeManifest()
+        _records = [SimpleNamespace(split="train")]
+
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> _FakeSample:
+            assert index == 0
+            return _FakeSample()
+
+    class _FakeSampler:
+        def __init__(self, _config: object) -> None:
+            pass
+
+        def sample(self, _sample: _FakeSample) -> SimpleNamespace:
+            return SimpleNamespace(selected_rows=[object()], rows=[object()], source="test", warnings=[])
+
+    renderer_config = SimpleNamespace(
+        renderer=SimpleNamespace(target_type=type("FakeRenderer", (), {}), znear=0.1, zfar=10.0)
+    )
+    store = SimpleNamespace(
+        store_dir=tmp_path / "rollouts.zarr",
+        return_semantics="test",
+        discount_gamma=1.0,
+        target_protocol_version="v0_gt_input",
+        reason_code_version="test",
+        field_retention_policy="test",
+        q_h_chunk_states=1,
+        target_eval_crop_max_points=1,
+        target_eval_crops_enabled=False,
+    )
+    config = SimpleNamespace(
+        source=SimpleNamespace(setup_target=_FakeDataset),
+        source_manifest_path=None,
+        sample_keys=None,
+        oracle_target_task_sampler=object(),
+        max_samples=None,
+        max_targets_per_sample=None,
+        require_label_valid=False,
+        selected_depth=SimpleNamespace(
+            renderer_config=lambda _depth: renderer_config,
+            enabled=False,
+            width_px=1,
+            height_px=1,
+            chunk_steps=1,
+        ),
+        target_scorer=SimpleNamespace(depth=object()),
+        store=store,
+        model_dump_jsonable=lambda: {},
+    )
+    result = SimpleNamespace(store_dir=store.store_dir, num_rollouts=1, num_steps=2, num_candidates=3)
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.rollout_dataset.VinOfflineSample", _FakeSample)
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.rollout_dataset.OracleTargetTaskSampler", _FakeSampler)
+    monkeypatch.setattr(
+        _RolloutSourceLineageBuilder,
+        "from_dataset",
+        classmethod(
+            lambda cls, dataset, *, max_samples: SimpleNamespace(  # noqa: ARG005
+                source_cache_version="7",
+                split_manifest_hash="split-hash",
+            )
+        ),
+    )
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.rollout_dataset.write_rollout_zarr_store", lambda *a, **k: result)
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.rollout_dataset.validate_rollout_zarr_store",
+        lambda _path: SimpleNamespace(ok=True, errors=[]),
+    )
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = config
+    writer.console = SimpleNamespace(log=lambda _message: None, warn=lambda _message: None)
+    writer.stats = RolloutDatasetWriterStats()
+    writer._rollout_target = lambda **_kwargs: [object()]
+    events: list[GenerationProgress] = []
+
+    actual = writer.run(progress=events.append)
+
+    assert actual is result
+    assert [(event.stage, event.completed, event.total) for event in events] == [
+        ("generating", 0, 1),
+        ("generating", 1, 1),
+        ("writing", 1, 1),
+        ("validating", 1, 1),
+    ]
 
 
 def _target_descriptor() -> TargetDescriptor:
@@ -249,7 +350,7 @@ def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None
     )
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(
-        store=SimpleNamespace(target_protocol_version="v1-observed"),
+        store=SimpleNamespace(target_protocol_version="v0_gt_input"),
         target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
     )
 

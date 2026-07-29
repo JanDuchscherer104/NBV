@@ -1,0 +1,38 @@
+seed = 7
+out_dir = ".logs/qh/smoke"
+
+[trainer_config]
+is_debug = true
+use_distributed_sampler = true
+use_wandb = false
+enable_validation = false
+gradient_clip_val = 0
+accumulate_grad_batches = 1
+
+[datamodule_config]
+batch_size = 2
+num_workers = 0
+
+[datamodule_config.train.rollout]
+store_dirs = ["/ABS/PATH/TO/ARIA_DSS/caches/oracle/rollouts-v0-smoke.zarr"]
+
+[datamodule_config.train]
+split = "train"
+
+[datamodule_config.train.actor]
+store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin-offline-v7"
+
+[module_config]
+huber_delta = 1.0
+target_sync_interval = 1
+
+[module_config.scorer]
+horizon = 2
+candidate_token_dim = 128
+num_heads = 4
+feedforward_multiplier = 2
+dropout = 0.0
+
+[module_config.optimizer]
+learning_rate = 0.0001
+weight_decay = 0.001

@@ -93,7 +93,7 @@ jobs:
       - name: Set up Typst
         uses: typst-community/setup-typst@v5.1.0
 
-      - name: Run root CI contract
+      - name: Run root CI contract, including focused Q_H coverage
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
         run: make ci PYTEST_ARGS=

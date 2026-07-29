@@ -1,0 +1,55 @@
+seed = 17
+out_dir = "/ABS/PATH/TO/ARIA_DSS/checkpoints/qh/RUN_ID"
+
+[trainer_config]
+accelerator = "gpu"
+devices = 2
+strategy = "ddp"
+max_epochs = 50
+precision = "bf16-mixed"
+use_distributed_sampler = true
+use_wandb = false
+enable_validation = false
+log_every_n_steps = 10
+gradient_clip_val = 0
+accumulate_grad_batches = 1
+
+[trainer_config.callbacks]
+use_model_checkpoint = true
+checkpoint_dir = "/ABS/PATH/TO/ARIA_DSS/checkpoints/qh/RUN_ID"
+checkpoint_filename = "epoch={epoch}-step={step}-train-loss={train/loss:.4f}"
+checkpoint_save_top_k = 2
+checkpoint_save_last = true
+checkpoint_every_n_train_steps = 100
+use_lr_monitor = false
+use_rich_model_summary = false
+
+[datamodule_config]
+batch_size = 4
+num_workers = 8
+pin_memory = true
+persistent_workers = true
+
+[datamodule_config.train.rollout]
+store_dirs = ["/ABS/PATH/TO/ARIA_DSS/caches/oracle/rollouts-v0-train.zarr"]
+
+[datamodule_config.train]
+split = "train"
+
+[datamodule_config.train.actor]
+store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin-offline-v7"
+
+[module_config]
+huber_delta = 1.0
+target_sync_interval = 100
+
+[module_config.scorer]
+horizon = 2
+candidate_token_dim = 128
+num_heads = 4
+feedforward_multiplier = 2
+dropout = 0.0
+
+[module_config.optimizer]
+learning_rate = 0.0001
+weight_decay = 0.001

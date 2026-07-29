@@ -1,9 +1,10 @@
 """Top-level VIN model namespace for runnable scorer implementations.
 
-`aria_nbv.vin.models.scene_myopic` owns the preserved seminar-era
-`VinModelV3`. Scaffold-only target-conditioned and finite-horizon families stay
-available from their leaf modules so broad imports do not imply runnable target
-scoring or Q_H support.
+:mod:`aria_nbv.vin.models.scene_myopic` owns the preserved seminar-era
+:class:`aria_nbv.vin.models.scene_myopic.VinModelV3`. Specialized
+target-conditioned and finite-horizon families stay
+available from their leaf modules so broad imports do not conflate their
+different training objectives.
 """
 
 from __future__ import annotations

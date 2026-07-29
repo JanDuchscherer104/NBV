@@ -12,20 +12,20 @@ flowchart LR
   utils["utils"]
   vin["vin"]
   vin -->|"21"| utils
-  data_handling -->|"10"| utils
+  data_handling -->|"12"| utils
+  lightning -->|"10"| utils
+  oracle -->|"10"| data_handling
   oracle -->|"10"| utils
-  oracle -->|"9"| data_handling
+  vin -->|"9"| data_handling
   data_handling -->|"8"| configs
-  vin -->|"8"| data_handling
-  lightning -->|"7"| utils
   oracle -->|"7"| pose_generation
+  rollouts -->|"7"| utils
   lightning -->|"6"| configs
+  lightning -->|"6"| data_handling
   pose_generation -->|"6"| utils
   oracle -->|"5"| rendering
   rendering -->|"5"| utils
   rollouts -->|"5"| pose_generation
-  rollouts -->|"5"| utils
-  lightning -->|"4"| data_handling
 
   classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;

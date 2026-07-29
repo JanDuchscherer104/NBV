@@ -1,3 +1,8 @@
+---
+kind: plan
+status: current
+---
+
 # Measured Autoresearch Sidecar — Implementation Plan
 
 ## Outcome

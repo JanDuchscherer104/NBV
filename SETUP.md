@@ -198,7 +198,7 @@ Download external checkpoints into `.logs/ckpts/`:
 ```
 
 The default VIN config resolves Lightning checkpoints from `.logs/checkpoints/`.
-For example, `.configs/offline_only.toml` references
+For example, `.configs/training/vin/offline_only.toml` references
 `epoch=20-step=1869-train-loss=6.2684.ckpt`.
 
 ## 5. Offline store and VIN diagnostics
@@ -212,15 +212,15 @@ uv run nbv-summary --config-path offline_only.toml
 
 The summary command forces `run_mode = "summarize_vin"`, disables W&B, uses one
 batch, and reads the configured offline store. The current default
-`.configs/offline_only.toml` points at `vin_offline`. Treat a manifest with
+`.configs/training/vin/offline_only.toml` points at `vin_offline`. Treat a manifest with
 `"interrupted": true` as a diagnostic store rather than a full training store.
 
 Build the current full-store config only after the one-scene path is healthy:
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_81286.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_81286.toml
 ```
 
 ## 6. One-scene smoke path
@@ -230,22 +230,22 @@ Use the sidecar smoke config first. It writes exactly one sample to
 
 ```sh
 cd aria_nbv
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml --dry-run
-uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rerun_smoke_v7.toml
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml --dry-run
+uv run nbv-build-offline --config-path ../.configs/generation/vin/build_vin_offline_rerun_smoke_v7.toml
 ```
 
 Save a Rerun recording from that one sample:
 
 ```sh
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline_smoke_v7.toml --split val --index 0 --save ../.artifacts/rerun/offline_smoke_v7.rrd
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline_smoke_v7.toml --split val --index 0 --save ../.artifacts/rerun/offline_smoke_v7.rrd
 ```
 
 Open the saved recording in the native viewer when available:
 
 ```sh
 cd aria_nbv
-uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline_smoke_v7.toml --split val --index 0 --view
+uv run nbv-rerun-inspect --config-path ../.configs/inspection/rerun/rerun_offline_smoke_v7.toml --split val --index 0 --view
 ```
 
 The Rerun inspector is diagnostic-only. Its point and mesh downsampling are

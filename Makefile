@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -74,7 +74,7 @@ LRZ_SCRIPTS_DIR ?= $(LRZ_SKILL_DIR)/scripts
 LRZ_RESOURCES_ARGS ?= summary
 LRZ_CMD ?=
 LITKG_MANIFEST ?= .agents/external/litkg-rs/Cargo.toml
-LITKG_CONFIG ?= .configs/litkg.toml
+LITKG_CONFIG ?= .configs/infrastructure/litkg.toml
 LITKG_REPO_ROOT ?= .
 LITKG_PROFILE ?= thesis-coding
 KG_BUNDLE_ROOT ?= .agents/kg/generated/neo4j-export
@@ -113,6 +113,17 @@ PACKAGE_SMOKE_TESTS := \
 	tests/lightning/test_vin_batch_collate.py \
 	tests/app/panels/test_vin_diagnostics_runtime.py \
 	tests/vin/test_vin_diagnostics_runtime.py
+QH_CI_TESTS := \
+	tests/data_handling/test_qh.py \
+	tests/rollouts/test_qh_reader.py \
+	tests/vin/test_models_namespace.py \
+	tests/vin/test_target_finite_horizon.py \
+	tests/lightning/test_candidate_scorer_contract.py \
+	tests/lightning/test_qh_module.py \
+	tests/lightning/test_qh_experiment.py \
+	tests/lightning/test_qh_fast_dev_run.py \
+	tests/lightning/test_qh_resume.py \
+	tests/lightning/test_qh_torchrun_smoke.py
 PYTEST_ARGS ?= -n auto
 
 # Read-only operator inspection defaults.
@@ -125,7 +136,7 @@ ROLLOUT_STORE ?= rollouts_v1_realistic.zarr
 ROLLOUT_MIN_HORIZON ?= 2
 ROLLOUT_SEED ?=
 RERUN_MODE ?= view
-RERUN_CONFIG ?= ../.configs/rerun_offline.toml
+RERUN_CONFIG ?= ../.configs/inspection/rerun/rerun_offline.toml
 RERUN_SAVE ?= ../.artifacts/rerun/offline_random.rrd
 ROLLOUT_RERUN_SAVE ?= ../.artifacts/rerun/rollout_random.rrd
 
@@ -879,7 +890,10 @@ thesis-watch: ## Watch and recompile the Typst thesis
 
 docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 
-package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
+qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
+	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
+
+package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)

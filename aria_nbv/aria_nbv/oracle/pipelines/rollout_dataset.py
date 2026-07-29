@@ -60,6 +60,11 @@ from ...rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+from ...targets.protocol import (
+    TargetDescriptorProvenance,
+    TargetInputProtocol,
+    validate_target_protocol_admission,
+)
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from .evaluated_rollout import (
@@ -70,7 +75,9 @@ from .evaluated_rollout import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from .progress import ProgressCallback
+
+from .progress import GenerationProgress
 
 
 @dataclass(slots=True)
@@ -188,7 +195,7 @@ class RolloutRecipeConfig(BaseConfig):
     def diverse_suite() -> list["RolloutRecipeConfig"]:
         """Return the radial/backtrack rollout-diversity recipe suite.
 
-        The suite mirrors `.configs/build_rollouts_v1_diverse.toml` and is
+        The suite mirrors `.configs/generation/rollouts/paired/build_rollouts_v1_diverse.toml` and is
         intended to pair with
         `CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family`.
         Sibling-diversity controls are best-effort after candidate validity
@@ -378,7 +385,7 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
 
     store: RolloutZarrStoreConfig = Field(
         default_factory=lambda: RolloutZarrStoreConfig(
-            target_protocol_version="v1_observed",
+            target_protocol_version=TargetInputProtocol.V0_GT_INPUT,
             field_retention_policy="compact_selected_heavy",
         )
     )
@@ -409,6 +416,18 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     """Enable debug logging in writer dependencies."""
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
+
+    @model_validator(mode="after")
+    def _validate_target_protocol(self) -> "RolloutDatasetWriterConfig":
+        """Reject actor-visible protocol claims from the Oracle GT generator."""
+
+        validate_target_protocol_admission(
+            self.store.target_protocol_version,
+            target_source=ORACLE_TARGET_TASK_SOURCE,
+            descriptor_source=ORACLE_TARGET_TASK_SOURCE,
+            descriptor_provenance=TargetDescriptorProvenance.ORACLE_GT,
+        )
+        return self
 
     @field_validator("source_manifest_path", mode="before")
     @classmethod
@@ -609,6 +628,7 @@ class RolloutDatasetWriter:
         *,
         invocation: RolloutStoreInvocation | None = None,
         shard_entry: RolloutShardEntry | None = None,
+        progress: ProgressCallback | None = None,
     ) -> RolloutZarrWriteResult:
         """Build the configured rollout store.
 
@@ -616,6 +636,15 @@ class RolloutDatasetWriter:
         rows. In shard mode the `RolloutShardEntry` is authoritative: source
         rows are filtered and ordered from the manifest, `max_samples` is
         ignored, and source/config hash mismatches fail before generation.
+
+        Args:
+            invocation: Provenance describing the caller and command context.
+            shard_entry: Optional authoritative shard assignment.
+            progress: Optional synchronous observer for framework-neutral
+                generation, writing, and validation updates.
+
+        Returns:
+            Summary of the validated rollout Zarr store.
         """
 
         dataset = self.config.source.setup_target()
@@ -647,6 +676,16 @@ class RolloutDatasetWriter:
             self._validate_shard_lineage(source_lineage, shard_entry)
         records = []
 
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="generating",
+                    completed=0,
+                    total=max_samples,
+                    message="Starting rollout sample generation",
+                )
+            )
+
         for sample_index in range(max_samples):
             sample = dataset[sample_index]
             if not isinstance(sample, VinOfflineSample):
@@ -655,6 +694,15 @@ class RolloutDatasetWriter:
             if sample.efm_snippet_view is None or not sample.efm_snippet_view.has_mesh:
                 self.stats.samples_without_snippet_or_mesh += 1
                 self.stats.skip("missing_snippet_or_mesh")
+                if progress is not None:
+                    progress(
+                        GenerationProgress(
+                            stage="generating",
+                            completed=sample_index + 1,
+                            total=max_samples,
+                            message=f"Skipped rollout source sample {sample_index + 1}/{max_samples}",
+                        )
+                    )
                 continue
             target_result = oracle_sampler.sample(sample)
             if not target_result.selected_rows:
@@ -664,6 +712,15 @@ class RolloutDatasetWriter:
                     f"Skipping sample scene={sample.scene_id} snippet={sample.snippet_id}: {reason}; "
                     f"source={target_result.source} warnings={target_result.warnings}",
                 )
+                if progress is not None:
+                    progress(
+                        GenerationProgress(
+                            stage="generating",
+                            completed=sample_index + 1,
+                            total=max_samples,
+                            message=f"Skipped rollout source sample {sample_index + 1}/{max_samples}",
+                        )
+                    )
                 continue
             rolled_targets_for_sample = 0
             for target_rank, target in enumerate(target_result.selected_rows):
@@ -686,11 +743,29 @@ class RolloutDatasetWriter:
                 if target_records:
                     rolled_targets_for_sample += 1
                     records.extend(target_records)
+            if progress is not None:
+                progress(
+                    GenerationProgress(
+                        stage="generating",
+                        completed=sample_index + 1,
+                        total=max_samples,
+                        message=f"Processed rollout source sample {sample_index + 1}/{max_samples}",
+                    )
+                )
 
         if not records:
             raise RuntimeError(f"No rollout records were generated; skipped={self.stats.skipped_reasons}")
 
         selected_depth_renderer_config = self.config.selected_depth.renderer_config(self.config.target_scorer.depth)
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="writing",
+                    completed=max_samples,
+                    total=max_samples,
+                    message=f"Writing {len(records)} rollout records",
+                )
+            )
         result = write_rollout_zarr_store(
             self.config.store.store_dir,
             records,
@@ -720,6 +795,15 @@ class RolloutDatasetWriter:
             target_eval_crops_enabled=self.config.store.target_eval_crops_enabled,
         )
         self.stats.rollouts_written = int(result.num_rollouts)
+        if progress is not None:
+            progress(
+                GenerationProgress(
+                    stage="validating",
+                    completed=max_samples,
+                    total=max_samples,
+                    message="Validating rollout Zarr store",
+                )
+            )
         validation = validate_rollout_zarr_store(result.store_dir)
         if not validation.ok:
             joined = "; ".join(validation.errors)

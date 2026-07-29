@@ -28,3 +28,25 @@ def test_trainer_factory_disables_default_logger_when_wandb_disabled() -> None:
     assert all(callback.__class__.__name__ != "LearningRateMonitor" for callback in trainer.callbacks)
     assert all(callback.__class__.__name__ != "ModelCheckpoint" for callback in trainer.callbacks)
     assert trainer.checkpoint_callback is None
+
+
+def test_trainer_factory_forwards_sampler_replacement_policy() -> None:
+    """Dedicated data modules can retain their explicit distributed samplers."""
+
+    assert TrainerFactoryConfig().use_distributed_sampler is True
+    cfg = TrainerFactoryConfig(
+        use_distributed_sampler=False,
+        use_wandb=False,
+        enable_validation=False,
+        max_epochs=1,
+        callbacks=TrainerCallbacksConfig(
+            use_model_checkpoint=False,
+            use_lr_monitor=False,
+            use_tqdm_progress_bar=False,
+            use_rich_model_summary=False,
+        ),
+    )
+
+    trainer = cfg.setup_target()
+
+    assert trainer._accelerator_connector.use_distributed_sampler is False  # noqa: SLF001

@@ -85,7 +85,7 @@ summarized in @tab:pipeline and visualized in @fig:candidate-poses.
 ) <tab:oracle-label-config>
 
 The corresponding runtime configuration is stored in
-`.configs/paper_figures_oracle_labeler.toml`.
+`.configs/inspection/figures/paper_figures_oracle_labeler.toml`.
 
 == Candidate generation
 

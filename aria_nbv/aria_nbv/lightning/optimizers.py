@@ -1,9 +1,12 @@
-"""Config-as-factory optimizer and learning-rate scheduler wiring.
+"""Shared optimizer and learning-rate scheduler configuration for Lightning.
 
-This module provides AdamW, plateau, and one-cycle construction for
-:class:`aria_nbv.lightning.VinLightningModule`. It owns translation into Lightning's optimizer
-mapping, while Lightning owns stepping order and the trainer owns the final
-one-cycle step budget.
+:class:`AdamWConfig` serves both the one-step
+:class:`aria_nbv.lightning.VinLightningModule` and finite-horizon
+:class:`aria_nbv.lightning.qh_module.QhLightningModule`. Scheduler factories
+provide the common Lightning mapping and step-budget contracts without owning
+either objective. Each consuming module retains optimizer selection, stepping
+order, and scheduler-admission policy; the Trainer owns the final one-cycle
+step budget.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import pytorch_lightning as pl
+from pydantic import FiniteFloat
 from torch import Tensor
 from torch.nn import functional as functional
 from torch.optim import AdamW, Optimizer
@@ -20,14 +24,14 @@ from ..utils import Optimizable, TargetConfig, optimizable_field
 
 
 class AdamWConfig(TargetConfig[Optimizer]):
-    """Configure AdamW for trainable VIN scorer parameters."""
+    """Configure AdamW for a Lightning module's trainable parameters."""
 
     @property
     def target_type(self) -> type[Optimizer]:
         """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return AdamW
 
-    learning_rate: float = optimizable_field(
+    learning_rate: FiniteFloat = optimizable_field(
         default=1e-3,
         optimizable=Optimizable.continuous(
             low=1e-5,
@@ -39,7 +43,7 @@ class AdamWConfig(TargetConfig[Optimizer]):
     )
     """Learning rate for AdamW."""
 
-    weight_decay: float = optimizable_field(
+    weight_decay: FiniteFloat = optimizable_field(
         default=1e-3,
         optimizable=Optimizable.continuous(
             low=1e-4,
@@ -54,8 +58,10 @@ class AdamWConfig(TargetConfig[Optimizer]):
         """Create AdamW over the exact trainable parameter list.
 
         Args:
-            params: Materialized scorer parameters selected by
-                :meth:`aria_nbv.lightning.VinLightningModule.configure_optimizers`.
+            params: Materialized parameters selected by the consuming
+                :meth:`aria_nbv.lightning.VinLightningModule.configure_optimizers`
+                or
+                :meth:`aria_nbv.lightning.qh_module.QhLightningModule.configure_optimizers`.
 
         Returns:
             Optimizer owned and stepped by Lightning.
@@ -79,13 +85,13 @@ class ReduceLrOnPlateauConfig(TargetConfig[ReduceLROnPlateau]):
     mode: Literal["min", "max"] = "min"
     """Whether to reduce on metric min or max."""
 
-    factor: float = 0.2
+    factor: FiniteFloat = 0.2
     """Multiplicative factor of LR reduction."""
 
     patience: int = 2
     """Number of steps with no improvement before reducing the LR."""
 
-    threshold: float = 1e-4
+    threshold: FiniteFloat = 1e-4
     """Threshold for measuring new optimum."""
 
     threshold_mode: Literal["rel", "abs"] = "rel"
@@ -94,10 +100,10 @@ class ReduceLrOnPlateauConfig(TargetConfig[ReduceLROnPlateau]):
     cooldown: int = 0
     """Number of epochs to wait before resuming normal operation."""
 
-    min_lr: float | list[float] = 0.0
+    min_lr: FiniteFloat | list[FiniteFloat] = 0.0
     """Lower bound on the learning rate."""
 
-    eps: float = 1e-8
+    eps: FiniteFloat = 1e-8
     """Minimal decay applied to LR."""
 
     monitor: str = "train/loss"
@@ -171,7 +177,7 @@ class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
 
         return OneCycleLR
 
-    max_lr: float | None = optimizable_field(
+    max_lr: FiniteFloat | None = optimizable_field(
         default=1e-4,
         optimizable=Optimizable.continuous(
             low=1e-5,
@@ -182,13 +188,13 @@ class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
     )
     """Maximum learning rate in the cycle (defaults to optimizer LR)."""
 
-    base_momentum: float = 0.85
+    base_momentum: FiniteFloat = 0.85
     """Lower momentum boundary in the cycle."""
 
-    max_momentum: float = 0.95
+    max_momentum: FiniteFloat = 0.95
     """Upper momentum boundary in the cycle."""
 
-    div_factor: float = optimizable_field(
+    div_factor: FiniteFloat = optimizable_field(
         default=25.0,
         optimizable=Optimizable.continuous(
             low=5.0,
@@ -198,7 +204,7 @@ class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
     )
     """Initial learning rate = max_lr / div_factor."""
 
-    final_div_factor: float = optimizable_field(
+    final_div_factor: FiniteFloat = optimizable_field(
         default=1e4,
         optimizable=Optimizable.continuous(
             low=1e2,
@@ -209,7 +215,7 @@ class OneCycleSchedulerConfig(TargetConfig[OneCycleLR]):
     )
     """Final learning rate = max_lr / (div_factor * final_div_factor)."""
 
-    pct_start: float = optimizable_field(
+    pct_start: FiniteFloat = optimizable_field(
         default=0.3,
         optimizable=Optimizable.continuous(
             low=0.05,

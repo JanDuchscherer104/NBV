@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "baseline_total": 2480,
+  "files": [
+    {
+      "owner": "rollout_reader",
+      "path": "aria_nbv/aria_nbv/rollouts/qh_reader.py"
+    },
+    {
+      "owner": "data_handling",
+      "path": "aria_nbv/aria_nbv/data_handling/qh.py"
+    },
+    {
+      "owner": "legacy_actor_adapter",
+      "path": "aria_nbv/aria_nbv/data_handling/offline/actor.py",
+      "zero_when_missing_in_final": true
+    },
+    {
+      "owner": "lightning_datamodule",
+      "path": "aria_nbv/aria_nbv/lightning/qh_datamodule.py"
+    }
+  ],
+  "future_symbols": [
+    {
+      "owner": "shared_actor_reader",
+      "path": "aria_nbv/aria_nbv/data_handling/offline/store.py",
+      "kind": "function",
+      "name": "read_actor_snippet"
+    },
+    {
+      "owner": "scorer_adapter_input",
+      "path": "aria_nbv/aria_nbv/lightning/qh_module.py",
+      "kind": "class",
+      "name": "_QhScorerInputs"
+    },
+    {
+      "owner": "scorer_adapter_flatten",
+      "path": "aria_nbv/aria_nbv/lightning/qh_module.py",
+      "kind": "function",
+      "name": "_flatten_qh_scorer_inputs"
+    }
+  ]
+}
