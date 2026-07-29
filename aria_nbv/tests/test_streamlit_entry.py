@@ -21,7 +21,7 @@ def _seed_default_ase_paths(root: Path) -> None:
     taxonomy.write_text("", encoding="utf-8")
 
 
-def test_streamlit_argv_disables_watchdog_by_default(monkeypatch) -> None:
+def test_streamlit_argv_uses_polling_watcher_by_default(monkeypatch) -> None:
     monkeypatch.delenv("STREAMLIT_SERVER_FILE_WATCHER_TYPE", raising=False)
 
     argv = _build_streamlit_argv(Path("/tmp/app.py"), [])
@@ -30,7 +30,7 @@ def test_streamlit_argv_disables_watchdog_by_default(monkeypatch) -> None:
         "streamlit",
         "run",
         "--server.fileWatcherType",
-        "none",
+        "poll",
         "/tmp/app.py",
     ]
 
@@ -79,7 +79,7 @@ def test_streamlit_entry_rewrites_sys_argv(monkeypatch) -> None:
         "streamlit",
         "run",
         "--server.fileWatcherType",
-        "none",
+        "poll",
     ]
     assert captured_argv[4].endswith("streamlit_app.py")
 
