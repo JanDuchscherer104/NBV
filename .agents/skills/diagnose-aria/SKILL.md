@@ -74,7 +74,8 @@ Use the smallest tool that can reproduce or inspect the symptom.
 
 - Streamlit entrypoint:
   `cd aria_nbv && uv run nbv-st --server.port <port>`
-  The wrapper disables Streamlit file watching by default; pass
+  The wrapper uses Streamlit's polling watcher by default, avoiding watchdog
+  inotify exhaustion while still reloading source edits. Pass
   `--server.fileWatcherType=<mode>` before `--` only when watcher behavior is
   the suspected issue.
 - Streamlit smoke and panel tests:
