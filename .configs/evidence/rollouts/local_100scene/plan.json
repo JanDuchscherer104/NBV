@@ -1,0 +1,19 @@
+{
+  "campaign_id": "v1-local-100scene-t1",
+  "config": "/home/jd/repos/ARIA-NBV/.configs/generation/rollouts/campaigns/build_rollouts_v1_local_100scene.toml",
+  "keep_free_disk_gib": 75.0,
+  "max_failed_units": 3,
+  "max_new_shards": 8,
+  "paired_panel_scenes": 20,
+  "profiles": {
+    "free_shell_upper_bound_60": 48,
+    "radial_backtrack_60": 47,
+    "realistic_core_60": 100,
+    "rich_local_60": 45
+  },
+  "root_candidates": 576,
+  "scene_profile_shards": 240,
+  "scenes": 100,
+  "selected_roots": 100,
+  "stop_after_minutes": 120.0
+}
