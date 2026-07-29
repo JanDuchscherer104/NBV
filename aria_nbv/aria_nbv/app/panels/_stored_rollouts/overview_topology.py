@@ -6,6 +6,7 @@ import html
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -27,6 +28,8 @@ This section establishes whether the selected artifact can support later claims.
 - **Currentness:** schema validation checks persisted structure, row linkage, masks, and required provenance. A stale store remains inspectable as metadata but cannot support scientific plots or Rerun claims.
 - **Provenance:** topology edges distinguish embedded payloads, resolved pointers, inferred paths, and missing links. Edge width is a relationship count, not data volume or effect size.
 - **Roles:** actor-visible inputs, privileged oracle/evaluation data, derived training views, and provenance are separate evidence classes.
+- **Reference coverage:** source scenes and unique snippet windows are shown against the full 100-scene, 4,608-window GT-mesh ASE target. This scale footprint is distinct from an exact raw-tar membership audit.
+- **Physical footprint:** on-disk Zarr bytes and bytes per rollout, step, and candidate describe storage cost; they are distinct from robot acquisition cost.
 
 Healthy stores have one resolvable owner for required modalities and exact source hashes. Missing or ambiguous links indicate incomplete local provenance; they do not silently invalidate or repair numeric values.
 """
@@ -155,6 +158,42 @@ def _render_header_metrics(summary: dict[str, object], *, validation_ok: bool) -
             rollout_value, rollout_delta = _split_metric(summary.get("rollout_split_counts"))
             st.metric("Rollout Split (Train/Val/Test)", rollout_value, delta=rollout_delta, delta_color="off")
 
+    coverage, footprint = st.columns(2)
+    with coverage:
+        with st.container(border=True):
+            st.markdown("##### Reference Dataset Coverage")
+            st.caption("Source footprint against the full 100-scene, 4,608-window GT-mesh ASE target.")
+            first, second = st.columns(2)
+            first.metric(
+                "GT-Mesh Scene Coverage",
+                _header_coverage_percentage(summary.get("source_scenes"), summary.get("reference_scene_count")),
+            )
+            second.metric(
+                "GT-Mesh Snippet Coverage",
+                _header_coverage_percentage(summary.get("source_snippets"), summary.get("reference_snippet_count")),
+            )
+            first, second = st.columns(2)
+            first.metric(
+                "Unrepresented GT-Mesh Scenes",
+                _coverage_gap(summary.get("source_scenes"), summary.get("reference_scene_count")),
+            )
+            second.metric(
+                "Unrepresented GT-Mesh Snippets",
+                _coverage_gap(summary.get("source_snippets"), summary.get("reference_snippet_count")),
+            )
+
+    with footprint:
+        with st.container(border=True):
+            st.markdown("##### Physical Store Footprint")
+            st.caption("On-disk Zarr payload and normalized storage cost; this is not the acquisition-cost metric.")
+            first, second = st.columns(2)
+            first.metric("Physical Store Footprint", _header_bytes_value(summary.get("store_bytes")))
+            second.metric("Zarr Files", _header_metric_value(summary.get("store_files")))
+            first, second = st.columns(2)
+            first.metric("Bytes / Factual Rollout", _header_bytes_value(summary.get("bytes_per_rollout")))
+            second.metric("Bytes / Factual Step", _header_bytes_value(summary.get("bytes_per_step")))
+            st.metric("Bytes / Candidate", _header_bytes_value(summary.get("bytes_per_candidate")))
+
     st.caption(
         "Coverage follows the persisted target table and target-to-rollout linkage. Per-scene target counts cover represented "
         "scenes only; targets without a rollout trace remain visible in the coverage denominator but cannot be assigned a scene."
@@ -193,6 +232,125 @@ def _header_coverage_value(numerator: object, denominator: object) -> str:
     if not isinstance(numerator, int) or not isinstance(denominator, int):
         return "Unavailable"
     return f"{numerator:,} / {denominator:,}"
+
+
+def _header_coverage_percentage(numerator: object, denominator: object) -> str:
+    """Format reference coverage as a numerator, denominator, and percentage."""
+
+    value = _header_coverage_value(numerator, denominator)
+    ratio = _header_ratio(numerator, denominator)
+    return value if ratio is None else f"{value} ({100.0 * ratio:.2f}%)"
+
+
+def _coverage_gap(numerator: object, denominator: object) -> str:
+    """Format the unrepresented part of one fixed reference population."""
+
+    if not isinstance(numerator, int) or not isinstance(denominator, int):
+        return "Unavailable"
+    return f"{max(0, denominator - numerator):,}"
+
+
+def _header_bytes_value(value: object) -> str:
+    """Format a finite byte count with an explicit binary unit."""
+
+    if not isinstance(value, (int, float)) or value < 0:
+        return "Unavailable"
+    amount = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if amount < 1024.0 or unit == "TiB":
+            return f"{amount:.1f} {unit}"
+        amount /= 1024.0
+    return "Unavailable"
+
+
+def _render_dataset_coverage_footprint(summary: dict[str, object]) -> None:
+    """Render compact coverage composition and source-footprint plots."""
+
+    st.markdown("#### Dataset Coverage & Footprint")
+    st.caption(
+        "Coverage is the source footprint relative to the 100-scene, 4,608-window GT-mesh reference. "
+        "It measures scale, not target-label or QH-supervision coverage."
+    )
+    reference, scene_footprint = st.columns(2)
+    with reference:
+        _render_plot(_reference_coverage_figure(summary))
+    with scene_footprint:
+        figure = _source_footprint_figure(summary)
+        if figure is None:
+            st.info("No scene-resolved source footprint is available in this store manifest.")
+        else:
+            _render_plot(figure)
+
+
+def _reference_coverage_figure(summary: dict[str, object]):
+    """Build a compositional represented-versus-unrepresented coverage chart."""
+
+    populations = (
+        ("GT-Mesh Scenes", "source_scenes", "reference_scene_count"),
+        ("GT-Mesh Snippet Windows", "source_snippets", "reference_snippet_count"),
+    )
+    rows: list[dict[str, object]] = []
+    for population, observed_key, reference_key in populations:
+        observed = summary.get(observed_key)
+        reference = summary.get(reference_key)
+        if not isinstance(observed, int) or not isinstance(reference, int):
+            continue
+        rows.extend(
+            (
+                {"population": population, "coverage": "Represented", "count": min(observed, reference)},
+                {"population": population, "coverage": "Unrepresented", "count": max(0, reference - observed)},
+            )
+        )
+    if not rows:
+        figure = go.Figure()
+        figure.add_annotation(text="Reference coverage is unavailable", showarrow=False)
+        figure.update_layout(title="Reference Dataset Coverage", height=310)
+        return figure
+    figure = px.bar(
+        pd.DataFrame(rows),
+        y="population",
+        x="count",
+        color="coverage",
+        orientation="h",
+        text="count",
+        barmode="stack",
+        color_discrete_map={"Represented": "#14b8a6", "Unrepresented": "#475569"},
+        labels={"population": "Reference Population", "count": "Count", "coverage": "Coverage"},
+        title="Reference Dataset Coverage",
+    )
+    figure.update_layout(height=310)
+    return figure
+
+
+def _source_footprint_figure(summary: dict[str, object]):
+    """Build a per-scene source row/window footprint chart when manifest detail exists."""
+
+    footprint = summary.get("source_footprint_by_scene")
+    if not isinstance(footprint, dict):
+        return None
+    rows: list[dict[str, object]] = []
+    for scene, values in sorted(footprint.items()):
+        if not isinstance(values, dict):
+            continue
+        for label, key in (("Source Rows", "source_rows"), ("Unique Snippet Windows", "source_snippets")):
+            value = values.get(key)
+            if isinstance(value, int):
+                rows.append({"scene": str(scene), "measure": label, "count": value})
+    if not rows:
+        return None
+    figure = px.bar(
+        pd.DataFrame(rows),
+        x="scene",
+        y="count",
+        color="measure",
+        barmode="group",
+        text="count",
+        color_discrete_map={"Source Rows": "#38bdf8", "Unique Snippet Windows": "#a78bfa"},
+        labels={"scene": "Scene", "count": "Source Footprint", "measure": "Population"},
+        title="Source Footprint by Represented Scene",
+    )
+    figure.update_layout(height=310)
+    return figure
 
 
 def _header_distribution_value(value: object) -> str:
@@ -248,6 +406,8 @@ def _render_trust_and_topology(
     st.dataframe(inv_df, hide_index=True, width="stretch")
     _download_frame("Download invariant CSV", "rollout-invariants.csv", inv_df)
     _download_json("Download invariant JSON", "rollout-invariants.json", invariants)
+
+    _render_dataset_coverage_footprint(session.header_summary)
 
     vin_dirs = discover_vin_store_dirs(paths.offline_cache_dir)
     try:
