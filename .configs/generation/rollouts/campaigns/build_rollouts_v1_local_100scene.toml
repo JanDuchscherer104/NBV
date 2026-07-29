@@ -1,0 +1,841 @@
+# Local-only, resumable V1 rollout campaign over all 100 GT-mesh ASE scenes.
+#
+# The campaign selects one deterministic root per scene with shard-level reserves.
+# Every actor-visible detected target with oriented 3D IoU > 0.20 is admitted;
+# omitted target caps mean all matched targets. Each completed source/profile
+# shard is immutable and registered into the append-only rollout collection.
+# Re-running the same command validates and skips completed work.
+#
+# Plan: aria_nbv/.venv/bin/nbv-plan-rollout-campaign --config-path <this-file>
+# Run:  aria_nbv/.venv/bin/nbv-run-rollout-campaign  --config-path <this-file>
+# Stop: Ctrl-C; resume with the same run command.
+campaign_id = "v1-local-100scene-t1"
+seed = 20260728
+expected_scene_count = 100
+ase_efm_dir = ".data/ase_efm"
+ase_meshes_dir = ".data/ase_meshes"
+output_root = ".data/offline_cache/rollout_campaign_v1_local_100scene"
+evidence_dir = ".configs/evidence/rollouts/local_100scene"
+collection_dir = ".data/offline_cache/rollout_collection_v1_local_100scene"
+realistic_profile = "realistic_core_60"
+challenger_profiles = [
+    "rich_local_60",
+    "radial_backtrack_60",
+    "free_shell_upper_bound_60",
+]
+paired_panel_scene_count = 20
+
+[source_writer]
+include_backbone = true
+include_depths = false
+include_pointclouds = false
+include_diagnostic_payloads = false
+include_gt_obbs = true
+include_detected_obbs = true
+include_trajectory_metadata = true
+vin_pad_points = 50000
+semidense_max_points = 50000
+semidense_include_obs_count = false
+max_candidates = 1
+samples_per_shard = 1
+max_samples = 1
+train_val_split = 0.0
+overwrite = false
+num_failures_allowed = 0
+backbone_numeric_keep_fields = [
+    "t_world_voxel",
+    "voxel_extent",
+    "occ_pr",
+    "occ_input",
+    "free_input",
+    "counts",
+    "cent_pr",
+    "pts_world",
+]
+backbone_payload_keep_fields = [
+    "t_world_voxel",
+    "voxel_extent",
+    "occ_pr",
+    "cent_pr",
+    "bbox_pr",
+    "clas_pr",
+    "cent_pr_nms",
+    "obbs_pr_nms",
+    "obb_pred",
+    "obb_pred_viz",
+    "obb_pred_sem_id_to_name",
+    "obb_pred_probs_full",
+    "obb_pred_probs_full_viz",
+]
+
+[source_writer.store]
+store_dir = ".data/offline_cache/rollout_campaign_v1_local_100scene/source-placeholder"
+
+[source_writer.dataset]
+atek_variant = "efm"
+scene_ids = []
+snippet_ids = []
+snippet_key_filter = []
+batch_size = 1
+wds_shuffle = false
+wds_repeat = false
+load_meshes = true
+require_mesh = true
+mesh_simplify_ratio = 1.0
+crop_mesh = false
+cache_meshes = true
+device = "cpu"
+
+[source_writer.labeler]
+device = "cuda"
+backprojection_stride = 16
+
+[source_writer.labeler.generator]
+device = "cuda"
+camera_label = "rgb"
+num_samples = 4
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.5
+max_radius = 1.8
+min_elev_deg = -20.0
+max_elev_deg = 25.0
+delta_azimuth_deg = 170.0
+sampling_strategy = "uniform_sphere"
+min_distance_to_mesh = 0.2
+ensure_collision_free = false
+ensure_free_space = true
+collision_backend = "pytorch3d"
+view_direction_mode = "radial_away"
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[source_writer.labeler.depth]
+max_candidates_final = 1
+resolution_scale = 0.05
+
+[source_writer.labeler.depth.renderer]
+device = "cuda"
+znear = 0.001
+zfar = 20.0
+cull_backfaces = true
+blur_radius = 0.0
+bin_size = 0
+dtype = "float32"
+max_views_per_batch = 1
+
+[source_writer.labeler.oracle]
+fusion_voxel_size_m = 0.05
+fusion_max_points = 1024
+
+[source_writer.backbone]
+model_cfg = ".configs/models/evl/evl_inf_desktop.yaml"
+model_ckpt = ".logs/ckpts/model_lite.pth"
+device = "cuda"
+freeze = true
+features_mode = "heads"
+
+[writer]
+max_samples = 1
+require_label_valid = true
+min_valid_root_candidates = 15
+log_timing = true
+verbosity = 1
+
+[writer.source]
+limit = 1
+return_format = "sample"
+include_efm_snippet = true
+include_gt_mesh = true
+load_backbone = true
+load_candidates = false
+load_depths = false
+load_candidate_pcs = false
+load_gt_obbs = true
+load_detected_obbs = true
+load_trajectory_metadata = true
+map_location = "cuda"
+verbosity = 1
+
+[writer.source.store]
+store_dir = ".data/offline_cache/rollout_campaign_v1_local_100scene/source-placeholder"
+
+[writer.target_scorer]
+backprojection_stride = 2
+target_crop_margin_m = 0.05
+min_current_target_points = 1
+include_scene_rri = false
+eval_point_cloud_source = "ase_gt_depth_root"
+eval_camera_label = "rgb"
+eval_fusion_voxel_size_m = 0.02
+eval_fusion_max_points = 200000
+target_eval_max_points = 50000
+reward_mode = "root_normalized_gain"
+eval_depth_far_m = 20.0
+target_crop_policy = "gt_obb_oriented_any_vertex_v1"
+scene_crop_policy = "snippet_occupancy_extent_v1"
+verbosity = 1
+log_timing = true
+
+[writer.target_scorer.oracle]
+fusion_voxel_size_m = 0.02
+fusion_max_points = 200000
+
+[writer.target_scorer.depth]
+device = "cuda"
+max_candidates_final = 60
+resolution_scale = 0.2
+verbosity = 1
+
+[writer.target_scorer.depth.renderer]
+device = "cuda"
+zfar = 20.0
+znear = 0.001
+cull_backfaces = false
+blur_radius = 0.0
+bin_size = 0
+max_views_per_batch = 2
+dtype = "float32"
+is_debug = false
+verbosity = 1
+
+[writer.selected_depth]
+enabled = true
+width_px = 240
+height_px = 240
+chunk_steps = 16
+
+[writer.store]
+store_dir = ".data/offline_cache/rollout_campaign_v1_local_100scene/rollout-placeholder.zarr"
+target_protocol_version = "v1_observed"
+field_retention_policy = "compact_selected_heavy"
+source_offline_store_version = "vin-offline-v7"
+split_manifest_hash = "local-100scene-campaign-v1"
+discount_gamma = 1.0
+q_h_chunk_states = 64
+target_eval_crop_max_points = 50000
+target_eval_crops_enabled = false
+
+[writer.observed_target_task_sampler]
+target_protocol_version = "v1_observed"
+gt_iou_threshold = 0.2
+seed = 20260728
+policy = "uniform_without_replacement"
+
+[target_sampler]
+target_protocol_version = "v1_observed"
+gt_iou_threshold = 0.2
+seed = 20260728
+policy = "uniform_without_replacement"
+
+[profiles.realistic_core_60.candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 60
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.25
+max_radius = 1.25
+min_elev_deg = -12.0
+max_elev_deg = 18.0
+delta_azimuth_deg = 120.0
+sampling_strategy = "forward_powerspherical"
+kappa = 8.0
+position_mode = "upper_bound_free_shell"
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = true
+max_step_distance_m = 1.0
+max_height_delta_m = 0.25
+max_backward_step_m = 0.25
+max_yaw_delta_deg = 70.0
+device = "cuda"
+verbosity = 2
+is_debug = false
+collect_rule_masks = false
+collect_debug_stats = true
+view_direction_mode = "radial_away"
+view_kappa = 8.0
+view_max_angle_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[[profiles.realistic_core_60.candidate_mixture.components]]
+name = "forward_local"
+count = 24
+strategy = "forward_rig"
+view_mode = "forward_rig"
+position_mode = "forward_local"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.realistic_core_60.candidate_mixture.components]]
+name = "target_bearing_local"
+count = 24
+strategy = "target_point"
+view_mode = "target_point"
+position_mode = "target_bearing_local"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.realistic_core_60.candidate_mixture.components]]
+name = "lateral_target_bypass"
+count = 12
+strategy = "target_point"
+view_mode = "target_point"
+position_mode = "lateral_target_bypass"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.realistic_core_60.recipes]]
+name = "random_valid_h1_s0"
+
+[profiles.realistic_core_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "random_valid"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.realistic_core_60.recipes]]
+name = "farthest_history_h1"
+
+[profiles.realistic_core_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "farthest_from_history"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.realistic_core_60.recipes]]
+name = "oracle_greedy_h1"
+
+[profiles.realistic_core_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.realistic_core_60.recipes]]
+name = "oracle_lookahead_h2"
+
+[profiles.realistic_core_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.realistic_core_60.recipes]]
+name = "temperature_h2_t10_s0"
+
+[profiles.realistic_core_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "temperature_softmax"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[profiles.rich_local_60.candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 60
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.25
+max_radius = 1.25
+min_elev_deg = -12.0
+max_elev_deg = 18.0
+delta_azimuth_deg = 120.0
+sampling_strategy = "forward_powerspherical"
+kappa = 8.0
+position_mode = "upper_bound_free_shell"
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = true
+max_step_distance_m = 1.25
+max_height_delta_m = 0.6
+max_backward_step_m = 0.35
+max_yaw_delta_deg = 85.0
+device = "cuda"
+verbosity = 2
+is_debug = false
+collect_rule_masks = false
+collect_debug_stats = true
+view_direction_mode = "radial_away"
+view_kappa = 8.0
+view_max_angle_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[[profiles.rich_local_60.candidate_mixture.components]]
+name = "target_bearing_local"
+count = 18
+strategy = "target_point"
+view_mode = "target_point"
+position_mode = "target_bearing_local"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.rich_local_60.candidate_mixture.components]]
+name = "forward_local"
+count = 18
+strategy = "forward_rig"
+view_mode = "forward_rig"
+position_mode = "forward_local"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.rich_local_60.candidate_mixture.components]]
+name = "lateral_target_bypass"
+count = 12
+strategy = "target_point"
+view_mode = "target_point"
+position_mode = "lateral_target_bypass"
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.rich_local_60.candidate_mixture.components]]
+name = "local_refinement"
+count = 6
+strategy = "radial_towards"
+view_mode = "radial_towards"
+position_mode = "local_refinement"
+min_radius = 0.2
+max_radius = 0.7
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.rich_local_60.candidate_mixture.components]]
+name = "revisit_backtrack"
+count = 6
+strategy = "forward_rig"
+view_mode = "forward_rig"
+position_mode = "revisit_backtrack"
+min_radius = 0.25
+max_radius = 0.9
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.rich_local_60.recipes]]
+name = "random_valid_h1_s0"
+
+[profiles.rich_local_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "random_valid"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.rich_local_60.recipes]]
+name = "farthest_history_h1"
+
+[profiles.rich_local_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "farthest_from_history"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.rich_local_60.recipes]]
+name = "oracle_greedy_h1"
+
+[profiles.rich_local_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.rich_local_60.recipes]]
+name = "oracle_lookahead_h2"
+
+[profiles.rich_local_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.rich_local_60.recipes]]
+name = "temperature_h2_t10_s0"
+
+[profiles.rich_local_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "temperature_softmax"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[profiles.radial_backtrack_60.candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 48
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.25
+max_radius = 1.1
+min_elev_deg = -12.0
+max_elev_deg = 18.0
+delta_azimuth_deg = 110.0
+sampling_strategy = "forward_powerspherical"
+kappa = 8.0
+position_mode = "upper_bound_free_shell"
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = true
+max_step_distance_m = 1.25
+max_height_delta_m = 0.35
+max_backward_step_m = 0.45
+max_yaw_delta_deg = 90.0
+device = "cpu"
+verbosity = 1
+is_debug = false
+collect_rule_masks = true
+collect_debug_stats = true
+view_direction_mode = "radial_away"
+view_kappa = 8.0
+view_max_angle_deg = 0.0
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[[profiles.radial_backtrack_60.candidate_mixture.components]]
+name = "radial_towards_target_bearing"
+count = 20
+strategy = "radial_towards"
+view_mode = "radial_towards"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 1.1
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.radial_backtrack_60.candidate_mixture.components]]
+name = "radial_away_target_bearing"
+count = 20
+strategy = "radial_away"
+view_mode = "radial_away"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 1.1
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.radial_backtrack_60.candidate_mixture.components]]
+name = "revisit_backtrack"
+count = 15
+strategy = "forward_rig"
+view_mode = "forward_rig"
+position_mode = "revisit_backtrack"
+min_radius = 0.25
+max_radius = 0.9
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.radial_backtrack_60.candidate_mixture.components]]
+name = "target_point_anchor"
+count = 5
+strategy = "target_point"
+view_mode = "target_point"
+position_mode = "target_bearing_local"
+min_radius = 0.35
+max_radius = 0.9
+view_max_azimuth_deg = 0.0
+view_max_elevation_deg = 0.0
+
+[[profiles.radial_backtrack_60.recipes]]
+name = "random_valid_h1_s0"
+
+[profiles.radial_backtrack_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "random_valid"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.radial_backtrack_60.recipes]]
+name = "farthest_history_h1"
+
+[profiles.radial_backtrack_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "farthest_from_history"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.radial_backtrack_60.recipes]]
+name = "oracle_greedy_h1"
+
+[profiles.radial_backtrack_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.radial_backtrack_60.recipes]]
+name = "oracle_lookahead_h2"
+
+[profiles.radial_backtrack_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.radial_backtrack_60.recipes]]
+name = "temperature_h2_t10_s0"
+
+[profiles.radial_backtrack_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "temperature_softmax"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[profiles.free_shell_upper_bound_60.candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 60
+oversample_factor = 2.0
+max_resamples = 2
+align_to_gravity = true
+min_radius = 0.5
+max_radius = 1.8
+min_elev_deg = -20.0
+max_elev_deg = 25.0
+delta_azimuth_deg = 170.0
+sampling_strategy = "uniform_sphere"
+kappa = 4.0
+position_mode = "upper_bound_free_shell"
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = false
+device = "cuda"
+verbosity = 2
+is_debug = false
+collect_rule_masks = false
+collect_debug_stats = false
+view_direction_mode = "radial_away"
+view_kappa = 4.0
+view_max_angle_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
+view_roll_jitter_deg = 0.0
+seed = 0
+
+[[profiles.free_shell_upper_bound_60.candidate_mixture.components]]
+name = "upper_bound_free_shell"
+count = 60
+strategy = "radial_away"
+view_mode = "radial_away"
+position_mode = "upper_bound_free_shell"
+
+[[profiles.free_shell_upper_bound_60.recipes]]
+name = "random_valid_h1_s0"
+
+[profiles.free_shell_upper_bound_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "random_valid"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.free_shell_upper_bound_60.recipes]]
+name = "farthest_history_h1"
+
+[profiles.free_shell_upper_bound_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "farthest_from_history"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.free_shell_upper_bound_60.recipes]]
+name = "oracle_greedy_h1"
+
+[profiles.free_shell_upper_bound_60.recipes.policy]
+horizon = 1
+branch_factor = 1
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.free_shell_upper_bound_60.recipes]]
+name = "oracle_lookahead_h2"
+
+[profiles.free_shell_upper_bound_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "oracle_greedy"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[[profiles.free_shell_upper_bound_60.recipes]]
+name = "temperature_h2_t10_s0"
+
+[profiles.free_shell_upper_bound_60.recipes.policy]
+horizon = 2
+branch_factor = 2
+beam_width = 2
+selection_policy = "temperature_softmax"
+selection_temperature = 1.0
+robust_temperature_logits = true
+min_history_distance_m = 0.0
+min_sibling_distance_m = 0.0
+min_sibling_yaw_deg = 0.0
+min_sibling_target_bearing_deg = 0.0
+require_sibling_strategy_diversity = false
+seed = 0
+
+[runtime]
+max_new_shards = 8
+stop_after_minutes = 120.0
+keep_free_disk_gib = 75.0
+max_failed_units = 3
