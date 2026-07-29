@@ -33,6 +33,8 @@ from aria_nbv.oracle.pipelines.shards import (
 )
 from aria_nbv.oracle.target_rri import TargetRriInvalidity
 from aria_nbv.oracle.target_selection import (
+    OBSERVED_TARGET_TASK_SOURCE,
+    ObservedTargetTask,
     OracleTargetTask,
     TargetTaskIdentityStatus,
 )
@@ -373,6 +375,80 @@ def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:
     assert config.max_targets_per_sample is None
     with pytest.raises(ValueError, match="max_targets_per_sample"):
         RolloutDatasetWriterConfig.model_validate({"max_targets_per_sample": 0})
+
+
+def test_v1_rollout_writer_persists_observed_descriptor_and_privileged_gt_match() -> None:
+    descriptor = TargetDescriptor(
+        sem_id=4,
+        class_name="chair",
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0),
+        extents_m=(0.5, 0.6, 0.7),
+        relative_pose_reference_object=(
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            2.0,
+            3.0,
+        ),
+    )
+    task = ObservedTargetTask(
+        source_index=7,
+        target_row_id=7,
+        target_id="observed-chair-7",
+        descriptor=descriptor,
+        inst_id=19,
+        confidence=0.82,
+        matched_gt_target_row_id=3,
+        matched_gt_target_id="gt-chair-3",
+        gt_match_iou=0.61,
+        gt_match_status=TargetTaskIdentityStatus.MATCHED.value,
+        gt_match_reason="VALID",
+        selected_rank=0,
+        selection_probability=1.0,
+    )
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = SimpleNamespace(
+        store=SimpleNamespace(target_protocol_version="v1_observed"),
+        target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
+    )
+
+    lineage = writer._target_lineage(task, target_rank=0)
+
+    assert lineage.target_source == OBSERVED_TARGET_TASK_SOURCE
+    assert lineage.target_source_index == 7
+    assert lineage.target_center_world == descriptor.center_world
+    assert lineage.matched_gt_target_row_id == 3
+    assert lineage.matched_gt_target_id == "gt-chair-3"
+    assert lineage.gt_match_iou == pytest.approx(0.61)
+    assert lineage.gt_match_score == pytest.approx(0.61)
+    assert lineage.gt_match_status == "matched"
+
+
+def test_v1_rollout_writer_config_requires_uncapped_observed_targets() -> None:
+    config = RolloutDatasetWriterConfig.model_validate(
+        {
+            "store": {"target_protocol_version": "v1_observed"},
+            "max_targets_per_sample": None,
+            "observed_target_task_sampler": {"max_targets_per_sample": None, "gt_iou_threshold": 0.2},
+        }
+    )
+
+    assert config.store.target_protocol_version == "v1_observed"
+    assert config.observed_target_task_sampler.max_targets_per_sample is None
+    with pytest.raises(ValueError, match="observed_target_task_sampler.max_targets_per_sample=None"):
+        RolloutDatasetWriterConfig.model_validate(
+            {
+                "store": {"target_protocol_version": "v1_observed"},
+                "observed_target_task_sampler": {"max_targets_per_sample": 1},
+            }
+        )
 
 
 def test_rollout_writer_records_typed_root_evidence_skip(monkeypatch: pytest.MonkeyPatch) -> None:
