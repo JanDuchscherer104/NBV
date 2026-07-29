@@ -352,7 +352,7 @@ details{{margin-top:24px;border-top:1px solid var(--line);padding-top:14px}} cod
 .toolbar{{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}} .current{{margin-left:auto;color:var(--muted)}} .empty{{padding:60px 0;text-align:center;color:var(--muted)}}
 @media(max-width:760px){{.layout{{display:block}}aside{{position:static;height:320px;border-right:0;border-bottom:1px solid var(--line)}}main{{padding:18px}}.actions{{grid-template-columns:1fr}}.current{{width:100%;margin:0}}}}
 </style></head><body>
-<header><h1>Scaffold decision review</h1><p>One fact at a time. Press Y, N, or C. Decisions stay in this browser until exported.</p></header>
+<header><h1>Scaffold decision review</h1><p>One candidate at a time. Press Y, N, or C. Decisions stay in this browser until exported.</p></header>
 <div class="layout"><aside>
 <strong>Progress</strong><div class="progress"><span id="bar"></span></div><div id="progressText"></div>
 <div class="stats"><div class="stat"><b id="yesCount">0</b>Yes</div><div class="stat"><b id="noCount">0</b>No</div><div class="stat"><b id="customCount">0</b>Custom</div></div>
