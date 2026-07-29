@@ -38,6 +38,7 @@ def _candidate(
     q_train: bool | None = True,
     selected: bool | None = False,
     reason_bitset: int | None = 1,
+    reason_version: str | None = "rollout-invalidity-v1",
 ) -> dict[str, object]:
     return {
         "candidate_row_id": candidate_id,
@@ -62,6 +63,7 @@ def _candidate(
         "q_train": q_train,
         "selected": selected,
         "invalid_reason_bitset": reason_bitset,
+        "reason_code_version": reason_version,
         "target_rri": -1000.0,
     }
 
@@ -154,6 +156,24 @@ def test_reason_bitset_intersections_preserve_every_reason_and_version() -> None
     assert row["mean_state_fraction"] == 1.0
 
 
+def test_reason_bitset_intersections_block_unsupported_or_missing_versions() -> None:
+    evidence = candidate_validity_evidence(
+        [
+            _candidate(0, actor=False, reason_bitset=1, reason_version="rollout-invalidity-v2"),
+            _candidate(1, actor=False, reason_bitset=1, reason_version=None),
+        ]
+    )
+
+    rows = evidence["reason_intersection_rows"]
+    assert not any(row["invalid_reason_bitset"] == 1 for row in rows)
+    unsupported = _find(rows, blocker="unsupported_reason_code_version")
+    assert unsupported["reason_version"] == "rollout-invalidity-v2"
+    assert unsupported["full_count"] == 1
+    missing = _find(rows, blocker="missing_reason_code_version")
+    assert missing["reason_version"] is None
+    assert missing["full_count"] == 1
+
+
 def test_conditional_coverage_macros_state_then_scene_not_candidate_mass() -> None:
     rows = [_candidate(index, scene="scene-a", step=0, actor=True, oracle=True) for index in range(10)]
     rows.extend(
@@ -240,11 +260,15 @@ def _audit_artifact(
                 stratum_id=stratum_id,
                 cohort_id=base.endpoint_rows[0].match_identity.exact_match_sha256,
                 scene_id=str(spec.get("scene", "scene-1")),
-                rollout_id="rollout-1",
+                rollout_id=str(spec.get("rollout", "rollout-1")),
                 candidate_id=f"candidate-{index}",
-                depth=0,
+                depth=int(spec.get("depth", 0)),
                 candidate_family="shell",
-                persisted_contract=_predicate_contract(str(spec["kind"])),
+                persisted_contract=_predicate_contract(
+                    str(spec["kind"]),
+                    threshold=float(spec.get("persisted_threshold", 1.0)),
+                    semantic=str(spec.get("persisted_semantic", "default")),
+                ),
                 independent_contract=_predicate_contract(
                     str(spec["kind"]),
                     threshold=float(spec.get("independent_threshold", 1.0)),
