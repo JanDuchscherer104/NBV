@@ -43,7 +43,8 @@ def test_load_corpus_uses_reconciled_statements_without_raw_messages(
 
     assert [item.id for item in items] == ["intent:cluster-1"]
     assert items[0].statement == "Keep one authoritative owner."
-    assert items[0].sources == ("private:clusters.jsonl#cluster-1",)
+    assert items[0].sources[0].startswith("private:corpus:")
+    assert items[0].sources[0].endswith("#cluster-1")
 
 
 def test_load_omx_limits_extraction_to_goal_sections(tmp_path: Path) -> None:

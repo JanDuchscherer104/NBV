@@ -30,6 +30,7 @@ python3 scripts/scaffold_review.py build \
 The command writes a self-contained `index.html`, a local Quarto wrapper, and a
 source manifest under `.artifacts/scaffold-review/`. Open the HTML directly.
 Decisions remain in browser local storage until exported as JSON.
+The manifest records the exact corpus SHA-256 used to build the board.
 The optional `--items` input contains explicit owner-authored findings; live PR
 metadata contributes observations only. Repo-local output is restricted to the
 ignored `.artifacts/` directory.

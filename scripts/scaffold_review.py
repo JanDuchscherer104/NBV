@@ -84,6 +84,7 @@ def _validate_item(item: ReviewItem) -> None:
 def load_corpus(path: Path) -> list[ReviewItem]:
     """Load reconciled intent clusters without copying raw transcript text."""
 
+    corpus_digest = hashlib.sha256(path.read_bytes()).hexdigest()
     items: list[ReviewItem] = []
     for row in _read_jsonl(path):
         themes = row.get("themes") or ["core"]
@@ -95,7 +96,9 @@ def load_corpus(path: Path) -> list[ReviewItem]:
                 theme=str(themes[0]),
                 title="Proposed scaffold intent",
                 statement=statement,
-                sources=(f"private:{path.name}#{row.get('cluster_id', 'cluster')}",),
+                sources=(
+                    f"private:corpus:{corpus_digest}#{row.get('cluster_id', 'cluster')}",
+                ),
                 details=tuple(
                     f"Theme: {THEME_LABELS.get(str(theme), str(theme))}"
                     for theme in themes
@@ -418,7 +421,14 @@ def build(args: argparse.Namespace) -> int:
             for theme in sorted({item.theme for item in items})
         },
         "sources": {
-            "corpus": args.corpus.name if args.corpus else None,
+            "corpus": (
+                {
+                    "file": args.corpus.name,
+                    "sha256": hashlib.sha256(args.corpus.read_bytes()).hexdigest(),
+                }
+                if args.corpus
+                else None
+            ),
             "omx": [path.name for path in args.omx],
             "review_items": [path.name for path in args.items],
             "agents_db": ".agents/{issues,todos,refactors}.toml",
