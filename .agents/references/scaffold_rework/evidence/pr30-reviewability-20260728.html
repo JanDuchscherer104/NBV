@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #30 Reviewability Audit</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5d6874;
+      --paper: #f7f8fa;
+      --panel: #ffffff;
+      --line: #d9dee5;
+      --good: #147d52;
+      --good-bg: #e8f6ef;
+      --warn: #9a5a00;
+      --warn-bg: #fff4d8;
+      --bad: #a83232;
+      --bad-bg: #fdecec;
+      --info: #1769aa;
+      --info-bg: #eaf3fb;
+      --accent: #6b4f9d;
+      --shadow: 0 2px 12px rgba(23, 32, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--info); }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    header {
+      color: white;
+      background: #192431;
+      border-bottom: 4px solid #d05252;
+    }
+    .header-inner, main, .nav-inner { width: min(1420px, calc(100% - 40px)); margin: 0 auto; }
+    .header-inner { padding: 38px 0 30px; }
+    .eyebrow { color: #bcd7eb; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    h1 { margin: 8px 0 10px; max-width: 980px; font-size: clamp(30px, 4vw, 54px); line-height: 1.05; letter-spacing: 0; }
+    .lede { max-width: 970px; margin: 0; color: #dce5ec; font-size: 18px; }
+    .metadata { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 22px; color: #b9c5ce; font-size: 13px; }
+    nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--line); }
+    .nav-inner { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; }
+    nav a { flex: 0 0 auto; padding: 7px 9px; color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 650; }
+    nav a:hover { color: var(--info); background: var(--info-bg); }
+    main { padding: 30px 0 80px; }
+    section { margin: 0 0 44px; scroll-margin-top: 64px; }
+    h2 { margin: 0 0 16px; font-size: 27px; letter-spacing: 0; }
+    h3 { margin: 24px 0 10px; font-size: 18px; letter-spacing: 0; }
+    p { margin: 8px 0 12px; }
+    .verdict {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr);
+      gap: 20px;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--bad);
+      box-shadow: var(--shadow);
+    }
+    .verdict strong { font-size: 20px; }
+    .verdict ul { margin: 8px 0 0; padding-left: 20px; }
+    .decision-box { padding: 15px; background: var(--bad-bg); border: 1px solid #efb9b9; }
+    .decision-box .label { color: var(--bad); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .decision-box p { margin-bottom: 0; font-weight: 700; }
+    .stats { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin: 16px 0; }
+    .stat { min-height: 108px; padding: 14px; background: var(--panel); border: 1px solid var(--line); }
+    .stat .value { display: block; font-size: 27px; font-weight: 780; line-height: 1.2; }
+    .stat .name { display: block; margin-top: 7px; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .stat.bad .value { color: var(--bad); }
+    .stat.good .value { color: var(--good); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+    .panel { padding: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .panel h3 { margin-top: 0; }
+    .status { display: inline-block; padding: 3px 7px; border-radius: 3px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .status.good { color: var(--good); background: var(--good-bg); }
+    .status.partial { color: var(--warn); background: var(--warn-bg); }
+    .status.bad { color: var(--bad); background: var(--bad-bg); }
+    .status.info { color: var(--info); background: var(--info-bg); }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+    th, td { padding: 10px 11px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { position: sticky; top: 46px; z-index: 4; background: #edf1f5; font-size: 12px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #fafbfd; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+    .table-wrap table { border: 0; min-width: 980px; }
+    .bar-row { display: grid; grid-template-columns: 250px minmax(120px, 1fr) 90px; gap: 12px; align-items: center; margin: 8px 0; }
+    .bar-track { height: 17px; background: #e6e9ed; overflow: hidden; }
+    .bar { height: 100%; background: var(--info); }
+    .bar.red { background: #c94a4a; }
+    .bar.green { background: #298966; }
+    .bar.purple { background: var(--accent); }
+    .flow { display: grid; grid-template-columns: 1fr 44px 1fr 44px 1fr; align-items: stretch; gap: 8px; }
+    .flow .step { padding: 15px; background: var(--panel); border: 1px solid var(--line); }
+    .flow .arrow { align-self: center; text-align: center; color: var(--muted); font-size: 24px; }
+    .callout { padding: 15px 17px; border-left: 4px solid var(--info); background: var(--info-bg); }
+    .callout.warn { border-color: var(--warn); background: var(--warn-bg); }
+    .callout.bad { border-color: var(--bad); background: var(--bad-bg); }
+    .callout.good { border-color: var(--good); background: var(--good-bg); }
+    .score-grid { display: grid; grid-template-columns: minmax(180px, .8fr) 1.7fr 1fr; border: 1px solid var(--line); background: var(--panel); }
+    .score-grid > div { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .score-grid > div:nth-last-child(-n+3) { border-bottom: 0; }
+    .score-grid .head { background: #edf1f5; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .codebox { overflow-x: auto; padding: 13px 15px; color: #e8edf2; background: #1b2530; font-size: 13px; white-space: pre; }
+    .pr-sequence { counter-reset: prs; }
+    .pr-item { position: relative; margin: 0 0 10px 42px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); }
+    .pr-item::before { counter-increment: prs; content: counter(prs); position: absolute; left: -42px; top: 10px; width: 30px; height: 30px; display: grid; place-items: center; color: white; background: #263a4d; font-weight: 800; }
+    .pr-item h3 { margin: 0 0 4px; font-size: 16px; }
+    .pr-item p { margin: 2px 0; }
+    details { margin: 10px 0; background: var(--panel); border: 1px solid var(--line); }
+    summary { cursor: pointer; padding: 12px 14px; font-weight: 700; }
+    details > div { padding: 0 14px 14px; }
+    .evidence { font-size: 13px; color: var(--muted); }
+    .footnotes { font-size: 13px; color: var(--muted); }
+    .nowrap { white-space: nowrap; }
+    @media (max-width: 1000px) {
+      .stats { grid-template-columns: repeat(3, 1fr); }
+      .grid-3 { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); }
+      .score-grid { grid-template-columns: 1fr; }
+      .score-grid .head { display: none; }
+      .score-grid > div { border-bottom: 0; }
+      .score-grid > div:nth-child(3n) { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+    }
+    @media (max-width: 720px) {
+      .header-inner, main, .nav-inner { width: min(100% - 22px, 1420px); }
+      .verdict, .grid-2 { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .bar-row { grid-template-columns: 1fr 72px; }
+      .bar-track { grid-column: 1 / -1; }
+    }
+    @media print { nav { display: none; } body { background: white; } .panel, .verdict { box-shadow: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="eyebrow">ARIA-NBV evidence audit</div>
+      <h1>PR #30 is a research branch, not a reviewable pull request</h1>
+      <p class="lede">The branch contains several worthwhile experiments, but it combines scaffold replacement, Graphify integration, knowledge-system retirement, thesis migration, skill deletion, source-linking, and audit tooling into one 383-file proposal. The right recovery is selective reconstruction from <code>main</code>, not review of the aggregate diff.</p>
+      <div class="metadata">
+        <span>Audited PR: <a href="https://github.com/JanDuchscherer104/ARIA-NBV/pull/30">#30</a></span>
+        <span>Base: <code>b8166fc8</code></span>
+        <span>Head: <code>2b02a3bf</code></span>
+        <span>Audit date: 2026-07-28</span>
+        <span>Mode: validator-gated autoresearch</span>
+      </div>
+    </div>
+  </header>
+
+  <nav aria-label="Report sections">
+    <div class="nav-inner">
+      <a href="#verdict">Verdict</a>
+      <a href="#goal">Original goal</a>
+      <a href="#inventory">Change inventory</a>
+      <a href="#works">What works</a>
+      <a href="#graphify">Graphify</a>
+      <a href="#losses">Losses and risk</a>
+      <a href="#matrix">Responsibilities</a>
+      <a href="#recovery">Recovery sequence</a>
+      <a href="#evidence">Evidence</a>
+    </div>
+  </nav>
+
+  <main>
+    <section id="verdict">
+      <h2>Executive Verdict</h2>
+      <div class="verdict">
+        <div>
+          <strong>Do not merge or attempt a line-by-line review of PR #30.</strong>
+          <p>Its final tree is not worthless, but the pull request is the wrong review unit. It has 133 commits, 383 changed files, 20,446 additions, 20,486 deletions, 53 graph-sync commits, a changed binary thesis PDF, and red hosted CI. Its body describes four late work packages while the diff also contains the earlier seven-package scaffold migration.</p>
+          <ul>
+            <li>Preserve the branch as an experiment and evidence source.</li>
+            <li>Close the PR without merging.</li>
+            <li>Rebuild only approved capabilities in small branches from current <code>main</code>.</li>
+            <li>Require one owner, one purpose, and one proof per replacement PR.</li>
+          </ul>
+        </div>
+        <div class="decision-box">
+          <div class="label">Recommended disposition</div>
+          <p>Archive the branch. Salvage behavior, not history.</p>
+          <p class="evidence">Confidence: high. Based on live GitHub metadata, clean-checkout tests, exact diff statistics, and source inspection.</p>
+        </div>
+      </div>
+
+      <div class="stats" aria-label="PR statistics">
+        <div class="stat bad"><span class="value">383</span><span class="name">changed files</span></div>
+        <div class="stat bad"><span class="value">133</span><span class="name">commits</span></div>
+        <div class="stat bad"><span class="value">40,932</span><span class="name">line churn</span></div>
+        <div class="stat bad"><span class="value">53</span><span class="name">graph sync commits</span></div>
+        <div class="stat good"><span class="value">10</span><span class="name">active ARIA skills</span></div>
+        <div class="stat bad"><span class="value">CI red</span><span class="name">hosted status</span></div>
+      </div>
+    </section>
+
+    <section id="goal">
+      <h2>The Goal That Produced the Monster</h2>
+      <p>The accepted scaffold plan began with a coherent target: replace a layered, stale, duplicated agent scaffold with a smaller source-owned system. During execution, that target absorbed several independent projects and conflicting success criteria.</p>
+      <div class="flow" aria-label="Goal expansion">
+        <div class="step"><strong>Initial problem</strong><br>Too many skills, stale generated context, unclear truth ownership, and overlapping Graphify/LitKG routes.</div>
+        <div class="arrow">&#8594;</div>
+        <div class="step"><strong>Expanded architecture</strong><br>Tracked OMX lifecycle, unified graph, skill allowlists, LitKG retirement, state-journal retirement, thesis ownership, and debrief migration.</div>
+        <div class="arrow">&#8594;</div>
+        <div class="step"><strong>Late additions</strong><br>Typst equation repair, QMD-to-Typst consolidation, source-link macros, glossary prune audit, and cross-modal Graphify bridges.</div>
+      </div>
+      <div class="grid-2" style="margin-top:16px">
+        <div class="callout good">
+          <strong>Durable objective</strong>
+          <p>Simple routing, progressive disclosure, source-owned truth, small prompt footprint, and exact-source verification.</p>
+        </div>
+        <div class="callout bad">
+          <strong>Category error</strong>
+          <p>A single PR was asked to prove both aggressive deletion and complete preservation, both upstream-minimal Graphify and custom cross-modal parsing, and both thesis consolidation and public-doc removal.</p>
+        </div>
+      </div>
+      <h3>Seven projects hidden inside one PR</h3>
+      <div class="grid-3">
+        <div class="panel"><span class="status info">Project 1</span><h3>Scaffold budget</h3><p>Reduce active skills, prompt bytes, and custom guidance LOC.</p></div>
+        <div class="panel"><span class="status info">Project 2</span><h3>Graph navigation</h3><p>Replace old Graphify wrappers and connect code, thesis, and literature.</p></div>
+        <div class="panel"><span class="status info">Project 3</span><h3>Knowledge retirement</h3><p>Remove LitKG, generated context, and state journals after migration.</p></div>
+        <div class="panel"><span class="status info">Project 4</span><h3>OMX evidence</h3><p>Track accepted planning bundles and validate lifecycle transitions.</p></div>
+        <div class="panel"><span class="status info">Project 5</span><h3>Thesis ownership</h3><p>Move current scientific direction from Quarto and skills into Typst.</p></div>
+        <div class="panel"><span class="status info">Project 6</span><h3>Typst quality</h3><p>Number equations, centralize notation, link source symbols, and audit prune candidates.</p></div>
+        <div class="panel"><span class="status info">Project 7</span><h3>Codex and Matt policy</h3><p>Pin an external skill allowlist, validate recursive file closures, constrain routing, and enforce prompt budgets.</p></div>
+      </div>
+    </section>
+
+    <section id="inventory">
+      <h2>Change Inventory</h2>
+      <p>The near-zero net line count is misleading. Large additions and deletions cancel numerically while moving responsibility across unrelated systems.</p>
+
+      <div class="panel">
+        <h3>Churn by responsibility family</h3>
+        <div class="bar-row"><span>ARIA skills</span><div class="bar-track"><div class="bar red" style="width:100%"></div></div><strong>11,049</strong></div>
+        <div class="bar-row"><span>Scaffold validators</span><div class="bar-track"><div class="bar purple" style="width:48%"></div></div><strong>5,278</strong></div>
+        <div class="bar-row"><span>OMX artifacts/lifecycle</span><div class="bar-track"><div class="bar purple" style="width:40%"></div></div><strong>4,441</strong></div>
+        <div class="bar-row"><span>Graphify integration</span><div class="bar-track"><div class="bar purple" style="width:35%"></div></div><strong>3,842</strong></div>
+        <div class="bar-row"><span>Quarto thesis/theory</span><div class="bar-track"><div class="bar red" style="width:31%"></div></div><strong>3,473</strong></div>
+        <div class="bar-row"><span>Agent policy/data</span><div class="bar-track"><div class="bar purple" style="width:29%"></div></div><strong>3,157</strong></div>
+        <div class="bar-row"><span>Agent memory</span><div class="bar-track"><div class="bar purple" style="width:14%"></div></div><strong>1,582</strong></div>
+        <div class="bar-row"><span>LitKG retirement</span><div class="bar-track"><div class="bar red" style="width:13%"></div></div><strong>1,488</strong></div>
+        <div class="bar-row"><span>Typst thesis/shared</span><div class="bar-track"><div class="bar green" style="width:11%"></div></div><strong>1,181</strong></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Family</th><th>Files</th><th>Additions</th><th>Deletions</th><th>Assessment</th><th>Disposition</th></tr></thead>
+          <tbody>
+            <tr><td>ARIA skills</td><td>130</td><td>984</td><td>10,065</td><td>Large prompt reduction, but capability parity is not established for several deleted skills and references.</td><td><span class="status bad">Rebuild selectively</span></td></tr>
+            <tr><td>Scaffold validators</td><td>8</td><td>4,998</td><td>280</td><td>Dominated by a 2,120-line OMX validator and extensive policy code. This contradicts the simplicity goal.</td><td><span class="status bad">Do not salvage wholesale</span></td></tr>
+            <tr><td>OMX evidence/lifecycle</td><td>26</td><td>4,053</td><td>388</td><td>Durable planning evidence is useful; the implementation and archived review payload are too large for this PR.</td><td><span class="status partial">Separate design</span></td></tr>
+            <tr><td>Graphify</td><td>15</td><td>2,404</td><td>1,438</td><td>Exact cross-modal traversal works. Custom implementation grows from 571 to 1,318 LOC and suppresses upstream report outputs.</td><td><span class="status partial">Experimental only</span></td></tr>
+            <tr><td>Quarto thesis/theory</td><td>13</td><td>189</td><td>3,284</td><td>Some content moved into Typst, but semantic parity is unproven and sampled concepts are missing.</td><td><span class="status bad">Restore by default</span></td></tr>
+            <tr><td>Typst thesis/shared</td><td>33</td><td>914</td><td>267</td><td>Numbered equations, glossary ownership, source-link macros, and prune visibility are individually valuable.</td><td><span class="status good">Split into focused PRs</span></td></tr>
+            <tr><td>Agent policy/data</td><td>30</td><td>1,805</td><td>1,352</td><td>A portable allowlist and routing fixtures are plausible, but an 856-line Matt policy engine plus integrity and prompt-budget governance is not justified by measured routing outcomes.</td><td><span class="status partial">Separate experiment</span></td></tr>
+            <tr><td>LitKG/context retirement</td><td>12+</td><td>0</td><td>1,488+</td><td>Direction may be valid, but Graphify does not replace authority-sensitive claim checking or all source discovery.</td><td><span class="status bad">Defer deletion</span></td></tr>
+            <tr><td>Package/tests</td><td>9</td><td>71</td><td>307</td><td>Unexpected scope for a scaffold PR, including removal of a package README and context helper behavior.</td><td><span class="status bad">Exclude</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="works">
+      <h2>What Actually Works</h2>
+      <div class="grid-2">
+        <div class="panel">
+          <span class="status good">Verified</span>
+          <h3>Typst build and notation audits</h3>
+          <p>A clean checkout builds the development thesis. The prune audit reports 56 glossary entries, 67 symbols, and 73 equations. Four prune-audit tests pass.</p>
+          <p class="evidence"><code>make thesis-pdf</code>, <code>make thesis-prune-audit glossary</code>, and <code>pytest scripts/tests/test_thesis_prune_audit.py</code> all exited 0.</p>
+        </div>
+        <div class="panel">
+          <span class="status good">Verified</span>
+          <h3>Scaffold budget reduction</h3>
+          <p>The active scaffold falls from 27,550 to 20,863 physical lines. Active skill count falls from 21 to 10. Prompt-visible skill description bytes fall from 3,778 to 1,388.</p>
+          <p class="evidence">The branch's own scaffold audit exits 0 with no warnings. These are size metrics, not proof of retained capability.</p>
+        </div>
+        <div class="panel">
+          <span class="status good">Verified</span>
+          <h3>Measured-autoresearch core</h3>
+          <p>The retained skill has a compact measurement contract and its nine self-tests pass. It preserves mixed iteration types: measurement, research-only synthesis, and candidate evaluation.</p>
+          <p class="evidence"><code>make measured-autoresearch-self-test</code> exited 0.</p>
+        </div>
+        <div class="panel">
+          <span class="status good">Verified</span>
+          <h3>Exact Graphify traversal</h3>
+          <p><code>graphify explain q_h_view</code> reports code callers and thesis references. A path from the descriptor chapter to <code>q_h_view</code> is two hops through <code>RolloutZarrStoreReader</code>.</p>
+          <p class="evidence">39 adapter/bridge tests and the retrieval contract pass on a clean checkout.</p>
+        </div>
+        <div class="panel">
+          <span class="status partial">Promising</span>
+          <h3>Native hierarchy visualization</h3>
+          <p><code>graphify tree</code> produces progressive file-tree disclosure with only <code>aria_nbv</code> and <code>docs</code> at the root. This is useful for orientation and avoids the prior flat top-level dump.</p>
+          <p class="evidence">The generated tree is an ignored 796 KB local HTML artifact. It is not a maintained truth surface.</p>
+        </div>
+        <div class="panel">
+          <span class="status partial">Promising</span>
+          <h3>Compact behavior routing</h3>
+          <p>The restored <code>agent-behavior</code> entrypoint is small and follows progressive disclosure. This matches the user's preference better than deleting the routing concept entirely.</p>
+          <p class="evidence">Routing structure is inspectable and scaffold-audit passes; comparative task-success evidence is still absent.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="graphify">
+      <h2>Does Graphify Work and Is It Useful?</h2>
+      <div class="callout warn">
+        <strong>Answer: useful as an exact relationship browser, not yet proven as the default agent navigation layer.</strong>
+        <p>The current integration succeeds when the agent already knows a symbol or file label. It is noisy for broad natural-language discovery, and its custom adapter is larger than the implementation it replaces.</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span class="value">10,102</span><span class="name">nodes</span></div>
+        <div class="stat"><span class="value">18,702</span><span class="name">links</span></div>
+        <div class="stat"><span class="value">698</span><span class="name">source files</span></div>
+        <div class="stat"><span class="value">478</span><span class="name">communities</span></div>
+        <div class="stat bad"><span class="value">1,318</span><span class="name">custom implementation LOC</span></div>
+        <div class="stat"><span class="value">13 MB</span><span class="name">local graph artifacts</span></div>
+      </div>
+
+      <div class="score-grid" role="table" aria-label="Graphify scorecard">
+        <div class="head">Capability</div><div class="head">Observed evidence</div><div class="head">Verdict</div>
+        <div>Freshness</div><div>Clean rebuild and <code>graphify_adapter.py check</code> pass; manifest binds source commit and digests.</div><div><span class="status good">Works</span></div>
+        <div>Exact explain</div><div><code>explain q_h_view</code> returns eight concrete code and thesis connections with locations.</div><div><span class="status good">Works</span></div>
+        <div>Exact path</div><div>Descriptor chapter to <code>q_h_view</code> resolves in two hops; thesis main to finite-horizon model resolves in three.</div><div><span class="status good">Works</span></div>
+        <div>Hierarchy</div><div>Native tree has two top-level roots and then package/file/symbol disclosure.</div><div><span class="status good">Works</span></div>
+        <div>Natural-language query</div><div>At the audited head and a 2,200-token budget, target-conditioned RRI returns 346 nodes and finite-horizon Q_H returns 214; both truncate most results and include unrelated neighbors.</div><div><span class="status partial">Noisy</span></div>
+        <div>Token benchmark</div><div><code>graphify benchmark graphify-out/graph.json</code> reports a 673,466-token naive corpus, 20,819 estimated tokens per generic query, and 32.3x reduction. This is Graphify's static estimator, not a task-correctness or agent-productivity result.</div><div><span class="status partial">Reproducible but limited</span></div>
+        <div>Community labels</div><div>478 communities are named <code>Community N</code> because clustering runs with <code>--no-label</code>.</div><div><span class="status bad">Weak disclosure</span></div>
+        <div>Cross-modal provenance</div><div>Typst and TeX are converted into temporary synthetic Python, then locations are rewritten to authoritative files. Tests cover this.</div><div><span class="status partial">Custom but real</span></div>
+        <div>Upstream minimalism</div><div>Repo-owned implementation grows from 571 to 1,318 LOC; tests grow from 428 to 1,047 LOC.</div><div><span class="status bad">Fails goal</span></div>
+        <div>Upstream outputs</div><div>The adapter keeps only <code>graph.json</code> and <code>manifest.json</code>. It suppresses native visualization and labels, and does not retain <code>GRAPH_REPORT.md</code> or <code>graph.html</code>.</div><div><span class="status bad">Diverges</span></div>
+        <div>Plan alignment</div><div>The accepted plan specified one tracked graph with code, scaffold, thesis, and literature partitions. The final adapter creates an untracked local graph with only code, thesis, and literature families.</div><div><span class="status bad">Drifted</span></div>
+        <div>Scaffold coverage</div><div>Agent skills, debriefs, accepted OMX artifacts, tests, and active configs are not in the final corpus. This keeps the tree clean but means Graphify cannot evaluate the scaffold it is meant to replace.</div><div><span class="status partial">Tradeoff</span></div>
+        <div>Agent productivity</div><div>No controlled comparison measures task success, time-to-owner, source-read reduction, or false-path rate with and without Graphify.</div><div><span class="status partial">Unproven</span></div>
+      </div>
+
+      <h3>What differs from canonical upstream behavior</h3>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Upstream Graphify</h3>
+          <ul>
+            <li>Builds code structurally and docs semantically.</li>
+            <li>Produces <code>graph.html</code>, <code>GRAPH_REPORT.md</code>, and <code>graph.json</code>.</li>
+            <li>Owns query, path, explain, clustering, reports, and visualization.</li>
+            <li>Can install native assistant guidance and hooks.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>PR #30 adapter</h3>
+          <ul>
+            <li>Selects exactly code, Typst thesis, and manifest-selected TeX.</li>
+            <li>Converts non-Python documents into synthetic Python before code-only extraction.</li>
+            <li>Rewrites every node and edge back to exact source locations.</li>
+            <li>Runs clustering without labels or visualization and discards the native report.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout warn" style="margin-top:16px">
+        <strong>Why there is no <code>GRAPH_REPORT.html</code></strong>
+        <p>Upstream does not define that filename. Its normal outputs are <code>graph.html</code>, <code>GRAPH_REPORT.md</code>, and <code>graph.json</code>. PR #30 intentionally invokes clustering with <code>--no-label --no-viz</code> and then retains only <code>graph.json</code> and a custom <code>manifest.json</code>, so both the native HTML visualization and Markdown report disappear. Native <code>graphify tree</code> can still generate a separate local hierarchy HTML on demand.</p>
+      </div>
+
+      <h3>Recommended Graphify decision</h3>
+      <div class="callout good">
+        <strong>Keep the experiment, not the integration contract.</strong>
+        <p>Use the branch's adapter as a benchmark candidate. Before merging any replacement, compare it against plain upstream Graphify and exact-source tools on 10 representative agent tasks. Merge only if it materially improves owner discovery or cross-modal traceability without requiring more than a thin repository boundary.</p>
+      </div>
+    </section>
+
+    <section id="losses">
+      <h2>What Does Not Work or Lacks Evidence</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Finding</th><th>Evidence</th><th>Impact</th><th>Confidence</th></tr></thead>
+          <tbody>
+            <tr><td>PR description under-reports scope</td><td>The body lists four late WPs, while the branch includes the earlier WP0-WP7 scaffold migration, 133 commits, and 383 files.</td><td>A reviewer cannot infer the actual proposal from the PR body.</td><td>High</td></tr>
+            <tr><td>Hosted CI is red</td><td><a href="https://github.com/JanDuchscherer104/ARIA-NBV/actions/runs/30294463193">Root Verification</a> fails when OMX native-acceptance clones the repo and Git LFS cannot fetch a 114 MB object.</td><td>The PR is not merge-ready. The failure also shows the new lifecycle test is coupled to full-repo LFS state.</td><td>High</td></tr>
+            <tr><td>RQ5 was removed from the thesis but remains a root invariant</td><td>The root <code>AGENTS.md</code> still names online discrete <code>Q_H</code> as the advisor-facing RQ5 bridge. The current Typst introduction defines only RQ1 through RQ4, and the Quarto questions stub says online learning is not an active RQ.</td><td>Two active owners contradict each other on thesis scope. This is scientific contract drift, not documentation cleanup.</td><td>High</td></tr>
+            <tr><td>The state-salvage ledger overstates preservation</td><td>The deleted <code>OPEN_QUESTIONS.md</code> contains exact unresolved split identities/proportions, Q_H pass thresholds and sample sizes, and the 100-scene fallback. The ledger calls these “already owned,” but the cited Typst/backlog destinations do not retain all of them.</td><td>Advisor decisions can disappear while migration checks still pass.</td><td>High</td></tr>
+            <tr><td>OMX lifecycle is overbuilt</td><td><code>validate_omx_artifacts.py</code> is 2,120 LOC; its tests are 1,327 LOC; the initiating commit changed 38 files with 5,911 additions.</td><td>A planning registry becomes a subsystem larger than the routing problem it addresses.</td><td>High</td></tr>
+            <tr><td>Graphify simplification claim is false by LOC</td><td>Custom implementation grows from 571 to 1,318 LOC, even though old wrappers are deleted.</td><td>Maintenance burden moved and expanded.</td><td>High</td></tr>
+            <tr><td>Graphify broad retrieval is noisy</td><td>Representative queries return 346 and 214 nodes and truncate most of them.</td><td>Agents still need exact vocabulary or source fallback.</td><td>High</td></tr>
+            <tr><td>The final graph no longer matches the accepted graph plan</td><td>The plan requires a tracked four-partition graph; the final configuration is an untracked three-family graph that excludes scaffold evidence.</td><td>The implementation cannot satisfy the original scaffold-navigation claim, and the 53 graph-sync commits no longer correspond to final tracked artifacts.</td><td>High</td></tr>
+            <tr><td>Quarto consolidation risks semantic loss</td><td>3,284 Quarto lines are removed while 914 Typst lines are added across a wider set of changes. Sampled concepts such as “proposal freeze” and “Gumbel-Top-k” are absent from Typst.</td><td>The “single owner” migration may silently delete research intent rather than relocate it.</td><td>Medium-high</td></tr>
+            <tr><td>New glossary citations do not resolve in Quarto</td><td><code>terms.yml</code> references <code>FittedQIteration-ernst2005</code>, <code>FixedHorizonTD-deAsis2020</code>, and <code>UVFA-schaul2015</code>. They exist only in <code>references-qh.bib</code>, while Quarto loads only <code>references.bib</code>.</td><td>The public glossary renders with unresolved scientific references.</td><td>High</td></tr>
+            <tr><td>Skill pruning removed operational assets</td><td>12 skills disappear, including geometry, Zarr, diagnosis, review, and Typst authoring; 10,065 lines are deleted.</td><td>Prompt size improves, but task success and replacement parity are not measured.</td><td>High</td></tr>
+            <tr><td>Retiring LitKG is premature</td><td>Graphify proves navigation, not citation authority, claim calibration, or external literature retrieval.</td><td>Authority-sensitive research workflows lose a distinct capability.</td><td>High</td></tr>
+            <tr><td>State-journal retirement is not independently reviewable</td><td>Four state files are deleted in the same history as skill deletion, Graphify migration, and agents-DB changes.</td><td>It is hard to verify whether all current facts received durable owners.</td><td>Medium</td></tr>
+            <tr><td>Generated and historical noise dominates review</td><td>53 graph-sync commits remain in history even though Graphify outputs are untracked in the final tree; a binary thesis PDF also changes.</td><td>Commit review does not reduce cognitive load.</td><td>High</td></tr>
+            <tr><td>The tracked thesis PDF is stale</td><td>The committed PDF is 108 pages. A clean build at <code>2b02a3bf</code> produces 121 pages with a different hash.</td><td>Reviewers cannot trust the binary as a rendering of the source diff.</td><td>High</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="matrix">
+      <h2>Responsibility Matrix</h2>
+      <p>The target should retain the useful ownership idea while rejecting wholesale replacement.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Responsibility</th><th>Before PR #30</th><th>PR #30 current state</th><th>Recommended target</th></tr></thead>
+          <tbody>
+            <tr><td>Scientific/domain truth</td><td>Split across Typst, Quarto, code, skills, and state journals.</td><td>Typst promoted; many Quarto pages reduced to redirect stubs; skills pruned.</td><td>Typst and code own current truth. Keep old Quarto content until each statement has a reviewed Typst destination.</td></tr>
+            <tr><td>Agent routing</td><td>21 project skills with many domain-specific routes.</td><td>10 compact skills, including <code>agent-behavior</code> and merged <code>aria-docs</code>.</td><td>Keep a thin router and additive <code>aria-docs</code>. Remove old skills only after task fixtures show replacement parity.</td></tr>
+            <tr><td>Code/project discovery</td><td>Older Graphify plus context scripts and exact-source fallback.</td><td>One custom cross-modal graph and native traversal commands.</td><td>Native Graphify for optional navigation; exact source remains mandatory. Keep only minimal corpus configuration and measured bridge logic.</td></tr>
+            <tr><td>Literature authority</td><td>LitKG plus bibliography, paper sources, and direct inspection.</td><td>LitKG deleted; direct-source checklist remains.</td><td>Do not delete LitKG until direct-source plus replacement retrieval is proven on real claim tasks. It may be retired later, independently.</td></tr>
+            <tr><td>Current project state</td><td>Four state journals plus agents DB and debriefs.</td><td>State journals deleted; agents DB and debriefs retained.</td><td>Use agents DB for actionable state and code/thesis for truth. Migrate one journal at a time with an auditable disposition table.</td></tr>
+            <tr><td>Planning evidence</td><td>Mostly ignored <code>.omx</code> artifacts with inconsistent tracking.</td><td>Accepted bundles tracked and validated by a large custom lifecycle engine.</td><td>Use a compact manifest and hash checker. Keep workflow/runtime semantics in OMX upstream, not a repo-owned state machine.</td></tr>
+            <tr><td>External skill policy</td><td>Matt-derived practices were referenced selectively and project configuration stayed lightweight.</td><td>A pinned allowlist, closure hashes, routing fixtures, prompt budgets, and an 856-line policy engine govern external skills and local Codex configuration.</td><td>Retain only a portable allowlist and explicit pin if they solve a demonstrated collision. Benchmark routing before adopting closure enforcement or prompt-binary integrity checks.</td></tr>
+            <tr><td>Typst authoring</td><td>Large dedicated skill with fixtures, package notes, and scripts.</td><td>Merged <code>aria-docs</code> with much smaller references; old skill deleted.</td><td>Keep <code>aria-docs</code> additive first. Retire the old skill only after a capability matrix and render fixtures pass.</td></tr>
+            <tr><td>Thesis source links</td><td>Static or incomplete links.</td><td>Branch/SHA-aware macros and Graphify entity links.</td><td>Keep Typst link macros independent of Graphify. Treat graph linkage as optional derived evidence.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="recovery">
+      <h2>How to Make the Work Manageable</h2>
+      <div class="callout bad">
+        <strong>Do not rebase or squash PR #30 into a smaller-looking commit.</strong>
+        <p>A squash hides history but leaves the same 383-file review problem. Start new branches from current <code>main</code> and reconstruct only approved outcomes.</p>
+      </div>
+
+      <h3>Immediate actions</h3>
+      <div class="pr-sequence">
+        <div class="pr-item"><h3>Archive PR #30</h3><p>Close without merge. Add a final comment linking this report and label the branch as experimental evidence. Do not delete the branch until salvage work finishes.</p></div>
+        <div class="pr-item"><h3>Restore review baseline</h3><p>Use current <code>main</code> as the only base. Do not cherry-pick broad scaffold commits. Copy narrow hunks manually or cherry-pick only after inspecting their complete dependency surface.</p></div>
+        <div class="pr-item"><h3>Freeze destructive removals</h3><p>No skill, Quarto page, LitKG route, state journal, or context helper is removed until its own replacement PR demonstrates parity.</p></div>
+        <div class="pr-item"><h3>Restore lost contracts first</h3><p>Before salvaging new work, restore or explicitly resolve RQ5, the missing advisor decisions, unresolved glossary citations, and the stale tracked PDF. These are blockers, not optional cleanup.</p></div>
+      </div>
+
+      <h3>Proposed small PR sequence</h3>
+      <div class="pr-sequence">
+        <div class="pr-item">
+          <h3>PR A: Native numbered equations only</h3>
+          <p><strong>Keep:</strong> native display equations, shared numbering behavior, focused glossary-builder tests.</p>
+          <p><strong>Exclude:</strong> skill deletion, Graphify, QMD migration, generated PDF.</p>
+          <p><strong>Review budget:</strong> about 10 to 15 Typst files, one helper, one test.</p>
+        </div>
+        <div class="pr-item">
+          <h3>PR B: Branch-aware thesis source links</h3>
+          <p><strong>Keep:</strong> <code>THESIS_CODE_REF</code>, <code>gh</code>/<code>gh-symbol</code> macros, explicit SHA override, link fixtures.</p>
+          <p><strong>Exclude:</strong> Graphify edges and prune audit.</p>
+          <p><strong>Stop condition:</strong> every supported link form renders and resolves.</p>
+        </div>
+        <div class="pr-item">
+          <h3>PR C: Thesis prune audit and visible markers</h3>
+          <p><strong>Keep:</strong> zero-use evidence, approved markers, submission fail-closed behavior.</p>
+          <p><strong>Exclude:</strong> deleting definitions, changing scientific semantics, Graphify parsing.</p>
+          <p><strong>Stop condition:</strong> audit and submission fixture pass; generated files are clearly identified.</p>
+        </div>
+        <div class="pr-item">
+          <h3>PR D: Additive aria-docs routing</h3>
+          <p><strong>Keep:</strong> compact <code>aria-docs</code> and <code>agent-behavior</code> progressive disclosure.</p>
+          <p><strong>Exclude:</strong> deleting <code>typst-authoring</code>, Mermaid, diagnosis, geometry, Zarr, or review skills.</p>
+          <p><strong>Stop condition:</strong> routing and render fixtures show the additive path works.</p>
+        </div>
+        <div class="pr-item">
+          <h3>Experiment E: Graphify usefulness benchmark</h3>
+          <p><strong>Do not merge yet.</strong> Compare plain upstream Graphify, the main-branch integration, and PR #30's adapter on 10 fixed tasks: owner lookup, cross-modal path, package hierarchy, thesis chapter topology, paper hierarchy, and stale graph detection.</p>
+          <p><strong>Required metrics:</strong> correct owner at top-k, exact source locator accuracy, nodes inspected, runtime, custom LOC, and false-path rate.</p>
+        </div>
+        <div class="pr-item">
+          <h3>Experiment F: Codex and Matt routing policy</h3>
+          <p><strong>Do not merge the current policy engine.</strong> Compare repository-local allowlisting with ordinary Codex configuration on fixed routing and conflict fixtures. Preserve the upstream skill bodies outside this repository.</p>
+          <p><strong>Required evidence:</strong> collision detection, correct route selection, prompt-visible bytes, clean bootstrap behavior, maintenance LOC, and a concrete failure that closure hashing prevents.</p>
+        </div>
+        <div class="pr-item">
+          <h3>Later PRs: one retirement at a time</h3>
+          <p>Only after measured parity: retire a redundant skill, then generated context, then a state journal, then LitKG. Each deletion PR contains its own capability-disposition matrix and rollback boundary.</p>
+        </div>
+        <div class="pr-item">
+          <h3>Separate design: OMX accepted artifacts</h3>
+          <p>Return to the requirement, not the 2,120-line implementation. First test whether a compact TOML registry plus a small hash/path validator is sufficient. Do not couple acceptance tests to full-repository LFS cloning.</p>
+        </div>
+      </div>
+
+      <h3>Review rules for every replacement PR</h3>
+      <div class="grid-3">
+        <div class="panel"><h3>One purpose</h3><p>The title, body, diff, and tests describe the same behavior.</p></div>
+        <div class="panel"><h3>One owner</h3><p>Every moved fact names its old and new authoritative surface.</p></div>
+        <div class="panel"><h3>One proof</h3><p>A small executable test or fixed evidence matrix proves the claimed improvement.</p></div>
+        <div class="panel"><h3>No binary churn</h3><p>Generated PDFs, graph outputs, and caches stay out unless they are the explicit deliverable.</p></div>
+        <div class="panel"><h3>No shadow deletion</h3><p>Capability removals are listed in the PR body and tested, not buried in consolidation.</p></div>
+        <div class="panel"><h3>Green hosted CI</h3><p>Local evidence is not enough. The exact head must pass GitHub checks.</p></div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <h2>Evidence and Confidence</h2>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Directly observed</h3>
+          <ul>
+            <li>Live PR metadata and hosted check status.</li>
+            <li>Exact <code>origin/main...2b02a3bf</code> diff statistics and commit history.</li>
+            <li>Clean detached checkout at the PR head.</li>
+            <li>Graphify 0.9.26 clean rebuild, graph counts, native query/path/explain/tree output.</li>
+            <li>39 Graphify tests, retrieval contract, four prune tests, glossary audit, scaffold audit, measured-autoresearch tests, memory validation, and development thesis build.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Inferred or not yet proven</h3>
+          <ul>
+            <li>Complete semantic-loss count for QMD-to-Typst migration.</li>
+            <li>Task-success parity after skill deletion.</li>
+            <li>Agent productivity improvement from Graphify.</li>
+            <li>Whether LitKG can be fully retired without loss.</li>
+            <li>Whether every state-journal fact received a durable owner.</li>
+          </ul>
+        </div>
+      </div>
+
+      <details open>
+        <summary>Reproducible command set</summary>
+        <div><div class="codebox">gh pr view 30 --repo JanDuchscherer104/ARIA-NBV --json number,title,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,additions,deletions,changedFiles,commits,reviews,statusCheckRollup,url
+git diff --shortstat origin/main...2b02a3bf
+git rev-list --count origin/main..2b02a3bf
+make PYTHON_INTERPRETER=python3 graphify-refresh graphify-freshness
+graphify benchmark graphify-out/graph.json
+graphify query "target-conditioned RRI scorer" --budget 2200 --graph graphify-out/graph.json
+graphify query "finite-horizon Q_H" --budget 2200 --graph graphify-out/graph.json
+graphify explain q_h_view --graph graphify-out/graph.json
+graphify path "04-02-descriptor-and-encoding-plan.typ" "q_h_view" --graph graphify-out/graph.json
+pytest -q scripts/tests/test_graphify_adapter.py scripts/tests/test_graphify_bridge.py
+python3 scripts/tests/test_graphify_retrieval.py
+make thesis-prune-audit glossary
+make thesis-pdf TYPST_THESIS_PDF=/tmp/pr30-audit-thesis.pdf
+make scaffold-audit measured-autoresearch-self-test check-agent-memory</div></div>
+      </details>
+
+      <details>
+        <summary>Retained Graphify benchmark observations</summary>
+        <div><div class="codebox">graphify benchmark graphify-out/graph.json
+Corpus: 505,100 words -> approximately 673,466 tokens
+Graph: 10,102 nodes, 18,702 edges
+Average estimated query cost: approximately 20,819 tokens
+Estimated reduction: 32.3x
+
+graphify query "target-conditioned RRI scorer" --budget 2200
+Traversal: 346 nodes; 61 shown; 285 cut
+
+graphify query "finite-horizon Q_H" --budget 2200
+Traversal: 214 nodes; 46 shown; 168 cut</div></div>
+        <p class="muted">These are deterministic CLI observations from clean head <code>2b02a3bf</code>. They establish output size and truncation, not semantic correctness or agent productivity.</p>
+      </details>
+
+      <details>
+        <summary>Primary source links</summary>
+        <div class="footnotes">
+          <p><a href="https://github.com/JanDuchscherer104/ARIA-NBV/pull/30">ARIA-NBV PR #30</a></p>
+          <p><a href="https://github.com/JanDuchscherer104/ARIA-NBV/actions/runs/30294463193">PR #30 failing Root Verification run</a></p>
+          <p><a href="https://github.com/Graphify-Labs/graphify/tree/66d8110a534b52df3d660b5fda5aa5461a6b667a">Pinned Graphify upstream source</a></p>
+          <p><a href="https://docs.github.com/en/pull-requests/concepts/helping-others-review-your-changes">GitHub guidance on small, focused pull requests</a></p>
+        </div>
+      </details>
+
+      <div class="callout warn" style="margin-top:18px">
+        <strong>Bottom line</strong>
+        <p>The branch is valuable as a record of experiments. It is not evidence that the whole architecture should be adopted. The next move should reduce decisions, not merely reduce commit count.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

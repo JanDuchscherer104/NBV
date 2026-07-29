@@ -1,0 +1,8 @@
+{
+  "validator_prompt": "Approve only if the HTML report comprehensively accounts for PR #30 change families, distinguishes evidence from inference, empirically evaluates Graphify usefulness, identifies losses and unsupported claims, and proposes a bounded recovery sequence that does not assume all changes should land.",
+  "architect_review": {
+    "verdict": "approved",
+    "summary": "Fresh final-artifact review approved after the report added the missing Codex/Matt policy disposition and reproducible Graphify evidence."
+  },
+  "output_artifact_path": ".omx/specs/autoresearch-pr30-reviewability-20260728/report.html"
+}

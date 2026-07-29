@@ -6,6 +6,9 @@ or repeatable workflows.
 
 ## Core Principles
 
+- **Predictable process:** Prefer a stable sequence of finding evidence,
+  locating its owner, executing the bounded change, and verifying the result.
+  Consistency does not require identical prose or implementation.
 - **Context hygiene:** Keep default context small. Load detailed guidance,
   history, and generated context only when the task needs them, and stop
   retrieval once the work is grounded.
@@ -20,6 +23,9 @@ or repeatable workflows.
 - **Evidence before assertion:** Exact source and fresh verification establish
   current truth. Retrieval, inferred links, similarity, plans, and agent
   confidence are discovery aids only.
+- **Qualified provenance:** Derived evidence records its source, freshness and
+  worktree, ambiguity, and whether links were extracted or inferred. Stale or
+  mismatched artifacts cannot establish current truth.
 - **Reviewability:** Prefer small, owner-scoped, reversible changes and pull
   requests. Do not combine scaffold migration, domain changes, generated
   artifacts, and unrelated cleanup into one review unit.
@@ -27,9 +33,13 @@ or repeatable workflows.
 ## Ownership
 
 - Code, tests, and active configuration own executable behavior and contracts.
-- The active Typst thesis owns scientific narrative, notation, and research
-  direction. Exact papers own external claims. Skills must not duplicate domain
-  knowledge from either source.
+- The target state is for the active Typst thesis to own scientific narrative,
+  notation, and research direction. Until that migration is reviewed,
+  `.agents/references/source_order.md` resolves current authority. Exact papers
+  own external claims, which retain page, section, equation, or source-file
+  locators. Skills must not duplicate domain knowledge from either source.
+- Immutable manifests and evidence bundles own measurements. Reports and thesis
+  prose interpret them without becoming competing measurement stores.
 - Root and nearest `AGENTS.md` files own repository and local invariants.
 - Skills own repeatable workflows, activation, handoffs, and verification. A
   skill should be a compact front door whose detail is loaded on demand.
@@ -37,6 +47,9 @@ or repeatable workflows.
 - Agents DB TOMLs own actionable issues, TODOs, and refactors.
 - Debriefs, conversations, and OMX artifacts are evidence and history, not
   automatic current truth. Promotion into an owner requires human review.
+- Newer intent supersedes older intent only within reviewed scope. Older intent
+  is weaker evidence for current choices but remains useful for detecting lost
+  capabilities; unresolved conflicts remain explicit.
 - Generated navigation and retrieval artifacts remain reproducible,
   non-authoritative, and outside normal startup context.
 
@@ -55,7 +68,17 @@ or repeatable workflows.
   generic research loops. It must support research-only, evaluator-design,
   measured implementation, and keep-or-discard iterations.
 - Keep `agents-db` as the actionable-work owner for now. Keep debriefs concise
-  and episodic rather than loading them as default project state.
+  and episodic rather than loading them as default project state. Debriefs
+  retain reusable diagnoses, failed approaches, measurements, and handoffs.
+- Give every actionable scaffold finding an explicit disposition: reject it,
+  deduplicate it, preserve it as a protocol, or record it in Agents DB.
+- Retire a handwritten state surface only after every claim has a verified
+  owner and every consumer has migrated.
+- Treat accepted plans and specifications as immutable evidence. Keep current
+  artifacts in native `.omx/context`, `.omx/specs`, and `.omx/plans` paths;
+  archive superseded bundles intact with successor provenance. Replace them
+  through explicit supersession rather than in-place rewriting. Keep any
+  registry and validator implementation minimal.
 - Prefer a small set of independently useful ARIA skills. Consolidation must
   preserve meaningful triggers, exclusions, helpers, tests, and verification;
   an arbitrary skill-count target is not a goal.
