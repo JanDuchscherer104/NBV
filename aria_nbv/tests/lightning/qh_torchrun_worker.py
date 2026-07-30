@@ -18,10 +18,23 @@ from tests.lightning.test_qh_fast_dev_run import _trainer
 from tests.lightning.test_qh_module import _ChainDataset, _TableScorer
 
 
+class _UnsupportedNanScorer(_TableScorer):
+    def forward(self, actor):
+        values = super().forward(actor)
+        return values.masked_fill(~actor.action_mask, torch.nan)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
-    scenarios = ("global-empty", "local-empty", "unequal", "distributed-val", "distributed-test")
+    scenarios = (
+        "global-empty",
+        "local-empty",
+        "unequal",
+        "unsupported-metric",
+        "distributed-val",
+        "distributed-test",
+    )
     parser.add_argument("--scenario", choices=scenarios, required=True)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -61,12 +74,27 @@ def main() -> None:
     admitted = _chain(steps=2, width=2)
     empty = replace(
         admitted,
+        actor=replace(admitted.actor, action_mask=torch.zeros_like(admitted.actor.action_mask)),
         supervision=replace(admitted.supervision, label_mask=torch.zeros_like(admitted.supervision.label_mask)),
     )
     if args.scenario == "global-empty":
         samples = [empty, empty]
     elif args.scenario == "local-empty":
         samples = [admitted, empty]
+    elif args.scenario == "unsupported-metric":
+        unsupported = replace(
+            admitted,
+            supervision=replace(
+                admitted.supervision,
+                label_mask=torch.cat(
+                    (
+                        admitted.supervision.label_mask[:1],
+                        torch.zeros_like(admitted.supervision.label_mask[1:]),
+                    )
+                ),
+            ),
+        )
+        samples = [admitted, unsupported]
     else:
         one_admitted = _chain(steps=2, width=2)
         labels = one_admitted.supervision.label_mask.clone()
@@ -81,18 +109,21 @@ def main() -> None:
     )
     module = QhLightningModule(
         QhLightningModuleConfig(lr_scheduler=None, target_sync_interval=3),
-        scorer=_TableScorer(),
+        scorer=_UnsupportedNanScorer() if args.scenario == "local-empty" else _TableScorer(),
     )
     initial_state = {name: value.detach().clone() for name, value in module.state_dict().items()}
     log_calls = 0
+    unsupported_metrics: dict[str, float] = {}
     original_log = module.log
 
-    def _log(*args, **kwargs) -> None:
+    def _log(name, value, **kwargs) -> None:
         nonlocal log_calls
         log_calls += 1
-        original_log(*args, **kwargs)
+        if name in {"train/unsupported_backup_rows", "train/unsupported_backup_fraction"}:
+            unsupported_metrics[name] = float(value.detach().item())
+        original_log(name, value, **kwargs)
 
-    if args.scenario == "global-empty":
+    if args.scenario in {"global-empty", "unsupported-metric"}:
         module.log = _log
     trainer = _trainer(
         devices=2,
@@ -111,6 +142,8 @@ def main() -> None:
         "online_scorer_calls": module.online_scorer.calls,
         "target_scorer_calls": module.target_scorer.calls,
         "log_calls": log_calls,
+        "unsupported_backup_rows": unsupported_metrics.get("train/unsupported_backup_rows"),
+        "unsupported_backup_fraction": unsupported_metrics.get("train/unsupported_backup_fraction"),
         "state_unchanged": all(torch.equal(value, module.state_dict()[name]) for name, value in initial_state.items()),
     }
     (args.output_dir / f"rank-{trainer.global_rank}.json").write_text(json.dumps(payload, sort_keys=True))

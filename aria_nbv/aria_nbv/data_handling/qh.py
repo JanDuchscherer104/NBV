@@ -129,6 +129,20 @@ class QhBatch:
         return shifted
 
     @property
+    def successor_action_mask(self) -> Tensor:
+        """Return shifted actor-valid successor actions before label filtering."""
+
+        shifted = torch.zeros_like(self.actor.action_mask)
+        shifted[:, :-1] = self.actor.action_mask[:, 1:] & self.actor.step_mask[:, 1:, None]
+        return shifted
+
+    @property
+    def actor_successor_present(self) -> Tensor:
+        """Return whether each transition has at least one actor-valid successor."""
+
+        return self.successor_action_mask.any(dim=-1)
+
+    @property
     def successor_present(self) -> Tensor:
         """Return whether each transition has at least one supported successor."""
 

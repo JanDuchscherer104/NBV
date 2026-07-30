@@ -10,9 +10,9 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019 @FixedHorizonTD-deAsis2020],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/tests/vin/test_target_finite_horizon.py; aria_nbv/tests/rollouts/test_qh_reader.py",
-  gate: [end-to-end permutation, mask, duplicate, frame, source, and variable-horizon tests for every admitted state protocol],
-)[The H=2 tracer covers candidate-row equivariance, local-frame geometry, invalid-row isolation, and deterministic selection. Dynamic selected-observation state, source-dropout, and variable-horizon acceptance tests remain pending.]
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/tests/lightning/test_qh_module.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  gate: [production scorer plus end-to-end permutation, mask, duplicate, frame, source, and horizon tests for every admitted state protocol],
+)[The replay and fitted-Q infrastructure covers row-aligned masks, local-frame tensors, selected-transition admission, and deterministic Double-Q selection for an injected scorer. No candidate-to-state architecture or scorer-level equivariance contract is implemented.]
 
 Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned inputs by $Pi$ must permute outputs by the same amount:
 
@@ -26,7 +26,7 @@ $
   #eqs.rl.candidate_mask_isolation
 $
 
-Mask ownership depends on the interaction. In the canonical candidate-to-state model, candidates are queries and scene, target, history, and horizon context are keys and values. The action mask therefore sanitizes candidate queries, gates output selection, and gates supervised losses; it is not a key-padding mask for the shared state tokens. Candidate masks become attention-key masks only in later candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding masks, action-validity masks, training masks, modality-presence masks, and horizon-availability masks must remain separate.
+Mask ownership depends on the interaction. In the candidate-to-state design candidate, candidates are queries and scene, target, history, and time context are keys and values. The action mask therefore sanitizes candidate queries, gates output selection, and gates supervised losses; it is not a key-padding mask for the shared state tokens. Candidate masks become attention-key masks only in candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding masks, action-validity masks, training masks, and modality-presence masks must remain separate; a horizon-availability mask is added only if explicit horizon queries are selected.
 
 Duplicate-row and valid-count tests are required because candidate-set pooling or per-set normalization can otherwise change the absolute value of an unchanged physical candidate. A duplicate row may duplicate an output, but it must not silently change another row's value unless the tested architecture explicitly models candidate-set context.
 
@@ -34,7 +34,7 @@ Coordinate handling is deliberately weaker than exact $op("SE")(3)$ equivariance
 
 Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, current candidate renders, and target crops may supervise or audit a model but may not enter its actor graph. Previously selected GT depth may enter only a `CF-GT` state branch. Source-dropout tests must show that removing an unavailable optional carrier changes only its masked branch.
 
-The variable-horizon interface adds its own acceptance contract. The boundary query $h=0$ has value zero; an $h=1$ target contains no bootstrap; $h>b_t$ is rejected or masked rather than silently clamped; and a target for $h>1$ may depend only on a successor value requested at $h-1$ @FixedHorizonTD-deAsis2020. Vectorizing a horizon axis must reproduce independent calls for every admissible $h$, and candidate-row equivariance and mask isolation must hold separately at every horizon. Changing only $h$ may change values but must not expose future observations. Because a geometrically valid action may have negative immediate gain, monotonicity such as $Q_(h+1)>=Q_h$ is not imposed as a universal acceptance test.
+If the explicit requested-horizon interface is selected, it adds its own acceptance contract: the boundary query $h=0$ has value zero; an $h=1$ target contains no bootstrap; $h>b_t$ is rejected or masked rather than clamped; and a target for $h>1$ may depend only on a successor value requested at $h-1$ @FixedHorizonTD-deAsis2020. Vectorizing a horizon axis must reproduce independent calls for every admissible $h$ without exposing future observations. The fixed-H alternative instead requires separate tests across configured horizons and remaining budgets. Neither design assumes monotonicity such as $Q_(h+1)>=Q_h$ because valid actions may have negative immediate gain.
 
 === Orthogonal architecture ladder
 
@@ -42,11 +42,11 @@ The variable-horizon interface adds its own acceptance contract. The boundary qu
   implementation: "partial",
   evidence: "pending",
   citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [promote a level only after lower interaction controls pass on the same scene carrier, target/source protocol, and horizon-query contract],
-)[The development tracer implements candidate-to-state cross-attention over an `S0-pose` carrier. Scene-carrier upgrades from @tab:thesis-scene-representation-design-space and variable-horizon conditioning are orthogonal to the interaction ladder below.]
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [freeze the scorer time-query contract, then promote a level only after lower interaction controls pass on the same scene carrier and target/source protocol],
+)[No level in the interaction ladder is implemented for finite-horizon scoring. Scene-carrier choice, fixed-H versus requested-horizon conditioning, and candidate interaction are orthogonal decisions to test after the scorer boundary is frozen.]
 
-The canonical A1 query contains candidate-local information plus the requested-horizon condition: local pose, candidate--target relation, candidate-local support reads, and an embedding of $h$. Target, scene, ordered history, and any admitted budget context are supplied once as shared state tokens. Candidate provenance and generator-family identity are audit-only by default; using them as learned features requires a named ablation because they may encode generator shortcuts. A single conditional value approximator is preferred over unrelated per-horizon networks, while separate $Q_1,dots,Q_H$ heads remain a control for horizon interference @UVFA-schaul2015.
+The proposed A1 query contains candidate-local pose, candidate--target relation, and candidate-local support reads. Target, scene, ordered history, and remaining-budget context are supplied once as shared state tokens. The requested-horizon design candidate additionally embeds $h$; the fixed-H alternative does not. Candidate provenance and generator-family identity are audit-only by default. Shared conditional and separate-horizon models remain alternatives for the source-owner decision rather than a frozen architecture @UVFA-schaul2015.
 
 #figure(
   text(size: 8.2pt, table(
@@ -54,8 +54,8 @@ The canonical A1 query contains candidate-local information plus the requested-h
     toprule(),
     table.header([*Level*], [*Interaction model*], [*Scientific role*]),
     midrule(),
-    [A0], [Independent masked MLP], [Locks target/candidate descriptors, masks, explicit horizon conditioning, and label learnability for a fixed scene carrier.],
-    [A1], [Candidate-to-state cross-attention], [Each horizon--candidate query independently reads shared target, scene, history, and budget context.],
+    [A0], [Independent masked MLP], [Locks target/candidate descriptors, masks, time context, and label learnability for a fixed scene carrier.],
+    [A1], [Candidate-to-state cross-attention], [Each candidate query independently reads shared target, scene, history, and budget context.],
     [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
     [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
     [A4], [Query-local relation bias], [Tests QCNet-style target, history, and candidate relations without importing its forecasting decoder.],
@@ -64,7 +64,7 @@ The canonical A1 query contains candidate-local information plus the requested-h
     [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
     bottomrule(),
   )),
-  caption: [Interaction-architecture ladder. Scene carrier, target/source protocol, horizon-query contract, and learning target are frozen independently for each comparison.],
+  caption: [Planned interaction-architecture ladder. Scene carrier, target/source protocol, time-query contract, and learning target are frozen independently for each comparison.],
 ) <tab:geometric-learning-ladder>
 
-Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings: static scene tokens are computed once per root, target tokens once per target, candidate encodings once per candidate, and lightweight horizon--candidate queries independently for each requested $h$ before optional set interaction.
+Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings and keeps optional requested-horizon conditioning separate from candidate-set interaction.

@@ -2,7 +2,7 @@
   "description": "Static cross-package imports, collapsed to public top-level packages.",
   "edges": [
     {
-      "importing_modules": 21,
+      "importing_modules": 20,
       "source": "vin",
       "target": "utils"
     },

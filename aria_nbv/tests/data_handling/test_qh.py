@@ -123,7 +123,11 @@ def test_derived_selected_and_successor_masks_share_exact_support() -> None:
 
     expected_successor = torch.zeros_like(action)
     expected_successor[:, :-1] = (action & labels)[:, 1:]
+    expected_actions = torch.zeros_like(action)
+    expected_actions[:, :-1] = action[:, 1:]
     assert torch.equal(batch.successor_backup_mask, expected_successor)
+    assert torch.equal(batch.successor_action_mask, expected_actions)
+    assert batch.actor_successor_present.tolist() == [[True, True, False]]
     assert batch.successor_present.tolist() == [[True, True, False]]
     assert batch.selected_train_mask.tolist() == [[False, True, True]]
     assert batch.bootstrap_mask.tolist() == [[False, True, False]]

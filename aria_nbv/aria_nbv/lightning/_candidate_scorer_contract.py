@@ -4,19 +4,9 @@
 and contract classifier. This sidecar owns the narrower training decision made
 by :class:`aria_nbv.lightning.lit_module.VinLightningModule`: the existing Lightning
 loss path can train CORAL/VinPrediction candidate scorers, while planned
-target-conditioned descriptor and finite-horizon ``Q_H`` scaffolds need their
-own objective wiring before construction.
-
-The rejected finite-horizon contract is the dense rollout-owned view. Its
-``valid_action_mask`` and ``q_train_mask`` are
-``Tensor["S N_shell", bool]``; one-step target RRI and root-gain rewards are
-``Tensor["S N_shell", float32]``; selected indices, TD rewards, next-state ids,
-terminal flags, and discounts are state vectors of length ``S``. The action
-mask must gate argmax, softmax, loss, and bootstrap maximization, while the
-narrower training mask also requires a finite oracle target. Invalid actions
-stay in their shell row with false masks and NaN labels, never as low-RRI
-examples. Those semantics are not interchangeable with the compact/right-
-padded one-step CORAL batch consumed by this package.
+target-conditioned descriptor scaffolds need their own objective wiring before
+construction. Finite-horizon ``Q_H`` training is owned by the separate
+scorer-independent Q_H Lightning module.
 """
 
 from __future__ import annotations
@@ -46,8 +36,8 @@ def validate_vin_lightning_candidate_scorer_contract(
 
     Raises:
         NotImplementedError: If ``config`` names a planned scorer family whose
-            actor-visible target descriptor or finite-horizon rollout objective
-            is not wired into :class:`aria_nbv.lightning.VinLightningModule`.
+            actor-visible target descriptor is not wired into
+            :class:`aria_nbv.lightning.VinLightningModule`.
 
     Notes:
         The current scorer receives actor-visible snippet evidence and
@@ -56,13 +46,6 @@ def validate_vin_lightning_candidate_scorer_contract(
     """
 
     scorer_contract = candidate_scorer_training_contract(config)
-    if scorer_contract == "finite_horizon_q_scaffold":
-        raise NotImplementedError(
-            "VinLightningModule currently trains only the CORAL/VinPrediction "
-            "candidate-scorer contract. MultiStepCandidateScorerConfig names "
-            "the planned Q_H finite-horizon scorer, which needs a rollout "
-            "objective, hard valid-action masks, and a dedicated Lightning module.",
-        )
     if scorer_contract == "target_myopic_coral_scaffold":
         raise NotImplementedError(
             "VinLightningModule can train the target-conditioned myopic family "

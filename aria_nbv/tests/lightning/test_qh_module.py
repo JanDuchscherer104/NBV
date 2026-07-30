@@ -59,7 +59,7 @@ class _ChainDataset(Dataset[QhChain]):
         return self.chains[index]
 
 
-def _batch(*, bootstrap: bool = True) -> QhBatch:
+def _training_chain(*, bootstrap: bool = True) -> QhChain:
     chain = _chain(steps=2, width=3)
     supervision = replace(
         chain.supervision,
@@ -68,7 +68,11 @@ def _batch(*, bootstrap: bool = True) -> QhBatch:
         discount=torch.tensor([0.9, 0.0]),
         terminal=torch.tensor([not bootstrap, True]),
     )
-    return collate_qh_chains([replace(chain, supervision=supervision)])
+    return replace(chain, supervision=supervision)
+
+
+def _batch(*, bootstrap: bool = True) -> QhBatch:
+    return collate_qh_chains([_training_chain(bootstrap=bootstrap)])
 
 
 def _module(sync_interval: int = 2) -> QhLightningModule:
@@ -148,7 +152,7 @@ def test_bootstrap_argmax_uses_shifted_action_and_label_support() -> None:
     assert targets[0, 0].item() == pytest.approx(0.5 + 0.9 * 30.0)
 
 
-def test_nonterminal_row_without_joint_successor_support_does_not_bootstrap() -> None:
+def test_nonterminal_row_with_actor_successor_but_no_label_support_is_excluded() -> None:
     module = _module()
     module.target_scorer.next.data.copy_(torch.tensor([1_000_000.0, 20.0, 30.0, 0.0]))
     batch = _batch()
@@ -158,8 +162,93 @@ def test_nonterminal_row_without_joint_successor_support_does_not_bootstrap() ->
 
     _loss, targets, admitted = module.compute_fitted_q_loss(batch)
 
+    assert admitted.tolist() == [[False, False]]
+    assert targets[0, 0] == 0.5
+
+
+def test_nonterminal_row_without_actor_successor_keeps_immediate_reward_target() -> None:
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    action_mask[:, 1] = False
+    batch = replace(batch, actor=replace(batch.actor, action_mask=action_mask))
+
+    _loss, targets, admitted = _module().compute_fitted_q_loss(batch)
+
     assert admitted.tolist() == [[True, False]]
     assert targets[0, 0] == 0.5
+
+
+def test_mixed_supported_and_unsupported_rows_train_only_supported_queries() -> None:
+    supported = _training_chain()
+    unsupported = _training_chain()
+    labels = unsupported.supervision.label_mask.clone()
+    labels[1] = False
+    unsupported = replace(unsupported, supervision=replace(unsupported.supervision, label_mask=labels))
+    batch = collate_qh_chains([supported, unsupported])
+
+    module = _module()
+    loss, _targets, admitted = module.compute_fitted_q_loss(batch)
+    supported_loss, _targets, _admitted = module.compute_fitted_q_loss(collate_qh_chains([supported]))
+
+    assert admitted.tolist() == [[True, True], [False, False]]
+    assert loss.item() == pytest.approx(supported_loss.item())
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+def test_selected_online_value_must_be_finite(nonfinite: float) -> None:
+    module = _module()
+    module.online_scorer.current.data[1] = nonfinite
+
+    with pytest.raises(ValueError, match="selected online predictions"):
+        module.compute_fitted_q_loss(_batch())
+
+
+@pytest.mark.parametrize("scorer_name", ["online_scorer", "target_scorer"])
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+def test_supported_successor_values_must_be_finite(scorer_name: str, nonfinite: float) -> None:
+    module = _module()
+    scorer = getattr(module, scorer_name)
+    scorer.next.data[2 if scorer_name == "online_scorer" else 1] = nonfinite
+    expected = "online successor predictions" if scorer_name == "online_scorer" else "target successor predictions"
+
+    with pytest.raises(ValueError, match=expected):
+        module.compute_fitted_q_loss(_batch())
+
+
+def test_nonfinite_unsupported_successor_values_are_ignored() -> None:
+    module = _module()
+    module.online_scorer.next.data[1] = float("nan")
+    module.target_scorer.next.data[1] = float("nan")
+    batch = _batch()
+    labels = batch.supervision.label_mask.clone()
+    labels[:, 1, 1] = False
+    batch = replace(batch, supervision=replace(batch.supervision, label_mask=labels))
+
+    loss, targets, admitted = module.compute_fitted_q_loss(batch)
+
+    assert torch.isfinite(loss)
+    assert torch.isfinite(targets[admitted]).all()
+
+
+def test_all_unsupported_batch_is_exact_optimizer_noop_with_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    batch = _batch()
+    labels = batch.supervision.label_mask.clone()
+    labels[:, 1] = False
+    batch = replace(batch, supervision=replace(batch.supervision, label_mask=labels))
+    logged: dict[str, torch.Tensor] = {}
+    monkeypatch.setattr(module, "log", lambda name, value, **kwargs: logged.__setitem__(name, value.detach()))
+
+    result = module.training_step(batch, 0)
+
+    assert result is None
+    assert module.online_scorer.calls == 0
+    assert module.target_scorer.calls == 0
+    assert module.optimizer_updates.item() == 0
+    assert logged["train/unsupported_backup_rows"].item() == 1
+    assert logged["train/unsupported_backup_fraction"].item() == 1
 
 
 @pytest.mark.parametrize("sync_interval", [1, 2])
@@ -203,6 +292,8 @@ def test_single_device_validation_logs_exact_weighted_loss_and_only_infrastructu
         "val/terminal_fraction",
         "val/no_successor_fraction",
         "val/nonfinite_valid_values",
+        "val/unsupported_backup_rows",
+        "val/unsupported_backup_fraction",
     }
 
 

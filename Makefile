@@ -120,7 +120,6 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/lightning/qh_module.py \
 	aria_nbv/rollouts/qh_reader.py \
 	aria_nbv/vin/models/__init__.py \
-	aria_nbv/vin/models/target_finite_horizon.py \
 	tests/data_handling/test_qh.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/data_handling/test_vin_offline_store.py \

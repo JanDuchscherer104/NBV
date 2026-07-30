@@ -338,8 +338,6 @@ website:
           contents:
           - text: scene_myopic
             file: reference/vin.models.scene_myopic.qmd
-          - text: target_finite_horizon
-            file: reference/vin.models.target_finite_horizon.qmd
           - text: target_myopic
             file: reference/vin.models.target_myopic.qmd
         - text: modules

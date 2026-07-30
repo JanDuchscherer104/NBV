@@ -137,13 +137,16 @@ class QhLightningModule(pl.LightningModule):
         """Execute one globally admitted optimizer transaction or an exact no-op."""
 
         del batch_idx
-        admitted = batch.selected_train_mask
+        admitted = self._fitted_q_admission_mask(batch)
         global_count = self._global_admitted_count(admitted)
         if int(global_count.item()) == 0:
+            selected_global_count = self._global_admitted_count(batch.selected_train_mask)
+            if int(selected_global_count.item()) > 0:
+                self._log_unsupported_backup_metrics(Stage.TRAIN, batch=batch)
             return None
 
         losses, targets, admitted, online_values, target_values = self._fitted_q_components(batch)
-        local_loss_sum = losses.sum() if bool(admitted.any()) else online_values.sum() * 0
+        local_loss_sum = losses.sum() if bool(admitted.any()) else self._parameter_connected_zero()
         world_size = torch.distributed.get_world_size() if self._distributed() else 1
         loss = local_loss_sum * world_size / global_count.to(dtype=local_loss_sum.dtype)
 
@@ -231,7 +234,7 @@ class QhLightningModule(pl.LightningModule):
         }
 
     def _fitted_q_components(self, batch: QhBatch) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        admitted = batch.selected_train_mask
+        admitted = self._fitted_q_admission_mask(batch)
         online_values = self(batch.actor)
         with torch.no_grad():
             target_values = self._score(self.target_scorer, batch.actor)
@@ -240,18 +243,24 @@ class QhLightningModule(pl.LightningModule):
         safe_selected = selected.clamp(0, max(online_values.shape[-1] - 1, 0))
         selected_reward = batch.supervision.candidate_reward.gather(-1, safe_selected.unsqueeze(-1)).squeeze(-1)
         targets = selected_reward.float().clone()
-        bootstrap = batch.bootstrap_mask
+        bootstrap = admitted & ~batch.supervision.terminal & batch.successor_present
         if bool(bootstrap.any()):
             successor_support = batch.successor_backup_mask
             online_next = torch.zeros_like(online_values)
             target_next = torch.zeros_like(target_values)
             online_next[:, :-1] = online_values[:, 1:]
             target_next[:, :-1] = target_values[:, 1:]
+            self._require_finite(
+                online_next[bootstrap][successor_support[bootstrap]],
+                "online successor predictions used for backup selection",
+            )
             next_index = online_next[bootstrap].masked_fill(~successor_support[bootstrap], -torch.inf).argmax(dim=-1)
             next_value = target_next[bootstrap].gather(-1, next_index.unsqueeze(-1)).squeeze(-1)
+            self._require_finite(next_value, "target successor predictions used for backup evaluation")
             targets[bootstrap] += batch.supervision.discount.float()[bootstrap] * next_value
 
         predictions = online_values[admitted].gather(-1, safe_selected[admitted].unsqueeze(-1)).squeeze(-1)
+        self._require_finite(predictions, "selected online predictions used for fitted-Q loss")
         losses = functional.huber_loss(
             predictions,
             targets[admitted].detach(),
@@ -280,6 +289,8 @@ class QhLightningModule(pl.LightningModule):
                 online_values=online_values,
                 target_values=target_values,
             )
+        elif bool(batch.selected_train_mask.any()):
+            self._log_unsupported_backup_metrics(stage, batch=batch)
         return losses.sum() / row_count.clamp_min(1)
 
     def _log_infrastructure_metrics(
@@ -293,7 +304,7 @@ class QhLightningModule(pl.LightningModule):
     ) -> None:
         count = admitted.sum()
         denominator = count.clamp_min(1).float()
-        nonterminal_no_successor = admitted & ~batch.supervision.terminal & ~batch.successor_present
+        nonterminal_no_successor = admitted & ~batch.supervision.terminal & ~batch.actor_successor_present
         valid = batch.actor.candidate_mask & batch.actor.step_mask.unsqueeze(-1)
         metrics = {
             "bootstrap_fraction": batch.bootstrap_mask.sum().float() / denominator,
@@ -313,6 +324,30 @@ class QhLightningModule(pl.LightningModule):
                 sync_dist=False,
                 batch_size=max(int(count.item()), 1),
                 reduce_fx="sum" if name == "nonfinite_valid_values" else "mean",
+            )
+        self._log_unsupported_backup_metrics(stage, batch=batch)
+
+    def _log_unsupported_backup_metrics(self, stage: Stage, *, batch: QhBatch) -> None:
+        selected = batch.selected_train_mask
+        unsupported = self._unsupported_backup_mask(batch)
+        training = stage is Stage.TRAIN
+        counts = torch.stack((unsupported.sum(), selected.sum())).to(dtype=torch.float32)
+        if training and self._distributed():
+            torch.distributed.all_reduce(counts, op=torch.distributed.ReduceOp.SUM)
+        unsupported_count, selected_count = counts.unbind()
+        denominator = selected_count.clamp_min(1)
+        for name, value, reduce_fx in (
+            ("unsupported_backup_rows", unsupported_count, "sum"),
+            ("unsupported_backup_fraction", unsupported_count / denominator, "mean"),
+        ):
+            self.log(
+                f"{stage.value}/{name}",
+                value,
+                on_step=training,
+                on_epoch=not training,
+                sync_dist=False,
+                batch_size=max(int(selected_count.item()), 1),
+                reduce_fx=reduce_fx,
             )
 
     def _log_aggregate(self, stage: Stage, loss_sum: Tensor, row_count: Tensor) -> None:
@@ -340,6 +375,35 @@ class QhLightningModule(pl.LightningModule):
     def _freeze_target(self) -> None:
         self.target_scorer.requires_grad_(False)
         self.target_scorer.eval()
+
+    def _parameter_connected_zero(self) -> Tensor:
+        terms = [
+            torch.nan_to_num(parameter).sum() * 0
+            for parameter in self.online_scorer.parameters()
+            if parameter.requires_grad
+        ]
+        if not terms:
+            raise RuntimeError("Q_H scorer must expose at least one trainable parameter.")
+        return torch.stack(terms).sum()
+
+    @staticmethod
+    def _unsupported_backup_mask(batch: QhBatch) -> Tensor:
+        return (
+            batch.selected_train_mask
+            & ~batch.supervision.terminal
+            & batch.actor_successor_present
+            & ~batch.successor_present
+        )
+
+    @classmethod
+    def _fitted_q_admission_mask(cls, batch: QhBatch) -> Tensor:
+        return batch.selected_train_mask & ~cls._unsupported_backup_mask(batch)
+
+    @staticmethod
+    def _require_finite(values: Tensor, description: str) -> None:
+        if not bool(torch.isfinite(values).all()):
+            count = int((~torch.isfinite(values)).sum().item())
+            raise ValueError(f"Q_H scorer produced {count} non-finite {description}.")
 
     @staticmethod
     def _score(scorer: nn.Module, actor: QhActorTensors) -> Float[Tensor, "B S N"]:

@@ -97,6 +97,13 @@ def test_two_process_local_empty_rank_matches_single_rank_update(tmp_path: Path)
         assert torch.allclose(rank_states[0][name], expected, atol=1e-6, rtol=1e-6), name
 
 
+def test_two_process_unsupported_backup_metrics_are_global(tmp_path: Path) -> None:
+    payloads = _run_torchrun(tmp_path, "unsupported-metric")
+
+    assert {payload["unsupported_backup_rows"] for payload in payloads} == {1.0}
+    assert all(float(payload["unsupported_backup_fraction"]) == pytest.approx(1.0 / 3.0) for payload in payloads)
+
+
 @pytest.mark.parametrize("scenario", ["distributed-val", "distributed-test"])
 def test_two_process_evaluation_fails_before_scorer_or_logging(tmp_path: Path, scenario: str) -> None:
     payloads = _run_torchrun(tmp_path, scenario)

@@ -31,6 +31,11 @@ scene-wise one-step CORAL stack:
 - `qh_module.py` owns scorer-independent fitted-Q optimization. Construct
   `QhLightningModule(config, scorer=...)` with a required scorer that maps
   `QhActorTensors` to `Tensor[B,S,N]` candidate values.
+- A non-terminal selected row is excluded when the actor has a valid successor
+  but no successor has label support. Terminal rows and states with no
+  actor-valid successor keep their immediate-reward boundary target.
+- Scorer outputs must be finite only where they participate in the selected
+  loss or supported Double-Q backup; padded and unsupported values are ignored.
 
 The package does not provide a production scorer, dedicated CLI, experiment
 configuration, run-artifact lifecycle, checkpoint policy, or cluster launcher
