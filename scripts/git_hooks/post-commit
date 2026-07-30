@@ -1,5 +1,5 @@
 #!/bin/sh
-# Dispatch local knowledge-graph refreshes after relevant commits.
+# Dispatch local Graphify refreshes after relevant commits.
 
 set -u
 
@@ -8,12 +8,6 @@ cd "$REPO" || exit 0
 
 changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null || true)
 [ -n "$changed" ] || exit 0
-
-case "$changed" in
-  *.agents/memory/state/*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*docs/contents/*|*docs/typst/*|*docs/references.bib*|*aria_nbv/aria_nbv/*)
-    scripts/kg/auto_refresh.sh
-    ;;
-esac
 
 case "$changed" in
   *.graphifyignore*|*.agents/AGENTS_INTERNAL_DB.md*|*.agents/issues.toml*|*.agents/todos.toml*|*.agents/refactors.toml*|*.agents/resolved.toml*|*.agents/references/*|*.agents/memory/state/*|*aria_nbv/*|*docs/index.qmd*|*docs/contents/*|*docs/typst/shared/*|*docs/typst/thesis/*|*docs/figures/diagrams/*|*docs/literature/*|*docs/references.bib*|*Makefile*)

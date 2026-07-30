@@ -92,7 +92,7 @@ def test_marker_fallback_includes_session_without_repo_cwd(tmp_path: Path) -> No
                 "type": "event_msg",
                 "payload": {
                     "type": "user_message",
-                    "message": "ARIA-NBV should keep transcript distillates KG-indexable.",
+                    "message": "ARIA-NBV should keep transcript distillates reviewable.",
                 },
             },
         ],

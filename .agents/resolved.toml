@@ -186,6 +186,34 @@ resolved_at = "2026-05-08"
 resolution_note = "kg-query duplication eliminated by deleting the Make target (commit d3e980d) and the supporting refactor record (refactor-017). Documented in litkg_quick_reference.md and aria-litkg-memory/SKILL.md updates from the same pass."
 resolved_from = ".agents/issues.toml"
 
+[[issue]]
+id = "issue-023"
+title = "litkg probation-router output is still too noisy for default agent use"
+description = "litkg should stay as a source-backed router, claim checker, and research-memory layer, but routing output and guidance ownership must stay discriminative and non-duplicative."
+type = "maintenance"
+priority = "medium"
+status = "resolved"
+labels = ["kg", "litkg", "semantic-scholar", "docs", "tooling"]
+context = ["The probation lane is correct: use litkg for broad source-backed routing, claim checks, research-memory lookup, and consolidation; localized implementation starts with nearest guides, owning skills, aria-nbv-context, and targeted file reads.", "The quick reference, config comments, issues, and debriefs still repeat trust/schema policy; quick reference should stay quick-use only while issue-025 owns the normative provenance/schema contract.", "The alignment tools contract makes litkg one advisory evidence channel inside a broader optional-tools contract; it should not become a hidden source of repo truth or a duplicate policy surface."]
+references = ["repo:AGENTS.md#routing", "repo:.agents/references/alignment_tools_contract.md", "repo:.agents/references/litkg_quick_reference.md", "repo:.agents/skills/semantic-scholar-litkg/SKILL.md", "repo:.agents/skills/aria-litkg-memory/SKILL.md", "repo:.configs/litkg.toml", "repo:.agents/refactors.toml#refactor-016", "repo:.agents/issues.toml#issue-025", "repo:.agents/issues.toml#issue-029", "repo:.agents/issues.toml#issue-030", "repo:.agents/todos.toml#todo-056", "repo:Makefile", "repo:.agents/external/litkg-rs/docs/architecture.md#semantic-scholar-contract"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; direct source inspection is the supported evidence path."
+resolved_from = ".agents/issues.toml"
+
+[[issue]]
+id = "issue-025"
+title = "Agents DB and transcript provenance are not yet full KG retrieval contracts"
+description = "Active backlog records carry context and references, but one normative litkg provenance contract must own schema, trust tiers, authority/freshness, and typed source edges."
+type = "integration"
+priority = "medium"
+status = "resolved"
+labels = ["agents-db", "kg", "litkg", "provenance", "semantic-scholar"]
+context = ["The normative contract should live in the litkg integration/spec/config layer: context-pack schema, transcript trust tiers, source authority/freshness, typed repo/bib/url/context7/litkg edges, and warning-first stale-reference diagnostics.", "Issues and todos should track implementation gaps instead of restating the full trust ladder; checked-in memory, backlog, docs, and code remain the only current truth.", "Autoresearch and MCP harnesses need the same proposal-only provenance rule: they can emit evidence and suggested updates, but normal repo lanes apply durable memory, backlog, roadmap, or policy changes."]
+references = ["repo:scripts/agents_db.py", "repo:.agents/references/alignment_tools_contract.md", "repo:.agents/skills/agents-db/references/provenance.md", "repo:.agents/refactors.toml#refactor-016", "repo:.agents/issues.toml#issue-029", "repo:.agents/todos.toml#todo-061", "url:https://www.semanticscholar.org/product/api"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; direct source inspection is the supported evidence path."
+resolved_from = ".agents/issues.toml"
+
 [[todo]]
 id = "todo-009"
 title = "Bounded public docs identity cleanup"
@@ -936,6 +964,266 @@ resolved_at = "2026-06-19"
 resolution_note = "Indexed all remaining thesis draft-marker TODO macros in .omx/context/thesis-marker-todos-20260618T224945Z.md and mapped them to existing active thesis, evidence, target/RRI, Q_H, rollout, and bridge-scope owners. Marker macros remain in Typst source until those owning gates are complete."
 resolved_from = ".agents/todos.toml"
 
+[[todo]]
+id = "todo-035"
+title = "Finish litkg config refresh and Semantic Scholar enrichment path"
+description = "Keep ARIA-NBV litkg config aligned with current Typst/slide paths, refresh generated graph outputs, and document the Semantic Scholar API-key/rate-limit workflow."
+priority = "medium"
+status = "resolved"
+labels = ["kg", "litkg", "semantic-scholar", "docs"]
+issue_ids = []
+loc_min = 80
+loc_expected = 220
+loc_max = 520
+context = ["The litkg profile now points at current seminar_paper, seminar_slides, thesis, thesis_slides, and shared Typst sources, but this TODO remains open until generated graph outputs and documented refresh/enrichment paths are clean.", "The context pack still reports graphify and codegraphcontext refresh recommendations.", "Semantic Scholar REST lookups worked for several papers but enrichment remains incomplete without SEMANTIC_SCHOLAR_API_KEY and unauthenticated calls hit 429.", "The alignment tools contract keeps literature enrichment and graph refreshes as evidence producers behind the optional-tools boundary; generated outputs should not become source-of-truth policy."]
+references = ["repo:.agents/references/alignment_tools_contract.md", "repo:.agents/skills/semantic-scholar-litkg/SKILL.md", "repo:.agents/skills/semantic-scholar-litkg/references/integration-spec.md", "repo:.configs/litkg.toml", "repo:.agents/external/litkg-rs/docs/architecture.md#semantic-scholar-contract", "url:https://www.semanticscholar.org/product/api"]
+implementation_notes = ["Keep .configs/litkg.toml source paths aligned with current seminar_paper, seminar_slides, thesis, thesis_slides, and shared Typst locations.", "Run the lightest litkg capability/context-pack checks after config changes; avoid committing generated runtime caches unless intentionally versioned.", "Document how to set SEMANTIC_SCHOLAR_API_KEY and rerun s2 enrich without storing the key.", "Keep litkg-rs toolkit changes repo-independent; put ARIA-specific fixes in config/docs."]
+acceptance = ["`litkg-cli capabilities` no longer reports stale Typst source paths for ARIA-NBV.", "The context-pack action plan can cite current Typst/docs/literature surfaces.", "Semantic Scholar enrichment instructions are clear and do not commit secrets.", "Graphify/Neo4j/generated outputs are refreshed or explicitly left as generated artifacts with repair commands."]
+verification = [".agents/external/litkg-rs/target/debug/litkg-cli capabilities --config .configs/litkg.toml --repo-root . --format json", ".agents/external/litkg-rs/target/debug/litkg-cli context-pack --config .configs/litkg.toml --repo-root . --task \"rollout planning smoke\" --profile rollout-planning --format text", "make check-agent-memory"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-039"
+title = "Add litkg-backed agents-db source-reference validation and KG edges"
+description = "Resolve agents-db references into litkg-rs graph entities and expose validation, repair, retrieval, and consolidation output for repo files, citation keys, Semantic Scholar IDs, external docs, generated context, and experiment evidence."
+priority = "medium"
+status = "resolved"
+labels = ["agents-db", "kg", "litkg", "provenance"]
+issue_ids = []
+loc_min = 180
+loc_expected = 420
+loc_max = 900
+context = ["The ARIA agents DB now requires context and structured references, and litkg-rs context packs can carry those fields.", "The next integration step is to resolve those reference strings into typed KG nodes/edges and report stale references before agents rely on them.", "This should grow beyond reference-edge validation into the full source-reference contract for kg-route/kg-search, authority-aware ranking, claim checks, and consolidation proposals that cite DB evidence alongside code, docs, papers, experiment manifests, and autoresearch evidence bundles."]
+references = ["repo:scripts/agents_db.py", "repo:.agents/references/alignment_tools_contract.md", "repo:.agents/skills/agents-db/references/provenance.md", "repo:.agents/skills/aria-litkg-memory/SKILL.md", "repo:.agents/external/litkg-rs/crates/litkg-core/src/context_pack.rs", "repo:.agents/external/litkg-rs/docs/architecture.md#adapter-output-contracts", "repo:.agents/external/litkg-rs/docs/kg-stack.md", "url:https://www.semanticscholar.org/product/api"]
+implementation_notes = ["Start in litkg-rs with a repo-independent source-reference parser for prefixes already enforced by scripts/agents_db.py.", "Validate repo paths and anchors best-effort, check bib keys against configured BibTeX, and connect arxiv/doi/s2 references to Semantic Scholar-enriched records when present.", "Emit typed KG edges such as BACKLOG_REFERENCES_FILE, BACKLOG_REFERENCES_PAPER, BACKLOG_REFERENCES_EXTERNAL_DOC, BACKLOG_REFERENCES_EXPERIMENT, and BACKLOG_DERIVED_FROM_CONTEXT_PACK in graphify/Neo4j outputs where the adapter supports them.", "Expose unresolved-reference, stale-source, and consolidation-proposal output through context-pack or a dedicated check command.", "Keep ARIA-specific defaults in .configs/litkg.toml and skills; do not hard-code ARIA paths into litkg-core."]
+acceptance = ["A litkg-rs check or context-pack report can list unresolved agents-db references with record ids and repair hints.", "Context-pack JSON exposes issue/todo context and references for ARIA-NBV active backlog records.", "At least repo: and bib: references are resolved into graph/export evidence in a smoke run or documented adapter contract.", "Agents can query backlog evidence alongside code/docs/papers from one litkg surface.", "Semantic Scholar identifiers remain optional enrichment and missing API keys produce repair commands, not hard failures."]
+verification = ["cargo test --manifest-path .agents/external/litkg-rs/Cargo.toml -p litkg-core -p litkg-cli context_pack", ".agents/external/litkg-rs/target/debug/litkg-cli context-pack --config .configs/litkg.toml --repo-root . --task \"agents db provenance smoke\" --profile thesis-coding --format json", "make agents-db AGENTS_ARGS='validate'"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-043"
+title = "Add authority and freshness ranking to litkg retrieval"
+description = "Teach litkg retrieval output to expose source type, authority tier, freshness/status metadata, component scores, final score, and explanation so agents can distinguish current canonical truth from stale evidence."
+priority = "high"
+status = "resolved"
+labels = ["kg", "litkg", "retrieval", "ranking", "memory"]
+issue_ids = []
+loc_min = 180
+loc_expected = 420
+loc_max = 900
+context = ["ARIA-NBV source order is currently encoded in AGENTS.md and the aria-litkg-memory skill, but litkg retrieval itself does not yet surface authority/freshness ranking.", "Without explicit ranking metadata, semantic search can over-rank old debriefs, archived scratchpads, generated context, or autoresearch reports above code, tests, current configs, canonical memory, and active backlog.", "The desired output should explain why a result was ranked, including lexical, semantic, graph-neighborhood, authority, and freshness contributions when available."]
+references = ["repo:AGENTS.md#source-order", "repo:.agents/references/alignment_tools_contract.md", "repo:.agents/skills/aria-litkg-memory/SKILL.md#source-authority", "repo:.configs/litkg.toml", "repo:.agents/external/litkg-rs/docs/architecture.md", "repo:.agents/external/litkg-rs/docs/kg-stack.md", "repo:.agents/kg/README.md"]
+implementation_notes = ["Start with deterministic metadata and scoring over existing file-based retrieval before adding optional embedding or live graph dependencies.", "Emit fields such as source_path, source_type, authority, updated, status, score_lexical, score_semantic, score_graph, score_final, and why in JSON output.", "Warn when results come from archived, historical, or superseded sources.", "Keep repo-specific authority tiers configurable instead of hard-coding ARIA paths into litkg-core."]
+acceptance = ["`kg find` or context-pack JSON includes source authority/freshness fields for retrieved evidence.", "Canonical memory and active backlog outrank old debriefs for broad current-truth queries when relevance is comparable.", "Stale/archive sources are marked rather than silently treated as current.", "Text output includes enough explanation for an agent to cite the right source."]
+verification = ["cargo test --manifest-path .agents/external/litkg-rs/Cargo.toml -p litkg-core -p litkg-cli", "make kg-search KG_QUERY=\"current project state\" KG_FORMAT=json KG_LIMIT=5"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-044"
+title = "Add kg-consolidate memory proposal command"
+description = "Add a litkg consolidation proposal mode that scans debriefs, resolved work, changed docs/code, generated context, and experiment manifests to propose canonical memory and backlog updates."
+priority = "medium"
+status = "resolved"
+labels = ["kg", "litkg", "memory", "consolidation", "agents-db"]
+issue_ids = []
+loc_min = 220
+loc_expected = 520
+loc_max = 1200
+context = ["ARIA-NBV already separates durable state under `.agents/memory/state/` from active backlog in the agents DB, but litkg does not yet close the loop from episodic evidence to proposed canonical updates.", "The command should produce patch-like Markdown suggestions for PROJECT_STATE, DECISIONS, OPEN_QUESTIONS, GOTCHAS, issues, todos, and refactors rather than overwriting files.", "This is the missing end-of-task leg of the agent memory plane: retrieve context, do work, write debrief, then consolidate proposals with source references."]
+references = ["repo:.agents/memory/README.md", "repo:.agents/skills/agents-db/references/provenance.md", "repo:.agents/memory/state/PROJECT_STATE.md"]
+implementation_notes = ["Implement the repo-independent command in litkg-rs, such as `consolidate-memory`, then expose a root `make kg-consolidate` wrapper after the CLI exists.", "Scan new debriefs, resolved DB records, active TODO deltas, changed source/docs, generated context, and curated experiment manifests.", "Group output by target file and include source references plus confidence/authority notes.", "Never silently edit canonical memory or backlog; output proposals for human/agent review."]
+acceptance = ["A consolidation command can emit suggested PROJECT_STATE, DECISIONS, OPEN_QUESTIONS, GOTCHAS, and backlog changes in Markdown or JSON.", "Suggestions cite source files/debriefs/records that justify each proposed change.", "The command distinguishes canonical updates from stale or low-authority history.", "No files are overwritten unless a separate explicit apply workflow is requested."]
+verification = ["cargo test --manifest-path .agents/external/litkg-rs/Cargo.toml -p litkg-core -p litkg-cli", "make check-agent-memory", "make agents-db AGENTS_ARGS='validate'"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-056"
+title = "Harden litkg probation-router context packs and transcript trust"
+description = "Finish the remaining litkg probation-router work after the first context-pack routing/scoring hardening pass."
+priority = "medium"
+status = "resolved"
+labels = ["kg", "litkg", "agent", "routing", "schema"]
+issue_ids = []
+loc_min = 160
+loc_expected = 420
+loc_max = 1000
+context = ["Initial context-pack fields, meaningful-term scoring, concrete-source boosts, generated/audit penalties, optional-backend warning behavior, verdict-bearing claim checks, backlog filtering, worktree exclusion, and confidence-floor routing have landed or are landing in the current contract-fix pass.", "Remaining probation-router work is transcript distillation, complete backlog/source-reference edge export, and consolidating schema/trust prose into one normative owner."]
+references = ["repo:.agents/references/litkg_quick_reference.md", "repo:AGENTS.md#commands", "repo:.agents/skills/aria-litkg-memory/SKILL.md", "repo:.agents/skills/semantic-scholar-litkg/SKILL.md", "repo:.agents/issues.toml#issue-023", "repo:.agents/issues.toml#issue-025", "repo:.agents/refactors.toml#refactor-016", "repo:.agents/external/litkg-rs/crates/litkg-core/src/context_pack.rs", "repo:.agents/external/litkg-rs/docs/architecture.md#adapter-output-contracts"]
+implementation_notes = ["Add transcript mining as generic JSONL session input to structured candidates with user intent, decisions, blockers, commands, changed surfaces, action items, and trust tiers.", "Complete active_backlog and source-reference edges so issue/todo ids, priority/status, compact context, references, acceptance, and verification are available to kg-route/kg-search without duplicating issue prose.", "Move long context-pack schema and transcript trust-ladder prose out of quick-use docs into the normative integration/spec/config owner.", "Preserve existing kg-* Make targets; do not add agent-* aliases unless a later decision changes the command surface.", "Keep active_todos and active_issues task-filtered, capped, and source-reference aware so localized coding tasks do not receive the whole backlog."]
+acceptance = ["Transcript-derived items have explicit trust tiers and never outrank canonical state unless promoted through checked-in memory/backlog/docs/code.", "active_backlog and source-reference edges cite concrete issue/todo ids and typed references without requiring agents to parse long prose blobs.", "The quick reference names only usage, commands, fallback, mandatory claim checks, and a short field summary; the full schema/trust contract has one deeper owner.", "Context packs keep backlog slices filtered and capped, use task-grounded risk/missing-context output, inject matched verification/reference files, exclude transient worktrees, and expose a confidence_summary fallback for low-signal routes.", "Verb-intent boost (code-vs-process) closed wontfix per 2026-05-08 smoke evidence: three real tasks (todo-026 code, issue-013 process, mixed harness-design) all produced reasonable top_sources without a dedicated boost; existing apply_route_surface_adjustment plus verification-target injection covers the observed gap. Re-open if a future smoke shows mis-ranking on a real backlog item.", "Existing `make kg-route`, `make kg-search`, and `make kg-claim-check` wrappers continue to work without new agent-* aliases."]
+verification = ["cargo test --manifest-path .agents/external/litkg-rs/Cargo.toml -p litkg-core -p litkg-cli context_pack", "make kg-route KG_TASK=\"fix rerun inspector rollout zarr logging\" KG_FORMAT=json", "make kg-route KG_TASK=\"write thesis claim about target-conditioned Q_H\" KG_FORMAT=json", "make kg-search KG_QUERY=\"litkg context-pack transcript trust stale reference diagnostics\" KG_FORMAT=json", "make kg-claim-check KG_CLAIM=\"GT OBBs are actor-visible in the main thesis setting\" KG_FORMAT=json"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-062"
+title = "Restore source-path provenance for paper:* nodes in litkg ingestion"
+description = "Curated literature notes ingested as Paper/Document nodes (paper:rri-theory, paper:nbv-background, paper:gen-nbv, paper:hestia, paper:active-radiance-and-3dgs, paper:pomdp-submodularity, etc.) carry no source_path or repo_path after ingestion. The ranking layer globs against the source path for [authority_tiers] matching, so these nodes always fall to authority=default multiplier 1.0. The claim-check verdict heuristic only counts spans with authority canonical or active, so literature claims whose evidence sits in these nodes come back unverifiable even when the cited paper is fully indexed."
+priority = "high"
+status = "resolved"
+labels = ["litkg", "ingestion", "authority", "claim-check"]
+issue_ids = []
+loc_min = 60
+loc_expected = 140
+loc_max = 320
+context = ["nodes.jsonl shows 84 paper:* nodes; all have source_path=null and repo_path=null in their properties.", "ranking.rs:27 reads source_path.to_string_lossy() and falls through to authority_label=default when no glob matches.", "context_pack.rs:1727 (is_canonical_or_active) accepts only labels canonical or active for claim-verdict counting.", "The 2026-05-11 proposal-claim review pivoted P0 of the litkg native-integration plan from a 5-line TOML edit to this Rust change once V2 verification showed the null paths.", "Best fix is to populate source_path at the ingestion site (crates/litkg-core/src/ingest/papers.rs or wherever Paper/Document nodes are created from QMD/MD sources); a less-invasive alternative is a config-driven paper_authority map in litkg.toml read before path-glob fallback."]
+references = ["repo:.agents/external/litkg-rs/crates/litkg-core/src/ranking.rs", "repo:.agents/external/litkg-rs/crates/litkg-core/src/context_pack.rs", "repo:.configs/litkg.toml", "repo:.agents/issues.toml#issue-025", "repo:.agents/kg/generated/neo4j-export/nodes.jsonl", "repo:.agents/skills/aria-litkg-memory/SKILL.md"]
+implementation_notes = ["Locate the ingestion code that constructs Paper/Document nodes from QMD/MD sources (likely .agents/external/litkg-rs/crates/litkg-core/src/ingest/ or sibling).", "Add a source_path property to those nodes pointing at the originating file (e.g. docs/contents/theory/rri_theory.qmd).", "Verify by inspecting nodes.jsonl after re-ingestion: paper:rri-theory should carry properties.source_path.", "Add an [authority_tiers] entry tier-ing docs/contents/theory/** and docs/contents/literature/** at 1.4 (active) or 1.5 (canonical) once provenance is restored.", "Alternative if source-path injection is hard: add a top-level [paper_authority] table to litkg.toml mapping paper_id to a multiplier; have ranking.rs read it before falling back to path-glob.", "Re-run the seven proposal claim checks documented in .agents/memory/history/2026/05/2026-05-08 and confirm at least 5/7 flip to supported."]
+acceptance = ["paper:* nodes in nodes.jsonl carry a non-null source_path that points at the underlying QMD/MD source.", "make kg-search KG_QUERY='VIN-NBV RRI' returns paper:rri-theory or paper:nbv-background with authority=active or canonical, not default.", "make kg-claim-check KG_CLAIM='VIN-NBV introduces Relative Reconstruction Improvement (RRI), an oracle label computed from point-mesh reconstruction-error reduction after adding a query view' returns verdict=supported with confidence > 0.6.", "At least five of the seven 2026-05-11 proposal claims flip from unverifiable to supported."]
+verification = ["cd .agents/external/litkg-rs && cargo fmt --all --check && cargo test", "make kg-refresh-light", "make kg-claim-check KG_CLAIM='VIN-NBV introduces Relative Reconstruction Improvement (RRI), an oracle label computed from point-mesh reconstruction-error reduction after adding a query view' KG_FORMAT=json"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-063"
+title = "Lean ContextPack default: omit evidence_spans, backend_status, and boilerplate fields"
+description = "make kg-route KG_TASK='smoke' KG_FORMAT=json returns a 242 KB payload today. Six fields account for 84 percent of the bytes and are either legacy aliases or unconditionally emitted boilerplate. Default ContextPack should omit them; an opt-in flag re-enables the legacy shape for debugging."
+priority = "medium"
+status = "resolved"
+labels = ["litkg", "context-pack", "signal-noise"]
+issue_ids = []
+loc_min = 80
+loc_expected = 200
+loc_max = 400
+context = ["The 2026-05-11 litkg audit (see history debrief) measured 242 KB vs 39 KB JSON for a trivial smoke query when six fields are removed.", "evidence_spans is the bulk (154 entries x ~1.3 KB) and is already deduplicated into top_sources for agent consumption.", "backend_status duplicates kg-capabilities output on every call.", "missing_leaves and missing_context_leaves are documented as legacy aliases for missing_context in .agents/references/litkg_quick_reference.md.", "action_plan emits the same two generic bullets regardless of task; suggested_next_action.summary already carries the actionable line.", "assumptions emits the same three boilerplate sentences regardless of task.", "profile, budget_tokens, and truncated metadata almost never matter to the agent and are misleading for trivial inputs.", "The P1 compact filter (scripts/kg/compact_*.jq) already hides these from agents, but litkg-rs still constructs the payload and jq still chews it. This todo fixes the source."]
+references = ["repo:.agents/external/litkg-rs/crates/litkg-core/src/context_pack.rs", "repo:.agents/external/litkg-rs/crates/litkg-cli/src/main.rs", "repo:.agents/references/litkg_quick_reference.md", "repo:scripts/kg/compact_route.jq", "repo:.agents/issues.toml#issue-025", "repo:.agents/memory/history/2026/05/2026-05-11_kg_compact_default_and_stop_hook_auto_refresh.md"]
+implementation_notes = ["Identify the ContextPack serialization site in crates/litkg-core/src/context_pack.rs and wrap legacy/bulk fields in conditional emission based on a new --full CLI flag.", "Default-omit on kg-route, kg-claim-check, kg-search; opt-in on --full or KG_VERBOSE=1.", "Bulk fields to omit by default: evidence_spans, backend_status, action_plan, assumptions, missing_leaves, missing_context_leaves, profile, budget_tokens, truncated, and relevant_papers when empty.", "Update inspect_cli.rs tests to cover both default-lean and --full output.", "Update Makefile kg-route etc. so KG_VERBOSE=1 path passes --full.", "Acceptance: trivial kg-route KG_TASK='smoke' KG_FORMAT=json payload drops from 242 KB to <=50 KB."]
+acceptance = ["Default kg-route JSON for a trivial input is <=50 KB (was 242 KB).", "Legacy aliases missing_leaves and missing_context_leaves are removed or only emitted under --full.", "evidence_spans, backend_status, action_plan, assumptions emit only under --full or KG_VERBOSE=1.", "Existing compact filters under scripts/kg/compact_*.jq continue to work unchanged.", "make kg-route KG_VERBOSE=1 reproduces the legacy field set for backwards compatibility."]
+verification = ["cd .agents/external/litkg-rs && cargo fmt --all --check && cargo test", "make kg-route KG_TASK='smoke' KG_FORMAT=json | wc -c", "make kg-route KG_TASK='smoke' KG_VERBOSE=1 KG_FORMAT=json | wc -c", "make kg-route KG_TASK='harden bounded oracle-RRI lookahead' | wc -l"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-064"
+title = "Audit and prune stale generated-literature notes under .agents/kg/generated/literature/"
+description = "21 MB of generated KG artifacts live under .agents/kg/generated/. Roughly 30 of the files in generated/literature/ carry 2026-03-30 dates and predate the seminar-to-thesis migration. Some reference files or backlog records that have since been resolved-and-archived, so they're noisy as KG sources. Need a scripted age+cross-reference audit."
+priority = "low"
+status = "resolved"
+labels = ["litkg", "cleanup", "kg-artifacts"]
+issue_ids = []
+loc_min = 40
+loc_expected = 100
+loc_max = 200
+context = ["du -sh .agents/kg/generated reports 21 MB on 2026-05-11.", "neo4j-export/nodes.jsonl + edges.jsonl are 9.4 MB combined and are live data; the rest is text notes.", "generated/literature/ carries 2026-03-30-* refactor notes referring to seminar-era code paths and design choices the project has since superseded.", "Stale notes increase KG noise without contributing value; they may also bleed into top_sources for unrelated queries."]
+references = ["repo:.agents/kg/generated/literature/", "repo:.agents/kg/generated/neo4j-export/", "repo:.agents/external/litkg-rs/scripts/kg/", "repo:.agents/issues.toml#issue-025"]
+implementation_notes = ["Write a stale-file audit shell or Python script under scripts/kg/audit_stale_literature.py that lists files in generated/literature/ older than 60 days and checks whether each references a still-tracked path or backlog id.", "Produce a candidate-deletion list with one-line justification per file; do not auto-delete.", "User reviews the list, then archives or deletes confirmed-stale files.", "Optionally add a stale-threshold knob to .configs/litkg.toml so future audits use one source of truth."]
+acceptance = ["A scripts/kg/audit_stale_literature.py exists and produces a human-reviewable candidate list with file paths, ages, and stale reasons.", "After review and prune, du -sh .agents/kg/generated/literature reports a meaningful reduction (>20 percent) without breaking kg-search on the remaining literature.", "The audit script is idempotent and safe to re-run."]
+verification = ["python3 scripts/kg/audit_stale_literature.py | head -20", "du -sh .agents/kg/generated/literature/", "make kg-search KG_QUERY='RRI VIN-NBV' KG_LIMIT=5"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-065"
+title = "Confirm or remove kg-search matched_field and unused score-normalization noise"
+description = "Two small kg-search output cleanups: (a) verify whether matched_field on hit objects is ever anything other than 'search_text' (if not, drop it from the JSON shape); (b) consider normalizing score_lexical / score_final to [0,1] per-query so adjacent queries are comparable for humans and the compact filter output is legible."
+priority = "low"
+status = "resolved"
+labels = ["litkg", "kg-search", "signal-noise"]
+issue_ids = []
+loc_min = 30
+loc_expected = 80
+loc_max = 160
+context = ["matched_field always reads 'search_text' in spot-checks during the 2026-05-11 litkg audit; if this is constant in practice it adds bytes to every hit with no signal.", "Raw lexical scores observed during the audit: 315.0, 1535.0, 2946.0. The variance is huge across queries and the compact filter prints these to humans.", "Normalization could happen client-side in the jq filters, but it's cleaner at the source (litkg-rs) so that all downstream consumers (Streamlit panels, KG viz, etc.) get consistent ranges."]
+references = ["repo:.agents/external/litkg-rs/crates/litkg-core/src/", "repo:scripts/kg/compact_search.jq", "repo:.agents/issues.toml#issue-025"]
+implementation_notes = ["Probe: run 10 distinct kg-search queries (KG_FORMAT=json) and tabulate distinct matched_field values. If always 'search_text', remove from the response schema and update the compact filter.", "Score normalization: divide score_final by max(score_final) for the result set; emit normalized_score alongside score_final or in place of it (depending on whether existing consumers depend on the magnitude)."]
+acceptance = ["matched_field is removed from kg-search output (or proven to carry real signal and kept) with the decision recorded in the debrief.", "kg-search results either expose a normalized score in [0,1] for legibility, or a decision-recorded reason to keep raw magnitudes.", "compact_search.jq is updated accordingly."]
+verification = ["for q in 'RRI' 'oracle' 'next-best-view' 'CORAL' 'VIN' 'pose generation' 'rerun inspector' 'dataset cache' 'Hestia' 'Aria'; do make kg-search KG_QUERY=\"$q\" KG_FORMAT=json KG_LIMIT=3 | jq -r '.[].matched_field'; done | sort -u", "make kg-search KG_QUERY='RRI' | head -10"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-068"
+title = "Audit Graphiti integration for temporal KG queries"
+description = "Graphiti is configured ([backends].graphiti = false today) with Mac MCP server scripts at scripts/kg/start_graphiti.sh. It provides LLM-extracted temporal knowledge-graph search useful for questions like 'how did the proposal scope evolve over the last 3 weeks'. Phase B (todo-067) solves the immediate retrieval problem via Neo4j vector index, so Graphiti is deferred until temporal queries become an explicit workflow."
+priority = "low"
+status = "resolved"
+labels = ["litkg", "graphiti", "temporal", "deferred"]
+issue_ids = []
+loc_min = 100
+loc_expected = 300
+loc_max = 700
+context = ["Graphiti uses Neo4j as backend storage; would share the runtime with Phase B (todo-067) if both are enabled.", "Adds an LLM call per ingest (entity/relation extraction) -- cost not yet justified for current use case.", "Real value: temporal reasoning. 'When did this concept change?' 'What was the rationale at week W?'", "Defer until thesis writing surfaces a need to audit decision evolution over time.", "The alignment tools contract keeps Graphiti optional and replaceable; enabling it should require a concrete temporal-query workflow trigger."]
+references = ["repo:.agents/references/alignment_tools_contract.md", "repo:.agents/external/litkg-rs/scripts/kg/start_graphiti.sh", "repo:.agents/external/litkg-rs/scripts/kg/ingest_docs.sh", "repo:.agents/external/litkg-rs/docs/tooling-and-backends.md", "repo:.configs/litkg.toml"]
+implementation_notes = ["Survey current Graphiti capabilities (the upstream project) for relevance to ARIA-NBV's temporal questions.", "If enabling: flip [backends].graphiti = true, ensure scripts/kg/start_graphiti.sh works against the Mac, add a kg-temporal-search verb that calls Graphiti's search API.", "If not enabling: document the decision in DECISIONS.md and close the todo."]
+acceptance = ["Decision recorded in DECISIONS.md or PROJECT_STATE.md: enable Graphiti now, or defer with a clear trigger condition.", "If enabled: scripts/kg/start_graphiti.sh works end-to-end with the Mac MCP server.", "If deferred: trigger condition is recorded so future agents know when to revisit."]
+verification = ["make kg-capabilities KG_FORMAT=json | jq '.conformance.backends[] | select(.name == \"graphiti\")'", "rg -n 'graphiti' .agents/memory/state/"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-069"
+title = "Audit MemPalace integration: resolve capability/config inconsistency and decide on backend role"
+description = "make kg-capabilities reports MemPalace as state=ready, agent_recommendation=use_now, but .configs/litkg.toml has [backends].mempalace = false. The inconsistency hints at a half-finished integration. Audit what MemPalace would add (human-curated annotations layer, MCP integration) vs Neo4j vector index (auto-extracted KG over project files), resolve the config inconsistency, and decide whether to enable as an additional semantic backend or leave deferred."
+priority = "low"
+status = "resolved"
+labels = ["litkg", "mempalace", "deferred", "config-hygiene"]
+issue_ids = []
+loc_min = 60
+loc_expected = 180
+loc_max = 400
+context = ["User asked 2026-05-11 about employing mempalace as another backend; recommendation was to defer pending audit.", "MemPalace stores human-curated memory chunks separately from the project KG; complements rather than replaces Neo4j vector.", "Cross-project memory: notes from other repos could surface in ARIA-NBV searches.", "MCP integration: Claude/Codex could query MemPalace tools directly without going through make kg-* targets.", "Risk of drift: two semantic backends (Neo4j vector + MemPalace) must be kept in sync; current pipeline doesn't do that automatically.", "The alignment tools contract keeps MemPalace behind the optional MCP/KG boundary until this audit resolves its backend role."]
+references = ["repo:.agents/references/alignment_tools_contract.md", "repo:.configs/litkg.toml", "repo:.agents/external/litkg-rs/docs/tooling-and-backends.md", "url:https://mempalace.github.io/mempalace/", "url:https://mempalace.github.io/mempalace/guide/mcp-integration.html"]
+implementation_notes = ["Step 1: investigate the kg-capabilities reporter to find where MemPalace state=ready is computed despite the backend flag being off; reconcile so the two surfaces agree.", "Step 2: if the user actively uses MemPalace for human-curated annotations on other projects, spec the integration: would litkg-cli call MemPalace MCP tools (mem.search) at query time and blend with Neo4j hits? Or would MemPalace memories be ingested into Neo4j as additional nodes?", "Step 3: if MemPalace value is low for the current paper/code retrieval problem, document the decision and either enable for cross-project memory only or fully drop the backend reference."]
+acceptance = ["make kg-capabilities and .configs/litkg.toml [backends] table agree on MemPalace state (both enabled or both disabled).", "Decision recorded with rationale: enable for X, defer until Y, or drop.", "If enabled: an end-to-end test demonstrates MemPalace hits appearing in a kg-search result with provenance."]
+verification = ["make kg-capabilities KG_FORMAT=json | jq '.conformance.backends[] | select(.name == \"mempalace\")'", "rg -n 'mempalace' .configs/litkg.toml .agents/external/litkg-rs/docs/"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-071"
+title = "Modality-aware stemming for kg-search BM25 (don't mangle code identifiers)"
+description = "Today the SearchTokenizer applies Porter stemming uniformly across all candidate records inside metadata_search (litkg-viewer/src/query.rs). Code-symbol tokens like Vinformer or score_lexical get stemmed (Vinformer->vinform), creating asymmetric matches: the query stem matches paper bodies cleanly but is unreliable against code identifiers. A first attempt (2026-05-13) to skip stemming for GraphModality::Code broke the search_penalizes_generated_context_below_code_for_equal_matches authority invariant, because the query is still stemmed and would then only match stem-invariant tokens in raw code docs (rerun_logging vs query stem rerun+log lost the second hit). Need a coherent fix that preserves both: (a) typo/plural tolerance for natural-language docs, (b) authority-correct ranking when both code and generated-context records contain the same identifier."
+priority = "medium"
+status = "resolved"
+labels = ["litkg", "kg-search", "ranking", "stemming"]
+issue_ids = []
+loc_min = 80
+loc_expected = 200
+loc_max = 400
+context = ["User asked 2026-05-12 to stem only Paper/DocSection content. Naive implementation breaks the BM25 symmetry test because the query is stemmed but code docs are not.", "Options: (1) stem queries asymmetrically (stem when comparing against natural-language docs, raw when comparing against code), (2) extend the tokenizer with an identifier-shape heuristic that skips stemming on CamelCase / underscore-joined tokens, (3) accept stemming everywhere and document the Vinformer->vinform limitation."]
+references = ["repo:.agents/external/litkg-rs/crates/litkg-viewer/src/query.rs", "repo:.agents/external/litkg-rs/crates/litkg-core/src/ranking.rs", "repo:.agents/memory/state/DECISIONS.md"]
+implementation_notes = ["Approach 1 sketch: per-candidate scoring loop computes BM25 with two query-term sets (stemmed for non-code records, raw-token for code records). Cost: doubles per-record term lookup.", "Approach 2 sketch: extend SearchTokenizer with a stem_unless_identifier() helper that returns the raw token if it matches an identifier shape (contains uppercase mid-token, contains underscore-joined parts, has length>=8 with no vowel transition). Applies symmetrically to indexing and query.", "Add a regression test: query 'Vinformer' against a code record with title 'aria_nbv.vin.Vinformer' must rank top-1; query 'viewpoints' against a paper with body 'viewpoint planning' must still match."]
+acceptance = ["search_penalizes_generated_context_below_code_for_equal_matches still passes.", "A new test exercises a CamelCase identifier query and asserts the code record outranks any noisy stem-collapse match.", "DECISIONS.md updated with the chosen approach (1, 2, or 3) and a one-line rationale."]
+verification = ["cd .agents/external/litkg-rs && cargo test -p litkg-viewer query::tests::", "make kg-search KG_QUERY='Vinformer' KG_LIMIT=5 | head -20"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
+[[todo]]
+id = "todo-075"
+title = "Refresh-path cleanup: graphify_rebuild_command + kg-refresh-code Neo4j-probe disagreement"
+description = "scripts/kg/auto_refresh.sh dispatches kg-refresh-lit -> kg-materialize, which calls rebuild_graph() in litkg-cli main.rs and bails with 'No graphify rebuild command configured' because graphify_rebuild_command is unset in .configs/litkg.toml. Separately, kg-refresh-code -> scripts/kg/index_code.sh runs its own Neo4j liveness probe that disagrees with auto_refresh.sh's HTTP probe (auto_refresh sees Neo4j up, index_code says 'Neo4j service is not running'). Both partial failures surface as 'warn:' lines in .agents/kg/.refresh.log and the hook continues, so they degrade silently. kg-doctor doesn't yet read the refresh log tail so neither shows up green-vs-red until you grep manually."
+priority = "medium"
+status = "resolved"
+labels = ["litkg", "auto-refresh", "hook", "durability"]
+issue_ids = ["issue-025"]
+loc_min = 40
+loc_expected = 120
+loc_max = 250
+context = ["Filed 2026-05-13 as part of the 074 debrief; surfaced repeatedly in auto_refresh.sh dispatch logs.", "Two independent failure modes, both fixable surgically.", "graphify_rebuild_command -> three options: (a) set it in .configs/litkg.toml pointing at the existing graphify CLI invocation, (b) have kg-materialize emit a no-op log line when the command is None, (c) drop kg-materialize from kg-refresh-lit's dependency chain.", "kg-refresh-code -> index_code.sh likely checks Bolt port 7687 via docker inspect or similar; auto_refresh.sh's curl to 7474 succeeds even when index_code's check fails. Align the probes or honor KG_SKIP_NEO4J_CHECK=1.", "The alignment tools contract treats graphify and Neo4j outputs as derived evidence unless a later task explicitly promotes an artifact."]
+references = ["repo:.agents/references/alignment_tools_contract.md", "repo:.agents/external/litkg-rs/crates/litkg-cli/src/main.rs", "repo:.agents/external/litkg-rs/scripts/kg/index_code.sh", "repo:scripts/kg/auto_refresh.sh", "repo:scripts/kg/doctor.py", "repo:.configs/litkg.toml", "repo:.agents/external/litkg-rs/docs/tooling-and-backends.md"]
+implementation_notes = ["graphify_rebuild_command fix: easiest is (b) — have kg-materialize log 'skip: graphify rebuild not configured' and return Ok() when None. This keeps kg-refresh-lit's dependency chain intact and matches the user's existing 'graphify is optional' intent.", "kg-refresh-code fix: read scripts/kg/index_code.sh, find its Neo4j check, and either (i) honor KG_SKIP_NEO4J_CHECK=1 set by auto_refresh.sh just before invocation, or (ii) replace the script's probe with the same curl http://127.0.0.1:7474/ pattern that auto_refresh.sh uses.", "Doctor follow-up: add a refresh_log_tail check to scripts/kg/doctor.py that greps the last 200 lines of .agents/kg/.refresh.log for 'warn:' or 'fail:' lines and reports yellow if any."]
+acceptance = ["scripts/kg/auto_refresh.sh dispatch buckets=[memory docs code] completes without any warn: lines in .agents/kg/.refresh.log when all services are up.", "make kg-refresh-lit runs to completion without erroring on graphify.", "make kg-refresh-code runs to completion when Neo4j is up.", "kg-doctor surfaces refresh-log warnings as yellow (not green) when present."]
+verification = ["KG_FORCE=1 KG_REFRESH_SYNC=1 scripts/kg/auto_refresh.sh && echo $?", "tail -30 .agents/kg/.refresh.log | grep -E 'warn:|fail:' && echo 'WARN PRESENT' || echo 'clean'", "make kg-refresh-lit && make kg-refresh-code"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
+resolved_from = ".agents/todos.toml"
+
 [[refactor]]
 id = "refactor-013"
 title = "Pilot optional OMX and Codex templates after scaffold cleanup"
@@ -1105,4 +1393,23 @@ acceptance = ["A task like design experiment evidence registry surfaces m1_contr
 verification = ["make qmd-frontmatter-check", "cd .agents/external/litkg-rs && cargo test -p litkg-core context_pack::genre_boost", "make kg-route KG_TASK=\"design experiment evidence registry\" KG_FORMAT=json"]
 resolved_at = "2026-05-08"
 resolution_note = "Smoke evidence (2026-05-08): make kg-route KG_TASK='design final experiment evidence registry...' KG_FORMAT=json now returns m1_contract_report.qmd 4x in evidence_spans and required_reads. The verification-injection + lexical-filter changes in litkg-rs 152f13b solved the precedent-discovery gap that motivated this refactor without requiring a genre frontmatter scheme. top_sources still does not promote precedents structurally; re-open if a future task surfaces an unrecoverable miss."
+resolved_from = ".agents/refactors.toml"
+
+[[refactor]]
+id = "refactor-014"
+title = "Scope graph and memory tooling as KG support, not public docs"
+description = "Clarify litkg-rs, graphify/JSONL, Neo4j, Graphiti, CodeGraphContext, and MemPalace as internal KG/memory infrastructure while keeping public docs and canonical memory as the source of truth."
+priority = "low"
+status = "resolved"
+labels = ["kg", "agent", "docs", "scaffold"]
+issue_ids = ["issue-003", "issue-012"]
+loc_min = 80
+loc_expected = 180
+loc_max = 420
+context = ["The PRML cross-review classified Graphify, MemPalace, and OMX as later transfers, not immediate public-facing requirements.", "ARIA-NBV already has context scripts, memory state, litkg-rs, and a semantic-scholar-litkg skill/submodule; these should improve retrieval without adding public-doc sprawl.", "The agent-memory plan needs explicit runtime-role language: litkg is the structural KG/retrieval/consolidation layer, graphify/JSONL is durable output, Neo4j is optional traversal DB, Graphiti is optional temporal runtime, MemPalace is separate episodic mining, and generated KG artifacts stay internal."]
+implementation_notes = ["Treat KG outputs as generated/internal unless explicitly curated into public docs.", "Prefer existing litkg-rs, code-index, Graphify, Neo4j, Graphiti, and MemPalace adapters before writing bespoke parsers.", "Keep canonical truth in Typst/Quarto source, .agents/memory/state, active backlog, and code docstrings; KG artifacts should cite those sources.", "Align AGENTS.md, semantic-scholar-litkg, aria-litkg-memory, .agents/kg/README.md, and .configs/litkg.toml so agents do not confuse MemPalace with the structural KG backend."]
+acceptance = ["KG generation and memory mining have clear internal output locations and are not exposed as primary public navigation.", "The repo can explain when to use context scripts, litkg retrieval, litkg implementation work, and MemPalace mining.", "Generated KG artifacts are ignored, small, or intentionally versioned with provenance.", "Public Quarto navigation does not surface raw .agents/kg/generated outputs."]
+verification = ["make kg-capabilities || true", "make check-agent-memory", "rg -n \"graphify|MemPalace|Neo4j|Graphiti|code-index|litkg|aria-litkg-memory\" .agents/skills .agents/kg/README.md .configs scripts/kg AGENTS.md"]
+resolved_at = "2026-07-30"
+resolution_note = "Retired with the LitKG scaffold integration; optional tools remain source-subordinate."
 resolved_from = ".agents/refactors.toml"

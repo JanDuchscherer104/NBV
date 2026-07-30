@@ -815,14 +815,6 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "fixture schema omissions were not rejected",
         )
 
-        local_as_kg = routing_fixture_with_expected("local-file-lookup", ["agent-behavior", "aria-litkg-memory"])
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, local_as_kg), skills_by_name)
-        expect(
-            "local-lookup-not-kg",
-            any("aria-litkg-memory" in error and "no routing-cue overlap" in error for error in errors),
-            "local lookup incorrectly passed as KG routing",
-        )
-
         geometry_as_entity = routing_fixture_with_expected(
             "geometry-frame-implementation", ["agent-behavior", "entity-aware-rri"]
         )

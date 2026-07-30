@@ -6,13 +6,7 @@
       "id": "local-file-lookup",
       "task": "Find where a cross-surface ARIA-NBV symbol or document owner lives.",
       "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not use KG as the default source of truth for a localized lookup."]
-    },
-    {
-      "id": "kg-claim-check",
-      "task": "Check an advisor-facing thesis or literature claim against source-backed evidence.",
-      "expected_skills": ["agent-behavior", "aria-litkg-memory"],
-      "non_goals": ["Do not promote retrieved evidence without inspecting canonical sources."]
+      "non_goals": ["Do not use an optional index as the source of truth for a localized lookup."]
     },
     {
       "id": "entity-rri-implementation",
@@ -51,26 +45,20 @@
       "task": "Find the source family and thesis target-RRI section owner for a local wording check.",
       "expected_skills": ["agent-behavior", "aria-nbv-context"],
       "forbidden_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
-      "non_goals": ["Do not use KG, Context7, or external library docs for local source family lookup."]
-    },
-    {
-      "id": "literature-finite-candidate-double-q",
-      "task": "Check an advisor-facing finite-candidate Double-Q literature claim against source-backed evidence.",
-      "expected_skills": ["agent-behavior", "aria-litkg-memory"],
-      "non_goals": ["Do not promote retrieved literature evidence without inspecting Quarto, BibTeX, and source-order owners."]
+      "non_goals": ["Do not use Context7 or external library docs for local source family lookup."]
     },
     {
       "id": "local-source-mirror-vin-nbv-methods",
       "task": "Locate the local literature source family for a narrow VIN-NBV methods claim before writing thesis prose.",
       "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not use KG as the default owner for deterministic local source family discovery."]
+      "non_goals": ["Do not use an optional index as the default owner for deterministic local source family discovery."]
     },
     {
       "id": "code-index-frustum-rendering",
       "task": "Locate the implementation of candidate frustum rendering with source family and code-index evidence.",
       "expected_skills": ["agent-behavior", "aria-nbv-context"],
       "expected_tool_refs": ["mcp__code_index.search_code_advanced"],
-      "non_goals": ["Do not start with browser tools or KG when local code-index and rg can localize the source."]
+      "non_goals": ["Do not start with browser tools when local code-index and rg can localize the source."]
     },
     {
       "id": "planned-thesis-detail",

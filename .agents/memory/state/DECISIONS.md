@@ -19,7 +19,7 @@ tags: [codex, workflow, architecture]
 - Shared repo guidance must stay machine-portable; operator-specific interpreter or host paths belong in `.agents/references/` or user-local notes, not repo-root or nested `AGENTS.md` files.
 - Canonical project memory lives in `.agents/memory/state/`; episodic notes live in `.agents/memory/history/`.
 - Generated routing context under `docs/_generated/context/*.md` is derived
-  output and remains untracked; tracked generated glossary/KG artifacts such
+  output and remains untracked; tracked generated glossary artifacts such
   as `docs/_generated/context/glossary.jsonl` are regenerated through the
   glossary pipeline.
 - `make context` is the lightweight scaffold refresh for `source_index.md`, `literature_index.md`, and `data_contracts.md`.
@@ -27,27 +27,23 @@ tags: [codex, workflow, architecture]
 - `docs/_generated/context/source_index.md` is a compact routing index; broad file inventories stay discoverable through commands, not the hot path.
 - The Codex hot path starts from role-split source order: thesis roadmap/questions plus canonical memory for active thesis direction, glossary source for terminology, proposal Typst for advisor wording, seminar paper only for historical implemented evidence, and generated context only for lightweight routing.
 - Progressive disclosure routes from the root `AGENTS.md` into package, docs, and module-specific guides only after the touched surface is localized; agents should not load all nested guides up front.
-- Broad scaffold routing is split by role: `aria-nbv-context` owns local
-  deterministic file discovery, `aria-litkg-memory` owns KG-backed retrieval,
-  claim checks, and consolidation, and `semantic-scholar-litkg` owns KG
-  implementation/config/operation.
+- `aria-nbv-context` owns deterministic local file discovery; claim support
+  comes from direct inspection of exact primary and repository sources.
 - `.agents/references/` holds operator aids and long-form conventions; those docs are on-demand references, not default bootstrap context.
 - `docs/typst/seminar_paper/main.typ` is historical implemented evidence. Current thesis direction is owned by `docs/contents/thesis/roadmap.qmd`, `docs/contents/thesis/questions.qmd`, and `.agents/memory/state/`; do not let the older seminar paper override newer plans or promote planned work to implemented results.
 - Native debriefs under `.agents/memory/history/` must include `canonical_updates_needed`; existing `status: legacy-imported` notes are grandfathered archive evidence.
 - Ad hoc `.codex/*.md` notes are invalid; migrate them into `.agents/memory/history/` or archive them under `archive/codex-legacy/`.
 - Verification in shared repo guidance is selected by touched surface rather than by a single global checklist.
-- litkg keeps the consolidated `kg-*` command surface for agents; no
-  `agent-route`/`agent-retrieve` aliases are introduced. The default subset and
-  expected context-pack fields live in `.agents/references/litkg_quick_reference.md`.
 - Advisor-facing proposal, thesis roadmap/question, and literature-synthesis
-  claims require `kg-claim-check` before being treated as supported.
+  claims require direct inspection of cited primary sources before being
+  treated as supported.
 - Codex Desktop persists local session transcripts under
   `${CODEX_HOME:-$HOME/.codex}/sessions/YYYY/MM/DD/rollout-*.jsonl`; restored
   backup stores may be queried explicitly but are not canonical repo memory.
 - Transcript mining must not check in full raw Codex transcripts. Repo memory
   may contain only user-authored extracts and reviewed candidate distillates
-  under `.agents/memory/transcripts/`, where LitKG indexes them with lower
-  authority than canonical memory.
+  under `.agents/memory/transcripts/`, where they remain lower authority than
+  canonical memory.
 - Plan-mode transcript answers mean the user's answers to `request_user_input`
   questions. Assistant `<proposed_plan>` text remains agent output and does not
   become a decision unless the user later accepts or restates it.
@@ -80,10 +76,10 @@ tags: [codex, workflow, architecture]
   for agents unless the user explicitly requests edits. Treat it as idea
   evidence, not current thesis direction.
 - `docs/typst/shared/glossary.typ` remains the glossary/terminology source of
-  truth. YAML, QMD, Typst, and KG-facing glossary outputs are derived from it.
+  truth. YAML, QMD, Typst, and generated glossary outputs are derived from it.
 - Canonical generated docs artifacts that belong to the glossary, notation, or
   docs pipeline should be regenerated and tracked when their source changes.
-  Generated context and KG-routing artifacts remain derived/untracked unless
+  Generated context artifacts remain derived/untracked unless
   explicitly versioned.
 - Human-owner preferences that are durable but not public narrative or workflow
   rules live in `.agents/references/human_owner_intent.md`.
@@ -323,11 +319,3 @@ tags: [codex, workflow, architecture]
   and `NaN`/masked until a later oracle-lookahead converter materializes them.
 - The public glossary is a tiered math lookup table generated from `docs/typst/shared/glossary.typ`: core thesis math terms render first with shared symbol/equation refs, support terms remain normal glossary entries, and peripheral background terms stay linkable but visually demoted.
 - CI/pre-commit becomes required before full-scale generation, not before proposal/M1 groundwork. GitHub issue mirroring remains a local TODO; `.agents/*.toml` stays the source of truth.
-
-## litkg Decisions (2026-05-11/12)
-- Semantic kg-search uses the Neo4j vector index as the canonical backend: `kg_embedding_index_2560` over `KGEmbeddingNode.kg_embedding` (HNSW, cosine, dim 2560). Lexical fallback is always available when Neo4j or the Ollama tunnel is down; the response surfaces `search_mode: hybrid|lexical_only` with `mode_reason`.
-- BM25 (k1=1.5, b=0.75) replaces naive term-frequency as the lexical scorer. Porter stemming + a curated `[synonyms]` table in `.configs/litkg.toml` + Levenshtein distance-≤2 fuzzy fallback for zero-exact-hits round out the lexical layer.
-- Agent-facing kg-* output is compact-by-default (≤14 lines). Verbose payloads require explicit opt-in via `KG_VERBOSE=1` or `KG_FORMAT=json`. The compact filters live at `scripts/kg/compact_*.jq` and must not surface `evidence_spans`, `backend_status`, `action_plan`, `assumptions`, `missing_leaves`, `missing_context_leaves`, `profile`, `budget_tokens`, or `truncated`.
-- Auto-refresh on session Stop is enabled via `scripts/kg/auto_refresh.sh`, gated on Ollama tunnel reachability at `127.0.0.1:11434`. Optional `KG_NEO4J_AUTO_UP=1` warm-starts Neo4j Docker so the next session has hybrid search available.
-- Graphiti (`[backends].graphiti = false` today) and MemPalace remain deferred. They are not the right home for paper/code retrieval; revisit only when temporal queries (Graphiti) or human-curated annotations (MemPalace) become explicit workflows. Tracked as `todo-068` and `todo-069`.
-- `kg-query` and `kg-brief` were deleted as Makefile aliases for `kg-route`; `kg-related` was deleted as a subset of `kg-search`. `kg-ingest-docs-smoke` collapsed into `make kg-ingest-docs KG_SMOKE=1`. The agent-facing kg verb set is `kg-search`, `kg-route`, `kg-claim-check`, `kg-status`, `kg-capabilities`.

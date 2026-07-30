@@ -11,7 +11,7 @@ metadata:
     - "diagnose-aria for concrete Rerun launch failures or suspicious visual output"
     - "dataset-cache-ops for incompatible or invalid offline stores"
     - "nbv-geometry-contracts for PoseTW, CameraTW, projection, or CW90 frame issues"
-    - "aria-litkg-memory for official-doc/API lookup when Rerun behavior is uncertain"
+    - "diagnose-aria for focused official-doc/API lookup when Rerun behavior is uncertain"
   evidence_required:
     - "focused inspector test, saved .rrd smoke artifact, or exact store incompatibility"
     - "entity-path, frame-coordinate, and display-only downsampling evidence"

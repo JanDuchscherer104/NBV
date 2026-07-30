@@ -7,7 +7,6 @@ topics: [litkg, kg, agent-contract, context-pack]
 confidence: high
 canonical_updates_needed:
   - AGENTS.md
-  - .agents/skills/semantic-scholar-litkg/SKILL.md
 files_touched:
   - AGENTS.md
   - .agents/skills/semantic-scholar-litkg/SKILL.md

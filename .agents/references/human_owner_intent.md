@@ -111,8 +111,7 @@ These are intentionally unresolved and must not be presented as accepted
 policy:
 
 - Graphify's exact corpus, refresh model, and retained generated artifacts.
-- Whether LitKG remains useful after exact-source and literature workflows are
-  verified without it.
+- LitKG is retired; reintroduction requires a new evidence-backed decision.
 - Whether `aria-nbv-context` remains a thin router or owns a small amount of
   stable project orientation.
 - Which handwritten project-state surfaces can be retired after their facts

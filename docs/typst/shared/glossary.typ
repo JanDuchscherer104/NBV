@@ -6,7 +6,7 @@
 #import "equations.typ": eqs
 
 // Rich `description` fields may use Typst content, including #symb and #eqs.
-// Keep `custom` fields machine-readable so `typst query` can feed Quarto and litkg-rs.
+// Keep `custom` fields machine-readable so `typst query` can feed generated docs.
 #let aria-glossary-entries = (
   (
     key: "next-best-view",

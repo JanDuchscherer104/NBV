@@ -11,14 +11,8 @@ why it exists without chat history.
 - `arxiv:<id>`, `doi:<doi>`, or `s2:<paperId>` for durable paper identifiers.
 - `url:<https-url>` for external API or tool documentation.
 - `context7:<library-id>` for Context7-resolved external library docs.
-- `litkg:<profile-or-command>` for litkg-rs context-pack, capability, or KG
-  command evidence.
-
-## Litkg Use
-
-For broad or literature-backed DB additions, run a litkg route/query first and
-copy only the relevant source pointers into `references`. Prefer stable source
-pointers over long summaries.
+For broad or literature-backed DB additions, inspect the cited primary source
+and record only stable source pointers in `references`.
 
 Backlog records should remain compact but auditable. If a context pack omits
 active backlog rows or references, amend `issue-023` or `issue-025` rather than

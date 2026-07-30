@@ -1,5 +1,4 @@
 .git/
-.agents/kg/db/
 .artifacts/
 .cache/
 .mypy_cache/

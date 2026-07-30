@@ -131,8 +131,8 @@ name = "research"
 bucket = "engineering"
 upstream_path = "skills/engineering/research/SKILL.md"
 posture = "reference"
-aria_owner = "aria-litkg-memory"
-reason = "Borrow primary-source discipline only; ARIA KG, literature, and claim-check owners stay local."
+aria_owner = "aria-nbv-context"
+reason = "Borrow primary-source discipline only; direct source inspection remains local."
 
 [[skill]]
 name = "resolving-merge-conflicts"

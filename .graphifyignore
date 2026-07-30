@@ -65,7 +65,6 @@ external/
 .agent/skills/
 .agents/external/
 .agents/skills/
-.agents/kg/
 .agents/memory/history/
 .agents/memory/transcripts/
 .agents/archive/

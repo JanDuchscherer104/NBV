@@ -9,7 +9,6 @@ metadata:
     - "tiny cleanup that does not change active debt"
   handoff_to:
     - "docs-curator for public docs or thesis narrative"
-    - "aria-litkg-memory for KG-backed consolidation proposals"
     - "simplification for behavior-preserving pruning"
   evidence_required:
     - "existing record search before adding duplicates"

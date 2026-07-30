@@ -6,7 +6,7 @@
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
 .PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
-.PHONY: memory-mine agents-db glossary kg-up kg-down kg-status kg-capabilities kg-ollama-check kg-search kg-route kg-claim-check kg-consolidate kg-show-paper kg-sync kg-materialize kg-index-code kg-ingest-docs kg-load-bundle kg-mcp-install kg-doctor kg-enrich kg-ingest-papers kg-export-neo4j kg-semantic-enrich kg-refresh-light kg-refresh-code kg-refresh-lit kg-refresh-semantic kg-refresh-full
+.PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
 .PHONY: offline-info offline-tree offline-samples offline-random-index offline-rerun-random offline-sample-rerun-random
@@ -73,26 +73,6 @@ LRZ_SKILL_DIR ?= .agents/skills/lrz-ai-systems
 LRZ_SCRIPTS_DIR ?= $(LRZ_SKILL_DIR)/scripts
 LRZ_RESOURCES_ARGS ?= summary
 LRZ_CMD ?=
-LITKG_MANIFEST ?= .agents/external/litkg-rs/Cargo.toml
-LITKG_CONFIG ?= .configs/litkg.toml
-LITKG_REPO_ROOT ?= .
-LITKG_PROFILE ?= thesis-coding
-KG_BUNDLE_ROOT ?= .agents/kg/generated/neo4j-export
-KG_QUERY ?=
-KG_TOPIC ?=
-KG_TASK ?=
-KG_CLAIM ?=
-KG_RELATED_PATH ?=
-KG_PAPER ?=
-KG_LIMIT ?= 24
-KG_FORMAT ?= text
-KG_MODALITY ?=
-KG_DOC_PATHS ?=
-KG_DOCTOR_ARGS ?=
-comma := ,
-empty :=
-space := $(empty) $(empty)
-KG_MODALITY_ARGS = $(foreach modality,$(subst $(comma),$(space),$(strip $(KG_MODALITY))),--modality $(modality))
 PACKAGE_SMOKE_RUFF_PATHS := \
 	aria_nbv/app/panels/vin_diagnostics_runtime.py \
 	aria_nbv/data_handling/vin_store/writer.py \
@@ -388,180 +368,6 @@ memory-mine: _check_python ## 🧠 Mine current repo state (docs, code, history)
 	@$(PYTHON_INTERPRETER) -m mempalace --palace .artifacts/mempalace/palace mine .
 	@$(PYTHON_INTERPRETER) -m mempalace --palace .artifacts/mempalace/palace mine .agents/memory --mode convos
 	@echo "$(GREEN)MemPalace mining complete.$(NC)"
-
-kg-up: ## 📚 Start the optional litkg Neo4j runtime
-	@.agents/external/litkg-rs/scripts/kg/up.sh
-
-kg-down: ## 📚 Stop the optional litkg Neo4j runtime
-	@.agents/external/litkg-rs/scripts/kg/down.sh
-
-kg-status: ## 📚 Fast 0/1 litkg health probe (no full capabilities run); prints reason on stderr
-	@scripts/kg/status.sh
-
-kg-capabilities: ## 📚 Show litkg backend/source readiness (set KG_FORMAT=json for machine output)
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- capabilities \
-		--config "$(LITKG_CONFIG)" \
-		--repo-root "$(LITKG_REPO_ROOT)" \
-		--format "$(KG_FORMAT)"
-
-kg-ollama-check: ## 📚 Validate Mac/remote Ollama model endpoint for litkg runtime refresh
-	@python3 .agents/external/litkg-rs/scripts/kg/ollama_http.py check \
-		--config "$(LITKG_CONFIG)"
-
-kg-search: ## 📚 Search litkg-indexed code/docs/memory/backlog/literature (set KG_QUERY='...'; KG_MODALITY='literature,docs'; KG_VERBOSE=1 or KG_FORMAT=json for full payload)
-	@if [ -z "$(strip $(KG_QUERY))" ]; then \
-		echo "$(RED)KG_QUERY is required, e.g. make kg-search KG_QUERY='entity-aware RRI'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ] || [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg find \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--limit "$(KG_LIMIT)" \
-			$(KG_MODALITY_ARGS) \
-			--format "$(KG_FORMAT)" \
-			"$(KG_QUERY)"; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg find \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--limit "$(KG_LIMIT)" \
-			$(KG_MODALITY_ARGS) \
-			--format json \
-			"$(KG_QUERY)" | jq -r -f scripts/kg/compact_search.jq; \
-	fi
-
-kg-route: ## 📚 Route a broad task through litkg evidence and backlog (set KG_TASK='...'; KG_VERBOSE=1 for legacy full payload, KG_FORMAT=json for lean JSON)
-	@if [ -z "$(strip $(KG_TASK))" ]; then \
-		echo "$(RED)KG_TASK is required, e.g. make kg-route KG_TASK='debug candidate pose frame mismatch'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format "$(or $(KG_FORMAT),json)" \
-			--full; \
-	elif [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "$(KG_TASK)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json | jq -r -f scripts/kg/compact_route.jq; \
-	fi
-
-kg-claim-check: ## 📚 Claim-check against litkg context (set KG_CLAIM='...'; KG_VERBOSE=1 for legacy full payload, KG_FORMAT=json for lean JSON)
-	@if [ -z "$(strip $(KG_CLAIM))" ]; then \
-		echo "$(RED)KG_CLAIM is required, e.g. make kg-claim-check KG_CLAIM='ARIA-NBV is an end-to-end policy'$(NC)"; \
-		exit 2; \
-	fi
-	@if [ "$(KG_VERBOSE)" = "1" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format "$(or $(KG_FORMAT),json)" \
-			--full; \
-	elif [ "$(KG_FORMAT)" = "json" ]; then \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json; \
-	else \
-		cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- context-pack \
-			--config "$(LITKG_CONFIG)" \
-			--repo-root "$(LITKG_REPO_ROOT)" \
-			--task "claim-check: $(KG_CLAIM)" \
-			--profile "$(LITKG_PROFILE)" \
-			--format json | jq -r -f scripts/kg/compact_claim_check.jq; \
-	fi
-
-kg-consolidate: ## 📚 Propose memory/backlog consolidation updates without editing files
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- kg consolidate \
-		--config "$(LITKG_CONFIG)" \
-		--repo-root "$(LITKG_REPO_ROOT)" \
-		--format "$(KG_FORMAT)"
-
-kg-show-paper: ## 📚 Show one registered paper (set KG_PAPER='VIN-NBV-frahm2025')
-	@if [ -z "$(strip $(KG_PAPER))" ]; then \
-		echo "$(RED)KG_PAPER is required, e.g. make kg-show-paper KG_PAPER='VIN-NBV-frahm2025'$(NC)"; \
-		exit 2; \
-	fi
-	@cargo run --manifest-path "$(LITKG_MANIFEST)" -p litkg-cli -- lit show \
-		--config "$(LITKG_CONFIG)" \
-		--paper "$(KG_PAPER)" \
-		--format "$(KG_FORMAT)"
-
-kg-sync: ## 📚 Sync literature registry from docs/references.bib
-	@./scripts/kg/ingest_papers.sh sync
-
-kg-materialize: ## 📚 Materialize literature into Markdown for agent consumption
-	@echo "$(BLUE)Materializing literature...$(NC)"
-	@./scripts/kg/ingest_papers.sh materialize
-	@echo "$(GREEN)Literature materialized to .agents/kg/generated/literature/.$(NC)"
-
-kg-index-code: ## 🏗️ Index aria_nbv code into Neo4j
-	@./scripts/kg/index_code.sh
-
-kg-ingest-docs: ## 📝 Ingest docs/ into Neo4j/Graphiti (set KG_SMOKE=1 for a single-doc smoke pass)
-	@if [ "$(KG_SMOKE)" = "1" ]; then \
-		GRAPHITI_DOC_CHAR_LIMIT=1200 ./scripts/kg/ingest_docs.sh AGENTS.md; \
-	else \
-		./scripts/kg/ingest_docs.sh $(KG_DOC_PATHS); \
-	fi
-
-kg-load-bundle: ## 📚 Load the litkg Neo4j export bundle into the live Neo4j runtime
-	@python3 .agents/external/litkg-rs/scripts/kg/load_bundle.py \
-		--bundle-root "$(KG_BUNDLE_ROOT)"
-
-kg-mcp-install: ## 🔌 Print the litkg-cypher MCP profile install steps (gateway-side)
-	@./scripts/kg/install_mcp_profile.sh
-
-kg-doctor: ## 🩺 Health + drift checks (tunnels, vector index, embedding coverage, smoke)
-	@python3 scripts/kg/doctor.py $(KG_DOCTOR_ARGS)
-
-kg-enrich: ## 📚 Refresh litkg runtime embeddings and code↔doc links
-	@KG_OLLAMA_CONFIG="$(LITKG_CONFIG)" \
-		KG_CODE_REPO_ROOT="$(CURDIR)" \
-		KG_CODE_PATH_PREFIX="$(KG_SRC_DIR)" \
-		python3 .agents/external/litkg-rs/scripts/kg/enrich_embeddings.py
-
-kg-ingest-papers: ## 📚 Full literature pipeline (sync, download, parse, materialize)
-	@./scripts/kg/ingest_papers.sh
-
-kg-export-neo4j: ## 📚 Export literature and memory nodes to a Neo4j import bundle
-	@./scripts/kg/ingest_papers.sh export-neo4j
-
-kg-semantic-enrich: ## 📚 Enrich literature registry with Semantic Scholar metadata
-	@./scripts/kg/ingest_papers.sh semantic-enrich
-
-kg-refresh-light: context kg-capabilities ## 📚 Refresh lightweight generated context and inspect litkg readiness
-
-kg-refresh-code: kg-index-code ## 📚 Refresh litkg code-symbol index
-
-kg-refresh-lit: kg-sync kg-materialize kg-export-neo4j ## 📚 Refresh literature registry/materialization/export; enrich with S2 when keyed
-	@if [ -n "$$SEMANTIC_SCHOLAR_API_KEY" ]; then \
-		$(MAKE) kg-semantic-enrich; \
-	else \
-		echo "$(YELLOW)Skipping Semantic Scholar enrichment; SEMANTIC_SCHOLAR_API_KEY is not set.$(NC)"; \
-	fi
-
-kg-refresh-semantic: kg-refresh-lit kg-load-bundle kg-enrich ## 📚 Refresh literature export, load it into Neo4j, and embed semantic nodes
-
-kg-refresh-full: kg-refresh-light kg-refresh-code kg-refresh-lit ## 📚 Refresh lightweight context, code index, and literature artifacts
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  🔧 LRZ AI Systems operator helpers
