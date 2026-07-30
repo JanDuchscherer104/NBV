@@ -12,7 +12,6 @@ reviewed_at = "2026-07-08"
 license = "MIT"
 install_command = "npx skills@latest add mattpocock/skills"
 default_policy = "disabled_unless_selected"
-contract = ".agents/references/mattpocock_skills_contract.md"
 runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
 
 [postures]
@@ -148,8 +147,8 @@ name = "setup-matt-pocock-skills"
 bucket = "engineering"
 upstream_path = "skills/engineering/setup-matt-pocock-skills/SKILL.md"
 posture = "reference"
-aria_owner = "mattpocock_skills_contract.md"
-reason = "Raw setup creates Matt-native truth surfaces; use the ARIA adapter contract instead."
+aria_owner = "AGENTS.md"
+reason = "Raw setup must not create parallel ARIA truth surfaces; repository source order remains authoritative."
 
 [[skill]]
 name = "tdd"

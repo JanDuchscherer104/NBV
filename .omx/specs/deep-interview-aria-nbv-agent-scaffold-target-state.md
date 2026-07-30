@@ -191,6 +191,98 @@ Newer intent refines older intent only within the scope actually reconsidered.
 Age, similarity, inferred links, or agent consensus never performs automatic
 acceptance or supersession.
 
+## `.agents/references` Target State
+
+`.agents/references` is not a general documentation shelf. In the accepted
+target state it contains only small, human-maintained, cross-cutting maps that
+have no more local owner:
+
+```text
+.agents/references/
+  README.md                 # index and scope boundary only
+  human_owner_intent.md     # reviewed general human preferences
+  source_order.md           # concise authority and conflict-resolution map
+```
+
+The index lists these owners and points to package, documentation, tool, OMX,
+and test surfaces without restating their content. Files do not remain in this
+directory merely because agents may find them useful. Before moving or deleting
+one, preserve each still-current rule in its closest source owner and prove that
+its active consumers use that owner. Git history preserves superseded policy;
+it is not necessary to keep a second active copy for provenance.
+
+The current files have these target dispositions:
+
+- `README.md`: add this new compact index only after the migration. It lists
+  the two substantive references, states what does not belong in the directory,
+  and points outward without copying owner content.
+- `agent_memory_templates.md`: move the surviving debrief schema and examples
+  beside the debrief implementation, preferably `.agents/memory/README.md` or
+  the script/template that validates them. Delete it if debriefs retire.
+  > Not sure, would merge memory and debrief instructions into [$mempalace-aria-nbv:agents-db](/home/jd/repos/ARIA-NBV/.agents/skills/agents-db/SKILL.md)
+- `alignment_tools_contract.md`: fold its universal rule, optional tools produce
+  evidence rather than truth, into root guidance and this specification. Move
+  tool-specific behavior beside each retained tool, then delete the aggregate.
+- `context7_library_ids.md`: keep contents, integrate in new aria-nbv context routing skill;
+- `external_stack_contracts.md`: move live ATEK, EFM3D, EVL, and Project Aria
+  contracts to the nearest `data_handling`, rendering, or package owner,
+  including source docstrings and tests. Delete package-docstring TODO lists or
+  move actionable items to Agents DB.
+- `human_owner_intent.md`: retain, but keep only reviewed general preferences.
+  Scaffold-rework requirements move to this specification after acceptance.
+- `source_order.md`: retain and rewrite as the concise current authority map.
+  Remove stale QMD, generated-context, handwritten-state, or tool routes as
+  their owners change; do not turn it into a project encyclopedia.
+- `litkg_quick_reference.md`: while LitKG remains undecided, treat this as
+  migration input. If LitKG is retained, put only ARIA-specific operations
+  beside its configuration or vendored tool documentation and rely on upstream
+  docs for generic usage. If LitKG retires, delete the file after replacement
+  checks pass.
+- `omx_artifact_policy.md`: if a repository OMX lifecycle is retained, move its
+  minimal tracked-artifact contract to `.omx/README.md` and enforce it with the
+  smallest existing validator. Otherwise rely on upstream OMX behavior and
+  delete the local policy.
+- `omx_quick_reference.md`: delete the generic command guide and link to pinned
+  upstream OMX documentation. Preserve only proven ARIA-specific deviations
+  beside `.omx/` or in the optional-operator section of root guidance.
+- `operator_quick_reference.md`: retire the mixed grab bag. Move environment
+  recovery to package setup documentation; tool health to the retained tool;
+  frame notation to the Typst glossary and geometry package; EFM views to
+  `data_handling`; and dirty-worktree invariants to root guidance.
+- `python_conventions.md`: move durable cross-package Python contracts to
+  `aria_nbv/AGENTS.md`, source docstrings, formatter/type configuration, and
+  executable tests. Do not maintain a prose duplicate of configured rules.
+  <!-- Not sure, maabe make our python standards a skill? -->
+- `rollout_zarr_q_invalidity_contract.md`: move this domain contract beside
+  `aria_nbv.rollouts`, its schema/codecs, tests, and corresponding Typst
+  definitions. The package `AGENTS.md` may summarize hazards and routes but may
+  not duplicate the complete schema.
+- `skill_style_guide.md`: move the minimal skill authoring contract to
+  `.agents/skills/README.md` and its validator. Generic authoring advice should
+  come from the upstream skill-authoring capability rather than an ARIA copy.
+- `thesis_code_links.md`: move the durable link convention into the contract
+  documentation of `docs/typst/shared/style.typ`, with a short route in
+  `docs/AGENTS.md`. Compile-time behavior remains owned and tested by the Typst
+  implementation.
+- `verification_matrix.md`: distribute commands to the nearest `AGENTS.md`,
+  package/test owner, Make target help, or retained tool documentation. Root
+  guidance keeps only universal verification expectations; delete the central
+  matrix after every active route has a local owner.
+- `scaffold_routing_fixtures.json`: it is executable test data, not a reference.
+  Replace it with the smallest accepted smoke scenarios under the scaffold
+  test owner, or delete it if the current skill-name-specific fixture no longer
+  tests a retained outcome.
+- `scaffold_rework/README.md` and `scaffold_rework/evidence/*`: retain them only
+  through review and acceptance of this specification. After acceptance, the
+  specification's decision-lossless dispositions, frozen PR/commit references,
+  and Git history are the durable record; remove this temporary evidence tree
+  from the active scaffold rather than creating another archive hierarchy.
+
+Migration is content-led, not file-led. Each workpackage inventories distinct
+current claims, assigns each claim to one owner, updates consumers, validates
+the replacement, and only then removes the old file. Copying a whole reference
+file to a new directory without reducing overlap does not satisfy this target.
+
 ## Cross-Modal Linkage Contract
 
 Rich linkage is a repository requirement, not a Graphify-specific feature:
@@ -201,9 +293,12 @@ Rich linkage is a repository requirement, not a Graphify-specific feature:
 - Thesis sections use glossary terms, shared `symb` and `eqs` keys, citations,
   and the source-link macros in `docs/typst/shared/style.typ` to connect claims
   to their definitions, evidence, and implementation anchors.
-- `.agents/references/thesis_code_links.md` owns the final versus draft code-link
-  convention: final-worthy links use `gh`, drafting links use `gh-wip` or
-  `gh-symbol`, and submission builds disable draft-only navigation.
+- The contract documentation and implementation in
+  `docs/typst/shared/style.typ` own the final versus draft code-link convention:
+  final-worthy links use `gh`, drafting links use `gh-wip` or `gh-symbol`, and
+  submission builds disable draft-only navigation. During migration,
+  `.agents/references/thesis_code_links.md` is an input to that owner, not a
+  permanent parallel contract.
 - Public code docstrings link to the relevant thesis section, glossary key,
   equation key, evidence contract, or paper when that relationship is necessary
   to understand semantics. They do not copy thesis prose or mathematical
@@ -665,6 +760,9 @@ Planning or execution must ask before:
   corpus content is tracked.
 - No new source registry, graph, ontology, ADR hierarchy, or lifecycle engine is
   introduced.
+- The final `.agents/references` tree contains only its index,
+  `human_owner_intent.md`, and `source_order.md`; every removed file has a
+  claim-level owner/disposition and no live consumer of the obsolete path.
 - `git diff --check` passes and the committed diff contains only requirements
   artifacts and necessary index pointers.
 - The human owner reviews the complete document and explicitly accepts or

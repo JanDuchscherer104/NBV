@@ -88,9 +88,8 @@ accepted OMX evidence, and debrief policy are explicit repository decisions.
 #### SCAFF-001 - The prompt budget excludes most prompt-visible skills
 
 - **Kind:** observed defect; critical; high confidence.
-- **Affected owner:** `scripts/scaffold/check_wp7_integration.py`,
-  `.agents/references/mattpocock_skills_contract.md`, and the WP0/WP7 prompt
-  accounting contract.
+- **Affected owner:** `scripts/scaffold/check_wp7_integration.py` and the WP0/WP7
+  prompt accounting contract.
 - **Current evidence:** `scripts/scaffold/check_wp7_integration.py:171-191` counts
   only repository ARIA skills and selected Matt skills. Its passing result is
   `description_crosscheck=462+1008=1470<=1511`. A fresh
@@ -362,14 +361,13 @@ accepted OMX evidence, and debrief policy are explicit repository decisions.
   failure prompts activate the intended route and produce owner plus reproducer
   evidence.
 
-#### SCAFF-012 - Matt policy prose has already drifted from executable truth
+#### SCAFF-012 - Matt policy prose drifted from executable truth
 
 - **Kind:** observed documentation defect; medium severity; high confidence.
-- **Affected owner:** `.agents/references/mattpocock_skills_contract.md`.
-- **Current evidence:** `.agents/references/mattpocock_skills_contract.md:33-40`
-  says ten ARIA descriptions total 380 bytes and the integrated total is 1,388.
-  The executable WP7 result reports 462 and 1,470. Static validation reads the
-  manifest/current skills, so it remains green while the prose is stale.
+- **Affected owner:** the historical Matt policy prose.
+- **Current evidence:** its hand-maintained prompt-byte totals disagreed with the
+  executable WP7 result. Static validation read the manifest/current skills, so
+  it remained green while the prose was stale.
 - **Previous evidence:** the Matt allowlist and closure hashing did not exist in
   the earlier scaffold; this is new policy drift, not inherited debt.
 - **Smallest remedy:** remove mutable byte totals from prose. Render them only in
@@ -386,8 +384,7 @@ accepted OMX evidence, and debrief policy are explicit repository decisions.
 - **Current evidence:** `.codex/config.toml` is intentionally absent and ignored;
   only an example and bootstrap/validation machinery are tracked. The actual
   fresh prompt contains many global/system/plugin skills outside the Matt
-  allowlist, as the policy correctly acknowledges at
-  `.agents/references/mattpocock_skills_contract.md:20-23`.
+  allowlist.
 - **Previous evidence:** the previous scaffold had no reliable project-local Matt
   isolation contract.
 - **Smallest remedy:** report Matt isolation as optional operator setup, not as a

@@ -49,6 +49,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   advisor-facing RQ5 bridge after offline `Q_H` evidence is stable.
 
 ## Optional Operator Tools
+- Externally installed skills are optional capabilities, not ARIA-NBV truth
+  owners. Translate any proposed output path through the repository source order
+  before creating a new tracked surface.
 - OMX remains optional operator orchestration. Use
   `.agents/references/omx_quick_reference.md` only when the task explicitly
   asks for OMX or operator orchestration; do not make OMX required for normal
