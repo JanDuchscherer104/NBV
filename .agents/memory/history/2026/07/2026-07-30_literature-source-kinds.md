@@ -19,11 +19,10 @@ another's fields.
 
 ## Result
 
-The book is recorded as a metadata-only GitHub source. It has no local PDF
-target, because the linked repository does not establish redistribution rights
-for the third-party book. The manifest contract now describes source
-capabilities: landing-page metadata, arXiv TeX acquisition, and explicit PDF
-acquisition are independent field pairs.
+The book is recorded as a metadata-only bibliographic source through its
+WorldCat catalog record. It has no local PDF target. The manifest contract now
+describes source capabilities: landing-page metadata, arXiv TeX acquisition,
+and explicit PDF acquisition are independent field pairs.
 
 ## Verification
 
