@@ -29,6 +29,10 @@ or repeatable workflows.
 - **Reviewability:** Prefer small, owner-scoped, reversible changes and pull
   requests. Do not combine scaffold migration, domain changes, generated
   artifacts, and unrelated cleanup into one review unit.
+- **Conceptual collaboration:** For meaningful Spatial-AI, ML, MLOps,
+  data-science, or statistics work, prefer an explanation of the governing
+  model, assumptions, and failure mode. Use diagrams when they clarify a real
+  relationship; reserve durable teaching artifacts for deliberate learning.
 
 ## Ownership
 

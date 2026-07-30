@@ -22,6 +22,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   when available and do not use online renderers unless explicitly permitted.
 - Need file localization or deterministic local discovery: use `aria-nbv-context`.
 - Vague, high-impact, or advisor-facing plans: use `plan-grill`.
+- PR or working-tree review: use `code-review-aria-nbv`; actionable P0--P2
+  findings on a PR are published and resolved as GitHub review threads, while
+  local-only reviews report the same line-referenced findings locally.
 - Bugs, regressions, suspicious metrics, or failing docs/data checks: use
   `diagnose-aria`.
 - Backlog or memory changes: use the `agents-db` skill.
@@ -62,6 +65,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: update Quarto or Typst docs.
+- Text marked `<...>`: preserve it in the smallest owner selected above; see
+  `agent-behavior` for the capture procedure.
 
 ## Commands
 - Python: `aria_nbv/.venv/bin/python`

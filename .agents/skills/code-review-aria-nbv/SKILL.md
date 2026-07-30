@@ -76,6 +76,23 @@ metadata:
   reproduce each finding from repo evidence before implementing it or feeding it
   into an OMX merge-ready verdict.
 
+## GitHub Publication And Resolution
+
+For an ARIA pull-request review, reviewer lanes validate each candidate against
+the exact diff and its owner, then return structured findings. The orchestrating
+agent uses the GitHub review-thread capability to publish every accepted P0, P1,
+or P2 finding as a line-anchored thread with severity, concrete impact, and a
+remedy or diagnostic next step. Do not manufacture threads for P3 polish,
+uncertain hypotheses, or already-addressed findings; retain those in the final
+review record instead.
+
+A published P0--P2 thread is merge-blocking until the fixing agent replies
+with the exact change and verification evidence. Reviewer lanes recheck the
+diff; the orchestrating agent resolves the thread through the GitHub capability
+or leaves it open with a precise blocker. `CLEAR` requires no unresolved valid
+P0--P2 threads. A working-tree review without a PR returns the same
+line-referenced findings locally and publishes nothing.
+
 ## When To Use
 
 Use this skill when the task is to:

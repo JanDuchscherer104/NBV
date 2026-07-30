@@ -8,6 +8,9 @@ metadata:
     - "implementation behavior changes where Python standards are incidental"
     - "large API redesign before the target interface is stable"
   handoff_to:
+    - "codebase-design for a module-boundary design that precedes implementation"
+    - "design-an-interface for competing public interface shapes"
+    - "domain-modeling for ubiquitous-language and entity/value-object decisions"
     - "docs-curator for public narrative, Quarto, or Typst documentation"
     - "nbv-geometry-contracts for frame, unit, or tensor-shape semantics"
     - "simplification for behavior-preserving API cleanup before documentation"
@@ -123,12 +126,23 @@ cross-references, equations, and Quartodoc rendering constraints.
   and sequencing expectations.
 - Use `Attributes:` when instance state is part of the contract. Public
   dataclasses, Pydantic models, DTOs, configs, and typed payloads also need
-  per-field docstrings.
+  per-field docstrings. Explain conceptual or theoretical meaning for fields
+  whose role cannot be inferred from the type and name alone.
+- Document a non-straightforward private function or method when its invariant,
+  transformation, state transition, or failure mode is needed to safely change
+  its caller. Keep trivial private helpers concise.
+- Use standard Python annotations plus framework types (`Tensor`, `ndarray`,
+  and project types). Do not introduce Jaxtyping or another runtime shape-type
+  system; record shapes, frames, units, and support semantics in docstrings.
+- Use `codebase-design`, `design-an-interface`, or `domain-modeling` before
+  documenting a genuinely unsettled boundary. This skill records the resulting
+  source-level contract; it does not duplicate those design methods.
 - Use `Yields:` for generators, iterators, and streaming-style APIs.
 - Use `Examples:` for public APIs that are easy to misuse.
-- Use `Notes:` or `Theory:` when they materially help correct usage. Complex
-  geometry, RRI, rollout, reconstruction, and learning APIs should include the
-  most important equations when those equations define the contract.
+- Use `Notes:` or `Theory:` when they materially help correct usage. A complex
+  geometry, RRI, rollout, reconstruction, or learning API may state one
+  contract-defining equation, then link to the thesis owner for its definition
+  and full derivation. Do not copy thesis prose or mathematical definitions.
 - Use Markdown math (`$...$`, `$$...$$`) for equations that should render in
   generated Quarto API pages; use raw Python docstrings (`r"""..."""`) when
   LaTeX backslashes appear.

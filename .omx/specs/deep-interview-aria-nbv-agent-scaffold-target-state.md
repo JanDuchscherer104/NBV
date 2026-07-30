@@ -1,28 +1,26 @@
 ---
 kind: deep-interview-spec
-status: proposed
+status: accepted
 slug: aria-nbv-agent-scaffold-target-state
 profile: standard
 context_type: brownfield
 final_ambiguity: 0.12
 threshold: 0.20
+accepted: 2026-07-30
 ---
 
 # ARIA-NBV Agent Scaffold Target-State Specification
 
 ## Authority And Use
 
-This document is the proposed requirements source of truth for the next
+This document is the accepted requirements source of truth for the next
 ARIA-NBV agent-scaffold attempt. It consolidates reviewed human intent,
 historical OMX decisions, PR #30 evidence, local scaffold reviews, and trusted
 external practice research.
 
-It becomes authoritative only after explicit human acceptance. Until then,
-`.agents/references/human_owner_intent.md` remains the reviewed preference owner
-and exact code, tests, configuration, thesis sources, and papers remain
-authoritative in their respective domains.
-
-After acceptance:
+Explicit human acceptance on 2026-07-30 made it authoritative for this scoped
+rework. Exact code, tests, configuration, thesis sources, and papers remain
+authoritative in their respective domains. The following boundaries apply:
 
 - this specification owns the scaffold-rework target state and planning bounds;
 - `.agents/references/human_owner_intent.md` continues to own general cross-task
@@ -35,6 +33,30 @@ The specification is decision-lossless: it retains accepted current intent,
 unresolved conflicts, and capabilities at risk from destructive cleanup.
 Superseded implementation hypotheses may be summarized by source family rather
 than copied or individually registered.
+
+## Accepted 2026-07-30 Amendments
+
+- `agent-behavior` is the compact operational kernel for universal agent and
+  commit invariants. It routes durable information to its smallest owner rather
+  than becoming a handbook.
+- Instructions written as `<...>` are capture requests: preserve their intent
+  in the smallest owner selected by the root capture rule before completion.
+- `python-standards` is the sole ARIA Python-contract guidance owner. It keeps
+  its stable skill identifier, requires theory-aware DTO and complex-private
+  API documentation where needed, and uses ordinary Python/framework typing,
+  never Jaxtyping.
+- Reviewer lanes validate actionable P0--P2 findings; the orchestrating agent
+  publishes them as line-anchored GitHub threads. A fixing agent replies with
+  verification evidence, the reviewer rechecks the diff, and the orchestrator
+  resolves the thread. P3 remains in the final review record.
+- Pull-request bodies explain the responsibility change, retained contract,
+  user-visible effect, verification evidence, and deliberate exclusions. They
+  are not implementation diaries.
+- For non-trivial Spatial-AI, ML, MLOps, data-science, or statistics work,
+  agents provide a contextual explanation of the governing model, assumptions,
+  and failure mode. Rendered Mermaid/UML is used only when it clarifies a
+  genuine multi-component relationship; persistent teaching lessons require an
+  explicit teaching request.
 
 ## Intent
 
@@ -297,8 +319,9 @@ Rich linkage is a repository requirement, not a Graphify-specific feature:
   submission builds disable draft-only navigation.
 - Public code docstrings link to the relevant thesis section, glossary key,
   equation key, evidence contract, or paper when that relationship is necessary
-  to understand semantics. They do not copy thesis prose or mathematical
-  definitions into Python documentation.
+  to understand semantics. They do not copy thesis prose or full mathematical
+  definitions into Python documentation; one minimal implementation-contract
+  equation is allowed when callers cannot use the API correctly without it.
 - Literature syntheses resolve citation keys to `docs/references.bib` or
   `docs/references-qh.bib` and preserve exact source locators. Thesis claims link
   to those citations rather than treating a graph or synthesis page as proof.
