@@ -3,7 +3,33 @@ kind: spec
 status: current
 ---
 
-# ARIA-NBV Agent Scaffold Rework: Consolidated Evidence
+# ARIA-NBV Agent Scaffold Rework: Source-Aligned Restart
+
+## Scope And Completeness
+
+This revision audits every source family requested for the scaffold restart:
+
+- all user-authored messages in Codex parent task
+  `019fa7a1-57e8-72d1-8002-10a23c1b565e`;
+- PR #30 at audited head `2b02a3bff7ac2fccffd8118b2790ec3f3803b6e5`;
+- the July 11 decision record, July 14 context and plan, and July 20 context and
+  successor plan named by the repository owner;
+- the completed Python/package-guidance autoresearch goal metadata;
+- the local `writing-great-skills` reference; and
+- current upstream guidance from OpenAI, Anthropic, Agent Skills, and Graphify.
+
+"Complete" here means that every requested source family has a disposition and
+every non-trivial candidate is represented as retained, superseded, rejected,
+deferred, or unresolved. It does not mean that repeated prompts, transient
+execution instructions, or implementation detail are copied into the target
+state. User-authored intent is primary preference evidence; historical OMX
+artifacts are decision evidence; PR #30 is experimental evidence; external
+guidance is comparative practice evidence, not authority over ARIA choices.
+
+The Python/package-guidance goal's metadata and passing verdict remain, but its
+referenced `findings.md` is absent. This report therefore preserves the goal and
+its rubric as an evidence gap; it does not repeat the unavailable findings as
+verified conclusions.
 
 ## Executive Verdict
 
@@ -20,7 +46,11 @@ receive or whether tasks still succeed.
 
 The new attempt therefore follows one rule:
 
-> One purpose, one owner, and one executable proof per pull request.
+> One purpose, one owner, and one comparative evidence bundle per pull request.
+
+This is an ARIA review policy, not a claimed universal best practice. A material
+claim needs a baseline, candidate evidence, objective assertions, cost or
+context impact, and human review; one green check is not sufficient.
 
 This report is decision evidence. Current code, tests, configuration,
 `human_owner_intent.md`, `source_order.md`, the active thesis, and exact papers
@@ -31,15 +61,17 @@ remain authoritative for their own claims.
 - Keep default context small and load detail only when needed.
 - Give every durable meaning one authoritative owner.
 - Keep root guidance thin and place contracts beside their nearest owner.
-- Prefer upstream behavior; retain only minimal adapters for measured gaps.
+- Prefer upstream behavior by default; retain a local adapter or small
+  implementation only when a measured gap and comparative evidence justify it.
 - Treat graphs, retrieval, plans, debriefs, and agent output as evidence, never
   automatic truth.
 - Preserve source, freshness/worktree, ambiguity, and extracted/inferred
   provenance for derived evidence.
 - Keep optional tools optional: exact-source repository work must remain
   possible without OMX, Graphify, MemPalace, or LitKG.
-- Keep scientific/domain knowledge in code, tests, the active thesis, and exact
-  papers rather than skills.
+- Keep primary scientific and domain facts in code, tests, the active thesis,
+  and exact papers. Skills may own stable operational procedures and precise
+  pointers, but must not become competing fact stores.
 - Preserve privacy: raw transcripts, runtime identifiers, machine paths,
   credentials, and private retrieval corpora remain untracked.
 - Prefer small owner-scoped PRs and explicit capability dispositions over
@@ -47,6 +79,18 @@ remain authoritative for their own claims.
 - Require fresh executable verification before claiming completion.
 - Retire an owner only after its facts and consumers have verified destinations.
 - Keep accepted plans immutable and supersede them explicitly.
+- Keep Python entity contracts in source docstrings and render them through
+  Quartodoc; require useful contract documentation, not narration of trivial
+  private helpers.
+- Keep package READMEs only for durable human subsystem orientation. Do not
+  generate symbol matrices or duplicate routing policy in them.
+- Keep UML an explicit, untracked, operator-only architecture aid. It is not a
+  default context surface, runtime flow model, or API authority.
+- Resolve literature claims from authoritative TeX/PDF sources with citation,
+  exact locator, and calibrated wording. Retrieval tools may locate evidence
+  but do not verify the claim.
+- Give every actionable scaffold finding one disposition: reject, deduplicate,
+  preserve as a protocol, or record in Agents DB.
 
 ## Goals
 
@@ -62,9 +106,24 @@ The target scaffold should:
 - retain `measured-autoresearch` for research-only, evaluator-design, measured
   implementation, and keep-or-discard iterations;
 - retain Agents DB as the actionable-work owner for now;
-- keep debriefs episodic and useful rather than a current-state mirror;
+- determine the debrief trigger from measured retrieval value and maintenance
+  cost; keep debriefs historical rather than a current-state mirror;
 - keep generated navigation local, reproducible, and non-authoritative;
-- reduce custom scaffold implementation without deleting unique capabilities.
+- reduce custom scaffold implementation without deleting unique capabilities;
+- preserve Git LFS ownership for versioned checkpoints and model artifacts;
+- avoid restoring retired cache-migration or runtime-training APIs merely for
+  compatibility; and
+- make every retained skill predictable: a clear trigger, a bounded process,
+  checkable completion criteria, and branch-specific detail disclosed only when
+  needed;
+- classify every prompt-visible default, system, external, and repository skill
+  as retained, disabled, explicitly invoked, uncontrollable, or unresolved;
+  repository-local counts alone are not the runtime surface; and
+- preserve the thesis-wide shared-notation requirement. Every notation symbol
+  used in Typst must resolve through the shared glossary/notation owner. The
+  earlier phrase that every "equation" must be defined there is retained as an
+  ambiguity: equation labels and semantic definitions belong in shared
+  ownership, but copying every equation body would violate single ownership.
 
 ## Non-Goals
 
@@ -80,25 +139,122 @@ The target scaffold should:
   or context helpers before replacement parity is demonstrated.
 - No thesis, package, or runtime behavior changes hidden in a scaffold PR.
 - No replay of PR #30's commits or large custom policy engines.
+- No generated symbol inventories, default global UML, or broad context
+  snapshots as substitutes for exact owners.
+- No numeric simplification target, skill count, graph size, or LOC result that
+  can hide lost capability or new custom maintenance cost.
+
+## Source Authority And Alignment
+
+Use the following precedence when sources disagree:
+
+1. Current reviewed owner intent determines scaffold preferences.
+2. Current code, tests, configuration, thesis sources, and exact papers
+   determine implementation and scientific truth in their respective scopes.
+3. Newer user intent refines older intent only within the scope actually
+   reconsidered; age alone never performs supersession.
+4. Accepted OMX artifacts preserve decisions and rationale, but do not override
+   current owners or prove that an implementation worked.
+5. PR #30 and generated reports provide observations and candidates only.
+6. External sources inform design, but ARIA-specific policies remain explicit
+   owner choices.
+
+The named July artifacts are audited at their native repository-relative paths,
+not at the stale archive paths used by the previous report:
+
+- `.omx/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md`
+- `.omx/context/agent-scaffold-consensus-20260714T081220Z.md`
+- `.omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md`
+- `.omx/context/agent-scaffold-refresh-20260720T110000Z.md`
+- `.omx/plans/ralplan-aria-nbv-agent-scaffold-refresh-20260720.md`
+- `.omx/goals/autoresearch/aria-nbv-python-standards-and-aria-nbv-package-g/`
+
+The PR #30 issue index, five-PR proposal, HTML audit, and validator result are
+copied review evidence in `.agents/references/scaffold_rework/evidence/`; they
+are not present at that path in the primary checkout and are not promoted to
+current truth by being preserved here.
+
+## External Practice Evidence
+
+The restart adopts only practices supported by both the project intent and a
+plausible operational benefit:
+
+- OpenAI's [Harness Engineering](https://openai.com/index/harness-engineering/)
+  reports that a short `AGENTS.md` works better as a map than as a monolithic
+  manual, and that stable architecture and documentation invariants benefit
+  from mechanical checks.
+- Anthropic's
+  [context-engineering guidance](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+  frames context as a finite attention budget and recommends the smallest
+  high-signal token set that supports the desired outcome.
+- Agent Skills guidance on
+  [descriptions](https://agentskills.io/skill-creation/optimizing-descriptions),
+  [best practices](https://agentskills.io/skill-creation/best-practices), and
+  [evaluation](https://agentskills.io/skill-creation/evaluating-skills)
+  supports progressive disclosure, focused descriptions, realistic positive
+  and near-miss prompts, repeated trials, and comparison with a no-skill or
+  previous-skill baseline.
+- Upstream [Graphify](https://github.com/Graphify-Labs/graphify) provides native
+  query, path, explain, hierarchy, and extracted/inferred provenance behavior.
+  These features must be evaluated before ARIA adds wrappers; inferred edges
+  guide discovery but consequential claims still require exact-source checks.
+
+These sources do not establish ARIA's optional-tool policy, immutable-plan
+policy, exact source hierarchy, or PR boundaries. Those are owner preferences.
+Likewise, local `disable-model-invocation` behavior is client-specific and must
+be measured in the actual Codex runtime rather than treated as a portable Agent
+Skills standard.
+
+## Skill Design Contract
+
+The local `writing-great-skills` reference contributes the following
+requirements without becoming a second project-truth store:
+
+- Predictability means a repeatable process, not identical generated output.
+- A model-invoked skill spends startup context; a user-invoked skill spends
+  human recall. Independent reach must justify the chosen cost, and a router is
+  useful only when explicit skills exceed practical recall.
+- A description states one distinct trigger per execution branch. Synonyms and
+  body summaries are duplication, not coverage.
+- Every procedural step ends in a checkable completion criterion; important
+  criteria account for the complete touched surface and prevent premature
+  completion.
+- Inline what every branch needs; move branch-only reference material behind a
+  precise context pointer; keep a concept's definition, rules, and caveats
+  co-located.
+- Split a skill only for independent invocation or when hiding later steps
+  prevents premature completion. Do not split merely to shorten files.
+- Prune duplicate, irrelevant, no-op, sedimentary, and ceremonial prose.
+  Prefer positive target behavior; reserve negation for real guardrails.
+- Admit, change, or retire a skill only against realistic activation and task
+  fixtures, including adjacent negative cases and a prior/no-skill baseline.
+
+Do not optimize only a hand-picked ARIA skill count. Inventory the actual client
+catalog: discovered skill, precedence/collision, invocation eligibility,
+startup description bytes, activated body, references read, and task outcome.
+Where runtime telemetry is unavailable, record an evidence gap rather than a
+file-based estimate presented as runtime truth.
 
 ## Historical Evidence Ledger
 
 ### July 11 simplification decision record
 
-Source: `codex/scaffold-distill-upstream-graphify` at
-`.omx/archive/accepted-bundles/aria-nbv-agent-scaffold-simplification--c2c9c9381e40fd2f/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md`.
+Source: `.omx/specs/aria-nbv-agent-scaffold-simplification-20260711/decision-record.md`
+in the primary checkout.
 
 Retain: one owner per meaning, thin root routing, `aria-nbv-context` as discovery
 control rather than a project handbook, derived evidence as non-authoritative,
-and optional-tool failure isolation.
+optional-tool failure isolation, operator-only UML, docstring/Quartodoc Python
+entity ownership, contract-tiered documentation, selective package READMEs,
+and direct-source literature verification.
 
 Do not inherit automatically: categorical LitKG removal, exact Graphify corpus,
 or fixed command and skill inventories. Those conclusions were later contested.
 
 ### July 14 simplification plan
 
-Source: the same accepted bundle at
-`plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md`.
+Source: `.omx/plans/ralplan-aria-nbv-agent-scaffold-simplification-20260714.md`
+in the primary checkout.
 
 Retain: independent reach earns a skill, explicit behavior beats ambient hooks,
 and deletion must be proven by owners and tests before removal.
@@ -114,9 +270,11 @@ Source: `codex/agent-scaffold-refresh-v2` at
 Retain: measured-autoresearch, Agents DB, current debrief policy, durable human
 intent, privacy, exact-source fallback, and no tracked generated wiki.
 
-Treat as disproven implementation hypotheses: one tracked graph, automatic
-source/graph commit pairs, a large OMX lifecycle validator, broad external-skill
-closure enforcement, and simultaneous LitKG/context/state retirement.
+Treat as superseded or unproven implementation hypotheses: an exact nine-skill
+portfolio, one tracked graph, automatic source/graph commit pairs, a large OMX
+lifecycle validator, broad external-skill closure enforcement, and simultaneous
+LitKG/context/state retirement. The plan's retention of measured-autoresearch,
+Agents DB, exact-source fallback, privacy, and no generated wiki remains current.
 
 ### July 26 scaffold issue index
 
@@ -132,6 +290,12 @@ routing tests measured lexical consistency rather than task outcomes; graph
 link precision and scaffold/bibliography coverage were incomplete; custom
 scaffold scripts grew despite headline LOC reduction; synchronous hooks and
 mandatory debrief growth had unmeasured cost.
+
+Also preserve its concrete failure candidates: vendored Graphify over-trigger,
+an undocumented large tree artifact, custom adaptation growth before tests,
+stale external-skill policy, copied-hook drift, transcript completeness gaps,
+regressed source inspection, and live-looking references to retired systems.
+These are hypotheses to reproduce against `main`, not licenses for bulk removal.
 
 ### July 26 five-PR rebuild proposal
 
@@ -181,24 +345,79 @@ Observed or material failures:
 - retirement claims unsupported by replacement evidence.
 
 PR #30 remains an open draft as of this report. It must not be treated as the
-new implementation baseline.
+new implementation baseline. At the live check on 2026-07-30 it still contained
+383 changed files, +20,446/-20,486 lines, and a failing root CI check.
+
+### Parent Codex task
+
+The parent task contributes the strongest temporal preference evidence. Its
+material sequence is:
+
+- preserve information and capabilities before simplifying;
+- prefer native/upstream implementations and progressive disclosure;
+- centralize scientific truth in code, thesis, and exact papers;
+- require Graphify to respect native hierarchy and link modalities, but later
+  question whether Graphify was useful enough to justify its adaptation;
+- reject PR #30 as overwhelming and explicitly allow partial adoption;
+- replace one monster PR with small, self-contained PRs;
+- build a reviewed owner-intent corpus, then reject trivial candidates and
+  overengineered extraction machinery; and
+- consolidate only important, generalizable, non-conflicting intent into the
+  restart evidence.
+
+Thus the earlier requests to include all candidates or make
+`aria-nbv-context` contain all relevant project information are superseded by
+the later requirements for selective distillation, context hygiene, single
+ownership, and progressive disclosure. The July 20 fixed architecture is
+evidence, not a standing command to reproduce its full target.
 
 ## Current Conflicts
 
 Keep these open until their dedicated workpackage supplies evidence:
 
 - exact Graphify corpus, refresh behavior, and retained outputs;
+- whether a fresh Graphify graph is the default navigation route or an optional
+  architecture aid used only after exact lookup becomes insufficient;
 - whether LitKG still provides unique claim or retrieval value;
 - whether `aria-nbv-context` is a pure router or contains compact stable
   orientation;
 - exact external-skill reference, allowlist, pinning, or vendoring policy;
 - which handwritten state surfaces can retire;
+- whether debriefs remain required for every non-trivial task, as retained by
+  the July 20 successor, or become event-triggered/episodic, as later cost and
+  context concerns suggest;
 - when Typst becomes the sole scientific owner rather than the target owner;
+- the exact enforceable interpretation of the shared-glossary requirement for
+  equation labels and definitions;
 - minimum OMX registry and validator implementation. Current artifacts retain
   native OMX role paths and superseded bundles remain archived with successor
   provenance.
 
+These earlier numeric targets are explicitly superseded as universal gates:
+exactly nine ARIA skills, a fixed prompt-byte reduction, and a fixed graph-size
+limit. They may be retained as historical baselines, but capability, runtime,
+and maintenance evidence determines acceptance. Destructive migration still
+stops on unresolved ownership, missing source/test coverage, stale material
+evidence, unclassified artifacts, hidden semantic changes, or an unpaired
+maintenance-cost regression.
+
 ## Clean Restart Sequence
+
+Before implementation, freeze a small representative evaluator. It must cover:
+
+- owner localization from code, docs, thesis, literature, and scaffold prompts;
+- positive and near-miss skill activation;
+- task completion with the current skill, candidate skill, and no-skill path;
+- Graphify owner/path/hierarchy tasks, including code-symbol references from
+  docs, thesis structure, bibliography/paper membership, stale graphs, and
+  inferred-edge false links;
+- exact-source fallback with optional tools absent; and
+- human review cost: files changed, generated churn, custom LOC, diff size, and
+  whether the result can be reviewed independently.
+
+Record assertion-level evidence, repeated-run aggregates where stochastic
+behavior matters, runtime/token cost when observable, and explicit telemetry
+gaps. Do not optimize the evaluator after seeing only the candidate result.
 
 ### PR 1: Intent and authority alignment
 
@@ -247,9 +466,12 @@ retirement independently reversible.
 
 ### Separate thesis PRs
 
-Salvage numbered equations, source links, and visible prune markers as separate
-thesis changes. Do not use scaffold cleanup to justify thesis semantic changes,
-Quarto deletion, or generated PDF churn.
+Salvage centered numbered equations using native Typst math, shared notation and
+glossary coverage, branch-aware code/source links, draft markers, development
+build profiles, and visible prune evidence as separate thesis changes. The
+proposed folding of Quarto questions/roadmap material into Typst is a separate
+semantic migration and requires statement-by-statement ownership review. Do not
+use scaffold cleanup to justify Quarto deletion or generated PDF churn.
 
 ### Separate OMX design
 
@@ -263,11 +485,56 @@ Every replacement PR must satisfy:
 
 - one purpose reflected by title, body, diff, and tests;
 - one owner for every moved fact;
-- one executable proof for the claimed improvement;
+- one comparative evidence bundle for the claimed improvement;
 - explicit retained, replaced, removed, and deferred capabilities;
 - no generated or binary churn unless it is the deliverable;
 - exact-head hosted CI and reviewable commit history;
 - rollback without depending on later PRs.
+
+Permanent automation is admitted only for a stable, recurring, objectively
+testable invariant. Every new validator or hook needs an owner, a concrete
+failure mode, a useful remediation message, a positive fixture, a negative
+fixture, and evidence that it does not block the valid baseline. A validator
+larger or harder to maintain than the capability it protects is a design
+failure unless its comparative benefit is demonstrated.
+
+## Candidate Disposition Summary
+
+Retain now:
+
+- thin scoped guidance, exact-source owners, progressive disclosure, privacy,
+  measured-autoresearch, Agents DB, docstrings/Quartodoc, selective READMEs,
+  direct-source literature checks, optional-tool fallback, and small PRs;
+- PR #30's observed useful capabilities only as salvage candidates: Typst
+  equation/notation/prune checks, source-link primitives, native Graphify
+  traversal/hierarchy, and repaired docs routing; and
+- native OMX role paths with explicit supersession evidence, without assuming a
+  registry engine is needed.
+
+Reject now:
+
+- PR #30 as a merge or replay unit;
+- a comprehensive context skill, tracked generated wiki/graph as truth, global
+  generated inventories, custom Graphify replacement, broad synchronous hooks,
+  lexical-only routing tests, or automatic intent acceptance;
+- arbitrary skill/LOC/byte targets used without capability evidence; and
+- bulk deletion based only on apparent redundancy.
+
+Defer to evidence:
+
+- Graphify corpus, refresh, hooks, outputs, and adapter;
+- LitKG and state-journal retirement;
+- external-skill allowlisting/pinning/vendoring;
+- exact debrief trigger policy and minimal OMX lifecycle machinery; and
+- any generated cross-modal/NLP layer beyond upstream Graphify behavior.
+
+Keep outside this scaffold series:
+
+- thesis semantic consolidation, notation/equation formatting, Quarto removal,
+  model/package refactors, runtime training APIs, and scientific claim changes.
+- code or chat TODOs do not automatically become debrief prose. Existing source
+  TODOs stay with their source owner; actionable cross-cutting findings go to
+  Agents DB after review; historical failed approaches may remain in debriefs.
 
 ## Recommended First Action
 
