@@ -41,7 +41,7 @@ from .root_selection import (
 )
 from .shards import plan_rollout_shards, run_rollout_shard
 
-CAMPAIGN_EVENT_VERSION = "rollout-campaign-event-v1"
+CAMPAIGN_EVENT_VERSION = "rollout-campaign-event-v2"
 """Version of campaign progress ledger rows."""
 
 
@@ -349,6 +349,8 @@ class RolloutCampaign:
     def __init__(self, config: RolloutCampaignConfig) -> None:
         self.config = config
         self._started = 0.0
+        self._campaign_config_hash = stable_config_hash(config)
+        self._root_inventory_hash: str | None = None
 
     def paired_panel_scene_ids(self, inventory: RootInventory) -> tuple[str, ...]:
         """Return the stable scene subset receiving all candidate profiles."""
@@ -397,6 +399,7 @@ class RolloutCampaign:
             seed=self.config.seed,
             expected_scene_count=self.config.expected_scene_count,
         )
+        self._bind_root_inventory(inventory)
         write_root_inventory(self.config.root_inventory_path, inventory, repo_root=Path.cwd())
         assignments = self.planned_profiles_by_scene(inventory)
         new_shards = skipped_shards = failed_shards = failed_scenes = 0
@@ -475,7 +478,7 @@ class RolloutCampaign:
         if accepted is not None:
             try:
                 return self._validate_source_event(scene, accepted)
-            except CampaignSourceIneligibleError as exc:
+            except Exception as exc:
                 self._event("source_cache_invalid", scene_id=scene.scene_id, error=f"{type(exc).__name__}: {exc}")
 
         rejected = {
@@ -508,27 +511,7 @@ class RolloutCampaign:
             self.config.output_root / "sources" / scene.scene_id, candidate.rank_digest
         )
         store_dir = attempt_root / "store"
-        source_config = self.config.source_writer.model_copy(deep=True)
-        source_config.store = source_config.store.model_copy(update={"store_dir": store_dir})
-        source_config.dataset = source_config.dataset.model_copy(
-            update={
-                "scene_ids": [scene.scene_id],
-                "snippet_ids": [candidate.sample_key],
-                "snippet_key_filter": [candidate.sample_key],
-                "tar_urls": [candidate.shard_path.as_posix()],
-                "scene_to_mesh": {scene.scene_id: scene.mesh_path},
-                "wds_shuffle": False,
-                "wds_repeat": False,
-                "load_meshes": True,
-                "require_mesh": True,
-            }
-        )
-        source_config.max_samples = 1
-        source_config.samples_per_shard = 1
-        source_config.overwrite = False
-        source_config.include_depths = False
-        source_config.include_pointclouds = False
-        source_config.include_diagnostic_payloads = False
+        source_config = self._source_config(scene, candidate, store_dir)
         writer = source_config.setup_target()
         if writer is None:
             raise RuntimeError("VinOfflineWriterConfig did not instantiate a writer.")
@@ -550,8 +533,42 @@ class RolloutCampaign:
             store_dir=store_dir.resolve().as_posix(),
             split=selection.split,
             target_ids=list(selection.target_ids),
+            source_writer_config_hash=stable_config_hash(source_config),
+            target_sampler_config_hash=stable_config_hash(self.config.target_sampler),
+            source_manifest_hash=_file_sha256(source_config.store.manifest_path),
         )
         return selection
+
+    def _source_config(
+        self,
+        scene: SceneRootCandidates,
+        candidate: RankedSnippet,
+        store_dir: Path,
+    ) -> VinOfflineWriterConfig:
+        """Derive the immutable one-row source writer for one ranked snippet."""
+
+        source_config = self.config.source_writer.model_copy(deep=True)
+        source_config.store = source_config.store.model_copy(update={"store_dir": store_dir})
+        source_config.dataset = source_config.dataset.model_copy(
+            update={
+                "scene_ids": [scene.scene_id],
+                "snippet_ids": [candidate.sample_key],
+                "snippet_key_filter": [candidate.sample_key],
+                "tar_urls": [candidate.shard_path.as_posix()],
+                "scene_to_mesh": {scene.scene_id: scene.mesh_path},
+                "wds_shuffle": False,
+                "wds_repeat": False,
+                "load_meshes": True,
+                "require_mesh": True,
+            }
+        )
+        source_config.max_samples = 1
+        source_config.samples_per_shard = 1
+        source_config.overwrite = False
+        source_config.include_depths = False
+        source_config.include_pointclouds = False
+        source_config.include_diagnostic_payloads = False
+        return source_config
 
     def _open_source_selection(
         self,
@@ -607,8 +624,24 @@ class RolloutCampaign:
         event: dict[str, Any],
     ) -> CampaignSourceSelection:
         sample_key = str(event["sample_key"])
-        candidate = next(candidate for candidate in scene.candidates if candidate.sample_key == sample_key)
-        return self._open_source_selection(scene, candidate, Path(str(event["store_dir"])))
+        candidate = next(
+            (candidate for candidate in scene.candidates if candidate.sample_key == sample_key),
+            None,
+        )
+        if candidate is None:
+            raise ValueError(f"Cached source sample {sample_key!r} is absent from the active root inventory.")
+        store_dir = Path(str(event["store_dir"]))
+        source_config = self._source_config(scene, candidate, store_dir)
+        expected_source_hash = stable_config_hash(source_config)
+        if event.get("source_writer_config_hash") != expected_source_hash:
+            raise ValueError("Cached source writer config does not match the active campaign.")
+        expected_sampler_hash = stable_config_hash(self.config.target_sampler)
+        if event.get("target_sampler_config_hash") != expected_sampler_hash:
+            raise ValueError("Cached target sampler config does not match the active campaign.")
+        manifest_hash = _file_sha256(source_config.store.manifest_path)
+        if event.get("source_manifest_hash") != manifest_hash:
+            raise ValueError("Cached source manifest does not match the selected source event.")
+        return self._open_source_selection(scene, candidate, store_dir)
 
     def _run_profile_shard(self, source: CampaignSourceSelection, *, profile_name: str) -> bool:
         profile = self.config.profiles[profile_name]
@@ -731,17 +764,36 @@ class RolloutCampaign:
         ]
         return matches[-1] if matches else None
 
+    def _bind_root_inventory(self, inventory: RootInventory) -> None:
+        """Freeze the active inventory identity used to filter resumable events."""
+
+        payload = inventory.to_jsonable(repo_root=Path.cwd())
+        self._root_inventory_hash = str(payload["inventory_hash"])
+
     def _events(self) -> list[dict[str, Any]]:
+        if self._root_inventory_hash is None:
+            return []
         try:
             lines = self.config.progress_path.read_text(encoding="utf-8").splitlines()
         except FileNotFoundError:
             return []
-        return [json.loads(line) for line in lines if line.strip()]
+        rows = [json.loads(line) for line in lines if line.strip()]
+        return [
+            row
+            for row in rows
+            if row.get("campaign_id") == self.config.campaign_id
+            and row.get("campaign_config_hash") == self._campaign_config_hash
+            and row.get("root_inventory_hash") == self._root_inventory_hash
+        ]
 
     def _event(self, event: str, **payload: Any) -> None:
+        if self._root_inventory_hash is None:
+            raise RuntimeError("Campaign root inventory must be bound before recording progress events.")
         row = {
             "version": CAMPAIGN_EVENT_VERSION,
             "campaign_id": self.config.campaign_id,
+            "campaign_config_hash": self._campaign_config_hash,
+            "root_inventory_hash": self._root_inventory_hash,
             "event": event,
             "time_unix_s": time.time(),
             **payload,
@@ -766,6 +818,7 @@ class RolloutCampaign:
                 "version": "rollout-campaign-status-v1",
                 "campaign_id": self.config.campaign_id,
                 "config_hash": stable_config_hash(self.config),
+                "root_inventory_hash": self._root_inventory_hash,
                 "state": "running",
                 "event_counts": dict(sorted(event_counts.items())),
                 "collection_dir": self.config.collection_dir.resolve().as_posix(),
@@ -788,6 +841,7 @@ class RolloutCampaign:
             "version": "rollout-campaign-status-v1",
             "campaign_id": self.config.campaign_id,
             "config_hash": stable_config_hash(self.config),
+            "root_inventory_hash": self._root_inventory_hash,
             "reason": result.reason,
             "invocation": {
                 "new_shards": result.new_shards,
@@ -830,6 +884,12 @@ def _digest(seed: int, namespace: str, value: str) -> str:
     """Return a deterministic assignment digest."""
 
     return sha256(f"{seed}:{namespace}:{value}".encode()).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    """Return the SHA-256 digest of a persisted campaign artifact."""
+
+    return sha256(path.read_bytes()).hexdigest()
 
 
 def _free_disk_gib(path: Path) -> float:

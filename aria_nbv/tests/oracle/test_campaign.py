@@ -15,6 +15,7 @@ from aria_nbv.oracle.pipelines.campaign import (
 )
 from aria_nbv.oracle.pipelines.root_selection import RankedSnippet, RootInventory, SceneRootCandidates
 from aria_nbv.targets.protocol import TargetInputProtocol
+from aria_nbv.utils.fingerprints import stable_config_hash
 
 
 def _inventory(count: int) -> RootInventory:
@@ -180,6 +181,7 @@ def test_source_selection_advances_only_for_typed_ineligibility(
     )
     campaign = RolloutCampaign(config)
     campaign._prepare_paths()
+    campaign._bind_root_inventory(RootInventory(seed=config.seed, scenes=(scene,)))
     attempts: list[str] = []
 
     def build_source(_scene: SceneRootCandidates, candidate: RankedSnippet) -> CampaignSourceSelection:
@@ -201,6 +203,202 @@ def test_source_selection_advances_only_for_typed_ineligibility(
     assert selected.candidate is second
     assert attempts == [first.sample_key, second.sample_key]
     assert campaign._events()[0]["event"] == "source_rejected"
+
+
+@pytest.mark.parametrize(
+    "cache_error",
+    [FileNotFoundError("cached store is missing"), RuntimeError("cached store is truncated")],
+)
+def test_invalid_cached_source_falls_through_to_viable_reserve(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cache_error: Exception,
+) -> None:
+    first, second = (
+        RankedSnippet(
+            sample_key=f"AriaSyntheticEnvironment_81286_AtekDataSample_{index:06d}",
+            shard_path=tmp_path / f"shards-{index:04d}.tar",
+            rank_digest=str(index) * 64,
+        )
+        for index in range(2)
+    )
+    scene = SceneRootCandidates(
+        scene_id="81286",
+        mesh_path=tmp_path / "scene_ply_81286.ply",
+        candidates=(first, second),
+    )
+    config = RolloutCampaignConfig(
+        output_root=tmp_path / "output",
+        evidence_dir=tmp_path / "evidence",
+        collection_dir=tmp_path / "collection",
+    )
+    campaign = RolloutCampaign(config)
+    campaign._prepare_paths()
+    campaign._bind_root_inventory(RootInventory(seed=config.seed, scenes=(scene,)))
+    campaign._event(
+        "source_selected",
+        scene_id=scene.scene_id,
+        sample_key=first.sample_key,
+        store_dir=(tmp_path / "cached-source").as_posix(),
+    )
+    attempts: list[str] = []
+
+    monkeypatch.setattr(campaign, "_validate_source_event", lambda *_: (_ for _ in ()).throw(cache_error))
+
+    def build_source(_scene: SceneRootCandidates, candidate: RankedSnippet) -> CampaignSourceSelection:
+        attempts.append(candidate.sample_key)
+        if candidate is first:
+            raise CampaignSourceIneligibleError("cached root is no longer admissible")
+        return CampaignSourceSelection(
+            scene_id=scene.scene_id,
+            candidate=candidate,
+            store_dir=tmp_path / "reserve-source",
+            split="train",
+            target_ids=("observed-target",),
+        )
+
+    monkeypatch.setattr(campaign, "_build_and_validate_source", build_source)
+
+    selected = campaign._select_source(scene)
+
+    assert selected.candidate is second
+    assert attempts == [first.sample_key, second.sample_key]
+    assert [event["event"] for event in campaign._events()] == [
+        "source_selected",
+        "source_cache_invalid",
+        "source_rejected",
+    ]
+
+
+def test_resumed_source_event_is_bound_to_campaign_identity(tmp_path: Path) -> None:
+    inventory = _inventory(1)
+    first_config = RolloutCampaignConfig(
+        campaign_id="campaign-a",
+        expected_scene_count=1,
+        paired_panel_scene_count=0,
+        output_root=tmp_path / "output",
+        evidence_dir=tmp_path / "evidence",
+        collection_dir=tmp_path / "collection",
+    )
+    first = RolloutCampaign(first_config)
+    first._prepare_paths()
+    first._bind_root_inventory(inventory)
+    first._event(
+        "source_selected",
+        scene_id=inventory.scenes[0].scene_id,
+        sample_key=inventory.scenes[0].selected.sample_key,
+        store_dir=(tmp_path / "source-a").as_posix(),
+    )
+
+    second = RolloutCampaign(first_config.model_copy(update={"campaign_id": "campaign-b"}))
+    second._bind_root_inventory(inventory)
+
+    assert second._accepted_source_event(inventory.scenes[0].scene_id) is None
+    assert second._events() == []
+
+
+def test_resumed_source_event_is_bound_to_campaign_config(tmp_path: Path) -> None:
+    inventory = _inventory(1)
+    first_config = RolloutCampaignConfig(
+        campaign_id="campaign-a",
+        expected_scene_count=1,
+        paired_panel_scene_count=0,
+        output_root=tmp_path / "output",
+        evidence_dir=tmp_path / "evidence",
+        collection_dir=tmp_path / "collection",
+    )
+    first = RolloutCampaign(first_config)
+    first._prepare_paths()
+    first._bind_root_inventory(inventory)
+    first._event(
+        "source_selected",
+        scene_id=inventory.scenes[0].scene_id,
+        sample_key=inventory.scenes[0].selected.sample_key,
+        store_dir=(tmp_path / "source-a").as_posix(),
+    )
+
+    changed_source_writer = first_config.source_writer.model_copy(
+        update={"vin_pad_points": first_config.source_writer.vin_pad_points + 1}
+    )
+    second = RolloutCampaign(first_config.model_copy(update={"source_writer": changed_source_writer}))
+    second._bind_root_inventory(inventory)
+
+    assert second._accepted_source_event(inventory.scenes[0].scene_id) is None
+    assert second._events() == []
+
+
+def test_resumed_source_event_is_bound_to_root_inventory(tmp_path: Path) -> None:
+    first_inventory = _inventory(1)
+    config = RolloutCampaignConfig(
+        campaign_id="campaign-a",
+        expected_scene_count=1,
+        paired_panel_scene_count=0,
+        output_root=tmp_path / "output",
+        evidence_dir=tmp_path / "evidence",
+        collection_dir=tmp_path / "collection",
+    )
+    first = RolloutCampaign(config)
+    first._prepare_paths()
+    first._bind_root_inventory(first_inventory)
+    first._event(
+        "source_selected",
+        scene_id=first_inventory.scenes[0].scene_id,
+        sample_key=first_inventory.scenes[0].selected.sample_key,
+        store_dir=(tmp_path / "source-a").as_posix(),
+    )
+    changed_candidate = RankedSnippet(
+        sample_key=first_inventory.scenes[0].selected.sample_key,
+        shard_path=tmp_path / "different-shard.tar",
+        rank_digest="f" * 64,
+    )
+    changed_inventory = RootInventory(
+        seed=first_inventory.seed,
+        scenes=(
+            SceneRootCandidates(
+                scene_id=first_inventory.scenes[0].scene_id,
+                mesh_path=first_inventory.scenes[0].mesh_path,
+                candidates=(changed_candidate,),
+            ),
+        ),
+    )
+
+    second = RolloutCampaign(config)
+    second._bind_root_inventory(changed_inventory)
+
+    assert second._accepted_source_event(changed_inventory.scenes[0].scene_id) is None
+    assert second._events() == []
+
+
+def test_cached_source_manifest_hash_must_match_selected_event(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    inventory = _inventory(1)
+    scene = inventory.scenes[0]
+    config = RolloutCampaignConfig(
+        expected_scene_count=1,
+        paired_panel_scene_count=0,
+        output_root=tmp_path / "output",
+        evidence_dir=tmp_path / "evidence",
+        collection_dir=tmp_path / "collection",
+    )
+    campaign = RolloutCampaign(config)
+    campaign._bind_root_inventory(inventory)
+    store_dir = tmp_path / "cached-source"
+    source_config = config.source_writer.model_copy(deep=True)
+    source_config.store = source_config.store.model_copy(update={"store_dir": store_dir})
+    monkeypatch.setattr(campaign, "_source_config", lambda *_: source_config)
+    source_config.store.manifest_path.parent.mkdir(parents=True)
+    source_config.store.manifest_path.write_text("current manifest", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest does not match"):
+        campaign._validate_source_event(
+            scene,
+            {
+                "sample_key": scene.selected.sample_key,
+                "store_dir": store_dir.as_posix(),
+                "source_writer_config_hash": stable_config_hash(source_config),
+                "target_sampler_config_hash": stable_config_hash(config.target_sampler),
+                "source_manifest_hash": "stale-manifest-hash",
+            },
+        )
 
 
 def test_source_operational_failure_propagates_without_reserve_storm(
