@@ -10,7 +10,5 @@ or generated documentation.
   plans and specifications.
 - `operator_quick_reference.md`: practical environment, worktree, frame, and
   EFM-view recovery aids that are not canonical project state.
-- `scaffold_rework/`: temporary evidence for the proposed scaffold target
-  state; it is not current policy.
 - `mattpocock_skills_manifest.toml`: conditional runtime configuration, kept
   only while the repository maintains an external-skill allowlist.

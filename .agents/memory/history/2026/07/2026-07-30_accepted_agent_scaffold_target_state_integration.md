@@ -14,9 +14,9 @@ surfaces without creating a competing policy owner.
 
 ## Method
 Compared the accepted `.omx/specs/` requirement artifact with the root source
-order and reviewed-preference owner. Updated only their live acceptance
-pointers; the accepted specification and temporary evidence index remain
-unchanged.
+order and reviewed-preference owner. Verified that the specification's source
+ledger retained every unique disposition from the temporary context, interview,
+and scaffold-evidence artifacts; then removed those temporary active surfaces.
 
 ## Findings
 
@@ -25,6 +25,10 @@ unchanged.
   thesis, and human-intent ownership.
 - `.agents/references/human_owner_intent.md` explicitly retains only
   cross-task preferences and points scoped requirements to the specification.
+- The temporary `.agents/references/scaffold_rework/` tree and its two
+  superseded OMX context/interview records were removed from active guidance.
+  Their source-family dispositions remain in the accepted specification and
+  their exact contents remain recoverable through Git history.
 
 ## Verification
 
@@ -37,4 +41,4 @@ unchanged.
 
 No `.agents/memory/state` promotion was needed. Current guidance routing changed
 in `source_order.md` and `human_owner_intent.md`; the accepted specification
-remains immutable.
+remains immutable while its prescribed temporary surfaces were retired.
