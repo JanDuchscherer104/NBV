@@ -13,7 +13,6 @@ loop that reproduces the user-visible symptom before patching:
 - offline store: manifest/sample-index read + `tests/data_handling/test_vin_offline_store.py`
 - Streamlit: import/dispatcher test before manual UI inspection
 - docs: `cd docs && quarto render <page>` or focused typst compile
-- KG: narrowest `make kg-*` command for the failing artifact
 
 Workflow:
 1. Search `.agents/resolved.toml` first to avoid redoing settled diagnoses.
@@ -30,7 +29,7 @@ missing artifact, access, fixture, or metric needed next, and record durable
 debt as a blocked issue via `make agents-db`.
 
 Read `.agents/memory/state/GOTCHAS.md` and
-`.agents/references/verification_matrix.md` first.
+the nearest package guide or diagnostic skill first.
 
 Report:
 - failing loop and passing loop

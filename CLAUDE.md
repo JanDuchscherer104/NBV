@@ -29,7 +29,6 @@ into the same scaffold that Codex and Gemini already use.
 - Format/lint: `ruff format <file>` and `ruff check <file>`.
 - Tests: `cd aria_nbv && uv run pytest <path>`.
 - Memory + DB checks: `make check-agent-memory`, `make agents-db`.
-- KG (probationary): see `.agents/references/litkg_quick_reference.md`.
 
 ## Claude-Specific Surfaces
 - Slash commands: `.claude/commands/` mirrors the most-used scaffold verbs.
@@ -44,6 +43,6 @@ into the same scaffold that Codex and Gemini already use.
   on stop.
 
 ## Verification
-- Pick the narrowest check from `.agents/references/verification_matrix.md`.
+- Pick the narrowest check from the nearest package guide or skill.
 - After agent-memory or skill edits: `make check-agent-memory`.
 - After agents-DB edits: `make agents-db AGENTS_ARGS='validate'`.

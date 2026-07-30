@@ -14,5 +14,5 @@ Apply `.agents/skills/diagnose-aria/SKILL.md`. Before patching:
 4. Turn the minimized repro into a regression test when a real seam exists.
 5. Remove every `[DEBUG-...]` probe before reporting.
 
-Verify with the narrowest check from
-`.agents/references/verification_matrix.md` for the failing surface.
+Verify with the narrowest check named by the failing surface's package guide or
+diagnostic skill.

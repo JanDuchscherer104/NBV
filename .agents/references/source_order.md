@@ -35,9 +35,8 @@ Use this reference when a task needs current project truth or sources disagree.
   Semantic-drift warnings from `make scaffold-audit` are source-order review
   prompts: move durable truth to the owner above, or justify the text as a
   compact routing/evidence cue.
-- Optional tool and adapter boundaries:
-  `.agents/references/alignment_tools_contract.md`. KG/backend operational
-  details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
+- Optional tools and adapters provide evidence, not truth. Tool-specific
+  operating details remain with the retained tool owner.
 - Thesis-to-code links: `docs/typst/shared/style.typ` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse
@@ -59,4 +58,5 @@ implemented evidence. Do not promote planned work to implemented results.
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
-- Optional tool boundary: `.agents/references/alignment_tools_contract.md`.
+- Optional tools provide evidence or proposals; their owning source remains
+  authoritative.

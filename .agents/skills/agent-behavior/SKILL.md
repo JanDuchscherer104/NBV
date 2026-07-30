@@ -26,7 +26,7 @@ metadata:
     - ".agents/references/source_order.md#capture-rule"
     - ".agents/skills/README.md#required-frontmatter"
   verification:
-    - "surface-specific checks from .agents/references/verification_matrix.md"
+    - "surface-specific checks from the nearest package guide or skill"
     - "make check-agent-memory when agent guidance or memory changes"
 ---
 

@@ -30,11 +30,11 @@ metadata:
   must_read:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
-    - ".agents/references/verification_matrix.md"
+    - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
   canonical_sources:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - "docs/contents/setup.qmd"
-    - ".agents/references/verification_matrix.md"
+    - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/pydantic/pydantic"

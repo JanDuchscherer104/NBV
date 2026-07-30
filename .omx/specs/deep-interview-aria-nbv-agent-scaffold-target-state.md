@@ -220,7 +220,7 @@ The current files have these target dispositions:
   beside the debrief implementation, preferably `.agents/memory/README.md` or
   the script/template that validates them. Delete it if debriefs retire.
   > Not sure, would merge memory and debrief instructions into [$mempalace-aria-nbv:agents-db](/home/jd/repos/ARIA-NBV/.agents/skills/agents-db/SKILL.md)
-- `alignment_tools_contract.md`: fold its universal rule, optional tools produce
+- Alignment-tool contract: fold its universal rule, optional tools produce
   evidence rather than truth, into root guidance and this specification. Move
   tool-specific behavior beside each retained tool, then delete the aggregate.
 - `context7_library_ids.md`: keep contents, integrate in new aria-nbv context routing skill;
@@ -233,11 +233,8 @@ The current files have these target dispositions:
 - `source_order.md`: retain and rewrite as the concise current authority map.
   Remove stale QMD, generated-context, handwritten-state, or tool routes as
   their owners change; do not turn it into a project encyclopedia.
-- `litkg_quick_reference.md`: while LitKG remains undecided, treat this as
-  migration input. If LitKG is retained, put only ARIA-specific operations
-  beside its configuration or vendored tool documentation and rely on upstream
-  docs for generic usage. If LitKG retires, delete the file after replacement
-  checks pass.
+- `litkg_quick_reference.md`: retire with LitKG after the direct-source claim
+  discipline and local literature lookup checks pass.
 - `omx_artifact_policy.md`: if a repository OMX lifecycle is retained, move its
   minimal tracked-artifact contract to `.omx/README.md` and enforce it with the
   smallest existing validator. Otherwise rely on upstream OMX behavior and
@@ -265,7 +262,7 @@ The current files have these target dispositions:
   documentation of `docs/typst/shared/style.typ`, with a short route in
   `docs/AGENTS.md`. Compile-time behavior remains owned and tested by the Typst
   implementation.
-- `verification_matrix.md`: distribute commands to the nearest `AGENTS.md`,
+- Verification command matrix: distribute commands to the nearest `AGENTS.md`,
   package/test owner, Make target help, or retained tool documentation. Root
   guidance keeps only universal verification expectations; delete the central
   matrix after every active route has a local owner.
@@ -383,7 +380,7 @@ layouts:
 
 ## Optional Tools And External Capabilities
 
-- OMX, Graphify, MemPalace, LitKG, MCP servers, external skills, and similar
+- OMX, Graphify, MemPalace, MCP servers, external skills, and similar
   systems remain optional evidence, navigation, or orchestration tools.
 - Normal repository work and CI must remain possible from exact sources without
   these tools.
@@ -607,7 +604,7 @@ make either change invalid.
 ## Non-Goals
 
 - No replay, merge-in-place repair, or wholesale cherry-pick of PR #30.
-- No one-shot migration of skills, Graphify, LitKG, memory, OMX lifecycle,
+- No one-shot migration of skills, Graphify, memory, OMX lifecycle,
   thesis, and generated artifacts.
 - No comprehensive scaffold handbook or project encyclopedia in a skill.
 - No repository-owned replacement for maintained external systems without a
@@ -641,7 +638,6 @@ make either change invalid.
   query.
 - A custom Graphify replacement or large parser/adapter layer before upstream
   comparison.
-- Categorical LitKG removal or retention without capability evidence.
 - Automatic transcript ingestion, generated agent briefs, or transcript-derived
   accepted intent.
 - The PR #30 OMX registry, archive copies, tombstones, seed recovery, purge
@@ -666,8 +662,6 @@ These remain unresolved and block only their affected workpackage:
 - Which optional Graphify role, if any, the human owner selects after the
   exact-source/current-integration/unmodified-upstream comparison, followed by
   the exact corpus, refresh behavior, and retained local outputs for that role.
-- Whether LitKG provides unique claim, retrieval, or literature value after
-  exact-source alternatives are verified.
 - Exact external-skill reference, allowlist, pinning, vendoring, and integrity
   policy.
 - Which handwritten state surfaces can retire after owner/consumer migration.
@@ -874,7 +868,7 @@ Still requiring implementation-time verification against the active baseline:
 - Actual prompt-visible skill inventory and context cost.
 - Current Graphify behavior and comparative utility; frozen PR #30 observations
   remain historical evidence rather than current-state claims.
-- Current LitKG consumers and replacement parity.
+- Direct-source claim and local-literature fallback parity.
 - Current state/debrief consumers and retrieval value.
 - Exact client-specific skill, hook, MCP, and permission surfaces.
 

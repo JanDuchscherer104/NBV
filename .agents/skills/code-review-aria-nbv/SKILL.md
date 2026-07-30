@@ -35,11 +35,11 @@ metadata:
   must_read:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
-    - ".agents/references/verification_matrix.md"
+    - "nearest package AGENTS.md"
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
-    - ".agents/references/verification_matrix.md"
+    - "nearest package AGENTS.md"
     - ".agents/skills/README.md"
     - "scripts/scaffold/fixtures/routing.json"
   context7_refs:
@@ -90,8 +90,8 @@ Use this skill when the task is to:
 ## Grounding
 
 Before reviewing substantial ARIA changes, read `AGENTS.md`, the nearest nested
-`AGENTS.md` for the touched surface, `.agents/references/source_order.md`, and
-`.agents/references/verification_matrix.md`. For docs-heavy reviews, include
+`AGENTS.md` for the touched surface, and `.agents/references/source_order.md`.
+For docs-heavy reviews, include
 `docs/AGENTS.md`; for package-contract reviews, refresh `make context-contracts`
 only when generated contract context is needed.
 
@@ -103,7 +103,7 @@ Route validated findings to the smallest owner named by metadata or the nearest
 docs and thesis prose, `nbv-geometry-contracts` for frames, `entity-aware-rri`
 for target semantics, `counterfactual-rollout-planner` for rollout/Q_H,
 `dataset-cache-ops` / `rerun-nbv-inspector` for data and visual diagnostics,
-and `aria-litkg-memory` / `agents-db` for claim checks or durable records.
+and `agents-db` for durable records.
 
 ## Review Standard
 

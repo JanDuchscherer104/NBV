@@ -27,11 +27,11 @@ metadata:
   must_read:
     - "AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
-    - ".agents/references/verification_matrix.md"
+    - "nearest package AGENTS.md or diagnostic skill"
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
-    - ".agents/references/verification_matrix.md"
+    - "nearest package AGENTS.md or diagnostic skill"
     - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/websites/streamlit_io"
@@ -89,10 +89,8 @@ Use the smallest tool that can reproduce or inspect the symptom.
   `cd aria_nbv && uv run nbv-rerun-inspect ...`.
   Hand off to `rerun-nbv-inspector` for visual, frame-coordinate, depth/RGB,
   OBB, frustum, or `.rrd` entity-tree issues.
-- KG and docs failures:
-  `make kg-status`, `make kg-route KG_TASK="<task>"`,
-  `make kg-claim-check KG_CLAIM="<claim>"`, `make qmd-frontmatter-check`,
-  and focused Quarto or Typst renders for the touched page.
+- Docs failures: `make qmd-frontmatter-check` and focused Quarto or Typst
+  renders for the touched page.
 - Package behavior:
   `cd aria_nbv && uv run pytest <focused-test>`, then targeted
   `cd aria_nbv && uv run ruff check <path>` only for touched Python surfaces.
@@ -108,7 +106,6 @@ Build the smallest deterministic loop that reproduces the user-visible symptom:
 - Streamlit panel: entrypoint or panel test before manual UI inspection
 - docs: `cd docs && quarto render <page>` or
   `typst compile typst/seminar_slides/<file>.typ --root .`
-- KG: the narrowest `make kg-*` command that owns the failing artifact
 - performance: a timing harness or profiler before changing code
 
 Do not proceed on code guesses until the loop fails in the same way the user

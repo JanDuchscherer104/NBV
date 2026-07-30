@@ -26,7 +26,7 @@ metadata:
   must_read:
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md"
-    - ".agents/references/verification_matrix.md"
+    - "docs/AGENTS.md"
   canonical_sources:
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md#role-split"
