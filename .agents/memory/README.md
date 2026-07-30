@@ -29,3 +29,41 @@ Native debriefs use absolute ISO dates and include `id`, `date`, `title`,
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
+
+Existing records with `status: legacy-imported` are grandfathered archive
+evidence and do not need backfilling unless a task explicitly requests it.
+Use absolute ISO dates (`2026-05-08`) in frontmatter and prose; debriefs outlive
+the session that wrote them.
+
+### No Canonical Updates
+
+```yaml
+---
+id: 2026-03-25_example_debrief
+date: 2026-03-25
+title: "Example Debrief"
+status: done
+topics: [scaffold, codex, memory]
+confidence: high
+canonical_updates_needed: []
+---
+```
+
+### With Canonical Updates
+
+```yaml
+---
+id: 2026-03-25_example_with_state_updates
+date: 2026-03-25
+title: "Example Debrief With State Updates"
+status: done
+topics: [scaffold, codex, memory]
+confidence: high
+canonical_updates_needed:
+  - .agents/memory/state/DECISIONS.md
+  - .agents/memory/state/PROJECT_STATE.md
+---
+```
+
+When it materially clarifies the work, note staged or commit scope in a dirty
+worktree and whether compatibility was deliberately preserved or removed.

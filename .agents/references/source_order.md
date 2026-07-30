@@ -37,6 +37,12 @@ Use this reference when a task needs current project truth or sources disagree.
   compact routing/evidence cue.
 - Optional tools and adapters provide evidence, not truth. Tool-specific
   operating details remain with the retained tool owner.
+  - External research and automation propose source-linked changes; ordinary
+    repository lanes review and apply durable mutations.
+  - Prefer bounded typed interfaces over exposing unrestricted shell access to
+    an adapter.
+  - Screenshots, rendered pages, and UI diagnostics are advisory evidence until
+    the owning source, test, or accepted record is updated.
 - Thesis-to-code links: `docs/typst/shared/style.typ` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse

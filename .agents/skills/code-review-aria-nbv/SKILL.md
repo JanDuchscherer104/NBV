@@ -39,7 +39,6 @@ metadata:
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
-    - "nearest package AGENTS.md"
     - ".agents/skills/README.md"
     - "scripts/scaffold/fixtures/routing.json"
   context7_refs:

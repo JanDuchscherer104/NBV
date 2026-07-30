@@ -730,3 +730,37 @@ references = ["repo:aria_nbv/aria_nbv/data_handling/_target_selection.py", "repo
 implementation_notes = ["Add rollout writer config fields or a target_source enum that selects OracleTargetTaskSampler for oracle/data-generation profiles while preserving ActorVisibleTargetSelector for V1 diagnostics.", "Persist oracle target-task identity status, identity IoU/gap, selected rank/probability, projected-area audit, support audit, class/id metadata, and headroom placeholders where the rollout schema expects target records.", "Ensure unsupported, ambiguous, or invalid-geometry target tasks are masks/reasons, not low-RRI samples.", "Keep OBS-SEL/PRED-Q/GT-EVAL configs, app diagnostics, and Streamlit selectors visibly separate from oracle target-task sampling."]
 acceptance = ["A rollout writer smoke config can sample capped identity-valid oracle target tasks from GT OBBs.", "The legacy V1 selector remains available only for diagnostic/deployable actor-input profiles.", "Target records in rollout/H=1 outputs preserve oracle identity and descriptor audit fields needed for preflight and Rerun/Streamlit inspection.", "Ambiguous duplicate GT targets are rejected from the sampled task pool with explicit status or invalidity metadata."]
 verification = ["cd aria_nbv && uv run pytest tests/data_handling/test_target_selection.py tests/rollouts/test_dataset_writer.py -q", "cd aria_nbv && uv run ruff check aria_nbv/aria_nbv/data_handling/_target_selection.py aria_nbv/aria_nbv/rollouts/dataset_writer.py aria_nbv/tests/data_handling/test_target_selection.py aria_nbv/tests/rollouts/test_dataset_writer.py", "rg -n \"OracleTargetTaskSampler|ActorVisibleTargetSelector|target_source|identity_ambiguity_gap\" aria_nbv/aria_nbv/rollouts aria_nbv/tests/rollouts .configs .agents"]
+
+[[todo]]
+id = "todo-039"
+title = "Validate structured agents-db source references"
+description = "Validate repository and bibliography references in agents-db records without introducing a new retrieval or graph authority."
+priority = "medium"
+status = "todo"
+labels = ["agents-db", "provenance", "validation"]
+issue_ids = ["issue-025"]
+loc_min = 40
+loc_expected = 100
+loc_max = 220
+context = ["The agents DB already requires structured references, but prefix validation alone does not prove that local paths, anchors, or bibliography keys exist.", "This requirement survives LitKG retirement and belongs in the existing agents-db validation path."]
+references = ["repo:scripts/agents_db.py", "repo:.agents/skills/agents-db/references/provenance.md", "repo:docs/references.bib"]
+implementation_notes = ["Extend the existing validator only where deterministic local validation is cheap.", "Report broken references with record IDs and repair hints; do not add semantic search, graph ingestion, or remote dependencies."]
+acceptance = ["Broken repo paths and bibliography keys fail validation with the owning record ID.", "Optional external identifiers remain syntactically validated without network access."]
+verification = ["make agents-db AGENTS_ARGS='validate'", "python3 -m unittest discover -s scripts/tests -p 'test_agents_db*.py'"]
+
+[[todo]]
+id = "todo-044"
+title = "Define a source-backed memory consolidation proposal workflow"
+description = "Provide a bounded proposal-only route from debrief and backlog evidence to reviewed canonical-memory updates without reviving LitKG."
+priority = "medium"
+status = "todo"
+labels = ["memory", "consolidation", "agents-db", "scaffold"]
+issue_ids = ["issue-025"]
+loc_min = 20
+loc_expected = 80
+loc_max = 180
+context = ["Debriefs record whether canonical updates are needed, but the current process does not define one small review path for applying those proposals.", "The requirement is tool-independent: evidence must cite exact owners, and no automated helper may overwrite canonical memory."]
+references = ["repo:.agents/memory/README.md", "repo:.agents/skills/agents-db/references/provenance.md", "repo:.agents/references/source_order.md"]
+implementation_notes = ["Start with the existing debrief frontmatter and agents-db workflow.", "Prefer a documented review step or a small existing-command extension over a new service, ontology, graph, or transcript processor."]
+acceptance = ["A maintainer can identify pending canonical updates from source-backed debriefs and review them by target owner.", "No helper mutates canonical memory or backlog without an explicit ordinary repository edit."]
+verification = ["make check-agent-memory", "make agents-db AGENTS_ARGS='validate'"]
