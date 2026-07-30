@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - ".agents/**"
-      - ".claude/**"
       - ".codex/**"
       - ".codex-plugin/**"
       - ".gemini/**"
@@ -17,7 +16,6 @@ on:
       - ".graphifyignore"
       - ".omx/**"
       - "AGENTS.md"
-      - "CLAUDE.md"
       - "Makefile"
       - "README.md"
       - "SETUP.md"
@@ -30,7 +28,6 @@ on:
       - main
     paths:
       - ".agents/**"
-      - ".claude/**"
       - ".codex/**"
       - ".codex-plugin/**"
       - ".gemini/**"
@@ -43,7 +40,6 @@ on:
       - ".graphifyignore"
       - ".omx/**"
       - "AGENTS.md"
-      - "CLAUDE.md"
       - "Makefile"
       - "README.md"
       - "SETUP.md"

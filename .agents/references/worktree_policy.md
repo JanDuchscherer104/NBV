@@ -1,10 +1,9 @@
 # Worktree Policy
 
-Use this reference when working in a Claude Code or Codex git worktree under
-`.claude/worktrees/<name>/` (or any other parallel-session worktree). Worktrees
+Use this reference when working in any parallel-session git worktree. Worktrees
 fork the working tree and the agent scaffold (`.agents/memory/history/`,
-`.agents/*.toml`, `.codex/`, `.claude/`); without an explicit merge policy
-those forks silently diverge.
+`.agents/*.toml`, `.codex/`); without an explicit merge policy those forks
+silently diverge.
 
 ## Memory Surfaces By Merge Risk
 

@@ -9,6 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ABSENT_PATHS = {
+    ".claude",
+    "CLAUDE.md",
     ".agents/external/litkg-rs",
     ".agents/kg",
     ".agents/references/litkg_quick_reference.md",
@@ -16,8 +18,6 @@ ABSENT_PATHS = {
     ".agents/skills/semantic-scholar-litkg",
     ".agents/skills/aria-nbv-context/references/context_map.md",
     ".configs/litkg.toml",
-    ".claude/commands/kg-claim-check.md",
-    ".claude/commands/context-refresh.md",
     "scripts/kg",
     "scripts/nbv_context_index.sh",
     "scripts/nbv_literature_index.sh",
@@ -25,9 +25,7 @@ ABSENT_PATHS = {
 }
 ACTIVE_SCAN_ROOTS = [
     "AGENTS.md",
-    "CLAUDE.md",
     "Makefile",
-    ".claude",
     ".codex/hooks.example.json",
     ".gemini/settings.json",
     ".agents/AGENTS_INTERNAL_DB.md",

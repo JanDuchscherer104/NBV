@@ -2,7 +2,7 @@
 .PHONY: help ci scaffold-final graphify-ci agents-db-validate package-smoke docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test api-docs-self-test
 .PHONY: context-qmd-tree context-contracts context-dir-tree uml qmd-frontmatter-check
-.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: migrate-codex-memory codex-transcripts scaffold-wp0-baseline scaffold-wp0-baseline-self-test scaffold-wp0-check omx-artifacts-check omx-artifacts-self-test omx-native-acceptance scaffold-audit scaffold-audit-self-test matt-policy-self-test measured-autoresearch-self-test wp6-direct-source-check wp7-integration-check wp7-integration-self-test check-agent-memory new-debrief install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -179,9 +179,6 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
 	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
 
-claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude Code activation
-	@scripts/sync_claude_skills.sh
-
 install-git-hooks: ## 🪝 Copy repository hooks into the current worktree
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
@@ -197,14 +194,13 @@ install-git-hooks: ## 🪝 Copy repository hooks into the current worktree
 			echo "$(GREEN)installed $$target$(NC)"; \
 	done
 
-install-hooks: install-git-hooks ## 🪝 Activate portable Claude, Codex, Gemini, and git hooks
+install-hooks: install-git-hooks ## 🪝 Activate portable Codex, Gemini, and git hooks
 	@if [ ! -f .codex/hooks.json ]; then \
 		cp .codex/hooks.example.json .codex/hooks.json && \
 			echo "$(GREEN)copied .codex/hooks.example.json -> .codex/hooks.json$(NC)"; \
 	else \
 		echo "$(YELLOW).codex/hooks.json already present; leaving as-is$(NC)"; \
 	fi
-	@echo "$(GREEN)Claude hooks: .claude/settings.json (tracked, auto-loaded)$(NC)"
 	@echo "$(GREEN)Gemini hooks: .gemini/settings.json (tracked, auto-loaded)$(NC)"
 
 agents-db: _check_python ## 🧠 Inspect or maintain .agents/issues,todos,refactors,resolved (set AGENTS_ARGS='validate')

@@ -268,8 +268,6 @@ graphify-out/
 .agents/kg/.last-refresh
 .agents/tmp/*
 .agents/work/
-.claude/worktrees/
-
 # Large download manifests
 !.data/
 .data/*
