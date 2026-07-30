@@ -132,7 +132,6 @@ allow-direct-references = true
 
 [tool.uv]
 prerelease = "if-necessary"
-preview-features = ["centralized-project-envs"]
 # Build PyTorch3D against runtime Torch and the pinned Apple Silicon Mojo toolchain.
 extra-build-dependencies = { pytorch3d = [
     { requirement = "torch", match-runtime = true },
