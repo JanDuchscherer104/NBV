@@ -147,7 +147,7 @@ chunk_steps = 16
 
 [store]
 store_dir                    = "rollouts_v1_realistic_pilot50.zarr"
-target_protocol_version      = "v1_observed"
+target_protocol_version      = "v0_gt_input"
 field_retention_policy       = "compact_selected_heavy"
 source_offline_store_version = "vin-offline-v7"
 split_manifest_hash          = "0c746d304c1feac2"
@@ -190,3 +190,4 @@ branch_factor         = 2
 beam_width            = 2
 selection_temperature = 1.0
 seed                  = 0
+# ``v1`` names this rollout-build profile; persisted target protocol remains ``v0_gt_input``.

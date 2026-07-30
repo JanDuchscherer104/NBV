@@ -6,7 +6,6 @@ status: done
 topics: [docs, typst, thesis, advisor-deck, autoresearch]
 confidence: high
 canonical_updates_needed:
-  - docs/typst/thesis/advisor_meeting_2026_05_22.typ
   - .agents/references/source_order.md
   - docs/contents/thesis/questions.qmd
   - docs/contents/thesis/roadmap.qmd

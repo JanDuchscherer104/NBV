@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import pickle
 import subprocess
 import sys
 import tarfile
 from dataclasses import asdict
 from io import BytesIO
+from pathlib import Path
 from types import MethodType, SimpleNamespace
-from typing import TYPE_CHECKING
 
 import msgspec
 import numpy as np
@@ -42,6 +43,7 @@ from aria_nbv.data_handling.offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
+from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
 from aria_nbv.pose_generation.types import CandidateSamplingResult
@@ -61,9 +63,6 @@ ARIA_POSE_T_WORLD_RIG = aria_constants.ARIA_POSE_T_WORLD_RIG
 PerspectiveCameras = pytest.importorskip(
     "pytorch3d.renderer.cameras",
 ).PerspectiveCameras
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _write_sample_index(path: Path, records: list[VinOfflineIndexRecord]) -> None:
@@ -1111,6 +1110,75 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     assert torch.equal(batch.trajectory.time_ns, torch.tensor([100, 200], dtype=torch.int64))  # noqa: S101
 
 
+def test_actor_snippet_reader_matches_one_step_sample_and_reads_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One-step samples should use one shared typed actor-snippet read."""
+
+    store_cfg = _write_test_store(tmp_path)
+    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample", split="all").setup_target()
+    record = dataset._records[0]
+    direct = dataset._store.read_actor_snippet(record)
+    reads: list[VinOfflineIndexRecord] = []
+    original = dataset._store.read_actor_snippet
+
+    def _record_read(
+        requested: VinOfflineIndexRecord,
+        *,
+        device: str | torch.device = "cpu",
+    ) -> VinSnippetView:
+        reads.append(requested)
+        return original(requested, device=device)
+
+    monkeypatch.setattr(dataset._store, "read_actor_snippet", _record_read)
+    sample = dataset[0]
+
+    assert reads == [record]  # noqa: S101
+    torch.testing.assert_close(sample.vin_snippet.points_world, direct.points_world, equal_nan=True)
+    assert torch.equal(sample.vin_snippet.lengths, direct.lengths)  # noqa: S101
+    assert torch.equal(sample.vin_snippet.t_world_rig.tensor(), direct.t_world_rig.tensor())  # noqa: S101
+    assert sample.vin_snippet.points_world.dtype is torch.float32  # noqa: S101
+    assert sample.vin_snippet.lengths.dtype is torch.int64  # noqa: S101
+
+
+@pytest.mark.parametrize("failure", ["missing", "record_block"])
+def test_actor_snippet_reader_rejects_invalid_required_blocks(tmp_path: Path, failure: str) -> None:
+    """Required actor evidence must fail with immutable-store rebuild guidance."""
+
+    store_cfg = _write_test_store(tmp_path)
+    manifest = VinOfflineManifest.read(store_cfg.manifest_path)
+    if failure == "missing":
+        del manifest.shards[0].blocks["vin.lengths"]
+        match = "Required actor block 'vin.lengths'.*Rebuild"
+    else:
+        manifest.shards[0].blocks["vin.lengths"].kind = "msgpack_indexed_records"
+        match = "Actor block 'vin.lengths'.*numeric Zarr array.*Rebuild"
+    manifest.write(store_cfg.manifest_path)
+    reader = VinOfflineStoreReader(store_cfg)
+
+    with pytest.raises(ValueError, match=match):
+        reader.read_actor_snippet(reader.sample_index[0])
+
+
+def test_actor_snippet_reader_drops_worker_handles_when_pickled(tmp_path: Path) -> None:
+    """Reader pickling should preserve metadata but discard process-owned handles."""
+
+    store_cfg = _write_test_store(tmp_path)
+    reader = VinOfflineStoreReader(store_cfg)
+    expected = reader.read_actor_snippet(reader.sample_index[0])
+    assert reader._opened  # noqa: S101
+
+    restored = pickle.loads(pickle.dumps(reader))
+
+    assert restored._opened == {}  # noqa: S101
+    assert restored._opened_pid is None  # noqa: S101
+    actual = restored.read_actor_snippet(restored.sample_index[0])
+    torch.testing.assert_close(actual.points_world, expected.points_world, equal_nan=True)
+    assert torch.equal(actual.lengths, expected.lengths)  # noqa: S101
+    assert torch.equal(actual.t_world_rig.tensor(), expected.t_world_rig.tensor())  # noqa: S101
+
+
 def test_vin_offline_dataset_get_by_scene_snippet_accepts_compact_ase_atek_ids(tmp_path: Path) -> None:
     store_cfg = _write_test_store(tmp_path)
     records = VinOfflineIndexRecord.read_many(store_cfg.sample_index_path)
@@ -1193,7 +1261,7 @@ def test_vin_offline_store_reads_indexed_record_blocks(
 
     store_cfg = _write_test_store(tmp_path, include_diagnostic_payloads=True)
     reader = VinOfflineStoreReader(store_cfg)
-    record = reader.get_split_records("all")[1]
+    record = reader.get_split_records(None)[1]
     payload = reader.read_optional_record(record, "oracle.depths_payload")
     assert payload is not None  # noqa: S101
     decoded = CandidateDepths.from_serializable(payload, device=torch.device("cpu"))
@@ -1233,7 +1301,7 @@ def test_vin_offline_store_rejects_unsupported_record_block_kind(tmp_path: Path)
     manifest.write(store_cfg.manifest_path)
 
     reader = VinOfflineStoreReader(store_cfg)
-    record = reader.get_split_records("all")[1]
+    record = reader.get_split_records(None)[1]
     with pytest.raises(ValueError, match="Unsupported VIN offline block kind"):
         reader.read_optional_record(record, "oracle.depths_payload")
 
@@ -1288,7 +1356,9 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
         datamodule = dm_cfg.setup_target()
         datamodule.setup(stage=Stage.TRAIN)
 
-        train_batch = next(iter(datamodule.train_dataloader()))
+        train_loader = datamodule.train_dataloader()
+        train_batch = next(iter(train_loader))
+        repeated_train_batch = next(iter(train_loader))
         val_batch = next(iter(datamodule.val_dataloader()))
         assert isinstance(train_batch, VinOracleBatch)  # noqa: S101
         assert train_batch.rri.shape == (2, 4)  # noqa: S101
@@ -1304,6 +1374,7 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
             ),
         )  # noqa: S101
         assert train_batch.scene_id == ["scene-a", "scene-b"]  # noqa: S101
+        assert set(repeated_train_batch.scene_id) == set(train_batch.scene_id)  # noqa: S101
 
         assert isinstance(val_batch, VinOracleBatch)  # noqa: S101
         assert val_batch.rri.shape == (1, 4)  # noqa: S101
@@ -1330,3 +1401,36 @@ def test_vin_offline_source_config_disables_diagnostic_blocks_for_vin_batches(tm
     assert dataset.config.load_gt_obbs is True  # noqa: S101
     assert dataset.config.load_detected_obbs is True  # noqa: S101
     assert dataset.config.load_trajectory_metadata is True  # noqa: S101
+
+
+def test_fit_binner_offline_config_selects_all_stored_rows(tmp_path: Path) -> None:
+    """The shipped binner config should preserve its all-stage source selection."""
+
+    config_path = Path(__file__).resolve().parents[3] / ".configs" / "fit_binner_offline.toml"
+    experiment_config = AriaNBVExperimentConfig.from_toml(config_path)
+    source = experiment_config.datamodule_config.source
+
+    assert isinstance(source, VinOfflineSourceConfig)  # noqa: S101
+    assert source.train_split is None  # noqa: S101
+    assert source.val_split is None  # noqa: S101
+
+    store_config = _write_test_store(tmp_path)
+    source.offline = VinOfflineDatasetConfig(store=store_config)
+    dataset = source.setup_target(split=Stage.TRAIN)
+
+    assert dataset.config.split is None  # noqa: S101
+    assert len(dataset) == len(VinOfflineStoreReader(store_config).get_split_records(None))  # noqa: S101
+
+
+def test_vin_offline_source_normalizes_stage_strings() -> None:
+    """Source split text should normalize to all rows or canonical stages."""
+
+    all_rows = VinOfflineSourceConfig(train_split="all", val_split=None, test_split="all")
+    concrete = VinOfflineSourceConfig(train_split="fit", val_split="validate", test_split="test")
+
+    assert all_rows.train_split is None  # noqa: S101
+    assert all_rows.val_split is None  # noqa: S101
+    assert all_rows.test_split is None  # noqa: S101
+    assert concrete.train_split is Stage.TRAIN  # noqa: S101
+    assert concrete.val_split is Stage.VAL  # noqa: S101
+    assert concrete.test_split is Stage.TEST  # noqa: S101

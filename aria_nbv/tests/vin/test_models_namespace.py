@@ -15,7 +15,6 @@ from aria_nbv.vin.models import VinModelV3Config as NamespacedVinModelV3Config
 from aria_nbv.vin.models import scene_myopic as namespaced_v3
 from aria_nbv.vin.models.scene_myopic import VinModelV3 as CanonicalVinModelV3
 from aria_nbv.vin.models.scene_myopic import VinModelV3Config as CanonicalVinModelV3Config
-from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorer, MultiStepCandidateScorerConfig
 from aria_nbv.vin.models.target_myopic import TargetConditionedMyopicScorer, TargetConditionedMyopicScorerConfig
 
 
@@ -38,8 +37,6 @@ def test_root_vin_namespace_excludes_scaffold_scorers() -> None:
     model_root = importlib.import_module("aria_nbv.vin.models")
 
     for name in (
-        "MultiStepCandidateScorer",
-        "MultiStepCandidateScorerConfig",
         "TargetConditionedMyopicScorer",
         "TargetConditionedMyopicScorerConfig",
     ):
@@ -193,46 +190,6 @@ def test_candidate_scorer_config_parses_myopic_base_scorer_payload() -> None:
     assert scorer.base_scorer.config.field_dim == 12
 
 
-def test_planned_multi_step_scorer_config_is_visible_but_not_runnable() -> None:
-    """The finite-horizon scaffold should fail explicitly."""
-
-    config = MultiStepCandidateScorerConfig(horizon=3, discount=0.9)
-
-    assert config.target_type is MultiStepCandidateScorer
-    with pytest.raises(NotImplementedError, match="scaffold only"):
-        config.setup_target()
-
-
-def test_candidate_scorer_config_accepts_multi_step_scaffold() -> None:
-    """Lightning config should accept the planned finite-horizon scorer config object."""
-
-    from aria_nbv.lightning.lit_module import VinLightningModuleConfig
-
-    scorer_config = MultiStepCandidateScorerConfig(horizon=3, discount=0.9)
-    module_config = VinLightningModuleConfig(vin=scorer_config)
-
-    assert module_config.vin is scorer_config
-    with pytest.raises(NotImplementedError, match="scaffold only"):
-        module_config.vin.setup_target()
-
-
-def test_candidate_scorer_config_parses_multi_step_payload() -> None:
-    """Dict-style experiment payloads should select the finite-horizon scaffold config."""
-
-    from aria_nbv.lightning.lit_module import VinLightningModuleConfig
-
-    module_config = VinLightningModuleConfig(
-        vin={
-            "horizon": 3,
-            "discount": 0.9,
-            "candidate_token_dim": 64,
-        },
-    )
-
-    assert isinstance(module_config.vin, MultiStepCandidateScorerConfig)
-    assert module_config.vin.horizon == 3
-
-
 def test_candidate_scorer_training_contract_classifies_configs() -> None:
     """Training entry points should distinguish CORAL and rollout-value contracts."""
 
@@ -245,4 +202,3 @@ def test_candidate_scorer_training_contract_classifies_configs() -> None:
         candidate_scorer_training_contract(TargetConditionedMyopicScorerConfig(target_descriptor_dim=32))
         == "target_myopic_coral_scaffold"
     )
-    assert candidate_scorer_training_contract(MultiStepCandidateScorerConfig(horizon=3)) == "finite_horizon_q_scaffold"

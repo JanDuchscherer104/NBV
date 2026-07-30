@@ -3,10 +3,8 @@
 This module names the narrow interface that `aria_nbv.lightning.lit_module`
 needs from a candidate scorer. The current implementation is
 `aria_nbv.vin.models.scene_myopic.VinModelV3`, the seminar-era one-step RRI scorer. Future
-target-conditioned myopic and finite-horizon scorers should implement the same
-forward surface when they are trainable through the existing Lightning loss
-path, or provide a separate Lightning module when their objective is no longer
-CORAL-over-candidate rows.
+target-conditioned myopic scorers should implement the same forward surface
+when they are trainable through the existing Lightning loss path.
 
 The contract deliberately keeps rollout value targets out of
 `aria_nbv.vin.types.VinPrediction`. Multi-step labels such as endpoint gain,
@@ -22,7 +20,6 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias
 from torch import Tensor
 
 from .models.scene_myopic import VinModelV3Config
-from .models.target_finite_horizon import MultiStepCandidateScorerConfig
 from .models.target_myopic import TargetConditionedMyopicScorerConfig
 from .types import EvlBackboneOutput, VinPrediction
 
@@ -123,22 +120,18 @@ class CandidateScorerPrediction(Protocol):
     """
 
 
-CandidateScorerConfig: TypeAlias = (
-    VinModelV3Config | TargetConditionedMyopicScorerConfig | MultiStepCandidateScorerConfig
-)
+CandidateScorerConfig: TypeAlias = VinModelV3Config | TargetConditionedMyopicScorerConfig
 """Config-as-factory type for candidate scorer architecture slots.
 
 The union keeps the preserved `VinModelV3Config` as the default runnable
 implementation while letting experiment configs name the planned
-target-conditioned myopic and finite-horizon families. Those planned configs
-are still non-runnable scaffolds; their `setup_target()` methods fail
-explicitly until the corresponding model semantics are implemented.
+target-conditioned myopic family. Positive-width target descriptors remain
+non-runnable until the corresponding model semantics are implemented.
 """
 
 CandidateScorerTrainingContract: TypeAlias = Literal[
     "coral_candidate",
     "target_myopic_coral_scaffold",
-    "finite_horizon_q_scaffold",
 ]
 """Training-objective contract selected by a candidate scorer config.
 
@@ -147,9 +140,8 @@ per-candidate `VinPrediction` rows with CORAL logits, probabilities, and a
 ``head_coral`` helper. `TargetConditionedMyopicScorerConfig` with
 ``target_descriptor_dim == 0`` uses that same contract as a v3-backed baseline;
 positive descriptor widths remain a scaffold until target-token ownership is
-implemented. The finite-horizon ``Q_H`` scaffold is intentionally classified
-separately because it needs rollout-return targets and hard valid-action masks
-instead of one-step ordinal RRI labels.
+implemented. Finite-horizon ``Q_H`` training uses its dedicated scorer-independent
+Lightning module rather than this one-step VIN configuration union.
 """
 
 
@@ -165,8 +157,6 @@ def candidate_scorer_training_contract(config: CandidateScorerConfig) -> Candida
         objective families before constructing placeholder modules.
     """
 
-    if isinstance(config, MultiStepCandidateScorerConfig):
-        return "finite_horizon_q_scaffold"
     if isinstance(config, TargetConditionedMyopicScorerConfig):
         if int(config.target_descriptor_dim) == 0:
             return "coral_candidate"

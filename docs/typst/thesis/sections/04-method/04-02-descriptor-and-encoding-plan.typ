@@ -15,7 +15,7 @@
   gate: [preserve row identity, masks, provenance, and source roles in every tensor reader],
 )[The factual replay schema, lazy reader, framework-neutral dataset seam, and dense `q_h/` view are implemented and unit-tested. Frozen scientific replay evidence remains pending. The schema is a storage contract; readability from the store does not make a field actor-visible.]
 
-The rollout store preserves source, target, rollout, step, candidate, diagnostic, and lineage tables. Its derived `q_h/` arrays provide a padded state--candidate view without changing factual identities or labels. Target pose and extents in the V0 task remain privileged GT-derived instructions. Candidate geometry, selected history, remaining budget, and hard masks are decision inputs in the implemented tracer; target gains, GT associations, mesh diagnostics, crops, and current all-candidate renders remain label or audit fields. Previously selected depth becomes a later actor input only under a named counterfactual-observation protocol.
+The rollout store preserves source, target, rollout, step, candidate, diagnostic, and lineage tables. Its derived `q_h/` arrays provide a padded state--candidate view without changing factual identities or labels. Target pose and extents in the V0 task remain privileged GT-derived instructions. Candidate geometry, selected history, remaining budget, and hard masks are actor-side fields in the implemented DTO seam; target gains, GT associations, mesh diagnostics, crops, and current all-candidate renders remain label or audit fields. No production finite-horizon scorer currently consumes these tensors. Previously selected depth becomes a later actor input only under a named counterfactual-observation protocol.
 
 #figure(
   text(size: 8.3pt, table(
@@ -39,9 +39,9 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @zhou2023query @FixedHorizonTD-deAsis2020 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [typed selected-observation state, explicit residual-horizon query, positive-width V1 target path, source masks, and leakage tests],
-)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for an H=2 V0 tracer. The canonical DTO contract additionally separates static scene context, dynamic selected-observation state, target state, candidate rows, and the requested residual horizon.]
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [fixed-H versus requested-horizon source-owner decision, typed selected-observation state, positive-width V1 target path, source masks, and leakage tests],
+)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The production scorer DTO remains planned. Static scene context, dynamic selected-observation state, target state, and candidate rows are common requirements; an explicit requested-horizon value query is an alternative pending the source-owner decision.]
 
 The intended input for target $e$ at step $t$ is
 
@@ -55,26 +55,26 @@ This equation is an information contract rather than one flat tensor. The corres
   text(size: 8.1pt, table(
     columns: (0.92fr, 1.35fr, 1.05fr),
     toprule(),
-    table.header([*DTO role*], [*Canonical content*], [*Visibility*]),
+    table.header([*DTO role*], [*Candidate content*], [*Visibility*]),
     midrule(),
     [`StaticSceneContext`], [root semidense evidence, supported EVL tokens, root frame and EVL extent], [actor input; immutable within one rollout],
     [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
     [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [V0 instruction or V1 actor-visible target],
     [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
-    [`ValueQuery`], [requested residual horizon $h$ and its availability mask], [model-visible query; not scene evidence],
+    [`ValueQuery`], [optional requested residual horizon $h$ and its availability mask], [proposed model-visible query if the explicit-horizon design is selected],
     [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
     [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
     [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
     bottomrule(),
   )),
-  caption: [Canonical DTO ownership. Model inputs, horizon queries, supervision, transition linkage, and provenance are distinct types even when collated in one training batch.],
+  caption: [Production-scorer DTO design space. Model inputs, optional horizon queries, supervision, transition linkage, and provenance remain distinct even when collated in one training batch.],
 ) <tab:thesis-qh-dto-contract>
 
-The maximum supported horizon $H$ is an experiment and checkpoint contract. The remaining budget $b_t$ belongs to the rollout state and limits admissible queries. The requested residual horizon $h$ is the value query and must satisfy $1 <= h <= b_t <= H$. A fixed-H=2 tracer may set $h=b_t$, but the thesis-core variable-horizon scorer must receive $h$ explicitly. Separate $Q_1, dots, Q_H$ heads remain a structural control rather than the canonical interface. The step index $t$ remains lineage by default; it becomes a learned feature only in a named non-stationarity ablation because $h$, the dynamic state, and the budget already encode the minimal time-to-go semantics.
+The maximum supported horizon $H$ is an experiment contract and becomes a checkpoint contract once a scorer exists. In the current fixed-horizon direction, remaining budget $b_t$ belongs to the rollout state and supplies time-to-go context without a separate requested-horizon input. The alternative explicit-horizon design would add $h$ with $1 <= h <= b_t <= H$ so one scorer can answer several residual-horizon queries. That alternative, separate $Q_1, dots, Q_H$ heads, and fixed-H models must be compared before the public scorer interface is frozen. The step index $t$ remains lineage by default and becomes a learned feature only in a named non-stationarity ablation.
 
-The canonical model call is therefore conceptually `score(static_context, dynamic_state, target_state, candidate_table, requested_horizon)`. One state can be evaluated for several residual horizons by adding a horizon axis and returning values of shape $[B, L, N_q]$, or by flattening the same horizon--candidate queries into the batch. Static scene, target, and candidate encodings are reused. The horizon mask excludes $h>b_t$; it does not invent future observations, and no causal attention between horizon queries is required.
+The common model boundary is conceptually `score(static_context, dynamic_state, target_state, candidate_table, time_context)`, where `time_context` is remaining budget for fixed-H and may additionally contain requested horizon if that design is selected. The explicit-horizon candidate could evaluate one state for several residual horizons and return $[B,L,N_q]$, but this is proposed rather than implemented. Either interface must keep static encodings reusable and must not expose future observations.
 
-Padding masks, modality-presence masks, source-role masks, action masks, training masks, and horizon-availability masks remain distinct. A missing modality must not be encoded as an ordinary zero observation, padding must not be mistaken for missing evidence, and an unsupported horizon must not be silently clamped to the available budget.
+Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. If the explicit-horizon design is selected, its horizon-availability mask is also distinct and an unsupported horizon must not be silently clamped to the available budget. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
 
 The target descriptor separates identity, geometry, observed support, confidence, and source:
 
@@ -98,7 +98,7 @@ Target-independent static scene encodings may be reused across several target ta
   implementation: "partial",
   evidence: "pending",
   citation: [@zhou2019continuity @zhou2023query @LFF-li2021],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/vin/modules/pooling.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/vin/modules/pooling.py",
   gate: [frame-transform, row-shuffle, and held-out descriptor ablations],
 )[Root-relative candidate geometry and a minimal candidate-local target relation are implemented. The complete candidate-frustum and dynamic-memory relation descriptor remains planned.]
 
@@ -136,11 +136,11 @@ This adopts QCNet's query-centric geometric discipline, not its trajectory decod
   implementation: "partial",
   evidence: "pending",
   citation: [@e3nn-SphericalHarmonics-2025 @Hestia-lu2026],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; docs/contents/theory/candidate_view_dependence.qmd",
+  source: "aria_nbv/aria_nbv/data_handling/qh.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [directional-novelty fixture and matched architecture ablation],
-)[The H=2 tracer consumes set-valued pose history, for which at most one prior selected action is observable. Ordered temporal encoding and directional memory remain required for H>=3.]
+)[The implemented DTO carries set-valued selected-pose history, but no production scorer consumes it yet. Ordered temporal encoding and directional memory remain candidate requirements for longer-horizon models.]
 
-The canonical candidate row is a local query, not a duplicate of the full state. It contains candidate self pose, candidate--target relation, and candidate-local scene/support reads. Shared target, scene, ordered history, requested horizon, and any admitted budget context are supplied once as state/query tokens. Hard action validity and padding remain masks; candidate family or sampler provenance is audit-only by default and may enter the model only as a named ablation.
+The proposed candidate row is a local query, not a duplicate of the full state. It contains candidate self pose, candidate--target relation, and candidate-local scene/support reads. Shared target, scene, ordered history, and remaining-budget context are supplied once as state tokens; a requested-horizon token is added only if that design is selected. Hard action validity and padding remain masks; candidate family or sampler provenance is audit-only by default and may enter the model only as a named ablation.
 
 Viewing history is not reducible to camera distance. For a target-local point or cell, selected camera directions define a signed first moment together with the second-moment memory
 

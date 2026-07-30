@@ -24,6 +24,7 @@ from torch import Tensor
 from ..data_handling.offline.batch import CompactObbBlock
 from ..data_handling.raw.views import EfmSnippetView, VinSnippetView
 from ..targets import TargetDescriptor
+from ..targets.protocol import ORACLE_GT_TARGET_SOURCE
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
 
@@ -50,7 +51,7 @@ TARGET_INVALID_REASON_CODES: dict[str, int] = {
 TARGET_INVALID_REASON_VERSION = "target-selection-invalidity-v1"
 """Version label for `TARGET_INVALID_REASON_CODES`."""
 
-ORACLE_TARGET_TASK_SOURCE = "gt_obbs_oracle"
+ORACLE_TARGET_TASK_SOURCE = ORACLE_GT_TARGET_SOURCE
 """Source label for oracle target-task rows sampled from GT OBBs."""
 
 

@@ -249,7 +249,7 @@ def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None
     )
     writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
     writer.config = SimpleNamespace(
-        store=SimpleNamespace(target_protocol_version="v1-observed"),
+        store=SimpleNamespace(target_protocol_version="v0_gt_input"),
         target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
     )
 

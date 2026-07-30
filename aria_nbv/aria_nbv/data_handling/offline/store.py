@@ -11,18 +11,22 @@ This module owns the immutable on-disk layout of the VIN offline dataset:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - Pydantic config annotations need Path at runtime.
 from typing import Any
 
 import msgspec
 import numpy as np
+import torch
 import zarr
+from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator
 
 from ...configs import PathConfig
-from ...utils import BaseConfig
+from ...utils import BaseConfig, Stage
 from ...utils.config_paths import resolve_cache_artifact_dir
+from ..raw.views import VinSnippetView
 from .format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
@@ -32,6 +36,12 @@ from .format import (
 
 OFFLINE_DATASET_VERSION = 7
 """Version of the immutable VIN offline dataset format."""
+
+_ACTOR_SNIPPET_BLOCKS = (
+    "vin.points_world",
+    "vin.lengths",
+    "vin.t_world_rig",
+)
 
 
 class VinOfflineStoreConfig(BaseConfig):
@@ -268,21 +278,32 @@ class VinOfflineStoreReader:
         self._records_by_sample_index = {record.sample_index: record for record in self.sample_index}
         self._shards = {spec.shard_id: spec for spec in self.manifest.shards}
         self._opened: dict[str, OpenedShard] = {}
+        self._opened_pid: int | None = None
         self._split_cache: dict[str, np.ndarray] = {}
 
-    def get_split_records(self, split: str) -> list[VinOfflineIndexRecord]:
+    def __getstate__(self) -> dict[str, Any]:
+        """Drop process-owned shard handles before worker pickling."""
+
+        state = self.__dict__.copy()
+        state["_opened"] = {}
+        state["_opened_pid"] = None
+        return state
+
+    def get_split_records(self, split: Stage | None) -> list[VinOfflineIndexRecord]:
         """Return index records for the requested split.
 
         Args:
-            split: Split name such as ``"all"``, ``"train"``, or ``"val"``.
+            split: Lifecycle stage to select, or ``None`` for every stored row.
 
         Returns:
             Ordered index records for the split.
         """
 
-        if split not in self._split_cache:
-            self._split_cache[split] = self.config.read_split_indices(split)
-        return [self._records_by_sample_index[int(idx)] for idx in self._split_cache[split]]
+        if split is None:
+            return list(self.sample_index)
+        if split.value not in self._split_cache:
+            self._split_cache[split.value] = self.config.read_split_indices(split.value)
+        return [self._records_by_sample_index[int(idx)] for idx in self._split_cache[split.value]]
 
     def _open_shard(self, shard_id: str) -> OpenedShard:
         """Open one shard and cache its Zarr-backed blocks.
@@ -293,6 +314,11 @@ class VinOfflineStoreReader:
         Returns:
             Worker-local opened shard handle.
         """
+
+        pid = os.getpid()
+        if self._opened_pid != pid:
+            self._opened = {}
+            self._opened_pid = pid
 
         opened = self._opened.get(shard_id)
         if opened is not None:
@@ -318,6 +344,70 @@ class VinOfflineStoreReader:
                 )
         self._opened[shard_id] = opened
         return opened
+
+    def read_actor_snippet(
+        self,
+        record: VinOfflineIndexRecord,
+        *,
+        device: str | torch.device = "cpu",
+    ) -> VinSnippetView:
+        """Decode the actor-visible VIN blocks for one immutable source row.
+
+        Tensors never alias Zarr buffers; shard handles reopen after worker forks.
+
+        Args:
+            record: Global sample-index record selecting the source row.
+            device: Device receiving the decoded tensors.
+
+        Returns:
+            :class:`VinSnippetView` with world points ``Tensor["P C", float32]``,
+            valid point length ``Tensor["1", int64]``,
+            and world-from-rig :class:`PoseTW` history ``Tensor["T 12", float32]``.
+        """
+
+        shard = self._shards.get(record.shard_id)
+        if shard is None:
+            raise ValueError(
+                f"VIN sample {record.sample_key!r} references unknown shard {record.shard_id!r}. "
+                "Rebuild the VIN offline store from the immutable source corpus.",
+            )
+        if record.row < 0 or record.row >= shard.num_rows:
+            raise ValueError(
+                f"VIN sample {record.sample_key!r} references invalid shard row {record.row}. "
+                "Rebuild the VIN offline store from the immutable source corpus.",
+            )
+        for block_name in _ACTOR_SNIPPET_BLOCKS:
+            block = shard.blocks.get(block_name)
+            if block is None:
+                raise ValueError(
+                    f"Required actor block {block_name!r} is missing for sample {record.sample_key!r}. "
+                    "Rebuild the VIN offline store from the immutable source corpus.",
+                )
+            if block.kind != "zarr_array":
+                raise ValueError(
+                    f"Actor block {block_name!r} must be a numeric Zarr array, not {block.kind!r}. "
+                    "Rebuild the VIN offline store from the immutable source corpus.",
+                )
+
+        target = torch.device(device)
+        points_world = torch.from_numpy(
+            np.array(self.read_numeric_block(record, "vin.points_world"), copy=True),
+        ).to(device=target, dtype=torch.float32)
+        lengths = (
+            torch.from_numpy(np.array(self.read_numeric_block(record, "vin.lengths"), copy=True))
+            .to(device=target, dtype=torch.int64)
+            .reshape(-1)
+        )
+        t_world_rig = PoseTW(
+            torch.from_numpy(
+                np.array(self.read_numeric_block(record, "vin.t_world_rig"), copy=True),
+            ).to(device=target, dtype=torch.float32),
+        )
+        return VinSnippetView(
+            points_world=points_world,
+            lengths=lengths,
+            t_world_rig=t_world_rig,
+        )
 
     def read_numeric_block(self, record: VinOfflineIndexRecord, block_name: str) -> np.ndarray:
         """Read one numeric block row for a sample.

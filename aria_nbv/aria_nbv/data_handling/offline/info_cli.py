@@ -21,6 +21,7 @@ import numpy as np
 import typer
 from rich.tree import Tree
 
+from ...utils import Stage
 from ...utils.cli_format import (
     cli_console,
     counts_table,
@@ -187,7 +188,7 @@ def _tree_payload(store: VinOfflineStoreConfig) -> dict[str, Any]:
     for split in _SPLITS:
         split_path = store.split_path(split)
         if split_path.exists():
-            splits[split] = len(reader.get_split_records(split))
+            splits[split] = len(reader.get_split_records(_stage_or_all(split)))
     return {
         "store_dir": store.store_dir.expanduser().resolve().as_posix(),
         "version": int(reader.manifest.version),
@@ -199,7 +200,7 @@ def _tree_payload(store: VinOfflineStoreConfig) -> dict[str, Any]:
 
 def _samples_payload(*, store: VinOfflineStoreConfig, split: str, limit: int) -> dict[str, Any]:
     reader = VinOfflineStoreReader(store)
-    records = reader.get_split_records(split)
+    records = reader.get_split_records(_stage_or_all(split))
     rows = [_sample_row(reader, record) for record in records[: max(0, int(limit))]]
     return {
         "store_dir": store.store_dir.expanduser().resolve().as_posix(),
@@ -212,7 +213,7 @@ def _samples_payload(*, store: VinOfflineStoreConfig, split: str, limit: int) ->
 
 def _random_index_payload(*, store: VinOfflineStoreConfig, split: str, seed: int | None) -> dict[str, Any]:
     reader = VinOfflineStoreReader(store)
-    records = reader.get_split_records(split)
+    records = reader.get_split_records(_stage_or_all(split))
     if not records:
         raise SystemExit(f"No VIN offline samples found for split {split!r}.")
     index = random.Random(seed).randrange(len(records))
@@ -229,6 +230,13 @@ def _random_index_payload(*, store: VinOfflineStoreConfig, split: str, seed: int
         "shard_id": record.shard_id,
         "shard_row": int(record.row),
     }
+
+
+def _stage_or_all(value: str | Split) -> Stage | None:
+    """Normalize an inspection CLI selection before querying the typed store reader."""
+
+    text = value.value if isinstance(value, Split) else value
+    return None if text == Split.all.value else Stage.from_str(text)
 
 
 def _sample_row(reader: VinOfflineStoreReader, record: VinOfflineIndexRecord) -> dict[str, Any]:

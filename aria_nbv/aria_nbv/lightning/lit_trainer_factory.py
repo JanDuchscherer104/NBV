@@ -86,6 +86,10 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
 
     num_sanity_val_steps: int = 2
     """Validation batches run before training; ``-1`` checks the entire loader."""
+
+    use_distributed_sampler: bool = True
+    """Allow Lightning to replace data-loader samplers during distributed execution."""
+
     enable_validation: bool = False
     """Enable validation; false zeroes validation limits/cadence during validation."""
 
@@ -208,6 +212,7 @@ class TrainerFactoryConfig(TargetConfig[pl.Trainer]):
             callbacks=callbacks,
             logger=logger,
             num_sanity_val_steps=self.num_sanity_val_steps,
+            use_distributed_sampler=self.use_distributed_sampler,
         )
 
 

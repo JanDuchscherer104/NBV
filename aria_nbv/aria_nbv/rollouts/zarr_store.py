@@ -36,6 +36,7 @@ from zarr.storage import LocalStore
 
 from ..configs import PathConfig
 from ..data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
+from ..targets.protocol import TargetInputProtocol
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
 from .manifest import (
@@ -458,7 +459,7 @@ class RolloutZarrStoreConfig(BaseConfig):
     discount_gamma: float = Field(default=1.0, ge=0.0)
     """Discount applied only to non-terminal selected TD transitions."""
 
-    target_protocol_version: str = "v1-observed"
+    target_protocol_version: TargetInputProtocol = TargetInputProtocol.V0_GT_INPUT
     """Contract version separating target task inputs from oracle labels."""
 
     reason_code_version: str = INVALID_REASON_VERSION
@@ -553,7 +554,7 @@ def write_rollout_zarr_store(
     *,
     return_semantics: str = DEFAULT_RETURN_SEMANTICS,
     discount_gamma: float = 1.0,
-    target_protocol_version: str = "v1-observed",
+    target_protocol_version: TargetInputProtocol | str = TargetInputProtocol.V0_GT_INPUT,
     reason_code_version: str = INVALID_REASON_VERSION,
     field_retention_policy: str = "compact",
     source_offline_store_version: str = "unknown-source-version",
@@ -669,7 +670,7 @@ class _RolloutZarrWriteSession:
         self.records = list(records)
         self.return_semantics = return_semantics
         self.discount_gamma = float(discount_gamma)
-        self.target_protocol_version = target_protocol_version
+        self.target_protocol_version = str(target_protocol_version)
         self.reason_code_version = reason_code_version
         self.field_retention_policy = field_retention_policy
         self.source_offline_store_version = source_offline_store_version

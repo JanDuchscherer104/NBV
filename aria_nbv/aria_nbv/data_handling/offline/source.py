@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ...configs import PathConfig
 from ...utils import Stage, TargetConfig
@@ -29,11 +29,14 @@ class VinOfflineSourceConfig(TargetConfig[VinOfflineDataset]):
     offline: VinOfflineDatasetConfig = Field(default_factory=VinOfflineDatasetConfig)
     """Immutable VIN offline dataset configuration."""
 
-    train_split: Literal["train", "val", "all"] = "train"
-    """Offline split to use for training."""
+    train_split: Stage | None = Stage.TRAIN
+    """Stored stage used for training; ``None`` selects every stored row."""
 
-    val_split: Literal["train", "val", "all"] = "val"
-    """Offline split to use for validation and testing."""
+    val_split: Stage | None = Stage.VAL
+    """Stored stage used for validation; ``None`` selects every stored row."""
+
+    test_split: Stage | None = Stage.VAL
+    """Stored stage used for testing; ``None`` selects every stored row."""
 
     load_candidates_for_batch: bool = False
     """Whether VIN-batch reads should decode candidate diagnostics."""
@@ -53,10 +56,23 @@ class VinOfflineSourceConfig(TargetConfig[VinOfflineDataset]):
     load_trajectory_metadata_for_batch: bool = True
     """Whether VIN-batch reads should decode trajectory metadata blocks."""
 
+    @field_validator("train_split", "val_split", "test_split", mode="before")
+    @classmethod
+    def _normalize_stage(cls, value: Stage | str | None) -> Stage | None:
+        """Normalize config-file stage text before it enters source selection."""
+
+        if value is None or value == "all":
+            return None
+        return Stage.from_str(value)
+
     def setup_target(self, *, split: Stage) -> VinOfflineDataset:
         """Instantiate the immutable offline VIN dataset for the requested split."""
 
-        dataset_split = self.train_split if split is Stage.TRAIN else self.val_split
+        dataset_split = {
+            Stage.TRAIN: self.train_split,
+            Stage.VAL: self.val_split,
+            Stage.TEST: self.test_split,
+        }[split]
         offline_cfg = self.offline.model_copy(deep=True)
         offline_cfg.paths = self.paths
         offline_cfg.store.paths = self.paths
