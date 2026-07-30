@@ -241,9 +241,16 @@ docs/_freeze/**/*.html
 # Graphify
 graphify-out/
 
-# OMX is operator-local. Force-add only accepted records validated by
-# scripts/validate_agent_memory.py.
-.omx/
+# OMX durable role artifacts may be selected for version control. Runtime and
+# generated sidecars remain operator-local.
+.omx/*
+!.omx/context/
+!.omx/interviews/
+!.omx/specs/
+!.omx/plans/
+.omx/specs/**/mission.md
+.omx/specs/**/sandbox.md
+.omx/specs/**/result.json
 
 # OMC local memory/replay state is operator-local unless promoted into .agents.
 .omc/

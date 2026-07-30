@@ -25,16 +25,16 @@ authoritative in their respective domains.
 After acceptance:
 
 - this specification owns the scaffold-rework target state and planning bounds;
-- `.agents/references/human_owner_intent.md` owns only general human preferences
-  outside this target state and may point here rather than duplicate it;
+- `.agents/references/human_owner_intent.md` continues to own general cross-task
+  human preferences and points here for requirements scoped to this rework;
 - later `.omx/plans/` own implementation sequencing, not requirements;
 - historical reports and artifacts remain evidence with the dispositions below;
 - changes to this target state require explicit supersession, not silent edits.
 
-The specification is semantically lossless: every distinct material conclusion
-from the reviewed corpus is retained, refined, rejected, deferred, or kept open.
-Losslessness does not require copying repeated prose or historical implementation
-detail.
+The specification is decision-lossless: it retains accepted current intent,
+unresolved conflicts, and capabilities at risk from destructive cleanup.
+Superseded implementation hypotheses may be summarized by source family rather
+than copied or individually registered.
 
 ## Intent
 
@@ -58,6 +58,7 @@ capabilities without replaying the branch or repeating its migration shape.
   back to it.
 - Optional tools improve navigation or execution without becoming hidden
   dependencies.
+- Omx stays the domain agnostic orchestration harness.
 - Skills remain compact procedural front doors and preserve independently useful
   capabilities.
 - Scaffold changes are measured against realistic tasks and shipped as small,
@@ -67,9 +68,25 @@ capabilities without replaying the branch or repeating its migration shape.
 - Custom scaffold code and policy exist only where a measured local gap
   justifies their maintenance cost.
 
-## Ubiquitous Language
+## Domain Ubiquitous Language And Scaffold Vocabulary
 
-Use these terms consistently in scaffold work:
+ARIA-NBV's domain ubiquitous language has one source family:
+
+- `docs/typst/shared/glossary.typ` owns domain terms, definitions, aliases,
+  relationships, citation keys, and references to notation and equations;
+- `docs/typst/shared/symbols.typ` and `docs/typst/shared/symbols/*.typ` own domain
+  symbols and their stable keys; and
+- `docs/typst/shared/equations.typ` and `docs/typst/shared/equations/*.typ` own
+  named equations and their stable keys.
+
+`docs/typst/shared/notation.typ`, generated glossary/notation files, rendered
+glossaries, Quarto pages, skills, graphs, and agent guidance are consumers or
+derived views. They must not redefine a term, symbol, or equation independently.
+When code or prose needs new domain language, update the appropriate shared
+Typst owner first and reference its stable key from the consuming surface.
+
+The following terms are narrower scaffold-governance vocabulary for this
+specification. They do not compete with the domain glossary:
 
 - **Owner:** the source responsible for maintaining one class of durable
   information.
@@ -105,7 +122,7 @@ Avoid unqualified uses of `context`, `memory`, `truth`, `canonical`, `artifact`,
 - **Progressive disclosure:** root guidance is a thin map; local contracts and
   verification live near their owners; branch-specific workflow detail loads on
   demand.
-- **Upstream first:** use maintained native behavior before local adaptation.
+- **Upstream first:** use maintained native behavior (omx, graphify, mattpocock/skills, ...) before local adaptation.
   Add a local adapter only for a demonstrated gap and keep it minimal.
 - **Evidence before assertion:** exact source and fresh executable verification
   establish current facts; retrieval and agent confidence guide discovery.
@@ -115,31 +132,54 @@ Avoid unqualified uses of `context`, `memory`, `truth`, `canonical`, `artifact`,
   define the pull-request unit.
 - **Capability preservation:** simplify by preserving outcomes, not by retaining
   every current file or deleting every apparent duplicate.
-- **Least privilege:** write authority, hooks, MCP tools, and automation are
-  explicit and task-scoped rather than permissive tracked defaults.
 - **Literal operational status:** configured, installed, initialized, healthy,
   and fresh are distinct states and must be reported accurately.
 - **Stable language:** terminology conflicts are surfaced before design; resolved
-  terms are captured in their existing owner.
+  domain terms, symbols, and equations are captured in the shared Typst owners
+  named above; scaffold-governance terms remain scoped to this specification.
+- **Rich source-owned linkage:** connect thesis prose, glossary entries,
+  equations, symbols, code contracts, tests, measurements, and exact literature
+  through stable owner-defined identifiers and resolvable links. Links improve
+  traversal without copying the linked fact into another authority.
 - **Sparse durable decisions:** record only choices that are costly to reverse,
   surprising without rationale, and based on genuine alternatives.
 
 ## Source And Ownership Model
 
-- Code, tests, and active configuration own executable behavior and contracts.
-- Exact papers own external scientific claims and retain precise locators.
-- The active Typst thesis is the target owner for scientific narrative,
-  notation, and research direction. Until that migration is reviewed,
-  `.agents/references/source_order.md` resolves current authority.
+The principal repository owners are:
+
+- `aria_nbv/aria_nbv/` owns Python implementation and runtime behavior. Public
+  module, class, function, DTO, shape, unit, lifecycle, and failure contracts
+  live in source signatures, types, and docstrings; `aria_nbv/tests/` proves
+  executable behavior; active TOML and Python configuration owns selected
+  runtime parameters. Generated Quartodoc pages render source contracts but do
+  not own them.
+- `docs/typst/thesis/main.typ` and its includes under
+  `docs/typst/thesis/sections/` own the active thesis narrative, research
+  questions, method, evaluation interpretation, limitations, and submission
+  claims.
+- `docs/typst/shared/glossary.typ`, `docs/typst/shared/symbols.typ`,
+  `docs/typst/shared/symbols/*.typ`, `docs/typst/shared/equations.typ`, and
+  `docs/typst/shared/equations/*.typ` own domain ubiquitous language, notation,
+  and named mathematical definitions.
+- `docs/contents/literature/*.qmd` owns curated repository literature synthesis,
+  while `docs/literature/sources.jsonl` records the local source catalog,
+  `docs/references.bib` and `docs/references-qh.bib` own citation identities,
+  and exact papers or their authoritative TeX/PDF sources own external
+  scientific claims and locators.
+- Root and nearest nested `AGENTS.md` files own repository-wide and local
+  invariants, hazards, and verification routes. `.agents/references/source_order.md`
+  resolves current conflicts while this proposed target state is being reviewed.
+- `.agents/references/human_owner_intent.md` owns reviewed general human
+  preferences. After acceptance, this specification owns only the requirements
+  scoped to the scaffold rework.
+- `.agents/issues.toml`, `.agents/todos.toml`, `.agents/refactors.toml`, and
+  `.agents/resolved.toml` own actionable and resolved maintenance work through
+  Agents DB.
 - Immutable manifests and evidence bundles own measurements. Reports and thesis
   prose interpret them.
-- Root and nearest `AGENTS.md` files own universal and local repository
-  invariants, hazards, and verification routes.
 - Skills own repeatable procedures, activation, handoffs, and verification; they
   do not own scientific facts or package encyclopedias.
-- `.agents/references/human_owner_intent.md` owns reviewed general human scaffold
-  preferences outside this accepted target-state specification.
-- Agents DB TOMLs own actionable issues, TODOs, and refactors.
 - Debriefs own concise historical diagnoses, failed approaches, measurements,
   and handoffs when those are not durable elsewhere.
 - OMX context, specifications, plans, handoffs, and goal ledgers own their
@@ -151,6 +191,39 @@ Newer intent refines older intent only within the scope actually reconsidered.
 Age, similarity, inferred links, or agent consensus never performs automatic
 acceptance or supersession.
 
+## Cross-Modal Linkage Contract
+
+Rich linkage is a repository requirement, not a Graphify-specific feature:
+
+- Glossary entries use their structured `internal_links`, `citations`,
+  `symbol_refs`, and `equation_refs` fields to connect domain language to thesis
+  sections, bibliography entries, symbols, and equations.
+- Thesis sections use glossary terms, shared `symb` and `eqs` keys, citations,
+  and the source-link macros in `docs/typst/shared/style.typ` to connect claims
+  to their definitions, evidence, and implementation anchors.
+- `.agents/references/thesis_code_links.md` owns the final versus draft code-link
+  convention: final-worthy links use `gh`, drafting links use `gh-wip` or
+  `gh-symbol`, and submission builds disable draft-only navigation.
+- Public code docstrings link to the relevant thesis section, glossary key,
+  equation key, evidence contract, or paper when that relationship is necessary
+  to understand semantics. They do not copy thesis prose or mathematical
+  definitions into Python documentation.
+- Literature syntheses resolve citation keys to `docs/references.bib` or
+  `docs/references-qh.bib` and preserve exact source locators. Thesis claims link
+  to those citations rather than treating a graph or synthesis page as proof.
+- Tests and immutable measurement manifests link to the implementation contract
+  they verify; thesis results link to the exact evidence bundle they interpret.
+- Durable links use repository-relative paths, stable glossary/symbol/equation
+  keys, citation keys, code symbols, commit or release identifiers, and stable
+  evidence IDs. Machine paths, runtime IDs, generated graph-node IDs, and
+  search-result positions are not durable identifiers.
+
+Link validation must check that touched targets resolve, that final thesis links
+are pinned appropriately, that draft-only links disappear in submission mode,
+and that no derived navigation surface becomes the only representation of a
+relationship. Graphify may discover, index, or validate these links, but the
+source-owned links must remain usable when Graphify is absent.
+
 ## Guidance And Progressive Disclosure
 
 - Keep root `AGENTS.md` concise: universal safety, source-order pointer, compact
@@ -160,15 +233,19 @@ acceptance or supersession.
   the file.
 - Do not create a comprehensive root handbook, generated agent brief, or default
   all-in-one context snapshot.
-- Keep package READMEs only for durable human subsystem orientation. Do not put
+- Code documentation should live in doc-strings.
+- Keep package READMEs only for durable human and agent subsystem orientation, domain specific usage information, sometimes domain specific architecture and implementation details. Do not put
   agent routing, generated symbol matrices, or transient refactor inventories
   in them.
-- Keep `aria-nbv-context` focused on deterministic discovery, owner location,
-  provenance, and handoff. Whether it contains a small stable orientation layer
-  remains open.
+- Preserve deterministic discovery, owner location, provenance, and handoff as
+  an outcome without freezing the current router or its file layout.
 - Exact search and direct source reading remain the universal fallback.
 - Durable guidance names capabilities and fallbacks, not developer paths,
   transient transport identifiers, or assumed optional-tool availability.
+- Global Codex guidance remains pointer-only for ARIA-NBV; repository guidance
+  owns ARIA policy, routing, and verification.
+- Scoped UML generation remains an explicit, untracked operator aid. It is not a
+  default context surface, runtime-flow model, or API authority.
 
 ## Skill Model
 
@@ -186,13 +263,29 @@ acceptance or supersession.
 - Classify the actual prompt-visible runtime surface, including system,
   external, and repository skills. A repository directory count is not the
   runtime skill surface.
+- Report repository-controlled and complete runtime surfaces separately. Skill
+  counts, description bytes, and LOC are maintenance/context costs, not evidence
+  that a capability was preserved.
 - Evaluate positive prompts, near misses, forbidden routes, handoffs, and task
-  outcomes. Lexical consistency alone is insufficient.
+  outcomes. Lexical consistency fixtures are lint, not routing or capability
+  evaluation.
 - Keep `measured-autoresearch` and `agents-db` unless dedicated evidence supports
   a later change. Do not enforce an arbitrary skill-count target.
+- Do not blindly drop any of our established preferences, invariants in skills like [$mempalace-aria-nbv:typst-authoring](.agents/skills/typst-authoring/SKILL.md).
 - Skills may contain operational domain procedures and precise owner pointers,
   but scientific and implementation facts remain with thesis, papers, code,
   tests, and configuration.
+
+Cleanup preserves outcome contracts rather than current skill names or file
+layouts:
+
+- agents locate the exact owner, respect dirty-worktree boundaries, choose one
+  primary lane, and verify the result;
+- Typst, Quarto, bibliography, rendering, and source-link tasks reach complete
+  progressively disclosed authoring guidance;
+- diagnostic prompts reach one usable workflow or an exact-source fallback; and
+- removing or consolidating a named skill is allowed when these outcomes remain
+  covered by the shared smoke set or a workpackage-local comparison.
 
 ## Optional Tools And External Capabilities
 
@@ -218,17 +311,30 @@ acceptance or supersession.
   provenance where Graphify proves useful.
 - Consequential inferred links require exact-source verification.
 - Wrong-root or materially stale graph evidence cannot establish current state.
-- Benchmark unmodified current upstream Graphify before retaining hooks,
-  adapters, custom parsers, old pins, or tracked outputs.
-- Compare exact search, upstream Graphify, the current integration, and PR #30's
-  adapter on fixed owner, path, hierarchy, thesis, literature, stale-graph, and
-  false-link tasks.
+- First decouple Graphify from mandatory routing, hooks, freshness gates, CI
+  requirements, and ordinary task completion. Preserve the existing integration
+  dormant long enough to remain a reproducible comparison candidate.
+- Compare exact-source routing, the dormant current integration, and unmodified
+  current upstream Graphify on fixed owner, path, hierarchy, thesis, literature,
+  active-bibliography, stale-graph, false-link, broad-query, and exact-file
+  negative-routing tasks.
 - Measure locator correctness, owner-at-k, source-verification rate, runtime,
   context cost, generated size, and custom LOC.
-- Do not track a graph, generated wiki, or report as project truth merely because
-  upstream can generate it.
-- The exact corpus, refresh model, hooks, default routing, and retained outputs
-  remain open pending the comparative experiment.
+- Keep generated graph, report, and wiki output local, reproducible, and
+  non-authoritative.
+- After the comparison, the human owner selects complete deletion, optional
+  unmodified upstream use, or upstream plus one proven thin adapter. A planning
+  agent must not infer that choice from a composite score.
+- The exact optional corpus, refresh model, and retained local outputs remain
+  open until that selection. Graphify does not return to required routing or CI.
+
+The frozen PR #30 evidence establishes a narrower historical result: exact
+`path`/`explain` traversal and native hierarchy were useful when the symbol or
+file was already known. Broad natural-language retrieval was noisy; inferred
+link precision, scaffold-corpus coverage, and agent-productivity benefit were
+not established; and the custom adapter grew while suppressing native report
+and visualization outputs. These findings define comparison cases, not a reason
+to retain that adapter.
 
 ## Memory, Debriefs, Conversations, And Agents DB
 
@@ -238,9 +344,12 @@ acceptance or supersession.
   transcript mining.
 - Keep Agents DB as the actionable-work owner for now. Exclude resolved and
   historical records from active routing unless history is explicitly requested.
+- Historical ledgers, debriefs, and resolved records must be visibly historical;
+  references to retired tools must not appear as current routes or owners.
 - Keep debriefs concise and historical rather than a default current-state
-  mirror. Their exact trigger policy remains open pending retrieval-value and
-  maintenance-cost evidence.
+  mirror. Retain the current non-trivial-work trigger policy; a later measured
+  package may propose narrowing it from retrieval-value and maintenance-cost
+  evidence.
 - Retire a handwritten state or history surface only after every live claim has
   a verified destination and every consumer has migrated.
 - Code or chat TODOs do not automatically become debrief prose. Source-local
@@ -250,17 +359,24 @@ acceptance or supersession.
 
 ## OMX Artifact Contract
 
-- Use native `.omx/context`, `.omx/specs`, `.omx/plans`, and handoff/goal paths
-  for their documented roles.
-- Accepted specifications and plans are immutable decision evidence. Changes use
-  explicit successors with predecessor provenance rather than in-place rewriting.
-- Keep drafts, runtime state, logs, and raw interview material ignored unless a
-  separate accepted policy says otherwise.
-- Preserve accepted evidence and supersession while first testing whether Git
-  history and compact hashes are sufficient.
-- Do not build a broad artifact registry, lifecycle engine, or natural-language
-  acceptance system without a demonstrated failure that native paths and Git
-  cannot solve.
+- Use native `.omx/context`, `.omx/interviews`, `.omx/specs`, and `.omx/plans`
+  paths for selected current review, decision, report, plan, and handoff
+  artifacts. Tracking is independent of acceptance; proposed material may be
+  versioned for review.
+- Keep drafts, runtime state, goals, logs, team data, caches, temporary files,
+  and routine autoresearch mission/sandbox/result sidecars ignored. Track a
+  sidecar exceptionally only when it is unique durable evidence.
+- The working tree contains current review or accepted artifacts and final
+  evidence that remains useful. When an artifact is superseded, remove it and
+  identify its former path and Git commit from the successor when provenance is
+  material. Git history is the archive.
+- After this specification is accepted, retain it and the current evidence
+  index. Remove its context and interview once their decisions are represented
+  or assigned, unless either contains unique unresolved evidence.
+- Do not add an `.omx/archive`, artifact registry, byte-identical bundle copies,
+  tombstones, seed recovery, purge simulation, rollback journal, or
+  natural-language acceptance system without a separately demonstrated failure
+  that native paths and Git cannot solve.
 - A validator or agent review supplies evidence; explicit human acceptance
   promotes this target-state specification.
 - Plans derived from this specification must not silently narrow its scope,
@@ -287,31 +403,42 @@ acceptance or supersession.
 
 - Keep current public documentation renderable and distinguish current thesis
   direction from historical implementation evidence.
-- Source docstrings and Quartodoc own Python module and public-entity contracts,
-  including non-obvious fields, shapes, units, lifecycle, and failures. Do not
-  narrate trivial private helpers.
-- Keep `python-docstrings` as the procedural style owner unless measured evidence
-  supports a change.
+- Source docstrings own Python module and public-entity contracts, including
+  non-obvious fields, shapes, units, lifecycle, and failures. Quartodoc renders
+  those contracts as generated human-facing documentation. Do not narrate
+  trivial private helpers.
+- Preserve contract-focused Python docstring authoring and Quartodoc
+  compatibility as outcomes; the current procedural skill may be consolidated
+  when those outcomes remain covered.
 - Keep scientific language, notation, equation labels, bibliography, draft
   markers, build profiles, and source links in shared Typst ownership.
 - Every Typst notation symbol must resolve through the shared glossary/notation
   owner; the exact enforceable scope for equation definitions remains open.
-- Cross-modal links should resolve to real code symbols, thesis sections, or
-  exact literature sources and remain removable navigation rather than truth.
+- Typst owns visible thesis structure, citations, and code-reference anchors;
+  code and docstrings own implementation symbols; BibTeX and exact papers own
+  citation identity and scientific evidence.
+- Cross-modal links must resolve through those source owners and remain useful
+  without Graphify. Graphify may index or enrich them as qualified derived
+  evidence but may not become their sole representation.
 - Literature claims require citation resolution, authoritative TeX/PDF
   inspection, an exact locator, and calibrated wording.
 - Retrieval and generated literature graphs may locate evidence but do not
   verify scientific claims.
 - Thesis consolidation, Quarto retirement, equation formatting, and source-link
   changes belong in separate thesis PRs, not scaffold migration PRs.
+- Native Typst and BibTeX extraction by upstream Graphify remains unproven for
+  this repository. Any ARIA adapter requires a measured gap and an isolated
+  experiment after the clean scaffold baseline exists.
 
 ## Operational And Security Invariants
 
-- Distinguish configured, installed, initialized, available, healthy, and fresh.
 - A failed required stage leaves the previous successful freshness marker
   unchanged.
 - Non-blocking hooks and adapters report concise failures and do not hide them
   behind successful no-ops.
+- Tracked hook/configuration changes and installed operator state must not drift
+  silently. Heavy synchronous post-commit work requires measured latency and an
+  explicit failure policy; it is not a default scaffold mechanism.
 - Permanent validators protect stable, recurring, objectively testable failures;
   each needs an owner, positive and negative fixtures, and useful remediation.
 - A validator larger or harder to maintain than the protected capability is a
@@ -320,6 +447,9 @@ acceptance or supersession.
   deterministic check prevents recurring drift.
 - Avoid broad semantic policy validators and environment-specific tracked
   defaults.
+- Narrow scaffold validators should be hermetic where practical and must not
+  require unrelated network access, Git LFS objects, or a full-repository clone
+  merely to validate a local planning or routing contract.
 - Manage intentionally versioned model checkpoints and artifacts through Git
   LFS.
 - Do not restore retired cache-migration or runtime-training APIs solely for
@@ -327,22 +457,27 @@ acceptance or supersession.
 
 ## Evaluation And Review Contract
 
-Before destructive consolidation, freeze a representative evaluator covering:
+Before destructive consolidation, freeze one tiny shared smoke set covering
+owner discovery, progressive disclosure, diagnostic routing, and exact-source
+work when optional tools are absent. Each destructive workpackage adds only the
+bounded comparison needed for the capability it removes or replaces.
 
-- owner localization across code, docs, thesis, literature, and scaffold;
-- positive, near-miss, and negative skill activation;
-- task completion with current, candidate, and no-skill paths;
-- optional-tool absence and exact-source fallback;
-- stale, wrong-root, and inferred Graphify evidence;
-- terminology and authority conflicts;
-- retained capability regression;
-- runtime/token cost, references read, and telemetry gaps; and
-- human review cost, custom LOC, generated churn, files changed, and rollback.
+Prefer native Codex runs, existing tests, and shell checks. Use executable
+end-state assertions as primary evidence and transcript or trace review only to
+explain failures and costs. Repeat stochastic trials only where necessary. Do
+not create a general evaluator framework, dashboard, ontology, transcript
+processor, or scoring engine, and do not tune checks after seeing the candidate
+result.
 
-Use executable end-state assertions as primary evidence. Use transcript or trace
-review to explain failures and costs. Repeat stochastic trials and aggregate
-results where necessary. Do not tune the evaluator only after seeing the
-candidate result.
+Accounting reports distinguish repository-controlled versus observed runtime
+surfaces and production, test, generated, and upstream code. No combined byte
+or LOC total may be presented as task-success or retained-capability evidence.
+
+Graphify's dedicated comparison additionally covers owner and path discovery,
+native hierarchy, thesis-code-literature relationships, stale or wrong-root
+evidence, false inferred links, optional-tool fallback, runtime, context cost,
+generated size, and custom LOC. These dimensions remain disaggregated evidence
+for the human decision rather than inputs to an automatic composite score.
 
 Every replacement pull request requires:
 
@@ -362,13 +497,16 @@ make either change invalid.
 - Align current owner intent, source order, and routing without duplicating them.
 - Preserve or repair independently useful documentation and operational skills.
 - Measure the complete runtime scaffold surface and representative outcomes.
+- Make scaffold measurements literal and disaggregated so cost reductions are
+  not reported as capability or productivity gains.
 - Determine Graphify's useful role through an upstream-first comparative test.
 - Retire one redundant capability implementation at a time only after parity.
 - Reduce custom scaffold code and maintenance burden without deleting unique
   capability.
 - Preserve useful PR #30 candidates for isolated re-evaluation: progressive
-  skill disclosure, repaired documentation routing, measured-autoresearch tests,
-  Graphify provenance/hierarchy, and thesis notation/linkage checks.
+  skill disclosure, preflight discipline, repaired authoring and diagnostic
+  routing, measured-autoresearch tests, Graphify provenance/hierarchy, source
+  links, and the thesis-only notation and prune audits.
 - Make every actionable scaffold finding receive a reviewed disposition or an
   Agents DB owner.
 
@@ -412,6 +550,10 @@ make either change invalid.
 - Categorical LitKG removal or retention without capability evidence.
 - Automatic transcript ingestion, generated agent briefs, or transcript-derived
   accepted intent.
+- The PR #30 OMX registry, archive copies, tombstones, seed recovery, purge
+  simulation, rollback machinery, and pinned lifecycle subsystem.
+- The custom HTML intent reviewer and its extraction/validation machinery as a
+  maintained scaffold subsystem.
 - Mandatory generated context suites, AST inventories, symbol matrices, and
   global UML in routine routing.
 - Broad synchronous hooks and hidden background mutation.
@@ -427,23 +569,16 @@ make either change invalid.
 
 These remain unresolved and block only their affected workpackage:
 
-- Exact Graphify corpus, refresh behavior, retained outputs, hooks, and whether
-  it is default navigation or an optional architecture aid.
+- Which optional Graphify role, if any, the human owner selects after the
+  exact-source/current-integration/unmodified-upstream comparison, followed by
+  the exact corpus, refresh behavior, and retained local outputs for that role.
 - Whether LitKG provides unique claim, retrieval, or literature value after
   exact-source alternatives are verified.
-- Whether `aria-nbv-context` is a pure router or contains compact stable
-  orientation.
 - Exact external-skill reference, allowlist, pinning, vendoring, and integrity
   policy.
 - Which handwritten state surfaces can retire after owner/consumer migration.
-- Whether debriefs remain required for broad non-trivial work or become strictly
-  event-triggered and episodic.
 - When Typst becomes the sole scientific owner and the exact enforceable shared
   glossary/equation contract.
-- Minimum OMX accepted-artifact retention, archive, supersession, registry, and
-  validation mechanism.
-- Which PR #30 Graphify, docs, Typst, and source-link capabilities are
-  non-inferior when isolated against the current baseline.
 
 No implementation plan may silently resolve these choices.
 
@@ -473,8 +608,10 @@ Planning or execution must ask before:
 ## Assumptions And Resolutions
 
 - **Assumption:** all earlier user requests should be copied. **Resolution:**
-  repeated and superseded wording is omitted, but each distinct conclusion has
-  a disposition and a source pointer.
+  repeated and superseded wording is omitted. Accepted current requirements,
+  unresolved conflicts, and capabilities exposed to destructive cleanup remain
+  decision-lossless; historical implementation hypotheses may be summarized by
+  source family.
 - **Assumption:** one authoritative document should contain every implementation
   fact. **Resolution:** this document owns target-state requirements only and
   points to domain owners.
@@ -492,6 +629,10 @@ Planning or execution must ask before:
 
 - If Graphify says module A owns a symbol but current code defines it in module
   B, exact code wins and the graph is marked stale or incorrect.
+- If Graphify is absent, agents still follow Typst-to-code links, resolve
+  bibliography citations to exact papers, and complete ordinary repository work.
+- If the Graphify comparison has mixed results, no aggregate score selects its
+  role; the human owner reviews the disaggregated evidence and chooses.
 - If a global instruction conflicts with the nearest `AGENTS.md`, the nearest
   applicable owner governs within its allowed scope; universal safety remains
   global.
@@ -514,7 +655,9 @@ Planning or execution must ask before:
 - Every tracked aggregation artifact in `.agents/references/scaffold_rework/`
   and both current autoresearch reports appears in the source ledger.
 - June deep-interview, July decision/plan, local review corpus, and PR #30
-  evidence have explicit retained/rejected/deferred/open dispositions.
+  evidence have source-family dispositions, while every accepted current
+  requirement, unresolved conflict, and capability at risk from destructive
+  cleanup is retained explicitly.
 - The specification separates principles, invariants, goals, non-goals,
   preferences, open decisions, and historical hypotheses.
 - No unresolved decision is presented as accepted policy.
@@ -526,6 +669,11 @@ Planning or execution must ask before:
   artifacts and necessary index pointers.
 - The human owner reviews the complete document and explicitly accepts or
   revises it before its status changes from `proposed`.
+- Acceptance is a separate atomic follow-up that changes the specification
+  status, updates the evidence-index pointer, and removes scoped duplication
+  from `human_owner_intent.md`. Context and interview records are then removed
+  once fully represented or assigned, unless they retain unique unresolved
+  evidence.
 - `$plan` consumes this specification directly without repeating broad
   requirements discovery or treating historical reports as implementation
   instructions.
@@ -537,9 +685,11 @@ Planning or execution must ask before:
 - `.agents/references/human_owner_intent.md`
   - Role: current reviewed human preferences.
   - Disposition: incorporated throughout; remains authoritative until this spec
-    is explicitly accepted.
+    is explicitly accepted and continues to own general cross-task preferences
+    afterward.
 - `.omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md`
-  - Role: source-aligned restart synthesis and historical disposition ledger.
+  - Role: source-aligned restart synthesis and historical disposition ledger,
+    including the reviewed `.agents/work/agents-scaffold/` corpus.
   - Disposition: incorporated; implementation sequence remains advisory for the
     later planning phase.
 - `.omx/specs/autoresearch-agent-scaffold-external-best-practices-20260730/report.md`
@@ -554,18 +704,32 @@ Planning or execution must ask before:
 
 - `.agents/references/scaffold_rework/evidence/scaffold-issue-index-20260726.md`
   - Role: measured improvements, regressions, and unresolved scaffold issues.
-  - Disposition: useful capabilities retained as isolated candidates; broad
-    implementation recommendations require current reproduction.
+  - Disposition: compact skill/docs routing, measured autoresearch, owner
+    localization, and native-shaped graph hierarchy/provenance remain isolated
+    candidates. Scoped prompt budgets, lexical routing fixtures, structural
+    graph tests, headline LOC, corpus omissions, inferred-link errors, hook
+    drift, and historical-record leakage become explicit measurement and
+    replacement constraints. Exact workpackages require current reproduction.
 - `.agents/references/scaffold_rework/evidence/five-pr-rebuild-20260726.md`
   - Role: historical clean-room decomposition.
-  - Disposition: small-PR principle retained; exact five-PR sequence deferred to
-    planning against this specification.
+  - Disposition: clean baseline, serial small PRs, one owner, one proof,
+    explicit capability dispositions, stop conditions, and rollback boundaries
+    retained. Its exact five-PR sequence, tool choices, fixed path inventories,
+    transcript/graph machinery, and migration ledgers are not requirements.
 - `.agents/references/scaffold_rework/evidence/pr30-reviewability-20260728.html`
   - Role: visual PR #30 audit.
-  - Disposition: reviewability findings retained; the HTML is evidence only.
+  - Disposition: exact Graphify traversal and hierarchy, measured-autoresearch,
+    progressive disclosure, authoring restoration, and preflight discipline are
+    candidate capabilities. Noisy broad retrieval, incomplete graph coverage,
+    custom-code growth, suppressed upstream outputs, red CI, hidden scope,
+    binary/generated churn, and unproven deletion parity are failure evidence.
+    RQ5, Quarto/Typst parity, bibliography/glossary, and PDF findings remain with
+    thesis/documentation owners and outside scaffold PRs.
 - `.agents/references/scaffold_rework/evidence/pr30-reviewability-result-20260728.json`
   - Role: historical validator record.
-  - Disposition: retained as provenance, not a current digest or approval.
+  - Disposition: proves only that the HTML passed its stated historical review
+    prompt; it is provenance, not approval of PR #30, this specification, or a
+    current implementation.
 
 ### Historical Git evidence
 
@@ -586,12 +750,6 @@ Planning or execution must ask before:
   - Source: audited PR #30 experimental implementation.
   - Disposition: not a merge or migration base; isolated capabilities and
     observed failure modes are retained as experiment candidates.
-- `.agents/work/agents-scaffold/` review corpus as summarized in the current
-  restart report
-  - Role: May 6-July 12 advisory snapshots across changing scaffold states.
-  - Disposition: cross-report safety, status, routing, least-privilege, and
-    autoresearch-loop principles retained; dated tool picks and expansion-heavy
-    proposals rejected or deferred.
 
 ### External practice evidence
 
@@ -614,10 +772,11 @@ Confirmed from current artifacts:
 - Installed OMX uses mode-specific JSON contracts; no generic `omx artifact`
   source-reference registry is available.
 
-Still requiring implementation-time verification:
+Still requiring implementation-time verification against the active baseline:
 
 - Actual prompt-visible skill inventory and context cost.
-- Current Graphify behavior and comparative utility.
+- Current Graphify behavior and comparative utility; frozen PR #30 observations
+  remain historical evidence rather than current-state claims.
 - Current LitKG consumers and replacement parity.
 - Current state/debrief consumers and retrieval value.
 - Exact client-specific skill, hook, MCP, and permission surfaces.

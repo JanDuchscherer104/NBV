@@ -54,11 +54,13 @@ SCAFFOLD_REQUIRED_SNIPPETS = (
         "## Python Package",
     ),
 )
-OMX_RECORD_PATHS = {
-    ".omx/plans/": "plan",
-    ".omx/specs/": "spec",
-}
-OMX_RECORD_STATUSES = {"current", "accepted"}
+OMX_DURABLE_PATHS = (
+    ".omx/context/",
+    ".omx/interviews/",
+    ".omx/specs/",
+    ".omx/plans/",
+)
+OMX_DURABLE_SUFFIXES = (".md", ".json", ".html")
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
@@ -171,27 +173,10 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
         if not tracked_path.startswith(".omx/"):
             continue
 
-        expected_kind = next(
-            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
-            None,
-        )
-        if expected_kind is None or not tracked_path.endswith(".md"):
+        if not tracked_path.startswith(OMX_DURABLE_PATHS):
             errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
-            continue
-
-        path = REPO_ROOT / tracked_path
-        try:
-            frontmatter = parse_frontmatter(path)
-        except ValueError as exc:
-            errors.append(f"{tracked_path}: {exc}")
-            continue
-
-        if frontmatter.get("kind") != expected_kind:
-            errors.append(f"{tracked_path}: `kind` must be `{expected_kind}`")
-        if frontmatter.get("status") not in OMX_RECORD_STATUSES:
-            errors.append(
-                f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}"
-            )
+        elif not tracked_path.endswith(OMX_DURABLE_SUFFIXES):
+            errors.append(f"unsupported tracked OMX artifact: {tracked_path}")
     return errors
 
 
