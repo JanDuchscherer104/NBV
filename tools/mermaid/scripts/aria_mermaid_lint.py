@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -138,12 +137,11 @@ def lint_text(text: str, path: Path) -> list[tuple[str, str]]:
 
 
 def run_mmdc(path: Path, output: Path | None) -> tuple[int, str]:
-    exe = shutil.which("mmdc")
-    if not exe:
-        return 127, "mmdc not found; install @mermaid-js/mermaid-cli for render validation"
+    """Render through the canonical repository-local Mermaid wrapper."""
     if output is None:
         output = path.with_suffix(".lint.svg")
-    cmd = [exe, "-i", str(path), "-o", str(output), "-b", "white", "-t", "default"]
+    wrapper = Path(__file__).with_name("render_mermaid.sh")
+    cmd = [str(wrapper), str(path), str(output)]
     proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90)
     return proc.returncode, proc.stdout
 

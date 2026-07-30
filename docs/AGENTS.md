@@ -56,9 +56,10 @@ Apply this file when working under `docs/`.
 - Validate Mermaid before committing diagram edits.
 - For Mermaid source files, use the `aria-nbv-mermaid` skill and run
   `python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>`.
-- Prefer local rendering with `tools/mermaid/scripts/render_mermaid.sh` when
-  global `mmdc` is available; do not use online renderers for unpublished
-  thesis figures unless explicitly permitted.
+- Prefer local rendering with `tools/mermaid/scripts/render_mermaid.sh`; it
+  resolves a repository-local CLI before explicit environment or `PATH` tools.
+  Do not use online renderers for unpublished thesis figures unless explicitly
+  permitted.
 - Use `{mermaid}` fences in Quarto.
 - Use `<br/>` for Mermaid line breaks and Mermaid-safe node ids.
 

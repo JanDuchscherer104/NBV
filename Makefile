@@ -62,7 +62,7 @@ TYPST_INCLUDES_ARGS ?= --paper --mode includes
 LITERATURE_SEARCH_QUERY ?=
 MIGRATE_CODEX_MEMORY_ARGS ?=
 CODEX_TRANSCRIPT_ARGS ?=
-MMDC ?= mmdc
+MERMAID_RENDER ?= tools/mermaid/scripts/render_mermaid.sh
 MMD_DIR ?= external/mmdc-examples
 MMD_OUT ?= $(MMD_DIR)
 MMD_FORMAT ?= png
@@ -639,15 +639,16 @@ mmdc-render: ## 📊 Render all .mmd files in a folder (MMD_DIR=..., MMD_OUT=...
 		out_dir="$(MMD_OUT)"; \
 		fmt="$(MMD_FORMAT)"; \
 		scale="$(MMD_SCALE)"; \
+		render="$(MERMAID_RENDER)"; \
 		mkdir -p "$$out_dir"; \
 		for f in "$$in_dir"/*.mmd; do \
 			[ -e "$$f" ] || continue; \
 			base="$$(basename "$$f" .mmd)"; \
 			out="$$out_dir/$$base.$$fmt"; \
 			if [[ "$$fmt" == "svg" ]]; then \
-				$(MMDC) -i "$$f" -o "$$out"; \
+				"$$render" "$$f" "$$out"; \
 			else \
-				$(MMDC) -i "$$f" -o "$$out" -s "$$scale"; \
+				"$$render" "$$f" "$$out" --scale "$$scale"; \
 			fi; \
 		done'
 
