@@ -33,7 +33,7 @@ metadata:
   canonical_sources:
     - "aria_nbv/AGENTS.md#core-rules"
     - "aria_nbv/AGENTS.md#core-rules"
-    - "aria_nbv/aria_nbv/data_handling/raw/views.py"
+    - "aria_nbv/aria_nbv/data_handling/ase_efm/views.py"
     - "aria_nbv/aria_nbv/rendering/unproject.py"
     - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
     - ".agents/memory/state/GOTCHAS.md"
@@ -76,7 +76,7 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 1. `AGENTS.md`
 2. `aria_nbv/AGENTS.md`
 3. `aria_nbv/AGENTS.md` and `python-standards` when generic Python guidance is needed
-4. `aria_nbv/aria_nbv/data_handling/raw/views.py` and the focused rendering
+4. `aria_nbv/aria_nbv/data_handling/ase_efm/views.py` and the focused rendering
    module
 5. `.agents/memory/state/GOTCHAS.md`
 6. `aria_nbv/aria_nbv/vin/AGENTS.md` when VIN batch/candidate fields are touched

@@ -37,7 +37,7 @@ metadata:
     - ".agents/skills/rerun-nbv-inspector/references/nbv-inspector-contract.md"
     - ".agents/skills/rerun-nbv-inspector/references/context7-queries.md"
     - ".agents/skills/rerun-nbv-inspector/references/rerun-python-patterns.md"
-    - "aria_nbv/aria_nbv/data_handling/raw/views.py"
+    - "aria_nbv/aria_nbv/data_handling/ase_efm/views.py"
   context7_refs:
     - "/rerun-io/rerun"
     - "/websites/streamlit_io"
