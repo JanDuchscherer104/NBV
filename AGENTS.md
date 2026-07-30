@@ -28,6 +28,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Bugs, regressions, suspicious metrics, or failing docs/data checks: use
   `diagnose-aria`.
 - Backlog or memory changes: use the `agents-db` skill.
+- Task closeout, an execution debrief, or commit-to-record traceability: use
+  `debriefs`.
 - Cleanup, pruning, or simplification: use the `simplification` skill.
 - LRZ AI Systems, Slurm, DSS, Pyxis, or remote compute work: use `lrz-ai-systems`.
 
@@ -91,9 +93,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   implementation or measurement evidence where applicable.
 
 ## Debriefs
-- Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
-- Native debriefs must follow `.agents/memory/README.md` and
-  include `canonical_updates_needed` even when the list is empty.
+- Use `debriefs` for non-trivial task closeout. It distinguishes temporary
+  cross-session handoffs from durable execution evidence and links meaningful
+  commits to the appropriate debrief and/or Agents DB records.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except
   the intentionally vendored `.codex/skills/graphify/**` project skill.

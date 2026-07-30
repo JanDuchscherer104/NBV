@@ -20,6 +20,14 @@ This directory replaces the old flat `.codex/*.md` note bucket.
   when they change durable truth, in the agents DB when they are actionable, and
   in `history/` when they are task debriefs.
 - If a task does not change current truth, say so explicitly in the debrief instead of silently relying on chat history.
+- A temporary `$handoff` is context transfer for a fresh session; it is not a
+  repository debrief and must not be checked in. Use a debrief only after a
+  non-trivial task has durable findings, verification, or an owner handoff.
+- Meaningful commits point to their execution evidence rather than repeating
+  it: add `Debrief: .agents/memory/history/YYYY/MM/<file>.md` and, where an
+  active or resolved maintenance record is affected, `Agents-DB: issue-XXXX,
+  todo-XXXX` to the commit footer. Routine mechanical commits may omit a
+  footer when no durable record exists.
 
 ## Debrief Contract
 

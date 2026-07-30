@@ -84,6 +84,14 @@ is useful.
 
 - Stage only request-owned paths. Commit messages and PRs describe the actual
   responsibility change, retained contract, verification, and exclusions.
+- Commit each completed, verified vertical slice or independently reviewable
+  governance change; do not hold unrelated finished work for a large omnibus
+  commit.
+- Meaningful commits point to their durable evidence with a `Debrief:` footer
+  containing the repository-relative history path and, when applicable, an
+  `Agents-DB:` footer containing the affected record IDs. The footer is a
+  pointer, not a duplicate narrative; use `debriefs` to decide the smallest
+  correct record.
 - A PR is one reviewable concern with an independent rollback boundary; do not
   use its body as an implementation chronology.
 - For meaningful Spatial-AI, ML, MLOps, data-science, or statistics work,
