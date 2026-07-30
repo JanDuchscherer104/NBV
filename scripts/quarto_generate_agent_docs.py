@@ -121,14 +121,6 @@ DOC_SPECS: tuple[DocSpec, ...] = (
         summary="Maintained pitfalls, validation traps, and environment caveats.",
     ),
     DocSpec(
-        source=".agents/references/operator_quick_reference.md",
-        output="references/operator_quick_reference.qmd",
-        title="Operator Quick Reference",
-        section="References",
-        nav_label="Operator Quick Reference",
-        summary="Compact operator aid for environment recovery, repo hygiene, and key commands.",
-    ),
-    DocSpec(
         source=".agents/skills/aria-nbv-context/SKILL.md",
         output="skills/aria_nbv_context_skill.qmd",
         title="aria-nbv-context Skill",

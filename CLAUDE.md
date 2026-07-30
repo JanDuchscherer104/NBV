@@ -23,7 +23,7 @@ into the same scaffold that Codex and Gemini already use.
   `.agents/skills/*/SKILL.md`, `.agents/references/human_owner_intent.md`,
   `.agents/memory/state/`, or the agents DB via `make agents-db`).
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`
-  following `.agents/references/agent_memory_templates.md`.
+  following `.agents/memory/README.md`.
 
 ## Commands
 - Format/lint: `ruff format <file>` and `ruff check <file>`.

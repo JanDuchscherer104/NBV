@@ -47,10 +47,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Externally installed skills are optional capabilities, not ARIA-NBV truth
   owners. Translate any proposed output path through the repository source order
   before creating a new tracked surface.
-- OMX remains optional operator orchestration. Use
-  `.agents/references/omx_quick_reference.md` only when the task explicitly
-  asks for OMX or operator orchestration; do not make OMX required for normal
-  repo work.
+- OMX remains optional operator orchestration; use its upstream help only when
+  a task explicitly asks for operator orchestration. Do not make it required
+  for normal repo work.
 - Optional OMX, MCP, graph, memory, and autoresearch tools produce evidence or
   proposals, not repo-owned truth. Apply durable changes only through the
   owning source, package guidance, docs, or Agents DB surface.

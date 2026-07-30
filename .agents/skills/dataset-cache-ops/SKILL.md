@@ -83,7 +83,7 @@ operating or validating an existing ARIA store.
 1. `aria_nbv/AGENTS.md`
 2. `aria_nbv/aria_nbv/data_handling/AGENTS.md`
 3. `README.md`
-4. `.agents/references/operator_quick_reference.md`
+4. `aria_nbv/aria_nbv/data_handling/AGENTS.md`
 5. `.agents/memory/state/GOTCHAS.md`
 
 ## Rules
