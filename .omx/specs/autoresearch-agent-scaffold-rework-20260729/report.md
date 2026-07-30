@@ -13,6 +13,8 @@ This revision audits every source family requested for the scaffold restart:
   `019fa7a1-57e8-72d1-8002-10a23c1b565e`;
 - PR #30 at audited head `2b02a3bff7ac2fccffd8118b2790ec3f3803b6e5`;
 - the June 9-10 scaffold deep-interview lineage recovered from Git history;
+- the dated May 6-July 12 local review corpus under
+  `.agents/work/agents-scaffold/`;
 - the July 11 decision record, July 14 context and plan, and July 20 context and
   successor plan named by the repository owner;
 - the completed Python/package-guidance autoresearch goal metadata;
@@ -79,6 +81,17 @@ remain authoritative for their own claims.
   all-at-once migration.
 - Require fresh executable verification before claiming completion.
 - Retire an owner only after its facts and consumers have verified destinations.
+- Operational status must be literal: distinguish configured, available,
+  initialized, healthy, and fresh. Never advance a freshness marker after a
+  failed required stage or report a partial result as current.
+- Durable guidance names capabilities and fallbacks, not client-specific MCP
+  transport identifiers, developer paths, or assumed tool availability.
+- Non-blocking automation may report failure without stopping unrelated work;
+  it must not suppress failure and imply success.
+- Approval and write-autonomy defaults are operator choices, not repository
+  invariants, unless the owner explicitly adopts them for every collaborator.
+- Active routing and backlog evidence exclude resolved and historical records
+  unless the task explicitly requests history.
 - Keep accepted plans immutable and supersede them explicitly.
 - Keep Python entity contracts in source docstrings and render them through
   Quartodoc; require useful contract documentation, not narration of trivial
@@ -108,6 +121,9 @@ The target scaffold should:
   exact search at acceptable context and maintenance cost;
 - retain `measured-autoresearch` for research-only, evaluator-design, measured
   implementation, and keep-or-discard iterations;
+- make every measured-autoresearch mission name its target function, safe edit
+  surface, cheap and full evaluator tiers, evidence output, and keep/discard
+  rule; external engines may execute packets but do not own these semantics;
 - keep autoresearch and other external harnesses behind bounded adapter
   contracts: explicit budgets and stop conditions, reproducible evidence, and
   proposals rather than direct mutation of owner surfaces;
@@ -122,6 +138,8 @@ The target scaffold should:
 - make every retained skill predictable: a clear trigger, a bounded process,
   checkable completion criteria, and branch-specific detail disclosed only when
   needed;
+- choose one primary work lane before activation branches multiply, while
+  naming secondary owners explicitly for genuinely cross-surface changes;
 - classify every prompt-visible default, system, external, and repository skill
   as retained, disabled, explicitly invoked, uncontrollable, or unresolved;
   repository-local counts alone are not the runtime surface; and
@@ -275,6 +293,67 @@ Deep Research, LlamaIndex, smolagents, CrewAI, or other harnesses; the old
 `.agents/memory/state/` ownership assignment; or a requirement to build broad
 automation before a bounded task and evaluator justify it. Those are historical
 implementation hypotheses or later-contested ownership choices.
+
+### May 6-July 12 local scaffold review corpus
+
+The ignored local review corpus under `.agents/work/agents-scaffold/` spans four
+different scaffold states and must be read chronologically:
+
+- May 6 reviews evaluate PR #13-era routing and propose substantial LitKG,
+  generated-context, and skill expansion.
+- June 10 autoresearch reports compare then-current external engines.
+- June 19 reviews focus on safety, routing overlap, tool capability, and
+  empirical skill evaluation.
+- July 8-12 reviews inspect external-skill integration and the implemented
+  scaffold immediately before the simplification decision record.
+
+The files are advisory snapshots, not accepted decisions, and several assess
+commits or tool versions that are no longer current. Their specific tool picks,
+skill counts, renames, and deletion catalogs therefore receive no standing
+authority.
+
+Retain these additional cross-report conclusions:
+
+- Keep edits request-traceable and choose one primary lane. A secondary owner
+  is a declared dependency, not a reason to activate every broad router.
+- Treat tool health as layered state. Configured does not mean installed;
+  installed does not mean initialized for the active worktree; ready does not
+  mean fresh; and a CLI-readiness probe is not an end-to-end health check.
+- Make freshness transactional and scoped to the stage or source family that
+  succeeded. Failure injection must prove that a failed required stage leaves
+  the previous successful marker unchanged.
+- Make hook and adapter failures concise and visible. Avoid `|| true`, hidden
+  mutation, and background work whose failure cannot be distinguished from a
+  healthy no-op.
+- Refer to optional tools by capability with an exact-source fallback. Keep
+  transport names, launch commands, version mappings, and client differences in
+  runtime adapters rather than durable skill contracts.
+- Validate literal owner, `must_read`, test, and verification paths when a
+  lightweight deterministic check can do so. Do not replace this with semantic
+  drift heuristics or an exhaustive private schema.
+- Keep permissive approval modes and write-enabled MCP posture out of tracked
+  defaults. Apply least privilege and expose write authority explicitly.
+- Do not route active work through resolved backlog, raw transcripts, archived
+  guidance, or historical review documents.
+- Add nested `AGENTS.md` files only after repeated ambiguity or a materially
+  distinct verification contract demonstrates the need.
+- Preserve one canonical client-neutral capability description where multiple
+  clients are supported, but implement a manifest or doctor command only if a
+  small design prevents real configuration drift. The principle does not
+  justify another broad policy engine.
+
+Retain from the autoresearch reports only the loop contract: a mission-owned
+target function, bounded edit surface, cheap diagnostics before expensive
+experiments, explicit metrics and artifacts, reproducibility controls, and a
+keep/discard decision. Do not retain their dated recommendation of a particular
+external engine or build an executor that duplicates OMX orchestration.
+
+Reject or defer the expansion-heavy proposals: mandatory LitKG context packs,
+automatic transcript ingestion, a generated agent brief, new pandas/Plotly
+skills without demonstrated demand, a fixed Matt-skill allowlist, raw upstream
+setup conventions, code-index retention periods, and generated client adapters.
+Each may be reconsidered only as a small capability experiment against the
+current baseline.
 
 ### July 11 simplification decision record
 
