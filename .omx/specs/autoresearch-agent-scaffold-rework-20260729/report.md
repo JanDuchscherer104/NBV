@@ -9,8 +9,7 @@ status: current
 
 This revision audits every source family requested for the scaffold restart:
 
-- all user-authored messages in Codex parent task
-  `019fa7a1-57e8-72d1-8002-10a23c1b565e`;
+- all user-authored messages in the reviewed private Codex parent task;
 - PR #30 at audited head `2b02a3bff7ac2fccffd8118b2790ec3f3803b6e5`;
 - the June 9-10 scaffold deep-interview lineage recovered from Git history;
 - the dated May 6-July 12 local review corpus under

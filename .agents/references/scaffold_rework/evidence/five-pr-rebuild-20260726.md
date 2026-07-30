@@ -9,7 +9,7 @@
   `.omx/specs/autoresearch-agent-scaffold-issue-index-20260726/report.md`
 - Report SHA-256 at planning time:
   `8cf4ded5b1da43369674ba0a6ed53bbb4dcb911ea17c2da020b61e1e11032936`
-- Report validator: Architect `019f9e3a-169a-7673-9df2-c4bd0277bd35`, `APPROVED`
+- Report validator: independent Architect review, `APPROVED`
 - Prometheus Momus re-review: `APPROVED`
 - Post-plan Metis gap check: `CLEAR`
 - Execution handoff: sequential `$ultragoal`; no parallel write team
