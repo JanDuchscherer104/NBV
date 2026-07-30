@@ -257,8 +257,6 @@ graphify-out/
 .agents/generated/
 .agents/tmp/*
 .agents/work/
-.claude/worktrees/
-
 # Large download manifests
 !.data/
 .data/*

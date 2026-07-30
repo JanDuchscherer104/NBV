@@ -3,9 +3,7 @@
 # not produce a new debrief under .agents/memory/history/YYYY/MM/. Never
 # blocks; debrief decisions stay with the human/agent.
 #
-# Wired into:
-#   .claude/settings.json    (Stop hook)
-#   .codex/hooks.example.json (operator-local Stop hook template)
+# Wired into `.codex/hooks.example.json` as an operator-local Stop hook template.
 set -euo pipefail
 
 THRESHOLD="${DEBRIEF_NUDGE_THRESHOLD:-6}"

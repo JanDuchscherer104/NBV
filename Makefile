@@ -5,7 +5,7 @@
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief claude-skills install-git-hooks install-hooks
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -252,9 +252,6 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
 	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
 
-claude-skills: ## 🤖 Symlink .agents/skills/* into .claude/skills/ for Claude Code activation
-	@scripts/sync_claude_skills.sh
-
 install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
@@ -269,14 +266,13 @@ install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
 
-install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Claude, Codex, Gemini, and git
+install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Codex, Gemini, and git
 	@if [ ! -f .codex/hooks.json ]; then \
 		cp .codex/hooks.example.json .codex/hooks.json && \
 			echo "$(GREEN)copied .codex/hooks.example.json -> .codex/hooks.json$(NC)"; \
 	else \
 		echo "$(YELLOW).codex/hooks.json already present; leaving as-is$(NC)"; \
 	fi
-	@echo "$(GREEN)Claude hooks: .claude/settings.json (tracked, auto-loaded)$(NC)"
 	@echo "$(GREEN)Gemini hooks: .gemini/settings.json (tracked, auto-loaded)$(NC)"
 
 agents-db: _check_python ## 🧠 Inspect or maintain .agents/issues,todos,refactors,resolved (set AGENTS_ARGS='validate')
