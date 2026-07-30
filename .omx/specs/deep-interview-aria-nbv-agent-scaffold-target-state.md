@@ -260,7 +260,8 @@ The current files have these target dispositions:
 - `skill_style_guide.md`: move the minimal skill authoring contract to
   `.agents/skills/README.md` and its validator. Generic authoring advice should
   come from the upstream skill-authoring capability rather than an ARIA copy.
-- `thesis_code_links.md`: move the durable link convention into the contract
+- Thesis code-link convention: keep the durable contract in
+  `docs/typst/shared/style.typ`
   documentation of `docs/typst/shared/style.typ`, with a short route in
   `docs/AGENTS.md`. Compile-time behavior remains owned and tested by the Typst
   implementation.
@@ -296,9 +297,7 @@ Rich linkage is a repository requirement, not a Graphify-specific feature:
 - The contract documentation and implementation in
   `docs/typst/shared/style.typ` own the final versus draft code-link convention:
   final-worthy links use `gh`, drafting links use `gh-wip` or `gh-symbol`, and
-  submission builds disable draft-only navigation. During migration,
-  `.agents/references/thesis_code_links.md` is an input to that owner, not a
-  permanent parallel contract.
+  submission builds disable draft-only navigation.
 - Public code docstrings link to the relevant thesis section, glossary key,
   equation key, evidence contract, or paper when that relationship is necessary
   to understand semantics. They do not copy thesis prose or mathematical

@@ -38,7 +38,7 @@ Use this reference when a task needs current project truth or sources disagree.
 - Optional tool and adapter boundaries:
   `.agents/references/alignment_tools_contract.md`. KG/backend operational
   details remain with `.agents/external/litkg-rs/docs/` and `.configs/litkg.toml`.
-- Thesis-to-code links: `.agents/references/thesis_code_links.md` defines the
+- Thesis-to-code links: `docs/typst/shared/style.typ` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse
   thesis/code relationships, but they do not override the thesis, code,

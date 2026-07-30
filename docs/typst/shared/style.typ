@@ -79,14 +79,20 @@
   )
 }
 
-/// Link to a file or line in the GitHub repo. Use for final-worthy implementation anchors.
+/// Link to a final-worthy, pinned implementation anchor.
+///
+/// This is navigation, not scientific evidence or a substitute for a citation.
+/// Final builds should set `aria-code-ref` to a release tag or commit SHA.
 #let gh(path, body: none, ref: none, line: none, end: none) = {
   link(_github-file-url(path, ref: ref, line: line, end: end))[
     #_gh-link-label(_gh-label(path, body: body))
   ]
 }
 
-/// Draft-only GitHub file/line link. Compiles to plain text with `--input aria-wip-links=false`.
+/// Draft-only GitHub file/line link.
+///
+/// Compiles to plain text with `--input aria-wip-links=false`; do not use it
+/// as an archival thesis reference.
 #let gh-wip(path, body: none, ref: "main", line: none, end: none) = {
   let label = _gh-label(path, body: body)
   if _aria-wip-links-enabled() {
@@ -98,7 +104,10 @@
   }
 }
 
-/// Draft-only GitHub symbol-search link. Compiles to plain text with `--input aria-wip-links=false`.
+/// Draft-only GitHub symbol-search link.
+///
+/// It compiles to plain text with `--input aria-wip-links=false`. GitHub
+/// search is dynamic, so this macro is not an archival symbol permalink.
 #let gh-symbol(symbol, body: none, language: "python") = {
   let label = if body == none { code-inline(symbol) } else { body }
   if _aria-wip-links-enabled() {
