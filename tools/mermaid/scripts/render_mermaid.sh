@@ -18,6 +18,10 @@ scale=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --scale)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "--scale requires a value" >&2
+        exit 2
+      fi
       scale="$2"
       shift 2
       ;;
@@ -31,10 +35,10 @@ done
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 local_mmdc="$repo_root/tools/mermaid/node_modules/.bin/mmdc"
 
-if [[ -n "${MERMAID_CLI:-}" ]]; then
-  mmdc="$MERMAID_CLI"
-elif [[ -x "$local_mmdc" ]]; then
+if [[ -x "$local_mmdc" ]]; then
   mmdc="$local_mmdc"
+elif [[ -n "${MERMAID_CLI:-}" ]]; then
+  mmdc="$MERMAID_CLI"
 elif mmdc="$(command -v mmdc 2>/dev/null)"; then
   :
 else
