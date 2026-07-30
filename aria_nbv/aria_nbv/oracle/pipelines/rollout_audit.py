@@ -38,7 +38,7 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator, model_validator
 
 from ...configs import PathConfig
-from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from ...data_handling.vin_store.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.evidence import (
     _OracleEvidenceError,
     build_root_eval_pointcloud,

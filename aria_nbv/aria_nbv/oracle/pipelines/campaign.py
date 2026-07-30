@@ -22,8 +22,8 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 
 from ...configs import PathConfig
-from ...data_handling.offline.dataset import VinOfflineDatasetConfig, VinOfflineSample
-from ...data_handling.offline.store import VinOfflineStoreConfig
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig, VinOfflineSample
+from ...data_handling.vin_store.store import VinOfflineStoreConfig
 from ...pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
 from ...rollouts.collection import RolloutCollection, RolloutShardLogicalKey
 from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
