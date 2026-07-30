@@ -185,6 +185,85 @@ exact-source verification for consequential inferred links. Do not track outputs
 install hooks, pin an older version, or add adapters until the evaluator shows a
 specific benefit and acceptable freshness, privacy, runtime, and maintenance cost.
 
+### 10. Stable domain language should precede scaffold automation
+
+The local `domain-modeling` reference recommends challenging overloaded terms,
+testing boundaries with concrete scenarios, checking stated behavior against
+code, capturing resolved language promptly, and recording only consequential
+trade-offs. ARIA should adopt this discipline without copying the generic
+`CONTEXT.md` and `docs/adr/` layout. Terms such as "context", "memory", "truth",
+"owner", and "artifact" currently carry multiple meanings and can blur the
+boundary between authority and evidence.
+
+**ARIA implication:** define a compact authority vocabulary in the existing
+source-order owner; challenge conflicting uses during design; test boundaries
+through concrete scenarios; and compare declared ownership with hooks, imports,
+consumers, and runtime behavior. Existing accepted OMX decision records remain
+the place for the few durable trade-offs worth preserving.
+
+## Adopted Principles, Goals, Invariants, And Non-Goals
+
+The next scaffold attempt should adopt the following constraints. They combine
+the external evidence above with the domain-modeling discipline while preserving
+ARIA's existing source owners.
+
+### Principles
+
+- Use one precise term and one definition owner for each scaffold concept.
+- Surface conflicting terminology before designing around it.
+- Test ownership boundaries with concrete failure scenarios and implementation
+  evidence, not only prose or lexical routing.
+- Capture resolved language in its existing owner; create new owner surfaces
+  only when real content requires them.
+- Record a durable decision only when it is expensive to reverse, surprising
+  without rationale, and the result of a genuine trade-off.
+
+### Goals
+
+- Establish a compact ubiquitous language for scaffold governance. At minimum,
+  distinguish owner, authority, evidence, derived view, router, runtime state,
+  human intent, decision record, plan, capability, and supersession.
+- Route through concepts and responsibilities rather than generated catalogs.
+- Expose contradictions between intended ownership and actual repository
+  behavior before migration or deletion.
+- Evaluate the scaffold using scenarios such as stale graph versus current
+  source, global versus nearest guidance, skill versus package invariant,
+  accepted plan versus newer owner intent, and optional tool unavailable.
+- Keep scientific language in the thesis glossary, code, and papers while the
+  scaffold vocabulary covers only guidance, evidence, lifecycle, and authority.
+
+### Invariants
+
+- Exact owner sources settle claims; plans, graphs, retrieval, transcripts,
+  debriefs, and generated reports provide evidence only.
+- A router points to an owner and may explain how to reach it, but does not copy
+  the owner's durable facts.
+- A derived view remains reproducible, provenance-bearing, and non-authoritative.
+- A decision record preserves rationale; it is not a task queue, current-state
+  mirror, implementation specification, or proof of implementation.
+- Vocabulary definitions describe what a concept is and how it differs from
+  adjacent concepts; implementation mechanics remain with code, tests, or the
+  owning operational workflow.
+- Capability retirement requires a concrete owner, consumer, replacement, and
+  scenario-based verification; deleting a named skill or file is not evidence
+  that its capability is preserved.
+
+### Non-Goals
+
+- Do not add a root `CONTEXT.md`, `CONTEXT-MAP.md`, or parallel scaffold
+  glossary while `.agents/references/source_order.md` can own the compact
+  authority vocabulary.
+- Do not create `docs/adr/` or an ADR for every file move, skill edit, routing
+  adjustment, or reversible implementation choice. Existing accepted OMX
+  decision records remain the durable trade-off surface.
+- Do not build a generated ontology, transcript-derived vocabulary, or
+  natural-language conflict resolver; retrieval tools cannot define terms.
+- Do not place general programming terminology or scientific/domain facts in
+  the scaffold vocabulary merely because the scaffold references them.
+- Do not turn terminology discipline into a mandatory semantic validator.
+- Do not duplicate a definition across root guidance, skills, package guides,
+  generated reports, and decision records for convenience.
+
 ## Where External Sources Agree
 
 Across OpenAI, Anthropic, Agent Skills, GitHub, Google, AGENTS.md, and SWE-agent,
