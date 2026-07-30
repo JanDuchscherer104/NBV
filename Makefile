@@ -155,6 +155,7 @@ QH_CI_TESTS := \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
+QH_CI_PYTHON ?= uv run --extra dev python
 PYTEST_ARGS ?= -n auto
 
 # Read-only operator inspection defaults.
@@ -919,9 +920,9 @@ thesis-watch: ## Watch and recompile the Typst thesis
 docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
-	@cd $(PKG_DIR) && PYTHONPATH=. $(PYTHON_INTERPRETER) -m ruff format --check $(QH_CI_RUFF_PATHS)
-	@cd $(PKG_DIR) && PYTHONPATH=. $(PYTHON_INTERPRETER) -m ruff check $(QH_CI_RUFF_PATHS)
-	@cd $(PKG_DIR) && PYTHONPATH=. $(PYTHON_INTERPRETER) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
+	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
+	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
+	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
 
 package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
