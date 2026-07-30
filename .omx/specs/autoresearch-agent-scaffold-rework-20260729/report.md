@@ -12,6 +12,7 @@ This revision audits every source family requested for the scaffold restart:
 - all user-authored messages in Codex parent task
   `019fa7a1-57e8-72d1-8002-10a23c1b565e`;
 - PR #30 at audited head `2b02a3bff7ac2fccffd8118b2790ec3f3803b6e5`;
+- the June 9-10 scaffold deep-interview lineage recovered from Git history;
 - the July 11 decision record, July 14 context and plan, and July 20 context and
   successor plan named by the repository owner;
 - the completed Python/package-guidance autoresearch goal metadata;
@@ -97,6 +98,8 @@ remain authoritative for their own claims.
 The target scaffold should:
 
 - route an agent quickly to the exact owning source;
+- provide a compact operator-onboarding route from global Codex guidance back
+  to repository-owned policy without duplicating ARIA rules globally;
 - expose detail progressively instead of loading a project handbook;
 - preserve independently useful ARIA workflows without mirroring domain truth;
 - measure the complete prompt-visible skill surface, not a convenient subset;
@@ -105,6 +108,9 @@ The target scaffold should:
   exact search at acceptable context and maintenance cost;
 - retain `measured-autoresearch` for research-only, evaluator-design, measured
   implementation, and keep-or-discard iterations;
+- keep autoresearch and other external harnesses behind bounded adapter
+  contracts: explicit budgets and stop conditions, reproducible evidence, and
+  proposals rather than direct mutation of owner surfaces;
 - retain Agents DB as the actionable-work owner for now;
 - determine the debrief trigger from measured retrieval value and maintenance
   cost; keep debriefs historical rather than a current-state mirror;
@@ -236,6 +242,39 @@ Where runtime telemetry is unavailable, record an evidence gap rather than a
 file-based estimate presented as runtime truth.
 
 ## Historical Evidence Ledger
+
+### June 9-10 scaffold deep interview and goal persistence
+
+Recovered Git-history sources at commit `d24bdd18f111369762fc6f9a9a14ed241e26fe80`:
+
+- the session-scoped `deep-interview-state.json` lifecycle record;
+- `.omx/context/agent-scaffold-cleanup-20260609T205222Z.md`;
+- `.omx/plans/agent-scaffold-cleanup-prd-20260609.md`; and
+- `.omx/plans/prometheus-strict/agent-scaffold-goals-20260610.md`.
+
+The state JSON is lifecycle metadata, not the interview transcript. The
+substantive durable artifacts are the context, PRD, and goals plan. They were
+first tracked by `56c2bc21`, restored by `d24bdd18`, and removed from the active
+tree by `40febb61` as indexed OMX runtime artifacts.
+
+Retain: repository-owned ARIA policy with pointer-only global onboarding;
+strict ownership and replaceable external tools; deterministic checks rather
+than fuzzy duplicate-policy gates; contract-level verification routes across
+code, docs, literature, CLI, Streamlit, and visual evidence; and an
+autoresearch adapter that has explicit budgets, seeds where applicable,
+dry-run/stop behavior, and evidence/proposal outputs without directly mutating
+policy, memory, roadmap, or active backlog.
+
+The narrow June 9 cleanup PRD is not the complete interview result. In the same
+task, the owner explicitly said that the first implementation omitted requested
+operator workflows and then requested persistence of all scaffold goals. The
+June 10 goals plan therefore refines the PRD for intent coverage.
+
+Do not inherit automatically: the contemporary shortlist of LangGraph, Open
+Deep Research, LlamaIndex, smolagents, CrewAI, or other harnesses; the old
+`.agents/memory/state/` ownership assignment; or a requirement to build broad
+automation before a bounded task and evaluator justify it. Those are historical
+implementation hypotheses or later-contested ownership choices.
 
 ### July 11 simplification decision record
 
