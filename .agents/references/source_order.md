@@ -21,6 +21,10 @@ Use this reference when a task needs current project truth or sources disagree.
   for historical evidence, not for current thesis priority.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
+- Accepted scaffold-rework target state:
+  `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` owns the
+  scoped scaffold requirements and planning bounds. It does not replace the
+  exact code, test, configuration, thesis, or human-preference owners above.
 - Generated routing artifacts: `docs/_generated/context/source_index.md`,
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.
@@ -64,5 +68,7 @@ implemented evidence. Do not promote planned work to implemented results.
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
+- Accepted scoped target state: the relevant `.omx/specs/` artifact named in
+  the role split above; later plans implement it but do not redefine it.
 - Optional tools provide evidence or proposals; their owning source remains
   authoritative.

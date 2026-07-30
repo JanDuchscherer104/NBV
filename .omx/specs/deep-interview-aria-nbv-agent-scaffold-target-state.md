@@ -191,7 +191,7 @@ The principal repository owners are:
   scientific claims and locators.
 - Root and nearest nested `AGENTS.md` files own repository-wide and local
   invariants, hazards, and verification routes. `.agents/references/source_order.md`
-  resolves current conflicts while this proposed target state is being reviewed.
+  resolves current conflicts alongside this accepted target state.
 - `.agents/references/human_owner_intent.md` owns reviewed general human
   preferences. After acceptance, this specification owns only the requirements
   scoped to the scaffold rework.

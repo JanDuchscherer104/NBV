@@ -48,6 +48,9 @@ or repeatable workflows.
 - Skills own repeatable workflows, activation, handoffs, and verification. A
   skill should be a compact front door whose detail is loaded on demand.
 - This file owns reviewed human scaffold preferences.
+- The accepted scaffold-rework requirements live in
+  `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md`; this
+  file retains only general preferences that apply beyond that scoped rework.
 - Agents DB TOMLs own actionable issues, TODOs, and refactors.
 - Debriefs, conversations, and OMX artifacts are evidence and history, not
   automatic current truth. Promotion into an owner requires human review.

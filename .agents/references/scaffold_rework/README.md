@@ -1,15 +1,14 @@
 # Scaffold Rework Evidence
 
-This file is an evidence index, not an authority. The four proposed planning
-artifacts have distinct roles:
+This file is an evidence index, not an authority. The planning artifacts have
+distinct roles:
 
 - `.omx/context/aria-nbv-agent-scaffold-target-state-20260730T100831Z.md` is the
   bounded evidence and task context.
 - `.omx/interviews/aria-nbv-agent-scaffold-target-state-20260730T100831Z.md`
   records resolved and open decisions.
-- `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` is the only
-  proposed target-state owner. It remains non-authoritative until explicit human
-  acceptance.
+- `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` is the
+  accepted target-state owner for this scoped rework.
 - This README only locates those artifacts and their supporting evidence.
 
 Use the autoresearch reports for evidence and disposition rationale:
@@ -34,9 +33,7 @@ The reproducible PR #30 evidence is frozen at audited commit `2b02a3bf`. Its
 is volatile and must not be copied into the target-state requirements.
 
 These files are historical evidence, not current implementation truth or an
-accepted execution plan. Until the proposed specification is accepted, current
-authority remains with exact source owners, `human_owner_intent.md`, and
-`source_order.md`. After acceptance, the specification owns only the scoped
+accepted execution plan. The accepted specification owns only the scoped
 scaffold-rework target state; general preferences and domain truth remain with
 their existing owners.
 
