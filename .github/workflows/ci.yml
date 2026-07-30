@@ -2,30 +2,6 @@ name: Root Verification
 
 on:
   pull_request:
-    paths:
-      - ".agents/**"
-      - ".codex/skills/graphify/**"
-      - ".github/workflows/**"
-      - ".pre-commit-config.yaml"
-      - ".configs/**"
-      - ".graphifyignore"
-      - "AGENTS.md"
-      - "Makefile"
-      - "README.md"
-      - "SETUP.md"
-      - "aria_nbv/**"
-      - "docs/**"
-      - "scripts/agents_db.py"
-      - "scripts/check_graphify_freshness.py"
-      - "scripts/check_graphify_integration.py"
-      - "scripts/git_hooks/**"
-      - "scripts/graphify_refresh.py"
-      - "scripts/templates/lrz/**"
-      - "scripts/tests/test_graphify_freshness.py"
-      - "scripts/tests/test_graphify_integration.py"
-      - "scripts/tests/test_post_commit_graph_dispatch.sh"
-      - "scripts/validate_agent_memory.py"
-      - "scripts/validate_qmd_frontmatter.py"
   push:
     branches:
       - main
@@ -70,33 +46,76 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Initialize EFM3D submodule
-        run: git submodule update --init external/efm3d
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install validation dependencies
+      - name: Select affected CI families
+        id: impact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          python -m pip install --upgrade pip PyYAML uv
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git diff --no-renames --name-only -z "$PR_BASE_SHA" "$PR_HEAD_SHA" \
+              | python scripts/ci_impact.py --github-output "$GITHUB_OUTPUT"
+          else
+            python scripts/ci_impact.py --full --github-output "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify CI impact routing
+        run: make ci-impact-self-test PYTHON_INTERPRETER=python
+
+      - name: Initialize EFM3D submodule
+        if: steps.impact.outputs.package == 'true'
+        run: git submodule update --init external/efm3d
+
+      - name: Install shared validation dependencies
+        if: >-
+          steps.impact.outputs.scaffold == 'true' ||
+          steps.impact.outputs.docs == 'true' ||
+          steps.impact.outputs.graphify == 'true'
+        run: python -m pip install --upgrade pip PyYAML
+
+      - name: Install package validation dependencies
+        if: steps.impact.outputs.package == 'true'
+        run: python -m pip install --upgrade pip uv
+
+      - name: Install Graphify
+        if: steps.impact.outputs.graphify == 'true'
+        run: |
           GRAPHIFY_VERSION=$(tr -d '[:space:]' < .codex/skills/graphify/.graphify_version)
           python -m pip install "graphifyy==$GRAPHIFY_VERSION"
           INSTALLED_GRAPHIFY_VERSION=$(graphify --version | sed -E 's/.*([0-9]+[.][0-9]+[.][0-9]+).*/\1/')
           test "$INSTALLED_GRAPHIFY_VERSION" = "$GRAPHIFY_VERSION"
 
       - name: Set up Quarto
+        if: steps.impact.outputs.docs == 'true'
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Set up Typst
+        if: steps.impact.outputs.docs == 'true'
         uses: typst-community/setup-typst@v5.1.0
 
-      - name: Run root CI contract, including focused Q_H coverage
+      - name: Validate agent scaffold and memory
+        if: steps.impact.outputs.scaffold == 'true'
+        run: make agents-db-validate check-agent-memory
+
+      - name: Validate package contracts
+        if: steps.impact.outputs.package == 'true'
+        run: make package-smoke PYTEST_ARGS=
+
+      - name: Validate documentation
+        if: steps.impact.outputs.docs == 'true'
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
-        run: make ci PYTEST_ARGS=
+        run: make qmd-frontmatter-check api-docs-self-test docs-render-core
 
-      - name: Run opt-in Graphify integration contract
-        run: make graphify-ci
+      - name: Validate Graphify contracts
+        if: steps.impact.outputs.graphify == 'true'
+        run: make graphify-skill-self-test graphify-ci
