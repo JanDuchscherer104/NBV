@@ -1,6 +1,8 @@
-# arXiv Source Trees
+# Literature Sources
 
-This directory stores extracted arXiv LaTeX source bundles for papers that directly shape the benchmark design in this repository.
+This directory records literature and engineering sources that shape the
+project. Extracted arXiv source trees are one optional local asset, not the
+identity model for every source.
 
 ## Included papers
 
@@ -32,10 +34,20 @@ The checked-in manifest for this directory lives at:
 
 - `sources.jsonl`
 
-Each JSONL row describes one paper and the local output names needed to fetch its arXiv e-print source tree and, optionally, its PDF. The current schema is:
+Each JSONL row describes one selected source. Fields compose by capability:
 
-- required: `arxiv_id`, `tex_dir`
-- optional: `title`, `short_title`, `source_url`, `pdf_url`, `pdf_file`
+- `title` names the source; `short_title` provides a compact display name.
+- `url` records a human-facing landing page for any source kind.
+- `arxiv_id` plus `tex_dir` requests a local arXiv TeX source tree.
+- `pdf_url` plus `pdf_file` requests an explicit PDF asset when the source's
+  acquisition and storage rights permit it.
+- `relevance_rank`, `relevance_category`, and `adoptable_ideas` explain why the
+  source belongs in this project.
+
+Rows with only metadata and a landing-page `url` are valid. Empty legacy
+strings are treated as absent capability fields. The repository-local
+`download_arxiv_tex_src.py` command acts only on rows with an `arxiv_id` and
+`tex_dir`; it deliberately skips metadata-only rows.
 
 Run the downloader from the repo root:
 
