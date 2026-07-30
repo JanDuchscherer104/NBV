@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -241,6 +241,9 @@ graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, f
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
 graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
+
+ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
+	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh

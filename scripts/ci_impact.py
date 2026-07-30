@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Select the root CI families affected by a NUL-delimited path list."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import sys
+
+FAMILIES = ("scaffold", "package", "docs", "graphify")
+
+FULL_PATHS = {
+    ".github/workflows/ci.yml",
+    ".pre-commit-config.yaml",
+    "Makefile",
+    "aria_nbv/pyproject.toml",
+    "aria_nbv/uv.lock",
+    "scripts/ci_impact.py",
+    "scripts/tests/test_ci_impact.py",
+}
+
+SCAFFOLD_PATHS = {
+    "AGENTS.md",
+    "scripts/agents_db.py",
+    "scripts/validate_agent_memory.py",
+}
+
+DOCS_PATHS = {
+    "README.md",
+    "SETUP.md",
+    "scripts/tests/test_quarto_generate_api_docs.sh",
+    "scripts/validate_qmd_frontmatter.py",
+}
+
+GRAPHIFY_PATHS = {
+    ".graphifyignore",
+    "scripts/check_graphify_freshness.py",
+    "scripts/check_graphify_integration.py",
+    "scripts/graphify_refresh.py",
+    "scripts/tests/test_graphify_freshness.py",
+    "scripts/tests/test_graphify_integration.py",
+    "scripts/tests/test_post_commit_graph_dispatch.sh",
+}
+
+
+def select_families(paths: list[str]) -> set[str]:
+    """Return affected CI families, failing closed for any unknown path."""
+    selected: set[str] = set()
+    unknown = False
+
+    for path in paths:
+        if path in FULL_PATHS:
+            return set(FAMILIES)
+
+        matched = False
+        if path.startswith(".agents/") or path in SCAFFOLD_PATHS:
+            selected.add("scaffold")
+            matched = True
+        if path.startswith("aria_nbv/") or path.startswith(".configs/"):
+            selected.add("package")
+            matched = True
+        if path.startswith("docs/") or path in DOCS_PATHS:
+            selected.add("docs")
+            matched = True
+        if (
+            path.startswith((".agents/", "aria_nbv/", "docs/"))
+            or path.startswith(".codex/skills/graphify/")
+            or path.startswith("scripts/git_hooks/")
+            or path in GRAPHIFY_PATHS
+        ):
+            selected.add("graphify")
+            matched = True
+
+        unknown = unknown or not matched
+
+    return set(FAMILIES) if unknown else selected
+
+
+def parse_nul_paths(raw: bytes) -> list[str]:
+    """Decode a non-empty, NUL-terminated path stream from ``git diff -z``."""
+    if not raw or not raw.endswith(b"\0"):
+        raise ValueError("expected a non-empty NUL-terminated path list")
+    paths = [item.decode("utf-8") for item in raw[:-1].split(b"\0")]
+    if any(not path for path in paths):
+        raise ValueError("path list contains an empty entry")
+    return paths
+
+
+def _write_outputs(selected: set[str], output_path: Path) -> None:
+    with output_path.open("a", encoding="utf-8") as output:
+        for family in FAMILIES:
+            output.write(f"{family}={str(family in selected).lower()}\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--full", action="store_true", help="select every family")
+    parser.add_argument(
+        "--github-output",
+        type=Path,
+        default=os.environ.get("GITHUB_OUTPUT"),
+        help="append GitHub Actions step outputs to this file",
+    )
+    args = parser.parse_args()
+
+    try:
+        selected = (
+            set(FAMILIES)
+            if args.full
+            else select_families(parse_nul_paths(sys.stdin.buffer.read()))
+        )
+    except (UnicodeDecodeError, ValueError) as error:
+        parser.error(str(error))
+
+    if args.github_output is not None:
+        _write_outputs(selected, args.github_output)
+    print("selected CI families: " + ", ".join(sorted(selected)))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
