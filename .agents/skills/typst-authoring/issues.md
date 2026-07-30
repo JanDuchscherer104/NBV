@@ -147,8 +147,8 @@ Then compile and inspect the affected page.
 ## 7. Mermaid-To-Typst Figure Rules
 
 - Keep `.mmd` as the version-controlled source.
-- Render locally with Mermaid CLI, the ARIA-NBV Mermaid workflow, or
-  `scripts/render_mermaid.sh`.
+- Use the ARIA-NBV Mermaid workflow and its canonical local renderer at
+  `tools/mermaid/scripts/render_mermaid.sh`.
 - Include PNG/SVG/PDF with explicit Typst width.
 - Inspect the final Typst page, not only the standalone diagram.
 - Captions should state the scientific point, not just list components.

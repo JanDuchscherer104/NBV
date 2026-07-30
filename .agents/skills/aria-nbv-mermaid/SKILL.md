@@ -1,20 +1,20 @@
 ---
 name: aria-nbv-mermaid
-description: Use for creating, editing, validating, or rendering ARIA-NBV Mermaid `.mmd` thesis diagrams and diagram templates.
+description: Use for ARIA-NBV Mermaid source, local lint/render, and thesis-diagram style work.
 metadata:
   mode: implementation
   not_when:
     - "the task is only Typst layout/prose without Mermaid sources"
-    - "a concrete Mermaid parser traceback owns the task"
+    - "a concrete local lint or Mermaid CLI failure needs diagnosis"
     - "the requested visual is better as a raster image or non-Mermaid asset"
   handoff_to:
-    - "typst-authoring for Typst inclusion, captions, and final page QA"
+    - "typst-authoring for shared notation changes, Typst inclusion, captions, and final-page QA"
     - "docs-curator for Quarto pages containing Mermaid fences"
-    - "diagnose-aria for concrete Mermaid CLI/render failures"
+    - "diagnose-aria for reproduced local lint or Mermaid CLI failures"
   evidence_required:
-    - "relevant docs/typst/shared symbols or equations before writing math labels"
-    - "tools/mermaid symbol map and style guide for thesis figures"
-    - "local Mermaid lint before committing .mmd edits"
+    - "the source `.mmd` and its destination surface"
+    - "the local style guide and symbol map before math-heavy or thesis-figure edits"
+    - "local lint output; render output or an explicit `mmdc`-unavailable result"
   applies_to:
     - "**/*.mmd"
     - "tools/mermaid/**"
@@ -29,83 +29,82 @@ metadata:
   must_read:
     - "AGENTS.md"
     - "docs/AGENTS.md"
-    - "tools/mermaid/references/aria_mermaid_style.md"
-    - "tools/mermaid/references/aria_symbol_map.yaml"
   canonical_sources:
     - "docs/AGENTS.md"
     - "tools/mermaid/references/aria_mermaid_style.md"
     - "tools/mermaid/references/aria_symbol_map.yaml"
     - "tools/mermaid/scripts/aria_mermaid_lint.py"
+    - "tools/mermaid/scripts/render_mermaid.sh"
     - "docs/typst/shared"
-  context7_refs:
-    - "/mermaid-js/mermaid"
-    - "/websites/typst_app"
-  literature_refs:
-    - "docs/references.bib"
-    - "docs/contents/literature/index.qmd"
-  tool_refs:
-    - "mcp__code_index.search_code_advanced"
   verification:
     - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>"
-    - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when global mmdc is available"
+    - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when `mmdc` is available"
 ---
 
 # ARIA-NBV Mermaid Figure Skill
 
-Create and maintain Mermaid diagrams for ARIA-NBV thesis and docs surfaces.
-The goal is stable, versioned diagrams whose visual grammar and math notation
-match `docs/typst/shared`.
+This skill owns the local Mermaid seam: versioned `.mmd` source through the
+vendored `tools/mermaid` lint and render commands. It routes notation, final
+document integration, and diagnosed tool failures to their existing owners.
 
 ## Use When
 
-- Creating or editing `.mmd` files.
-- Translating ARIA-NBV architecture, VIN/NBV/RRI/oracle/entity pipelines,
-  rollout protocols, storage layouts, or app sequences into Mermaid.
-- Validating or exporting thesis diagrams before Typst/Quarto inclusion.
-- Updating Mermaid templates, style rules, examples, or the symbol map.
+- Creating, editing, reviewing, linting, or rendering a repository `.mmd`.
+- Updating `tools/mermaid` templates, examples, style guidance, the symbol map,
+  or the local linter/render wrapper.
+- Turning a local architecture, protocol, storage, or sequence into a Mermaid
+  diagram.
 
-## Rules
+## Read First
 
-1. Read relevant Typst symbols/equations before writing math labels.
-2. Use `tools/mermaid/references/aria_symbol_map.yaml` as the curated
-   Mermaid/KaTeX projection of shared Typst notation.
-3. Start from `tools/mermaid/templates/flowchart_scientific.mmd` or
-   `tools/mermaid/templates/sequence_scientific.mmd` unless another Mermaid
-   grammar is clearly required.
-4. Use the four semantic classes for thesis flowcharts: `input`, `compute`,
-   `data`, and `output`.
-5. For math-heavy flowcharts, use frontmatter with `htmlLabels: true`,
-   `layout: elk`, and the shared class palette.
-6. Prefer compact KaTeX labels with a bold title plus one to three math/code
-   lines. Use `\begin{array}{c}` for multiline math labels.
-7. Do not invent notation inside Mermaid. Add missing notation to Typst shared
-   sources first, then update the curated symbol map.
-8. Keep `.mmd` as source. Render locally for review; never use online renderers
-   for unpublished thesis figures unless the user explicitly permits it.
-9. Do not rewrite existing diagrams merely because the linter reports warnings;
-   preserve visual intent and migrate only requested or clear mismatches.
+1. Read `AGENTS.md` and `docs/AGENTS.md`.
+2. For a thesis figure or any math label, read the local style guide and symbol
+   map; also inspect the relevant `docs/typst/shared` source.
+3. For a rendering or linting failure, capture the exact local command and
+   output before handing off to `diagnose-aria`.
+
+## Seam Rules
+
+- Keep `.mmd` as the source of record. `tools/mermaid` owns local template,
+  style, notation-projection, lint, and render behavior; do not add a second
+  Mermaid CLI wrapper to another skill. Its wrapper resolves a repository-local
+  CLI first, then an explicit `MERMAID_CLI` or `PATH` installation.
+- Start from the matching local template or example. Flowcharts use the shared
+  `input`, `compute`, `data`, and `output` classes; math-heavy flowcharts use
+  the supplied frontmatter.
+- Keep labels compact. Every new mathematical symbol must already be in shared
+  Typst notation and its Mermaid projection; hand off to `typst-authoring`
+  before changing either owner.
+- Treat lint warnings as review evidence. Preserve existing visual intent and
+  change it only for the requested diagram or a clear style mismatch.
+- Render locally only. If `mmdc` is unavailable, report that condition rather
+  than substituting an online renderer.
 
 ## Workflow
 
-1. Determine diagram intent: data flow, model branch, training pipeline,
-   rollout protocol, storage layout, sequence, or configuration graph.
-2. Read the relevant shared symbols/equations and the Mermaid style guide.
-3. Create or edit the `.mmd` from a template or matching example.
-4. Run `python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>`.
-5. If global `mmdc` is available, run
-   `tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg`.
-6. If the diagram will enter Typst, hand off to `typst-authoring` for inclusion,
-   caption quality, and rendered-page inspection.
+1. Identify the grammar and destination: source-only, Quarto fence, or a
+   rendered Typst asset.
+2. Copy the matching local template or adapt the closest local example.
+3. For math labels, verify each symbol against the shared Typst owner and
+   `aria_symbol_map.yaml`; stop and hand off if notation must change.
+4. Edit the `.mmd`, then run:
 
-## References
+   ```bash
+   python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>
+   ```
 
-- `tools/mermaid/references/aria_mermaid_style.md` - visual grammar.
-- `tools/mermaid/references/aria_symbol_map.yaml` - curated notation map.
-- `tools/mermaid/templates/` - starting templates.
-- `tools/mermaid/examples/` - style anchors and migration examples.
-- `tools/mermaid/scripts/` - linter, render wrapper, symbol-map helper.
+   Resolve errors. Record warnings that remain intentional.
+5. When the local renderer resolves a CLI, render a review artifact outside
+   tracked figure paths unless an output asset is requested:
+
+   ```bash
+   tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg
+   ```
+
+6. Hand off Quarto inclusion to `docs-curator`; hand off Typst asset inclusion,
+   captioning, and page inspection to `typst-authoring`.
 
 ## Completion
 
-Report the `.mmd` path, lint command and result, render command/result if run,
-and any remaining warnings or skipped rendering reason.
+Report the source path, exact lint result, render result or `mmdc` gap, and
+the destination-owner handoff when one remains.

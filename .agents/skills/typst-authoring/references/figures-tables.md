@@ -80,8 +80,8 @@ For thesis result tables:
   scientific geometry or data renderers for coordinate geometry, directional
   fields, and real 3D evidence.
 - Keep `.mmd` as the version-controlled source.
-- Render locally with Mermaid CLI, this skill's helper, or the ARIA-NBV Mermaid
-  workflow if available.
+- Use `aria-nbv-mermaid` for source/style work, then render through the
+  canonical local wrapper in `tools/mermaid`.
 - Include PNG/SVG/PDF with explicit Typst width.
 - Inspect the standalone render and final Typst page.
 - Use notation consistent with `docs/typst/shared`.
@@ -89,10 +89,9 @@ For thesis result tables:
 Typical proposal/thesis render command:
 
 ```bash
-.agents/skills/typst-authoring/scripts/render_mermaid.sh \
-  -i docs/typst/thesis/figures/proposal_system_flow.mmd \
-  -o docs/typst/thesis/figures/proposal_system_flow.png \
-  --width 1600
+tools/mermaid/scripts/render_mermaid.sh \
+  docs/typst/thesis/figures/proposal_system_flow.mmd \
+  docs/typst/thesis/figures/proposal_system_flow.svg
 ```
 
 For Quarto pages, use `{mermaid}` fences instead of rendered PNG unless the

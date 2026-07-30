@@ -17,9 +17,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   guide only when that module contract is touched.
 - Docs, bibliography, Typst, or Quarto work: read `docs/AGENTS.md`.
 - Mermaid `.mmd` or thesis diagram work: use `aria-nbv-mermaid`; math notation
-  must come from `docs/typst/shared`; validate with
-  `tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
-  when available and do not use online renderers unless explicitly permitted.
+	must come from `docs/typst/shared`; validate with
+	`tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
+	through `tools/mermaid/scripts/render_mermaid.sh` and do not use online
+	renderers unless explicitly permitted.
 - Need file localization or deterministic local discovery: use `aria-nbv-context`.
 - Vague, high-impact, or advisor-facing plans: use `plan-grill`.
 - PR or working-tree review: use `code-review-aria-nbv`; actionable P0--P2
