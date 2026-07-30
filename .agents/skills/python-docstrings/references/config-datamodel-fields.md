@@ -28,7 +28,7 @@ class EfmCameraView:
         calib: Per-frame camera intrinsics and extrinsics.
     """
 
-    images: Float[Tensor, "F C H W"]
+    images: Tensor
     """``Tensor["F C H W", float32]`` normalized RGB images in Aria RDF frame."""
 
     calib: CameraTW

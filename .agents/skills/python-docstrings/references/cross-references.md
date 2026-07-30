@@ -85,7 +85,7 @@ Use Markdown links for external material that is not a resolvable API symbol:
 Examples:
 
 - `Point-mesh distances use [PyTorch3D point-mesh distance primitives](https://pytorch3d.org/docs/).`
-- `Shape annotations follow [Jaxtyping array annotations](https://docs.kidger.site/jaxtyping/api/array/).`
+- `Tensor shapes and dtypes are stated in the field docstring.`
 
 Do not leave unresolved roles for external targets in rendered Quarto pages.
 Keep external links selective and relevant.

@@ -12,7 +12,6 @@ from typing import Any
 
 import pytorch_lightning as pl
 import torch
-from jaxtyping import Float
 from pydantic import Field, FiniteFloat
 from torch import Tensor, nn
 from torch.nn import functional
@@ -104,7 +103,7 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
-    def forward(self, actor: QhActorTensors) -> Float[Tensor, "B S N"]:
+    def forward(self, actor: QhActorTensors) -> Tensor:
         """Return online candidate values with the actor's exact batch shape.
 
         Args:
@@ -406,7 +405,7 @@ class QhLightningModule(pl.LightningModule):
             raise ValueError(f"Q_H scorer produced {count} non-finite {description}.")
 
     @staticmethod
-    def _score(scorer: nn.Module, actor: QhActorTensors) -> Float[Tensor, "B S N"]:
+    def _score(scorer: nn.Module, actor: QhActorTensors) -> Tensor:
         values = scorer(actor)
         expected = actor.action_mask.shape
         if not isinstance(values, Tensor) or values.shape != expected:

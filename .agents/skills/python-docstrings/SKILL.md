@@ -24,14 +24,14 @@ metadata:
     - "contract docs"
   must_read:
     - "aria_nbv/AGENTS.md"
-    - ".agents/skills/python-docstrings/references/type-shape-jaxtyping.md"
+    - ".agents/skills/python-docstrings/references/tensor-shapes.md"
     - ".agents/skills/python-docstrings/references/theory-rich-docstrings.md"
     - ".agents/skills/python-docstrings/references/config-datamodel-fields.md"
     - ".agents/skills/python-docstrings/references/quartodoc-contract.md"
     - ".agents/skills/python-docstrings/references/cross-references.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#completion-criteria"
-    - ".agents/skills/python-docstrings/references/type-shape-jaxtyping.md"
+    - ".agents/skills/python-docstrings/references/tensor-shapes.md"
     - ".agents/skills/python-docstrings/references/theory-rich-docstrings.md"
     - ".agents/skills/python-docstrings/references/config-datamodel-fields.md"
     - ".agents/skills/python-docstrings/references/quartodoc-contract.md"
@@ -62,7 +62,7 @@ Write or refactor Python docstrings as API contracts. Prefer concise,
 high-information docstrings that explain behavior, invariants, units, shapes,
 ownership, sequencing, theory, and boundary semantics instead of paraphrasing
 type hints. This skill owns all ARIA-NBV docstring preferences, including
-field docs, shape display, Jaxtyping-facing docstring style, examples,
+field docs, tensor-shape display, ordinary array annotations, examples,
 cross-references, equations, and Quartodoc rendering constraints.
 
 ## Workflow
@@ -80,10 +80,10 @@ cross-references, equations, and Quartodoc rendering constraints.
 5. Cross-reference internal symbols and external sources with the local
    Quartodoc role contract or Quarto-compatible Markdown. See
    [references/cross-references.md](./references/cross-references.md).
-6. For tensor values, use Jaxtyping annotations whenever possible and still
-   include the shape-style docstring token when shape or dtype matters:
+6. For tensor and NumPy values, use ordinary ``Tensor`` or ``np.ndarray``
+   annotations and include the shape-style docstring token when shape or dtype matters:
    `points ``Tensor["N 3", float32]``: ...`. See
-   [references/type-shape-jaxtyping.md](./references/type-shape-jaxtyping.md).
+   [references/tensor-shapes.md](./references/tensor-shapes.md).
 7. Trim boilerplate. Remove empty sections and filler prose. Avoid `Raises:`
    unless callers genuinely need to rely on or handle the failure contract.
 8. Optionally audit. Run [scripts/audit_docstrings.py](./scripts/audit_docstrings.py)
@@ -149,16 +149,15 @@ $$
 Theory-rich function docstring:
 
 ```python
-from jaxtyping import Float, Int
 from torch import Tensor
 
 
 def compute_rri(
-    points_t: Float[Tensor, "N_t 3"],
-    points_q: Float[Tensor, "N_q 3"],
-    gt_mesh_vertices: Float[Tensor, "V 3"],
-    gt_mesh_faces: Int[Tensor, "F 3"],
-) -> tuple[Float[Tensor, "N_q"], Float[Tensor, "D"]]:
+    points_t: Tensor,
+    points_q: Tensor,
+    gt_mesh_vertices: Tensor,
+    gt_mesh_faces: Tensor,
+) -> tuple[Tensor, Tensor]:
     r"""Compute candidate-view Relative Reconstruction Improvement.
 
     Args:
@@ -231,7 +230,7 @@ def run(self, sample: EfmSnippetView) -> OracleRriSample:
 
 ## References
 
-- [Type, shape, and Jaxtyping](./references/type-shape-jaxtyping.md)
+- [Tensor and NumPy shapes](./references/tensor-shapes.md)
 - [Theory-rich docstrings](./references/theory-rich-docstrings.md)
 - [Config and datamodel fields](./references/config-datamodel-fields.md)
 - [Quartodoc contract](./references/quartodoc-contract.md)

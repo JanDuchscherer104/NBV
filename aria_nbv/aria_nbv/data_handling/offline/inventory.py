@@ -33,7 +33,7 @@ class OfflineVisualInventoryError(ValueError):
         super().__init__("Offline visual inventory validation failed:\n- " + "\n- ".join(self.errors))
 
 
-# TODO: all tensor fields must have shape and type information and use JaxTyping!
+# TODO: all tensor fields must document shape and dtype information.
 @dataclass(slots=True)
 class OfflineVisualInventory:
     """Summary of required and optional visual payloads for one offline sample."""

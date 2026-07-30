@@ -70,7 +70,6 @@ dependencies = [
     "termcolor>=1.1.0; sys_platform == 'linux'",
     "easydict>=1.9; sys_platform == 'linux'",
     "shortuuid>=1.0.11; sys_platform == 'linux'",
-    "jaxtyping>=0.3.6",
     "msgspec>=0.20.0",
     "zarr>=3.1.5",
     "setuptools<81",
