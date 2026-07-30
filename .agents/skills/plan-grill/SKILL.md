@@ -10,13 +10,12 @@ metadata:
   handoff_to:
     - "diagnose-aria for concrete failures"
     - "aria-nbv-context when the affected surface is unknown"
-    - "aria-litkg-memory for KG-backed retrieval or claim checks"
     - "code-review-aria-nbv for concrete diff review"
     - "docs-curator for public narrative edits after the decision"
   evidence_required:
     - "source-order owner for the decision"
     - "success criteria, in/out of scope, and deferred decisions"
-    - "claim-check output for advisor-facing claims"
+    - "direct-source evidence for advisor-facing claims"
     - "source ladder and explicit claim strength for theory-rich mode"
   applies_to:
     - "**"

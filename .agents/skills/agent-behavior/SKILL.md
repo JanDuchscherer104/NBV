@@ -7,7 +7,6 @@ metadata:
     - "obvious one-line answer or command output with no durable edit"
   handoff_to:
     - "aria-nbv-context for unknown local ownership"
-    - "aria-litkg-memory for KG-backed routing or claim checks"
     - "diagnose-aria for concrete failures"
     - "plan-grill for ambiguous high-impact decisions"
   evidence_required:

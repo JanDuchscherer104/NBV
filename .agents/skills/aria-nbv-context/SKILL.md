@@ -5,10 +5,8 @@ metadata:
   mode: router
   not_when:
     - "exact file and owner are already known"
-    - "KG-backed authority, freshness, or claim checking is required"
     - "a concrete failure command or traceback owns the task"
   handoff_to:
-    - "aria-litkg-memory for KG-backed retrieval, routing, or claim checks"
     - "diagnose-aria for concrete failures"
     - "nearest AGENTS.md or narrow skill after localization"
   evidence_required:
@@ -44,7 +42,7 @@ metadata:
 # Aria NBV Context
 
 Use this skill as the local discovery layer. It should identify the smallest
-relevant set of files, then hand off to a narrower implementation, docs, KG, or
+relevant set of files, then hand off to a narrower implementation, docs, or
 diagnostic workflow.
 
 ## Workflow

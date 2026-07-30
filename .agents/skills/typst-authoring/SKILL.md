@@ -38,7 +38,7 @@ metadata:
     - ".agents/references/source_order.md#role-split"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
-    - ".agents/references/thesis_code_links.md"
+    - "docs/typst/shared/style.typ"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
     - ".agents/skills/typst-authoring/references/figures-tables.md"
@@ -89,8 +89,8 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 - `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
   claim-discipline references; use the nested fragment, shape, or beat writing
   modes only when useful; preserve claim strength and citations.
-- `claim-check`: classify claims and run `make kg-claim-check KG_CLAIM='...'`
-  for advisor-facing literature or thesis claims.
+- `claim-check`: classify advisor-facing literature or thesis claims and use the
+  direct-source checklist in `references/claim-citation-discipline.md`.
 - `figure-table` / `visual-qa`: read figures/tables and workflow references;
   scientific, geometric, or 3D work also reads `scientific-visualizations.md`
   and the selected renderer/package reference.
@@ -104,7 +104,8 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
    add recurring terms or equations to shared modules first.
 3. Keep notation policy, math-attachment details, claim discipline, figure/table
    conventions, and package notes in the referenced files, not this hot path.
-4. Classify advisor-facing claims and run KG claim checks when evidence matters.
+4. Classify advisor-facing claims and complete the direct-source evidence check
+   when evidence matters.
 5. Use Glossarium-native `@term` / `@term:short` references for durable terms.
 6. Write final thesis/proposal prose as paragraphs unless the template asks for
    lists.
@@ -117,7 +118,7 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 2. If notation changes, check `docs/typst/shared` and update the shared module
    before using the symbol in thesis text.
 3. If thesis prose links to implementation code, classify the link with
-   `.agents/references/thesis_code_links.md`: use `#gh` for final-worthy pinned
+   `docs/typst/shared/style.typ`: use `#gh` for final-worthy pinned
    anchors and `#gh-wip` / `#gh-symbol` for removable drafting aids.
 4. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
    read `references/aria-nbv-notation.md`; for package-backed layouts or

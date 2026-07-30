@@ -32,8 +32,9 @@ Apply this file when working under `docs/`.
   `.agents/archive/docs/`.
 - If you need current project truth, open the owning source from
   `.agents/references/source_order.md` instead of scanning broad doc trees.
-- Run `make kg-claim-check KG_CLAIM="..."` for advisor-facing proposal,
-  roadmap, research-question, or literature-synthesis claims.
+- For advisor-facing proposal, roadmap, research-question, or literature-
+  synthesis claims, follow the direct-source evidence check in
+  `.agents/skills/typst-authoring/references/claim-citation-discipline.md`.
 
 ## Commands
 - Context refresh: `make context`
@@ -66,9 +67,9 @@ Apply this file when working under `docs/`.
 - Add new references to `docs/references.bib` when introducing important concepts or papers.
 - Replace temporary citation placeholders such as `cite…` before finishing.
 - Use links to relevant internal docs or authoritative external references when introducing non-obvious concepts.
-- Use `.agents/references/thesis_code_links.md` for thesis-to-code links:
-  `#gh` is for final-worthy pinned implementation anchors, while `#gh-wip`
-  and `#gh-symbol` are removable draft/agent navigation aids.
+- Use the documented `#gh`, `#gh-wip`, and `#gh-symbol` contracts in
+  `docs/typst/shared/style.typ` for thesis-to-code links. `#gh` is for
+  final-worthy pinned anchors; the other two are removable draft navigation.
 - Keep Quarto source files (`*.qmd`) separate from rendered site output. Published HTML belongs under `docs/_site/`, not next to the sources.
 - Treat `docs/_freeze/` as tracked execution state for code-backed pages when needed; treat `docs/_site/`, `site_libs/`, `index_files/`, and `*_files/` as generated publish artifacts.
 - Do not store generated context or rendered artifacts in tracked docs paths unless the task explicitly requires it.

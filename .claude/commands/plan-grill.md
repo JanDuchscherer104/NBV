@@ -19,5 +19,6 @@ For "$ARGUMENTS":
    public surfaces affected, implementation packages, verification commands,
    assumptions and deferred decisions.
 
-For advisor-facing claims, run `make kg-claim-check KG_CLAIM="..."` before
+For advisor-facing claims, complete the direct-source evidence check in
+`.agents/skills/typst-authoring/references/claim-citation-discipline.md` before
 treating the claim as supported.
