@@ -224,7 +224,7 @@ The current files have these target dispositions:
   evidence rather than truth, into root guidance and this specification. Move
   tool-specific behavior beside each retained tool, then delete the aggregate.
 - `context7_library_ids.md`: keep contents, integrate in new aria-nbv context routing skill;
-- `external_stack_contracts.md`: move live ATEK, EFM3D, EVL, and Project Aria
+- External-stack contract: keep live ATEK, EFM3D, EVL, and Project Aria
   contracts to the nearest `data_handling`, rendering, or package owner,
   including source docstrings and tests. Delete package-docstring TODO lists or
   move actionable items to Agents DB.

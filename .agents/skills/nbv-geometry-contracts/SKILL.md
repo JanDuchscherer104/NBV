@@ -33,7 +33,8 @@ metadata:
   canonical_sources:
     - "aria_nbv/AGENTS.md#core-rules"
     - "aria_nbv/AGENTS.md#core-rules"
-    - ".agents/references/external_stack_contracts.md#efm3d-and-evl"
+    - "aria_nbv/aria_nbv/data_handling/raw/views.py"
+    - "aria_nbv/aria_nbv/rendering/unproject.py"
     - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
     - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
@@ -75,7 +76,8 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 1. `AGENTS.md`
 2. `aria_nbv/AGENTS.md`
 3. `aria_nbv/AGENTS.md` and `python-standards` when generic Python guidance is needed
-4. `.agents/references/external_stack_contracts.md`
+4. `aria_nbv/aria_nbv/data_handling/raw/views.py` and the focused rendering
+   module
 5. `.agents/memory/state/GOTCHAS.md`
 6. `aria_nbv/aria_nbv/vin/AGENTS.md` when VIN batch/candidate fields are touched
 7. The focused rendering or pose-generation tests for the changed path
@@ -84,9 +86,9 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 
 ## Contract Rules
 
-- Treat `aria_nbv/AGENTS.md`, the `python-standards` skill, and
-  `.agents/references/external_stack_contracts.md` as the canonical owners for
-  frame, transform, camera, and external-stack conventions.
+- Treat `aria_nbv/AGENTS.md`, the `python-standards` skill, and the focused
+  typed data/rendering source modules as the canonical owners for frame,
+  transform, camera, and external-stack conventions.
 - Return the frame convention, transform direction, tensor shape, units, and
   smallest relevant test evidence for the touched surface.
 - Keep display-only visualization corrections out of training, rendering, and
