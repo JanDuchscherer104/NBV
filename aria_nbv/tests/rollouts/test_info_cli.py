@@ -223,7 +223,7 @@ def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path, capsys) -> 
             "--thesis-bundle-output",
             str(output),
             "--thesis-evidence-status",
-            "confirmatory",
+            "pilot",
         ],
     )
 

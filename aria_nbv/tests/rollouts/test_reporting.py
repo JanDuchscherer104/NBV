@@ -196,12 +196,12 @@ def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path) -> N
     first_frames = build_thesis_report_frames(
         [first_store, second_store],
         sidecar_paths=[first_sidecar, second_sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
     rebuilt_frames = build_thesis_report_frames(
         [second_store, first_store],
         sidecar_paths=[second_sidecar, first_sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
 
     assert serialize_thesis_report_bundle(first_frames) == serialize_thesis_report_bundle(rebuilt_frames)
@@ -387,7 +387,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
                 "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                 "bundle_role": "analysis_facts",
                 "logical_name": "paired-policy-analysis",
-                "status": "confirmatory",
+                "status": "pilot",
                 "facts": [
                     {
                         "store_id": result.manifest_sha256,
@@ -409,7 +409,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
     frames = build_thesis_report_frames(
         [result.store_dir],
         sidecar_paths=[sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
 
     promoted = frames["facts"].set_index("key")
@@ -420,7 +420,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         assert row["unit"] == unit
         assert row["n"] == n
         assert row["aggregation"] == aggregation
-        assert row["status"] == "confirmatory"
+        assert row["status"] == "pilot"
         assert row["source"].startswith("analysis/paired_policy.json|sidecar:")
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
     assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
@@ -431,7 +431,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
     ("payload_patch", "message"),
     [
         ({"schema_version": "wrong-version"}, "schema_version"),
-        ({"status": "pilot"}, "status"),
+        ({"status": "confirmatory"}, "status"),
         ({"facts": []}, "non-empty"),
     ],
 )
@@ -445,7 +445,7 @@ def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, m
     payload = {
         "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
         "bundle_role": "analysis_facts",
-        "status": "confirmatory",
+        "status": "pilot",
         "facts": [
             {
                 "store_id": result.manifest_sha256,
@@ -466,7 +466,7 @@ def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, m
         build_thesis_report_frames(
             [result.store_dir],
             sidecar_paths=[sidecar],
-            evidence_status="confirmatory",
+            evidence_status="pilot",
         )
 
 
@@ -502,7 +502,7 @@ def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, mes
             {
                 "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                 "bundle_role": "analysis_facts",
-                "status": "confirmatory",
+                "status": "pilot",
                 "facts": [fact],
             }
         ),
@@ -513,7 +513,7 @@ def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, mes
         build_thesis_report_frames(
             [result.store_dir],
             sidecar_paths=[sidecar],
-            evidence_status="confirmatory",
+            evidence_status="pilot",
         )
 
 
@@ -544,7 +544,7 @@ def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_pa
                 {
                     "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                     "bundle_role": "analysis_facts",
-                    "status": "confirmatory",
+                    "status": "pilot",
                     "facts": facts,
                 }
             ),
@@ -554,7 +554,7 @@ def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_pa
             build_thesis_report_frames(
                 [result.store_dir],
                 sidecar_paths=[sidecar],
-                evidence_status="confirmatory",
+                evidence_status="pilot",
             )
 
 

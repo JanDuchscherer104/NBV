@@ -22,6 +22,14 @@ from aria_nbv.rollouts.read_model import (
     target_by_id,
     target_rows,
 )
+from aria_nbv.rollouts.scientific_audit import (
+    PolicyMatchIdentity,
+    PolicySemanticRole,
+    PolicyTreatmentIdentity,
+    TreatmentConfigPath,
+    named_sha256_context_hash,
+    normalize_treatment_configs,
+)
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets.protocol import ORACLE_GT_TARGET_SOURCE
 from tests.rollout_fixtures import build_rollout_records
@@ -125,6 +133,9 @@ def test_endpoint_evaluation_unit_decodes_lineage_pose_order_and_comparator(tmp_
     assert unit.lineage.candidate_config_hash
     assert unit.lineage.oracle_config_hash == "fixture-oracle"
     assert unit.lineage.rollout_config_hash
+    assert unit.lineage.rollout_seed == 51
+    assert unit.lineage.model_checkpoint_hash is None
+    assert unit.lineage.selection_rng_state_hash == "fixture-rng"
     assert unit.lineage.target_id == "fixture-target-0"
     assert unit.lineage.target_protocol_version == "v0_gt_input"
     assert unit.pose_chain.step_row_ids == tuple(step.step_row_id for step in steps)
@@ -207,6 +218,22 @@ def test_persisted_context_hash_binds_typed_lineage_target_and_root_identity(tmp
     )
     assert (
         persisted_pre_treatment_context_sha256(
+            replace(unit.lineage, rollout_seed=unit.lineage.rollout_seed + 1),
+            target,
+            root_identity,
+        )
+        != baseline
+    )
+    assert (
+        persisted_pre_treatment_context_sha256(
+            replace(unit.lineage, selection_rng_state_hash="different-rng"),
+            target,
+            root_identity,
+        )
+        != baseline
+    )
+    assert (
+        persisted_pre_treatment_context_sha256(
             unit.lineage,
             replace(target, primary_invalid_reason_id=target.primary_invalid_reason_id + 1),
             root_identity,
@@ -223,10 +250,106 @@ def test_persisted_context_hash_binds_typed_lineage_target_and_root_identity(tmp
     )
 
 
+def test_stored_pairing_uses_normalized_configs_not_raw_treatment_hashes(tmp_path) -> None:
+    allowlist = (
+        TreatmentConfigPath(owner="candidate", json_pointer="/treatment"),
+        TreatmentConfigPath(owner="rollout", json_pointer="/treatment"),
+    )
+    resolved = (
+        {
+            "candidate": {"treatment": "one-step", "radius_m": 1.0},
+            "rollout": {"treatment": "one-step", "budget": 2},
+        },
+        {
+            "candidate": {"treatment": "lookahead", "radius_m": 1.0},
+            "rollout": {"treatment": "lookahead", "budget": 2},
+        },
+        {
+            "candidate": {"treatment": "lookahead", "radius_m": 2.0},
+            "rollout": {"treatment": "lookahead", "budget": 2},
+        },
+    )
+    normalized = tuple(normalize_treatment_configs(config, allowlist) for config in resolved)
+
+    units = []
+    targets = []
+    root_identities = []
+    for index, configs in enumerate(normalized):
+        records = _anchored_records()
+        raw_by_owner = {item.name: item.sha256 for item in configs.raw_fingerprints}
+        records[0].lineage.policy.candidate_config_hash = raw_by_owner["candidate"]
+        records[0].lineage.policy.rollout_config_hash = raw_by_owner["rollout"]
+        reader = _reader_for_records(tmp_path / str(index), records)
+        unit = endpoint_evaluation_unit(reader, 0)
+        target = target_by_id(reader, unit.lineage.target_row_id)
+        assert target is not None
+        units.append(unit)
+        targets.append(target)
+        root_identities.append(root_action_set_identity(reader, unit))
+
+    persisted_contexts = tuple(
+        persisted_pre_treatment_context_sha256(unit.lineage, target, root_identity)
+        for unit, target, root_identity in zip(units, targets, root_identities, strict=True)
+    )
+    assert units[0].lineage.candidate_config_hash != units[1].lineage.candidate_config_hash
+    assert units[0].lineage.rollout_config_hash != units[1].lineage.rollout_config_hash
+    assert persisted_contexts[0] == persisted_contexts[1] == persisted_contexts[2]
+
+    def match(index: int, role: PolicySemanticRole) -> PolicyMatchIdentity:
+        return PolicyMatchIdentity.derive(
+            treatment=PolicyTreatmentIdentity(semantic_role=role, treatment_id=role.value),
+            configs=normalized[index],
+            root_action_set_sha256=root_identities[index].sha256,
+            persisted_context_sha256=persisted_contexts[index],
+            raw_asset_context_sha256=named_sha256_context_hash(()),
+        )
+
+    one_step = match(0, PolicySemanticRole.ORACLE_ONE_STEP)
+    lookahead = match(1, PolicySemanticRole.ORACLE_LOOKAHEAD)
+    nonallowlisted = match(2, PolicySemanticRole.ORACLE_LOOKAHEAD)
+    assert one_step.exact_match_sha256 == lookahead.exact_match_sha256
+    assert lookahead.exact_match_sha256 != nonallowlisted.exact_match_sha256
+
+
+def test_endpoint_evaluation_unit_rejects_caller_policy_identity_mismatch(tmp_path) -> None:
+    checkpoint_hash = "a" * 64
+    records = _anchored_records()
+    records[0].lineage.policy.model_checkpoint_hash = checkpoint_hash
+    reader = _reader_for_records(tmp_path, records)
+
+    unit = endpoint_evaluation_unit(
+        reader,
+        0,
+        expected_rollout_seed=51,
+        expected_model_checkpoint_hash=checkpoint_hash,
+        expected_selection_rng_state_hash="fixture-rng",
+    )
+    assert unit.lineage.model_checkpoint_hash == checkpoint_hash
+
+    mismatches = (
+        ("rollout_seed", {"expected_rollout_seed": 52}),
+        ("model_checkpoint_hash", {"expected_model_checkpoint_hash": "b" * 64}),
+        ("selection_rng_state_hash", {"expected_selection_rng_state_hash": "different-rng"}),
+    )
+    for label, expected in mismatches:
+        with np.testing.assert_raises_regex(ValueError, label):
+            endpoint_evaluation_unit(reader, 0, **expected)
+
+    builtin_reader = _reader(tmp_path / "builtin")
+    with np.testing.assert_raises_regex(ValueError, "model_checkpoint_hash"):
+        endpoint_evaluation_unit(
+            builtin_reader,
+            0,
+            expected_model_checkpoint_hash=checkpoint_hash,
+        )
+
+
 def test_endpoint_evaluation_unit_rejects_missing_lineage_and_root_anchor(tmp_path) -> None:
     mutations = (
         ("source_sample_key", "sources/sample_key_id", -1),
         ("candidate_config_hash", "lineage/candidate_config_id", -1),
+        ("rollout_seed", "rollouts/random_seed", -1),
+        ("selection_rng_state_hash", "lineage/selection_rng_state_hash_id", -1),
         ("target_id", "targets/target_id", -1),
         ("root_time_ns", "rollouts/root_time_ns", -1),
     )

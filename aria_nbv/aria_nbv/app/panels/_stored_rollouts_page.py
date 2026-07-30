@@ -70,8 +70,20 @@ def render_stored_rollouts_page() -> None:
         return
 
     selected_inventory = next((row for row in inventory if Path(str(row["path"])) == store_path), None)
+    audit_value = st.text_input(
+        "Scientific audit JSON (optional)",
+        value="",
+        placeholder="/absolute/path/to/scientific-audit.json",
+        help="Selected explicitly. The artifact is loaded lazily only by scientific sections.",
+        key=f"stored_rollout_audit_path:{store_path.resolve().as_posix()}",
+    ).strip()
+    audit_path = Path(audit_value) if audit_value else None
     try:
-        session = open_stored_rollout_session(store_path, inventory_row=selected_inventory)
+        session = open_stored_rollout_session(
+            store_path,
+            inventory_row=selected_inventory,
+            audit_path=audit_path,
+        )
     except Exception as exc:
         st.error(f"The selected store cannot be opened: {type(exc).__name__}: {exc}")
         _download_json("Download store identity JSON", "rollout-store-identity.json", selected_inventory or {})

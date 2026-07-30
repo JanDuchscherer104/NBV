@@ -156,6 +156,37 @@ def test_reason_bitset_intersections_preserve_every_reason_and_version() -> None
     assert row["mean_state_fraction"] == 1.0
 
 
+def test_reason_bitset_decoding_blocks_missing_and_unsupported_versions() -> None:
+    combined = (1 << INVALID_REASON_CODES["CLEARANCE_TOO_SMALL"]) | (
+        1 << INVALID_REASON_CODES["PATH_SEGMENT_COLLISION"]
+    )
+    evidence = candidate_validity_evidence(
+        [
+            _candidate(0, actor=False, oracle=False, q_train=False, reason_bitset=combined, reason_version=None),
+            _candidate(
+                1,
+                actor=False,
+                oracle=False,
+                q_train=False,
+                reason_bitset=combined,
+                reason_version="rollout-invalidity-v2",
+            ),
+        ]
+    )
+
+    rows = evidence["reason_intersection_rows"]
+    assert not any(row.get("reason_names") for row in rows)
+    assert _find(rows, blocker="missing_reason_code_version")["reason_version"] is None
+    unsupported = _find(rows, blocker="unsupported_reason_code_version")
+    assert unsupported["reason_version"] == "rollout-invalidity-v2"
+    assert unsupported["available"] is False
+    flow_targets = {row["target"] for row in evidence["flow_rows"] if row["target_stage"] == "outcome"}
+    assert flow_targets == {
+        "invalid_reason_version_unavailable",
+        "invalid_reason_version_unsupported:rollout-invalidity-v2",
+    }
+
+
 def test_reason_bitset_intersections_block_unsupported_or_missing_versions() -> None:
     evidence = candidate_validity_evidence(
         [
@@ -224,6 +255,7 @@ def _audit_artifact(
     specs: tuple[dict[str, object], ...],
     *,
     comparison_protocol: AuditComparisonProtocol = AuditComparisonProtocol.SAME_CONTRACT,
+    mandatory_status: MandatoryCohortStatus = MandatoryCohortStatus.PASS,
 ):
     base = _complete_payload()
     units = [AuditSamplingUnit(unit_id="endpoint-1", stratum_id="endpoint")]
@@ -277,7 +309,9 @@ def _audit_artifact(
                 persisted_valid=bool(spec["persisted"]),
                 independent_valid=None if status is RowEvaluationStatus.BLOCKED else bool(spec["independent"]),
                 raw_measurement=None if status is RowEvaluationStatus.BLOCKED else float(spec["measurement"]),
-                signed_margin=None if status is RowEvaluationStatus.BLOCKED else 1.0 - float(spec["measurement"]),
+                signed_margin=None
+                if status is RowEvaluationStatus.BLOCKED
+                else float(spec.get("independent_threshold", 1.0)) - float(spec["measurement"]),
                 evaluation_status=status,
                 missing_reason="label unavailable" if status is RowEvaluationStatus.BLOCKED else None,
                 inclusion_probability=stratum.inclusion_probability,
@@ -287,17 +321,23 @@ def _audit_artifact(
     readiness = (
         AuditReadiness.CONFIRMATORY
         if comparison_protocol is AuditComparisonProtocol.SAME_CONTRACT
+        and mandatory_status is MandatoryCohortStatus.PASS
         and all(row.independent_valid is not None for row in validity_rows)
         else AuditReadiness.PILOT
         if comparison_protocol is AuditComparisonProtocol.ROBUSTNESS_CHARACTERIZATION
         and all(row.independent_valid is not None for row in validity_rows)
         else AuditReadiness.BLOCKED
     )
-    status = {
-        AuditReadiness.CONFIRMATORY: AuditStatus.PASS,
-        AuditReadiness.PILOT: AuditStatus.CHARACTERIZATION,
-        AuditReadiness.BLOCKED: AuditStatus.PARTIAL,
-    }[readiness]
+    status = (
+        AuditStatus.FAIL
+        if mandatory_status is MandatoryCohortStatus.FAIL
+        and all(row.independent_valid is not None for row in validity_rows)
+        else {
+            AuditReadiness.CONFIRMATORY: AuditStatus.PASS,
+            AuditReadiness.PILOT: AuditStatus.CHARACTERIZATION,
+            AuditReadiness.BLOCKED: AuditStatus.PARTIAL,
+        }[readiness]
+    )
     payload = ScientificAuditPayload(
         **{
             **base.model_dump(mode="python"),
@@ -311,7 +351,7 @@ def _audit_artifact(
                     cohort_id=base.endpoint_rows[0].match_identity.exact_match_sha256,
                     endpoint_row_count=1,
                     validity_row_count=len(validity_rows),
-                    mandatory_status=MandatoryCohortStatus.PASS,
+                    mandatory_status=mandatory_status,
                     reason="Validity reducer fixture.",
                 ),
             ),
@@ -359,6 +399,123 @@ def test_weighted_confusion_and_boundary_bins_are_hand_calculated() -> None:
         boundary_bin_right=0.1,
     )
     assert boundary["weighted_agreement"] == 1.0
+    assert evidence["same_contract_eligible"] is True
+    assert evidence["required_predicate_coverage_complete"] is True
+
+
+def test_confirmatory_gate_requires_every_kind_and_pass_artifact_status() -> None:
+    missing_kinds = _audit_artifact(
+        ({"kind": "path", "population": 1, "persisted": True, "independent": True, "measurement": 0.5},)
+    )
+    missing_evidence = validity_audit_evidence(missing_kinds)
+
+    assert missing_evidence["same_contract_eligible"] is False
+    assert missing_evidence["evidence_status"] == "unavailable"
+    assert {row["predicate_kind"] for row in _rows(missing_evidence["blocker_rows"])} == {
+        "state",
+        "combined_actor",
+    }
+    assert all(row["blocker"] == "missing_required_predicate_kind" for row in missing_evidence["blocker_rows"])
+
+    failed = _audit_artifact(
+        (
+            {"kind": "state", "population": 1, "persisted": True, "independent": True, "measurement": 0.5},
+            {"kind": "path", "population": 1, "persisted": True, "independent": True, "measurement": 0.5},
+            {
+                "kind": "combined_actor",
+                "population": 1,
+                "persisted": True,
+                "independent": True,
+                "measurement": 0.5,
+            },
+        ),
+        mandatory_status=MandatoryCohortStatus.FAIL,
+    )
+    failed_evidence = validity_audit_evidence(failed)
+    assert failed_evidence["artifact_status"] == "fail"
+    assert failed_evidence["required_predicate_coverage_complete"] is True
+    assert failed_evidence["same_contract_eligible"] is False
+
+
+def test_signed_margin_macros_weight_within_state_then_equalize_states_and_scenes() -> None:
+    artifact = _audit_artifact(
+        (
+            {
+                "kind": "state",
+                "population": 1,
+                "persisted": True,
+                "independent": True,
+                "measurement": 0.0,
+                "scene": "scene-a",
+                "rollout": "rollout-a0",
+            },
+            {
+                "kind": "state",
+                "population": 3,
+                "persisted": True,
+                "independent": False,
+                "measurement": 2.0,
+                "scene": "scene-a",
+                "rollout": "rollout-a0",
+            },
+            {
+                "kind": "state",
+                "population": 1,
+                "persisted": True,
+                "independent": True,
+                "measurement": 0.0,
+                "scene": "scene-a",
+                "rollout": "rollout-a1",
+            },
+            {
+                "kind": "state",
+                "population": 1,
+                "persisted": True,
+                "independent": True,
+                "measurement": -2.0,
+                "scene": "scene-b",
+                "rollout": "rollout-b0",
+            },
+            {"kind": "path", "population": 1, "persisted": True, "independent": True, "measurement": 0.5},
+            {
+                "kind": "combined_actor",
+                "population": 1,
+                "persisted": True,
+                "independent": True,
+                "measurement": 0.5,
+            },
+        )
+    )
+
+    margins = _rows(validity_audit_evidence(artifact)["margin_rows"])
+    state_rows = [row for row in margins if row["predicate_kind"] == "state" and row["aggregation_level"] == "state"]
+    scene_a = _find(margins, predicate_kind="state", aggregation_level="scene_macro", scene_id="scene-a")
+    scene_b = _find(margins, predicate_kind="state", aggregation_level="scene_macro", scene_id="scene-b")
+    cohort = _find(margins, predicate_kind="state", aggregation_level="cohort_scene_macro")
+
+    assert sorted(row["weighted_mean_signed_margin"] for row in state_rows) == pytest.approx([-0.5, 1.0, 3.0])
+    assert scene_a["mean_state_signed_margin"] == pytest.approx(0.25)
+    assert scene_a["state_count"] == 2
+    assert scene_b["mean_state_signed_margin"] == pytest.approx(3.0)
+    assert cohort["mean_scene_signed_margin"] == pytest.approx(1.625)
+    assert cohort["scene_count"] == 2
+    assert cohort["sampled_count"] == 4
+
+
+def test_false_same_contract_declaration_is_rejected_by_typed_identity() -> None:
+    with pytest.raises(ValidationError, match="SAME_CONTRACT validity audits require exact"):
+        _audit_artifact(
+            (
+                {
+                    "kind": "state",
+                    "population": 1,
+                    "persisted": True,
+                    "independent": False,
+                    "measurement": 0.5,
+                    "independent_threshold": 0.25,
+                },
+            )
+        )
 
 
 def test_missing_labels_are_unavailable_and_changed_contract_is_characterization() -> None:
@@ -383,7 +540,16 @@ def test_missing_labels_are_unavailable_and_changed_contract_is_characterization
     assert _rows(missing_evidence["margin_rows"])[0]["signed_margin"] is None
 
     changed = _audit_artifact(
-        ({"kind": "path", "population": 2, "persisted": True, "independent": True, "measurement": 0.5},),
+        (
+            {
+                "kind": "path",
+                "population": 2,
+                "persisted": True,
+                "independent": False,
+                "measurement": 0.5,
+                "independent_threshold": 0.25,
+            },
+        ),
         comparison_protocol=AuditComparisonProtocol.ROBUSTNESS_CHARACTERIZATION,
     )
     changed_evidence = validity_audit_evidence(changed)

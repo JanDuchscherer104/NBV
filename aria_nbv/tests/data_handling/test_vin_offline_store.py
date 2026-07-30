@@ -520,7 +520,7 @@ def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_pa
         semidense_max_points=None,
         semidense_include_obs_count=False,
         max_candidates=4,
-        samples_per_shard=16,
+        samples_per_shard=1,
         max_samples=None,
         train_val_split=0.5,
         overwrite=False,

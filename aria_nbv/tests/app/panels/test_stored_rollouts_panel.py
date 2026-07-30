@@ -29,6 +29,7 @@ from aria_nbv.app.panels._stored_rollouts import (
 )
 from aria_nbv.app.panels._stored_rollouts import session as stored_session
 from aria_nbv.configs import PathConfig
+from aria_nbv.rollouts.inspection import deterministic_candidate_display_sample
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
@@ -144,7 +145,7 @@ def test_reference_coverage_figure_composes_represented_and_unrepresented_popula
     }
 
 
-def test_reconstruction_section_uses_automatic_metric_plan_without_temporal_selectors(
+def test_reconstruction_section_defaults_to_audited_endpoint_without_six_metric_or_pooled_histogram(
     isolated_path_config,
     tmp_path: Path,
 ) -> None:
@@ -158,8 +159,9 @@ def test_reconstruction_section_uses_automatic_metric_plan_without_temporal_sele
     assert "Temporal metric" not in labels
     assert "Temporal grouping class" not in labels
     assert "Temporal grouping field" not in labels
-    assert {multiselect.label for multiselect in app.multiselect} >= {"Scenes", "Policies", "Horizons"}
-    assert "Download all-metric summary CSV" in {button.label for button in app.get("download_button")}
+    assert any("Independent endpoint evidence is unavailable" in warning.value for warning in app.warning)
+    assert "Download all-metric summary CSV" not in {button.label for button in app.get("download_button")}
+    assert all("Factual endpoint distributions" not in title.value for title in app.title)
 
 
 def test_stale_store_keeps_metadata_and_blocks_scientific_sections(isolated_path_config, tmp_path: Path) -> None:
@@ -255,39 +257,17 @@ def test_candidate_composition_uses_generator_stages_and_component_legend() -> N
         "View · Forward Rig",
     }
     assert not figure.layout.annotations
-    assert figure.layout.yaxis.title.text == "Share of Generated Candidates"
+    assert figure.layout.title.text == "Descriptive Stored-Mass Characterization"
+    assert figure.layout.yaxis.title.text == "Pooled Share of Stored Candidates"
     assert list(figure.layout.yaxis.range) == [0.0, 1.0]
     assert figure.layout.legend.title.text == "Persisted Generator Component"
     assert figure.layout.font.size == 18
 
 
 def test_candidate_selection_plot_separates_selector_from_generator_families() -> None:
-    figure = candidate_generation._selection_preference_figure(
-        pd.DataFrame(
-            {
-                "dimension": ["policy", "strategy", "position", "mixture"],
-                "family": ["oracle_greedy", "forward_rig", "upper_bound_free_shell", "target_point"],
-                "selection_enrichment_vs_valid_availability": [1.0, 1.5, 1.0, 0.75],
-                "candidate_count": [8] * 4,
-                "actor_valid_count": [6] * 4,
-                "selected_count": [2] * 4,
-                "valid_availability_share": [1.0, 0.5, 1.0, 1.0],
-                "selected_share": [1.0, 0.75, 1.0, 0.75],
-            }
-        ),
-        policy="oracle_greedy",
-    )
-
-    assert list(figure.data[0].y) == [
-        "Mixture · Target Point",
-        "Position · Upper Bound Free Shell",
-        "View · Forward Rig",
-    ]
-    assert list(figure.data[0].x) == [0.75, 1.0, 1.5]
-    assert figure.layout.xaxis.title.text == "Selection Enrichment Relative to Valid Availability"
-    assert figure.layout.yaxis.title.text == "Generator Component"
-    assert "Oracle Greedy" in figure.layout.title.text
-    assert len(figure.layout.shapes) == 1
+    assert not hasattr(candidate_generation, "_selection_preference_figure")
+    assert "rank" not in candidate_generation.__doc__.lower()
+    assert "regret" not in candidate_generation.__doc__.lower()
 
 
 def test_candidate_actor_validity_is_a_two_part_admission_composition() -> None:
@@ -512,7 +492,33 @@ def test_candidate_heavy_button_materializes_audit_only_after_explicit_request(
 
     assert not app.exception
     assert calls == 1
-    assert "Download normalized candidate evidence CSV" in {button.label for button in app.get("download_button")}
+    assert "Download display sample CSV" in {button.label for button in app.get("download_button")}
+
+
+def test_validity_full_scan_is_explicit_and_absent_audit_stays_characterization_only(
+    isolated_path_config,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_current_store(isolated_path_config, horizon=2)
+    stored_session.clear_stored_rollout_caches()
+    original = stored_session._cached_validity_scientific_evidence
+    calls = 0
+
+    def tracked(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stored_session, "_cached_validity_scientific_evidence", tracked)
+    app = _select_section(_stored_rollouts_app(tmp_path).run(), "Validity & Support")
+    assert calls == 0
+    next(button for button in app.button if button.label == "Load full validity scientific evidence").click()
+    app = app.run()
+
+    assert not app.exception
+    assert calls == 1
+    assert any("characterization-only" in warning.value for warning in app.warning)
 
 
 def test_oracle_headroom_section_exposes_exact_blockers_instead_of_unmatched_estimate(
@@ -526,22 +532,12 @@ def test_oracle_headroom_section_exposes_exact_blockers_instead_of_unmatched_est
     assert not app.exception
     assert "Oracle Headroom & Policies" in [subheader.value for subheader in app.subheader]
     assert any("Δlook is blocked" in warning.value for warning in app.warning)
-    assert any("ηQ is blocked" in info.value for info in app.info)
+    assert any("ηQ is blocked" in warning.value for warning in app.warning)
 
 
-def test_reconstruction_metric_plan_includes_every_finite_available_quantity() -> None:
-    summary = pd.DataFrame(
-        [
-            {"metric": "cumulative_target_root_gain", "label": "Cumulative root gain", "finite_count": 2},
-            {"metric": "selected_entropy", "label": "Selection entropy", "finite_count": 1},
-            {"metric": "missing", "label": "Missing", "finite_count": 0},
-        ]
-    )
-
-    assert reconstruction_return._metric_plan(summary) == {
-        "cumulative_target_root_gain": "Cumulative root gain",
-        "selected_entropy": "Selection entropy",
-    }
+def test_reconstruction_has_no_automatic_six_metric_plan() -> None:
+    assert not hasattr(reconstruction_return, "_metric_plan")
+    assert "Factual endpoint distributions" not in reconstruction_return.__doc__
 
 
 def test_failure_lineage_handoff_selects_inspect_section(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -588,3 +584,175 @@ def test_download_serializers_keep_complete_rows_and_stable_json() -> None:
     assert shared._serialize_json({"z": np.int64(2), "a": ["first"]}) == (
         b'{\n  "a": [\n    "first"\n  ],\n  "z": 2\n}\n'
     )
+
+
+@pytest.mark.parametrize("blockers", [("required_validity_contract_incomplete:missing state",), ()])
+def test_confirmatory_download_uses_reporting_readiness_without_runtime_attempt(
+    blockers: tuple[str, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {"errors": [], "downloads": 0, "bundles": 0}
+
+    def evidence_bundle(*, evidence_status: str) -> bytes:
+        calls["bundles"] = int(calls["bundles"]) + 1
+        return evidence_status.encode()
+
+    session = SimpleNamespace(
+        confirmatory_export_blockers=lambda: blockers,
+        evidence_bundle=evidence_bundle,
+    )
+    fake_streamlit = SimpleNamespace(
+        markdown=lambda *args, **kwargs: None,
+        radio=lambda *args, **kwargs: "confirmatory",
+        checkbox=lambda *args, **kwargs: True,
+        error=lambda message: calls["errors"].append(message),  # type: ignore[union-attr]
+        info=lambda *args, **kwargs: None,
+        download_button=lambda *args, **kwargs: calls.__setitem__("downloads", int(calls["downloads"]) + 1),
+    )
+    monkeypatch.setattr(inspect_rerun, "st", fake_streamlit)
+
+    inspect_rerun._render_evidence_bundle_download(session)
+
+    assert calls["bundles"] == 0
+    assert calls["downloads"] == (0 if blockers else 1)
+    assert bool(calls["errors"]) is bool(blockers)
+
+
+def test_session_open_performs_no_scientific_audit_byte_io_or_parsing(
+    isolated_path_config,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store_path = _write_current_store(isolated_path_config)
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text("{}", encoding="utf-8")
+    loads: list[Path] = []
+    original_read_bytes = Path.read_bytes
+
+    def fail_audit_read_bytes(path: Path) -> bytes:
+        if path.resolve() == audit_path.resolve():
+            raise AssertionError("session construction must not read audit bytes")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_audit_read_bytes)
+    monkeypatch.setattr(stored_session, "load_scientific_audit", lambda path: loads.append(path))
+
+    session = stored_session.open_stored_rollout_session(
+        store_path,
+        inventory_row=None,
+        audit_path=audit_path,
+    )
+
+    assert loads == []
+    assert session.audit_path == audit_path.resolve()
+    assert session.audit_content_sha256 is None
+
+
+def test_audit_cache_keys_include_live_store_identity_and_lazy_content_fingerprint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored_session._cached_audit_artifact.clear()
+    current_store_sha = ["a" * 64]
+    reader = SimpleNamespace(root=SimpleNamespace(attrs={"manifest_sha256": current_store_sha[0]}))
+    artifact = SimpleNamespace(
+        provenance=SimpleNamespace(rollout_store_sha256="a" * 64),
+        bundle_sha256="b" * 64,
+    )
+    loads: list[Path] = []
+
+    def current_reader(_store_path: str):
+        reader.root.attrs["manifest_sha256"] = current_store_sha[0]
+        return reader
+
+    def load(path: Path):
+        loads.append(path)
+        return artifact
+
+    monkeypatch.setattr(stored_session, "_reader", current_reader)
+    monkeypatch.setattr(stored_session, "load_scientific_audit", load)
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text("first", encoding="utf-8")
+    first_fingerprint = stored_session._lazy_audit_file_fingerprint(audit_path)
+
+    loaded, blockers = stored_session._cached_audit_artifact(
+        "same-store-path",
+        "a" * 64,
+        audit_path.as_posix(),
+        first_fingerprint,
+    )
+    assert loaded is artifact
+    assert blockers == ()
+
+    current_store_sha[0] = "c" * 64
+    loaded, blockers = stored_session._cached_audit_artifact(
+        "same-store-path",
+        "c" * 64,
+        audit_path.as_posix(),
+        first_fingerprint,
+    )
+    assert loaded is artifact
+    assert blockers and blockers[0].startswith("scientific_audit_wrong_store:")
+
+    current_store_sha[0] = "a" * 64
+    audit_path.write_text("second", encoding="utf-8")
+    second_fingerprint = stored_session._lazy_audit_file_fingerprint(audit_path)
+    assert second_fingerprint != first_fingerprint
+    loaded, blockers = stored_session._cached_audit_artifact(
+        "same-store-path",
+        "a" * 64,
+        audit_path.as_posix(),
+        second_fingerprint,
+    )
+    assert loaded is artifact
+    assert blockers == ()
+    assert loads == [audit_path, audit_path, audit_path]
+    stored_session._cached_audit_artifact.clear()
+
+
+def test_deterministic_display_sample_is_bounded_order_independent_and_retains_late_minority() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "scene": "scene-a",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "step_index": 0,
+            "policy": "oracle_greedy",
+            "horizon": 1,
+            "acquisition_budget_steps": 1,
+            "branch_factor": 1,
+            "beam_width": 1,
+            "temperature": 0.0,
+            "candidate_config": "candidate-v1",
+            "rollout_config": "rollout-v1",
+            "branch_schedule": "one_step",
+            "strategy": "forward_rig" if index < 20_004 else "minority_view",
+            "position": "upper_bound_free_shell",
+            "mixture": "target_point",
+            "actor_action": index % 2 == 0,
+            "invalid_reason_bitset": 0 if index % 2 == 0 else 1,
+        }
+        for index in range(20_005)
+    ]
+
+    first = deterministic_candidate_display_sample(rows, max_rows=100, seed="display-test")
+    second = deterministic_candidate_display_sample(reversed(rows), max_rows=100, seed="display-test")
+
+    first_ids = [row["candidate_row_id"] for row in first["rows"]]
+    second_ids = [row["candidate_row_id"] for row in second["rows"]]
+    assert first_ids == second_ids
+    assert len(first_ids) == 100
+    assert 20_004 in first_ids
+    assert first["metadata"] == second["metadata"]
+    assert first["metadata"]["display_only"] is True
+    assert all({"N_h", "n_h", "pi_h", "seed", "display_only"} <= row.keys() for row in first["strata"])
+
+
+def test_section_modules_do_not_own_store_or_audit_pipeline_access() -> None:
+    for module in (reconstruction_return, oracle_headroom, candidate_generation, validity_support, inspect_rerun):
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        assert "rollouts.inspection" not in source
+        assert "RolloutZarrStoreReader" not in source
+        assert "ScientificAuditArtifact" not in source
+        assert "load_scientific_audit" not in source

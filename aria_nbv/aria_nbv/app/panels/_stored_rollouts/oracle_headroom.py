@@ -1,188 +1,79 @@
-"""Exact-cohort oracle headroom and policy evidence."""
+"""Audited exact-pair oracle headroom and learned-planner effects."""
 
 from __future__ import annotations
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from .session import StoredRolloutSession
-from .shared import _download_frame, _info_popover, _render_plot
+from .shared import _download_frame, _info_popover
 
 _HEADROOM_INFO = r"""
-For root-normalized target reconstruction error, endpoint gain and discounted
-selected-chain return are
+Exact pre-treatment pairs estimate
+(\Delta_{\mathrm{look}}=J(\pi_{oracle-look})-J(\pi_{oracle-1})) and
+(\Delta_Q=J(\pi_Q)-J(\pi_{learned-1})). Scenes are the top-level sampling
+unit; every exact within-scene pair is retained and cluster intervals are
+eligible only at the frozen scene gate.
 
-$$
-J(\pi)=\frac{\Delta_0-\Delta_H}{\Delta_0+\varepsilon},
-\qquad
-G(\pi)=\sum_{t=0}^{H-1}\gamma^t r_{t,\mathrm{root}}.
-$$
-
-Oracle lookahead headroom and the fraction recovered by a QH policy are
-
-$$
-\Delta_{\mathrm{look}}=J(\pi_{\mathrm{oracle-look}})-J(\pi_{\mathrm{oracle-1}}),
-$$
-
-$$
-\eta_Q=\frac{J(\pi_Q)-J(\pi_{\mathrm{learned-1}})}
-{J(\pi_{\mathrm{oracle-look}})-J(\pi_{\mathrm{learned-1}})+\varepsilon}.
-$$
-
-The primary endpoint is root-normalized target gain; target RRI is diagnostic.
-Rows are paired only when source, target/protocol, horizon and acquisition
-budget, candidate and oracle configuration, and branch/beam schedule match
-exactly. Actor policies consume actor-visible observations. Oracle roles use
-privileged evaluation labels and define ceilings, not deployable inputs.
+Recovered headroom is
+(\eta_Q=\Delta_Q/[J(\pi_{oracle-look})-J(\pi_{learned-1})]). There is no
+epsilon in this denominator. The ratio is emitted only above the frozen
+positive-headroom threshold; weak/nonpositive denominators remain explicit
+exclusions. Missing roles, mismatched context/checkpoints, failed audit rows,
+and wrong-store artifacts block inference. Selected rank/regret describes the
+same valid action table and never establishes generator causality.
 """
 
 
-def _return_contract(session: StoredRolloutSession) -> None:
-    semantics = session.header_summary.get("q_h_return_semantics")
-    gamma = session.header_summary.get("discount_gamma")
-    columns = st.columns(2)
-    columns[0].metric("Persisted return semantics", "unavailable" if semantics is None else str(semantics))
-    gamma_label = f"{float(gamma):.6g}" if isinstance(gamma, (int, float)) else "unavailable"
-    columns[1].metric("Discount γ", gamma_label)
-    evidence = session.discounted_returns()
-    if not evidence.get("available"):
-        st.info(f"Discounted return is unavailable: {evidence.get('reason', 'store contract is insufficient')}.")
-        return
-    returns = pd.DataFrame(evidence.get("rows", []))
-    finite = pd.to_numeric(returns.get("discounted_return"), errors="coerce").dropna()
-    if finite.empty:
-        st.info(
-            "Discounted return is derivable under the store contract, but no rollout has a complete finite reward chain."
-        )
-        return
-    st.caption(str(evidence.get("reason")))
-    st.metric(
-        "Median discounted return G",
-        f"{float(finite.median()):.4g}",
-        delta=f"{len(finite):,} finite rollouts",
-        delta_color="off",
-    )
-    _download_frame("Download discounted returns CSV", "discounted-rollout-returns.csv", returns)
-
-
-def _endpoint_and_horizon_views(role_rows: pd.DataFrame) -> None:
-    if role_rows.empty:
-        return
-    exact = role_rows.dropna(subset=["final_cumulative_target_root_gain"])
-    if exact.empty:
-        return
-    figure = px.histogram(
-        exact,
-        x="final_cumulative_target_root_gain",
-        color="semantic_role",
-        marginal="box",
-        barmode="overlay",
-        opacity=0.55,
-        title="Exact-cohort endpoint gain distributions",
-    )
-    _render_plot(figure)
-    horizon = (
-        exact.groupby(["semantic_role", "horizon"], dropna=False)["final_cumulative_target_root_gain"]
-        .agg(endpoint_median="median", endpoint_mean="mean", cohort_count="count")
-        .reset_index()
-    )
-    figure = px.line(
-        horizon,
-        x="horizon",
-        y="endpoint_median",
-        color="semantic_role",
-        markers=True,
-        hover_data=("endpoint_mean", "cohort_count"),
-        title="Exact-cohort endpoint gain by horizon",
-    )
-    _render_plot(figure)
-
-
-def _oracle_evidence(rows: pd.DataFrame) -> None:
-    finite = pd.to_numeric(rows["delta_look"], errors="coerce").dropna()
-    columns = st.columns(3)
-    columns[0].metric("Exact oracle pairs", f"{len(finite):,}")
-    columns[1].metric("Median Δlook", f"{float(finite.median()):.4g}")
-    columns[2].metric("Mean Δlook", f"{float(finite.mean()):.4g}")
-    figure = px.histogram(
-        rows,
-        x="delta_look",
-        marginal="box",
-        title="Paired oracle lookahead headroom (root-normalized endpoint gain)",
-    )
-    _render_plot(figure)
-    horizon = (
-        rows.groupby("horizon", dropna=False)["delta_look"]
-        .agg(delta_median="median", delta_mean="mean", matched_cohorts="count")
-        .reset_index()
-    )
-    _render_plot(
-        px.line(
-            horizon,
-            x="horizon",
-            y="delta_median",
-            markers=True,
-            hover_data=("delta_mean", "matched_cohorts"),
-            title="Oracle lookahead headroom by horizon",
-        )
-    )
-    st.caption("Target RRI deltas below are diagnostic; root-normalized endpoint gain is the headroom definition.")
-    st.dataframe(rows, hide_index=True, width="stretch")
-    _download_frame("Download exact oracle headroom CSV", "oracle-headroom.csv", rows)
-
-
-def _qh_evidence(rows: pd.DataFrame) -> None:
-    finite = pd.to_numeric(rows["eta_q"], errors="coerce").dropna()
-    st.metric(
-        "Median recovered headroom ηQ",
-        f"{float(finite.median()):.4g}",
-        delta=f"{len(finite):,} exact cohorts",
-        delta_color="off",
-    )
-    _render_plot(px.histogram(rows, x="eta_q", marginal="box", title="Recovered QH headroom over exact cohorts"))
-    st.dataframe(rows, hide_index=True, width="stretch")
-    _download_frame("Download recovered headroom CSV", "qh-recovered-headroom.csv", rows)
-
-
 def render(session: StoredRolloutSession) -> None:
-    """Render exact semantic-role evidence and fail-closed blockers."""
+    """Render only independently audited exact-pair policy evidence."""
 
     st.subheader("Oracle Headroom & Policies")
-    _info_popover("Endpoint return and headroom theory", _HEADROOM_INFO)
-    _return_contract(session)
-
-    evidence = session.oracle_headroom()
-    blockers = pd.DataFrame(evidence.get("blocker_rows", []))
-    st.markdown("#### Prerequisites")
-    st.dataframe(blockers, hide_index=True, width="stretch")
-    st.caption(
-        "Semantic roles are assigned only to exact persisted policy/recipe identifiers. Similar names, prefixes, and free-text labels are never inferred."
-    )
-
-    role_rows = pd.DataFrame(evidence.get("role_rows", []))
-    _endpoint_and_horizon_views(role_rows)
-    oracle_rows = pd.DataFrame(evidence.get("oracle_rows", []))
-    if oracle_rows.empty:
+    _info_popover("Exact pairing, scene gate, and headroom theory", _HEADROOM_INFO)
+    audit = session.audit_state()
+    evidence = session.audited_policy_effects()
+    if not bool(evidence.get("available")):
         st.warning(
-            "Δlook is blocked: the store has no finite one-step-oracle/lookahead-oracle pair in the same exact cohort."
+            "Δlook is blocked and ηQ is blocked: audited policy effects are unavailable; "
+            "no persisted pooled headroom estimate is substituted."
         )
-    else:
-        _oracle_evidence(oracle_rows)
-    qh_rows = pd.DataFrame(evidence.get("qh_rows", []))
-    if qh_rows.empty:
-        st.info(
-            "ηQ is blocked: exact QH, learned-one-step, and oracle-lookahead rows do not coexist in a finite matched cohort."
-        )
-    else:
-        _qh_evidence(qh_rows)
+        blockers = pd.DataFrame(evidence.get("blocker_rows", [{"reason": value} for value in audit.blockers]))
+        if not blockers.empty:
+            st.dataframe(blockers, hide_index=True, width="stretch")
+        return
 
-    if oracle_rows.empty or qh_rows.empty:
-        mismatch = pd.DataFrame(session.comparable_cohorts().get("mismatch_rows", []))
-        if not mismatch.empty:
-            with st.expander("Nearest unmatched cohorts", expanded=False):
-                st.dataframe(mismatch, hide_index=True, width="stretch")
-                _download_frame("Download mismatch evidence CSV", "policy-cohort-mismatches.csv", mismatch)
+    summaries = pd.DataFrame(evidence.get("summary_rows", []))
+    pairs = pd.DataFrame(evidence.get("pair_rows", []))
+    scenes = pd.DataFrame(evidence.get("scene_rows", []))
+    exclusions = pd.DataFrame(evidence.get("exclusion_rows", []))
+    denominators = pd.DataFrame(evidence.get("headroom_denominator_rows", []))
+    st.caption(
+        f"Audit {audit.artifact_status}/{audit.readiness}; scene CI gate: "
+        f"{evidence.get('min_scenes_for_cluster_ci')} scenes; eta_Q threshold: "
+        f"{evidence.get('eta_headroom_threshold')} (epsilon-free)."
+    )
+    st.markdown("#### ΔQ, Δlook, and ηQ summaries")
+    st.dataframe(summaries, hide_index=True, width="stretch")
+    st.markdown("#### Headroom denominator and exact exclusions")
+    st.dataframe(denominators, hide_index=True, width="stretch")
+    if not exclusions.empty:
+        st.dataframe(exclusions, hide_index=True, width="stretch")
+    with st.expander("Exact pair and scene-macro rows", expanded=False):
+        st.dataframe(pairs, hide_index=True, width="stretch")
+        st.dataframe(scenes, hide_index=True, width="stretch")
+    _download_frame("Download audited policy summary CSV", "audited-policy-effects.csv", summaries)
+    _download_frame("Download exact policy pairs CSV", "audited-policy-pairs.csv", pairs)
+    rank_key = f"stored_oracle_rank:{session.identity}"
+    if st.button("Load selected-action rank and regret evidence", key=f"{rank_key}:load"):
+        st.session_state[rank_key] = True
+    if st.session_state.get(rank_key, False):
+        ranks = pd.DataFrame(session.selected_candidate_ranks())
+        with st.expander("Selected-action rank and regret on the same valid action table", expanded=True):
+            if ranks.empty:
+                st.info("Selected rank/regret evidence is unavailable for this store.")
+            else:
+                st.dataframe(ranks, hide_index=True, width="stretch")
+                _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
 
 __all__ = ["render"]

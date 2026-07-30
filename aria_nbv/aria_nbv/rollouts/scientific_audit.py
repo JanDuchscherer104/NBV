@@ -487,7 +487,20 @@ class AuditSamplingUnit(_AuditModel):
 
 
 class FrozenAuditCohort(_AuditModel):
-    """Pre-evaluation sample frozen by deterministic within-stratum hash priority."""
+    r"""Pre-evaluation sample frozen by deterministic hash priority.
+
+    Construct the complete population and the predeclared allocation first,
+    then call :func:`freeze_hash_priority_cohort` exactly once before any
+    evaluator runs. The resulting seed, population hash, strata, inclusion
+    probabilities, weights, and selected identities remain fixed throughout
+    evaluation and reduction. Failed selected units become blocked audit rows;
+    callers must not replace them or resample the cohort.
+
+    Candidate-predicate rows are sampled units, while scenes remain the
+    independent unit for scientific policy effects. The weights
+    $w_h=1/\pi_h$ recover stratum population summaries; they do not turn
+    candidates into independent replicates.
+    """
 
     seed: NonEmptyStr
     """Explicit sampling seed included in every priority digest."""
@@ -680,7 +693,15 @@ class EndpointAuditRow(_AuditModel):
 
 
 class ValidityPredicateContract(_AuditModel):
-    """Canonical scalar validity-predicate identity for side-artifact comparison."""
+    """Exact scalar predicate semantics used to classify audit comparisons.
+
+    Identity covers predicate role, implementation owner, versioned name,
+    comparison operator, threshold, unit, frame, and semantic configuration.
+    Persisted and independent identities must match byte-for-byte for a
+    ``same_contract`` audit. A different threshold, inclusive boundary,
+    coordinate frame, unit, collision policy, or owner version is robustness
+    characterization, never correctness evidence for the persisted mask.
+    """
 
     predicate_kind: Literal["state", "path", "combined_actor", "oracle_label"]
     """Separated validity role owned by this predicate."""
@@ -734,7 +755,17 @@ class ValidityPredicateContract(_AuditModel):
             "frame": frame,
             "semantic_config_sha256": semantic_config_sha256,
         }
-        return cls(**payload, identity_sha256=_canonical_json_sha256(payload))
+        return cls(
+            predicate_kind=predicate_kind,
+            owner=owner,
+            name=name,
+            comparison_operator=comparison_operator,
+            threshold=threshold,
+            unit=unit,
+            frame=frame,
+            semantic_config_sha256=semantic_config_sha256,
+            identity_sha256=_canonical_json_sha256(payload),
+        )
 
     @model_validator(mode="after")
     def _validate_identity(self) -> ValidityPredicateContract:
@@ -873,7 +904,14 @@ class ValidityAuditRow(_AuditModel):
 
 
 class AuditCohortSummary(_AuditModel):
-    """Mandatory audit gate and row counts for one exact scientific cohort."""
+    """Fail-closed mandatory gate for one exact scientific cohort.
+
+    Counts must match the endpoint and validity rows represented in the
+    payload. Every represented cohort requires exactly one summary, and any
+    ``FAIL`` blocks confirmatory readiness even when all individual rows are
+    complete. :attr:`reason` records the predeclared scientific justification;
+    it is not a discretionary reporting label.
+    """
 
     cohort_id: NonEmptyStr
     """Identity shared by endpoint and validity rows."""
@@ -892,7 +930,16 @@ class AuditCohortSummary(_AuditModel):
 
 
 class ScientificAuditPayload(_AuditModel):
-    """Unsealed deterministic scientific-audit content."""
+    """Validated but unsealed content at the start of the artifact lifecycle.
+
+    Build and validate the complete frozen cohort, provenance, endpoint rows,
+    validity rows, and mandatory summaries here. Then call
+    :func:`seal_scientific_audit`, persist the sealed artifact with
+    :func:`canonical_scientific_audit_bytes`, and verify the digest before any
+    reduction or confirmatory use. Payload validation derives readiness from
+    completeness, mandatory verdicts, and comparison protocol; callers cannot
+    promote partial or characterization content by choosing a status string.
+    """
 
     schema_version: Literal["stored-rollout-scientific-audit-v1"] = SCIENTIFIC_AUDIT_SCHEMA_VERSION
     """Exact reader/writer schema version; no rollout-Zarr version is changed."""
@@ -1169,7 +1216,12 @@ def freeze_hash_priority_cohort(
 
 
 def seal_scientific_audit(payload: ScientificAuditPayload) -> ScientificAuditArtifact:
-    """Attach the SHA-256 of canonical payload bytes without mutating the payload."""
+    """Seal validated payload bytes without mutating the input payload.
+
+    The digest excludes the seal field itself. Persist the returned artifact,
+    not the unsealed payload, using
+    :func:`canonical_scientific_audit_bytes` with ``include_bundle_sha256=True``.
+    """
 
     digest = hashlib.sha256(canonical_scientific_audit_bytes(payload)).hexdigest()
     return ScientificAuditArtifact.model_validate({**payload.model_dump(mode="python"), "bundle_sha256": digest})
@@ -1181,6 +1233,11 @@ def canonical_scientific_audit_bytes(
     include_bundle_sha256: bool = False,
 ) -> bytes:
     """Serialize an audit with sorted keys, strict finite numbers, and one newline.
+
+    The default form is the canonical unhashed payload used by
+    :func:`seal_scientific_audit` and :func:`verify_scientific_audit_sha256`.
+    Set ``include_bundle_sha256=True`` only for persisted sealed bytes. This
+    separation makes payload -> seal -> persisted bytes deterministic.
 
     Args:
         artifact: Unsealed payload or sealed artifact.
@@ -1216,7 +1273,11 @@ def require_confirmatory_audit(artifact: ScientificAuditArtifact) -> None:
 
 
 def write_scientific_audit(path: Path, payload: ScientificAuditPayload) -> ScientificAuditArtifact:
-    """Seal and atomically write one canonical JSON side artifact outside Zarr."""
+    """Seal and atomically persist canonical JSON outside rollout Zarr.
+
+    Returns the same sealed artifact represented by the bytes on disk. The
+    side artifact never mutates or version-bumps the rollout store.
+    """
 
     artifact = seal_scientific_audit(payload)
     path = Path(path)
@@ -1228,7 +1289,12 @@ def write_scientific_audit(path: Path, payload: ScientificAuditPayload) -> Scien
 
 
 def load_scientific_audit(path: Path, *, require_confirmatory: bool = False) -> ScientificAuditArtifact:
-    """Load strict JSON, reject duplicate keys/nonfinite values, and verify its seal."""
+    """Load strict JSON, reject malformed canonical content, and verify its seal.
+
+    Duplicate keys, nonfinite constants, schema drift, and digest mismatch fail
+    before the artifact reaches reducers. ``require_confirmatory=True`` also
+    enforces the exact PASS/CONFIRMATORY readiness state.
+    """
 
     path = Path(path)
     raw = json.loads(

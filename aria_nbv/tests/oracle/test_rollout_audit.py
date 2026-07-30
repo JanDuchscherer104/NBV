@@ -265,6 +265,9 @@ def _inputs(config: OracleGtEndpointEvaluatorConfig) -> tuple[StoredEvaluationLi
         candidate_config_hash="a" * 16,
         oracle_config_hash=stable_config_hash(config.target_scorer),
         rollout_config_hash="b" * 16,
+        rollout_seed=0,
+        model_checkpoint_hash=None,
+        selection_rng_state_hash=f"seed-once:0:split-manifest:{'2' * 16}",
         target_row_id=task.target_row_id,
         target_id=task.target_id,
         target_protocol_version=TargetInputProtocol.V0_GT_INPUT.value,
@@ -381,6 +384,8 @@ def _measurement(*, delta_0: float, delta_h: float) -> IndependentEndpointMeasur
 def _audit_identities(
     unit: StoredEndpointEvaluationUnit,
     target: StoredTarget,
+    *,
+    treatment: PolicyTreatmentIdentity | None = None,
 ) -> tuple[PolicyMatchIdentity, StoredRootActionSetIdentity]:
     root_sha256 = "3" * 64
     configs = normalize_treatment_configs(
@@ -395,7 +400,8 @@ def _audit_identities(
         sha256=root_sha256,
     )
     match_identity = PolicyMatchIdentity.derive(
-        treatment=PolicyTreatmentIdentity(
+        treatment=treatment
+        or PolicyTreatmentIdentity(
             semantic_role=PolicySemanticRole.ORACLE_ONE_STEP,
             treatment_id="oracle-1",
         ),
@@ -409,6 +415,83 @@ def _audit_identities(
         raw_asset_context_sha256=named_sha256_context_hash((NamedSha256(name="target_mesh", sha256="6" * 64),)),
     )
     return match_identity, root_identity
+
+
+def test_audit_bridge_requires_exact_stored_checkpoint_for_learned_treatment() -> None:
+    config = _config()
+    base_unit, target = _unit(config, comparator_gain=0.0)
+    checkpoint = "a" * 64
+    treatment = PolicyTreatmentIdentity(
+        semantic_role=PolicySemanticRole.LEARNED_ONE_STEP,
+        treatment_id="learned-one-step",
+        model_checkpoint_sha256=checkpoint,
+    )
+    matching_unit = replace(
+        base_unit,
+        lineage=replace(base_unit.lineage, model_checkpoint_hash=checkpoint),
+    )
+    match_identity, root_identity = _audit_identities(matching_unit, target, treatment=treatment)
+    evaluator = _MeasurementEvaluator(_measurement(delta_0=1.0, delta_h=1.0))
+
+    row = build_endpoint_audit_row(
+        evaluator,
+        unit=matching_unit,
+        target=target,
+        audit_config=ScientificAuditConfig(),
+        match_identity=match_identity,
+        root_action_identity=root_identity,
+        unit_id="matching-learned-checkpoint",
+        stratum_id="stratum-0",
+    )
+
+    assert row.evaluation_status is RowEvaluationStatus.COMPLETE
+    assert len(evaluator.calls) == 1
+
+    for label, stored_checkpoint, message in (
+        ("missing", None, "requires an exact persisted"),
+        ("mismatched", "b" * 64, "differs from the learned policy treatment"),
+    ):
+        evaluator.calls.clear()
+        unit = replace(
+            base_unit,
+            lineage=replace(base_unit.lineage, model_checkpoint_hash=stored_checkpoint),
+        )
+        with pytest.raises(ValueError, match=message):
+            build_endpoint_audit_row(
+                evaluator,
+                unit=unit,
+                target=target,
+                audit_config=ScientificAuditConfig(),
+                match_identity=match_identity,
+                root_action_identity=root_identity,
+                unit_id=f"{label}-learned-checkpoint",
+                stratum_id="stratum-0",
+            )
+        assert evaluator.calls == []
+
+
+def test_audit_bridge_rejects_stored_checkpoint_for_non_learned_treatment() -> None:
+    config = _config()
+    base_unit, target = _unit(config, comparator_gain=0.0)
+    unit = replace(
+        base_unit,
+        lineage=replace(base_unit.lineage, model_checkpoint_hash="a" * 64),
+    )
+    match_identity, root_identity = _audit_identities(base_unit, target)
+    evaluator = _MeasurementEvaluator(_measurement(delta_0=1.0, delta_h=1.0))
+
+    with pytest.raises(ValueError, match="Non-learned policy treatment"):
+        build_endpoint_audit_row(
+            evaluator,
+            unit=unit,
+            target=target,
+            audit_config=ScientificAuditConfig(),
+            match_identity=match_identity,
+            root_action_identity=root_identity,
+            unit_id="non-learned-checkpoint",
+            stratum_id="stratum-0",
+        )
+    assert evaluator.calls == []
 
 
 def test_evaluator_protocol_has_no_persisted_comparator_input() -> None:
@@ -782,6 +865,11 @@ def test_real_pilot50_root_only_endpoint_tracer() -> None:
         candidate_config_hash=stable_config_hash(writer.candidate_mixture),
         oracle_config_hash=stable_config_hash(scorer),
         rollout_config_hash=stable_config_hash(writer.recipes[0].policy),
+        rollout_seed=writer.recipes[0].policy.seed,
+        model_checkpoint_hash=None,
+        selection_rng_state_hash=(
+            f"seed-once:{writer.recipes[0].policy.seed}:split-manifest:{source_manifest.split_manifest_hash}"
+        ),
         target_row_id=task.target_row_id,
         target_id=task.target_id,
         target_protocol_version=TargetInputProtocol.V0_GT_INPUT.value,

@@ -29,13 +29,18 @@ from ..common import _report_exception
 from .session import StoredRolloutSession
 from .shared import _LAUNCH_HANDLE_KEY, _download_frame, _download_json, _info_popover, _render_plot
 
-_INSPECT_INFO = """
+_INSPECT_INFO = r"""
 This section traces aggregate findings back to exact persisted rows.
 
-- Selected depth is privileged oracle/evaluation evidence for the factual selected action. Missing or corrupt depth disables only its preview.
-- Candidate and step previews may be bounded for display; their CSV exports contain the complete selected population.
+Audit identity is (H_a=\operatorname{SHA256}(\text{canonical JSON bytes})),
+and its sealed rollout-store identity must equal the selected store manifest
+hash before any confirmatory backlink is admissible. Hashing/parsing is lazy
+and occurs only after this active section requests provenance.
+
+- Selected depth in metres is privileged oracle/evaluation evidence for the factual selected action. Missing or corrupt depth disables only its preview.
+- Candidate and step previews may be bounded for display; their CSV exports contain the complete selected rollout/step population, which is the denominator.
 - Rerun reconstructs debugging views from a store, rollout id, configuration, and layer policy. It does not establish matched or statistically conclusive policy evidence.
-- Confirmatory bundles still require current validation, frozen protocols, and matched evidence.
+- Confirmatory backlinks require PASS/readiness, current validation, frozen protocols, exact store identity, matched evidence, and the section-specific scene uncertainty gate.
 
 Actor-visible inputs and privileged overlays remain distinct throughout inspection.
 """
@@ -62,6 +67,29 @@ def render(session: StoredRolloutSession, *, paths: PathConfig) -> None:
 
     st.subheader("Inspect, Export & Rerun")
     _info_popover("Selected-depth and Rerun evidence limits", _INSPECT_INFO)
+    audit = session.audit_state()
+    with st.expander("Scientific audit provenance and backlinks", expanded=False):
+        st.json(
+            {
+                "path": None if audit.path is None else audit.path.as_posix(),
+                "content_sha256": audit.content_sha256,
+                "bundle_sha256": audit.bundle_sha256,
+                "selected_store_sha256": audit.selected_store_sha256,
+                "audit_store_sha256": audit.audit_store_sha256,
+                "store_identity_matches": audit.store_identity_matches,
+                "status": audit.artifact_status,
+                "readiness": audit.readiness,
+                "evidence_tier": audit.evidence_tier,
+                "blockers": audit.blockers,
+                "backlinks": {
+                    "reconstruction": "Reconstruction & Return",
+                    "policy_effects": "Oracle Headroom & Policies",
+                    "candidate_support": "Candidate Generation & Selection",
+                    "validity": "Validity & Support",
+                },
+            },
+            expanded=False,
+        )
 
     rollout_ids = session.rollout_ids()
     if not rollout_ids:
@@ -144,7 +172,12 @@ def _render_evidence_bundle_download(session: StoredRolloutSession) -> None:
         value=False,
         disabled=status != "confirmatory",
     )
-    allowed = status == "pilot" or acknowledge
+    export_blockers = session.confirmatory_export_blockers() if status == "confirmatory" else ()
+    confirmatory_ready = not export_blockers
+    if status == "confirmatory" and not confirmatory_ready:
+        blocker_text = "; ".join(export_blockers)
+        st.error(f"Confirmatory export is blocked: {blocker_text}")
+    allowed = status == "pilot" or acknowledge and confirmatory_ready
     if allowed:
         st.download_button(
             "Download deterministic evidence bundle",
@@ -152,9 +185,9 @@ def _render_evidence_bundle_download(session: StoredRolloutSession) -> None:
             file_name=f"rollout-evidence-{status}.json",
             mime="application/json",
             on_click="ignore",
-            help="Built lazily on click, then cached by immutable store path and evidence status.",
+            help="Built lazily on click and cached by live store plus selected audit content identity.",
         )
-    else:
+    elif status == "confirmatory" and confirmatory_ready:
         st.info("Acknowledge the confirmatory evidence contract to enable this download.")
 
 

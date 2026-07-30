@@ -1,9 +1,13 @@
-"""Deterministic pandas projections and JSON bundles for rollout evidence.
+"""Deterministic scientific-report readiness, tables, and JSON bundles.
 
-The module is a read-only adapter over :mod:`aria_nbv.rollouts.inspection`.
-It gives Streamlit, thesis authoring, and offline analysis one stable table
-contract without reimplementing rollout statistics or parsing Zarr arrays in
-presentation code. Heavy candidate rows remain in the rollout store.
+This module owns the single reporting boundary over
+:mod:`aria_nbv.rollouts.inspection` and sealed scientific-audit artifacts. It
+binds one audit to one validated store, derives exact confirmatory blockers,
+projects a fixed table registry, and serializes byte-stable bundles for
+Streamlit, thesis authoring, and offline analysis. Reporting verifies and
+reduces precomputed evidence; it never executes independent evaluators,
+reinterprets Zarr arrays, or promotes persisted proxy statistics to
+confirmatory facts. Heavy candidate rows remain in the rollout store.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Literal
 
@@ -20,6 +24,7 @@ import pandas as pd
 
 from .inspection import (
     candidate_group_summary_rows,
+    policy_effect_evidence,
     rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
@@ -27,7 +32,19 @@ from .inspection import (
     selected_depth_summary_rows,
     suspicious_rollout_rows,
     target_audit_rows,
+    validity_audit_evidence,
     validity_waterfall_rows,
+)
+from .scientific_audit import (
+    AuditComparisonProtocol,
+    AuditStatus,
+    EquivalenceVerdict,
+    MandatoryCohortStatus,
+    RowEvaluationStatus,
+    ScientificAuditArtifact,
+    load_scientific_audit,
+    require_confirmatory_audit,
+    verify_scientific_audit_sha256,
 )
 from .zarr_store import RolloutZarrStoreReader
 
@@ -219,6 +236,49 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "sidecars": ("sidecar_id", "path", "name", "sha256", "format", "status"),
     "sidecar_values": ("sidecar_id", "key", *_VALUE_COLUMNS),
+    "audit_provenance": (
+        "store_id",
+        "bundle_sha256",
+        "cohort_sha256",
+        "artifact_status",
+        "readiness",
+        "comparison_protocol",
+        "audit_rollout_store_sha256",
+        "source_store_sha256",
+        "split_manifest_sha256",
+        "raw_asset_count",
+        "evaluator_id",
+        "implementation_revision",
+        "resolved_config_sha256",
+        "endpoint_row_count",
+        "validity_row_count",
+        "observed_distinct_scenes",
+        "min_scenes_for_cluster_ci",
+        "cluster_ci_eligible",
+        "cluster_ci_suppression_reason",
+        "evidence_tier",
+    ),
+    "audit_raw_assets": ("store_id", "name", "sha256", "evidence_tier"),
+    "audit_cohorts": (
+        "store_id",
+        "cohort_id",
+        "endpoint_row_count",
+        "validity_row_count",
+        "mandatory_status",
+        "reason",
+        "evidence_tier",
+    ),
+    "audit_blockers": ("store_id", "scope", "cohort_id", "code", "detail"),
+    "scientific_fact_registry": (
+        "store_id",
+        "evidence_id",
+        "fact",
+        "declared_tier",
+        "evidence_tier",
+        "status",
+        "reason",
+        "source",
+    ),
 }
 """Stable table names and column order consumed by the thesis bundle."""
 
@@ -236,14 +296,84 @@ _FACT_SPECS = (
     ("selected.path_length_m.p95", "m", "selected.path_length_m.count", "p95"),
 )
 
+_SCIENTIFIC_FACT_REGISTRY = (
+    ("E1", "independent_endpoint_gain", "thesis_primary"),
+    ("E2", "raw_qh_endpoint_effect", "thesis_primary"),
+    ("E3", "oracle_lookahead_headroom", "thesis_primary_setup_gate"),
+    ("E4", "recovered_headroom", "thesis_support"),
+    ("E5", "endpoint_telescoping_equivalence", "audit_gate"),
+    ("E6", "fixed_budget_termination_path_cost", "thesis_primary_companion"),
+    ("E7", "scene_macro_endpoint_effect", "thesis_primary_at_scene_gate"),
+    ("E8", "horizon_trajectory", "thesis_support_descriptive"),
+    ("G1", "candidate_family_composition", "thesis_support"),
+    ("G2", "proposal_mass_calibration", "development_support"),
+    ("G3", "equal_area_directional_density", "thesis_support"),
+    ("G4", "spherical_cap_coverage", "thesis_support"),
+    ("G5", "angular_separation", "thesis_support"),
+    ("G6", "spatial_support", "thesis_support"),
+    ("G7", "target_view_support", "thesis_support"),
+    ("G8", "target_los", "thesis_support"),
+    ("G9", "motion_support", "thesis_support"),
+    ("G10", "behavior_evaluation_support", "thesis_support"),
+    ("G11", "selected_rank_and_regret", "thesis_support"),
+    ("V1", "candidate_flow", "thesis_support_audit"),
+    ("V2", "mask_intersections", "thesis_support_audit"),
+    ("V3", "conditional_actor_validity", "thesis_support"),
+    ("V4", "reason_bitset_intersections", "thesis_support"),
+    ("V5", "signed_predicate_margins", "thesis_support"),
+    ("V6", "spatial_invalidity", "development_support"),
+    ("V7", "same_contract_validity_confusion", "audit_gate"),
+    ("V8", "boundary_agreement", "audit_gate"),
+    ("V9", "oracle_label_coverage", "thesis_support"),
+    ("O1", "target_protocol_matching", "thesis_support_appendix"),
+    ("O2", "store_identity_audit_readiness", "audit_gate"),
+    ("O3", "exact_row_drilldown", "development_only"),
+)
+"""Closed registry of reportable evidence IDs, meanings, and declared tiers.
+
+Registry membership declares what reporting knows how to name, not that a fact
+is available. Each selected store receives exactly one row per evidence ID;
+status and reason are derived from verified artifact content and fail closed
+when the required estimand, cohort, or inference gate is absent.
+"""
+
+ScientificAuditReference = ScientificAuditArtifact | Path | str | None
+
+
+def scientific_report_blockers(
+    store_path: Path | str,
+    scientific_audit: ScientificAuditReference,
+) -> tuple[str, ...]:
+    """Return reporting-owned blockers for one confirmatory store/audit binding.
+
+    The same store validation, artifact seal, provenance identities, mandatory
+    cohorts, endpoint equivalence, and validity-contract gates used by
+    :func:`build_thesis_report_frames` are applied here. An empty tuple means
+    eligible under current evidence; it does not create or run an audit.
+    """
+
+    resolved_store = Path(store_path).expanduser().resolve()
+    artifact, load_blockers = _resolve_scientific_audit(scientific_audit, evidence_status="pilot")
+    if artifact is None:
+        return load_blockers
+    reader = RolloutZarrStoreReader(resolved_store)
+    validation = reader.validate()
+    if not validation.ok:
+        detail = "; ".join(validation.errors[:3]) or "unknown validation error"
+        return (f"rollout_store_invalid:{detail}",)
+    store_id = str(reader.root.attrs.get("manifest_sha256", ""))
+    blocker_rows = _scientific_audit_blockers(resolved_store, store_id=store_id, artifact=artifact)
+    return tuple(f"{row['code']}:{row['detail']}" for row in blocker_rows)
+
 
 def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
     *,
     sidecar_paths: Iterable[Path | str] = (),
     evidence_status: Literal["pilot", "confirmatory"],
+    scientific_audit: ScientificAuditReference = None,
 ) -> dict[str, pd.DataFrame]:
-    """Build deterministic named DataFrames from rollout stores and sidecars.
+    """Build deterministic named DataFrames with fail-closed evidence tiers.
 
     Args:
         store_paths: Current-schema rollout Zarr stores. Every store is fully
@@ -251,15 +381,24 @@ def build_thesis_report_frames(
         sidecar_paths: Optional caller-selected JSON or JSONL evidence files.
             Selected paths are required to exist; missing files never disappear
             silently from provenance.
-        evidence_status: Explicit scientific status for all projected facts.
-            Callers must choose ``pilot`` or ``confirmatory``; file names and
-            paths never determine this status.
+        evidence_status: Requested export tier. Persisted proxy statistics
+            remain labelled ``pilot`` even inside an admitted confirmatory
+            bundle; only the audit-backed registry may become confirmatory.
+        scientific_audit: Explicit precomputed audit artifact or JSON path.
+            Reporting may verify and reduce it but never executes the audit
+            evaluator. Confirmatory export requires an exact PASS artifact.
 
     Returns:
         Mapping whose keys and columns exactly match
         :data:`THESIS_REPORT_TABLE_COLUMNS`. Config values, statistics, and
         sidecar leaves use typed long-form rows so missing values remain
         distinguishable from zero or an empty string.
+
+    Notes:
+        Persisted rollout summaries remain pilot proxies in every bundle.
+        Confirmatory status is available only through one verified audit bound
+        to one validated store, and the scientific-fact registry records both
+        available and unavailable declared facts exactly once per store.
     """
 
     if evidence_status not in {"pilot", "confirmatory"}:
@@ -268,8 +407,21 @@ def build_thesis_report_frames(
     resolved_stores = sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix)
     if not resolved_stores:
         raise ValueError("At least one rollout store is required to build thesis report frames.")
+    artifact, audit_load_blockers = _resolve_scientific_audit(
+        scientific_audit,
+        evidence_status=evidence_status,
+    )
+    if artifact is not None and len(resolved_stores) != 1:
+        raise ValueError("One scientific audit can be bound to exactly one selected rollout store.")
     for store_path in resolved_stores:
         _append_store_rows(rows, store_path, evidence_status=evidence_status)
+    _append_scientific_audit_rows(
+        rows,
+        store_paths=resolved_stores,
+        artifact=artifact,
+        load_blockers=audit_load_blockers,
+        evidence_status=evidence_status,
+    )
     for sidecar_path in sorted(
         {Path(path).expanduser().resolve() for path in sidecar_paths},
         key=Path.as_posix,
@@ -279,12 +431,311 @@ def build_thesis_report_frames(
     return {name: _frame(name, table_rows) for name, table_rows in rows.items()}
 
 
+def _resolve_scientific_audit(
+    reference: ScientificAuditReference,
+    *,
+    evidence_status: Literal["pilot", "confirmatory"],
+) -> tuple[ScientificAuditArtifact | None, tuple[str, ...]]:
+    if reference is None:
+        if evidence_status == "confirmatory":
+            raise ValueError("Confirmatory evidence export requires an explicit scientific audit artifact or path.")
+        return None, ("scientific_audit_absent",)
+    try:
+        if isinstance(reference, ScientificAuditArtifact):
+            artifact = ScientificAuditArtifact.model_validate(reference.model_dump(mode="python"))
+            verify_scientific_audit_sha256(artifact)
+        else:
+            artifact = load_scientific_audit(Path(reference).expanduser().resolve())
+        if evidence_status == "confirmatory":
+            require_confirmatory_audit(artifact)
+        return artifact, ()
+    except Exception as exc:
+        if evidence_status == "confirmatory":
+            raise ValueError(f"Confirmatory scientific audit is invalid: {type(exc).__name__}: {exc}") from exc
+        return None, (f"scientific_audit_invalid:{type(exc).__name__}:{exc}",)
+
+
+def _append_scientific_audit_rows(
+    rows: dict[str, list[dict[str, object]]],
+    *,
+    store_paths: list[Path],
+    artifact: ScientificAuditArtifact | None,
+    load_blockers: tuple[str, ...],
+    evidence_status: Literal["pilot", "confirmatory"],
+) -> None:
+    store_ids = tuple(str(row["store_id"]) for row in rows["stores"])
+    if artifact is None:
+        for store_id in store_ids:
+            for blocker in load_blockers:
+                rows["audit_blockers"].append(
+                    {"store_id": store_id, "scope": "artifact", "cohort_id": None, "code": blocker, "detail": blocker}
+                )
+            _append_scientific_fact_registry(
+                rows,
+                store_id=store_id,
+                evidence_tier="blocked",
+                availability=_unavailable_scientific_facts("confirmatory_scientific_audit_unavailable"),
+                source="scientific_audit.unavailable",
+            )
+        return
+
+    assert len(store_paths) == len(store_ids) == 1
+    store_id = store_ids[0]
+    blockers = _scientific_audit_blockers(store_paths[0], store_id=store_id, artifact=artifact)
+    if evidence_status == "confirmatory" and blockers:
+        details = "; ".join(f"{row['code']}: {row['detail']}" for row in blockers)
+        raise ValueError(f"Confirmatory scientific audit is not admissible for the selected store: {details}")
+
+    evidence_tier: Literal["confirmatory", "characterization", "blocked"] = (
+        "confirmatory" if evidence_status == "confirmatory" and not blockers else "characterization"
+    )
+    rows["audit_provenance"].append(
+        {
+            "store_id": store_id,
+            "bundle_sha256": artifact.bundle_sha256,
+            "cohort_sha256": artifact.cohort.cohort_sha256,
+            "artifact_status": artifact.status.value,
+            "readiness": artifact.readiness.value,
+            "comparison_protocol": artifact.comparison_protocol.value,
+            "audit_rollout_store_sha256": artifact.provenance.rollout_store_sha256,
+            "source_store_sha256": artifact.provenance.source_store_sha256,
+            "split_manifest_sha256": artifact.provenance.split_manifest_sha256,
+            "raw_asset_count": len(artifact.provenance.raw_assets),
+            "evaluator_id": artifact.provenance.evaluator_id,
+            "implementation_revision": artifact.provenance.implementation_revision,
+            "resolved_config_sha256": artifact.provenance.resolved_config_sha256,
+            "endpoint_row_count": len(artifact.endpoint_rows),
+            "validity_row_count": len(artifact.validity_rows),
+            "observed_distinct_scenes": artifact.observed_distinct_scenes,
+            "min_scenes_for_cluster_ci": artifact.config.min_scenes_for_cluster_ci,
+            "cluster_ci_eligible": artifact.cluster_ci_eligible,
+            "cluster_ci_suppression_reason": artifact.cluster_ci_suppression_reason,
+            "evidence_tier": evidence_tier,
+        }
+    )
+    rows["audit_raw_assets"].extend(
+        {
+            "store_id": store_id,
+            "name": item.name,
+            "sha256": item.sha256,
+            "evidence_tier": evidence_tier,
+        }
+        for item in artifact.provenance.raw_assets
+    )
+    rows["audit_cohorts"].extend(
+        {
+            "store_id": store_id,
+            "cohort_id": summary.cohort_id,
+            "endpoint_row_count": summary.endpoint_row_count,
+            "validity_row_count": summary.validity_row_count,
+            "mandatory_status": summary.mandatory_status.value,
+            "reason": summary.reason,
+            "evidence_tier": evidence_tier,
+        }
+        for summary in artifact.cohort_summaries
+    )
+    rows["audit_blockers"].extend(blockers)
+    if evidence_status == "pilot":
+        rows["audit_blockers"].append(
+            {
+                "store_id": store_id,
+                "scope": "export",
+                "cohort_id": None,
+                "code": "pilot_mode_confirmatory_claims_suppressed",
+                "detail": "Pilot exports retain provenance and characterization only.",
+            }
+        )
+    availability = (
+        _scientific_fact_availability(artifact)
+        if evidence_tier == "confirmatory"
+        else _unavailable_scientific_facts("pilot_or_blocked_evidence_tier")
+    )
+    _append_scientific_fact_registry(
+        rows,
+        store_id=store_id,
+        evidence_tier=evidence_tier,
+        availability=availability,
+        source=f"scientific_audit:{artifact.bundle_sha256}",
+    )
+
+
+def _scientific_audit_blockers(
+    store_path: Path,
+    *,
+    store_id: str,
+    artifact: ScientificAuditArtifact,
+) -> list[dict[str, object]]:
+    blockers: list[dict[str, object]] = []
+
+    def append(scope: str, code: str, detail: str, *, cohort_id: str | None = None) -> None:
+        blockers.append({"store_id": store_id, "scope": scope, "cohort_id": cohort_id, "code": code, "detail": detail})
+
+    if artifact.provenance.rollout_store_sha256 != store_id:
+        append(
+            "identity",
+            "wrong_rollout_store",
+            f"expected={store_id}:observed={artifact.provenance.rollout_store_sha256}",
+        )
+    manifest = RolloutZarrStoreReader(store_path).manifest().get("manifest", {})
+    config_hashes = manifest.get("config_hashes", {}) if isinstance(manifest, dict) else {}
+    _append_identity_hash_blocker(
+        append,
+        label="source_store",
+        observed=config_hashes.get("source_manifest") if isinstance(config_hashes, dict) else None,
+        expected=artifact.provenance.source_store_sha256,
+    )
+    _append_identity_hash_blocker(
+        append,
+        label="split_manifest",
+        observed=config_hashes.get("split_manifest") if isinstance(config_hashes, dict) else None,
+        expected=artifact.provenance.split_manifest_sha256,
+    )
+    if artifact.status is not AuditStatus.PASS:
+        append("artifact", "audit_status_not_pass", artifact.status.value)
+    if artifact.comparison_protocol is not AuditComparisonProtocol.SAME_CONTRACT:
+        append("artifact", "comparison_protocol_mismatch", artifact.comparison_protocol.value)
+    for summary in artifact.cohort_summaries:
+        if summary.mandatory_status is not MandatoryCohortStatus.PASS:
+            append("cohort", "mandatory_cohort_not_pass", summary.reason, cohort_id=summary.cohort_id)
+    for row in artifact.endpoint_rows:
+        if row.evaluation_status is not RowEvaluationStatus.COMPLETE:
+            append("endpoint", "endpoint_incomplete", row.unit_id, cohort_id=row.cohort_id)
+        elif row.equivalence_verdict is not EquivalenceVerdict.PASS:
+            append("endpoint", "endpoint_equivalence_failed", row.unit_id, cohort_id=row.cohort_id)
+        if row.source_store_sha256 != artifact.provenance.source_store_sha256:
+            append("endpoint", "endpoint_source_identity_mismatch", row.unit_id, cohort_id=row.cohort_id)
+        if row.split_manifest_sha256 != artifact.provenance.split_manifest_sha256:
+            append("endpoint", "endpoint_split_identity_mismatch", row.unit_id, cohort_id=row.cohort_id)
+    validity = validity_audit_evidence(artifact)
+    if not bool(validity["same_contract_eligible"]):
+        append("validity", "required_validity_contract_incomplete", str(validity["fallback_reason"]))
+    validity_blockers = validity["blocker_rows"]
+    if not isinstance(validity_blockers, list):
+        raise TypeError("validity_audit_evidence blocker_rows must be a list.")
+    for row in validity_blockers:
+        if not isinstance(row, dict):
+            raise TypeError("validity_audit_evidence blocker rows must be mappings.")
+        append(
+            "validity",
+            str(row["blocker"]),
+            f"predicate_kind={row['predicate_kind']}",
+            cohort_id=str(row["cohort_id"]),
+        )
+    return sorted(
+        blockers,
+        key=lambda row: tuple(
+            "" if row[key] is None else str(row[key]) for key in THESIS_REPORT_TABLE_COLUMNS["audit_blockers"]
+        ),
+    )
+
+
+def _append_identity_hash_blocker(
+    append: Callable[[str, str, str], None],
+    *,
+    label: str,
+    observed: object,
+    expected: str,
+) -> None:
+    observed_values = tuple(str(value) for value in observed) if isinstance(observed, list | tuple) else ()
+    if observed_values != (expected,):
+        append("identity", f"wrong_{label}_identity", f"expected={expected}:observed={observed_values}")
+
+
+def _scientific_fact_availability(artifact: ScientificAuditArtifact) -> dict[str, str | None]:
+    availability = _unavailable_scientific_facts("not_projected_by_scientific_audit")
+    endpoints = artifact.endpoint_rows
+    endpoints_complete = bool(endpoints) and all(
+        row.evaluation_status is RowEvaluationStatus.COMPLETE and row.endpoint_gain is not None for row in endpoints
+    )
+    availability["E1"] = None if endpoints_complete else "complete_independent_endpoints_absent"
+    equivalence_complete = endpoints_complete and all(
+        row.equivalence_verdict is EquivalenceVerdict.PASS for row in endpoints
+    )
+    availability["E5"] = None if equivalence_complete else "endpoint_equivalence_not_complete_pass"
+    companion_complete = endpoints_complete and all(
+        row.achieved_steps is not None
+        and row.budget is not None
+        and row.termination_reason is not None
+        and row.path_length_m is not None
+        and row.evaluation_cost_s is not None
+        for row in endpoints
+    )
+    availability["E6"] = None if companion_complete else "fixed_budget_path_or_cost_fields_incomplete"
+
+    effects = policy_effect_evidence(artifact)
+    summary_rows = effects["summary_rows"]
+    if not isinstance(summary_rows, list):
+        raise TypeError("policy_effect_evidence summary_rows must be a list.")
+    summaries = {str(row["contrast"]): row for row in summary_rows if isinstance(row, dict) and "contrast" in row}
+    for evidence_id, contrast in (("E2", "raw_qh"), ("E3", "delta_look"), ("E4", "eta_q")):
+        summary = summaries.get(contrast)
+        availability[evidence_id] = (
+            None if summary is not None and bool(summary.get("estimable")) else f"{contrast}_not_estimable"
+        )
+    inferential_summaries = [
+        summary
+        for contrast, summary in summaries.items()
+        if contrast in {"raw_qh", "delta_look", "eta_q"} and summary.get("inference_status") == "cluster_ci"
+    ]
+    availability["E7"] = None if inferential_summaries else "scene_cluster_ci_gate_not_met"
+
+    validity = validity_audit_evidence(artifact)
+    confusion_rows = validity["confusion_rows"]
+    boundary_rows = validity["boundary_rows"]
+    validity_gate = bool(validity["same_contract_eligible"])
+    confusion_available = (
+        validity_gate
+        and isinstance(confusion_rows, list)
+        and bool(confusion_rows)
+        and all(isinstance(row, dict) and bool(row.get("eligible")) for row in confusion_rows)
+    )
+    boundary_available = validity_gate and isinstance(boundary_rows, list) and bool(boundary_rows)
+    availability["V7"] = None if confusion_available else "eligible_same_contract_confusion_absent"
+    availability["V8"] = None if boundary_available else "eligible_boundary_agreement_absent"
+    availability["O2"] = None
+    return availability
+
+
+def _unavailable_scientific_facts(reason: str) -> dict[str, str | None]:
+    return {evidence_id: reason for evidence_id, _, _ in _SCIENTIFIC_FACT_REGISTRY}
+
+
+def _append_scientific_fact_registry(
+    rows: dict[str, list[dict[str, object]]],
+    *,
+    store_id: str,
+    evidence_tier: Literal["confirmatory", "characterization", "blocked"],
+    availability: Mapping[str, str | None],
+    source: str,
+) -> None:
+    registry_rows: list[dict[str, object]] = [
+        {
+            "store_id": store_id,
+            "evidence_id": evidence_id,
+            "fact": fact,
+            "declared_tier": declared_tier,
+            "evidence_tier": evidence_tier,
+            "status": "available" if availability[evidence_id] is None else "unavailable",
+            "reason": availability[evidence_id],
+            "source": source,
+        }
+        for evidence_id, fact, declared_tier in _SCIENTIFIC_FACT_REGISTRY
+    ]
+    identities = {(str(row["store_id"]), str(row["evidence_id"])) for row in registry_rows}
+    if len(identities) != len(registry_rows) or len(registry_rows) != len(_SCIENTIFIC_FACT_REGISTRY):
+        raise ValueError("Scientific fact registry must contain exactly one row per (store_id, evidence_id).")
+    rows["scientific_fact_registry"].extend(registry_rows)
+
+
 def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     """Serialize report frames as strict, compact, byte-stable JSON.
 
     The serializer rejects missing or extra tables, column drift, and infinite
     floats. Pandas and NumPy missing scalars become JSON ``null``. It adds no
     build timestamp, so identical frames produce identical bytes.
+
+    This is serialization only: scientific readiness and fact availability
+    must already have been established by :func:`build_thesis_report_frames`.
     """
 
     _validate_frame_schema(frames)
@@ -317,7 +768,12 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
 
 
 def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFrame]) -> str:
-    """Atomically write a thesis-report bundle and return its SHA-256 digest."""
+    """Atomically write validated report bytes and return their SHA-256.
+
+    The digest covers the exact bytes written by
+    :func:`serialize_thesis_report_bundle`; no timestamp or path enters bundle
+    identity.
+    """
 
     output_path = Path(path).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -377,7 +833,7 @@ def _append_store_rows(
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
     stats = rollout_statistics(reader, manifest_payload=manifest_payload)
     rows["statistics"].extend(_typed_leaf_rows("store_id", store_id, stats))
-    rows["facts"].extend(_fact_rows(store_id, stats, evidence_status=evidence_status))
+    rows["facts"].extend(_fact_rows(store_id, stats))
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))
     rows["targets"].extend(_with_store_id(store_id, target_audit_rows(reader)))
     rows["validity"].extend(_with_store_id(store_id, validity_waterfall_rows(reader)))
@@ -389,7 +845,7 @@ def _append_store_rows(
         {
             "store_id": store_id,
             **storage,
-            "status": evidence_status,
+            "status": "pilot",
             "source": "inspection.runtime_storage_statistics",
         }
     )
@@ -397,7 +853,7 @@ def _append_store_rows(
         {
             "store_id": store_id,
             **failure,
-            "status": evidence_status,
+            "status": "pilot",
             "source": "inspection.suspicious_rollout_rows",
         }
         for failure in suspicious_rollout_rows(reader)
@@ -570,8 +1026,6 @@ def _typed_leaf_rows(owner_key: str, owner: str, payload: object) -> list[dict[s
 def _fact_rows(
     store_id: str,
     statistics: dict[str, object],
-    *,
-    evidence_status: Literal["pilot", "confirmatory"],
 ) -> list[dict[str, object]]:
     return [
         {
@@ -581,7 +1035,7 @@ def _fact_rows(
             "unit": unit,
             "n": _nested_value(statistics, n_key),
             "aggregation": aggregation,
-            "status": evidence_status,
+            "status": "pilot",
             "source": "inspection.rollout_statistics",
         }
         for key, unit, n_key, aggregation in _FACT_SPECS
@@ -706,10 +1160,12 @@ def _json_scalar(value: object, *, table: str, column: str) -> object:
 
 __all__ = [
     "ANALYSIS_FACT_SIDECAR_VERSION",
+    "ScientificAuditReference",
     "THESIS_REPORT_BUNDLE_ROLE",
     "THESIS_REPORT_BUNDLE_VERSION",
     "THESIS_REPORT_TABLE_COLUMNS",
     "build_thesis_report_frames",
     "serialize_thesis_report_bundle",
+    "scientific_report_blockers",
     "write_thesis_report_bundle",
 ]

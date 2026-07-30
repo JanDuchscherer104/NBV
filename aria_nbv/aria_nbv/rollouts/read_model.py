@@ -1,4 +1,12 @@
-"""Typed, presentation-free projections over persisted rollout stores."""
+"""Canonical read-side interpretation of persisted rollout stores.
+
+This module owns typed, presentation-free DTOs and the joins that decode
+rollouts, steps, targets, selected depths, endpoint lineage, factual pose
+chains, and pre-treatment identities from :class:`RolloutZarrStoreReader`.
+It does not render UI, reduce scientific populations, evaluate geometry, or
+write stores. Those responsibilities belong respectively to the app session,
+:mod:`aria_nbv.rollouts.inspection`, Oracle audit pipelines, and Zarr writers.
+"""
 
 from __future__ import annotations
 
@@ -183,6 +191,12 @@ class StoredEvaluationLineage:
     """Resolved oracle-evaluation configuration identity."""
     rollout_config_hash: str
     """Resolved rollout configuration identity."""
+    rollout_seed: int
+    """Persisted recipe/root seed used to derive deterministic rollout seeds."""
+    model_checkpoint_hash: str | None
+    """Exact learned-policy checkpoint hash, or ``None`` for non-learned policies."""
+    selection_rng_state_hash: str
+    """Persisted action-selection RNG-state identity for replay audits."""
     target_row_id: int
     """Stable target row referenced by the rollout."""
     target_id: str
@@ -686,16 +700,19 @@ def persisted_pre_treatment_context_sha256(
 
     The versioned digest binds source, split, sample/shard, scene/snippet,
     target protocol and persisted target identity, root temporal anchors,
-    persisted config identities, fixed budget, reason/label state, and the root
-    action-table hash. Policy schedules, branch/beam parameters, selected pose
-    chains, candidate outcomes, and reconstruction scores are excluded.
+    non-treatment Oracle identity, rollout seed and selection-RNG identity,
+    fixed budget, reason/label state, and the root action-table hash. Raw
+    candidate/rollout config hashes, policy schedules, branch/beam parameters,
+    learned checkpoints, selected pose chains, candidate outcomes, and
+    reconstruction scores are excluded.
 
     Notes:
         This helper can bind only identities persisted in the current rollout
         schema. Independently reopened mesh/content identities remain separate
-        in the scientific audit's raw-asset context. A model checkpoint is
-        bound through normalized config/treatment identity unless a future
-        persisted lineage field supplies an exact checkpoint hash.
+        in the scientific audit's raw-asset context. Raw candidate/rollout
+        config hashes and learned checkpoints remain provenance/treatment
+        identities; pairing binds their treatment-normalized config identity
+        separately.
     """
 
     if root_action_identity.rollout_row_id != lineage.rollout_row_id:
@@ -703,7 +720,7 @@ def persisted_pre_treatment_context_sha256(
     if target.target_row_id != lineage.target_row_id or target.target_id != lineage.target_id:
         raise ValueError("Stored target identity differs from the rollout lineage.")
     payload = {
-        "version": "aria-nbv-persisted-pre-treatment-context-v1",
+        "version": "aria-nbv-persisted-pre-treatment-context-v2",
         "source": {
             "row_id": lineage.source_row_id,
             "sample_index": lineage.source_sample_index,
@@ -741,13 +758,13 @@ def persisted_pre_treatment_context_sha256(
             "time_ns": lineage.root_time_ns,
             "trajectory_index": lineage.root_trajectory_index,
             "frame_index": lineage.root_frame_index,
+            "rollout_seed": lineage.rollout_seed,
+            "selection_rng_state_hash": lineage.selection_rng_state_hash,
             "budget": root_action_identity.budget,
             "action_set_sha256": root_action_identity.sha256,
         },
         "configs": {
-            "candidate": lineage.candidate_config_hash,
             "oracle": lineage.oracle_config_hash,
-            "rollout": lineage.rollout_config_hash,
         },
     }
     encoded = json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":"), sort_keys=True).encode(
@@ -766,6 +783,10 @@ def _canonical_float32_hex(value: NDArray[np.float32], *, shape: tuple[int, ...]
 def endpoint_evaluation_unit(
     reader: RolloutZarrStoreReader,
     rollout_row_id: int,
+    *,
+    expected_rollout_seed: int | None = None,
+    expected_model_checkpoint_hash: str | None = None,
+    expected_selection_rng_state_hash: str | None = None,
 ) -> StoredEndpointEvaluationUnit:
     r"""Decode one strict independent endpoint-evaluation unit.
 
@@ -777,6 +798,13 @@ def endpoint_evaluation_unit(
     Args:
         reader: Validated read-only rollout store reader.
         rollout_row_id: Stable rollout-table row identity.
+        expected_rollout_seed: Optional caller-owned seed identity that must
+            equal the persisted rollout seed.
+        expected_model_checkpoint_hash: Optional learned checkpoint identity
+            that must equal the persisted checkpoint. Supplying one for a
+            non-learned stored policy also fails closed.
+        expected_selection_rng_state_hash: Optional caller-owned selection-RNG
+            identity that must equal the persisted lineage value.
 
     Returns:
         A typed evaluation unit with evaluator inputs and a separately typed
@@ -836,6 +864,12 @@ def endpoint_evaluation_unit(
     selected_poses = _readonly_pose_matrix(selected_poses, label="selected_poses_world_cam")
 
     lineage = _evaluation_lineage(reader, rollout=rollout, rollout_position=rollout_position)
+    _validate_expected_policy_identity(
+        lineage,
+        expected_rollout_seed=expected_rollout_seed,
+        expected_model_checkpoint_hash=expected_model_checkpoint_hash,
+        expected_selection_rng_state_hash=expected_selection_rng_state_hash,
+    )
     comparator_gain = float(rollouts["final_cumulative_target_root_gain"][rollout_position])
     if achieved_steps == 0 and termination_reason == "terminated_early" and np.isnan(comparator_gain):
         comparator_gain = 0.0
@@ -966,6 +1000,7 @@ def _evaluation_lineage(
     root_time_ns = int(rollouts["root_time_ns"][rollout_position])
     root_trajectory_index = int(rollouts["root_trajectory_index"][rollout_position])
     root_frame_index = int(rollouts["root_frame_index"][rollout_position])
+    rollout_seed = int(rollouts["random_seed"][rollout_position])
     for label, value in (
         ("source_row_id", rollout.source_row_id),
         ("source_sample_index", source_sample_index),
@@ -973,6 +1008,7 @@ def _evaluation_lineage(
         ("root_time_ns", root_time_ns),
         ("root_trajectory_index", root_trajectory_index),
         ("root_frame_index", root_frame_index),
+        ("rollout_seed", rollout_seed),
         ("target_row_id", rollout.target_row_id),
     ):
         if value < 0:
@@ -1038,6 +1074,19 @@ def _evaluation_lineage(
             lineage_table["rollout_config_id"][lineage_position],
             label="rollout_config_hash",
         ),
+        rollout_seed=rollout_seed,
+        model_checkpoint_hash=_optional_decoded(
+            reader,
+            "config",
+            lineage_table["model_checkpoint_id"][lineage_position],
+            label="model_checkpoint_hash",
+        ),
+        selection_rng_state_hash=_required_decoded(
+            reader,
+            "config",
+            lineage_table["selection_rng_state_hash_id"][lineage_position],
+            label="selection_rng_state_hash",
+        ),
         target_row_id=rollout.target_row_id,
         target_id=target_id,
         target_protocol_version=_required_decoded(
@@ -1053,6 +1102,29 @@ def _evaluation_lineage(
             label="target_crop_policy",
         ),
     )
+
+
+def _validate_expected_policy_identity(
+    lineage: StoredEvaluationLineage,
+    *,
+    expected_rollout_seed: int | None,
+    expected_model_checkpoint_hash: str | None,
+    expected_selection_rng_state_hash: str | None,
+) -> None:
+    """Reject caller-owned policy identities that disagree with persisted lineage."""
+
+    expected = (
+        ("rollout_seed", expected_rollout_seed, lineage.rollout_seed),
+        ("model_checkpoint_hash", expected_model_checkpoint_hash, lineage.model_checkpoint_hash),
+        (
+            "selection_rng_state_hash",
+            expected_selection_rng_state_hash,
+            lineage.selection_rng_state_hash,
+        ),
+    )
+    for label, requested, persisted in expected:
+        if requested is not None and requested != persisted:
+            raise ValueError(f"Caller-supplied {label}={requested!r} does not match persisted lineage {persisted!r}.")
 
 
 def _validate_factual_steps(steps: tuple[StoredStep, ...], *, rollout_row_id: int) -> None:
@@ -1118,6 +1190,19 @@ def _required_identity(value: str, *, label: str) -> str:
     if not normalized or normalized.lower() in {"unknown", "none", "null", "placeholder"}:
         raise ValueError(f"Missing or placeholder {label} identity.")
     return normalized
+
+
+def _optional_decoded(
+    reader: RolloutZarrStoreReader,
+    dictionary: str,
+    index: Any,
+    *,
+    label: str,
+) -> str | None:
+    values = _string_dictionary(reader, dictionary)
+    position = int(index)
+    value = values[position].strip() if 0 <= position < len(values) else ""
+    return _required_identity(value, label=label) if value else None
 
 
 def _string_dictionary(reader: RolloutZarrStoreReader, name: str) -> list[str]:

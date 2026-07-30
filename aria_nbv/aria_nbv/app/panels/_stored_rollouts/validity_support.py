@@ -13,17 +13,21 @@ import streamlit as st
 from .session import StoredRolloutSession
 from .shared import _SECTION_KEY, _download_frame, _format_plot_label, _info_popover, _render_plot
 
-_VALIDITY_INFO = """
+_VALIDITY_INFO = r"""
 Validity is a hard admission contract, never a low reconstruction score.
+Invalid-reason codes explain rejection.
+Actor, oracle-label, QH-training, and selected masks are separate denominators;
+selection must imply actor validity. Full reason bitsets and signed margins
+retain state/path/combined predicate ownership, comparison operator, threshold,
+frame, and units. Counts are reduced within decision state and then scene.
 
-- `actor_action_mask` identifies actions the policy may select.
-- `oracle_label_mask` identifies rows with privileged evaluation labels.
-- `q_train_mask` additionally identifies rows admitted to QH supervision.
-- `selected_mask` records the factual actor decision and must imply actor validity; it need not imply QH trainability.
-
-Invalid-reason codes explain rejection. Actor-valid but oracle-invalid rows are
-evaluation-coverage gaps, not negative-RRI examples. Compare stores only when
-candidate budgets, target protocol, and reason-code version agree.
+Independent confusion/boundary evidence uses the frozen stratified audit with
+inverse inclusion weights (1/\pi_h). Confirmatory soundness-style language
+requires a sealed PASS artifact under the exact same predicate contract.
+Without it, flow, masks, reasons, and margins characterize persisted behavior
+only. Missing labels/margins remain unavailable and never become false or zero.
+Development triage and correlations are collapsed diagnostics, not thesis
+claims.
 """
 _VALID_FANOUT_COLORS = ("#14b8a6", "#2dd4bf", "#0f766e", "#5eead4")
 _INVALID_FRACTION_COLORS = ("#ef4444", "#fb7185", "#be123c", "#f97316")
@@ -66,12 +70,42 @@ def _render_targets_and_support(session: StoredRolloutSession) -> None:
             _render_candidate_admission_waterfall(masks)
         _download_frame("Download mask combinations CSV", "candidate-mask-combinations.csv", masks)
 
-    if st.toggle(
-        "Load complete invalid-reason breakdowns",
-        value=False,
-        help="Builds complete-store invalid-reason distributions for validity triage.",
+    composition = pd.DataFrame(session.candidate_composition())
+    if composition.empty or "generation_cohort_id" not in composition:
+        return
+    cohort = st.selectbox(
+        "Validity generation cohort",
+        sorted(composition["generation_cohort_id"].astype(str).unique().tolist()),
+    )
+    state_key = f"stored_validity_heavy:{session.identity}:{cohort}"
+    if st.button("Load full validity scientific evidence", key=f"{state_key}:load"):
+        st.session_state[state_key] = True
+    if not st.session_state.get(state_key, False):
+        st.info("Full candidate validity rows and independent-audit reducers remain unloaded until requested.")
+        return
+    evidence = session.validity_scientific_evidence(generation_cohort_id=str(cohort))
+    st.caption(f"Evidence tier: {evidence.evidence_tier}. Candidate rows are characterized over the full cohort.")
+    for title, rows in (
+        ("Count-conserving candidate flow", evidence.characterization.get("flow_rows", [])),
+        ("Mask intersections and implication checks", evidence.characterization.get("mask_intersection_rows", [])),
+        ("Invalid-reason intersections", evidence.characterization.get("reason_intersection_rows", [])),
+        ("State/scene conditional validity", evidence.characterization.get("conditional_availability_rows", [])),
     ):
-        _render_invalid_reason_distributions(pd.DataFrame(session.candidates()))
+        with st.expander(title, expanded=title.startswith("Count")):
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if evidence.audit is None:
+        st.warning("Independent same-contract validity audit is unavailable; evidence remains characterization-only.")
+        if evidence.blockers:
+            st.dataframe(pd.DataFrame({"blocker": evidence.blockers}), hide_index=True, width="stretch")
+    else:
+        for title, key in (
+            ("Independent weighted confusion", "confusion_rows"),
+            ("Signed-margin summaries", "margin_rows"),
+            ("Predicate-boundary agreement", "boundary_rows"),
+            ("Audit coverage and blockers", "coverage_rows"),
+        ):
+            with st.expander(title, expanded=False):
+                st.dataframe(pd.DataFrame(evidence.audit.get(key, [])), hide_index=True, width="stretch")
 
 
 def _render_temporal_validity(session: StoredRolloutSession) -> None:
@@ -626,8 +660,8 @@ def render(session: StoredRolloutSession) -> None:
     """Render target/action support followed by actionable failure triage."""
 
     _render_targets_and_support(session)
-    st.divider()
-    _render_failure_triage(session)
+    with st.expander("Development triage and score correlations", expanded=False):
+        _render_failure_triage(session)
 
 
 __all__ = ["render"]

@@ -71,6 +71,7 @@ from ...rollouts.scientific_audit import (
     EquivalenceVerdict,
     NamedSha256,
     PolicyMatchIdentity,
+    PolicySemanticRole,
     RowEvaluationStatus,
     ScientificAuditConfig,
 )
@@ -187,7 +188,14 @@ class IndependentEndpointMeasurement:
 
 @runtime_checkable
 class IndependentEndpointEvaluator(Protocol):
-    """Evaluate a stored path without accepting any persisted comparator."""
+    """Recompute terminal evidence without persisted outcome inputs.
+
+    The callable boundary accepts only immutable source/target lineage and the
+    factual selected pose chain. Persisted gains, point--mesh distances,
+    cumulative returns, and equivalence comparators are intentionally absent;
+    :func:`build_endpoint_audit_row` joins the persisted comparator only after
+    independent measurement returns.
+    """
 
     def evaluate(
         self,
@@ -228,14 +236,27 @@ class ResolvedEndpointSource:
 
 
 class EndpointSourceRepository(Protocol):
-    """Resolve and verify one immutable source row from persisted lineage."""
+    """Own immutable source-row reopening and lineage verification.
+
+    Implementations bind source-store, split-manifest, shard, sample, scene,
+    snippet, and raw-asset identities before returning geometry. They do not
+    render selected views, score endpoints, or inspect persisted comparator
+    values; those remain evaluator and audit-bridge responsibilities.
+    """
 
     def resolve(self, lineage: StoredEvaluationLineage) -> ResolvedEndpointSource:
         """Return the exact source row or raise a typed blocker."""
 
 
 class OracleGtEndpointEvaluatorConfig(TargetConfig["OracleGtEndpointEvaluator"]):
-    """Configure independent evaluation for the frozen Oracle-GT/v0 protocol."""
+    """Freeze independent Oracle-GT source and evaluator semantics.
+
+    The config-as-factory owns the immutable VIN reader, reviewed source
+    manifest, full source/split identities, accepted candidate and rollout
+    config hashes, target scorer, and endpoint denominator guard. Validation
+    admits only the v0 Oracle-GT protocol and the calibrated RGB rendering
+    inputs required for an independent endpoint measurement.
+    """
 
     @property
     def target_type(self) -> type["OracleGtEndpointEvaluator"]:
@@ -324,7 +345,13 @@ class OracleGtEndpointEvaluatorConfig(TargetConfig["OracleGtEndpointEvaluator"])
 
 
 class VinOfflineEndpointSourceRepository:
-    """Open one configured VIN dataset and verify reviewed row lineage."""
+    """Resolve exact VIN rows under reviewed immutable-source identities.
+
+    Construction verifies the configured VIN manifest and ordered split
+    manifest. :meth:`resolve` then checks every persisted row identity before
+    materializing the source sample and returning source-owned raw-asset
+    hashes. Geometry reconstruction remains outside this repository.
+    """
 
     def __init__(self, config: OracleGtEndpointEvaluatorConfig) -> None:
         self.config = config
@@ -446,7 +473,15 @@ class VinOfflineEndpointSourceRepository:
 
 
 class OracleGtEndpointEvaluator:
-    """Re-render and score factual Oracle-GT rollout endpoints independently."""
+    r"""Re-render and score factual Oracle-GT rollout endpoints independently.
+
+    The evaluator owns calibrated selected-view rendering, root/history point
+    fusion, Oracle-GT target reconstruction and crop verification, terminal
+    bidirectional point--mesh error, path length, cost, and raw geometry hashes.
+    It computes $J=(\Delta_0-\Delta_H)/(\Delta_0+\epsilon)$ from reopened
+    evidence. It never receives or reads the persisted return used later for
+    telescoping-equivalence comparison.
+    """
 
     def __init__(
         self,
@@ -878,6 +913,7 @@ def build_endpoint_audit_row(
         raise ValueError("Root action-set identity budget differs from the endpoint unit.")
     if root_action_identity.sha256 != match_identity.root_action_set_sha256:
         raise ValueError("Root action-set identity differs from the frozen policy match identity.")
+    _validate_policy_checkpoint_identity(unit.lineage, match_identity)
     persisted_context_sha256 = persisted_pre_treatment_context_sha256(
         unit.lineage,
         target,
@@ -981,6 +1017,28 @@ def build_endpoint_audit_row(
         evaluation_cost_s=measurement.evaluation_cost_s,
         missing_reason=None,
     )
+
+
+def _validate_policy_checkpoint_identity(
+    lineage: StoredEvaluationLineage,
+    match_identity: PolicyMatchIdentity,
+) -> None:
+    """Require stored checkpoint lineage to match the declared policy treatment."""
+
+    treatment = match_identity.treatment
+    learned = treatment.semantic_role in {
+        PolicySemanticRole.LEARNED_ONE_STEP,
+        PolicySemanticRole.LEARNED_QH,
+    }
+    stored = lineage.model_checkpoint_hash
+    declared = treatment.model_checkpoint_sha256
+    if learned:
+        if stored is None:
+            raise ValueError("Learned policy treatment requires an exact persisted model checkpoint hash.")
+        if stored != declared:
+            raise ValueError("Persisted model checkpoint hash differs from the learned policy treatment identity.")
+    elif stored is not None:
+        raise ValueError("Non-learned policy treatment must not carry a persisted model checkpoint hash.")
 
 
 def _candidate_table_from_world_poses(

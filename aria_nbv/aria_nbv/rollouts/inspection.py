@@ -1,8 +1,12 @@
-"""Read-only inspection helpers for rollout Zarr stores.
+"""Presentation-neutral reducers for persisted and independently audited rollouts.
 
-This module keeps Streamlit, CLI, and tests away from ad hoc Zarr joins. The
-helpers return plain dictionaries and NumPy-backed scalar values so UI code can
-choose its own rendering library without owning rollout-store semantics.
+This module keeps Streamlit, reporting, CLI, and tests away from ad hoc Zarr
+joins. It owns full-population candidate, validity, geometry, policy-effect,
+and descriptive rollout reductions over :mod:`aria_nbv.rollouts.read_model`
+records and sealed scientific-audit artifacts. Helpers return JSON-ready plain
+dictionaries so presentation code never owns denominators, frames, units,
+missingness, or scientific eligibility. It does not evaluate raw geometry,
+write stores, or choose UI rendering policy.
 """
 
 from __future__ import annotations
@@ -1529,6 +1533,25 @@ def candidate_evidence_availability_rows(reader: RolloutZarrStoreReader) -> list
                 "detail": "persisted fields present" if not missing else f"missing: {', '.join(missing)}",
             }
         )
+    ess_fields = (
+        "candidates/behavior_probability",
+        "candidates/evaluation_probability",
+        "candidates/valid_action_table_identity",
+    )
+    ess_missing = tuple(path for path in ess_fields if path not in reader.root)
+    output.append(
+        {
+            "evidence": "behavior/evaluation support and ESS",
+            "available": False,
+            "required_fields": ess_fields,
+            "missing_fields": ess_missing,
+            "detail": (
+                "ESS cannot be computed or proxied: normalized behavior and evaluation probability vectors "
+                "over an identical valid action table require semantic validation; persisted field presence alone "
+                "is insufficient"
+            ),
+        }
+    )
     return output
 
 
@@ -2031,6 +2054,160 @@ _COVERING_REFERENCE_COUNT = 512
 _CAP_RADII_DEG = (30.0, 60.0, 90.0, 120.0, 150.0)
 
 
+def deterministic_candidate_display_sample(
+    audit_rows: Iterable[Mapping[str, object]],
+    *,
+    max_rows: int = 20_000,
+    seed: str = "stored-rollout-display-v1",
+) -> dict[str, object]:
+    r"""Select an order-independent display-only candidate sample.
+
+    Sampling is stratified over the exact generation cohort, scene, decision
+    state, generator family, actor-validity, and invalid-reason identity. Rows
+    receive deterministic SHA-256 priorities within strata. Reducers must use
+    the complete input population; this bounded projection is only for plots.
+
+    The returned stratum rows expose population size $N_h$, display size
+    $n_h$, and inclusion probability $\pi_h=n_h/N_h$.
+
+    Args:
+        audit_rows: Complete projected candidates from one exact generation cohort.
+        max_rows: Hard upper bound on the display-only sample.
+        seed: Stable non-empty hash-priority seed recorded in the result.
+
+    Returns:
+        JSON-ready sample rows, per-stratum design metadata, and overall counts.
+
+    Raises:
+        ValueError: If sampling parameters are invalid or rows mix generation cohorts.
+    """
+
+    if isinstance(max_rows, bool) or not isinstance(max_rows, int) or max_rows < 1:
+        raise ValueError("max_rows must be a positive integer.")
+    if not seed:
+        raise ValueError("seed must be non-empty.")
+    rows = _sorted_candidate_rows(audit_rows)
+    if not rows:
+        return {
+            "rows": [],
+            "strata": [],
+            "metadata": {
+                "population_count": 0,
+                "display_count": 0,
+                "max_rows": max_rows,
+                "seed": seed,
+                "display_only": True,
+            },
+        }
+    cohort_ids = {str(_candidate_generation_cohort_fields(row)["generation_cohort_id"]) for row in rows}
+    if len(cohort_ids) != 1:
+        raise ValueError("Display sampling requires exactly one generation cohort.")
+
+    grouped: dict[tuple[str, ...], list[dict[str, object]]] = {}
+    for row in rows:
+        cohort = _candidate_generation_cohort_fields(row)
+        state = row.get("step_row_id", row.get("step_index", "unknown"))
+        family = "|".join(str(row.get(field, "unknown")) for field in ("strategy", "position", "mixture"))
+        actor = _optional_bool(row.get("actor_action"))
+        reason = row.get("invalid_reason_bitset", row.get("invalid_reason", "unknown"))
+        key = (
+            str(cohort["generation_cohort_id"]),
+            str(row.get("scene", "unknown")),
+            str(row.get("rollout_row_id", "unknown")),
+            str(state),
+            family,
+            "unavailable" if actor is None else str(actor).lower(),
+            str(reason),
+        )
+        grouped.setdefault(key, []).append(row)
+
+    counts = {key: len(values) for key, values in grouped.items()}
+    allocation = _display_sample_allocation(counts, min(max_rows, len(rows)), seed=seed)
+    selected: list[dict[str, object]] = []
+    strata: list[dict[str, object]] = []
+    for stratum_key in sorted(grouped):
+        population = grouped[stratum_key]
+        n_h = allocation[stratum_key]
+        ordered = sorted(
+            population,
+            key=lambda row: (_display_row_priority(seed, stratum_key, row), _candidate_row_id(row)),
+        )
+        pi_h = n_h / len(population)
+        selected.extend(
+            {
+                **row,
+                "display_stratum_id": hashlib.sha256("\0".join(stratum_key).encode()).hexdigest(),
+                "display_N_h": len(population),
+                "display_n_h": n_h,
+                "display_pi_h": pi_h,
+                "display_seed": seed,
+                "display_only": True,
+            }
+            for row in ordered[:n_h]
+        )
+        strata.append(
+            {
+                "generation_cohort_id": stratum_key[0],
+                "scene": stratum_key[1],
+                "rollout_state": f"{stratum_key[2]}:{stratum_key[3]}",
+                "family": stratum_key[4],
+                "actor_valid": stratum_key[5],
+                "invalid_reason": stratum_key[6],
+                "N_h": len(population),
+                "n_h": n_h,
+                "pi_h": pi_h,
+                "seed": seed,
+                "display_only": True,
+            }
+        )
+    return {
+        "rows": sorted(selected, key=lambda row: (str(row["display_stratum_id"]), _candidate_row_id(row))),
+        "strata": strata,
+        "metadata": {
+            "generation_cohort_id": next(iter(cohort_ids)),
+            "population_count": len(rows),
+            "display_count": len(selected),
+            "max_rows": max_rows,
+            "seed": seed,
+            "display_only": True,
+        },
+    }
+
+
+def _display_sample_allocation(
+    counts: Mapping[tuple[str, ...], int],
+    sample_count: int,
+    *,
+    seed: str,
+) -> dict[tuple[str, ...], int]:
+    """Allocate a bounded display sample while retaining minority strata."""
+
+    keys = sorted(counts)
+    if sample_count >= sum(counts.values()):
+        return {key: counts[key] for key in keys}
+    allocation = dict.fromkeys(keys, 0)
+    ranked_keys = sorted(keys, key=lambda key: hashlib.sha256(f"{seed}\0{'|'.join(key)}".encode()).digest())
+    for key in ranked_keys[:sample_count]:
+        allocation[key] = 1
+    remaining = sample_count - sum(allocation.values())
+    while remaining:
+        eligible = [key for key in keys if allocation[key] < counts[key]]
+        key = max(eligible, key=lambda item: (counts[item] / (allocation[item] + 1), tuple(item)))
+        allocation[key] += 1
+        remaining -= 1
+    return allocation
+
+
+def _display_row_priority(seed: str, key: tuple[str, ...], row: Mapping[str, object]) -> bytes:
+    payload = json.dumps(dict(row), sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(f"{seed}\0{'|'.join(key)}\0{payload}".encode()).digest()
+
+
+def _candidate_row_id(row: Mapping[str, object]) -> int:
+    value = row.get("candidate_row_id")
+    return int(value) if isinstance(value, (int, np.integer)) and not isinstance(value, (bool, np.bool_)) else -1
+
+
 def candidate_state_composition_evidence(
     audit_rows: Iterable[Mapping[str, object]],
     *,
@@ -2043,6 +2220,11 @@ def candidate_state_composition_evidence(
     equally within scene, and then averaged equally across scenes. States with
     no actor-valid or selected population remain explicit undefined
     denominators.
+
+    Shares are dimensionless and expected to sum to one across families only
+    within a defined state/population. Selection enrichment compares selected
+    share with actor-valid availability; it describes policy preference, not a
+    causal generator effect or reconstruction benefit.
     """
 
     rows = _sorted_candidate_rows(audit_rows)
@@ -2161,6 +2343,13 @@ def candidate_direction_evidence(
     a fixed Fibonacci reference grid and fixed cap radii; it is evidence
     against a uniform-sphere reference, not proof that uniform sampling is the
     intended proposal distribution.
+
+    All directions are root-relative unit vectors in right-handed Z-up world
+    coordinates. Reducers compute per-state quantities, average states within
+    scene, then average scenes within the exact generation cohort. Missing or
+    zero-length directions reduce the defined denominator rather than becoming
+    zero coverage. Covering radius and nearest-neighbour separation diagnose
+    finite action support; they do not establish downstream NBV performance.
     """
 
     rows = _sorted_candidate_rows(geometry_rows)
@@ -2277,7 +2466,16 @@ def candidate_direction_evidence(
 def candidate_spatial_support_evidence(
     geometry_rows: Iterable[Mapping[str, object]],
 ) -> list[dict[str, object]]:
-    """Summarize root-relative spatial shells with state and scene macros."""
+    """Summarize root-relative spatial shells with state and scene macros.
+
+    XY radius, 3D root distance, and signed Z height are measured in metres in
+    right-handed Z-up ARIA world coordinates. Values are reduced per decision
+    state, then equally across states within scene and across scenes within an
+    exact generation cohort, separately for sampled and validity populations.
+    Nonfinite values remain missing and zero-radius rows remain legitimate.
+    These summaries characterize realized action-space support, not candidate
+    quality or reconstruction benefit.
+    """
 
     rows = _sorted_candidate_rows(geometry_rows)
     metrics = {
@@ -2312,7 +2510,16 @@ def candidate_spatial_support_evidence(
 def candidate_target_view_evidence(
     geometry_rows: Iterable[Mapping[str, object]],
 ) -> list[dict[str, object]]:
-    """Summarize target distance and mark unobserved view evidence unavailable."""
+    """Summarize target distance and preserve unavailable view evidence.
+
+    Target distance is measured per candidate in metres and reduced by state,
+    scene, and exact generation cohort. Camera-forward alignment, 3D bearing,
+    FOV/pixel margin, and target line of sight require calibration/projection or
+    ray evidence that the current rows do not carry, so explicit unavailable
+    rows retain their missing fields and denominators. Yaw diagnostics and path
+    collision are not substituted. The output characterizes support only; it
+    cannot claim target visibility, occlusion, or generator performance.
+    """
 
     rows = _sorted_candidate_rows(geometry_rows)
     output: list[dict[str, object]] = []
@@ -2394,6 +2601,13 @@ def candidate_motion_support_evidence(
     Joint support is emitted only when the caller supplies an explicit
     conjunction of ``actor_valid``, ``path_collision_free``, and/or
     ``finite_motion``. No implicit conjunction is treated as scientific data.
+
+    Step length, height delta, backward displacement, clearance, and free-space
+    margin use metres; yaw uses degrees in the root-centered right-handed Z-up
+    frame. Metrics are reduced over actor-valid candidates per state, then
+    scene and generation cohort, with finite and missing counts preserved.
+    Expected support depends on the frozen motion contract. These summaries
+    diagnose its realized domain and cannot establish endpoint performance.
     """
 
     allowed_joint = {"actor_valid", "path_collision_free", "finite_motion"}
@@ -2446,7 +2660,17 @@ def candidate_regret_evidence(
     audit_rows: Iterable[Mapping[str, object]],
     rank_rows: Iterable[Mapping[str, object]],
 ) -> dict[str, list[dict[str, object]]]:
-    """Summarize selected-action regret and expose selection-contract violations."""
+    """Summarize selected-action regret under an exact valid alternative set.
+
+    Each decision state must join to exactly one selected actor-valid candidate
+    and at least one finite actor-valid oracle label. Regret is selected versus
+    best root-normalized target gain over that same alternative set; ranks are
+    ordinal within state. Eligible values are reduced per state, then equally
+    across states within scene and across scenes in the generation cohort.
+    Missing joins, invalid selections, or absent finite labels become explicit
+    violation rows, never zero regret. The result evaluates policy selection
+    relative to persisted oracle labels, not generator causality.
+    """
 
     candidates = _sorted_candidate_rows(audit_rows)
     ranks = [dict(row) for row in rank_rows]
@@ -2573,6 +2797,11 @@ def _validity_outcome_bucket(
         return "actor_validity_unavailable"
     if actor:
         return "unselected_actor_valid"
+    reason_version = row.get("reason_code_version")
+    if not isinstance(reason_version, str) or not reason_version:
+        return "invalid_reason_version_unavailable"
+    if reason_version != INVALID_REASON_VERSION:
+        return f"invalid_reason_version_unsupported:{reason_version}"
     bitset = row.get("invalid_reason_bitset")
     if not isinstance(bitset, (int, np.integer)) or isinstance(bitset, (bool, np.bool_)) or int(bitset) < 0:
         return "invalid_reason_unavailable"
@@ -2838,34 +3067,6 @@ def _signed_margin_summary_rows(
     *,
     evidence_status: str,
 ) -> list[dict[str, object]]:
-    """Project per-unit signed margins without treating them as IID evidence."""
-
-    return [
-        {
-            "cohort_id": row.cohort_id,
-            "unit_id": row.unit_id,
-            "scene_id": row.scene_id,
-            "predicate_kind": row.predicate_kind,
-            "predicate_owner": row.predicate_owner,
-            "predicate_name": row.predicate_name,
-            "comparison_operator": row.comparison_operator,
-            "threshold": float(row.threshold),
-            "unit": row.unit,
-            "raw_measurement": None if row.raw_measurement is None else float(row.raw_measurement),
-            "signed_margin": None if row.signed_margin is None else float(row.signed_margin),
-            "available": row.raw_measurement is not None and row.signed_margin is not None,
-            "missing_reason": row.missing_reason,
-            "evidence_status": evidence_status,
-        }
-        for row in rows
-    ]
-
-
-def _signed_margin_summary_rows(
-    rows: list[ValidityAuditRow],
-    *,
-    evidence_status: str,
-) -> list[dict[str, object]]:
     """Aggregate weighted margins within state, then equally by scene and cohort."""
 
     output: list[dict[str, object]] = []
@@ -2961,26 +3162,26 @@ def _signed_margin_summary_rows(
     output.extend(state_rows)
 
     scene_groups: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
-    for row in state_rows:
+    for state_row in state_rows:
         scene_groups.setdefault(
             (
-                str(row["cohort_id"]),
-                str(row["scene_id"]),
-                str(row["persisted_contract_sha256"]),
-                str(row["independent_contract_sha256"]),
+                str(state_row["cohort_id"]),
+                str(state_row["scene_id"]),
+                str(state_row["persisted_contract_sha256"]),
+                str(state_row["independent_contract_sha256"]),
             ),
             [],
-        ).append(row)
+        ).append(state_row)
     scene_rows: list[dict[str, object]] = []
     for scene_key, group in sorted(scene_groups.items()):
         cohort_id, scene_id, persisted_identity, independent_identity = scene_key
-        defined = [row for row in group if row["weighted_mean_signed_margin"] is not None]
+        defined = [state_row for state_row in group if state_row["weighted_mean_signed_margin"] is not None]
         scene_mean = (
             None
             if not defined
-            else float(np.mean([float(cast(float, row["weighted_mean_signed_margin"])) for row in defined]))
+            else float(np.mean([float(cast(float, state_row["weighted_mean_signed_margin"])) for state_row in defined]))
         )
-        representative = group[0]
+        scene_representative = group[0]
         scene_rows.append(
             {
                 "cohort_id": cohort_id,
@@ -2988,16 +3189,16 @@ def _signed_margin_summary_rows(
                 "scene_id": scene_id,
                 "persisted_contract_sha256": persisted_identity,
                 "independent_contract_sha256": independent_identity,
-                "predicate_kind": representative["predicate_kind"],
-                "predicate_owner": representative["predicate_owner"],
-                "predicate_name": representative["predicate_name"],
-                "comparison_operator": representative["comparison_operator"],
-                "threshold": representative["threshold"],
-                "unit": representative["unit"],
-                "frame": representative["frame"],
-                "sampled_count": sum(int(cast(int, row["sampled_count"])) for row in group),
-                "complete_count": sum(int(cast(int, row["complete_count"])) for row in group),
-                "missing_count": sum(int(cast(int, row["missing_count"])) for row in group),
+                "predicate_kind": scene_representative["predicate_kind"],
+                "predicate_owner": scene_representative["predicate_owner"],
+                "predicate_name": scene_representative["predicate_name"],
+                "comparison_operator": scene_representative["comparison_operator"],
+                "threshold": scene_representative["threshold"],
+                "unit": scene_representative["unit"],
+                "frame": scene_representative["frame"],
+                "sampled_count": sum(int(cast(int, state_row["sampled_count"])) for state_row in group),
+                "complete_count": sum(int(cast(int, state_row["complete_count"])) for state_row in group),
+                "missing_count": sum(int(cast(int, state_row["missing_count"])) for state_row in group),
                 "state_count": len(group),
                 "defined_state_count": len(defined),
                 "missing_state_count": len(group) - len(defined),
@@ -3009,24 +3210,24 @@ def _signed_margin_summary_rows(
     output.extend(scene_rows)
 
     cohort_groups: dict[tuple[str, str, str], list[dict[str, object]]] = {}
-    for row in scene_rows:
+    for scene_row in scene_rows:
         cohort_groups.setdefault(
             (
-                str(row["cohort_id"]),
-                str(row["persisted_contract_sha256"]),
-                str(row["independent_contract_sha256"]),
+                str(scene_row["cohort_id"]),
+                str(scene_row["persisted_contract_sha256"]),
+                str(scene_row["independent_contract_sha256"]),
             ),
             [],
-        ).append(row)
+        ).append(scene_row)
     for cohort_key, group in sorted(cohort_groups.items()):
         cohort_id, persisted_identity, independent_identity = cohort_key
-        defined = [row for row in group if row["mean_state_signed_margin"] is not None]
+        defined = [scene_row for scene_row in group if scene_row["mean_state_signed_margin"] is not None]
         cohort_mean = (
             None
             if not defined
-            else float(np.mean([float(cast(float, row["mean_state_signed_margin"])) for row in defined]))
+            else float(np.mean([float(cast(float, scene_row["mean_state_signed_margin"])) for scene_row in defined]))
         )
-        representative = group[0]
+        cohort_representative = group[0]
         output.append(
             {
                 "cohort_id": cohort_id,
@@ -3034,17 +3235,17 @@ def _signed_margin_summary_rows(
                 "scene_id": None,
                 "persisted_contract_sha256": persisted_identity,
                 "independent_contract_sha256": independent_identity,
-                "predicate_kind": representative["predicate_kind"],
-                "predicate_owner": representative["predicate_owner"],
-                "predicate_name": representative["predicate_name"],
-                "comparison_operator": representative["comparison_operator"],
-                "threshold": representative["threshold"],
-                "unit": representative["unit"],
-                "frame": representative["frame"],
-                "sampled_count": sum(int(cast(int, row["sampled_count"])) for row in group),
-                "complete_count": sum(int(cast(int, row["complete_count"])) for row in group),
-                "missing_count": sum(int(cast(int, row["missing_count"])) for row in group),
-                "state_count": sum(int(cast(int, row["state_count"])) for row in group),
+                "predicate_kind": cohort_representative["predicate_kind"],
+                "predicate_owner": cohort_representative["predicate_owner"],
+                "predicate_name": cohort_representative["predicate_name"],
+                "comparison_operator": cohort_representative["comparison_operator"],
+                "threshold": cohort_representative["threshold"],
+                "unit": cohort_representative["unit"],
+                "frame": cohort_representative["frame"],
+                "sampled_count": sum(int(cast(int, scene_row["sampled_count"])) for scene_row in group),
+                "complete_count": sum(int(cast(int, scene_row["complete_count"])) for scene_row in group),
+                "missing_count": sum(int(cast(int, scene_row["missing_count"])) for scene_row in group),
+                "state_count": sum(int(cast(int, scene_row["state_count"])) for scene_row in group),
                 "scene_count": len(group),
                 "defined_scene_count": len(defined),
                 "missing_scene_count": len(group) - len(defined),
@@ -6398,6 +6599,7 @@ __all__ = [
     "candidate_audit_rows",
     "candidate_evidence_availability_rows",
     "candidate_direction_evidence",
+    "deterministic_candidate_display_sample",
     "candidate_family_composition_rows",
     "candidate_flow_rows",
     "candidate_geometry_evidence_rows",
