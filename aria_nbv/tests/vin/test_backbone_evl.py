@@ -7,7 +7,11 @@ from pathlib import Path
 import omegaconf
 import torch
 
-from aria_nbv.vin.backbones.evl import _normalize_evl_model_config_paths, filter_backbone_output_for_features_mode
+from aria_nbv.vin.backbones.evl import (
+    EvlBackboneConfig,
+    _normalize_evl_model_config_paths,
+    filter_backbone_output_for_features_mode,
+)
 from aria_nbv.vin.types import EvlBackboneOutput
 
 PoseTW = __import__("efm3d.aria.pose", fromlist=["PoseTW"]).PoseTW
@@ -43,6 +47,14 @@ def _backbone_output() -> EvlBackboneOutput:
         feat2d_upsampled={"rgb": torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)},
         token2d={"rgb": torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)},
     )
+
+
+def test_default_model_config_uses_canonical_evl_location() -> None:
+    """The default EVL configuration should match the checked-in asset path."""
+
+    config = EvlBackboneConfig()
+
+    assert config.model_cfg.as_posix().endswith(".configs/models/evl/evl_inf_desktop.yaml")  # noqa: S101
 
 
 def test_features_mode_heads_drops_neck_and_internal_features() -> None:

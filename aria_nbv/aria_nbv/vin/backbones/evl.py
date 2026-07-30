@@ -154,7 +154,7 @@ class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
     paths: PathConfig = Field(default_factory=PathConfig)
     """Project path resolver."""
 
-    model_cfg: Path = Field(default_factory=lambda: Path(".configs") / "evl_inf_desktop.yaml")
+    model_cfg: Path = Field(default_factory=lambda: Path(".configs") / "models" / "evl" / "evl_inf_desktop.yaml")
     """Resolved Hydra YAML used to instantiate `efm3d.model.evl.EVL`."""
 
     model_ckpt: Path = Field(default_factory=lambda: Path(".logs") / "ckpts" / "model_lite.pth")
