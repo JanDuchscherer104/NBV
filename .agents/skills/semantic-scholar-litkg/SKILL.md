@@ -35,7 +35,6 @@ metadata:
     - ".agents/skills/semantic-scholar-litkg/references/integration-spec.md"
     - ".agents/references/litkg_quick_reference.md#default-commands"
     - ".configs/litkg.toml"
-    - ".agents/references/context7_library_ids.md"
   context7_refs:
     - "/pytorch/pytorch"
     - "/pydantic/pydantic"

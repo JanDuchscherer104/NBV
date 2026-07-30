@@ -92,7 +92,7 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Debriefs
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
-- Native debriefs must follow `.agents/references/agent_memory_templates.md` and
+- Native debriefs must follow `.agents/memory/README.md` and
   include `canonical_updates_needed` even when the list is empty.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except

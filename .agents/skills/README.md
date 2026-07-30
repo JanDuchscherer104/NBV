@@ -57,7 +57,7 @@ owning thesis roadmap, research-question page, Quarto theory page, Typst
 section, package `AGENTS.md`, or source code contract instead.
 Use optional `context7_refs`, `literature_refs`, and `tool_refs` only as thin
 routing edges. Context7 refs must already exist in
-`.agents/references/context7_library_ids.md`; literature refs must resolve to
+their exact upstream identifier; literature refs must resolve to
 BibTeX keys, Quarto/literature paths, local TeX mirror paths, or route labels
 in `aria-nbv-context/references/context_map.md`; tool refs use canonical
 `mcp__<server>.<tool_name>` names. Do not point skill metadata at generated
@@ -105,7 +105,7 @@ domain knowledge, exact tool loops, required evidence, and verification choices.
 - Do not repeat the full lane-selection policy in every skill. Put routing cues
   in metadata and keep detailed arbitration in `agent-behavior`.
 - Before deleting a skill or merging router skills, update
-  `scaffold_routing_fixtures.json` and keep `make scaffold-audit` green.
+  `scripts/scaffold/fixtures/routing.json` and keep `make scaffold-audit` green.
 
 ## Source-Order Review Gate
 

@@ -137,22 +137,6 @@ DOC_SPECS: tuple[DocSpec, ...] = (
         summary="Long-form Python style, typing, docstring, and config examples.",
     ),
     DocSpec(
-        source=".agents/references/context7_library_ids.md",
-        output="references/context7_library_ids.qmd",
-        title="Context7 Library IDs",
-        section="References",
-        nav_label="Context7 Library IDs",
-        summary="Lookup table for approved Context7 library identifiers used in repo workflows.",
-    ),
-    DocSpec(
-        source=".agents/references/agent_memory_templates.md",
-        output="references/agent_memory_templates.qmd",
-        title="Agent Memory Templates",
-        section="References",
-        nav_label="Agent Memory Templates",
-        summary="Canonical frontmatter and body templates for native debrief records.",
-    ),
-    DocSpec(
         source=".agents/skills/aria-nbv-context/SKILL.md",
         output="skills/aria_nbv_context_skill.qmd",
         title="aria-nbv-context Skill",

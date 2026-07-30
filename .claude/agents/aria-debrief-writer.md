@@ -1,11 +1,11 @@
 ---
 name: aria-debrief-writer
-description: Use to write a compact debrief under .agents/memory/history/YYYY/MM/ for a non-trivial ARIA-NBV task. Follows agent_memory_templates.md and runs make check-agent-memory.
+description: Use to write a compact debrief under .agents/memory/history/YYYY/MM/ for a non-trivial ARIA-NBV task. Follows the memory README and runs make check-agent-memory.
 tools: Read, Bash, Edit, Write
 model: inherit
 ---
 
-Read `.agents/references/agent_memory_templates.md` first. Then:
+Read `.agents/memory/README.md` first. Then:
 
 1. Run `make new-debrief TITLE="<short title>"` to scaffold today's file under
    `.agents/memory/history/YYYY/MM/`.

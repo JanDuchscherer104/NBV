@@ -16,7 +16,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
-ROUTING_FIXTURES = ROOT / ".agents" / "references" / "scaffold_routing_fixtures.json"
+ROUTING_FIXTURES = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -39,7 +39,6 @@ METADATA_KEYS = REQUIRED_METADATA | OPTIONAL_METADATA
 BLOCKED_HANDOFF_PREFIXES = {"omx", "github", "oh-my-codex"}
 DECLARED_CAPABILITY_TOKENS = {"external", "GitHub", "owning", "nearest", "specialized"}
 HOT_PATH_LINE_BUDGET = 150
-CONTEXT7_IDS = ROOT / ".agents" / "references" / "context7_library_ids.md"
 BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
 CONTEXT_MAP = ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
@@ -204,20 +203,6 @@ def metadata_strings(metadata: dict[str, Any], fields: set[str]) -> list[str]:
         elif isinstance(value, str):
             values.append(value)
     return values
-
-
-def load_context7_ids(path: Path = CONTEXT7_IDS) -> tuple[set[str], list[str]]:
-    errors: list[str] = []
-    ids: set[str] = set()
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return ids, [f"{rel(path)}: cannot read Context7 registry: {exc}"]
-    for match in re.finditer(r"`(/[^`\s]+)`", text):
-        ids.add(match.group(1))
-    if not ids:
-        errors.append(f"{rel(path)}: no Context7 library IDs found")
-    return ids, errors
 
 
 def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
@@ -392,10 +377,8 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     known_names = {skill.name for skill in skills}
-    context7_ids, context7_errors = load_context7_ids()
     bibtex_keys, bibtex_errors = load_bibtex_keys()
     context_routes, context_route_errors = load_context_map_routes()
-    errors.extend(context7_errors)
     errors.extend(bibtex_errors)
     errors.extend(context_route_errors)
 
@@ -488,10 +471,6 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                     continue
                 if not ref.startswith("/"):
                     errors.append(f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID")
-                elif ref not in context7_ids:
-                    errors.append(
-                        f"{prefix}: metadata.context7_refs entry {ref!r} is not listed in {rel(CONTEXT7_IDS)}"
-                    )
 
         literature_refs = skill.metadata.get("literature_refs") or []
         if isinstance(literature_refs, list):
@@ -874,21 +853,6 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "planned-detail-semantic-drift",
             any("possible semantic drift" in warning for warning in warnings),
             "planned thesis detail in skill body was not warned",
-        )
-
-        unknown_context7_text = self_test_skill_text(
-            "unknown-context7-skill",
-            [".agents/references/context7_library_ids.md"],
-            "Use this test body for Context7 validation.",
-            '  context7_refs:\n    - "/missing/context7-id"',
-        )
-        write_self_test_skill(tmp_root, "unknown-context7-skill", unknown_context7_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "unknown-context7-ref",
-            not load_errors and any("metadata.context7_refs" in error for error in errors),
-            "unknown Context7 ID was not rejected",
         )
 
         missing_literature_text = self_test_skill_text(

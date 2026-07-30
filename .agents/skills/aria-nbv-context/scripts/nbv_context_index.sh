@@ -120,14 +120,12 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "| Findings and glossary | \`docs/contents/experiments/findings.qmd\`, \`docs/contents/glossary.qmd\`, \`docs/typst/shared/glossary.typ\` | You need prior experiment outcomes or project terminology. |"
   echo "| Idea archive | \`docs/contents/ideas.qmd\` | You need read-only scratch/history, not current direction. |"
   echo "| Implementation contracts | \`docs/reference/index.qmd\`, package docstrings | You need package architecture or oracle/RRI computation details. |"
-  echo "| External stack notes | \`.agents/references/external_stack_contracts.md\`, vendored source under \`external/\` | You need ATEK, EFM3D, EVL, or Project Aria tooling contracts. |"
+  echo "| External stack owners | \`data_handling/\`, \`rendering/\`, \`vin/\`, and vendored source under \`external/\` | You need ATEK, EFM3D, EVL, or Project Aria tooling contracts. |"
   echo
   echo "## Secondary/on-demand references"
-  echo "- .agents/references/operator_quick_reference.md"
-  echo "- .agents/references/python_conventions.md"
   echo "- .agents/skills/aria-nbv-context/references/context_map.md"
-  echo "- .agents/references/agent_memory_templates.md"
-  echo "- .agents/references/context7_library_ids.md"
+  echo "- .agents/skills/aria-nbv-context/references/context7_library_ids.md"
+  echo "- .agents/memory/README.md"
   echo "- docs/index.qmd"
   echo "- .agents/archive/docs/todos.qmd  # historical archive only"
   echo

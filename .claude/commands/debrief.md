@@ -6,7 +6,7 @@ argument-hint: "<short title>"
 
 Run `make new-debrief TITLE="$ARGUMENTS"` to scaffold the file with valid
 frontmatter (today's absolute date, empty `canonical_updates_needed`, required
-keys per `.agents/references/agent_memory_templates.md`).
+keys per `.agents/memory/README.md`).
 
 Then open the file and fill in:
 - task (one sentence: what was the goal)

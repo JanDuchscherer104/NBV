@@ -25,7 +25,7 @@ metadata:
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#capture-rule"
-    - ".agents/references/skill_style_guide.md#required-frontmatter"
+    - ".agents/skills/README.md#required-frontmatter"
   verification:
     - "surface-specific checks from .agents/references/verification_matrix.md"
     - "make check-agent-memory when agent guidance or memory changes"

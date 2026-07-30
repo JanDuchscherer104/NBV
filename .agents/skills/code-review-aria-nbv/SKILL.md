@@ -40,8 +40,8 @@ metadata:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
     - ".agents/references/verification_matrix.md"
-    - ".agents/references/skill_style_guide.md"
-    - ".agents/references/scaffold_routing_fixtures.json"
+    - ".agents/skills/README.md"
+    - "scripts/scaffold/fixtures/routing.json"
   context7_refs:
     - "/pytorch/pytorch"
     - "/facebookresearch/pytorch3d"
