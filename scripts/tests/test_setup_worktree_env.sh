@@ -17,6 +17,7 @@ mkdir -p \
   "${FAKE_BIN}"
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${WORKTREE_ROOT}/scripts/"
+touch "${WORKTREE_ROOT}/.env.example"
 
 cat >"${FAKE_BIN}/readlink" <<'EOF'
 #!/usr/bin/env bash
@@ -43,9 +44,20 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
+[[ -L "${WORKTREE_ROOT}/.env" ]]
 
 ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
   bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check
+
+unlink "${WORKTREE_ROOT}/.env"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/missing-env.out" 2>"${SANDBOX}/missing-env.err"; then
+  echo "--check unexpectedly accepted a missing .env" >&2
+  exit 1
+fi
+grep -Fq ".env is missing" "${SANDBOX}/missing-env.err"
 
 echo "Worktree environment setup: PASS"

@@ -73,6 +73,8 @@ if [[ "$check_only" == false ]]; then
   if [[ ! -e .env ]]; then
     ln -s .env.example .env
   fi
+else
+  [[ -e .env ]] || fail ".env is missing; run scripts/setup_worktree_env.sh before checking"
 fi
 
 if git submodule status --recursive | awk '/^[-+U]/ { exit 1 }'; then
