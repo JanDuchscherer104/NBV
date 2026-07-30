@@ -32,8 +32,6 @@ website:
         - text: offline
           file: reference/data_handling.offline.qmd
           contents:
-          - text: actor
-            file: reference/data_handling.offline.actor.qmd
           - text: adapter
             file: reference/data_handling.offline.adapter.qmd
           - text: batch
@@ -86,12 +84,8 @@ website:
           file: reference/lightning.lit_trainer_factory.qmd
         - text: optimizers
           file: reference/lightning.optimizers.qmd
-        - text: qh_cli
-          file: reference/lightning.qh_cli.qmd
         - text: qh_datamodule
           file: reference/lightning.qh_datamodule.qmd
-        - text: qh_experiment
-          file: reference/lightning.qh_experiment.qmd
         - text: qh_module
           file: reference/lightning.qh_module.qmd
       - text: oracle

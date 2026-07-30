@@ -1,4 +1,4 @@
-"""Two-rank CPU/Gloo worker used by the Q_H TorchRun smoke test."""
+"""Two-rank CPU/Gloo worker for exact Q_H transaction regressions."""
 
 from __future__ import annotations
 
@@ -9,114 +9,109 @@ from pathlib import Path
 
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.callbacks import ModelCheckpoint
 
+from aria_nbv.data_handling.qh import collate_qh_chains
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
-from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.data_handling.test_qh import _chain, _StaticDataset
-from tests.lightning.test_qh_module import _TableScorer
+from tests.data_handling.test_qh import _chain
+from tests.lightning.test_qh_fast_dev_run import _trainer
+from tests.lightning.test_qh_module import _ChainDataset, _TableScorer
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument(
-        "--scenario",
-        choices=("standard", "global-empty", "local-empty", "unequal"),
-        default="standard",
-    )
+    scenarios = ("global-empty", "local-empty", "unequal", "distributed-val", "distributed-test")
+    parser.add_argument("--scenario", choices=scenarios, required=True)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-
     pl.seed_everything(123, workers=True)
+
+    if args.scenario in {"distributed-val", "distributed-test"}:
+        torch.distributed.init_process_group("gloo")
+        module = QhLightningModule(QhLightningModuleConfig(lr_scheduler=None), scorer=_TableScorer())
+        log_calls = 0
+
+        def _log(*args, **kwargs) -> None:
+            nonlocal log_calls
+            del args, kwargs
+            log_calls += 1
+
+        module.log = _log
+        error: str | None = None
+        try:
+            step = module.validation_step if args.scenario == "distributed-val" else module.test_step
+            step(collate_qh_chains([_chain(steps=2, width=3)]), 0)
+        except ValueError as exc:
+            error = str(exc)
+        rank = torch.distributed.get_rank()
+        payload = {
+            "rank": rank,
+            "world_size": torch.distributed.get_world_size(),
+            "error": error,
+            "online_scorer_calls": module.online_scorer.calls,
+            "target_scorer_calls": module.target_scorer.calls,
+            "log_calls": log_calls,
+        }
+        (args.output_dir / f"rank-{rank}.json").write_text(json.dumps(payload, sort_keys=True))
+        torch.distributed.barrier()
+        torch.distributed.destroy_process_group()
+        return
+
     admitted = _chain(steps=2, width=2)
     empty = replace(
         admitted,
-        supervision=replace(
-            admitted.supervision,
-            row_train_mask=torch.zeros_like(admitted.supervision.row_train_mask),
-        ),
+        supervision=replace(admitted.supervision, label_mask=torch.zeros_like(admitted.supervision.label_mask)),
     )
-    if args.scenario == "standard":
-        samples = [_chain(steps=2, width=2, offset=offset) for offset in range(4)]
-        validation = _StaticDataset(
-            [_chain(steps=2, width=2, offset=10) for _ in range(3)],
-            scene="val-scene",
-        )
-        max_epochs = 2
-    elif args.scenario == "global-empty":
+    if args.scenario == "global-empty":
         samples = [empty, empty]
-        validation = None
-        max_epochs = 1
     elif args.scenario == "local-empty":
         samples = [admitted, empty]
-        validation = None
-        max_epochs = 1
     else:
-        one_admitted = replace(
-            _chain(steps=2, width=2),
-            supervision=replace(
-                admitted.supervision,
-                row_train_mask=torch.tensor([True, False]),
-            ),
-        )
+        one_admitted = _chain(steps=2, width=2)
+        labels = one_admitted.supervision.label_mask.clone()
+        labels[1, one_admitted.supervision.selected_index[1]] = False
+        one_admitted = replace(one_admitted, supervision=replace(one_admitted.supervision, label_mask=labels))
         samples = [one_admitted, _chain(steps=2, width=2, offset=10)]
-        validation = None
-        max_epochs = 1
+
     data = QhDataModule(
-        train=_StaticDataset(samples, scene="train-scene"),
-        val=validation,
+        train=_ChainDataset(samples),
         batch_size=1,
         seed=43,
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(
-            scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
-            lr_scheduler=None,
-            target_sync_interval=3,
-        ),
-        scorer=_TableScorer() if args.scenario == "unequal" else None,
+        QhLightningModuleConfig(lr_scheduler=None, target_sync_interval=3),
+        scorer=_TableScorer(),
     )
-    callbacks = []
-    if args.scenario == "standard":
-        callbacks.append(
-            ModelCheckpoint(
-                dirpath=args.output_dir / "checkpoints",
-                filename="rank-zero-step={step}",
-                every_n_train_steps=2,
-                save_top_k=-1,
-                save_on_train_epoch_end=False,
-                auto_insert_metric_name=False,
-            )
-        )
-    trainer = pl.Trainer(
-        accelerator="cpu",
+    initial_state = {name: value.detach().clone() for name, value in module.state_dict().items()}
+    log_calls = 0
+    original_log = module.log
+
+    def _log(*args, **kwargs) -> None:
+        nonlocal log_calls
+        log_calls += 1
+        original_log(*args, **kwargs)
+
+    if args.scenario == "global-empty":
+        module.log = _log
+    trainer = _trainer(
         devices=2,
         strategy="ddp",
-        max_epochs=max_epochs,
-        logger=False,
-        callbacks=callbacks,
-        enable_checkpointing=bool(callbacks),
-        enable_model_summary=False,
-        use_distributed_sampler=True,
+        fast_dev_run=False,
+        max_epochs=1,
         deterministic=True,
     )
     trainer.fit(module, datamodule=data)
 
-    sampler = trainer.train_dataloader.sampler
     payload = {
-        "rank": trainer.global_rank,
         "world_size": trainer.world_size,
-        "epoch": getattr(sampler, "epoch", 0),
-        "indices": list(sampler),
         "global_step": trainer.global_step,
         "optimizer_updates": int(module.optimizer_updates.item()),
-        "target_syncs": int(module.target_syncs.item()),
         "training_row_count": int(module.training_row_count.item()),
-        "validation_row_count": int(module.validation_row_count.item()),
-        "validation_loss": float(trainer.callback_metrics.get("val/loss", torch.tensor(float("nan"))).item()),
-        "validation_admitted_rows": int(trainer.callback_metrics.get("val/admitted_rows", torch.tensor(-1)).item()),
+        "online_scorer_calls": module.online_scorer.calls,
+        "target_scorer_calls": module.target_scorer.calls,
+        "log_calls": log_calls,
+        "state_unchanged": all(torch.equal(value, module.state_dict()[name]) for name, value in initial_state.items()),
     }
     (args.output_dir / f"rank-{trainer.global_rank}.json").write_text(json.dumps(payload, sort_keys=True))
     torch.save(module.state_dict(), args.output_dir / f"rank-{trainer.global_rank}-state.pt")

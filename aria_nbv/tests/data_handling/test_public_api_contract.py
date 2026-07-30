@@ -23,14 +23,24 @@ def test_public_api_has_exact_stable_allowlist() -> None:
         "VinOfflineDataset",
         "VinOfflineDatasetConfig",
         "VinOfflineStoreConfig",
-        "QhRolloutChain",
-        "QhChainLineage",
-        "QhInputs",
-        "QhSupervision",
-        "QhBatch",
     )
     assert tuple(module.__all__) == expected  # noqa: S101
     assert all(hasattr(module, name) for name in expected)  # noqa: S101
+
+
+def test_qh_surfaces_remain_importable_from_owner_leaves() -> None:
+    """Keep Q_H data and training APIs leaf-owned without widening package roots."""
+
+    data_root = importlib.import_module("aria_nbv.data_handling")
+    qh_data = importlib.import_module("aria_nbv.data_handling.qh")
+    lightning_root = importlib.import_module("aria_nbv.lightning")
+    qh_datamodule = importlib.import_module("aria_nbv.lightning.qh_datamodule")
+    qh_module = importlib.import_module("aria_nbv.lightning.qh_module")
+
+    data_names = ("QhBatch", "QhChain", "QhDataset", "QhDatasetConfig", "collate_qh_chains")
+    assert all(hasattr(qh_data, name) and not hasattr(data_root, name) for name in data_names)  # noqa: S101
+    lightning_symbols = ((qh_datamodule, "QhDataModule"), (qh_module, "QhLightningModule"))
+    assert all(hasattr(module, name) and not hasattr(lightning_root, name) for module, name in lightning_symbols)  # noqa: S101
 
 
 def test_public_api_omits_internal_helper_exports() -> None:

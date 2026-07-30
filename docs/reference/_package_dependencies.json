@@ -7,17 +7,12 @@
       "target": "utils"
     },
     {
-      "importing_modules": 12,
+      "importing_modules": 11,
       "source": "data_handling",
       "target": "utils"
     },
     {
       "importing_modules": 10,
-      "source": "lightning",
-      "target": "utils"
-    },
-    {
-      "importing_modules": 10,
       "source": "oracle",
       "target": "data_handling"
     },
@@ -25,16 +20,21 @@
       "importing_modules": 10,
       "source": "oracle",
       "target": "utils"
-    },
-    {
-      "importing_modules": 9,
-      "source": "vin",
-      "target": "data_handling"
     },
     {
       "importing_modules": 8,
       "source": "data_handling",
       "target": "configs"
+    },
+    {
+      "importing_modules": 8,
+      "source": "lightning",
+      "target": "utils"
+    },
+    {
+      "importing_modules": 8,
+      "source": "vin",
+      "target": "data_handling"
     },
     {
       "importing_modules": 7,

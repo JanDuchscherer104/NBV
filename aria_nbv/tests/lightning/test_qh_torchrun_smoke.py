@@ -1,4 +1,4 @@
-"""External TorchRun attachment smoke for one-node Q_H DDP."""
+"""External TorchRun smoke tests for exact two-rank Q_H transactions."""
 
 # ruff: noqa: S101
 
@@ -15,14 +15,15 @@ import pytest
 import pytorch_lightning as pl
 import torch
 
+from aria_nbv.data_handling.qh import QhChain
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
-from aria_nbv.vin.models.target_finite_horizon import MultiStepCandidateScorerConfig
-from tests.data_handling.test_qh import _chain, _StaticDataset
-from tests.lightning.test_qh_module import _TableScorer
+from tests.data_handling.test_qh import _chain
+from tests.lightning.test_qh_fast_dev_run import _trainer
+from tests.lightning.test_qh_module import _ChainDataset, _TableScorer
 
 
-def _run_torchrun(output_dir: Path, scenario: str = "standard") -> list[dict[str, object]]:
+def _run_torchrun(output_dir: Path, scenario: str) -> list[dict[str, object]]:
     package_root = Path(__file__).resolve().parents[2]
     torchrun = Path(sys.executable).with_name("torchrun")
     env = os.environ.copy()
@@ -50,100 +51,65 @@ def _run_torchrun(output_dir: Path, scenario: str = "standard") -> list[dict[str
     return [json.loads((output_dir / f"rank-{rank}.json").read_text()) for rank in range(2)]
 
 
-def _module() -> QhLightningModule:
-    return QhLightningModule(
-        QhLightningModuleConfig(
-            scorer=MultiStepCandidateScorerConfig(candidate_token_dim=16, num_heads=4),
-            lr_scheduler=None,
-            target_sync_interval=3,
-        )
-    )
-
-
-def _table_module() -> QhLightningModule:
-    return QhLightningModule(
+def _fit_control(chains: list[QhChain], *, batch_size: int) -> dict[str, torch.Tensor]:
+    pl.seed_everything(123, workers=True)
+    module = QhLightningModule(
         QhLightningModuleConfig(lr_scheduler=None, target_sync_interval=3),
         scorer=_TableScorer(),
     )
-
-
-def test_two_process_cpu_gloo_training_is_rank_disjoint_and_single_writer(tmp_path: Path) -> None:
-    payloads = _run_torchrun(tmp_path)
-    assert {payload["world_size"] for payload in payloads} == {2}
-    assert {payload["epoch"] for payload in payloads} == {1}
-    assert {payload["global_step"] for payload in payloads} == {4}
-    assert {payload["validation_row_count"] for payload in payloads} == {4}
-    assert {payload["validation_admitted_rows"] for payload in payloads} == {8}
-    assert payloads[0]["validation_loss"] == pytest.approx(payloads[1]["validation_loss"])
-    assert set(payloads[0]["indices"]).isdisjoint(payloads[1]["indices"])
-    assert sorted(payloads[0]["indices"] + payloads[1]["indices"]) == [0, 1, 2, 3]
-    assert len(list((tmp_path / "checkpoints").glob("*.ckpt"))) == 2
-
-    module = _module()
-    module.load_state_dict(torch.load(tmp_path / "rank-0-state.pt", weights_only=True))
     data = QhDataModule(
-        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
-        val=_StaticDataset(
-            [_chain(steps=2, width=2, offset=10) for _ in range(3)],
-            scene="val-scene",
-        ),
-        batch_size=1,
+        train=_ChainDataset(chains),
+        batch_size=batch_size,
         seed=43,
     )
-    trainer = pl.Trainer(
-        accelerator="cpu",
-        devices=1,
-        logger=False,
-        enable_checkpointing=False,
-        enable_model_summary=False,
-        use_distributed_sampler=True,
+    trainer = _trainer(
+        fast_dev_run=False,
+        max_epochs=1,
+        deterministic=True,
     )
-    single_rank_loss = trainer.validate(module, datamodule=data, verbose=False)[0]["val/loss"]
-    assert payloads[0]["validation_loss"] == pytest.approx(single_rank_loss)
+    trainer.fit(module, datamodule=data)
+    return module.state_dict()
 
 
-def test_two_process_global_empty_batch_is_a_complete_noop(tmp_path: Path) -> None:
+def test_two_process_global_empty_batch_is_complete_noop(tmp_path: Path) -> None:
     payloads = _run_torchrun(tmp_path, "global-empty")
 
     assert {payload["global_step"] for payload in payloads} == {0}
     assert {payload["optimizer_updates"] for payload in payloads} == {0}
-    assert {payload["target_syncs"] for payload in payloads} == {0}
     assert {payload["training_row_count"] for payload in payloads} == {0}
+    assert {payload["online_scorer_calls"] for payload in payloads} == {0}
+    assert {payload["target_scorer_calls"] for payload in payloads} == {0}
+    assert {payload["log_calls"] for payload in payloads} == {0}
+    assert {payload["state_unchanged"] for payload in payloads} == {True}
 
 
-def test_two_process_local_empty_rank_matches_single_rank_admitted_update(tmp_path: Path) -> None:
+def test_two_process_local_empty_rank_matches_single_rank_update(tmp_path: Path) -> None:
     payloads = _run_torchrun(tmp_path, "local-empty")
 
-    assert {payload["global_step"] for payload in payloads} == {1}
-    assert {payload["optimizer_updates"] for payload in payloads} == {1}
+    one_fields = ("global_step", "optimizer_updates", "online_scorer_calls", "target_scorer_calls")
+    assert all({payload[field] for payload in payloads} == {1} for field in one_fields)
     assert sorted(payload["training_row_count"] for payload in payloads) == [0, 2]
     rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
     for name in rank_states[0]:
         assert torch.equal(rank_states[0][name], rank_states[1][name])
 
-    pl.seed_everything(123, workers=True)
-    control = _module()
-    data = QhDataModule(
-        train=_StaticDataset([_chain(steps=2, width=2)], scene="train-scene"),
-        batch_size=1,
-        seed=43,
-    )
-    trainer = pl.Trainer(
-        accelerator="cpu",
-        devices=1,
-        max_epochs=1,
-        logger=False,
-        enable_checkpointing=False,
-        enable_model_summary=False,
-        use_distributed_sampler=True,
-        deterministic=True,
-    )
-    trainer.fit(control, datamodule=data)
-    for name, expected in control.state_dict().items():
+    for name, expected in _fit_control([_chain(steps=2, width=2)], batch_size=1).items():
         assert torch.allclose(rank_states[0][name], expected, atol=1e-6, rtol=1e-6), name
 
 
-def test_two_process_unequal_transition_counts_match_exact_global_mean_update(tmp_path: Path) -> None:
+@pytest.mark.parametrize("scenario", ["distributed-val", "distributed-test"])
+def test_two_process_evaluation_fails_before_scorer_or_logging(tmp_path: Path, scenario: str) -> None:
+    payloads = _run_torchrun(tmp_path, scenario)
+
+    assert {payload["world_size"] for payload in payloads} == {2}
+    assert all("single-device" in str(payload["error"]) for payload in payloads)
+    assert all(
+        {payload[field] for payload in payloads} == {0}
+        for field in ("online_scorer_calls", "target_scorer_calls", "log_calls")
+    )
+
+
+def test_two_process_unequal_counts_match_exact_global_mean_update(tmp_path: Path) -> None:
     payloads = _run_torchrun(tmp_path, "unequal")
 
     assert sorted(payload["training_row_count"] for payload in payloads) == [1, 2]
@@ -152,27 +118,9 @@ def test_two_process_unequal_transition_counts_match_exact_global_mean_update(tm
         assert torch.equal(rank_states[0][name], rank_states[1][name])
 
     one_admitted = _chain(steps=2, width=2)
-    one_admitted = replace(
-        one_admitted,
-        supervision=replace(one_admitted.supervision, row_train_mask=torch.tensor([True, False])),
-    )
-    pl.seed_everything(123, workers=True)
-    control = _table_module()
-    data = QhDataModule(
-        train=_StaticDataset([one_admitted, _chain(steps=2, width=2, offset=10)], scene="train-scene"),
-        batch_size=2,
-        seed=43,
-    )
-    trainer = pl.Trainer(
-        accelerator="cpu",
-        devices=1,
-        max_epochs=1,
-        logger=False,
-        enable_checkpointing=False,
-        enable_model_summary=False,
-        use_distributed_sampler=True,
-        deterministic=True,
-    )
-    trainer.fit(control, datamodule=data)
-    for name, expected in control.state_dict().items():
+    labels = one_admitted.supervision.label_mask.clone()
+    labels[1, one_admitted.supervision.selected_index[1]] = False
+    one_admitted = replace(one_admitted, supervision=replace(one_admitted.supervision, label_mask=labels))
+    control_state = _fit_control([one_admitted, _chain(steps=2, width=2, offset=10)], batch_size=2)
+    for name, expected in control_state.items():
         assert torch.allclose(rank_states[0][name], expected, atol=1e-6, rtol=1e-6), name

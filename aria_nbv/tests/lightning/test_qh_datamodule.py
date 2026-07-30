@@ -1,0 +1,95 @@
+"""Stage-admission contracts for finite-horizon ``Q_H`` loaders."""
+
+# ruff: noqa: S101
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+import pytest
+from torch.utils.data import Dataset, SequentialSampler
+
+import aria_nbv.lightning.qh_datamodule as qh_datamodule
+from aria_nbv.rollouts.qh_reader import QhDataContract
+
+_CONTRACT = QhDataContract(
+    schema_version="qh-v1",
+    target_protocol="v0_gt_input",
+    reward_metric="target-root-gain",
+    return_semantics="finite-horizon",
+    td_semantics="fitted-q",
+    discount_gamma=0.95,
+    reason_code_version="reasons-v1",
+    actor_store_version="vin-v1",
+)
+
+
+class _StructuralDataset(Dataset[object]):
+    def __init__(
+        self,
+        scene: str,
+        *,
+        size: int = 1,
+        max_horizon: int = 1,
+        contract: QhDataContract = _CONTRACT,
+    ) -> None:
+        self.size = size
+        self.scenes = frozenset({scene})
+        self.max_horizon = max_horizon
+        self.contract = contract
+        self.provenance: dict[str, object] = {"scene": scene}
+
+    def __len__(self) -> int:
+        return self.size
+
+    def __getitem__(self, index: int) -> object:
+        return index
+
+
+def test_datamodule_admits_stage_datasets_with_differing_maximum_horizons() -> None:
+    data = qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+        train=_StructuralDataset("train", max_horizon=4),
+        val=_StructuralDataset("val", max_horizon=2),
+        test=_StructuralDataset("test", max_horizon=3),
+        seed=7,
+    )
+
+    assert data.val_dataset is not None and data.test_dataset is not None
+    assert (data.train_dataset.max_horizon, data.val_dataset.max_horizon, data.test_dataset.max_horizon) == (4, 2, 3)
+
+
+def test_datamodule_rejects_an_empty_configured_stage() -> None:
+    with pytest.raises(ValueError, match="at least one chain"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("train"), val=_StructuralDataset("val", size=0), seed=7
+        )
+
+
+def test_datamodule_rejects_pairwise_scene_overlap() -> None:
+    with pytest.raises(ValueError, match="train/test.*overlap scenes"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("shared"), test=_StructuralDataset("shared"), seed=7
+        )
+
+
+def test_datamodule_rejects_different_semantic_contracts() -> None:
+    with pytest.raises(ValueError, match="incompatible learning contracts"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("train"),
+            val=_StructuralDataset("val", contract=replace(_CONTRACT, reward_metric="scene-rri")),
+            seed=7,
+        )
+
+
+def test_datamodule_uses_seeded_train_shuffle_and_sequential_evaluation() -> None:
+    stages = {
+        "train": _StructuralDataset("train", size=8),
+        "val": _StructuralDataset("val", size=2),
+        "test": _StructuralDataset("test", size=2),
+    }
+    first = qh_datamodule.QhDataModule(**stages, seed=13)  # type: ignore[arg-type]
+    second = qh_datamodule.QhDataModule(**stages, seed=13)  # type: ignore[arg-type]
+
+    assert list(first.train_dataloader().sampler) == list(second.train_dataloader().sampler)
+    assert isinstance(first.val_dataloader().sampler, SequentialSampler)  # type: ignore[union-attr]
+    assert isinstance(first.test_dataloader().sampler, SequentialSampler)  # type: ignore[union-attr]

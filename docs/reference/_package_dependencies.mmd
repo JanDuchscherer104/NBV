@@ -12,12 +12,12 @@ flowchart LR
   utils["utils"]
   vin["vin"]
   vin -->|"21"| utils
-  data_handling -->|"12"| utils
-  lightning -->|"10"| utils
+  data_handling -->|"11"| utils
   oracle -->|"10"| data_handling
   oracle -->|"10"| utils
-  vin -->|"9"| data_handling
   data_handling -->|"8"| configs
+  lightning -->|"8"| utils
+  vin -->|"8"| data_handling
   oracle -->|"7"| pose_generation
   rollouts -->|"7"| utils
   lightning -->|"6"| configs

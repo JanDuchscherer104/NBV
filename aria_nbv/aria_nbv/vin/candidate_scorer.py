@@ -1,19 +1,18 @@
 """Structural scorer contract for VIN-compatible candidate models.
 
-This module names the narrow interface that :mod:`aria_nbv.lightning.lit_module`
+This module names the narrow interface that `aria_nbv.lightning.lit_module`
 needs from a candidate scorer. The current implementation is
-:class:`aria_nbv.vin.models.scene_myopic.VinModelV3`, the seminar-era one-step RRI scorer. Future
+`aria_nbv.vin.models.scene_myopic.VinModelV3`, the seminar-era one-step RRI scorer. Future
 target-conditioned myopic and finite-horizon scorers should implement the same
 forward surface when they are trainable through the existing Lightning loss
 path, or provide a separate Lightning module when their objective is no longer
 CORAL-over-candidate rows.
 
 The contract deliberately keeps rollout value targets out of
-:class:`aria_nbv.vin.types.VinPrediction`. Multi-step labels such as endpoint
-gain, selected-transition returns, and hard valid-action masks belong to
-:mod:`aria_nbv.rollouts`; the runnable ``Q_H`` scorer and objective remain
-leaf-owned by :mod:`aria_nbv.vin.models.target_finite_horizon` and
-:mod:`aria_nbv.lightning.qh_module`.
+`aria_nbv.vin.types.VinPrediction`. Multi-step labels such as endpoint gain,
+selected-transition returns, and hard valid-action masks belong to
+`aria_nbv.rollouts` stores and metrics until a concrete Q_H scorer owns that
+training objective.
 """
 
 from __future__ import annotations
@@ -119,7 +118,7 @@ class CandidateScorerPrediction(Protocol):
     """Optional ``Tensor["B N_q", bool]`` scorer diagnostic validity mask.
 
     The current one-step scorer does not automatically use this mask as a
-    training or action-selection mask. The dedicated ``Q_H`` objective uses the
+    training or action-selection mask. A future ``Q_H`` objective requires the
     authoritative hard valid-action mask stored with its rollout state.
     """
 
@@ -129,15 +128,17 @@ CandidateScorerConfig: TypeAlias = (
 )
 """Config-as-factory type for candidate scorer architecture slots.
 
-The union keeps the preserved `VinModelV3Config` as the default one-step
-implementation. The finite-horizon config is runnable but has a distinct
-rollout-value objective and is rejected by the one-step Lightning boundary.
+The union keeps the preserved `VinModelV3Config` as the default runnable
+implementation while letting experiment configs name the planned
+target-conditioned myopic and finite-horizon families. Those planned configs
+are still non-runnable scaffolds; their `setup_target()` methods fail
+explicitly until the corresponding model semantics are implemented.
 """
 
 CandidateScorerTrainingContract: TypeAlias = Literal[
     "coral_candidate",
     "target_myopic_coral_scaffold",
-    "finite_horizon_q",
+    "finite_horizon_q_scaffold",
 ]
 """Training-objective contract selected by a candidate scorer config.
 
@@ -145,10 +146,10 @@ CandidateScorerTrainingContract: TypeAlias = Literal[
 per-candidate `VinPrediction` rows with CORAL logits, probabilities, and a
 ``head_coral`` helper. `TargetConditionedMyopicScorerConfig` with
 ``target_descriptor_dim == 0`` uses that same contract as a v3-backed baseline;
-positive descriptor widths remain unsupported until target-token ownership is
-implemented. The runnable finite-horizon ``Q_H`` family is classified
-separately because it uses selected-transition rewards, bootstrap targets, and
-hard action masks instead of one-step ordinal RRI labels.
+positive descriptor widths remain a scaffold until target-token ownership is
+implemented. The finite-horizon ``Q_H`` scaffold is intentionally classified
+separately because it needs rollout-return targets and hard valid-action masks
+instead of one-step ordinal RRI labels.
 """
 
 
@@ -161,11 +162,11 @@ def candidate_scorer_training_contract(config: CandidateScorerConfig) -> Candida
 
     Returns:
         Contract string used by training entry points to reject incompatible
-        objective families before constructing their modules.
+        objective families before constructing placeholder modules.
     """
 
     if isinstance(config, MultiStepCandidateScorerConfig):
-        return "finite_horizon_q"
+        return "finite_horizon_q_scaffold"
     if isinstance(config, TargetConditionedMyopicScorerConfig):
         if int(config.target_descriptor_dim) == 0:
             return "coral_candidate"

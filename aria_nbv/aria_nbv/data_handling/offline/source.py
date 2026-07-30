@@ -29,14 +29,14 @@ class VinOfflineSourceConfig(TargetConfig[VinOfflineDataset]):
     offline: VinOfflineDatasetConfig = Field(default_factory=VinOfflineDatasetConfig)
     """Immutable VIN offline dataset configuration."""
 
-    train_split: Stage = Stage.TRAIN
-    """Stored stage used for training."""
+    train_split: Stage | None = Stage.TRAIN
+    """Stored stage used for training; ``None`` selects every stored row."""
 
-    val_split: Stage = Stage.VAL
-    """Stored stage used for validation."""
+    val_split: Stage | None = Stage.VAL
+    """Stored stage used for validation; ``None`` selects every stored row."""
 
-    test_split: Stage = Stage.VAL
-    """Stored stage used for testing when no distinct held-out split exists."""
+    test_split: Stage | None = Stage.VAL
+    """Stored stage used for testing; ``None`` selects every stored row."""
 
     load_candidates_for_batch: bool = False
     """Whether VIN-batch reads should decode candidate diagnostics."""
@@ -58,9 +58,11 @@ class VinOfflineSourceConfig(TargetConfig[VinOfflineDataset]):
 
     @field_validator("train_split", "val_split", "test_split", mode="before")
     @classmethod
-    def _normalize_stage(cls, value: Stage | str) -> Stage:
+    def _normalize_stage(cls, value: Stage | str | None) -> Stage | None:
         """Normalize config-file stage text before it enters source selection."""
 
+        if value is None or value == "all":
+            return None
         return Stage.from_str(value)
 
     def setup_target(self, *, split: Stage) -> VinOfflineDataset:

@@ -9,8 +9,8 @@ import sys
 import tarfile
 from dataclasses import asdict
 from io import BytesIO
+from pathlib import Path
 from types import MethodType, SimpleNamespace
-from typing import TYPE_CHECKING
 
 import msgspec
 import numpy as np
@@ -43,6 +43,7 @@ from aria_nbv.data_handling.offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
+from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
 from aria_nbv.pose_generation.types import CandidateSamplingResult
@@ -62,9 +63,6 @@ ARIA_POSE_T_WORLD_RIG = aria_constants.ARIA_POSE_T_WORLD_RIG
 PerspectiveCameras = pytest.importorskip(
     "pytorch3d.renderer.cameras",
 ).PerspectiveCameras
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _write_sample_index(path: Path, records: list[VinOfflineIndexRecord]) -> None:
@@ -1403,3 +1401,36 @@ def test_vin_offline_source_config_disables_diagnostic_blocks_for_vin_batches(tm
     assert dataset.config.load_gt_obbs is True  # noqa: S101
     assert dataset.config.load_detected_obbs is True  # noqa: S101
     assert dataset.config.load_trajectory_metadata is True  # noqa: S101
+
+
+def test_fit_binner_offline_config_selects_all_stored_rows(tmp_path: Path) -> None:
+    """The shipped binner config should preserve its all-stage source selection."""
+
+    config_path = Path(__file__).resolve().parents[3] / ".configs" / "fit_binner_offline.toml"
+    experiment_config = AriaNBVExperimentConfig.from_toml(config_path)
+    source = experiment_config.datamodule_config.source
+
+    assert isinstance(source, VinOfflineSourceConfig)  # noqa: S101
+    assert source.train_split is None  # noqa: S101
+    assert source.val_split is None  # noqa: S101
+
+    store_config = _write_test_store(tmp_path)
+    source.offline = VinOfflineDatasetConfig(store=store_config)
+    dataset = source.setup_target(split=Stage.TRAIN)
+
+    assert dataset.config.split is None  # noqa: S101
+    assert len(dataset) == len(VinOfflineStoreReader(store_config).get_split_records(None))  # noqa: S101
+
+
+def test_vin_offline_source_normalizes_stage_strings() -> None:
+    """Source split text should normalize to all rows or canonical stages."""
+
+    all_rows = VinOfflineSourceConfig(train_split="all", val_split=None, test_split="all")
+    concrete = VinOfflineSourceConfig(train_split="fit", val_split="validate", test_split="test")
+
+    assert all_rows.train_split is None  # noqa: S101
+    assert all_rows.val_split is None  # noqa: S101
+    assert all_rows.test_split is None  # noqa: S101
+    assert concrete.train_split is Stage.TRAIN  # noqa: S101
+    assert concrete.val_split is Stage.VAL  # noqa: S101
+    assert concrete.test_split is Stage.TEST  # noqa: S101
