@@ -62,7 +62,7 @@ Retain these contracts:
   outputs such as `ARIA_OBB_PRED`, `ARIA_OBB_PRED_VIZ`,
   `ARIA_OBB_PRED_SEM_ID_TO_NAME`, and `ARIA_OBB_PRED_PROBS_FULL`.
   Treat this as a compact contract snapshot, not a replacement for source
-  imports in `aria_nbv.data_handling.raw.views`, `aria_nbv.vin.backbone_evl`,
+  imports in `aria_nbv.data_handling.ase_efm.views`, `aria_nbv.vin.backbone_evl`,
   and `aria_nbv.rerun_inspector`.
 - EVL voxel evidence is local and checkpoint/config dependent. Any rollout,
   offline store, or Q_H payload using EVL fields needs source/config/checkpoint
@@ -105,7 +105,7 @@ Do not carry forward:
 
 When the docstring enrichment todo is implemented, prioritize:
 
-- `aria_nbv.data_handling.raw.views`: consumed EFM keys, units, frames, and OBB
+- `aria_nbv.data_handling.ase_efm.views`: consumed EFM keys, units, frames, and OBB
   actor-visible versus GT-label boundaries.
 - `aria_nbv.data_handling.efm_dataset`: ATEK shard, EFM adaptor, mesh pairing,
   and scene/snippet filtering contracts.

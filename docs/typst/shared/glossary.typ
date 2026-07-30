@@ -1690,7 +1690,7 @@
       definition_long: "A snippet typically contains RGB or grayscale streams, poses, calibration, semi-dense points, and scene metadata that EVL lifts into a voxel grid.",
       internal_links: (
         "docs/contents/ase_dataset.qmd",
-        "docs/reference/data_handling.raw.dataset.qmd",
+        "docs/reference/data_handling.ase_efm.dataset.qmd",
         "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (
@@ -1805,7 +1805,7 @@
       definition_long: "MTD supplies the logged egocentric trajectory used to define snippet state, current reconstruction context, and candidate-view reference poses.",
       internal_links: (
         "docs/contents/ase_dataset.qmd",
-        "docs/reference/data_handling.raw.views.qmd",
+        "docs/reference/data_handling.ase_efm.views.qmd",
       ),
       citations: (
         "ProjectAria-ASE-2025",

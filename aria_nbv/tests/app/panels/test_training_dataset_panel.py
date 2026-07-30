@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app.panels.training_dataset import _artifact_identity, _deep_metric_value, _download_payload
 from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling.offline.format import (
+from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,

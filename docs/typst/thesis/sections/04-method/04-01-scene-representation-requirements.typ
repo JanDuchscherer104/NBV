@@ -12,7 +12,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@EFM3D-straub2024],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/lightning/test_qh_module.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/lightning/test_qh_module.py",
   gate: [retain actor/oracle provenance checks and name the admitted state protocol in every run],
 )[The replay carrier, actor/supervision separation, and scorer-independent fitted-Q adapter are implemented. No production finite-horizon scorer or task-sufficient dynamic reconstruction memory is implemented, and frozen scientific validation remains pending.]
 
@@ -71,7 +71,7 @@ A useful representation must preserve distinctions that can change target-specif
   implementation: "partial",
   evidence: "pending",
   citation: [@EFM3D-straub2024 @EVL-Doc-2025],
-  source: "docs/literature/tex-src/arXiv-EFM3D/method.tex, Sec. Egocentric Voxel Lifting, lines 2--44; docs/contents/literature/efm3d.qmd; docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/data_handling/offline/writer.py",
+  source: "docs/literature/tex-src/arXiv-EFM3D/method.tex, Sec. Egocentric Voxel Lifting, lines 2--44; docs/contents/literature/efm3d.qmd; docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/data_handling/vin_store/writer.py",
   gate: [report target and candidate support against the persisted voxel pose and extent],
 )[EFM3D fields, their voxel pose, and finite extent are persisted. No finite-horizon scorer currently consumes them, and their sufficiency as the only long-horizon scene representation remains pending.]
 

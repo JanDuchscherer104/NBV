@@ -26,13 +26,13 @@ from pydantic import Field, field_validator
 from ...configs import PathConfig
 from ...utils import BaseConfig, Stage
 from ...utils.config_paths import resolve_cache_artifact_dir
-from ..raw.views import VinSnippetView
 from .format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineShardSpec,
 )
+from .views import VinSnippetView
 
 OFFLINE_DATASET_VERSION = 7
 """Version of the immutable VIN offline dataset format."""

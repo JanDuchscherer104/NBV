@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from aria_nbv.data_handling import VinOfflineDatasetConfig
-from aria_nbv.data_handling.offline.inventory import (
+from aria_nbv.data_handling.vin_store.inventory import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
     collect_offline_visual_inventory,

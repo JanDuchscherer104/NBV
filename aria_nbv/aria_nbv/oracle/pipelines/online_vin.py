@@ -4,7 +4,7 @@ This module provides an iterable source that streams ATEK/ASE snippets through t
 GT-mesh Oracle labels at runtime. It yields :class:`VinOracleBatch` while
 preserving actor-visible EFM/EVL evidence versus Oracle RRI and GT-OBB
 supervision boundaries. Immutable source reading remains in
-:mod:`aria_nbv.data_handling.offline`.
+:mod:`aria_nbv.data_handling.vin_store`.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from pydantic import Field
 from torch.utils.data import IterableDataset
 
 from ...configs import PathConfig
-from ...data_handling.offline.batch import VinOracleBatch
-from ...data_handling.raw.dataset import AseEfmDatasetConfig
-from ...data_handling.raw.views import EfmSnippetView
+from ...data_handling.ase_efm.dataset import AseEfmDatasetConfig
+from ...data_handling.ase_efm.views import EfmSnippetView
+from ...data_handling.vin_store.batch import VinOracleBatch
 from ...utils import Console, Stage, TargetConfig, Verbosity
 from .scene_labels import OracleRriLabeler, OracleRriLabelerConfig, OracleRriSample
 

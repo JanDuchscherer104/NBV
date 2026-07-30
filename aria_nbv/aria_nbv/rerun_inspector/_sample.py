@@ -13,7 +13,7 @@ from typing import cast
 
 from aria_nbv.data_handling import VinOfflineDataset, VinOfflineDatasetConfig
 from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id
-from aria_nbv.data_handling.offline.dataset import VinOfflineSample
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineSample
 
 from ._config import RerunInspectorSelectionConfig
 

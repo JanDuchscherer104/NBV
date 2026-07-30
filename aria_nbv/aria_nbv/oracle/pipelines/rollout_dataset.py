@@ -25,7 +25,7 @@ import torch
 from pydantic import Field, field_validator, model_validator
 
 from ...configs import PathConfig
-from ...data_handling.offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
+from ...data_handling.vin_store.dataset import VinOfflineDataset, VinOfflineDatasetConfig, VinOfflineSample
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,

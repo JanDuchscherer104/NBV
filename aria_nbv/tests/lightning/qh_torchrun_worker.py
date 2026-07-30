@@ -10,7 +10,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 import torch
 
-from aria_nbv.data_handling.qh import collate_qh_chains
+from aria_nbv.data_handling.qh_data import collate_qh_chains
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from tests.data_handling.test_qh import _chain

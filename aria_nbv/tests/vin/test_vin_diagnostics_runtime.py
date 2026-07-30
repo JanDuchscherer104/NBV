@@ -12,7 +12,7 @@ import torch
 
 import aria_nbv.app.panels.vin_diagnostics_runtime as runtime
 from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.vin_store.source import VinOfflineSourceConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 from aria_nbv.utils import Stage
 

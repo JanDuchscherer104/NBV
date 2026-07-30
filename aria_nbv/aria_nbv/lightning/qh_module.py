@@ -1,6 +1,6 @@
 """Scorer-independent fitted-Q optimization for finite-candidate chains.
 
-The injected scorer maps :class:`~aria_nbv.data_handling.qh.QhActorTensors`
+The injected scorer maps :class:`~aria_nbv.data_handling.qh_data.QhActorTensors`
 directly to candidate values. This module owns Double-Q targets, exact
 distributed admission, one optimizer transaction, metrics, and target sync.
 """
@@ -17,7 +17,7 @@ from torch import Tensor, nn
 from torch.nn import functional
 from torch.optim import Optimizer
 
-from ..data_handling.qh import QhActorTensors, QhBatch
+from ..data_handling.qh_data import QhActorTensors, QhBatch
 from ..utils import Stage, TargetConfig
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 

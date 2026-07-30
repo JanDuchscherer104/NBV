@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,20 +14,65 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling.offline.format import VinOfflineIndexRecord
-from aria_nbv.data_handling.qh import (
+from aria_nbv.data_handling.qh_data import (
     QhActorTensors,
     QhChain,
-    QhChainKey,
     QhDataset,
-    QhSupervision,
     collate_qh_chains,
 )
-from aria_nbv.data_handling.raw.views import VinSnippetView
+from aria_nbv.data_handling.qh_data.views import QhChainKey, QhSupervision
+from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rollouts.qh_reader import QhDataContract, _QhSourceRef
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
+
+
+def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_types() -> None:
+    """Keep every Q_H DTO/config field documented without a shared typing dependency."""
+
+    package = Path(__file__).resolve().parents[2] / "aria_nbv" / "data_handling" / "qh_data"
+    expected_classes = {
+        "views.py": {"QhActorTensors", "QhSupervision", "QhChainKey", "QhChain"},
+        "batching.py": {"QhBatch"},
+        "dataset.py": {"QhDatasetConfig"},
+    }
+    missing: list[str] = []
+    for filename, class_names in expected_classes.items():
+        source = (package / filename).read_text(encoding="utf-8")
+        assert "jax" + "typing" not in source
+        tree = ast.parse(source, filename=filename)
+        classes = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+        for class_name in class_names:
+            body = classes[class_name].body
+            for index, statement in enumerate(body):
+                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
+                    continue
+                following = body[index + 1] if index + 1 < len(body) else None
+                documented = (
+                    isinstance(following, ast.Expr)
+                    and isinstance(following.value, ast.Constant)
+                    and isinstance(following.value.value, str)
+                    and bool(following.value.value.strip())
+                )
+                if not documented:
+                    missing.append(f"{filename}:{class_name}.{statement.target.id}")
+    assert not missing
+
+
+def test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal() -> None:
+    """Keep batch transfer explicit when owned DTO fields change."""
+
+    source_path = Path(__file__).resolve().parents[2] / "aria_nbv" / "data_handling" / "qh_data" / "batching.py"
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    transform_batch = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_transform_batch"
+    )
+    calls = [node for node in ast.walk(transform_batch) if isinstance(node, ast.Call)]
+
+    assert not any(isinstance(call.func, ast.Name) and call.func.id in {"fields", "getattr"} for call in calls)
+    assert not any(keyword.arg is None for call in calls for keyword in call.keywords)
 
 
 def _snippet(points: int = 2) -> VinSnippetView:

@@ -30,7 +30,7 @@ from efm3d.aria.aria_constants import (
     ARIA_POSE_TIME_NS,
 )
 
-from aria_nbv.data_handling.raw.views import EfmSnippetView
+from aria_nbv.data_handling.ase_efm.views import EfmSnippetView
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
 

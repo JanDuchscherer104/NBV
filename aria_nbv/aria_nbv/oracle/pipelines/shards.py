@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from ...data_handling.offline.dataset import VinOfflineDatasetConfig
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
 from ...rollouts.manifest import (
     RolloutStoreInvocation,
     collect_runtime_provenance,

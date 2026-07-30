@@ -15,7 +15,7 @@ import pytest
 import pytorch_lightning as pl
 import torch
 
-from aria_nbv.data_handling.qh import QhChain
+from aria_nbv.data_handling.qh_data import QhChain
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from tests.data_handling.test_qh import _chain

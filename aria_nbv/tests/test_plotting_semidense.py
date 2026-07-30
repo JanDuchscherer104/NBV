@@ -3,7 +3,7 @@
 import numpy as np
 import torch
 
-from aria_nbv.data_handling.raw.views import EfmPointsView
+from aria_nbv.data_handling.ase_efm.views import EfmPointsView
 
 
 def test_semidense_points_respects_lengths_and_filters_nan() -> None:

@@ -27,8 +27,8 @@ from ..data_handling import (
     AseEfmDatasetConfig,
     VinOracleBatch,
 )
-from ..data_handling.offline.batch import VinOracleDatasetBase
-from ..data_handling.offline.source import VinOfflineSourceConfig
+from ..data_handling.vin_store.batch import VinOracleDatasetBase
+from ..data_handling.vin_store.source import VinOfflineSourceConfig
 from ..oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 from ..utils import Console, Stage, TargetConfig, Verbosity
 
@@ -331,7 +331,7 @@ class VinDataModule(pl.LightningDataModule):
         return iter(plan.dataset)
 
     def _describe_dataset(self, dataset: VinOracleDatasetBase, *, stage: Stage) -> dict[str, object]:
-        from ..data_handling.offline.dataset import VinOfflineDatasetConfig
+        from ..data_handling.vin_store.dataset import VinOfflineDatasetConfig
 
         summary: dict[str, object] = {
             "stage": stage.value,

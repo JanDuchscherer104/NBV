@@ -34,7 +34,7 @@ from .target_selection import (
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
 
-    from ..data_handling.offline.dataset import VinOfflineSample
+    from ..data_handling.vin_store.dataset import VinOfflineSample
 
 Tensor = torch.Tensor
 CameraLabel = Literal["rgb", "slaml", "slamr"]

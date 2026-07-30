@@ -10,7 +10,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019 @FixedHorizonTD-deAsis2020],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/tests/lightning/test_qh_module.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/tests/lightning/test_qh_module.py; aria_nbv/tests/rollouts/test_qh_reader.py",
   gate: [production scorer plus end-to-end permutation, mask, duplicate, frame, source, and horizon tests for every admitted state protocol],
 )[The replay and fitted-Q infrastructure covers row-aligned masks, local-frame tensors, selected-transition admission, and deterministic Double-Q selection for an injected scorer. No candidate-to-state architecture or scorer-level equivariance contract is implemented.]
 
@@ -42,7 +42,7 @@ If the explicit requested-horizon interface is selected, it adds its own accepta
   implementation: "partial",
   evidence: "pending",
   citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; docs/contents/theory/candidate_view_dependence.qmd",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [freeze the scorer time-query contract, then promote a level only after lower interaction controls pass on the same scene carrier and target/source protocol],
 )[No level in the interaction ladder is implemented for finite-horizon scoring. Scene-carrier choice, fixed-H versus requested-horizon conditioning, and candidate interaction are orthogonal decisions to test after the scorer boundary is frozen.]
 

@@ -11,7 +11,7 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_myopic.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/data_handling/qh.py",
+  source: "aria_nbv/aria_nbv/vin/models/target_myopic.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/data_handling/qh_data/views.py",
   gate: [retain the one-step scorer as a matched control and implement the first finite-horizon scorer only after its interface decision],
 )[The one-step VIN/CORAL scorer remains the historical myopic control. Replay-chain tensors and a selected-transition Double-Q trainer for an injected scorer are implemented. No deterministic H=2, candidate-to-state, or other production finite-horizon scorer is implemented.]
 

@@ -20,9 +20,7 @@ from .views import (
     EfmPointsView,
     EfmSnippetView,
     EfmTrajectoryView,
-    VinSnippetView,
     is_efm_snippet_view_instance,
-    is_vin_snippet_view_instance,
 )
 
 __all__ = [
@@ -35,8 +33,6 @@ __all__ = [
     "EfmSnippetLoader",
     "EfmSnippetView",
     "EfmTrajectoryView",
-    "VinSnippetView",
     "infer_semidense_bounds",
     "is_efm_snippet_view_instance",
-    "is_vin_snippet_view_instance",
 ]

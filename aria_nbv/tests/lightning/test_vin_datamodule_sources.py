@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.vin_store.source import VinOfflineSourceConfig
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 

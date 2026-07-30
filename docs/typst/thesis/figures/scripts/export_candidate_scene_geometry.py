@@ -34,11 +34,11 @@ import numpy as np
 import open3d as o3d
 
 from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling.offline.dataset import (
+from aria_nbv.data_handling.vin_store.dataset import (
     VinOfflineDataset,
     VinOfflineDatasetConfig,
 )
-from aria_nbv.data_handling.offline.store import VinOfflineStoreConfig
+from aria_nbv.data_handling.vin_store.store import VinOfflineStoreConfig
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader
 
 

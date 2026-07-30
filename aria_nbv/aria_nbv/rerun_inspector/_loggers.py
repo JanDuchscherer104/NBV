@@ -76,7 +76,7 @@ if TYPE_CHECKING:
     from efm3d.aria.camera import CameraTW
     from numpy.typing import NDArray
 
-    from aria_nbv.data_handling.offline.dataset import VinOfflineSample
+    from aria_nbv.data_handling.vin_store.dataset import VinOfflineSample
 
     from ._config import RerunOfflineInspectorConfig
 

@@ -12,7 +12,7 @@ from aria_nbv.data_handling import (  # noqa: E402
     AseEfmDatasetConfig,
     EfmSnippetView,
 )
-from aria_nbv.data_handling.raw.views import (  # noqa: E402
+from aria_nbv.data_handling.ase_efm.views import (  # noqa: E402
     EfmCameraView,
     EfmPointsView,
     EfmTrajectoryView,

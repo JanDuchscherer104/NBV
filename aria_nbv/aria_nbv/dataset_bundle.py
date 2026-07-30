@@ -20,8 +20,8 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
-from .data_handling.offline.format import VinOfflineIndexRecord, VinOfflineManifest
-from .data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
+from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils.fingerprints import stable_msgspec_hash

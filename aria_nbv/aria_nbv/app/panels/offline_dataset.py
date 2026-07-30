@@ -18,13 +18,13 @@ import torch
 
 from ...configs import PathConfig
 from ...data_handling import VinOfflineStoreConfig
-from ...data_handling.offline.diagnostics import (
+from ...data_handling.vin_store.diagnostics import (
     VinOfflineCoverageStats,
     VinOfflineDatasetStats,
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )
-from ...data_handling.offline.source import VinOfflineSourceConfig
+from ...data_handling.vin_store.source import VinOfflineSourceConfig
 from ...dataset_topology import build_dataset_topology
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rollouts.inspection import discover_rollout_store_paths

@@ -19,8 +19,8 @@ attach mesh and snippet context without changing immutable VIN offline rows.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, fields, replace
-from inspect import cleandoc, getattr_static, getsource
+from dataclasses import dataclass, replace
+from inspect import getattr_static
 from pprint import pformat
 from typing import Any, Literal, TypedDict
 
@@ -53,62 +53,9 @@ from torch import Tensor
 from trimesh import Trimesh  # type: ignore[import-untyped]
 
 from ...utils import summarize
+from .._repr_support import _CompactReprMixin
 from ..identifiers import compact_ase_atek_sample_id
 from ..mesh_cache import MeshProcessSpec
-
-_FIELD_DOC_CACHE: dict[type, dict[str, str]] = {}
-
-
-def _extract_field_docs(cls: type) -> dict[str, str]:
-    """Extract field docstrings from the dataclass source when available."""
-    try:
-        source = getsource(cls)
-    except OSError:
-        return {}
-    source = cleandoc(source)
-    pattern = re.compile(r"^\s*(\w+)\s*:[^\n]*\n\s*\"\"\"(.*?)\"\"\"", re.MULTILINE | re.DOTALL)
-    return {name: cleandoc(doc) for name, doc in pattern.findall(source)}
-
-
-def _get_field_doc(cls: type, field_name: str) -> str | None:
-    """Look up a cached field docstring for the requested dataclass field."""
-    docs = _FIELD_DOC_CACHE.get(cls)
-    if docs is None:
-        docs = _extract_field_docs(cls)
-        _FIELD_DOC_CACHE[cls] = docs
-    return docs.get(field_name)
-
-
-def _repr(obj: Any, *, include_docstrings: bool) -> str:
-    """Build a compact repr payload for view dataclasses."""
-    items: dict[str, Any] = {}
-    cls = obj.__class__
-    for f in fields(obj):
-        value = summarize(getattr(obj, f.name))
-        if include_docstrings:
-            doc = f.metadata.get("doc") if f.metadata else None
-            if doc is None:
-                doc = _get_field_doc(cls, f.name)
-            items[f.name] = {"value": value, "doc": doc} if doc else {"value": value}
-        else:
-            items[f.name] = value
-    return pformat(items, indent=2, width=100, compact=False)
-
-
-class BaseView:
-    """Base class for EFM view dataclasses with fast, optional docstring repr."""
-
-    __repr_docstrings__: bool = False
-    """Whether ``repr`` should include field docstrings."""
-
-    def __repr__(self) -> str:  # pragma: no cover - formatting only
-        """Return the compact repr for the current view object."""
-        return _repr(self, include_docstrings=getattr(self, "__repr_docstrings__", False))
-
-    def repr_with_docstrings(self) -> str:  # pragma: no cover - formatting only
-        """Return a repr that includes field docstrings when available."""
-        return _repr(self, include_docstrings=True)
-
 
 # ---------------------------------------------------------------------------
 # GT views (EFM-format)
@@ -116,7 +63,7 @@ class BaseView:
 
 
 @dataclass(slots=True)
-class EfmGtCameraObbView(BaseView):
+class EfmGtCameraObbView(_CompactReprMixin):
     """Expose per-camera ASE GT boxes for one EFM evaluation timestamp.
 
     These tensors are label/evaluation assets used for matching and target
@@ -142,7 +89,7 @@ CamerasDict = TypedDict(
 
 
 @dataclass(slots=True)
-class EfmGtTimestampView(BaseView):
+class EfmGtTimestampView(_CompactReprMixin):
     """Group oracle GT OBB views for one timestamp across Aria cameras."""
 
     time_id: str
@@ -153,7 +100,7 @@ class EfmGtTimestampView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmGTView(BaseView):
+class EfmGTView(_CompactReprMixin):
     """Parse nested ``gt_data/efm_gt`` annotations for evaluation-only access."""
 
     raw: dict[str, Any]
@@ -207,7 +154,7 @@ class EfmGTView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmCameraView(BaseView):
+class EfmCameraView(_CompactReprMixin):
     """Expose one calibrated Aria camera stream view without copying EFM tensors.
 
     The view consumes matching entries from ``ARIA_IMG``, ``ARIA_CALIB``,
@@ -305,7 +252,7 @@ class EfmCameraView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmTrajectoryView(BaseView):
+class EfmTrajectoryView(_CompactReprMixin):
     """Expose the MPS/EFM world-from-rig trajectory for one snippet."""
 
     t_world_rig: PoseTW
@@ -335,7 +282,7 @@ class EfmTrajectoryView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmPointsView(BaseView):
+class EfmPointsView(_CompactReprMixin):
     """Expose actor-visible MPS semidense reconstruction evidence.
 
     The ``ARIA_POINTS_*`` tensors are padded per frame; ``lengths`` defines the
@@ -499,7 +446,7 @@ class EfmPointsView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmObbView(BaseView):
+class EfmObbView(_CompactReprMixin):
     """Expose snippet-level GT boxes in the EFM ``ObbTW`` layout.
 
     `obbs` may be shaped `(T, K, 34)`, `(1, K, 34)`, or `(K, 34)` depending on
@@ -522,7 +469,7 @@ class EfmObbView(BaseView):
 
 
 @dataclass(slots=True)
-class EfmSnippetView(BaseView):
+class EfmSnippetView(_CompactReprMixin):
     """Own the typed boundary around one adapted ATEK/ASE snippet.
 
     ``efm`` retains the zero-copy key/value payload produced by
@@ -857,42 +804,6 @@ class EfmSnippetView(BaseView):
         return pformat(base, indent=2, width=120, compact=False)
 
 
-@dataclass(slots=True)
-class VinSnippetView(BaseView):
-    """Minimal snippet payload for VIN v2 batching.
-
-    Attributes:
-        points_world: ``Tensor["K_pad 3+C", float32]`` collapsed semidense points.
-            Base columns are XYZ; optional extras include inv_dist_std and
-            observation count (number of snippet frames that saw the point).
-            Rows after ``lengths`` are NaN padding.
-        lengths: ``Tensor["1", int64]`` or ``Tensor["B", int64]`` number of
-            valid rows in ``points_world``.
-        t_world_rig: ``PoseTW["F 12"]`` historical world←rig poses.
-    """
-
-    points_world: Tensor
-    """``Tensor["K_pad 3+C", float32]`` world-frame MPS points in metres; tail rows are NaN padding."""
-    lengths: Tensor
-    """``Tensor["1", int64]`` valid point-prefix length before fixed-width padding."""
-    t_world_rig: PoseTW
-    """``PoseTW["F 12"]`` MPS/EFM world←rig trajectory; translation is metres."""
-
-    def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> "VinSnippetView":
-        """Move the VIN snippet tensors to the requested device and dtype."""
-        target_device = torch.device(device)
-        return replace(
-            self,
-            points_world=self.points_world.to(device=target_device, dtype=dtype),
-            lengths=self.lengths.to(target_device),
-            t_world_rig=self.t_world_rig.to(device=target_device, dtype=dtype),  # type: ignore[arg-type]
-        )
-
-    def __repr__(self) -> str:
-        """Return the compact repr for the VIN snippet view."""
-        return _repr(self, include_docstrings=getattr(self, "__repr_docstrings__", False))
-
-
 def is_efm_snippet_view_instance(value: object) -> bool:
     """Return whether ``value`` behaves like an `EfmSnippetView`.
 
@@ -908,17 +819,6 @@ def is_efm_snippet_view_instance(value: object) -> bool:
     return True
 
 
-def is_vin_snippet_view_instance(value: object) -> bool:
-    """Return whether ``value`` behaves like a `VinSnippetView`."""
-    try:
-        getattr_static(value, "points_world")
-        getattr_static(value, "lengths")
-        getattr_static(value, "t_world_rig")
-    except AttributeError:
-        return False
-    return True
-
-
 __all__ = [
     "EfmCameraView",
     "EfmTrajectoryView",
@@ -928,7 +828,5 @@ __all__ = [
     "EfmGtTimestampView",
     "EfmGtCameraObbView",
     "EfmSnippetView",
-    "VinSnippetView",
     "is_efm_snippet_view_instance",
-    "is_vin_snippet_view_instance",
 ]

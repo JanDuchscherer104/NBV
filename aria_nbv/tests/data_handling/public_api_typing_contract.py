@@ -18,13 +18,13 @@ from aria_nbv.data_handling import (
     VinSnippetView,
 )
 from aria_nbv.data_handling.mesh_cache import MeshProcessSpec, ProcessedMesh, load_or_process_mesh
-from aria_nbv.data_handling.offline.adapter import (
+from aria_nbv.data_handling.vin_store.adapter import (
     DEFAULT_VIN_SNIPPET_PAD_POINTS,
     build_vin_snippet_view,
     empty_vin_snippet,
 )
-from aria_nbv.data_handling.offline.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleDatasetBase
-from aria_nbv.data_handling.offline.diagnostics import (
+from aria_nbv.data_handling.vin_store.batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleDatasetBase
+from aria_nbv.data_handling.vin_store.diagnostics import (
     NumericSummary,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
@@ -36,19 +36,19 @@ from aria_nbv.data_handling.offline.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
 )
-from aria_nbv.data_handling.offline.format import (
+from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
 )
-from aria_nbv.data_handling.offline.inventory import (
+from aria_nbv.data_handling.vin_store.inventory import (
     OfflineVisualInventory,
     OfflineVisualInventoryError,
     collect_offline_visual_inventory,
 )
-from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
-from aria_nbv.data_handling.offline.store import OFFLINE_DATASET_VERSION
-from aria_nbv.data_handling.offline.writer import flush_prepared_samples_to_shard, prepare_vin_offline_sample
+from aria_nbv.data_handling.vin_store.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
+from aria_nbv.data_handling.vin_store.writer import flush_prepared_samples_to_shard, prepare_vin_offline_sample
 from aria_nbv.lightning.lit_datamodule import VinDatasetSourceConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 

@@ -28,19 +28,92 @@ def test_public_api_has_exact_stable_allowlist() -> None:
     assert all(hasattr(module, name) for name in expected)  # noqa: S101
 
 
+def test_snippet_views_are_owned_by_their_domain_leaves() -> None:
+    """Keep ASE/EFM and immutable VIN view ownership separate."""
+
+    data_root = importlib.import_module("aria_nbv.data_handling")
+    ase_root = importlib.import_module("aria_nbv.data_handling.ase_efm")
+    ase_views = importlib.import_module("aria_nbv.data_handling.ase_efm.views")
+    vin_views = importlib.import_module("aria_nbv.data_handling.vin_store.views")
+
+    assert tuple(vin_views.__all__) == ("VinSnippetView", "is_vin_snippet_view_instance")  # noqa: S101
+    assert data_root.VinSnippetView is vin_views.VinSnippetView  # noqa: S101
+    assert not hasattr(ase_root, "VinSnippetView")  # noqa: S101
+    assert not hasattr(ase_views, "VinSnippetView")  # noqa: S101
+    assert not hasattr(ase_views, "is_vin_snippet_view_instance")  # noqa: S101
+
+
+def test_compact_repr_support_is_representation_only_and_excludes_qh_dtos() -> None:
+    """Share view formatting without creating a generic data-object contract."""
+
+    support = importlib.import_module("aria_nbv.data_handling._repr_support")
+    ase_views = importlib.import_module("aria_nbv.data_handling.ase_efm.views")
+    vin_views = importlib.import_module("aria_nbv.data_handling.vin_store.views")
+    qh_batching = importlib.import_module("aria_nbv.data_handling.qh_data.batching")
+    qh_views = importlib.import_module("aria_nbv.data_handling.qh_data.views")
+    mixin = support._CompactReprMixin
+
+    assert support.__all__ == []  # noqa: S101
+    assert issubclass(ase_views.EfmGtTimestampView, mixin)  # noqa: S101
+    assert issubclass(vin_views.VinSnippetView, mixin)  # noqa: S101
+    assert {name for name, value in vars(mixin).items() if callable(value)} == {  # noqa: S101
+        "__repr__",
+        "repr_with_docstrings",
+    }
+    qh_dtos = (
+        qh_views.QhActorTensors,
+        qh_views.QhSupervision,
+        qh_views.QhChainKey,
+        qh_views.QhChain,
+        qh_batching.QhBatch,
+    )
+    assert all(not issubclass(dto, mixin) for dto in qh_dtos)  # noqa: S101
+    assert "to" in qh_batching.QhBatch.__dict__  # noqa: S101
+    assert "to" not in mixin.__dict__  # noqa: S101
+
+    efm_view = ase_views.EfmGtTimestampView(time_id="7", cameras={})
+    assert repr(efm_view) == "EfmGtTimestampView(time_id='7', cameras={})"  # noqa: S101
+    assert "Timestamp identifier for this GT slice." in efm_view.repr_with_docstrings()  # noqa: S101
+
+
 def test_qh_surfaces_remain_importable_from_owner_leaves() -> None:
     """Keep Q_H data and training APIs leaf-owned without widening package roots."""
 
     data_root = importlib.import_module("aria_nbv.data_handling")
-    qh_data = importlib.import_module("aria_nbv.data_handling.qh")
+    qh_data = importlib.import_module("aria_nbv.data_handling.qh_data")
     lightning_root = importlib.import_module("aria_nbv.lightning")
     qh_datamodule = importlib.import_module("aria_nbv.lightning.qh_datamodule")
     qh_module = importlib.import_module("aria_nbv.lightning.qh_module")
 
-    data_names = ("QhBatch", "QhChain", "QhDataset", "QhDatasetConfig", "collate_qh_chains")
+    data_names = (
+        "QhActorTensors",
+        "QhBatch",
+        "QhChain",
+        "QhDataset",
+        "QhDatasetConfig",
+        "collate_qh_chains",
+    )
+    assert tuple(qh_data.__all__) == data_names  # noqa: S101
     assert all(hasattr(qh_data, name) and not hasattr(data_root, name) for name in data_names)  # noqa: S101
+    assert not hasattr(qh_data, "QhSupervision")  # noqa: S101
+    assert not hasattr(qh_data, "QhChainKey")  # noqa: S101
     lightning_symbols = ((qh_datamodule, "QhDataModule"), (qh_module, "QhLightningModule"))
     assert all(hasattr(module, name) and not hasattr(lightning_root, name) for module, name in lightning_symbols)  # noqa: S101
+
+
+def test_obsolete_qh_module_path_is_unavailable() -> None:
+    """Keep the package move honest instead of retaining a compatibility facade."""
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("aria_nbv.data_handling.qh")
+
+
+@pytest.mark.parametrize("module_name", ["raw", "offline"])
+def test_obsolete_data_handling_package_paths_are_unavailable(module_name: str) -> None:
+    """Keep ownership renames honest instead of retaining compatibility packages."""
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(f"aria_nbv.data_handling.{module_name}")
 
 
 def test_public_api_omits_internal_helper_exports() -> None:
@@ -123,8 +196,8 @@ def test_public_api_omits_legacy_vin_oracle_dataset_alias() -> None:
 def test_data_contracts_omit_pipeline_conversion_conveniences() -> None:
     """Keep online adaptation in pipelines and offline conversion in the dataset."""
 
-    batch_module = importlib.import_module("aria_nbv.data_handling.offline.batch")
-    dataset_module = importlib.import_module("aria_nbv.data_handling.offline.dataset")
+    batch_module = importlib.import_module("aria_nbv.data_handling.vin_store.batch")
+    dataset_module = importlib.import_module("aria_nbv.data_handling.vin_store.dataset")
     assert "from_label" not in batch_module.VinOracleBatch.__dict__  # noqa: S101
     assert "to_vin_oracle_batch" not in dataset_module.VinOfflineSample.__dict__  # noqa: S101
 
@@ -134,7 +207,7 @@ def test_offline_configs_omit_premature_counterfactual_knobs() -> None:
 
     data_module = importlib.import_module("aria_nbv.data_handling")
     pipeline_module = importlib.import_module("aria_nbv.oracle.pipelines.offline_vin")
-    source_module = importlib.import_module("aria_nbv.data_handling.offline.source")
+    source_module = importlib.import_module("aria_nbv.data_handling.vin_store.source")
     assert "include_counterfactuals" not in pipeline_module.VinOfflineWriterConfig.model_fields  # noqa: S101
     assert "load_counterfactuals" not in data_module.VinOfflineDatasetConfig.model_fields  # noqa: S101
     assert "load_counterfactuals_for_batch" not in source_module.VinOfflineSourceConfig.model_fields  # noqa: S101

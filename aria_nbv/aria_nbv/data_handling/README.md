@@ -23,7 +23,7 @@ never as low RRI.
   `VinOfflineDatasetConfig`, and `VinOfflineStoreConfig`.
 - Specialized raw views, identifier codecs, diagnostics, writers, inventory
   reducers, and storage records use their owning leaf modules.
-- Immutable training source: `data_handling.offline.source.VinOfflineSourceConfig`.
+- Immutable training source: `data_handling.vin_store.source.VinOfflineSourceConfig`.
 - Online generation: `oracle.pipelines.online_vin`; Lightning composes the
   online/offline discriminated source union.
 - Immutable one-step store: `VinOfflineDatasetConfig`, `VinOfflineStoreConfig`,
@@ -975,8 +975,8 @@ contracts.
 data_handling/
   identifiers.py
   mesh_cache.py
-  offline/
-  raw/
+  vin_store/
+  ase_efm/
     dataset.py
     loader.py
     views.py
@@ -1057,7 +1057,7 @@ layout transition.
 | `VinOracleOnlineDataset` | `class` | `public` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
 | `_default_online_train_ds` | `function` | `private` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
 | `VinOracleOnlineDatasetConfig` | `config` | `public` | `data_handling._vin_sources` | `oracle.pipelines.online_vin` | `oracle.pipelines.online_vin` | `moved: RWP03A` |
-| `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling.offline.source` | `data_handling.offline.source` | `moved: RWP03A` |
+| `VinOfflineSourceConfig` | `config` | `public` | `data_handling._vin_sources` | `data_handling.vin_store.source` | `data_handling.vin_store.source` | `moved: RWP03A` |
 | `VinDatasetSourceConfig` | `alias` | `public` | `data_handling._vin_sources` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | `moved: RWP03A` |
 
 #### Historical `efm_dataset_utils.py`
@@ -1070,41 +1070,41 @@ layout transition.
 | `raw_ase_atek_sample_id` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
 | `compact_ase_atek_identifiers` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
 | `_ase_atek_identifier_variants` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.identifiers` | `data_handling.identifiers` | `moved` |
-| `_infer_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_unique_preserve_order` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_infer_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_unique_preserve_order` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
 | `_looks_like_sample_key` | `function` | `private` | `data_handling.efm_dataset_utils` | deleted | deleted | `removed: no callers` |
-| `_looks_like_shard_id` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_normalize_shard_stem` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_matches_snippet_token` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_tar_contains_snippet` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_resolve_tar_from_path` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_resolve_tar_for_shard` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_find_tar_for_sample` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
-| `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.raw.dataset` | `data_handling.raw.dataset` | `moved` |
+| `_looks_like_shard_id` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_normalize_shard_stem` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_matches_snippet_token` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_tar_contains_snippet` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_resolve_tar_from_path` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_resolve_tar_for_shard` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_find_tar_for_sample` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_split_snippet_ids` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `_tensor3` | `function` | `private` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
+| `infer_semidense_bounds` | `function` | `public` | `data_handling.efm_dataset_utils` | `data_handling.ase_efm.dataset` | `data_handling.ase_efm.dataset` | `moved` |
 
 #### Historical `efm_views.py`
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `_FIELD_DOC_CACHE` | `constant` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `_extract_field_docs` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `_get_field_doc` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `_repr` | `function` | `private` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `BaseView` | `class` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmGtCameraObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `CamerasDict` | `constant` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmGtTimestampView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmGTView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmCameraView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmTrajectoryView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmPointsView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `EfmSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `VinSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `is_efm_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
-| `is_vin_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.raw.views` | `data_handling.raw.views` | `moved` |
+| `_FIELD_DOC_CACHE` | `constant` | `private` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `_extract_field_docs` | `function` | `private` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `_get_field_doc` | `function` | `private` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `_repr` | `function` | `private` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `BaseView` | `class` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmGtCameraObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `CamerasDict` | `constant` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmGtTimestampView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmGTView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmCameraView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmTrajectoryView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmPointsView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmObbView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `EfmSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `VinSnippetView` | `DTO` | `public` | `data_handling.efm_views` | `data_handling.vin_store.views` | `data_handling.vin_store.views` | `moved` |
+| `is_efm_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.ase_efm.views` | `data_handling.ase_efm.views` | `moved` |
+| `is_vin_snippet_view_instance` | `function` | `public` | `data_handling.efm_views` | `data_handling.vin_store.views` | `data_handling.vin_store.views` | `moved` |
 
 #### `mesh_cache.py`
 

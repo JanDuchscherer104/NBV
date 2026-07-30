@@ -60,8 +60,8 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 
 | Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
 |---|---|---|---|---|---|---|
-| `VinOfflineWriterConfig` | `config` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
-| `VinOfflineWriter` | `class` | `public leaf` | `data_handling.offline.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
+| `VinOfflineWriterConfig` | `config` | `public leaf` | `data_handling.vin_store.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
+| `VinOfflineWriter` | `class` | `public leaf` | `data_handling.vin_store.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
 
 ### `scene_labels.py`
 
@@ -98,15 +98,15 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 |---|---|---|---|---|---|---|
 | `_HELP_SETTINGS` | `constant` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `build_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `offline_app` | `constant` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `offline_app` | `constant` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `offline_main` | `function` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `offline_main` | `function` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `build_rollouts_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `build_offline_command` | `function` | `public leaf` | `data_handling.offline.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+| `build_offline_command` | `function` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `plan_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `status_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
 | `_raw_argv` | `function` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |

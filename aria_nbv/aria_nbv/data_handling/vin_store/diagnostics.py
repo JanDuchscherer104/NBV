@@ -21,11 +21,12 @@ from efm3d.aria.pose import PoseTW
 
 from ...configs import PathConfig
 from ...configs.path_config import PROJECT_ROOT
+from ..ase_efm.views import is_efm_snippet_view_instance
 from ..identifiers import compact_ase_atek_sample_id
-from ..raw.views import is_efm_snippet_view_instance, is_vin_snippet_view_instance
 from .batch import VinOracleBatch
 from .format import VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
+from .views import is_vin_snippet_view_instance
 
 RRI_COMPONENT_BLOCKS: tuple[str, ...] = (
     "oracle.pm_dist_before",

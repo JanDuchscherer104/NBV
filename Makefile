@@ -95,7 +95,7 @@ space := $(empty) $(empty)
 KG_MODALITY_ARGS = $(foreach modality,$(subst $(comma),$(space),$(strip $(KG_MODALITY))),--modality $(modality))
 PACKAGE_SMOKE_RUFF_PATHS := \
 	aria_nbv/app/panels/vin_diagnostics_runtime.py \
-	aria_nbv/data_handling/offline/writer.py \
+	aria_nbv/data_handling/vin_store/writer.py \
 	aria_nbv/pose_generation/types.py \
 	aria_nbv/rendering/candidate_depth_renderer.py \
 	tests/data_handling/test_vin_offline_store.py \
@@ -115,7 +115,7 @@ PACKAGE_SMOKE_TESTS := \
 	tests/vin/test_vin_diagnostics_runtime.py
 QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \
-	aria_nbv/data_handling/qh.py \
+	aria_nbv/data_handling/qh_data \
 	aria_nbv/lightning/qh_datamodule.py \
 	aria_nbv/lightning/qh_module.py \
 	aria_nbv/rollouts/qh_reader.py \

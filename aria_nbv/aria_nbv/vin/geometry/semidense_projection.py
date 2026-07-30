@@ -42,7 +42,7 @@ def sample_semidense_points(
     """Sample valid semidense world points from a VIN snippet.
 
     Args:
-        snippet: Object with the :class:`aria_nbv.data_handling.raw.views.VinSnippetView`
+        snippet: Object with the :class:`aria_nbv.data_handling.vin_store.views.VinSnippetView`
             point contract. It must expose ``points_world`` as
             ``Tensor["P C", float32]`` or ``Tensor["B P C", float32]`` and
             optional ``lengths``.
