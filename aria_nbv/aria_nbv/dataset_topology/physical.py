@@ -13,7 +13,7 @@ import numpy as np
 import zarr
 from rich.tree import Tree
 
-from ..data_handling.offline.format import VinOfflineManifest
+from ..data_handling.vin_store.format import VinOfflineManifest
 from ..utils.fingerprints import stable_msgspec_hash
 from ..utils.rich_summary import rich_summary
 from .contracts import TopologyRole, TopologyStatus

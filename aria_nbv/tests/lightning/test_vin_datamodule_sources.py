@@ -13,7 +13,7 @@ from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDatasetConfig
 
 
 def _config_path(name: str) -> Path:
-    return Path(__file__).resolve().parents[3] / ".configs" / name
+    return Path(__file__).resolve().parents[3] / ".configs" / "training" / "vin" / name
 
 
 def test_online_source_defaults_to_single_process_loading() -> None:

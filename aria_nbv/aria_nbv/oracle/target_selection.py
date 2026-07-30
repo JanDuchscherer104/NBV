@@ -506,7 +506,7 @@ class ObservedTargetTaskSampler:
             GT geometry is never copied into the actor descriptor.
         """
 
-        from ..data_handling.offline.dataset import VinOfflineSample
+        from ..data_handling.vin_store.dataset import VinOfflineSample
 
         if not isinstance(sample, VinOfflineSample):
             raise TypeError("ObservedTargetTaskSampler expects VinOfflineSample input.")

@@ -1428,7 +1428,9 @@ def test_vin_offline_source_config_disables_diagnostic_blocks_for_vin_batches(tm
 def test_fit_binner_offline_config_selects_all_stored_rows(tmp_path: Path) -> None:
     """The shipped binner config should preserve its all-stage source selection."""
 
-    config_path = Path(__file__).resolve().parents[3] / ".configs" / "fit_binner_offline.toml"
+    config_path = (
+        Path(__file__).resolve().parents[3] / ".configs" / "training" / "vin" / "binner" / "fit_binner_offline.toml"
+    )
     experiment_config = AriaNBVExperimentConfig.from_toml(config_path)
     source = experiment_config.datamodule_config.source
 

@@ -107,8 +107,9 @@ def test_rollout_store_config_rejects_noncanonical_target_protocol(protocol: str
         RolloutZarrStoreConfig(target_protocol_version=protocol)
 
 
-def test_oracle_rollout_writer_rejects_observed_protocol() -> None:
+def test_rollout_writer_admits_observed_protocol() -> None:
     assert RolloutDatasetWriterConfig().store.target_protocol_version is TargetInputProtocol.V0_GT_INPUT
 
-    with pytest.raises(ValidationError, match="v1_observed.*Oracle GT.*rebuild"):
-        RolloutDatasetWriterConfig(store=RolloutZarrStoreConfig(target_protocol_version="v1_observed"))
+    config = RolloutDatasetWriterConfig(store=RolloutZarrStoreConfig(target_protocol_version="v1_observed"))
+
+    assert config.store.target_protocol_version is TargetInputProtocol.V1_OBSERVED
