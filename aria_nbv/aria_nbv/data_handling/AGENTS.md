@@ -23,6 +23,9 @@ Apply this file when working under `aria_nbv/aria_nbv/data_handling/`.
 
 ## Boundary Rules
 - `aria_nbv.data_handling` is the active owner of raw snippets, VIN oracle batches, and the immutable VIN offline store.
+- `raw/views.py` owns consumed EFM keys and actor-visible versus oracle-only
+  boundaries; use the typed `PoseTW`, `CameraTW`, and `ObbTW` wrappers at
+  those boundaries instead of parallel schema names or raw matrix contracts.
 - The removed oracle-cache and VIN-snippet-cache compatibility modules must not be reintroduced.
 - Writers own manifest, sample-index, split, shard, and optional-record maintenance. Readers should validate strictly and fail with rebuild guidance rather than mutate derived artifacts.
 - Do not hand-edit store manifests, `sample_index.jsonl`, split arrays, shards, or payloads to silence failing tests; fix the writer, reader, or generator instead.

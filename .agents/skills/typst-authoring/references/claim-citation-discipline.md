@@ -35,15 +35,18 @@ For each non-obvious claim, verify at least one evidence path:
 - table/figure/result in `docs/typst/shared/data`;
 - explicit limitation or hypothesis wording.
 
-For advisor-facing scientific claims, run:
+For advisor-facing scientific claims, complete this direct-source check:
 
-```bash
-make kg-claim-check KG_CLAIM='...'
-```
+1. Classify the claim using the taxonomy above.
+2. Resolve every literature citation in `docs/references.bib` and inspect the
+   cited paper, authoritative TeX source, or PDF at the exact relevant locator.
+3. For implementation facts, inspect the defining code, its tests, and active
+   configuration. For results, inspect the immutable measurement manifest,
+   table, or figure source.
+4. Downgrade unsupported wording, add the missing evidence, or mark the claim
+   as a hypothesis or limitation before treating it as supported.
 
-Treat `unverifiable` or weak results as a request to downgrade the claim, add
-evidence, or mark it as a hypothesis. Do not require `kg-claim-check` for
-skill-only edits or purely mechanical Typst fixes.
+This check is unnecessary for skill-only edits or purely mechanical Typst fixes.
 
 For non-trivial sections, build a scratch claim ledger before final prose. Use
 `assets/templates/claim-ledger.md` to track paragraph, claim type, evidence

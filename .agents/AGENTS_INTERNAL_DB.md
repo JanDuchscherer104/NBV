@@ -19,9 +19,8 @@ change current truth, and otherwise belong in dated memory debriefs.
 Active issues and todos must carry compact prose context plus structured
 `references` pointers. Use `repo:` for internal files, `bib:` for papers in
 `docs/references.bib`, durable identifiers such as `arxiv:`/`doi:`/`s2:`,
-external docs as `url:`, Context7 library docs as `context7:`, and litkg-rs
-evidence as `litkg:`. This keeps local backlog records auditable and
-machine-usable by the litkg-rs context-pack/KG pipeline.
+external docs as `url:`, and Context7 library docs as `context7:`. This keeps
+local backlog records auditable and machine-readable.
 
 ## Priority Pillars
 

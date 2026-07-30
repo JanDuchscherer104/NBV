@@ -11,7 +11,7 @@ shift
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../../../../" && pwd)"
-LIT_DIR="${ROOT_DIR}/literature"
+LIT_DIR="${ROOT_DIR}/docs/literature"
 
 if [[ ! -d "$LIT_DIR" ]]; then
   echo "error: literature directory not found: $LIT_DIR" >&2

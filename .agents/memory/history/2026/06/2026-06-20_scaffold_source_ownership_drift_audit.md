@@ -12,7 +12,6 @@ files_touched:
   - .agents/references/scaffold_routing_fixtures.json
   - .agents/references/source_order.md
   - .agents/references/skill_style_guide.md
-  - .agents/references/skill_prune_merge_verdict.md
   - .agents/references/verification_matrix.md
 ---
 
@@ -45,4 +44,4 @@ state surface and be referenced through `metadata.canonical_sources`.
 - `aria_nbv/.venv/bin/python -m py_compile scripts/scaffold_audit.py`
 - `make agents-db AGENTS_ARGS='validate'`
 - `make check-agent-memory`
-- `git diff --check -- Makefile scripts/scaffold_audit.py .agents/references/scaffold_routing_fixtures.json .agents/references/skill_style_guide.md .agents/references/source_order.md .agents/references/skill_prune_merge_verdict.md .agents/references/verification_matrix.md .agents/skills/code-review-aria-nbv .agents/skills/code-review`
+- `git diff --check -- Makefile scripts/scaffold_audit.py .agents/references/scaffold_routing_fixtures.json .agents/references/skill_style_guide.md .agents/references/source_order.md .agents/references/verification_matrix.md .agents/skills/code-review-aria-nbv .agents/skills/code-review`

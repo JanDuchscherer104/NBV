@@ -101,7 +101,6 @@ REFERENCE_PREFIXES = (
     "arxiv:",
     "s2:",
     "url:",
-    "litkg:",
     "context7:",
 )
 RESOLUTION_FIELDS = ["resolved_at", "resolution_note", "resolved_from"]

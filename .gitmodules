@@ -13,6 +13,3 @@
 [submodule "external/PointNeXt"]
 	path = external/PointNeXt
 	url = git@github.com:guochengqian/PointNeXt.git
-[submodule ".agents/external/litkg-rs"]
-	path = .agents/external/litkg-rs
-	url = https://github.com/JanDuchscherer104/litkg-rs.git

@@ -21,7 +21,8 @@ Checked-in templates are allowed:
 - `.codex/config.example.toml`
 - `.codex/hooks.example.json`
 
-See `.agents/references/omx_quick_reference.md` for install and smoke commands.
+Use the installed OMX help for operator commands; the repository does not
+maintain a duplicate command guide.
 
 ## Hook Policy
 

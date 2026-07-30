@@ -1,11 +1,5 @@
 .logs/ckpts/** filter=lfs diff=lfs merge=lfs -text
 .logs/checkpoints/*.ckpt filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.db filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.sqlite filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.sqlite3 filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.duckdb filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.parquet filter=lfs diff=lfs merge=lfs -text
-.agents/kg/**/*.arrow filter=lfs diff=lfs merge=lfs -text
 .data/aria_download_urls/aria_synthetic_environments_dataset_download_urls.json filter=lfs diff=lfs merge=lfs -text
 .data/aria_download_urls/AriaSyntheticEnvironment_ATEK_download_urls.json filter=lfs diff=lfs merge=lfs -text
 .data/aria_download_urls/ase_mesh_download_urls.json filter=lfs diff=lfs merge=lfs -text

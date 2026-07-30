@@ -12,7 +12,7 @@ metadata:
     - "external code-review workflow capability for independent code-reviewer plus architect lanes, merge gating, and final review synthesis"
     - "GitHub review-thread capability for unresolved PR review threads, inline anchors, or resolution state"
     - "simplification for behavior-preserving AI-slop, dead-code, wrapper, or duplication cleanup"
-    - "python-docstrings for Python API-contract docstring findings"
+    - "python-standards for Python API-contract findings"
     - "docs-curator or typst-authoring for public docs, thesis prose, citations, or Typst standards"
     - "plan-grill for architecture decisions without concrete diffs"
     - "diagnose-aria when a finding needs reproduction"
@@ -35,13 +35,12 @@ metadata:
   must_read:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
-    - ".agents/references/verification_matrix.md"
+    - "nearest package AGENTS.md"
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#role-split"
-    - ".agents/references/verification_matrix.md"
-    - ".agents/references/skill_style_guide.md"
-    - ".agents/references/scaffold_routing_fixtures.json"
+    - ".agents/skills/README.md"
+    - "scripts/scaffold/fixtures/routing.json"
   context7_refs:
     - "/pytorch/pytorch"
     - "/facebookresearch/pytorch3d"
@@ -77,6 +76,23 @@ metadata:
   reproduce each finding from repo evidence before implementing it or feeding it
   into an OMX merge-ready verdict.
 
+## GitHub Publication And Resolution
+
+For an ARIA pull-request review, reviewer lanes validate each candidate against
+the exact diff and its owner, then return structured findings. The orchestrating
+agent uses the GitHub review-thread capability to publish every accepted P0, P1,
+or P2 finding as a line-anchored thread with severity, concrete impact, and a
+remedy or diagnostic next step. Do not manufacture threads for P3 polish,
+uncertain hypotheses, or already-addressed findings; retain those in the final
+review record instead.
+
+A published P0--P2 thread is merge-blocking until the fixing agent replies
+with the exact change and verification evidence. Reviewer lanes recheck the
+diff; the orchestrating agent resolves the thread through the GitHub capability
+or leaves it open with a precise blocker. `CLEAR` requires no unresolved valid
+P0--P2 threads. A working-tree review without a PR returns the same
+line-referenced findings locally and publishes nothing.
+
 ## When To Use
 
 Use this skill when the task is to:
@@ -90,8 +106,8 @@ Use this skill when the task is to:
 ## Grounding
 
 Before reviewing substantial ARIA changes, read `AGENTS.md`, the nearest nested
-`AGENTS.md` for the touched surface, `.agents/references/source_order.md`, and
-`.agents/references/verification_matrix.md`. For docs-heavy reviews, include
+`AGENTS.md` for the touched surface, and `.agents/references/source_order.md`.
+For docs-heavy reviews, include
 `docs/AGENTS.md`; for package-contract reviews, refresh `make context-contracts`
 only when generated contract context is needed.
 
@@ -99,11 +115,11 @@ only when generated contract context is needed.
 
 Route validated findings to the smallest owner named by metadata or the nearest
 `AGENTS.md`. Common handoffs: `simplification` for behavior-preserving cleanup,
-`python-docstrings` for API docs, `docs-curator` / `typst-authoring` for public
+`python-standards` for API docs, `docs-curator` / `typst-authoring` for public
 docs and thesis prose, `nbv-geometry-contracts` for frames, `entity-aware-rri`
 for target semantics, `counterfactual-rollout-planner` for rollout/Q_H,
 `dataset-cache-ops` / `rerun-nbv-inspector` for data and visual diagnostics,
-and `aria-litkg-memory` / `agents-db` for claim checks or durable records.
+and `agents-db` for durable records.
 
 ## Review Standard
 

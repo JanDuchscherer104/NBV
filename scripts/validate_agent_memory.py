@@ -17,48 +17,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
-ALIGNMENT_CONTRACT = REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md"
-ALIGNMENT_LINK_TARGETS = (
-    (
-        REPO_ROOT / "AGENTS.md",
-        ".agents/references/alignment_tools_contract.md` when work crosses OMX,",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "source_order.md",
-        "- Optional tool boundary: `.agents/references/alignment_tools_contract.md`.",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "Covers repo-owned scaffold alignment checks, required debrief frontmatter,",
-    ),
+OMX_DURABLE_PATHS = (
+    ".omx/context/",
+    ".omx/interviews/",
+    ".omx/specs/",
+    ".omx/plans/",
 )
-SCAFFOLD_REQUIRED_SNIPPETS = (
-    (
-        REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md",
-        "## Autoresearch Adapter",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "alignment_tools_contract.md",
-        "## Visual And UI Gates",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## Streamlit, Rerun, Offline, And Rollouts",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## KG And Optional Tooling",
-    ),
-    (
-        REPO_ROOT / ".agents" / "references" / "verification_matrix.md",
-        "## Python Package",
-    ),
-)
-OMX_RECORD_PATHS = {
-    ".omx/plans/": "plan",
-    ".omx/specs/": "spec",
-}
-OMX_RECORD_STATUSES = {"current", "accepted"}
+OMX_DURABLE_SUFFIXES = (".md", ".json", ".html")
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
@@ -171,27 +136,10 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
         if not tracked_path.startswith(".omx/"):
             continue
 
-        expected_kind = next(
-            (kind for prefix, kind in OMX_RECORD_PATHS.items() if tracked_path.startswith(prefix)),
-            None,
-        )
-        if expected_kind is None or not tracked_path.endswith(".md"):
+        if not tracked_path.startswith(OMX_DURABLE_PATHS):
             errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
-            continue
-
-        path = REPO_ROOT / tracked_path
-        try:
-            frontmatter = parse_frontmatter(path)
-        except ValueError as exc:
-            errors.append(f"{tracked_path}: {exc}")
-            continue
-
-        if frontmatter.get("kind") != expected_kind:
-            errors.append(f"{tracked_path}: `kind` must be `{expected_kind}`")
-        if frontmatter.get("status") not in OMX_RECORD_STATUSES:
-            errors.append(
-                f"{tracked_path}: `status` must be one of {', '.join(sorted(OMX_RECORD_STATUSES))}"
-            )
+        elif not tracked_path.endswith(OMX_DURABLE_SUFFIXES):
+            errors.append(f"unsupported tracked OMX artifact: {tracked_path}")
     return errors
 
 
@@ -236,27 +184,6 @@ def check_history_records() -> list[str]:
 
 def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
-
-    if not ALIGNMENT_CONTRACT.exists():
-        errors.append(f"missing alignment tools contract: {ALIGNMENT_CONTRACT.relative_to(REPO_ROOT).as_posix()}")
-
-    for path, expected_snippet in ALIGNMENT_LINK_TARGETS:
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if not path.exists():
-            errors.append(f"missing scaffold alignment link target: {rel}")
-            continue
-        text = path.read_text(encoding="utf-8")
-        if expected_snippet not in text:
-            errors.append(f"{rel}: missing expected alignment contract link")
-
-    for path, expected_snippet in SCAFFOLD_REQUIRED_SNIPPETS:
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if not path.exists():
-            errors.append(f"missing scaffold ownership target: {rel}")
-            continue
-        text = path.read_text(encoding="utf-8")
-        if expected_snippet not in text:
-            errors.append(f"{rel}: missing scaffold ownership snippet: {expected_snippet}")
 
     result = subprocess.run(
         ["git", "ls-files"],

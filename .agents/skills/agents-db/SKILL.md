@@ -9,7 +9,6 @@ metadata:
     - "tiny cleanup that does not change active debt"
   handoff_to:
     - "docs-curator for public docs or thesis narrative"
-    - "aria-litkg-memory for KG-backed consolidation proposals"
     - "simplification for behavior-preserving pruning"
   evidence_required:
     - "existing record search before adding duplicates"
@@ -86,6 +85,9 @@ or durable maintenance debt capture.
 - Use vertical slices for concrete follow-up work.
 - Keep `.agents/*.toml` as the local source of truth unless the user explicitly
   asks to publish GitHub issues.
+- In parallel worktrees, check the target branch before allocating a new record
+  ID. Reconcile colliding edits explicitly; never silently drop another
+  worktree's record.
 - Do not churn the DB for tiny local cleanup that does not change active debt.
 - For broad or literature-backed additions, include source-backed evidence
   before changing records.

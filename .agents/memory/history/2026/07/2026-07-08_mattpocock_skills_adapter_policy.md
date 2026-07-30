@@ -10,7 +10,6 @@ files_touched:
   - .gitmodules
   - .codex/config.example.toml
   - .agents/references/mattpocock_skills_manifest.toml
-  - .agents/references/mattpocock_skills_contract.md
   - .agents/references/scaffold_routing_fixtures.json
   - .agents/skills/plan-grill/SKILL.md
   - .agents/skills/diagnose-aria/SKILL.md
@@ -38,9 +37,9 @@ source-owner mapping, and local routing fixtures.
 Removed the stale `.agents/skills/skills` submodule declaration from
 `.gitmodules` and recorded the reviewed upstream skill policy in
 `.agents/references/mattpocock_skills_manifest.toml`. Added
-`.agents/references/mattpocock_skills_contract.md` to map Matt assumptions such
-as `CONTEXT.md`, ADRs, and issue tracker setup onto ARIA's glossary, decisions,
-roadmap/questions, nearest `AGENTS.md`, and `agents-db` owners.
+The adapter mapped Matt assumptions such as `CONTEXT.md`, ADRs, and issue
+tracker setup onto ARIA's glossary, decisions, roadmap/questions, nearest
+`AGENTS.md`, and `agents-db` owners.
 
 ## Outputs
 

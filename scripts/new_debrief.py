@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scaffold a dated agent debrief under .agents/memory/history/YYYY/MM/.
 
-The frontmatter follows .agents/references/agent_memory_templates.md exactly:
+The frontmatter follows .agents/memory/README.md exactly:
 required keys are id, date, title, status, topics, confidence, and
 canonical_updates_needed. Dates are absolute ISO strings — never relative.
 

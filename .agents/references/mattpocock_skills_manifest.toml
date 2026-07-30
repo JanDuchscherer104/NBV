@@ -12,7 +12,6 @@ reviewed_at = "2026-07-08"
 license = "MIT"
 install_command = "npx skills@latest add mattpocock/skills"
 default_policy = "disabled_unless_selected"
-contract = ".agents/references/mattpocock_skills_contract.md"
 runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
 
 [postures]
@@ -39,10 +38,8 @@ reference = [
   "writing-shape",
 ]
 skip = [
-  "claude-handoff",
   "design-an-interface",
   "edit-article",
-  "git-guardrails-claude-code",
   "loop-me",
   "migrate-to-shoehorn",
   "obsidian-vault",
@@ -132,8 +129,8 @@ name = "research"
 bucket = "engineering"
 upstream_path = "skills/engineering/research/SKILL.md"
 posture = "reference"
-aria_owner = "aria-litkg-memory"
-reason = "Borrow primary-source discipline only; ARIA KG, literature, and claim-check owners stay local."
+aria_owner = "aria-nbv-context"
+reason = "Borrow primary-source discipline only; direct source inspection remains local."
 
 [[skill]]
 name = "resolving-merge-conflicts"
@@ -148,8 +145,8 @@ name = "setup-matt-pocock-skills"
 bucket = "engineering"
 upstream_path = "skills/engineering/setup-matt-pocock-skills/SKILL.md"
 posture = "reference"
-aria_owner = "mattpocock_skills_contract.md"
-reason = "Raw setup creates Matt-native truth surfaces; use the ARIA adapter contract instead."
+aria_owner = "AGENTS.md"
+reason = "Raw setup must not create parallel ARIA truth surfaces; repository source order remains authoritative."
 
 [[skill]]
 name = "tdd"
@@ -256,14 +253,6 @@ aria_owner = "docs/typst/shared/glossary.typ"
 reason = "Deprecated upstream; ARIA glossary remains the terminology owner."
 
 [[skill]]
-name = "claude-handoff"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/claude-handoff/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "In-progress upstream and Claude-specific."
-
-[[skill]]
 name = "loop-me"
 bucket = "in-progress"
 upstream_path = "skills/in-progress/loop-me/SKILL.md"
@@ -310,14 +299,6 @@ upstream_path = "skills/in-progress/writing-shape/SKILL.md"
 posture = "reference"
 aria_owner = "typst-authoring"
 reason = "Use as reference-only paragraph-shaping mechanics inside typst-authoring; final prose still follows ARIA claim and notation gates."
-
-[[skill]]
-name = "git-guardrails-claude-code"
-bucket = "misc"
-upstream_path = "skills/misc/git-guardrails-claude-code/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Misc upstream and Claude-specific; ARIA root guidance owns git safety."
 
 [[skill]]
 name = "migrate-to-shoehorn"

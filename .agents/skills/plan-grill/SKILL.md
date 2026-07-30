@@ -10,13 +10,12 @@ metadata:
   handoff_to:
     - "diagnose-aria for concrete failures"
     - "aria-nbv-context when the affected surface is unknown"
-    - "aria-litkg-memory for KG-backed retrieval or claim checks"
     - "code-review-aria-nbv for concrete diff review"
     - "docs-curator for public narrative edits after the decision"
   evidence_required:
     - "source-order owner for the decision"
     - "success criteria, in/out of scope, and deferred decisions"
-    - "claim-check output for advisor-facing claims"
+    - "direct-source evidence for advisor-facing claims"
     - "source ladder and explicit claim strength for theory-rich mode"
   applies_to:
     - "**"
@@ -100,7 +99,7 @@ Keep the default path concise unless one of these modifiers applies.
   boundary and source-owner model before implementation detail. Name vertical
   truth owners and horizontal evidence sources, include a Mermaid diagram for
   non-trivial plans, link implementation-facing Python plans to
-  `.agents/references/python_conventions.md` and the nearest `aria_nbv/**/AGENTS.md`,
+  `python-standards` and the nearest `aria_nbv/**/AGENTS.md`,
   use local literature owners before web search for thesis claims, and use
   Context7 only for external library/API behavior after local owner inspection.
   Keep `$plan`, `$ralplan`, and `$prometheus-strict` as workflow owners; this

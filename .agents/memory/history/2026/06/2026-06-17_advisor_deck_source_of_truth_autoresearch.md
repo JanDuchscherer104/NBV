@@ -6,6 +6,7 @@ status: done
 topics: [docs, typst, thesis, advisor-deck, autoresearch]
 confidence: high
 canonical_updates_needed:
+  - docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ
   - .agents/references/source_order.md
   - docs/contents/thesis/questions.qmd
   - docs/contents/thesis/roadmap.qmd
@@ -18,7 +19,7 @@ files_touched:
 
 ## Task
 
-Ran `$autoresearch` on how `docs/typst/thesis/advisor_meeting_2026_05_22.typ`
+Ran `$autoresearch` on how `docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ`
 should become the highest advisor-facing source of truth for ARIA-NBV thesis
 direction.
 

@@ -25,7 +25,7 @@ repos:
         entry: make check-agent-memory
         language: system
         pass_filenames: false
-        files: ^(\.agents/memory/|\.agents/references/agent_memory_templates\.md|scripts/validate_agent_memory\.py|AGENTS\.md|Makefile)$
+        files: ^(\.agents/memory/|scripts/validate_agent_memory\.py|AGENTS\.md|Makefile)$
 
       - id: docs-render-core
         name: core docs render

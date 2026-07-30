@@ -10,7 +10,6 @@ files_touched:
   - Makefile
   - scripts/scaffold_audit.py
   - .agents/references/scaffold_routing_fixtures.json
-  - .agents/references/skill_prune_merge_verdict.md
   - .agents/references/skill_style_guide.md
   - .agents/skills/code-review-aria-nbv/SKILL.md
   - .claude/agents/aria-reviewer.md
@@ -32,8 +31,6 @@ handoff namespaces, and routing fixtures. The review skill directory now matches
 the canonical `code-review-aria-nbv` skill name. Missing skill modes were added
 without deleting or merging any skill.
 
-The durable prune/merge classification lives in
-`.agents/references/skill_prune_merge_verdict.md`.
 The Claude mirror was refreshed so the repo-local review agent points at the
 canonical `code-review-aria-nbv` path.
 

@@ -7,7 +7,6 @@ metadata:
     - "obvious one-line answer or command output with no durable edit"
   handoff_to:
     - "aria-nbv-context for unknown local ownership"
-    - "aria-litkg-memory for KG-backed routing or claim checks"
     - "diagnose-aria for concrete failures"
     - "plan-grill for ambiguous high-impact decisions"
   evidence_required:
@@ -25,9 +24,9 @@ metadata:
   canonical_sources:
     - "AGENTS.md"
     - ".agents/references/source_order.md#capture-rule"
-    - ".agents/references/skill_style_guide.md#required-frontmatter"
+    - ".agents/skills/README.md#required-frontmatter"
   verification:
-    - "surface-specific checks from .agents/references/verification_matrix.md"
+    - "surface-specific checks from the nearest package guide or skill"
     - "make check-agent-memory when agent guidance or memory changes"
 ---
 
@@ -43,6 +42,8 @@ obvious one-line fixes.
 3. Prefer the simplest sufficient change.
 4. Preserve unrelated user or agent work.
 5. Verify the touched behavior before claiming completion.
+6. Make durable claims, commits, PR bodies, and review conclusions match fresh
+   evidence; report an unresolved or unverified state literally.
 
 ## Lane Rule
 
@@ -63,6 +64,33 @@ obvious one-line fixes.
 3. Choose the narrowest edit set that satisfies the criteria.
 4. Run the verification for the touched surface.
 5. Capture durable deltas only in the smallest owning surface.
+
+## Durable Instruction Capture
+
+Text written as `<...>` is a request to preserve an invariant, preference, or
+target-state statement. Before completion, route it through root `AGENTS.md`:
+
+- repository or package invariant -> nearest `AGENTS.md`;
+- repeatable procedure -> narrow owning skill;
+- durable human preference -> `human_owner_intent.md`;
+- implementation/scientific truth -> its exact code, test, configuration,
+  thesis, evidence, or paper owner;
+- actionable follow-up -> Agents DB.
+
+Do not paste the same rule into every surface. Link to its owner when a route
+is useful.
+
+## Commit, PR, And Explanation Contract
+
+- Stage only request-owned paths. Commit messages and PRs describe the actual
+  responsibility change, retained contract, verification, and exclusions.
+- A PR is one reviewable concern with an independent rollback boundary; do not
+  use its body as an implementation chronology.
+- For meaningful Spatial-AI, ML, MLOps, data-science, or statistics work,
+  explain the governing model, assumptions, and failure mode when that helps
+  the user act correctly. Use a rendered Mermaid/UML diagram only for a real
+  multi-component relationship. Persistent lessons are an explicit teaching
+  workflow, not routine task output.
 
 ## Completion
 

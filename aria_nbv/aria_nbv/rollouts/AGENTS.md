@@ -14,6 +14,8 @@ Apply this file when working under `aria_nbv/aria_nbv/rollouts/`.
 - Scene/target Oracle scoring: `aria_nbv.oracle.scene_rri` and `aria_nbv.oracle.target_rri`
 - Compact rollout Zarr record and lineage sidecar: `trace.py`
 - Standalone rollout replay store: `zarr_store.py`
+- Draft rollout Zarr/Q_H storage design: `zarr_contract.md`; source and tests
+  remain authoritative for implemented schema.
 - Shared typed store interpretation for read-side adapters: `read_model.py`
 - Operational replay/store checks: `audits.py`
 - Inventory and presentation-ready audit summaries: `inspection.py`

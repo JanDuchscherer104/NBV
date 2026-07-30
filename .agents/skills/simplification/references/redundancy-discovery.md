@@ -23,8 +23,6 @@ Use this reference when `simplification` needs a deeper workflow for finding goo
    - Use `aria-nbv-context` when ownership or source-family routing is unclear.
    - Use `plan-grill` when the simplification depends on a high-impact
      architecture or compatibility decision.
-   - Use `aria-litkg-memory` when source-backed KG routing or claim checks are
-     needed before pruning.
    - Use `analyze_python_package`, `get_package_metrics`, and `find_package_issues` only after code-index narrows the package.
    - Use `analyze_python_file`, `find_long_functions`, and `get_extraction_guidance` only after code-index narrows the file.
    - Use `analyze_test_coverage` and `tdd_refactoring_guidance` before risky cleanup or when test confidence is weak.

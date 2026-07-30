@@ -21,13 +21,11 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   `tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
   when available and do not use online renderers unless explicitly permitted.
 - Need file localization or deterministic local discovery: use `aria-nbv-context`.
-- Need KG-backed retrieval, source-backed routing, claim checks, or
-  consolidation: use `aria-litkg-memory`.
-- Need to modify litkg-rs, KG source coverage, KG config, or KG operation:
-  use `semantic-scholar-litkg`; keep repo-independent implementation in
-  `.agents/external/litkg-rs`.
 - Vague, high-impact, or advisor-facing plans: use `plan-grill`.
-- Bugs, regressions, suspicious metrics, or failing docs/data/KG checks: use
+- PR or working-tree review: use `code-review-aria-nbv`; actionable P0--P2
+  findings on a PR are published and resolved as GitHub review threads, while
+  local-only reviews report the same line-referenced findings locally.
+- Bugs, regressions, suspicious metrics, or failing docs/data checks: use
   `diagnose-aria`.
 - Backlog or memory changes: use the `agents-db` skill.
 - Cleanup, pruning, or simplification: use the `simplification` skill.
@@ -49,13 +47,15 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   advisor-facing RQ5 bridge after offline `Q_H` evidence is stable.
 
 ## Optional Operator Tools
-- OMX remains optional operator orchestration. Use
-  `.agents/references/omx_quick_reference.md` only when the task explicitly
-  asks for OMX or operator orchestration; do not make OMX required for normal
-  repo work.
-- Use `.agents/references/alignment_tools_contract.md` when work crosses OMX,
-  MCP, KG, memory, graph, or autoresearch adapter boundaries; optional tools
-  produce evidence and proposals, not repo-owned truth.
+- Externally installed skills are optional capabilities, not ARIA-NBV truth
+  owners. Translate any proposed output path through the repository source order
+  before creating a new tracked surface.
+- OMX remains optional operator orchestration; use its upstream help only when
+  a task explicitly asks for operator orchestration. Do not make it required
+  for normal repo work.
+- Optional OMX, MCP, graph, memory, and autoresearch tools produce evidence or
+  proposals, not repo-owned truth. Apply durable changes only through the
+  owning source, package guidance, docs, or Agents DB surface.
 
 ## Instruction Capture
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.
@@ -65,6 +65,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: update Quarto or Typst docs.
+- Text marked `<...>`: preserve it in the smallest owner selected above; see
+  `agent-behavior` for the capture procedure.
 
 ## Commands
 - Python: `aria_nbv/.venv/bin/python`
@@ -72,8 +74,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Package tests: `cd aria_nbv && uv run pytest <path>`
 - Context refresh: `make context`; contract index: `make context-contracts`
 - Agents DB: `make agents-db`; memory check: `make check-agent-memory`
-- litkg commands: see `.agents/references/litkg_quick_reference.md`.
-- Surface checks: see `.agents/references/verification_matrix.md`.
+- Surface checks: use the nearest package guide or skill, then the narrowest
+  test, render, or command that proves the changed contract.
 
 ## Verification
 - Repo guidance, canonical state, debriefs, or skills: `make check-agent-memory`
@@ -85,11 +87,12 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   update docs/memory when behavior changes.
 - Docs edits: render the touched Quarto or Typst surface when non-trivial.
 - Advisor-facing proposal, roadmap, research-question, or literature-synthesis
-  claims require `make kg-claim-check KG_CLAIM="..."`.
+  claims require direct inspection of the cited primary source and exact local
+  implementation or measurement evidence where applicable.
 
 ## Debriefs
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
-- Native debriefs must follow `.agents/references/agent_memory_templates.md` and
+- Native debriefs must follow `.agents/memory/README.md` and
   include `canonical_updates_needed` even when the list is empty.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
   bucket; only checked-in `.codex/*.example.*` templates are allowed, except
@@ -127,7 +130,3 @@ Rules:
   `graphify-out/needs_update`; refresh them with the Graphify extraction
   workflow, whose completion records the current policy digest, before treating
   semantic links as current.
-- `litkg-rs` remains the source-authority layer for `kg-search`,
-  `kg-route`, `kg-claim-check`, Semantic Scholar/literature enrichment, and
-  thesis/advisor evidence. Use Graphify for navigation first; use litkg for
-  authority-sensitive claims.

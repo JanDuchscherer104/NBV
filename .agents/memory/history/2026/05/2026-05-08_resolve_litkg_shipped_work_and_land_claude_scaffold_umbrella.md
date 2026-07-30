@@ -38,7 +38,7 @@ into main as one umbrella record + cherry-picked files.
    main: `CLAUDE.md`, `.claude/settings.json`, `.claude/commands/` (7
    commands), `.claude/agents/` (4 sub-agents), `scripts/new_debrief.py`,
    `scripts/debrief_nudge.sh`, `scripts/kg/status.sh`,
-   `scripts/sync_claude_skills.sh`, `.agents/references/worktree_policy.md`,
+   `scripts/sync_claude_skills.sh`, parallel-worktree guidance,
    `.agents/skills/diagnose-aria/agents/openai.yaml`. Deleted empty
    `default_profile.yaml`.
 6. Patched `scripts/agents_db.py`:

@@ -30,11 +30,11 @@ metadata:
   must_read:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
-    - ".agents/references/verification_matrix.md"
+    - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
   canonical_sources:
     - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - "docs/contents/setup.qmd"
-    - ".agents/references/verification_matrix.md"
+    - "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     - ".agents/memory/state/GOTCHAS.md"
   context7_refs:
     - "/pydantic/pydantic"
@@ -83,7 +83,7 @@ operating or validating an existing ARIA store.
 1. `aria_nbv/AGENTS.md`
 2. `aria_nbv/aria_nbv/data_handling/AGENTS.md`
 3. `README.md`
-4. `.agents/references/operator_quick_reference.md`
+4. `aria_nbv/aria_nbv/data_handling/AGENTS.md`
 5. `.agents/memory/state/GOTCHAS.md`
 
 ## Rules

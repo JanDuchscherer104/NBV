@@ -9,12 +9,11 @@ metadata:
     - "internal operator-reference edits outside public docs"
   handoff_to:
     - "agents-db for backlog-only changes"
-    - "aria-litkg-memory for KG-backed claim checks or consolidation"
     - "owning skill for internal operator references"
   evidence_required:
     - "docs/AGENTS.md and source-order owner for changed claims"
     - "render or outline check for non-trivial docs edits"
-    - "claim-check output for advisor-facing claims"
+    - "direct-source evidence for advisor-facing claims"
   applies_to:
     - "README.md"
     - "SETUP.md"
@@ -27,7 +26,7 @@ metadata:
   must_read:
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md"
-    - ".agents/references/verification_matrix.md"
+    - "docs/AGENTS.md"
   canonical_sources:
     - "docs/AGENTS.md"
     - ".agents/references/source_order.md#role-split"
@@ -46,7 +45,7 @@ metadata:
   verification:
     - "make qmd-frontmatter-check for Quarto docs"
     - "cd docs && quarto render <page.qmd> for changed pages"
-    - "make kg-claim-check KG_CLAIM=\"<claim>\" for advisor-facing claims"
+    - "direct-source evidence check for advisor-facing claims"
 ---
 
 # Docs Curator
@@ -67,7 +66,7 @@ navigation, and public/internal boundary decisions.
 
 - Keep public Quarto docs reader-facing; internal agent guidance, generated
   context, raw scratch history, and OMX runtime notes stay under `.agents/`.
-- Run litkg claim checks for advisor-facing proposal, roadmap,
+- Use the direct-source evidence check for advisor-facing proposal, roadmap,
   research-question, or literature-synthesis claims.
 - Link to canonical state or owning implementation docs instead of repeating long explanations.
 - Keep bibliography additions in `docs/references.bib`.
