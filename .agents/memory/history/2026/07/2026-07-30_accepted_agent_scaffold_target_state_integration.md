@@ -14,8 +14,9 @@ surfaces without creating a competing policy owner.
 
 ## Method
 Compared the accepted `.omx/specs/` requirement artifact with the root source
-order, reviewed-preference owner, and scaffold evidence index. Updated only
-their acceptance pointers and removed stale proposed-status wording.
+order and reviewed-preference owner. Updated only their live acceptance
+pointers; the accepted specification and temporary evidence index remain
+unchanged.
 
 ## Findings
 
@@ -24,10 +25,6 @@ their acceptance pointers and removed stale proposed-status wording.
   thesis, and human-intent ownership.
 - `.agents/references/human_owner_intent.md` explicitly retains only
   cross-task preferences and points scoped requirements to the specification.
-- `.agents/references/scaffold_rework/README.md` is an evidence index for an
-  accepted target state, not a proposed-authority gate.
-- The specification no longer describes itself as under review in its source
-  ownership model.
 
 ## Verification
 
@@ -38,5 +35,6 @@ their acceptance pointers and removed stale proposed-status wording.
 
 ## Canonical State Impact
 
-None. The accepted specification, source order, and human-owner intent are the
-authoritative guidance surfaces changed by this work.
+No `.agents/memory/state` promotion was needed. Current guidance routing changed
+in `source_order.md` and `human_owner_intent.md`; the accepted specification
+remains immutable.
