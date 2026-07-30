@@ -105,8 +105,8 @@
     {
       "id": "python-docstring-contract",
       "task": "Write or refactor docstrings for Python public API contracts.",
-      "expected_skills": ["agent-behavior", "python-docstrings"],
-      "non_goals": ["Do not remove the docstring skill until its rules are migrated and routing fixtures still pass."]
+      "expected_skills": ["agent-behavior", "python-standards"],
+      "non_goals": ["Do not store package semantics in the generic Python standards skill."]
     },
     {
       "id": "typst-thesis-edit",

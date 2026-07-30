@@ -1,10 +1,9 @@
-# Python Conventions
+# General Python Conventions
 
-This file is the long-form reference for non-docstring Python typing, runtime,
-and config conventions in `aria_nbv/`. Binding short-form rules live in
-`aria_nbv/AGENTS.md`. Python docstring rules, including field docs, tensor
-shape rendering, equations, examples, references, and Quartodoc behavior, live
-only in `.agents/skills/python-docstrings/`.
+Use this disclosed reference for generic typing, runtime, and configuration
+practice. `aria_nbv/AGENTS.md` owns ARIA-specific types, geometry, logging, and
+package boundaries; formatter, linter, type configuration, source, and tests
+remain the executable owners.
 
 ## Core Rules
 - Config classes should inherit from `BaseConfig` where appropriate.
@@ -12,10 +11,10 @@ only in `.agents/skills/python-docstrings/`.
 - Prefer vectorized implementations over functional helpers, comprehensions, or explicit loops when readability remains acceptable.
 - All path-handling should be done through `PathConfig` objects that validate existence and absoluteness. Use `pathlib.Path` for filesystem paths.
 - Prefer `Enum` for categorical values and `match-case` when it improves multi-branch clarity.
-- Use existing utilities from `efm3d`, `atek`, and `projectaria_tools` before reimplementing infrastructure.
-- Use `PoseTW` for poses and `CameraTW` for cameras unless a subsystem explicitly requires a different camera type.
-- Route public API documentation, tensor-shape prose, and coordinate-frame
-  prose to the `python-docstrings` skill.
+- Prefer existing project and dependency seams before reimplementing
+  infrastructure.
+- Route public API documentation and tensor-shape prose through this skill's
+  focused references; route coordinate-frame semantics to the owning package.
 
 ## Typing
 - Type all public signatures and prefer modern builtins such as `list[str]` and `dict[str, Any]`.
@@ -36,23 +35,6 @@ class MyComponentConfig(BaseConfig["MyComponent"]):
     batch_size: int = Field(default=32, gt=0)
 ```
 
-## Console Logging
-Use `Console` from `aria_nbv.utils` for structured logging.
-
-```python
-from aria_nbv.utils import Console
-
-console = Console.with_prefix(self.__class__.__name__, 'setup_target')
-console.set_verbose(self.verbose).set_debug(self.is_debug)
-
-console.log('Starting setup...')
-console.warn('Deprecated parameter')
-console.error('Invalid configuration')
-console.dbg('Internal state: ...')
-console.plog(complex_obj)
-```
-
 ## Do Not
 - Do not use `Field(default=<callable>)` when you mean `default_factory`.
-- Do not pass raw matrices where `PoseTW` or `CameraTW` are expected.
 - Do not leave public signatures untyped.

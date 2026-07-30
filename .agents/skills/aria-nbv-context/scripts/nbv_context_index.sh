@@ -104,7 +104,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "|---|---:|---|---|"
   echo "| Canonical state | ${memory_state_count} docs | You need current truth, conventions, or decisions | Open the relevant doc in \`.agents/memory/state/\` |"
   echo "| Agent history | ${memory_history_count} docs | The task is historical, comparative, or evidence-driven | \`rg -n \"<term>\" .agents/memory/history\` |"
-  echo "| Agent references | ${ref_count} docs | You need conventions, templates, or external-doc lookup ids | Open \`python_conventions.md\` or the specific reference doc |"
+  echo "| Agent references | ${ref_count} docs | You need authority or human-preference routing | Open \`source_order.md\` or \`human_owner_intent.md\` |"
   echo "| Quarto docs | ${qmd_count} files | You need implementation narrative, roadmap, or explainer docs | \`scripts/nbv_qmd_outline.sh --compact\` |"
   echo "| Typst seminar paper | ${typst_paper_count} files | You need historical implemented evidence or seminar wording | \`scripts/nbv_typst_includes.py --paper --mode outline\` |"
   echo "| Typst slides/shared | $((typst_slides_count + typst_shared_count)) files | The task explicitly touches slides or shared macros | \`scripts/nbv_typst_includes.py --with-slides --mode outline\` |"

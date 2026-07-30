@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Standards"
+  short_description: "Apply focused Python API and documentation standards"
+  default_prompt: "Use $python-standards to apply focused typing, DTO, config, docstring, and API-contract guidance."

@@ -12,7 +12,7 @@ metadata:
     - "external code-review workflow capability for independent code-reviewer plus architect lanes, merge gating, and final review synthesis"
     - "GitHub review-thread capability for unresolved PR review threads, inline anchors, or resolution state"
     - "simplification for behavior-preserving AI-slop, dead-code, wrapper, or duplication cleanup"
-    - "python-docstrings for Python API-contract docstring findings"
+    - "python-standards for Python API-contract findings"
     - "docs-curator or typst-authoring for public docs, thesis prose, citations, or Typst standards"
     - "plan-grill for architecture decisions without concrete diffs"
     - "diagnose-aria when a finding needs reproduction"
@@ -99,7 +99,7 @@ only when generated contract context is needed.
 
 Route validated findings to the smallest owner named by metadata or the nearest
 `AGENTS.md`. Common handoffs: `simplification` for behavior-preserving cleanup,
-`python-docstrings` for API docs, `docs-curator` / `typst-authoring` for public
+`python-standards` for API docs, `docs-curator` / `typst-authoring` for public
 docs and thesis prose, `nbv-geometry-contracts` for frames, `entity-aware-rri`
 for target semantics, `counterfactual-rollout-planner` for rollout/Q_H,
 `dataset-cache-ops` / `rerun-nbv-inspector` for data and visual diagnostics,

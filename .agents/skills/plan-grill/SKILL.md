@@ -100,7 +100,7 @@ Keep the default path concise unless one of these modifiers applies.
   boundary and source-owner model before implementation detail. Name vertical
   truth owners and horizontal evidence sources, include a Mermaid diagram for
   non-trivial plans, link implementation-facing Python plans to
-  `.agents/references/python_conventions.md` and the nearest `aria_nbv/**/AGENTS.md`,
+  `python-standards` and the nearest `aria_nbv/**/AGENTS.md`,
   use local literature owners before web search for thesis claims, and use
   Context7 only for external library/API behavior after local owner inspection.
   Keep `$plan`, `$ralplan`, and `$prometheus-strict` as workflow owners; this

@@ -129,14 +129,6 @@ DOC_SPECS: tuple[DocSpec, ...] = (
         summary="Compact operator aid for environment recovery, repo hygiene, and key commands.",
     ),
     DocSpec(
-        source=".agents/references/python_conventions.md",
-        output="references/python_conventions.qmd",
-        title="Python Conventions",
-        section="References",
-        nav_label="Python Conventions",
-        summary="Long-form Python style, typing, docstring, and config examples.",
-    ),
-    DocSpec(
         source=".agents/skills/aria-nbv-context/SKILL.md",
         output="skills/aria_nbv_context_skill.qmd",
         title="aria-nbv-context Skill",

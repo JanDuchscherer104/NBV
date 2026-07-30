@@ -32,7 +32,7 @@ metadata:
     - ".agents/memory/state/GOTCHAS.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#core-rules"
-    - ".agents/references/python_conventions.md#core-rules"
+    - "aria_nbv/AGENTS.md#core-rules"
     - ".agents/references/external_stack_contracts.md#efm3d-and-evl"
     - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
     - ".agents/memory/state/GOTCHAS.md"
@@ -74,7 +74,7 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 
 1. `AGENTS.md`
 2. `aria_nbv/AGENTS.md`
-3. `.agents/references/python_conventions.md`
+3. `aria_nbv/AGENTS.md` and `python-standards` when generic Python guidance is needed
 4. `.agents/references/external_stack_contracts.md`
 5. `.agents/memory/state/GOTCHAS.md`
 6. `aria_nbv/aria_nbv/vin/AGENTS.md` when VIN batch/candidate fields are touched
@@ -84,7 +84,7 @@ Do not use it for pure model-head, docs-only, or non-geometry app changes.
 
 ## Contract Rules
 
-- Treat `aria_nbv/AGENTS.md`, `.agents/references/python_conventions.md`, and
+- Treat `aria_nbv/AGENTS.md`, the `python-standards` skill, and
   `.agents/references/external_stack_contracts.md` as the canonical owners for
   frame, transform, camera, and external-stack conventions.
 - Return the frame convention, transform direction, tensor shape, units, and
