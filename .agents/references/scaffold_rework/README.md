@@ -1,6 +1,11 @@
 # Scaffold Rework Evidence
 
-Use the current autoresearch report as the entry point:
+Review the proposed target-state specification before deriving implementation
+plans:
+
+- `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md`
+
+Use the autoresearch report for its evidence and disposition rationale:
 
 - `.omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md`
 
