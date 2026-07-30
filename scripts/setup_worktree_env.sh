@@ -30,6 +30,11 @@ fail() {
   exit 1
 }
 
+realpath_portable() {
+  "$shared_root/aria_nbv/.venv/bin/python" -c \
+    'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
@@ -39,7 +44,7 @@ link_or_check() {
   local target="$2"
 
   if [[ -L "$target" ]]; then
-    [[ "$(readlink -f "$target")" == "$(readlink -f "$source")" ]] || fail "$target points somewhere else"
+    [[ "$(realpath_portable "$target")" == "$(realpath_portable "$source")" ]] || fail "$target points somewhere else"
     return
   fi
 
@@ -52,6 +57,10 @@ link_or_check() {
 
 cd "$repo_root"
 link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
+
+if [[ "$check_only" == false ]]; then
+  mkdir -p .data
+fi
 
 for cache_dir in ase_efm ase_meshes ase_meshes_processed offline_cache worktree_migrations; do
   source="$shared_root/.data/$cache_dir"
