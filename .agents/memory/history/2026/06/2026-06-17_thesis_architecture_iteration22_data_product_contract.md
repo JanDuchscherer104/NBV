@@ -7,7 +7,7 @@ topics: [thesis, architecture, rollouts, zarr, q-h, feature-cache]
 confidence: high
 canonical_updates_needed:
   - aria_nbv/aria_nbv/data_handling/README.md
-  - .agents/references/rollout_zarr_q_invalidity_contract.md
+  - aria_nbv/aria_nbv/rollouts/zarr_contract.md
   - docs/typst/thesis/sections/04-method/index.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/contents/theory/rl_planning.qmd
@@ -60,7 +60,7 @@ payloads, collection-level preflight gates, and future point-feature banks.
 
 ## Canonical Updates Needed
 
-- Reconcile `.agents/references/rollout_zarr_q_invalidity_contract.md` with the
+- Reconcile `aria_nbv/aria_nbv/rollouts/zarr_contract.md` with the
   live writer, validator, and data-handling README before treating it as current
   guidance.
 - Add production preflight ownership: either extend `nbv-rollouts-info` with

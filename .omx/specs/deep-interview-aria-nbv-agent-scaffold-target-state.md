@@ -253,7 +253,7 @@ The current files have these target dispositions:
   `aria_nbv/AGENTS.md`, source docstrings, formatter/type configuration, and
   executable tests. Do not maintain a prose duplicate of configured rules.
   <!-- Not sure, maabe make our python standards a skill? -->
-- `rollout_zarr_q_invalidity_contract.md`: move this domain contract beside
+- `zarr_contract.md`: keep this domain contract beside
   `aria_nbv.rollouts`, its schema/codecs, tests, and corresponding Typst
   definitions. The package `AGENTS.md` may summarize hazards and routes but may
   not duplicate the complete schema.

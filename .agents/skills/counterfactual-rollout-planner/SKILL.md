@@ -19,7 +19,7 @@ metadata:
     - "aria_nbv/aria_nbv/pose_generation/**"
     - "aria_nbv/aria_nbv/rl/**"
     - "docs/contents/thesis/**"
-    - ".agents/references/rollout_zarr_q_invalidity_contract.md"
+    - "aria_nbv/aria_nbv/rollouts/zarr_contract.md"
   triggers:
     - "counterfactual rollout"
     - "bounded lookahead"
@@ -29,12 +29,12 @@ metadata:
     - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
     - "docs/contents/thesis/questions.qmd#rq2-offline-qh"
     - ".agents/memory/state/PROJECT_STATE.md"
-    - ".agents/references/rollout_zarr_q_invalidity_contract.md"
+    - "aria_nbv/aria_nbv/rollouts/zarr_contract.md"
   canonical_sources:
     - "docs/contents/thesis/roadmap.qmd#roadmap-m5"
     - "docs/contents/thesis/questions.qmd#rq2-offline-qh"
     - "docs/contents/theory/rl_planning.qmd#q-h-training-contract"
-    - ".agents/references/rollout_zarr_q_invalidity_contract.md#mask-semantics"
+    - "aria_nbv/aria_nbv/rollouts/zarr_contract.md#mask-semantics"
     - "aria_nbv/aria_nbv/rollouts/AGENTS.md"
   context7_refs:
     - "/pytorch/pytorch"
