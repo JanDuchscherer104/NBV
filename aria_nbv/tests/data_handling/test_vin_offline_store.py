@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-import aria_nbv.data_handling.offline.diagnostics as offline_diagnostics
+import aria_nbv.data_handling.vin_store.diagnostics as offline_diagnostics
 from aria_nbv.data_handling import (
     EfmSnippetView,
     VinOfflineDatasetConfig,
@@ -25,20 +25,20 @@ from aria_nbv.data_handling import (
     VinOracleBatch,
     VinSnippetView,
 )
-from aria_nbv.data_handling.offline.diagnostics import (
+from aria_nbv.data_handling.vin_store.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
     summarize_vin_batch_shapes,
 )
-from aria_nbv.data_handling.offline.format import (
+from aria_nbv.data_handling.vin_store.format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
 )
-from aria_nbv.data_handling.offline.source import VinOfflineSourceConfig
-from aria_nbv.data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreReader
-from aria_nbv.data_handling.offline.writer import (
+from aria_nbv.data_handling.vin_store.source import VinOfflineSourceConfig
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreReader
+from aria_nbv.data_handling.vin_store.writer import (
     assign_offline_splits,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
@@ -201,6 +201,17 @@ def _make_vin_snippet(*, offset: float = 0.0) -> VinSnippetView:
         lengths=lengths,
         t_world_rig=_make_pose_batch(2, offset=offset),
     )
+
+
+def test_vin_snippet_view_preserves_compact_and_documented_repr() -> None:
+    """Keep the moved VIN DTO's established representation modes."""
+
+    snippet = _make_vin_snippet()
+
+    assert "'doc'" not in repr(snippet)  # noqa: S101
+    documented = snippet.repr_with_docstrings()
+    assert "'doc'" in documented  # noqa: S101
+    assert "valid point-prefix length" in documented  # noqa: S101
 
 
 def _make_obb_tensor(num: int = 2, *, offset: float = 0.0) -> ObbTW:

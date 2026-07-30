@@ -8,7 +8,7 @@ not own metric formulas, Oracle label generation, or immutable data codecs.
 `lit_datamodule.py` composes the discriminated online/offline source union.
 Online generation is implemented by `oracle.pipelines.online_vin`; immutable
 offline source configuration is implemented by
-`data_handling.offline.source`.
+`data_handling.vin_store.source`.
 
 | Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
 |---|---|---|---|---|---|---|
@@ -24,7 +24,7 @@ TOML fields are frozen configuration contracts.
 The retained `Q_H` surface is an infrastructure seam, separate from the
 scene-wise one-step CORAL stack:
 
-- `data_handling.qh` and `rollouts.qh_reader` provide the leaf dataset and
+- `data_handling.qh_data` and `rollouts.qh_reader` provide the leaf dataset and
   validated reader contracts.
 - `qh_datamodule.py` admits compatible, scene-disjoint stage datasets and owns
   only their DataLoaders.

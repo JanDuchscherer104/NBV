@@ -14,7 +14,7 @@ import streamlit as st
 
 from ...configs import PathConfig
 from ...data_handling import VinOracleBatch
-from ...data_handling.offline.source import VinOfflineSourceConfig
+from ...data_handling.vin_store.source import VinOfflineSourceConfig
 from ...lightning.lit_datamodule import VinDataModule
 from ...utils import Stage
 from ..state import VIN_DIAG_STATE_KEY, get_vin_state

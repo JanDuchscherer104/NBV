@@ -1,7 +1,7 @@
 """Bounded reader for validated finite-candidate ``Q_H`` rollout chains.
 
 Persisted integrity belongs to :mod:`zarr_store`; tensor and actor-store
-composition belongs to :mod:`aria_nbv.data_handling.qh`.
+composition belongs to :mod:`aria_nbv.data_handling.qh_data`.
 """
 
 from __future__ import annotations

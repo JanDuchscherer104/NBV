@@ -11,7 +11,7 @@
 #thesis_status(
   implementation: "implemented",
   evidence: "pending",
-  source: "aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  source: "aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/aria_nbv/data_handling/qh_data/dataset.py; aria_nbv/tests/rollouts/test_qh_reader.py",
   gate: [preserve row identity, masks, provenance, and source roles in every tensor reader],
 )[The factual replay schema, lazy reader, framework-neutral dataset seam, and dense `q_h/` view are implemented and unit-tested. Frozen scientific replay evidence remains pending. The schema is a storage contract; readability from the store does not make a field actor-visible.]
 
@@ -39,7 +39,7 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @zhou2023query @FixedHorizonTD-deAsis2020 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [fixed-H versus requested-horizon source-owner decision, typed selected-observation state, positive-width V1 target path, source masks, and leakage tests],
 )[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The production scorer DTO remains planned. Static scene context, dynamic selected-observation state, target state, and candidate rows are common requirements; an explicit requested-horizon value query is an alternative pending the source-owner decision.]
 
@@ -98,7 +98,7 @@ Target-independent static scene encodings may be reused across several target ta
   implementation: "partial",
   evidence: "pending",
   citation: [@zhou2019continuity @zhou2023query @LFF-li2021],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/vin/modules/pooling.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/vin/modules/pooling.py",
   gate: [frame-transform, row-shuffle, and held-out descriptor ablations],
 )[Root-relative candidate geometry and a minimal candidate-local target relation are implemented. The complete candidate-frustum and dynamic-memory relation descriptor remains planned.]
 
@@ -136,7 +136,7 @@ This adopts QCNet's query-centric geometric discipline, not its trajectory decod
   implementation: "partial",
   evidence: "pending",
   citation: [@e3nn-SphericalHarmonics-2025 @Hestia-lu2026],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; docs/contents/theory/candidate_view_dependence.qmd",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [directional-novelty fixture and matched architecture ablation],
 )[The implemented DTO carries set-valued selected-pose history, but no production scorer consumes it yet. Ordered temporal encoding and directional memory remain candidate requirements for longer-horizon models.]
 

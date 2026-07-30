@@ -35,7 +35,6 @@ local external_root_inventories = {
   ["collections"] = "python",
   ["dataclasses"] = "python",
   ["enum"] = "python",
-  ["jaxtyping"] = "jaxtyping",
   ["lightning"] = "lightning",
   ["pathlib"] = "python",
   ["torch"] = "torch",

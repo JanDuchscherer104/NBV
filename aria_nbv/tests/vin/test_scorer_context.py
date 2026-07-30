@@ -6,7 +6,7 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling.raw.views import VinSnippetView
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.vin.scorer_context import (
     apply_vin_scorer_film,
     build_vin_scorer_scene_field,

@@ -19,8 +19,8 @@ from efm3d.aria import CameraTW, PoseTW
 from efm3d.aria.obb import ObbTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
-from aria_nbv.data_handling.offline.batch import CompactObbBlock
-from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle._scoring import PreparedRriScorerConfig
 from aria_nbv.oracle.evidence import (
     OracleEvidenceInvalidReason,

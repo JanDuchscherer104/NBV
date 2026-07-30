@@ -30,8 +30,6 @@ interlinks:
       url: https://lightning.ai/docs/pytorch/stable/
     torchmetrics:
       url: https://lightning.ai/docs/torchmetrics/stable/
-    jaxtyping:
-      url: https://docs.kidger.site/jaxtyping/
 
 # Global execution defaults (fast iterations; deterministic rebuilds)
 execute: # see https://quarto.org/docs/computations/execution-options.html

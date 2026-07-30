@@ -62,7 +62,7 @@ Apply this file when working under `aria_nbv/`.
 - Use `Literal` for constrained string values.
 - Public methods, functions, classes, modules, config models, dataclasses, and
   typed payload fields must follow the `python-docstrings` skill. That skill
-  owns Google-style sections, Quartodoc behavior, Jaxtyping shape display,
+  owns Google-style sections, Quartodoc behavior, tensor-shape display,
   equations, references, and field-docstring rules.
 - See `.agents/references/python_conventions.md` for non-docstring Python
   typing, runtime, and config conventions.

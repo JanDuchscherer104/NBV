@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from aria_nbv.data_handling.offline.format import (
+from aria_nbv.data_handling.vin_store.format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
     VinOfflineManifest,

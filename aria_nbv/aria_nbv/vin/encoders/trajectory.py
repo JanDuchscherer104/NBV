@@ -13,7 +13,7 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor, nn
 
-from ...data_handling.raw.views import EfmTrajectoryView
+from ...data_handling.ase_efm.views import EfmTrajectoryView
 from ...utils import TargetConfig
 from .pose import PoseEncodingOutput, R6dLffPoseEncoder, R6dLffPoseEncoderConfig
 
@@ -101,7 +101,7 @@ class TrajectoryEncoder(nn.Module):
         """Encode a trajectory's world←rig poses.
 
         Args:
-            trajectory: `aria_nbv.data_handling.raw.views.EfmTrajectoryView`.
+            trajectory: `aria_nbv.data_handling.ase_efm.views.EfmTrajectoryView`.
 
         Returns:
             TrajectoryEncodingOutput with per-frame encodings and pooled embedding.

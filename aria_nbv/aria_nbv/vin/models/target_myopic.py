@@ -17,7 +17,8 @@ from pydantic import Field
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 from torch import Tensor, nn
 
-from ...data_handling import EfmSnippetView, VinSnippetView
+from ...data_handling.ase_efm.views import EfmSnippetView
+from ...data_handling.vin_store.views import VinSnippetView
 from ...utils import TargetConfig
 from ..types import EvlBackboneOutput, VinPrediction
 from .scene_myopic import VinModelV3, VinModelV3Config

@@ -13,8 +13,9 @@ from typing import cast
 
 import torch
 
-from ...data_handling.offline.batch import VinOracleBatch
-from ...data_handling.raw.views import EfmSnippetView, VinSnippetView
+from ...data_handling.ase_efm.views import EfmSnippetView
+from ...data_handling.vin_store.batch import VinOracleBatch
+from ...data_handling.vin_store.views import VinSnippetView
 from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...lightning.lit_datamodule import VinDataModule
 from ...lightning.lit_module import VinLightningModule

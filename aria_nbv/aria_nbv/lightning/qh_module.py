@@ -1,6 +1,6 @@
 """Scorer-independent fitted-Q optimization for finite-candidate chains.
 
-The injected scorer maps :class:`~aria_nbv.data_handling.qh.QhActorTensors`
+The injected scorer maps :class:`~aria_nbv.data_handling.qh_data.QhActorTensors`
 directly to candidate values. This module owns Double-Q targets, exact
 distributed admission, one optimizer transaction, metrics, and target sync.
 """
@@ -12,13 +12,12 @@ from typing import Any
 
 import pytorch_lightning as pl
 import torch
-from jaxtyping import Float
 from pydantic import Field, FiniteFloat
 from torch import Tensor, nn
 from torch.nn import functional
 from torch.optim import Optimizer
 
-from ..data_handling.qh import QhActorTensors, QhBatch
+from ..data_handling.qh_data import QhActorTensors, QhBatch
 from ..utils import Stage, TargetConfig
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
@@ -104,7 +103,7 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
-    def forward(self, actor: QhActorTensors) -> Float[Tensor, "B S N"]:
+    def forward(self, actor: QhActorTensors) -> Tensor:
         """Return online candidate values with the actor's exact batch shape.
 
         Args:
@@ -406,7 +405,7 @@ class QhLightningModule(pl.LightningModule):
             raise ValueError(f"Q_H scorer produced {count} non-finite {description}.")
 
     @staticmethod
-    def _score(scorer: nn.Module, actor: QhActorTensors) -> Float[Tensor, "B S N"]:
+    def _score(scorer: nn.Module, actor: QhActorTensors) -> Tensor:
         values = scorer(actor)
         expected = actor.action_mask.shape
         if not isinstance(values, Tensor) or values.shape != expected:

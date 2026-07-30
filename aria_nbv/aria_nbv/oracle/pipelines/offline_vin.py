@@ -14,15 +14,17 @@ import torch
 from pydantic import Field
 
 from ...configs import PathConfig
-from ...data_handling.offline.adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view
-from ...data_handling.offline.format import (
+from ...data_handling.ase_efm.dataset import AseEfmDatasetConfig
+from ...data_handling.ase_efm.views import EfmSnippetView
+from ...data_handling.vin_store.adapter import DEFAULT_VIN_SNIPPET_PAD_POINTS, build_vin_snippet_view
+from ...data_handling.vin_store.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
-from ...data_handling.offline.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
-from ...data_handling.offline.writer import (
+from ...data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
+from ...data_handling.vin_store.writer import (
     DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS,
     DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS,
     PreparedVinOfflineSample,
@@ -30,8 +32,6 @@ from ...data_handling.offline.writer import (
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
-from ...data_handling.raw.dataset import AseEfmDatasetConfig
-from ...data_handling.raw.views import EfmSnippetView
 from ...utils import Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_json_signature
 from ...vin.backbones import EvlBackboneConfig

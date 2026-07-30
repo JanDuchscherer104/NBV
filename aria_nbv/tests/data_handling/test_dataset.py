@@ -15,9 +15,9 @@ from efm3d.aria.pose import PoseTW
 from torch.utils.data import DataLoader
 
 from aria_nbv.configs import PathConfig
+from aria_nbv.data_handling.ase_efm.dataset import AseEfmDataset, AseEfmDatasetConfig
+from aria_nbv.data_handling.ase_efm.views import EfmCameraView, EfmSnippetView
 from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from aria_nbv.data_handling.raw.dataset import AseEfmDataset, AseEfmDatasetConfig
-from aria_nbv.data_handling.raw.views import EfmCameraView, EfmSnippetView
 
 
 def _paths(tmp_path: Path) -> PathConfig:

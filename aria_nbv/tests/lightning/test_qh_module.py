@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from torch import nn
 from torch.utils.data import Dataset
 
-from aria_nbv.data_handling.qh import QhActorTensors, QhBatch, QhChain, collate_qh_chains
+from aria_nbv.data_handling.qh_data import QhActorTensors, QhBatch, QhChain, collate_qh_chains
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from tests.data_handling.test_qh import _chain

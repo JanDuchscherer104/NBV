@@ -21,7 +21,8 @@ from typing import Any
 import torch
 from efm3d.aria.pose import PoseTW
 
-from ..raw.views import EfmSnippetView, VinSnippetView
+from ..ase_efm.views import EfmSnippetView
+from .views import VinSnippetView
 
 DEFAULT_VIN_SNIPPET_PAD_POINTS = 50000
 

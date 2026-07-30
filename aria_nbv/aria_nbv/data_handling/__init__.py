@@ -15,12 +15,13 @@ neither constructs oracle labels nor chooses target entities.
 
 from __future__ import annotations
 
-# Bind raw views before offline batches, whose VIN types import this root.
-from .raw.dataset import AseEfmDataset, AseEfmDatasetConfig
-from .raw.views import EfmSnippetView, VinSnippetView
-from .offline.batch import VinOracleBatch
-from .offline.dataset import VinOfflineDataset, VinOfflineDatasetConfig
-from .offline.store import VinOfflineStoreConfig
+# Bind ASE/EFM views before VIN-store batches, whose VIN types import this root.
+from .ase_efm.dataset import AseEfmDataset, AseEfmDatasetConfig
+from .ase_efm.views import EfmSnippetView
+from .vin_store.batch import VinOracleBatch
+from .vin_store.dataset import VinOfflineDataset, VinOfflineDatasetConfig
+from .vin_store.store import VinOfflineStoreConfig
+from .vin_store.views import VinSnippetView
 
 __all__ = [
     "AseEfmDataset",

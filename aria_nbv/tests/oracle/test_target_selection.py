@@ -16,8 +16,8 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import VinSnippetView
-from aria_nbv.data_handling.offline.batch import CompactObbBlock
-from aria_nbv.data_handling.offline.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
     OracleTargetTask,

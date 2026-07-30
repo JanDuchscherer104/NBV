@@ -23,7 +23,7 @@ from .data_handling import (
     AseEfmDatasetConfig,
     EfmSnippetView,
 )
-from .data_handling.raw.views import (
+from .data_handling.ase_efm.views import (
     EfmCameraView,
     EfmGTView,
     EfmObbView,

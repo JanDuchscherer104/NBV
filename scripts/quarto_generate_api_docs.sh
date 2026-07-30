@@ -102,7 +102,7 @@ refresh_interlinks() {
     1)
       ;;
     auto)
-      for source in python torch lightning torchmetrics jaxtyping; do
+      for source in python torch lightning torchmetrics; do
         if [[ ! -f "${inventory_dir}/${source}_objects.txt" ]]; then
           run_quartodoc_interlinks
           return

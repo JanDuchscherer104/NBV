@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from ..data_handling.qh import QhBatch, QhChain, collate_qh_chains
+from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhDataContract
 
 

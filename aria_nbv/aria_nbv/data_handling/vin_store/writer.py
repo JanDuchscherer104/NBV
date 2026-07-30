@@ -26,13 +26,14 @@ import torch
 from efm3d.aria.aria_constants import ARIA_OBB_SEM_ID_TO_NAME
 
 from ...utils.semantic_names import normalize_semantic_name_map
+from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id
-from ..raw.views import EfmSnippetView, VinSnippetView
 from .format import (
     VinOfflineIndexRecord,
     VinOfflineShardSpec,
 )
 from .store import VinOfflineShardWriter
+from .views import VinSnippetView
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

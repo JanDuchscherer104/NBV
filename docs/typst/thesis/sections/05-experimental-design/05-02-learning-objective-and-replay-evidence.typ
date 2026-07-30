@@ -55,7 +55,7 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   implementation: "partial",
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
-  source: "aria_nbv/aria_nbv/data_handling/qh.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
   gate: [fixed-H versus requested-horizon source-owner decision, production scorer, exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
 )[A masked selected-transition Double-Q learner for an injected scorer is implemented. No H=2 V0 pose-history scorer, shared requested-horizon scorer, task-sufficient dynamic state, or policy evidence is implemented.]
 

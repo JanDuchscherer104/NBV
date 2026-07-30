@@ -14,8 +14,8 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from aria_nbv.data_handling.identifiers import compact_ase_atek_identifiers, compact_ase_atek_sample_id
-from aria_nbv.data_handling.offline.dataset import VinOfflineSample
-from aria_nbv.data_handling.offline.inventory import collect_offline_visual_inventory
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineSample
+from aria_nbv.data_handling.vin_store.inventory import collect_offline_visual_inventory
 
 from ._config import RerunOfflineInspectorConfig
 

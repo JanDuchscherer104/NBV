@@ -18,11 +18,8 @@ from pytorch3d.renderer.cameras import PerspectiveCameras
 from torch import Tensor
 
 from ...vin.types import EvlBackboneOutput
-from ..raw.views import (
-    EfmSnippetView,
-    VinSnippetView,
-    is_vin_snippet_view_instance,
-)
+from ..ase_efm.views import EfmSnippetView
+from .views import VinSnippetView, is_vin_snippet_view_instance
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

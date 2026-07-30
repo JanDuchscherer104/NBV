@@ -24,7 +24,7 @@ from ...data_handling import (
     VinOfflineDatasetConfig,
     VinOfflineStoreConfig,
 )
-from ...data_handling.offline.dataset import VinOfflineSample
+from ...data_handling.vin_store.dataset import VinOfflineSample
 from ...oracle.evidence import target_gt_obb_world
 from ...oracle.pipelines.evaluated_rollout import (
     EvaluatedRollout,

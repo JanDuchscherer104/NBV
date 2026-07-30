@@ -16,6 +16,15 @@ website:
       - text: data_handling
         file: reference/data_handling.qmd
         contents:
+        - text: ase_efm
+          file: reference/data_handling.ase_efm.qmd
+          contents:
+          - text: dataset
+            file: reference/data_handling.ase_efm.dataset.qmd
+          - text: loader
+            file: reference/data_handling.ase_efm.loader.qmd
+          - text: views
+            file: reference/data_handling.ase_efm.views.qmd
         - text: atek_downloads
           file: reference/data_handling.atek_downloads.qmd
           contents:
@@ -29,40 +38,40 @@ website:
           file: reference/data_handling.identifiers.qmd
         - text: mesh_cache
           file: reference/data_handling.mesh_cache.qmd
-        - text: offline
-          file: reference/data_handling.offline.qmd
+        - text: qh_data
+          file: reference/data_handling.qh_data.qmd
+          contents:
+          - text: batching
+            file: reference/data_handling.qh_data.batching.qmd
+          - text: dataset
+            file: reference/data_handling.qh_data.dataset.qmd
+          - text: views
+            file: reference/data_handling.qh_data.views.qmd
+        - text: vin_store
+          file: reference/data_handling.vin_store.qmd
           contents:
           - text: adapter
-            file: reference/data_handling.offline.adapter.qmd
+            file: reference/data_handling.vin_store.adapter.qmd
           - text: batch
-            file: reference/data_handling.offline.batch.qmd
+            file: reference/data_handling.vin_store.batch.qmd
           - text: dataset
-            file: reference/data_handling.offline.dataset.qmd
+            file: reference/data_handling.vin_store.dataset.qmd
           - text: diagnostics
-            file: reference/data_handling.offline.diagnostics.qmd
+            file: reference/data_handling.vin_store.diagnostics.qmd
           - text: format
-            file: reference/data_handling.offline.format.qmd
+            file: reference/data_handling.vin_store.format.qmd
           - text: info_cli
-            file: reference/data_handling.offline.info_cli.qmd
+            file: reference/data_handling.vin_store.info_cli.qmd
           - text: inventory
-            file: reference/data_handling.offline.inventory.qmd
+            file: reference/data_handling.vin_store.inventory.qmd
           - text: source
-            file: reference/data_handling.offline.source.qmd
+            file: reference/data_handling.vin_store.source.qmd
           - text: store
-            file: reference/data_handling.offline.store.qmd
-          - text: writer
-            file: reference/data_handling.offline.writer.qmd
-        - text: qh
-          file: reference/data_handling.qh.qmd
-        - text: raw
-          file: reference/data_handling.raw.qmd
-          contents:
-          - text: dataset
-            file: reference/data_handling.raw.dataset.qmd
-          - text: loader
-            file: reference/data_handling.raw.loader.qmd
+            file: reference/data_handling.vin_store.store.qmd
           - text: views
-            file: reference/data_handling.raw.views.qmd
+            file: reference/data_handling.vin_store.views.qmd
+          - text: writer
+            file: reference/data_handling.vin_store.writer.qmd
       - text: dataset_bundle
         file: reference/dataset_bundle.qmd
       - text: dataset_topology

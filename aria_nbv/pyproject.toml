@@ -70,7 +70,6 @@ dependencies = [
     "termcolor>=1.1.0; sys_platform == 'linux'",
     "easydict>=1.9; sys_platform == 'linux'",
     "shortuuid>=1.0.11; sys_platform == 'linux'",
-    "jaxtyping>=0.3.6",
     "msgspec>=0.20.0",
     "zarr>=3.1.5",
     "setuptools<81",
@@ -83,7 +82,7 @@ dependencies = [
     nbv-st                    = "aria_nbv.streamlit_app:streamlit_entry"
     nbv-fit-binner            = "aria_nbv.lightning.cli:fit_binner_main"
     nbv-build-offline         = "aria_nbv.oracle.pipelines.cli:offline_main"
-    nbv-offline-info          = "aria_nbv.data_handling.offline.info_cli:main"
+    nbv-offline-info          = "aria_nbv.data_handling.vin_store.info_cli:main"
     nbv-plan-rollout-shards   = "aria_nbv.oracle.pipelines.cli:plan_main"
     nbv-build-rollouts        = "aria_nbv.oracle.pipelines.cli:main"
     nbv-status-rollout-shards = "aria_nbv.oracle.pipelines.cli:status_main"

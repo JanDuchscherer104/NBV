@@ -36,11 +36,12 @@ from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...utils import BaseConfig, Console, Stage, TargetConfig, Verbosity
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.types import EvlBackboneOutput
+from ..ase_efm.loader import EfmSnippetLoader
+from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from ..raw.loader import EfmSnippetLoader
-from ..raw.views import EfmSnippetView, VinSnippetView
 from .batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
+from .views import VinSnippetView
 
 if TYPE_CHECKING:
     from .format import VinOfflineIndexRecord

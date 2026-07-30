@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling.raw.loader import EfmSnippetLoader
+from aria_nbv.data_handling.ase_efm.loader import EfmSnippetLoader
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

@@ -21,15 +21,16 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor
 
-from ..data_handling.offline.batch import CompactObbBlock
-from ..data_handling.raw.views import EfmSnippetView, VinSnippetView
+from ..data_handling.ase_efm.views import EfmSnippetView
+from ..data_handling.vin_store.batch import CompactObbBlock
+from ..data_handling.vin_store.views import VinSnippetView
 from ..targets import TargetDescriptor
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
 
 if TYPE_CHECKING:
-    from ..data_handling.offline.dataset import VinOfflineSample
+    from ..data_handling.vin_store.dataset import VinOfflineSample
 
 
 TARGET_INVALID_REASON_CODES: dict[str, int] = {
@@ -221,7 +222,7 @@ class OracleTargetTaskSampler:
             first-pass target-task eligibility.
         """
 
-        from ..data_handling.offline.dataset import VinOfflineSample
+        from ..data_handling.vin_store.dataset import VinOfflineSample
 
         if not isinstance(sample, VinOfflineSample):
             raise TypeError("OracleTargetTaskSampler expects VinOfflineSample input.")
