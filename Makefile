@@ -1,11 +1,11 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
-.PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
+.PHONY: help ci ci-impact-self-test graphify-projection-self-test agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-graphify-git-hook install-hooks
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
 .PHONY: agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -231,16 +231,8 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
-graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
-	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
-
-graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, freshness wiring, and hook dispatch
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
-	@./scripts/tests/test_post_commit_graph_dispatch.sh
-
-graphify-ci: graphify-skill-self-test graphify-integration-self-test ## 🕸️ Run opt-in Graphify comparison checks (requires pinned graphifyy)
+graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
+	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
@@ -264,21 +256,10 @@ install-git-hooks: ## 🪝 Symlink normal scripts/git_hooks/* into .git/hooks/
 	for hook in scripts/git_hooks/*; do \
 		[ -f "$$hook" ] || continue; \
 		name=$$(basename "$$hook"); \
-		[ "$$name" = post-commit ] && continue; \
 		target="$$HOOK_DIR/$$name"; \
 		ln -sf "$(CURDIR)/$$hook" "$$target" && \
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
-
-install-graphify-git-hook: ## 🕸️ Opt in to the dormant Graphify post-commit dispatcher
-	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
-	if [ -z "$$HOOK_DIR" ]; then \
-		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
-	fi; \
-	mkdir -p "$$HOOK_DIR"; \
-	target="$$HOOK_DIR/post-commit"; \
-	ln -sf "$(CURDIR)/scripts/git_hooks/post-commit" "$$target" && \
-		echo "$(GREEN)linked $$target -> $(CURDIR)/scripts/git_hooks/post-commit$(NC)"
 
 install-hooks: install-git-hooks ## 🪝 Activate normal Codex, Gemini, and git hooks
 	@if [ ! -f .codex/hooks.json ]; then \
@@ -726,7 +707,7 @@ thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
 thesis-watch: ## Watch and recompile the Typst thesis
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
-docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

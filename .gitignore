@@ -297,7 +297,3 @@ docs/literature/tex-src/**
 !.codex/hooks.example.json
 !.codex/environments/
 !.codex/environments/*.toml
-!.codex/skills/
-.codex/skills/*
-!.codex/skills/graphify/
-!.codex/skills/graphify/**

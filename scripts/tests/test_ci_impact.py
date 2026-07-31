@@ -32,15 +32,24 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("Install Graphify", workflow)
         self.assertNotIn("Validate Graphify", workflow)
         self.assertNotIn('pip install "graphifyy==', workflow)
+        self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
+        self.assertIn(
+            "make qmd-frontmatter-check graphify-projection-self-test", workflow
+        )
 
     def test_representative_narrow_and_overlap_paths(self) -> None:
         cases = {
-            "docs/index.qmd": {"docs", "graphify"},
-            ".agents/references/source_order.md": {"scaffold", "graphify"},
-            ".agents/example.qmd": {"scaffold", "graphify"},
-            "aria_nbv/aria_nbv/__init__.py": {"package", "graphify"},
+            "docs/index.qmd": {"docs"},
+            ".agents/references/source_order.md": {"scaffold"},
+            ".agents/example.qmd": {"scaffold"},
+            "aria_nbv/aria_nbv/__init__.py": {"package"},
             ".configs/example.toml": {"package"},
-            ".graphifyignore": {"graphify"},
+            ".graphifyignore": {"docs"},
+            "scripts/build_graphify_projection.py": {"docs"},
+            "scripts/tests/test_build_graphify_projection.py": {"docs"},
+            "docs/literature/sources.jsonl": {"docs"},
+            "docs/literature/README.md": {"docs"},
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
@@ -49,7 +58,7 @@ class SelectionTests(unittest.TestCase):
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(
             select_families(["docs/index.qmd", ".configs/example.toml"]),
-            {"docs", "package", "graphify"},
+            {"docs", "package"},
         )
 
     def test_cross_family_rename_reports_source_and_destination(self) -> None:
@@ -91,7 +100,7 @@ class SelectionTests(unittest.TestCase):
 
             self.assertEqual(
                 select_families(parse_nul_paths(changed)),
-                {"package", "docs", "graphify"},
+                {"package", "docs"},
             )
 
     def test_shared_control_paths_select_full(self) -> None:
