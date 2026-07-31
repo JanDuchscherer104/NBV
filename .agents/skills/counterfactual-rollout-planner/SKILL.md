@@ -10,7 +10,7 @@ metadata:
     - "diagnose-aria for concrete rollout failures or suspicious metrics"
     - "nbv-geometry-contracts for pose, camera, projection, or frame-contract issues"
     - "entity-aware-rri for target-crop or target-specific RRI ownership"
-    - "plan-grill for thesis-scope planning before changing roadmap claims"
+    - "aria-grill for thesis-scope planning before changing roadmap claims"
   evidence_required:
     - "horizon, branch/beam width, candidate budget, and acquisition budget"
     - "validity mask and invalid-reason treatment for selected actions"

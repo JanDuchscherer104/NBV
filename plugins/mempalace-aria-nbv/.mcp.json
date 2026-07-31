@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mempalace": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "set -euo pipefail\nif [[ -n \"${MEMPALACE_PALACE_PATH:-}\" ]]; then\n  palace_path=\"${MEMPALACE_PALACE_PATH}\"\nelse\n  if ! repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null)\"; then\n    echo \"mempalace-aria-nbv: not inside a Git repository; set MEMPALACE_PALACE_PATH\" >&2\n    exit 2\n  fi\n  palace_path=\"${repo_root}/.artifacts/mempalace/palace\"\nfi\nexec mempalace-mcp --palace \"${palace_path}\""
+      ]
+    }
+  }
+}

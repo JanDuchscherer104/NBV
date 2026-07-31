@@ -30,15 +30,21 @@
     {
       "id": "context7-pytorch3d-conceptual-plan",
       "task": "Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence.",
-      "expected_skills": ["agent-behavior", "plan-grill"],
+      "expected_skills": ["agent-behavior", "aria-grill"],
       "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
       "non_goals": ["Do not let Context7 replace local geometry owners or the nbv-geometry-contracts evidence loop."]
     },
     {
-      "id": "thesis-plan-grill-matt-collision",
-      "task": "Stress-test a thesis scope, advisor-facing decision, or ARIA plan-grill question that resembles generic Matt grilling.",
-      "expected_skills": ["agent-behavior", "plan-grill"],
+      "id": "thesis-aria-grill-matt-collision",
+      "task": "Stress-test a thesis scope, advisor-facing decision, or Aria Grill question that resembles generic Matt grilling.",
+      "expected_skills": ["agent-behavior", "aria-grill"],
       "non_goals": ["Do not route ARIA thesis planning to generic Matt grilling, grill-with-docs, or domain-modeling."]
+    },
+    {
+      "id": "aria-grill-progressive-interface-design",
+      "task": "Compare materially different public interface shapes for a high-impact ARIA module after grounding the owning contract.",
+      "expected_skills": ["agent-behavior", "aria-grill"],
+      "non_goals": ["Repository policy must not route implicit codebase-design, improve-codebase-architecture, design-an-interface, domain-modeling, or visualize use outside Aria Grill; explicit user invocation remains allowed, and guidance must not claim runtime disabling."]
     },
     {
       "id": "context7-not-needed-target-rri-section",

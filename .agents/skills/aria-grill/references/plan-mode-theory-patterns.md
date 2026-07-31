@@ -1,11 +1,11 @@
 # Plan-Mode Theory Patterns
 
-Use this reference only when `plan-grill` is running in `theory-rich` mode or
+Use this reference only when `aria-grill` is running in `theory-rich` mode or
 when the user asks for the lighter `elaborate` modifier.
 
 ## Activation
 
-- Default `plan-grill`: concise planning, source-order grounding, one material
+- Default `aria-grill`: concise planning, source-order grounding, one material
   question at a time.
 - `elaborate`: explain options before asking. Use local context and practical
   tradeoffs, but keep the answer short.

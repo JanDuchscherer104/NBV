@@ -1,4 +1,4 @@
-# Upstream Matt Pocock Guidance For Plan Grill
+# Upstream Matt Pocock Guidance For Aria Grill
 
 Use this as reference-only inspiration from `mattpocock/skills`; do not activate
 Matt grilling skills as ARIA defaults.
@@ -13,7 +13,7 @@ Borrow:
 
 ARIA differences:
 
-- `plan-grill` owns advisor-facing, thesis-scope, source-order-aware decisions.
+- `aria-grill` owns advisor-facing, thesis-scope, source-order-aware decisions.
 - ARIA terminology lives in `docs/typst/shared/glossary.typ`, not `CONTEXT.md`.
 - Durable decisions live in `.agents/memory/state/DECISIONS.md`, roadmap,
   questions, or the nearest `AGENTS.md`, not `docs/adr/` by default.

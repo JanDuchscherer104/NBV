@@ -69,8 +69,12 @@ or repeatable workflows.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
-- Keep raw transcripts, runtime identifiers, machine paths, credentials, and
-  private retrieval corpora untracked. Publish only reviewed distillations.
+- Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
+  and private retrieval corpora untracked. At most one deterministic,
+  pattern-sanitized, commit-scoped conversation slice may be tracked for a
+  Codex-authored commit only when a repository-owned provenance workflow
+  enforces the corresponding sanitization and commit-binding contract. Any
+  retained slice is provenance evidence, not a distillation or truth owner.
 - Preserve `measured-autoresearch` as a bounded, measurement-gated companion to
   generic research loops. It must support research-only, evaluator-design,
   measured implementation, and keep-or-discard iterations.

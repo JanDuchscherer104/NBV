@@ -22,7 +22,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 	through `tools/mermaid/scripts/render_mermaid.sh` and do not use online
 	renderers unless explicitly permitted.
 - Need file localization or deterministic local discovery: use `aria-nbv-context`.
-- Vague, high-impact, or advisor-facing plans: use `plan-grill`.
+- Vague, high-impact, or advisor-facing plans: use `aria-grill`. Repository
+  policy routes implicit ARIA use of optional architecture, interface-design,
+  committed Mermaid, and interactive-visualization capabilities through Aria
+  Grill; explicit user invocation overrides that route.
 - PR or working-tree review: use `code-review-aria-nbv`; actionable P0--P2
   findings on a PR are published and resolved as GitHub review threads, while
   local-only reviews report the same line-referenced findings locally.
@@ -66,8 +69,8 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: update Quarto or Typst docs.
-- Text marked `<...>`: preserve it in the smallest owner selected above; see
-  `agent-behavior` for the capture procedure.
+- Angle-bracket instruction capture is owned by `agent-behavior`; apply its
+  current-user-message eligibility rule and route valid captures here.
 
 ## Commands
 - Python: `aria_nbv/.venv/bin/python`

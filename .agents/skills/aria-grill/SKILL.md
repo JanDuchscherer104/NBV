@@ -1,6 +1,6 @@
 ---
-name: plan-grill
-description: Stress-test vague, high-impact, research-facing, advisor-facing, or cross-surface ARIA-NBV decisions before implementation, including theory-rich or elaborate Plan Mode option analysis when requested.
+name: aria-grill
+description: Stress-test vague, high-impact, research-facing, advisor-facing, or cross-surface ARIA-NBV decisions before implementation; use as the ARIA gateway for progressively disclosed architecture, interface, static-diagram, and interactive-visualization capabilities.
 metadata:
   mode: router
   not_when:
@@ -42,7 +42,7 @@ metadata:
     - "docs/contents/thesis/roadmap.qmd"
     - "docs/contents/thesis/questions.qmd"
     - ".agents/memory/state/PROJECT_STATE.md"
-    - ".agents/skills/plan-grill/references/plan-mode-theory-patterns.md"
+    - ".agents/skills/aria-grill/references/plan-mode-theory-patterns.md"
   context7_refs:
     - "/pytorch/pytorch"
     - "/facebookresearch/pytorch3d"
@@ -61,16 +61,7 @@ metadata:
     - "decision-complete plan with assumptions and deferred decisions"
 ---
 
-# Plan Grill
-
-## When To Use
-
-Use this skill before implementing ambiguous or high-impact work:
-
-- thesis scope, advisor-facing claims, or roadmap changes
-- entity-aware RRI, target-conditioned VIN, rollout/RL, or simulator choices
-- docs/public-internal partitioning, scaffold changes, or KG architecture
-- broad cleanup where ownership, compatibility, or evidence bar is unclear
+# Aria Grill
 
 ## Grounding
 
@@ -81,6 +72,24 @@ Use `docs/typst/shared/glossary.typ` for overloaded terms and the nearest
 
 For optional upstream questioning patterns, see
 `references/upstream-mattpocock.md`; keep ARIA source-order owners canonical.
+
+## Progressive Capability Routing
+
+Repository policy routes implicit ARIA use through Aria Grill; explicit user
+invocation overrides it. Select only the smallest material capability:
+
+- `codebase-design`: boundary vocabulary and comparison; use its
+  `DESIGN-IT-TWICE` workflow to compare materially different public interfaces.
+- `improve-codebase-architecture`: evidence-backed broader architecture scan.
+- `domain-modeling`: vocabulary, entities, value objects, or domain boundaries.
+- `aria-nbv-mermaid`: accepted static diagrams maintained in the repository.
+- `visualize`: interactive, dynamic, or spatial explanation needing more than
+  static prose or Mermaid.
+
+When selecting a capability, explicitly invoke its available installed skill.
+If it is unavailable, state that limitation and continue with source-grounded
+local analysis. Return accepted conclusions to the source-order owner; create
+no wrappers or parallel truth surfaces.
 
 ## Plan-Mode Modifiers
 
@@ -116,6 +125,9 @@ Keep the default path concise unless one of these modifiers applies.
 
 ## Interview Rules
 
+- Until shared understanding is reached and the user accepts a decision-
+  complete plan, perform only read-only grounding and questions. Do not
+  implement or write durable glossary, decision, roadmap, or guidance changes.
 - Ask one material decision at a time.
 - State the recommended answer with the tradeoff.
 - Under `elaborate` or `theory-rich`, explain answer-option tradeoffs before
@@ -134,11 +146,5 @@ Keep the default path concise unless one of these modifiers applies.
 
 ## Output
 
-End with a decision-complete plan that names:
-
-- goal and success criteria
-- in/out of scope
-- public interfaces or docs surfaces affected
-- implementation packages
-- verification commands
-- assumptions and deferred decisions
+End with a decision-complete plan naming the goal, success criteria, scope,
+affected owners, verification, assumptions, and deferred decisions.

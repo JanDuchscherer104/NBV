@@ -1,0 +1,4 @@
+interface:
+  display_name: "Aria Grill"
+  short_description: "Stress-test consequential ARIA decisions"
+  default_prompt: "Use $aria-grill to stress-test this ARIA-NBV decision and produce a source-grounded, decision-complete plan."

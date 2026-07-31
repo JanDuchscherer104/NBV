@@ -230,7 +230,7 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
-
+	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
 

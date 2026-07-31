@@ -7,8 +7,10 @@
 [projects."/absolute/path/to/ARIA-NBV"]
 trust_level = "trusted"
 
-# Keep repo-specific MCP/runtime configuration operator-local. The checked-in
-# .codex-plugin already declares the portable MemPalace plugin surface.
+# Repository skills are discovered directly from .agents/skills and are not
+# namespaced by an unrelated plugin. Optional MemPalace MCP access lives in the
+# repo marketplace at .agents/plugins/marketplace.json; it requires the global
+# `mempalace-mcp` executable and does not own skills or hooks.
 #
 # Matt Pocock skills are installed outside this repo, for example:
 #   npx skills@latest add mattpocock/skills

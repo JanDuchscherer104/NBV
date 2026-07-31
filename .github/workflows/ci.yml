@@ -104,7 +104,7 @@ jobs:
 
       - name: Validate agent scaffold and memory
         if: steps.impact.outputs.scaffold == 'true'
-        run: make agents-db-validate check-agent-memory
+        run: make agents-db-validate check-agent-memory scaffold-audit-self-test
 
       - name: Validate package contracts
         if: steps.impact.outputs.package == 'true'
