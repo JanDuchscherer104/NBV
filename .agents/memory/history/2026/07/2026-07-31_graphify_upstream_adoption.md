@@ -2,7 +2,7 @@
 id: 2026-07-31_graphify_upstream_adoption
 date: 2026-07-31
 title: "Graphify Upstream Adoption"
-status: in-progress
+status: complete
 topics: [graphify, scaffold, tooling, projection]
 confidence: high
 canonical_updates_needed: []
@@ -33,6 +33,7 @@ artifacts:
   - "commit:aee82c30"
   - "commit:121dd235"
   - "commit:8f3202c8"
+  - "pull-request:https://github.com/JanDuchscherer104/ARIA-NBV/pull/45"
   - ".omx/plans/graphify-thin-adapter.md"
   - ".omx/plans/test-spec-graphify-thin-adapter.md"
 ---
@@ -127,10 +128,9 @@ make Graphify a repository or CI prerequisite.
   guidance consumers. Commit `121dd235` owns the final lifecycle deletion and
   consumer repair.
 - **Deferred:** none inside the repository implementation.
-- **Open:** publish the committed branch, create the PR, monitor exact-head
-  hosted CI, and change this debrief to `complete`. The upstream proof,
-  lifecycle deletion, consumer repair, and local verification are complete;
-  final independent review clearance is being rerun after debrief repair.
+- **Open:** none. The upstream proof, lifecycle deletion, consumer repair,
+  local verification, independent review, publication, and hosted-CI gate are
+  complete.
 
 ## Verification
 
@@ -180,5 +180,8 @@ verification is complete; publication, PR creation, and hosted CI remain open.
 No additional canonical-state file is required. The committed guidance and
 human-owner-intent changes own the optional-tool and option-3 projection
 boundary. Upstream consumption proof, authorized deletion, consumer repair, and
-local verification are complete. This record remains `in-progress` until final
-review clearance, publication, and hosted-CI completion.
+local verification are complete. Independent code review returned `APPROVE`,
+Architect verification returned `CLEAR`, and PR #45 Root Verification passed at
+publication head `6c0eafa99242398404effe85bac639798ad12834` in 10m24s. This
+closure-only record is covered by the same required exact-head check before
+merge.
