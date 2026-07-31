@@ -5,7 +5,7 @@
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test python-standards-ratchet check-agent-memory new-debrief install-git-hooks install-hooks
 .PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -225,12 +225,20 @@ migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into 
 codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
 
+PYTHON_STANDARDS_BASE ?= origin/main
+PYTHON_STANDARDS_DIFF_MODE ?= all
+
+python-standards-ratchet: _check_python ## 🐍 Reject new docstring findings in changed package files
+	@$(PYTHON_INTERPRETER) .agents/skills/python-standards/scripts/audit_docstrings.py --git-base "$(PYTHON_STANDARDS_BASE)" --diff-mode "$(PYTHON_STANDARDS_DIFF_MODE)" --format json
+
 scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_python_standards_ratchet.py
+
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
 

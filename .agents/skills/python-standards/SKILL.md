@@ -104,8 +104,19 @@ cross-references, equations, and Quartodoc rendering constraints.
    [references/tensor-shapes.md](./references/tensor-shapes.md).
 7. Trim boilerplate. Remove empty sections and filler prose. Avoid `Raises:`
    unless callers genuinely need to rely on or handle the failure contract.
-8. Optionally audit. Run [scripts/audit_docstrings.py](./scripts/audit_docstrings.py)
-   to find missing or suspiciously short docstrings before or after a refactor.
+8. Audit touched package files against a Git baseline with
+   `make python-standards-ratchet PYTHON_STANDARDS_BASE=origin/main`. The
+   default `all` mode independently checks merge-base -> `HEAD`, `HEAD` ->
+   index, and index -> worktree, including untracked additions. It fails only
+   for findings absent from each transition's predecessor, so a later edit
+   cannot hide a staged regression. Set `PYTHON_STANDARDS_DIFF_MODE` to
+   `committed`, `staged`, or `unstaged` for one hook or CI state. The same
+   auditor checks adjacent docstrings on public annotated class fields and
+   supports deterministic JSON for machine consumers; direct path audits
+   remain available through
+   [scripts/audit_docstrings.py](./scripts/audit_docstrings.py).
+   This target introduces the executable ratchet; required CI pipelines must
+   invoke it explicitly.
 
 ## Writing Rules
 
