@@ -102,8 +102,7 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Native debriefs must follow `.agents/memory/README.md` and
   include `canonical_updates_needed` even when the list is empty.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
-  bucket; only checked-in `.codex/*.example.*` templates are allowed, except
-  the intentionally vendored `.codex/skills/graphify/**` project skill.
+  bucket; only checked-in `.codex/*.example.*` templates are allowed.
 
 ## Graphify
 
@@ -117,5 +116,11 @@ revision does not match the task, continue with exact-source discovery.
 Build the ignored evidence projection with
 `python3 scripts/build_graphify_projection.py`, setting
 `--output graphify-input` and `--aria-code-ref <full-sha-or-release-tag>`.
-Then use unmodified upstream Graphify on the corpus selected by
-`.graphifyignore`.
+The repository supplies all project-side setup. After merge, an operator needs
+only a normal user-installed upstream Graphify tool/skill (install it if
+absent) and an authenticated Codex session via `codex login`, then invokes
+`$graphify` on the corpus selected by `.graphifyignore`. The unmodified upstream
+skill may dispatch authenticated Codex subagents for semantic extraction. Never
+export a ChatGPT/Codex token, reuse it as `OPENAI_API_KEY`, add repository
+secrets, or introduce a Graphify fork, repository-owned package import, or
+local lifecycle.

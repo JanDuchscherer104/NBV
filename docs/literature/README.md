@@ -73,8 +73,15 @@ revision used for navigation:
 python3 scripts/build_graphify_projection.py \
   --output graphify-input \
   --aria-code-ref "$(git rev-parse HEAD)"
-graphify .
 ```
+
+All repository-side setup is included here. With the normal user-installed
+upstream Graphify tool and skill available, authenticate the Codex host once
+with `codex login` and invoke `$graphify` from the repository root. The
+unmodified upstream skill can use authenticated Codex subagents to extract the
+projection Markdown and then run Graphify's normal build/read surfaces. Do not
+export a ChatGPT/Codex token, map it to `OPENAI_API_KEY`, add a repository
+secret, or install a repository-local Graphify fork or lifecycle.
 
 Before relying on a query, path, or explanation, confirm the
 `source_revision` in `graphify-input/index.md` and verify consequential claims

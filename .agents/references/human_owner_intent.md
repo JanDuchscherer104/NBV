@@ -86,6 +86,14 @@ or repeatable workflows.
   asset identities. The projection is ignored, reproducible, and derived; it
   must not grow into a parser framework, graph schema, query layer, lifecycle
   manager, or alternative source of truth.
+- The Graphify replacement branch carries all repository-side setup. After
+  merge, the only external operator steps are normal Codex authentication and,
+  if absent, installing the unmodified user-scoped upstream Graphify tool/skill.
+  Semantic extraction may use authenticated Codex host subagents. Never export
+  or reuse a ChatGPT/Codex token as `OPENAI_API_KEY` or another provider API
+  key, add repository or CI secrets, introduce a Graphify fork,
+  repository-owned package import, hook/freshness lifecycle, or patch generated
+  graph output.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
   and private retrieval corpora untracked. At most one deterministic,
   pattern-sanitized, commit-scoped conversation slice may be tracked for a

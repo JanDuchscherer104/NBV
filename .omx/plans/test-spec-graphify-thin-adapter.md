@@ -246,12 +246,16 @@ This must pass before legacy deletion or PR publication:
 
 1. Confirm upstream Graphify 0.9.31 or re-review a newer version and capture
    exact `graphify extract --help` output relevant to document extraction.
-2. Determine whether upstream offers a backend-free path that genuinely parses
-   Markdown. `--code-only` is acceptable only if evidence proves it consumes
-   projection Markdown; its name alone is not evidence.
-3. Build the live projection, then run the smallest public fresh extraction
-   command into a disposable directory. If Markdown requires a semantic
-   backend, use only an already-authorized backend.
+2. Confirm the normal user-installed upstream Graphify skill/tool is available
+   and the host Codex session is authenticated with `codex login`. The
+   repository supplies every project-side setup surface.
+3. Build the live projection, then invoke the unmodified upstream `$graphify`
+   skill. It may dispatch authenticated Codex subagents to produce semantic
+   JSON before running the ordinary upstream Graphify build into a disposable
+   directory. Never export a ChatGPT/Codex token, reuse it as
+   `OPENAI_API_KEY`, add repository secrets, or use a Graphify fork,
+   repository-owned package import, or repository-owned lifecycle. The
+   unmodified user-scoped skill may use its upstream package implementation.
 4. Prove from the fresh manifest/report/read-side CLI that:
    - projection Markdown inputs were consumed;
    - native Python nodes remain present;
@@ -264,14 +268,16 @@ This must pass before legacy deletion or PR publication:
    and assert a file-to-file `references` edge whose two `source_file` values
    equal the expected literature and asset projection Markdown files. Public
    output is test evidence only and is never modified.
-6. Record Graphify version, exact command, backend class (never secret), source
-   revision, both H1 labels, both `source_file` values, output root, and observed
-   edge; then remove temp output.
+6. Record Graphify version, exact upstream command, Codex-subagent semantic
+   extraction route (never credential material), source revision, both H1
+   labels, both `source_file` values, output root, and observed edge; then
+   remove temp output.
 
 An old graph, read-only query without fresh extraction, manifest filename alone,
-or a code-only run that omitted Markdown fails this gate. If no authorized
-backend/backend-free path exists, retain the dormant legacy lifecycle and do
-not publish the replacement PR. Do not add CI credentials or patch graph JSON.
+or a code-only run that omitted Markdown fails this gate. If the authenticated
+upstream skill route cannot produce the proof without forbidden credential or
+local-lifecycle work, retain the dormant legacy lifecycle and do not publish
+the replacement PR. Do not add CI credentials or patch graph JSON.
 
 ## Verification sequence
 

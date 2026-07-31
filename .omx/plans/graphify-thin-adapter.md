@@ -5,6 +5,8 @@ owner: scaffold-tooling
 decision: upstream-plus-one-thin-adapter
 context: .omx/context/graphify-thin-adapter-20260731T175054Z.md
 test_spec: .omx/plans/test-spec-graphify-thin-adapter.md
+upstream_gate_route: user-installed-graphify-0.9.31-codex-host-subagents
+external_runtime_requirement: authenticated-codex-session
 ---
 
 # Upstream Graphify with one thin source-link projection
@@ -21,6 +23,14 @@ Graphify may ingest native code/docs plus the ignored projection.
 Exact sources remain authoritative and fully usable without Graphify. No
 Graphify install, graph refresh, freshness check, hook, semantic backend, or
 generated output becomes a repository or CI prerequisite.
+
+The branch contains all repository-side setup. After merge, the operator needs
+only `codex login` and the normal user-installed upstream Graphify tool/skill if
+it is not already present. The unmodified upstream skill may dispatch
+authenticated Codex subagents to produce semantic extraction JSON before
+running Graphify's upstream build. No ChatGPT/Codex token is exported or reused
+as `OPENAI_API_KEY`; no repository secret, Graphify fork, repository-owned
+Graphify package import, or second lifecycle is introduced.
 
 ## Success criteria
 
@@ -53,9 +63,11 @@ generated output becomes a repository or CI prerequisite.
 9. Fresh local verification and exact pushed-head hosted CI are green. The PR
    contains no thesis scientific prose, package semantics, generated graph,
    local PDF/TeX churn, or user-scoped installation state.
-10. A real upstream Graphify extraction consumes the generated Markdown and
-    proves one expected proxy traversal before the legacy lifecycle is deleted
-    or the replacement PR is published.
+10. A real unmodified upstream Graphify skill run consumes the generated
+    Markdown, using authenticated Codex subagents for semantic JSON when
+    needed, and proves one expected proxy traversal through public
+    `graphify path` or read-only public graph JSON before the legacy lifecycle
+    is deleted or the replacement PR is published.
 
 ## Non-goals
 
@@ -599,12 +611,14 @@ debrief/transcript references remain provenance and are not rewritten.
    paths. Do not weaken matching rules to improve coverage.
 3. Compile/query the active thesis independently, including separate `cite`,
    `link`, and `heading` queries.
-4. With user-installed upstream Graphify 0.9.31, first inspect exact CLI help
-   and determine whether Markdown structural extraction can run without a
-   semantic backend. Run the smallest public command that actually consumes
-   the projection; if full document extraction requires a backend, use only an
-   already-authorized backend. Record the exact command and evidence. Then
-   prove:
+4. With user-installed upstream Graphify 0.9.31, invoke the unmodified upstream
+   `$graphify` skill from a Codex session authenticated by `codex login`. Allow
+   that skill to dispatch authenticated Codex subagents for semantic JSON, then
+   run its normal upstream Graphify build. Record the exact upstream commands,
+   subagent-backed extraction evidence, and Graphify version. Never export the
+   ChatGPT/Codex token, reuse it as `OPENAI_API_KEY`, add a repository secret,
+   or introduce a Graphify fork, repository-owned package import, or lifecycle.
+   Then prove:
    - native Python nodes remain present;
    - projection Markdown pages are present;
    - one exact literature full-identity H1 and its linked asset-proxy
@@ -791,27 +805,29 @@ make graphify-projection-self-test
 git diff --check
 ```
 
-Required upstream 0.9.31 consumption gate, into a disposable directory and
-never tracked:
+Required upstream 0.9.31 consumption gate, dispatched through the unmodified
+user-installed `$graphify` skill in a `codex login` authenticated session and
+written only to a disposable directory:
 
 ```bash
 graphify --version
-graphify extract . --no-cluster --out /tmp/aria-graphify-option3
 graphify path "<exact literature full-identity H1>" \
   "<exact asset full-identity H1>" \
   --graph /tmp/aria-graphify-option3/graphify-out/graph.json
 ```
 
-The executor first checks exact 0.9.31 CLI help and uses a backend-free Markdown
-extraction path if upstream supports one. Otherwise an already authorized
-backend is required. The evidence must show that this fresh command consumed
-`graphify-input/**/*.md` and that `path` traverses between the exact generated
-literature and asset full-identity H1 labels. If public CLI output is
-insufficient, read the fresh public graph JSON without modifying it and assert
-the file-to-file `references` edge with both expected projection `source_file`
-values. Code-only extraction, an old graph, or manifest presence without the
-edge is insufficient. Do not import Graphify's package or add
-credentials/installation to hosted CI.
+The upstream skill dispatches authenticated Codex subagents for the Markdown
+semantic JSON, then performs the ordinary upstream Graphify build. Evidence
+must show that the fresh build consumed `graphify-input/**/*.md` and that public
+`graphify path` traverses between the exact generated literature and asset
+full-identity H1 labels. If public CLI output is insufficient, read the fresh
+public graph JSON without modifying it and assert the file-to-file `references`
+edge with both expected projection `source_file` values. Code-only extraction,
+an old graph, or manifest presence without the edge is insufficient. Do not
+export a ChatGPT/Codex token, set it as `OPENAI_API_KEY`, add repository/CI
+secrets, add a repository-owned Graphify package import, or add Graphify
+installation/execution to hosted CI. The unmodified user-scoped skill may use
+its own upstream package implementation.
 
 Hosted CI must run `graphify-projection-self-test` unconditionally whenever the
 docs job runs. Impact routing must select docs for the builder, its test,
@@ -868,8 +884,9 @@ gh pr view <pr-number> --json headRefOid,mergeable,reviewDecision,statusCheckRol
 - [ ] Legacy Graphify lifecycle and every live consumer are deleted.
 - [ ] A fresh real upstream extraction consumed the projection and proved one
       exact literature-H1 to asset-H1 `references` edge, with both expected
-      fresh projection `source_file` values, before that deletion; otherwise
-      the dormant lifecycle is retained and no replacement PR is published.
+      fresh projection `source_file` values, after semantic JSON was produced
+      by authenticated Codex subagents, before that deletion; otherwise the
+      dormant lifecycle is retained and no replacement PR is published.
 - [ ] Root/hosted CI contains no Graphify install, hook, refresh, or freshness
       requirement.
 - [ ] Credential-free docs CI runs `graphify-projection-self-test`
@@ -905,7 +922,7 @@ gh pr view <pr-number> --json headRefOid,mergeable,reviewDecision,statusCheckRol
 | Generated output stales | Embed revision/dirty state and source hashes; never claim freshness; rebuild explicitly. |
 | Output swap is interrupted | Caught failures restore the in-process backup; `--check` reports debris; a later normal build discards stale temp/backup and rebuilds. No completion marker or persistent recovery state. |
 | Rebase resurrects mandatory Graphify | Resolve against target-state/user selection and run forbidden-live-consumer searches. |
-| CI becomes dependent on Graphify/backend | CI tests only the standard-library adapter and mocked Typst runner; no Graphify install or semantic credential. |
+| CI becomes dependent on Graphify/auth | CI tests only the standard-library adapter and mocked Typst runner; `codex login` and the user-installed upstream skill remain operator-scoped. |
 | Adapter expands toward graph schema | No `graphify.*` imports, graph JSON writes, merge/global calls, watcher, or hook; enforce by tests/search. |
 | Deletion loses unique behavior | A real upstream extraction precedes deletion; if it cannot run or prove traversal, keep the dormant lifecycle and publish nothing. |
 
@@ -966,8 +983,10 @@ measured build-time budget becomes a requirement.
 
 Stop and escalate rather than broaden the adapter if:
 
-- upstream 0.9.31 cannot consume ordinary projection Markdown without a local
-  graph-schema patch;
+- the unmodified upstream skill plus authenticated Codex subagents cannot
+  produce a fresh projection graph without a local Graphify fork,
+  repository-owned package import, graph-schema patch, exported ChatGPT/Codex
+  token, `OPENAI_API_KEY` reuse, or repository secret;
 - deterministic identity fields cannot join the needed source record;
 - fulfilling a requested link requires parsing scientific TeX/PDF content;
 - a new thesis-to-code semantic link is needed but absent from an owning thesis

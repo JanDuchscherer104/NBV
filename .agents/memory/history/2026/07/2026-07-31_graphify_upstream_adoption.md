@@ -2,7 +2,7 @@
 id: 2026-07-31_graphify_upstream_adoption
 date: 2026-07-31
 title: "Graphify Upstream Adoption"
-status: blocked
+status: in-progress
 topics: [graphify, scaffold, tooling, projection]
 confidence: high
 canonical_updates_needed: []
@@ -76,32 +76,53 @@ make Graphify a repository or CI prerequisite.
 - Ruff formatting, default lint, and the strict complexity selection passed;
   mypy passed for the adapter and its tests. The focused scaffold checks and
   agent-memory validation also passed.
-- The required upstream-consumption proof is blocked. Graphify 0.9.31's public
-  `extract` command detected 237 code files and 364 semantic files, but rejects
-  document extraction without a working semantic backend. The installed
-  `claude-cli` backend returned an expired-OAuth `401`; all five semantic chunks
-  failed, so no projection nodes or expected reference edge were produced.
-- `graphify update` is code-only and therefore cannot provide the missing
-  Markdown-consumption proof.
+- The first upstream-consumption attempt did not prove the edge. Graphify
+  0.9.31's public `extract` command detected 237 code files and 364 semantic
+  files, while the attempted `claude-cli` backend returned an expired-OAuth
+  `401`; all five semantic chunks failed, so no projection nodes or expected
+  reference edge were produced.
+- The approved continuation uses the unmodified user-installed upstream
+  `$graphify` skill in a `codex login` authenticated session. Its authenticated
+  Codex subagents may produce semantic JSON before the normal upstream build.
+  No ChatGPT/Codex token export, `OPENAI_API_KEY` reuse, repository secret,
+  Graphify fork, repository-owned Graphify package import, or repository-owned
+  lifecycle is permitted.
+- The hard upstream-consumption gate passed at source HEAD
+  `3016d6c629a732dac30769039f734ff5496ad3f2` with Graphify 0.9.31 and
+  disposable output `/tmp/aria-graphify-codex-proof.EjW8rf`. An authenticated
+  Codex host subagent produced the semantic JSON; no provider API-key
+  environment variable participated.
+- The fresh graph contains 60 nodes and 117 edges, including 51 native Python
+  nodes from `aria_nbv/aria_nbv/lightning/qh_module.py`. Public `graphify path`
+  reported a one-hop `EXTRACTED` `references` edge from
+  `literature:arxiv:1509.06461` to
+  `pdf:docs/literature/pdf/Double-DQN.pdf`, with literature locator L8 and the
+  expected source files
+  `graphify-input/literature/literature-arxiv-1509-06461-346065ae69ea.md` and
+  `graphify-input/assets/pdf-docs-literature-pdf-double-dqn-pdf-fd61d0aa14bb.md`.
+  The proof used no token export, API key, repository secret, Graphify fork,
+  repository-owned Graphify package import, or graph patch.
 
 ## Dispositions
 
 - **Retained:** exact source owners, source verification, optional upstream
   Graphify, ignored generated projection state, and the dormant legacy
-  lifecycle until the upstream proof succeeds.
+  lifecycle temporarily until the now-unblocked deletion work is completed and
+  verified.
 - **Replaced:** the former unresolved three-option decision gate with the
   explicit option-3 target and its implemented deterministic Markdown
   projection boundary.
 - **Removed:** mandatory Graphify routing, normal hook installation, and
   required root/hosted-CI Graphify execution from the earlier decoupling
   change at `9d085d99`. No legacy Graphify implementation was deleted in this
-  blocked phase.
-- **Deferred:** deletion of the vendored skill and custom lifecycle, repair of
-  their remaining Make/CI/hook/guidance consumers, independent final review,
-  publication, PR creation, and hosted-CI monitoring.
-- **Open:** obtain an authorized working semantic backend or a genuine
-  backend-free upstream path, rerun the real 0.9.31 projection-edge proof, and
-  resume G006 only if that hard gate passes. G005 remains pending behind G006.
+  in-progress phase.
+- **Deferred:** publication, PR creation, and hosted-CI monitoring remain
+  pending until the now-authorized legacy deletion, consumer repair, and final
+  independent review are complete.
+- **Open:** remove the vendored skill and custom lifecycle, repair their
+  remaining Make/CI/hook/guidance consumers, rerun repository verification and
+  final review, then publish and monitor exact-head hosted CI. The upstream
+  proof itself is complete.
 
 ## Verification
 
@@ -113,14 +134,30 @@ complexity selection, mypy over the adapter and its tests, live `--check` over
 Typst compile plus `cite`/`link`/`heading` queries, focused scaffold checks, and
 `make check-agent-memory`. The pre-gate review has no unresolved P0--P2
 findings. The failed Graphify probe is preserved in the Ultragoal ledger as
-G006 evidence: the installed Claude backend still returns expired-OAuth `401`.
-Per the approved stop rule, the failure caused no legacy deletion, push, PR,
-hosted-CI run, or claim of completion.
+G006 evidence: the earlier installed Claude backend returned expired-OAuth
+`401`.
+
+The replacement proof then passed with Graphify 0.9.31 at source HEAD
+`3016d6c629a732dac30769039f734ff5496ad3f2`, using the disposable root
+`/tmp/aria-graphify-codex-proof.EjW8rf`. Authenticated Codex-host subagent
+semantic JSON fed a fresh 60-node/117-edge graph containing 51 native Python
+nodes from `aria_nbv/aria_nbv/lightning/qh_module.py`. Public `graphify path`
+showed the exact one-hop `EXTRACTED` `references` relation between
+`literature:arxiv:1509.06461` (literature L8) and
+`pdf:docs/literature/pdf/Double-DQN.pdf`, backed by the expected repo-relative
+projection source files
+`graphify-input/literature/literature-arxiv-1509-06461-346065ae69ea.md` and
+`graphify-input/assets/pdf-docs-literature-pdf-double-dqn-pdf-fd61d0aa14bb.md`.
+No token was exported, no provider API key or repository secret participated,
+and no Graphify fork, repository-owned Graphify package import, or graph patch
+was used. This satisfies
+the hard upstream-consumption gate but does not claim legacy deletion,
+publication, PR creation, or hosted CI complete.
 
 ## Canonical-State Impact
 
 No additional canonical-state file is required. The committed guidance and
 human-owner-intent changes own the optional-tool and option-3 projection
-boundary. This record remains `blocked` until upstream document consumption is
-proved and the retained/deferred work is either completed or explicitly
-replanned.
+boundary. This record remains `in-progress` until upstream document consumption
+proof is followed by the authorized deletion, final review, publication, and
+hosted-CI completion work.
