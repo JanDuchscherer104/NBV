@@ -249,7 +249,32 @@ def test_default_ci_keeps_graphify_integration_opt_in() -> None:
     )
 
     assert "graphify-integration-self-test" not in ci_line
+    assert "graphify-skill-self-test" not in ci_line
     assert "graphify-integration-self-test" in graphify_line
+    assert "graphify-skill-self-test" in graphify_line
+
+
+def test_default_hook_install_keeps_graphify_dispatch_opt_in() -> None:
+    makefile = (integration.ROOT / "Makefile").read_text(encoding="utf-8")
+    install_hooks_line = next(
+        line for line in makefile.splitlines() if line.startswith("install-hooks:")
+    )
+    graphify_hook_line = next(
+        line
+        for line in makefile.splitlines()
+        if line.startswith("install-graphify-git-hook:")
+    )
+    normal_hook_recipe = makefile.split("install-git-hooks:", 1)[1].split(
+        "\ninstall-graphify-git-hook:", 1
+    )[0]
+    graphify_hook_recipe = makefile.split("install-graphify-git-hook:", 1)[1].split(
+        "\ninstall-hooks:", 1
+    )[0]
+
+    assert "install-graphify-git-hook" not in install_hooks_line
+    assert '[ "$$name" = post-commit ] && continue' in normal_hook_recipe
+    assert "post-commit" in graphify_hook_line
+    assert "scripts/git_hooks/post-commit" in graphify_hook_recipe
 
 
 def main() -> None:
@@ -260,6 +285,7 @@ def main() -> None:
     test_extract_failure_diagnostic()
     test_semantic_policy_requires_reinclude_rules()
     test_default_ci_keeps_graphify_integration_opt_in()
+    test_default_hook_install_keeps_graphify_dispatch_opt_in()
 
 
 if __name__ == "__main__":

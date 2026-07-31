@@ -5,8 +5,8 @@
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
-.PHONY: agents-db glossary
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-graphify-git-hook install-hooks
+.PHONY: memory-mine agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
 .PHONY: offline-info offline-tree offline-samples offline-random-index offline-rerun-random offline-sample-rerun-random
@@ -240,7 +240,7 @@ graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, f
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
 	@./scripts/tests/test_post_commit_graph_dispatch.sh
 
-graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
+graphify-ci: graphify-skill-self-test graphify-integration-self-test ## 🕸️ Run opt-in Graphify comparison checks (requires pinned graphifyy)
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
@@ -255,7 +255,7 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
 	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
 
-install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
+install-git-hooks: ## 🪝 Symlink normal scripts/git_hooks/* into .git/hooks/
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
 		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
@@ -264,12 +264,23 @@ install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto
 	for hook in scripts/git_hooks/*; do \
 		[ -f "$$hook" ] || continue; \
 		name=$$(basename "$$hook"); \
+		[ "$$name" = post-commit ] && continue; \
 		target="$$HOOK_DIR/$$name"; \
 		ln -sf "$(CURDIR)/$$hook" "$$target" && \
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
 
-install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Codex, Gemini, and git
+install-graphify-git-hook: ## 🕸️ Opt in to the dormant Graphify post-commit dispatcher
+	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
+	if [ -z "$$HOOK_DIR" ]; then \
+		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
+	fi; \
+	mkdir -p "$$HOOK_DIR"; \
+	target="$$HOOK_DIR/post-commit"; \
+	ln -sf "$(CURDIR)/scripts/git_hooks/post-commit" "$$target" && \
+		echo "$(GREEN)linked $$target -> $(CURDIR)/scripts/git_hooks/post-commit$(NC)"
+
+install-hooks: install-git-hooks ## 🪝 Activate normal Codex, Gemini, and git hooks
 	@if [ ! -f .codex/hooks.json ]; then \
 		cp .codex/hooks.example.json .codex/hooks.json && \
 			echo "$(GREEN)copied .codex/hooks.example.json -> .codex/hooks.json$(NC)"; \
@@ -727,7 +738,7 @@ package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contrac
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

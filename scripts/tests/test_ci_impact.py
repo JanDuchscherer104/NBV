@@ -29,6 +29,9 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
         self.assertNotIn("ci-gate", workflow)
+        self.assertNotIn("Install Graphify", workflow)
+        self.assertNotIn("Validate Graphify", workflow)
+        self.assertNotIn('pip install "graphifyy==', workflow)
 
     def test_representative_narrow_and_overlap_paths(self) -> None:
         cases = {

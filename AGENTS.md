@@ -107,9 +107,11 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Graphify is the default ARIA-NBV navigation graph when
-`graphify-out/graph.json` exists. The graph is generated local state and should
-remain untracked unless a later artifact or LFS policy changes that.
+Graphify is an optional local navigation aid, not a prerequisite for repository
+work. When it is installed and a local graph is useful, use `graphify query`,
+`graphify path`, or `graphify explain`, then verify material claims in the exact
+owning source. If Graphify is absent, stale, or fails, use exact-source discovery
+and continue without refreshing it.
 
 The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
 package code, docs, and important `.agents/` references/memory/backlog. It
@@ -117,23 +119,7 @@ excludes runtime state, external repos, generated docs/sites, caches, large
 media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
 `.agents/skills/`, `aria_nbv/scripts/`, and `aria_nbv/tests/`.
 
-Rules:
-- For architecture, codebase, file-relationship, or project-content questions,
-  first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
-  succeeds, use `graphify query "<question>"`; otherwise fall back to the
-  owning source files until the graph is refreshed. Use
-  `graphify path "<A>" "<B>"` for relationships and
-  `graphify explain "<concept>"` for focused concepts.
-- Dirty `graphify-out/` files are expected after hooks or incremental updates;
-  dirty graph files are not a reason to skip Graphify. Only skip Graphify if
-  the task is about stale or incorrect graph output, or the user explicitly says
-  not to use it.
-- If `graphify-out/wiki/index.md` exists, use it for broad navigation before
-  raw source browsing. Read `graphify-out/GRAPH_REPORT.md` for broad
-  architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `python3 scripts/graphify_refresh.py` with the
-  changed paths in `GRAPHIFY_CHANGED`, or run `graphify update .` followed by
-  the freshness check. Documentation, paper, and diagram changes set
-  `graphify-out/needs_update`; refresh them with the Graphify extraction
-  workflow, whose completion records the current policy digest, before treating
-  semantic links as current.
+The vendored skill, custom scripts/tests, and tracked post-commit dispatcher are
+a dormant comparison candidate pending the Graphify ownership decision. They
+run only through explicit opt-in targets and do not belong to normal routing,
+hook installation, completion checks, or CI.
