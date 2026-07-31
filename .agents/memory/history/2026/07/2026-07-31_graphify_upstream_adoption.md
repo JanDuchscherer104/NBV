@@ -13,6 +13,7 @@ files_touched:
   - .agents/references/human_owner_intent.md
   - .gitignore
   - .graphifyignore
+  - Makefile
   - scripts/build_graphify_projection.py
   - scripts/tests/test_build_graphify_projection.py
 artifacts:
@@ -43,6 +44,18 @@ the approved plan and test specification, `63323508` locks the projection
 contract with fixture-first tests, and `aee82c30` implements the standard-library
 projection builder plus its narrow corpus and owner guidance.
 
+The subsequent pre-gate review repaired all eight accepted findings before the
+external upstream-consumption gate: citation ownership is source-local while
+compiled multiplicity remains global; `gh-symbol` reconciliation accepts only
+the exact repository/language/symbol search URL; Typst verification uses a
+unique external scratch directory; output installation rejects symlinked
+ancestors and physical escapes; unresolved `main` no longer falls back to
+`HEAD`; the stale `memory-mine` phony target was removed; the index records the
+configured code ref's pin kind, resolved OID, entity count, and per-family
+counts; and the fixture matrix plus mypy coverage was expanded. The renderer,
+Typst-closure reader, and narrow BibTeX reader were also split into factual
+helpers so the strict complexity selection passes without adding a framework.
+
 The builder consumes the active Typst thesis closure, both bibliography
 owners, `docs/literature/sources.jsonl`, explicit thesis code-link macros, and
 declared local PDF/TeX identities. It emits ignored Markdown proxy pages only;
@@ -51,12 +64,18 @@ make Graphify a repository or CI prerequisite.
 
 ## Findings
 
-- All 21 hermetic projection tests passed.
+- All 33 hermetic adapter unit tests passed. The broader focused pytest slice,
+  including scaffold contracts, passed all 37 tests.
 - Live `--check` validation and two builds produced byte-identical ignored
   projections containing 288 Markdown pages at the exact branch head.
 - An independent Typst compile and the configured `cite`, `link`, and `heading`
   queries passed, so the projection was checked against compiled thesis
   evidence rather than lexical scanning alone.
+- The independent pre-gate code review has no unresolved P0--P2 findings after
+  the eight accepted repairs.
+- Ruff formatting, default lint, and the strict complexity selection passed;
+  mypy passed for the adapter and its tests. The focused scaffold checks and
+  agent-memory validation also passed.
 - The required upstream-consumption proof is blocked. Graphify 0.9.31's public
   `extract` command detected 237 code files and 364 semantic files, but rejects
   document extraction without a working semantic backend. The installed
@@ -86,12 +105,17 @@ make Graphify a repository or CI prerequisite.
 
 ## Verification
 
-The completed implementation evidence comprises 21 passing tests, Ruff-clean
-changed Python, two byte-identical 288-page live builds, live `--check`, and an
-independent Typst compile plus `cite`/`link`/`heading` queries. The failed
-Graphify probe is preserved in the Ultragoal ledger as G006 evidence. Per the
-approved stop rule, the failure caused no legacy deletion, push, PR, or hosted
-CI attempt.
+The completed implementation evidence comprises 33 passing adapter unit tests,
+37 passing focused pytest cases including scaffold coverage, Ruff format and
+default lint, the clean `C901`/`PLR0911`/`PLR0912`/`PLR0913`/`PLR0915` strict
+complexity selection, mypy over the adapter and its tests, live `--check` over
+288 generated Markdown pages, two byte-identical live builds, an independent
+Typst compile plus `cite`/`link`/`heading` queries, focused scaffold checks, and
+`make check-agent-memory`. The pre-gate review has no unresolved P0--P2
+findings. The failed Graphify probe is preserved in the Ultragoal ledger as
+G006 evidence: the installed Claude backend still returns expired-OAuth `401`.
+Per the approved stop rule, the failure caused no legacy deletion, push, PR,
+hosted-CI run, or claim of completion.
 
 ## Canonical-State Impact
 
