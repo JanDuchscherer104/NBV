@@ -44,6 +44,7 @@ class ImpactPolicy:
 
     tiers: tuple[str, ...]
     full_paths: tuple[str, ...]
+    no_tier_paths: tuple[str, ...]
     labels: Mapping[str, frozenset[str]]
     tier_policy: Mapping[str, TierPolicy]
 
@@ -55,7 +56,7 @@ class ImpactPolicy:
         except (OSError, tomllib.TOMLDecodeError) as error:
             raise ValueError(f"cannot load CI impact policy {path}: {error}") from error
 
-        root_keys = {"version", "tiers", "labels", "full", "tier"}
+        root_keys = {"version", "tiers", "labels", "full", "evidence", "tier"}
         if set(raw) != root_keys:
             raise ValueError(f"CI impact policy root keys must be exactly {root_keys}")
         if type(raw.get("version")) is not int or raw["version"] != 1:
@@ -70,6 +71,11 @@ class ImpactPolicy:
         full_paths = _string_tuple(full.get("paths"), "full.paths")
         if not full_paths:
             raise ValueError("full.paths must not be empty")
+
+        evidence = _table(raw.get("evidence"), "evidence")
+        if set(evidence) != {"paths"}:
+            raise ValueError("evidence keys must be exactly {'paths'}")
+        no_tier_paths = _string_tuple(evidence.get("paths"), "evidence.paths")
 
         labels_raw = _table(raw.get("labels"), "labels")
         if set(labels_raw) != {"ci:full"}:
@@ -101,6 +107,7 @@ class ImpactPolicy:
         return cls(
             tiers=tiers,
             full_paths=full_paths,
+            no_tier_paths=no_tier_paths,
             labels=labels,
             tier_policy=tier_policy,
         )
@@ -115,6 +122,8 @@ class ImpactPolicy:
         }
         for path in paths:
             _validate_repo_path(path)
+            if any(fnmatchcase(path, pattern) for pattern in self.no_tier_paths):
+                continue
             if any(fnmatchcase(path, pattern) for pattern in self.full_paths):
                 return set(self.tiers)
             matched = {

@@ -70,11 +70,16 @@ or repeatable workflows.
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
-  and private retrieval corpora untracked. At most one deterministic,
-  pattern-sanitized, commit-scoped conversation slice may be tracked for a
-  Codex-authored commit only when a repository-owned provenance workflow
-  enforces the corresponding sanitization and commit-binding contract. Any
-  retained slice is provenance evidence, not a distillation or truth owner.
+  and private retrieval corpora untracked. A Codex-authored commit may add one
+  deterministic, pattern-sanitized, commit-scoped conversation slice through
+  `scripts/codex_commit.sh`; the slice is provenance evidence, not a
+  distillation or truth owner. Plain human commits remain exempt unless their
+  author deliberately supplies a `Codex-Transcript:` trailer. Sanitization is
+  fail-closed for the enumerated credential, identifier, email, and machine-path
+  patterns and residual runtime tags. Balanced injected wrappers are removed
+  only from eligible user/assistant messages; malformed tagged messages and
+  non-conversation control-plane records are not admitted. It does not claim to
+  identify arbitrary semantic personal data.
 - Preserve `measured-autoresearch` as a bounded, measurement-gated companion to
   generic research loops. It must support research-only, evaluator-design,
   measured implementation, and keep-or-discard iterations.

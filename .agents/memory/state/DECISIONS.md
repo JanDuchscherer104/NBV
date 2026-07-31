@@ -1,6 +1,6 @@
 ---
 id: decisions
-updated: 2026-05-12
+updated: 2026-07-30
 scope: repo
 owner: jan
 status: active
@@ -51,6 +51,36 @@ tags: [codex, workflow, architecture]
   transcript status is routing metadata for promotion/backlog review; it is not
   current truth until the item is accepted into canonical memory, backlog, docs,
   or code.
+- Commit-scoped transcript provenance narrowly supersedes the former blanket
+  prohibition on tracked transcript material. `scripts/codex_commit.sh` is the
+  explicit authorship boundary: it requires `CODEX_THREAD_ID` plus an explicit
+  UTC `CODEX_TRANSCRIPT_SCOPE_START`, captures only eligible messages at or
+  after that commit-relevant boundary, and adds a hash-bound
+  `Codex-Transcript:` trailer. The canonical boundary participates in the
+  snapshot identity. CI validates committed artifacts from Git alone and never
+  reads a local Codex session store. Existing transcript files outside the
+  commit-slice namespace are grandfathered historical evidence, not the format
+  for new commit provenance.
+- Each captured message is admitted by its recorded working directory's Git
+  common directory, so sibling worktrees are accepted while records from other
+  repositories are excluded. Capture state is bound to a fresh wrapper nonce
+  and cleared after success or failure; partial, interactive, path-limited, and
+  hook-bypassing wrapper modes are rejected.
+- Only extracted user/assistant records can become artifact messages; control-
+  plane records affect the snapshot hash only. Balanced reserved wrapper blocks
+  are stripped before credential/path sanitization, while a remaining malformed
+  tag excludes that message. Final artifact validation rejects all such tags.
+- A slice binds the expected commit parent and the proposed non-transcript Git
+  tree. Rebases, cherry-picks, content changes, and squashes therefore require
+  fresh capture. Artifact writes traverse and mutate the worktree through
+  no-follow directory descriptors; parent swaps and symlinks fail closed.
+- Single-parent authoring commits add exactly one artifact and trailer. Merge
+  commits may only inherit unchanged parent artifacts and must not carry an
+  authoring trailer. The wrapper refuses active merges before capture mutates
+  the index, artifact namespace, or invocation state. A squash merge is
+  validated as one new single-parent
+  commit, so squashing multiple transcript-bearing commits is unsupported
+  unless the squash is rebuilt with exactly one fresh artifact and trailer.
 
 ## Technical Decisions
 - Runtime objects are instantiated through config `.setup_target()` factories.

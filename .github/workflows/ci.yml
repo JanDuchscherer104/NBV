@@ -47,6 +47,12 @@ jobs:
           make python-standards-ratchet PYTHON_INTERPRETER=python
           PYTHON_STANDARDS_BASE="$PR_BASE_SHA"
 
+      - name: Validate commit-linked transcript provenance
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: python scripts/codex_transcript_provenance.py validate-range "$EVENT_BASE_SHA" "$EVENT_HEAD_SHA"
+
       - name: Select affected CI tiers
         id: select
         env:

@@ -271,9 +271,9 @@ def _validate_hook_contracts() -> None:
     if "nohup" in hook or "python3 scripts/graphify_refresh.py" in hook:
         raise RuntimeError("post-commit uses a non-portable Graphify launcher")
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    if "git rev-parse --git-path hooks" not in makefile:
+    if "git config --local core.hooksPath scripts/git_hooks" not in makefile:
         raise RuntimeError(
-            "hook installation does not resolve Git's effective hooks path"
+            "hook installation does not configure the worktree-relative source path"
         )
 
 

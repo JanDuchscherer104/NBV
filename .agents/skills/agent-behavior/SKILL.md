@@ -91,6 +91,16 @@ is useful.
   responsibility change, retained contract, verification, and exclusions.
 - A PR is one reviewable concern with an independent rollback boundary; do not
   use its body as an implementation chronology.
+- Use `scripts/codex_commit.sh` with an explicit `CODEX_THREAD_ID` and
+  `CODEX_TRANSCRIPT_SCOPE_START` for a Codex-authored commit that must carry
+  commit-linked transcript provenance. Set the UTC scope start to the first
+  commit-relevant user/assistant turn; earlier same-repository discussion is
+  excluded.
+  Do not infer Codex authorship from Git identity or ambient session state.
+  Ordinary `git commit` is human/exempt; a manually supplied
+  `Codex-Transcript:` trailer opts into strict artifact validation.
+  The wrapper intentionally rejects `--no-verify`, partial/index-mixing,
+  interactive, and pathspec-limited commit modes; prepare the exact index first.
 - For meaningful Spatial-AI, ML, MLOps, data-science, or statistics work,
   explain the governing model, assumptions, and failure mode when that helps
   the user act correctly. Use a rendered Mermaid/UML diagram only for a real

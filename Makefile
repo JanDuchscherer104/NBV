@@ -256,6 +256,8 @@ graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integ
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_codex_transcript_provenance.py
+	@./scripts/tests/test_codex_commit_hooks.sh
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -267,19 +269,12 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
 	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
 
-install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
-	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
-	if [ -z "$$HOOK_DIR" ]; then \
-		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
-	fi; \
-	mkdir -p "$$HOOK_DIR"; \
-	for hook in scripts/git_hooks/*; do \
-		[ -f "$$hook" ] || continue; \
-		name=$$(basename "$$hook"); \
-		target="$$HOOK_DIR/$$name"; \
-		ln -sf "$(CURDIR)/$$hook" "$$target" && \
-			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
-	done
+install-git-hooks: ## 🪝 Use tracked worktree-relative commit and Graphify hooks
+	@chmod +x scripts/git_hooks/pre-commit scripts/git_hooks/prepare-commit-msg \
+		scripts/git_hooks/commit-msg scripts/git_hooks/post-commit scripts/codex_commit.sh
+	@git config --local core.hooksPath scripts/git_hooks
+	@$(PYTHON_INTERPRETER) scripts/codex_transcript_provenance.py check-hooks
+	@echo "$(GREEN)configured core.hooksPath=scripts/git_hooks$(NC)"
 
 install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Codex, Gemini, and git
 	@if [ ! -f .codex/hooks.json ]; then \
@@ -758,7 +753,7 @@ ci-documentation: qmd-frontmatter-check api-docs-self-test docs-render-core ## R
 
 ci-graphify: graphify-skill-self-test graphify-ci ## Run Graphify-tier validation
 
-ci: python-standards-ratchet ci-governance ci-scientific ci-package ci-documentation ci-graphify ## Run the full root CI contract
+ci: python-standards-ratchet ci-impact-self-test ci-governance ci-scientific ci-package ci-documentation ci-graphify ## Run the full root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

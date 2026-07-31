@@ -15,6 +15,10 @@ paths = [
   "scripts/ci_impact.py",
   "scripts/tests/test_ci_impact.py",
 ]
+[evidence]
+paths = [
+  ".agents/memory/transcripts/commits/**",
+]
 
 [tier.governance]
 include = [

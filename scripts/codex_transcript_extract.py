@@ -76,6 +76,30 @@ STOPWORDS = {
 }
 
 
+class DuplicateJsonKeyError(ValueError):
+    """Raised when one JSON object repeats a key at any nesting depth."""
+
+
+def _reject_duplicate_json_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateJsonKeyError(key)
+        result[key] = value
+    return result
+
+
+def parse_jsonl_record(line: str) -> dict[str, Any] | None:
+    """Parse one JSONL record, rejecting malformed or ambiguous objects."""
+    try:
+        record = json.loads(line, object_pairs_hook=_reject_duplicate_json_keys)
+    except (json.JSONDecodeError, DuplicateJsonKeyError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
 @dataclass
 class PendingQuestion:
     mode: str | None
@@ -180,10 +204,9 @@ def jsonl_objects(path: Path) -> list[tuple[int, dict[str, Any]]]:
         for line_no, line in enumerate(handle, start=1):
             if not line.strip():
                 continue
-            try:
-                objects.append((line_no, json.loads(line)))
-            except json.JSONDecodeError:
-                continue
+            record = parse_jsonl_record(line)
+            if record is not None:
+                objects.append((line_no, record))
     return objects
 
 
@@ -341,7 +364,7 @@ def record_plan_answers(
         return
 
     for question_id, answer_payload in answers.items():
-        answer_list = []
+        answer_list: list[object] = []
         if isinstance(answer_payload, dict):
             answer_list = answer_payload.get("answers") or []
         if not answer_list:
@@ -371,8 +394,13 @@ def record_plan_answers(
 
 
 def extract_session(
-    path: Path, roots: list[Path], project_root: Path
+    path: Path, roots: list[Path], project_root: Path | None
 ) -> SessionState | None:
+    """Extract one session, optionally restricting records to ``project_root``.
+
+    Passing ``None`` is reserved for exact-session consumers which perform
+    their own repository-identity check. It never triggers batch discovery.
+    """
     objects = jsonl_objects(path)
     if not objects:
         return None
@@ -384,11 +412,13 @@ def extract_session(
         timestamp = obj.get("timestamp")
 
         if obj_type == "session_meta":
-            state.session_id = payload.get("id") or state.session_id
-            state.session_timestamp = payload.get("timestamp") or timestamp
+            state.session_id = state.session_id or payload.get("id")
+            state.session_timestamp = (
+                state.session_timestamp or payload.get("timestamp") or timestamp
+            )
             state.cwd = payload.get("cwd") or state.cwd
-            state.matched_by_cwd = state.matched_by_cwd or is_under_path(
-                state.cwd, project_root
+            state.matched_by_cwd = state.matched_by_cwd or (
+                project_root is None or is_under_path(state.cwd, project_root)
             )
             continue
 
@@ -397,8 +427,8 @@ def extract_session(
             state.cwd = payload.get("cwd") or state.cwd
             mode_payload = payload.get("collaboration_mode") or {}
             state.mode = mode_payload.get("mode") or state.mode
-            state.matched_by_cwd = state.matched_by_cwd or is_under_path(
-                state.cwd, project_root
+            state.matched_by_cwd = state.matched_by_cwd or (
+                project_root is None or is_under_path(state.cwd, project_root)
             )
             continue
 
@@ -487,38 +517,72 @@ def extract_session(
                 roots=roots,
             )
 
-    state.chat_messages = [
-        record
-        for record in state.chat_messages
-        if record_allowed_for_project(
-            record,
-            project_root,
-            session_marker_context=state.matched_by_marker,
-        )
-    ]
-    state.user_messages = [
-        record
-        for record in state.user_messages
-        if record_allowed_for_project(
-            record,
-            project_root,
-            session_marker_context=state.matched_by_marker,
-        )
-    ]
-    state.plan_answers = [
-        record
-        for record in state.plan_answers
-        if record_allowed_for_project(
-            record,
-            project_root,
-            session_marker_context=state.matched_by_marker,
-        )
-    ]
+    if project_root is not None:
+        state.chat_messages = [
+            record
+            for record in state.chat_messages
+            if record_allowed_for_project(
+                record,
+                project_root,
+                session_marker_context=state.matched_by_marker,
+            )
+        ]
+        state.user_messages = [
+            record
+            for record in state.user_messages
+            if record_allowed_for_project(
+                record,
+                project_root,
+                session_marker_context=state.matched_by_marker,
+            )
+        ]
+        state.plan_answers = [
+            record
+            for record in state.plan_answers
+            if record_allowed_for_project(
+                record,
+                project_root,
+                session_marker_context=state.matched_by_marker,
+            )
+        ]
     if not (state.matched_by_cwd or state.matched_by_marker):
         return None
     if not (state.chat_messages or state.user_messages or state.plan_answers):
         return None
     return state
+
+
+def find_exact_session_path(thread_id: str, roots: list[Path]) -> Path | None:
+    """Find the JSONL whose session metadata exactly matches ``thread_id``."""
+    if not thread_id.strip():
+        return None
+    named: list[Path] = []
+    fallback: list[Path] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        named.extend(root.rglob(f"*{thread_id}*.jsonl"))
+        fallback.extend(root.rglob("*.jsonl"))
+    seen: set[Path] = set()
+    for path in [*sorted(named), *sorted(fallback)]:
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    record = parse_jsonl_record(line)
+                    if record is None:
+                        continue
+                    if record.get("type") != "session_meta":
+                        continue
+                    payload = record.get("payload") or {}
+                    if payload.get("id") == thread_id:
+                        return path
+                    break
+        except OSError:
+            continue
+    return None
 
 
 def dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

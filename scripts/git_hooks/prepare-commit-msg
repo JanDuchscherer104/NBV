@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+ROOT=$(git rev-parse --show-toplevel)
+if [ "${ARIA_CODEX_COMMIT:-0}" = "1" ]; then
+  [ -n "${ARIA_CODEX_INVOCATION_NONCE:-}" ] || { echo "ARIA_CODEX_INVOCATION_NONCE is required" >&2; exit 2; }
+  python3 "$ROOT/scripts/codex_transcript_provenance.py" prepare-message \
+    --repo "$ROOT" --invocation-nonce "$ARIA_CODEX_INVOCATION_NONCE" "$1"
+elif grep -q '^Codex-Transcript:' "$1"; then
+  python3 "$ROOT/scripts/codex_transcript_provenance.py" validate-message \
+    --repo "$ROOT" "$1"
+fi

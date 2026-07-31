@@ -216,6 +216,12 @@ class SelectionTests(unittest.TestCase):
             package.stdout,
         )
 
+    def test_commit_transcript_evidence_selects_no_conditional_tier(self) -> None:
+        path = ".agents/memory/transcripts/commits/2026/07/ct1-123456789abc-1234567890abcdef.json"
+
+        self.assertEqual(self.policy.select([path]), set())
+        self.assertEqual(self.policy.select([path], ["ci:full"]), ALL)
+
     def test_shared_controls_and_unknown_paths_fail_closed(self) -> None:
         for paths in (
             ["Makefile"],

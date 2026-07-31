@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+if [ "${ARIA_CODEX_COMMIT:-0}" = "1" ]; then
+  [ -n "${ARIA_CODEX_THREAD_ID:-}" ] || { echo "ARIA_CODEX_THREAD_ID is required" >&2; exit 2; }
+  [ -n "${ARIA_CODEX_SCOPE_START:-}" ] || { echo "ARIA_CODEX_SCOPE_START is required" >&2; exit 2; }
+  [ -n "${ARIA_CODEX_INVOCATION_NONCE:-}" ] || { echo "ARIA_CODEX_INVOCATION_NONCE is required" >&2; exit 2; }
+  amend=
+  [ "${ARIA_CODEX_AMEND:-0}" = "1" ] && amend=--amend
+  python3 "$ROOT/scripts/codex_transcript_provenance.py" capture \
+    --repo "$ROOT" --thread-id "$ARIA_CODEX_THREAD_ID" \
+    --scope-start "$ARIA_CODEX_SCOPE_START" \
+    --sessions-root "${CODEX_SESSIONS_ROOT:-${HOME}/.codex/sessions}" \
+    --invocation-nonce "$ARIA_CODEX_INVOCATION_NONCE" $amend
+fi
+
+if [ "${ARIA_PRE_COMMIT_COMPOSED:-0}" != "1" ] && [ -f "$ROOT/.pre-commit-config.yaml" ] && command -v pre-commit >/dev/null 2>&1; then
+  ARIA_PRE_COMMIT_COMPOSED=1 pre-commit run --hook-stage pre-commit
+fi

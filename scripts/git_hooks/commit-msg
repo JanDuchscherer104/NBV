@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+if [ "${ARIA_CODEX_COMMIT:-0}" = "1" ] || grep -q '^Codex-Transcript:' "$1"; then
+  ROOT=$(git rev-parse --show-toplevel)
+  if [ "${ARIA_CODEX_COMMIT:-0}" = "1" ]; then
+    python3 "$ROOT/scripts/codex_transcript_provenance.py" validate-message \
+      --repo "$ROOT" --require-state \
+      --invocation-nonce "$ARIA_CODEX_INVOCATION_NONCE" "$1"
+  else
+    python3 "$ROOT/scripts/codex_transcript_provenance.py" validate-message \
+      --repo "$ROOT" "$1"
+  fi
+fi
