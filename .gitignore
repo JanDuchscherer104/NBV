@@ -272,7 +272,7 @@ graphify-out/
 .tmp/*
 
 # Literature review
-docs/literature/pdf/
+docs/literature/pdf
 docs/literature/tex-src/**
 !docs/literature/tex-src/
 !docs/literature/tex-src/**/
@@ -289,9 +289,13 @@ docs/literature/tex-src/**
 
 # Artifacts
 .artifacts/
+/mempalace.yaml
+/entities.json
 .codex/*
 !.codex/config.example.toml
 !.codex/hooks.example.json
+!.codex/environments/
+!.codex/environments/*.toml
 !.codex/skills/
 .codex/skills/*
 !.codex/skills/graphify/

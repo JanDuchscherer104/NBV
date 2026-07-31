@@ -66,6 +66,17 @@ or repeatable workflows.
   dispatcher concise.
 - Keep OMX, Graphify, MemPalace, and similar tools optional. Normal repository
   work and CI must still work from exact source without them.
+- Use the official upstream Codex plugin for MemPalace and keep its shared,
+  user-local project memory in the `aria-nbv` wing. Future live Codex work may
+  be retained through upstream hooks and explicit checkpoints.
+- Mine reviewed debriefs, canonical state, current source, reviewed references,
+  and tracked TeX, BibTeX, and literature notes as project documents. Any
+  historical Codex-session backfill must be project-filtered and reviewed as a
+  separate operation.
+- Exclude raw transcript stores, archives, runtime state, downloaded PDF
+  corpora, datasets, generated artifacts, caches, credentials, and private
+  unrelated sessions from MemPalace mining by default. MemPalace retrieval is
+  evidence and never promotes content into repository truth automatically.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.

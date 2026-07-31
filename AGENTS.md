@@ -60,6 +60,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Optional OMX, MCP, graph, memory, and autoresearch tools produce evidence or
   proposals, not repo-owned truth. Apply durable changes only through the
   owning source, package guidance, docs, or Agents DB surface.
+- Optional MemPalace use comes from the official upstream Codex plugin, uses
+  the `aria-nbv` wing, and follows the reviewed corpus boundary in
+  `.agents/references/human_owner_intent.md`; the repository owns no wrapper.
 
 ## Instruction Capture
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.

@@ -8,9 +8,15 @@
 trust_level = "trusted"
 
 # Repository skills are discovered directly from .agents/skills and are not
-# namespaced by an unrelated plugin. Optional MemPalace MCP access lives in the
-# repo marketplace at .agents/plugins/marketplace.json; it requires the global
-# `mempalace-mcp` executable and does not own skills or hooks.
+# namespaced by an unrelated plugin. Install optional MemPalace support from its
+# official Codex marketplace, keeping the Python tool and plugin at one release:
+#   uv tool install 'mempalace==3.6.0'
+#   codex plugin marketplace add MemPalace/mempalace --ref v3.6.0
+#   codex plugin add mempalace@mempalace
+# Codex CLI 0.146.0 compatibility note: upstream v3.6.0 declares marketplace
+# authentication NONE, while this CLI needs ON_INSTALL. Keep any temporary
+# NONE-to-ON_INSTALL metadata overlay in the user-local marketplace only; do not
+# copy it or any MemPalace runtime implementation into this repository.
 #
 # Matt Pocock skills are installed outside this repo, for example:
 #   npx skills@latest add mattpocock/skills
