@@ -4,6 +4,5 @@ name = "ARIA-NBV shared runtime"
 
 [setup]
 script = '''
-ARIA_NBV_SHARED_ROOT="$CODEX_SOURCE_WORKSPACE_PATH" \\
-  bash "$CODEX_WORKTREE_PATH/scripts/setup_worktree_env.sh"
+ARIA_NBV_SHARED_ROOT="$CODEX_SOURCE_WORKSPACE_PATH" bash "$CODEX_WORKTREE_PATH/scripts/setup_worktree_env.sh"
 '''

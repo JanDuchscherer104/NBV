@@ -31,8 +31,10 @@ import tomllib
 environment = tomllib.load(open(sys.argv[1], "rb"))
 assert environment["version"] == 1
 assert environment["name"] == "ARIA-NBV shared runtime"
-assert "$CODEX_SOURCE_WORKSPACE_PATH" in environment["setup"]["script"]
-assert "$CODEX_WORKTREE_PATH/scripts/setup_worktree_env.sh" in environment["setup"]["script"]
+assert environment["setup"]["script"].strip() == (
+    'ARIA_NBV_SHARED_ROOT="$CODEX_SOURCE_WORKSPACE_PATH" '
+    'bash "$CODEX_WORKTREE_PATH/scripts/setup_worktree_env.sh"'
+)
 PY
 
 cat >"${FAKE_BIN}/readlink" <<'EOF'
