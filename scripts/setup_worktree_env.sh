@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Configure a linked ARIA-NBV worktree without copying the runtime or data cache.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+shared_root="${ARIA_NBV_SHARED_ROOT:-$(git -C "$repo_root" worktree list --porcelain | awk '/^worktree / { print substr($0, 10); exit }')}"
+check_only=false
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/setup_worktree_env.sh [--check]
+
+Links this worktree to the source checkout's Python runtime, ignored data cache,
+and downloaded literature PDFs, then initializes the exact submodules recorded
+by this worktree.
+
+Set ARIA_NBV_SHARED_ROOT to use a primary checkout other than Git's first
+registered worktree. Source .env afterwards to use the linked virtual
+environment.
+EOF
+}
+
+if [[ "${1:-}" == "--check" ]]; then
+  check_only=true
+elif [[ $# -ne 0 ]]; then
+  usage >&2
+  exit 2
+fi
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+realpath_portable() {
+  "$shared_python" -c \
+    'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+[[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
+shared_python="$shared_root/aria_nbv/.venv/bin/python"
+[[ -x "$shared_python" ]] || fail "shared Python is not executable: $shared_python"
+"$shared_python" -c 'import sys; raise SystemExit(0 if sys.executable else 1)' \
+  >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
+[[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
+[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
+
+link_or_check() {
+  local source="$1"
+  local target="$2"
+
+  if [[ -L "$target" ]]; then
+    [[ "$(realpath_portable "$target")" == "$(realpath_portable "$source")" ]] || fail "$target points somewhere else"
+    return
+  fi
+
+  if [[ "$check_only" == true ]]; then
+    fail "$target is not linked to $source"
+  fi
+  [[ ! -e "$target" ]] || fail "$target already exists; preserve it or replace it manually"
+  ln -s "$source" "$target"
+}
+
+cd "$repo_root"
+link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
+"$repo_root/aria_nbv/.venv/bin/python" \
+  -c 'import sys; raise SystemExit(0 if sys.executable else 1)' \
+  >/dev/null 2>&1 || fail "linked Python cannot run: $repo_root/aria_nbv/.venv/bin/python"
+
+if [[ "$check_only" == false ]]; then
+  mkdir -p .data docs/literature
+fi
+
+# Download manifests are tracked; every other top-level .data directory is an
+# ignored cache and can be shared without copying it into each worktree.
+while IFS= read -r -d '' source; do
+  link_or_check "$source" ".data/$(basename "$source")"
+done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d ! -name aria_download_urls -print0)
+
+# TeX and bibliography sources are tracked and Git checks them out normally.
+# PDFs are ignored downloads, so retain one shared read-only cache for them.
+if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
+fi
+
+if [[ "$check_only" == false ]]; then
+  git submodule update --init --recursive
+  if [[ ! -e .env ]]; then
+    ln -s .env.example .env
+  fi
+else
+  [[ -e .env ]] || fail ".env is missing; run scripts/setup_worktree_env.sh before checking"
+fi
+
+if git submodule status --recursive | awk '/^[-+U]/ { exit 1 }'; then
+  printf 'ARIA-NBV worktree environment is ready. Source .env from %s.\n' "$repo_root"
+else
+  fail "one or more submodules are not at the recorded commit"
+fi
