@@ -16,9 +16,11 @@ Aria Grill, and keep MemPalace integration within its actual plugin boundary.
 ## Method
 
 Moved repository skills out of plugin-prefixed discovery, renamed Plan Grill
-to Aria Grill, updated its inbound routes, and retained the MemPalace plugin as
-an MCP-only launcher. Narrowed angle-bracket instruction capture to deliberate
-current user prose and locked the migration with focused governance tests.
+to Aria Grill, and updated its inbound routes. The migration initially retained
+a repository MemPalace launcher, but the same PR superseded that intermediate
+state with the official user-local upstream Codex plugin and no repository
+runtime. Narrowed angle-bracket instruction capture to deliberate current user
+prose and locked the migration with focused governance tests.
 
 ## Findings
 
@@ -28,8 +30,9 @@ current user prose and locked the migration with focused governance tests.
 - Competing public interface shapes route through the maintained
   `codebase-design` `DESIGN-IT-TWICE` workflow; deprecated
   `design-an-interface` remains skipped.
-- `plugins/mempalace-aria-nbv/` owns the repository-rooted MemPalace launcher;
-  it does not duplicate ARIA skills, hooks, or applications.
+- MemPalace's final disposition is the official upstream Codex plugin using the
+  user-local `aria-nbv` wing; the repository owns no plugin, launcher, or
+  runtime configuration.
 - Implicit ARIA planning routes through Aria Grill, while explicit user skill
   invocation remains authoritative.
 - Durable instruction capture excludes control-plane text, quoted history,
@@ -45,7 +48,7 @@ current user prose and locked the migration with focused governance tests.
 
 - `make check-agent-memory scaffold-audit scaffold-audit-self-test`: passed;
   scaffold audit retained 23 existing advisory warnings and reported no errors.
-- `python3 scripts/tests/test_agent_governance_g002.py`: passed (7 tests).
+- `python3 scripts/tests/test_agent_governance_g002.py`: passed (4 tests).
 - Strict mypy on `scripts/tests/test_agent_governance_g002.py`: passed.
 - `git diff --check`: passed.
 
