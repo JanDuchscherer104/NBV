@@ -14,7 +14,8 @@ Links this worktree to the primary checkout's Python runtime and generated data
 cache, then initializes the exact submodules recorded by this worktree.
 
 Set ARIA_NBV_SHARED_ROOT to use a primary checkout other than Git's first
-registered worktree. Source .env afterwards to use aria_nbv_run.
+registered worktree. Source .env afterwards to use the linked virtual
+environment.
 EOF
 }
 
@@ -31,11 +32,15 @@ fail() {
 }
 
 realpath_portable() {
-  "$shared_root/aria_nbv/.venv/bin/python" -c \
+  "$shared_python" -c \
     'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
 }
 
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
+shared_python="$shared_root/aria_nbv/.venv/bin/python"
+[[ -x "$shared_python" ]] || fail "shared Python is not executable: $shared_python"
+"$shared_python" -c 'import sys; raise SystemExit(0 if sys.executable else 1)' \
+  >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
 
@@ -57,6 +62,9 @@ link_or_check() {
 
 cd "$repo_root"
 link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
+"$repo_root/aria_nbv/.venv/bin/python" \
+  -c 'import sys; raise SystemExit(0 if sys.executable else 1)' \
+  >/dev/null 2>&1 || fail "linked Python cannot run: $repo_root/aria_nbv/.venv/bin/python"
 
 if [[ "$check_only" == false ]]; then
   mkdir -p .data

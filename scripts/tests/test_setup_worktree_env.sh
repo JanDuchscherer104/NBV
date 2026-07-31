@@ -17,7 +17,7 @@ mkdir -p \
   "${FAKE_BIN}"
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${WORKTREE_ROOT}/scripts/"
-touch "${WORKTREE_ROOT}/.env.example"
+cp "${REPO_ROOT}/.env.example" "${WORKTREE_ROOT}/"
 
 cat >"${FAKE_BIN}/readlink" <<'EOF'
 #!/usr/bin/env bash
@@ -25,6 +25,13 @@ echo "readlink must not be used" >&2
 exit 99
 EOF
 chmod +x "${FAKE_BIN}/readlink"
+
+cat >"${FAKE_BIN}/mamba" <<'EOF'
+#!/usr/bin/env bash
+echo "mamba must not be used" >&2
+exit 98
+EOF
+chmod +x "${FAKE_BIN}/mamba"
 
 git -C "${WORKTREE_ROOT}" init -q
 
@@ -46,6 +53,17 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
 [[ -L "${WORKTREE_ROOT}/.env" ]]
 
+(
+  cd "${WORKTREE_ROOT}"
+  PATH="${FAKE_BIN}:${PATH}"
+  # shellcheck disable=SC1091
+  source .env
+  [[ "$(command -v python)" == "${WORKTREE_ROOT}/aria_nbv/.venv/bin/python" ]]
+  python -c 'import sys; raise SystemExit(0 if sys.executable else 1)'
+  [[ -z "${ARIA_NBV_MAMBA_ENV:-}" ]]
+  ! declare -F aria_nbv_run >/dev/null
+)
+
 ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
   bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check
@@ -59,5 +77,16 @@ if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   exit 1
 fi
 grep -Fq ".env is missing" "${SANDBOX}/missing-env.err"
+
+ln -s .env.example "${WORKTREE_ROOT}/.env"
+unlink "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/missing-python.out" 2>"${SANDBOX}/missing-python.err"; then
+  echo "--check unexpectedly accepted a missing shared Python" >&2
+  exit 1
+fi
+grep -Fq "shared Python is not executable" "${SANDBOX}/missing-python.err"
 
 echo "Worktree environment setup: PASS"

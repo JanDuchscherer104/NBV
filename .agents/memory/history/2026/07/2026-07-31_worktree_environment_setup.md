@@ -20,9 +20,10 @@ copying the primary checkout's Python runtime or generated data cache.
 
 The setup script links the shared virtual environment and available cache
 directories, initializes the worktree's recorded submodules, and creates the
-local `.env` activation link. Portable path comparison uses the shared Python
-runtime instead of platform-specific `readlink` flags. Check mode validates the
-same runtime, cache, activation, and submodule contracts without mutating the
+local `.env` activation link. The linked virtual environment is the sole
+command-runtime owner. Portable path comparison uses its Python interpreter
+instead of platform-specific `readlink` flags. Check mode validates the same
+runtime, cache, activation, and submodule contracts without mutating the
 worktree.
 
 ## Findings
@@ -31,7 +32,9 @@ The data-directory parent must exist before cache links are created. Readiness
 also depends on `.env`: accepting a missing activation file would report a
 worktree ready even though the printed next step could not succeed. The sandbox
 regression covers a fresh worktree, normal setup, portable path resolution, and
-the missing-`.env` failure.
+the missing-`.env` failure. It also proves that activated commands use the
+linked virtual environment without depending on a second mamba environment and
+that readiness rejects a missing shared Python interpreter.
 
 ## Verification
 
