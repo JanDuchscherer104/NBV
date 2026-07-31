@@ -1,0 +1,129 @@
+version = 1
+tiers = ["governance", "scientific", "package", "documentation", "graphify"]
+
+[labels]
+"ci:full" = ["governance", "scientific", "package", "documentation", "graphify"]
+
+[full]
+paths = [
+  ".github/ci-impact.toml",
+  ".github/workflows/**",
+  ".pre-commit-config.yaml",
+  "Makefile",
+  "aria_nbv/pyproject.toml",
+  "aria_nbv/uv.lock",
+  "scripts/ci_impact.py",
+  "scripts/tests/test_ci_impact.py",
+]
+
+[tier.governance]
+include = [
+  ".agents/**",
+  ".github/pull_request_template.md",
+  "AGENTS.md",
+  "scripts/agents_db.py",
+  "scripts/debrief_nudge.sh",
+  "scripts/new_debrief.py",
+  "scripts/scaffold/**",
+  "scripts/scaffold_audit.py",
+  "scripts/tests/test_agent_governance_g002.py",
+  "scripts/tests/test_python_standards_ratchet.py",
+  "scripts/validate_agent_memory.py",
+]
+
+[tier.scientific]
+include = [
+  ".configs/build_rollouts_qh_*.toml",
+  "aria_nbv/aria_nbv/data_handling/qh_data/**",
+  "aria_nbv/aria_nbv/lightning/_candidate_scorer_*.py",
+  "aria_nbv/aria_nbv/lightning/qh_*.py",
+  "aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  "aria_nbv/aria_nbv/rollouts/zarr_store.py",
+  "aria_nbv/tests/data_handling/test_qh.py",
+  "aria_nbv/tests/data_handling/test_public_api_contract.py",
+  "aria_nbv/tests/data_handling/test_vin_offline_store.py",
+  "aria_nbv/tests/lightning/qh_torchrun_worker.py",
+  "aria_nbv/tests/lightning/test_candidate_scorer_contract.py",
+  "aria_nbv/tests/lightning/test_optimizer_finite_values.py",
+  "aria_nbv/tests/lightning/test_qh_*.py",
+  "aria_nbv/tests/rollouts/test_public_rollouts_api.py",
+  "aria_nbv/tests/rollouts/test_qh_reader.py",
+  "aria_nbv/tests/rollouts/test_zarr_store.py",
+  "aria_nbv/tests/test_config_field_constraints.py",
+]
+
+[tier.package]
+include = [
+  ".configs/**",
+  "aria_nbv/**",
+]
+exclude = [
+  ".configs/build_rollouts_qh_*.toml",
+  "aria_nbv/aria_nbv/data_handling/qh_data/**",
+  "aria_nbv/aria_nbv/lightning/_candidate_scorer_*.py",
+  "aria_nbv/aria_nbv/lightning/qh_*.py",
+  "aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  "aria_nbv/aria_nbv/rollouts/zarr_store.py",
+  "aria_nbv/tests/data_handling/test_qh.py",
+  "aria_nbv/tests/data_handling/test_public_api_contract.py",
+  "aria_nbv/tests/data_handling/test_vin_offline_store.py",
+  "aria_nbv/tests/lightning/qh_torchrun_worker.py",
+  "aria_nbv/tests/lightning/test_candidate_scorer_contract.py",
+  "aria_nbv/tests/lightning/test_optimizer_finite_values.py",
+  "aria_nbv/tests/lightning/test_qh_*.py",
+  "aria_nbv/tests/rollouts/test_public_rollouts_api.py",
+  "aria_nbv/tests/rollouts/test_qh_reader.py",
+  "aria_nbv/tests/rollouts/test_zarr_store.py",
+  "aria_nbv/tests/test_config_field_constraints.py",
+]
+
+[tier.documentation]
+include = [
+  "README.md",
+  "SETUP.md",
+  "docs/**",
+  "scripts/quarto_*.py",
+  "scripts/quarto_*.sh",
+  "scripts/quartodoc_*.py",
+  "scripts/tests/test_quarto_*.sh",
+  "scripts/tests/test_quartodoc_*.py",
+  "scripts/validate_qmd_frontmatter.py",
+]
+
+[tier.graphify]
+include = [
+  ".agents/AGENTS_INTERNAL_DB.md",
+  ".agents/issues.toml",
+  ".agents/memory/state/*.md",
+  ".agents/references/*.md",
+  ".agents/refactors.toml",
+  ".agents/resolved.toml",
+  ".agents/todos.toml",
+  ".codex/skills/graphify/**",
+  ".graphifyignore",
+  "aria_nbv/aria_nbv/**",
+  "docs/contents/**",
+  "docs/figures/diagrams/*.svg",
+  "docs/figures/diagrams/**/*.svg",
+  "docs/index.qmd",
+  "docs/literature/*.jsonl",
+  "docs/literature/*.md",
+  "docs/literature/*.qmd",
+  "docs/references.bib",
+  "docs/typst/shared/**",
+  "docs/typst/thesis/**",
+  "scripts/check_graphify_freshness.py",
+  "scripts/check_graphify_integration.py",
+  "scripts/git_hooks/**",
+  "scripts/graphify_refresh.py",
+  "scripts/tests/test_graphify_freshness.py",
+  "scripts/tests/test_graphify_integration.py",
+  "scripts/tests/test_post_commit_graph_dispatch.sh",
+]
+exclude = [
+  ".agents/archive/**",
+  ".agents/memory/history/**",
+  ".agents/memory/transcripts/**",
+  ".agents/skills/**",
+  ".agents/work/**",
+]

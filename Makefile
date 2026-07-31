@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test ci-governance ci-scientific ci-package ci-documentation ci-graphify graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -98,8 +98,12 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/qh_data \
 	aria_nbv/lightning/qh_datamodule.py \
 	aria_nbv/lightning/qh_module.py \
+	aria_nbv/lightning/_candidate_scorer_batch.py \
+	aria_nbv/lightning/_candidate_scorer_contract.py \
 	aria_nbv/rollouts/qh_reader.py \
-	aria_nbv/vin/models/__init__.py \
+	aria_nbv/rollouts/zarr_store.py \
+	aria_nbv/targets \
+	aria_nbv/vin/models \
 	tests/data_handling/test_qh.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/data_handling/test_vin_offline_store.py \
@@ -737,12 +741,24 @@ qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
 
-package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
+package-smoke: ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci-governance: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test ## Run governance-tier validation
+
+ci-scientific: qh-ci ## Run scientific-tier validation
+
+ci-package: package-smoke api-docs-self-test ## Run package smoke and lightweight API-documentation contracts
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_quartodoc_expand_config.py
+
+ci-documentation: qmd-frontmatter-check api-docs-self-test docs-render-core ## Run documentation-tier validation
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_quartodoc_expand_config.py
+
+ci-graphify: graphify-skill-self-test graphify-ci ## Run Graphify-tier validation
+
+ci: python-standards-ratchet ci-governance ci-scientific ci-package ci-documentation ci-graphify ## Run the full root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

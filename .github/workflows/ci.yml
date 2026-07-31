@@ -2,33 +2,11 @@ name: Root Verification
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  merge_group:
+    types: [checks_requested]
   push:
-    branches:
-      - main
-    paths:
-      - ".agents/**"
-      - ".codex/skills/graphify/**"
-      - ".github/workflows/**"
-      - ".pre-commit-config.yaml"
-      - ".configs/**"
-      - ".graphifyignore"
-      - "AGENTS.md"
-      - "Makefile"
-      - "README.md"
-      - "SETUP.md"
-      - "aria_nbv/**"
-      - "docs/**"
-      - "scripts/agents_db.py"
-      - "scripts/check_graphify_freshness.py"
-      - "scripts/check_graphify_integration.py"
-      - "scripts/git_hooks/**"
-      - "scripts/graphify_refresh.py"
-      - "scripts/templates/lrz/**"
-      - "scripts/tests/test_graphify_freshness.py"
-      - "scripts/tests/test_graphify_integration.py"
-      - "scripts/tests/test_post_commit_graph_dispatch.sh"
-      - "scripts/validate_agent_memory.py"
-      - "scripts/validate_qmd_frontmatter.py"
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -39,10 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  impact:
     runs-on: ubuntu-latest
-    env:
-      PYTHON_INTERPRETER: python
+    outputs:
+      governance: ${{ steps.select.outputs.governance }}
+      scientific: ${{ steps.select.outputs.scientific }}
+      package: ${{ steps.select.outputs.package }}
+      documentation: ${{ steps.select.outputs.documentation }}
+      graphify: ${{ steps.select.outputs.graphify }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -54,68 +36,163 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Select affected CI families
-        id: impact
+      - name: Verify CI impact policy
+        run: make ci-impact-self-test PYTHON_INTERPRETER=python
+
+      - name: Enforce Python documentation ratchet
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          make python-standards-ratchet PYTHON_INTERPRETER=python
+          PYTHON_STANDARDS_BASE="$PR_BASE_SHA"
+
+      - name: Select affected CI tiers
+        id: select
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            git diff --no-renames --name-only -z "$PR_BASE_SHA" "$PR_HEAD_SHA" \
-              | python scripts/ci_impact.py --github-output "$GITHUB_OUTPUT"
+            git diff --no-renames --name-only -z "$PR_BASE_SHA...$PR_HEAD_SHA" \
+              | python scripts/ci_impact.py \
+                  --labels-json "$PR_LABELS_JSON" \
+                  --github-output "$GITHUB_OUTPUT"
           else
             python scripts/ci_impact.py --full --github-output "$GITHUB_OUTPUT"
           fi
 
-      - name: Verify CI impact routing
-        run: make ci-impact-self-test PYTHON_INTERPRETER=python
-
-      - name: Initialize EFM3D submodule
-        if: steps.impact.outputs.package == 'true'
-        run: git submodule update --init external/efm3d
-
-      - name: Install shared validation dependencies
-        if: >-
-          steps.impact.outputs.scaffold == 'true' ||
-          steps.impact.outputs.docs == 'true' ||
-          steps.impact.outputs.graphify == 'true'
+  governance:
+    needs: impact
+    if: needs.impact.outputs.governance == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install governance dependencies
         run: python -m pip install --upgrade pip PyYAML
+      - name: Validate governance contracts
+        run: make ci-governance PYTHON_INTERPRETER=python
 
-      - name: Install package validation dependencies
-        if: steps.impact.outputs.package == 'true'
+  scientific:
+    needs: impact
+    if: needs.impact.outputs.scientific == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Initialize EFM3D submodule
+        run: git submodule update --init external/efm3d
+      - name: Install scientific validation dependencies
         run: python -m pip install --upgrade pip uv
+      - name: Validate scientific contracts
+        run: make ci-scientific PYTEST_ARGS=
 
-      - name: Install Graphify
-        if: steps.impact.outputs.graphify == 'true'
+  package:
+    needs: impact
+    if: needs.impact.outputs.package == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Initialize EFM3D submodule
+        run: git submodule update --init external/efm3d
+      - name: Install package validation dependencies
+        run: python -m pip install --upgrade pip uv
+      - name: Validate package contracts
+        run: make ci-package PYTEST_ARGS=
+
+  documentation:
+    needs: impact
+    if: needs.impact.outputs.documentation == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install documentation dependencies
+        run: python -m pip install --upgrade pip PyYAML pytest
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+      - name: Set up Typst
+        uses: typst-community/setup-typst@v5.1.0
+      - name: Validate documentation
+        env:
+          CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
+        run: make ci-documentation PYTHON_INTERPRETER=python
+
+  graphify:
+    needs: impact
+    if: needs.impact.outputs.graphify == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Graphify dependencies
         run: |
+          python -m pip install --upgrade pip PyYAML
           GRAPHIFY_VERSION=$(tr -d '[:space:]' < .codex/skills/graphify/.graphify_version)
           python -m pip install "graphifyy==$GRAPHIFY_VERSION"
           INSTALLED_GRAPHIFY_VERSION=$(graphify --version | sed -E 's/.*([0-9]+[.][0-9]+[.][0-9]+).*/\1/')
           test "$INSTALLED_GRAPHIFY_VERSION" = "$GRAPHIFY_VERSION"
-
-      - name: Set up Quarto
-        if: steps.impact.outputs.docs == 'true'
-        uses: quarto-dev/quarto-actions/setup@v2
-
-      - name: Set up Typst
-        if: steps.impact.outputs.docs == 'true'
-        uses: typst-community/setup-typst@v5.1.0
-
-      - name: Validate agent scaffold and memory
-        if: steps.impact.outputs.scaffold == 'true'
-        run: make agents-db-validate check-agent-memory scaffold-audit-self-test
-
-      - name: Validate package contracts
-        if: steps.impact.outputs.package == 'true'
-        run: make package-smoke PYTEST_ARGS=
-
-      - name: Validate documentation
-        if: steps.impact.outputs.docs == 'true'
-        env:
-          CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
-        run: make qmd-frontmatter-check api-docs-self-test docs-render-core
-
       - name: Validate Graphify contracts
-        if: steps.impact.outputs.graphify == 'true'
-        run: make graphify-skill-self-test graphify-ci
+        run: make ci-graphify PYTHON_INTERPRETER=python
+
+  ci:
+    if: always()
+    needs: [impact, governance, scientific, package, documentation, graphify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify selected jobs completed
+        env:
+          CI_IMPACT_RESULT: ${{ needs.impact.result }}
+          CI_SELECTED_JSON: >-
+            {"governance":"${{ needs.impact.outputs.governance }}",
+             "scientific":"${{ needs.impact.outputs.scientific }}",
+             "package":"${{ needs.impact.outputs.package }}",
+             "documentation":"${{ needs.impact.outputs.documentation }}",
+             "graphify":"${{ needs.impact.outputs.graphify }}"}
+          CI_RESULTS_JSON: >-
+            {"governance":"${{ needs.governance.result }}",
+             "scientific":"${{ needs.scientific.result }}",
+             "package":"${{ needs.package.result }}",
+             "documentation":"${{ needs.documentation.result }}",
+             "graphify":"${{ needs.graphify.result }}"}
+        run: python scripts/ci_impact.py --check-aggregate
