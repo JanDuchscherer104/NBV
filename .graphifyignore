@@ -1,68 +1,70 @@
 # ARIA-NBV root Graphify corpus policy.
 #
-# The graph should cover code/navigation surfaces without indexing operator
-# state, vendored repositories, generated sites, cache directories, or bulky
-# media. Graphify merges this with .gitignore using last-match-wins semantics.
-
-# Start closed, then opt in the maintained navigation surfaces.
+# Start closed. Admit only high-signal formats handled directly by upstream
+# Graphify plus the reproducible Markdown projection. Raw Typst, BibTeX,
+# JSONL, TeX, and bulk PDFs stay in their exact-source owners and are exposed
+# to navigation only through graphify-input/ identity pages.
 *
 **
 
-!Makefile
-
+# Python package code and maintained package orientation.
 !aria_nbv/
-!aria_nbv/**
+!aria_nbv/**/
+!aria_nbv/**/*.py
+!aria_nbv/**/*.md
+!aria_nbv/**/*.rst
+!aria_nbv/**/*.txt
+!aria_nbv/**/*.yaml
+!aria_nbv/**/*.yml
 
+# Maintained public documentation in upstream-native text formats.
 !docs/
-!docs/index.qmd
-!docs/contents/
-!docs/contents/**
-!docs/typst/
-!docs/typst/shared/
-!docs/typst/shared/**
-!docs/typst/thesis/
-!docs/typst/thesis/**
-!docs/figures/
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-!docs/literature/
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
-!docs/references.bib
+!docs/**/
+!docs/**/*.md
+!docs/**/*.qmd
+!docs/**/*.rst
+!docs/**/*.txt
+!docs/**/*.yaml
+!docs/**/*.yml
+!docs/**/*.html
 
+# High-signal internal references and canonical state, not runtime/history.
 !.agents/
-!.agents/AGENTS_INTERNAL_DB.md
-!.agents/issues.toml
-!.agents/todos.toml
-!.agents/refactors.toml
-!.agents/resolved.toml
 !.agents/references/
-!.agents/references/*.md
+!.agents/references/**/
+!.agents/references/**/*.md
 !.agents/memory/
 !.agents/memory/state/
-!.agents/memory/state/*.md
+!.agents/memory/state/**/
+!.agents/memory/state/**/*.md
 
-# Prune broad directory reincludes down to the intended files.
-.agents/references/**
-!.agents/references/*.md
-.agents/memory/**
-!.agents/memory/state/
-!.agents/memory/state/*.md
-docs/figures/**
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-docs/literature/**
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
+# Deterministic identities for Typst links, citations, and local source assets.
+!graphify-input/
+!graphify-input/**/
+!graphify-input/*.md
+!graphify-input/**/*.md
 
-# Explicit exclusions after reincludes.
-AGENTS.md
+# Generated sites, raw scientific owners, large assets, and operator state.
+docs/_build/
+docs/_extensions/
+docs/_inv/
+docs/.quarto/
+docs/_freeze/
+docs/_generated/
+docs/_site/
+docs/site_libs/
+docs/index_files/
+docs/*_files/
+docs/reference/
+docs/search.json
+docs/literature/pdf/
+docs/literature/tex-src/
+docs/**/.jupyter_cache/
+docs/**/*_files/
+
 graphify-out/
-graphify-out/**
 external/
-.agent/skills/
+.agent/
 .agents/external/
 .agents/skills/
 .agents/memory/history/
@@ -81,24 +83,6 @@ aria_nbv/scripts/
 aria_nbv/tests/
 scripts/
 
-docs/_build/
-docs/_extensions/
-docs/_inv/
-docs/.quarto/
-docs/_freeze/
-docs/_generated/
-docs/_site/
-docs/site_libs/
-docs/index_files/
-docs/*_files/
-docs/reference/
-docs/search.json
-docs/literature/pdf/
-docs/literature/tex-src/
-docs/**/.jupyter_cache/
-docs/**/*.html
-docs/**/*_files/
-
 **/__pycache__/
 **/.pytest_cache/
 **/.ruff_cache/
@@ -107,6 +91,14 @@ docs/**/*_files/
 **/.tox/
 **/.nox/
 
+# Raw/non-native inputs are intentionally represented through the projection.
+**/*.typ
+**/*.bib
+**/*.jsonl
+**/*.tex
+**/*.pdf
+
+# Other bulky media and archives stay outside the navigation corpus.
 **/*.7z
 **/*.avi
 **/*.bin
@@ -116,7 +108,6 @@ docs/**/*_files/
 **/*.jpg
 **/*.mov
 **/*.mp4
-**/*.pdf
 **/*.png
 **/*.tar
 **/*.tgz

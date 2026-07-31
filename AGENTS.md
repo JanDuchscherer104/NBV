@@ -107,19 +107,15 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Graphify is an optional local navigation aid, not a prerequisite for repository
-work. When it is installed and a local graph is useful, use `graphify query`,
-`graphify path`, or `graphify explain`, then verify material claims in the exact
-owning source. If Graphify is absent, stale, or fails, use exact-source discovery
-and continue without refreshing it.
+Graphify is an optional derived navigation aid, never a knowledge owner or a
+prerequisite for repository work. Start from exact code, Typst, bibliography,
+and literature sources. When `graphify-input/` and a local graph exist, qualify
+navigation results with the projection's `source_revision`, and verify every
+consequential link or claim in its owning source. If Graphify is absent or its
+revision does not match the task, continue with exact-source discovery.
 
-The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
-package code, docs, and important `.agents/` references/memory/backlog. It
-excludes runtime state, external repos, generated docs/sites, caches, large
-media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
-`.agents/skills/`, `aria_nbv/scripts/`, and `aria_nbv/tests/`.
-
-The vendored skill, custom scripts/tests, and tracked post-commit dispatcher are
-a dormant comparison candidate pending the Graphify ownership decision. They
-run only through explicit opt-in targets and do not belong to normal routing,
-hook installation, completion checks, or CI.
+Build the ignored evidence projection with
+`python3 scripts/build_graphify_projection.py`, setting
+`--output graphify-input` and `--aria-code-ref <full-sha-or-release-tag>`.
+Then use unmodified upstream Graphify on the corpus selected by
+`.graphifyignore`.

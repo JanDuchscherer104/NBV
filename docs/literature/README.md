@@ -58,6 +58,32 @@ uv run python scripts/download_arxiv_tex_src.py docs/literature/sources.jsonl --
 
 By default the script writes extracted source trees into `docs/literature/tex-src/` and PDFs into `docs/literature/pdf/`. Use `--overwrite` to replace an existing extracted tree or PDF target.
 
+## Optional Graphify projection
+
+The exact literature owners remain `sources.jsonl`, `docs/references.bib`,
+`docs/references-qh.bib`, the active Typst thesis,
+`docs/typst/shared/style.typ` for thesis-to-code link syntax, and the local
+files under `pdf/` and `tex-src/`. Graphify is a derived navigation view and
+never changes or supersedes those sources.
+
+From the repository root, build the ignored Markdown projection at the exact
+revision used for navigation:
+
+```bash
+python3 scripts/build_graphify_projection.py \
+  --output graphify-input \
+  --aria-code-ref "$(git rev-parse HEAD)"
+graphify .
+```
+
+Before relying on a query, path, or explanation, confirm the
+`source_revision` in `graphify-input/index.md` and verify consequential claims
+in the linked owner. The default graph intentionally excludes raw `.typ`,
+`.bib`, `.jsonl`, and `.tex` inputs and the bulk PDF corpus. Projection pages
+represent their identities and exact paths without parsing scientific content;
+a direct PDF extraction is a separate, disposable operator experiment, not
+part of the root graph.
+
 ## Why these sources are kept locally
 
 - to inspect the exact paper contribution statements and method structure

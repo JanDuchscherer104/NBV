@@ -80,6 +80,12 @@ or repeatable workflows.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
+- The human owner selected Graphify option 3: unmodified upstream Graphify plus
+  one thin, deterministic Markdown evidence projection for source-owned thesis
+  links, both bibliography owners, the literature manifest, and local TeX/PDF
+  asset identities. The projection is ignored, reproducible, and derived; it
+  must not grow into a parser framework, graph schema, query layer, lifecycle
+  manager, or alternative source of truth.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
   and private retrieval corpora untracked. At most one deterministic,
   pattern-sanitized, commit-scoped conversation slice may be tracked for a
@@ -132,7 +138,9 @@ or repeatable workflows.
 These are intentionally unresolved and must not be presented as accepted
 policy:
 
-- Graphify's exact corpus, refresh model, and retained generated artifacts.
+- Whether later evidence justifies changing the selected thin Graphify adapter
+  or retaining additional generated outputs; the current option-3 boundary is
+  accepted.
 - LitKG is retired; reintroduction requires a new evidence-backed decision.
 - Whether `aria-nbv-context` remains a thin router or owns a small amount of
   stable project orientation.

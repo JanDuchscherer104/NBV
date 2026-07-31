@@ -34,6 +34,7 @@ class FakeRunner:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, ...]] = []
+        self.call_cwds: list[Path] = []
         self.citations: list[dict[str, object]] = []
         self.links: list[dict[str, object]] = []
 
@@ -42,6 +43,7 @@ class FakeRunner:
     ) -> subprocess.CompletedProcess[str]:
         command = tuple(str(part) for part in argv)
         self.calls.append(command)
+        self.call_cwds.append(cwd)
         if command[0] == "git":
             return subprocess.run(
                 command, cwd=cwd, check=False, capture_output=True, text=True
@@ -197,6 +199,22 @@ class ProjectionTests(unittest.TestCase):
         self.assertNotIn(str(self.fixture.root), rendered)
         self.assertNotRegex(rendered, r"20\d\d-\d\d-\d\d[T ]")
 
+    def test_owner_links_leave_projection_while_identity_links_stay_inside(
+        self,
+    ) -> None:
+        result = self.build()
+        thesis_page = next(
+            body
+            for body in result.files.values()
+            if body.startswith("# thesis-source:docs/typst/thesis/sections/a.typ\n")
+        )
+
+        self.assertIn(
+            "../../docs/typst/thesis/sections/a.typ",
+            thesis_page,
+        )
+        self.assertRegex(thesis_page, r"\]\(\.\./citations/[^)]+\.md\)")
+
     def test_check_mode_leaves_existing_output_and_debris_unchanged(self) -> None:
         output = self.fixture.root / "graphify-input"
         output.mkdir()
@@ -227,6 +245,27 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "unexpected executable"):
             self.fixture.runner(["curl"], cwd=self.fixture.root)
 
+    def test_typst_commands_share_owner_root_entry_and_code_ref(self) -> None:
+        self.build()
+        typst_invocations = [
+            (call, cwd)
+            for call, cwd in zip(
+                self.fixture.runner.calls,
+                self.fixture.runner.call_cwds,
+                strict=True,
+            )
+            if call[0] == "typst"
+        ]
+        self.assertEqual(len(typst_invocations), 4)
+        for call, cwd in typst_invocations:
+            self.assertEqual(cwd, self.fixture.root / "docs")
+            self.assertEqual(call[2], "typst/thesis/main.typ")
+            self.assertEqual(call[call.index("--root") + 1], ".")
+            self.assertEqual(
+                call[call.index("--input") + 1],
+                f"aria-code-ref={self.fixture.code_oid}",
+            )
+
     def test_dynamic_include_fails_while_inactive_comments_and_raw_are_ignored(
         self,
     ) -> None:
@@ -238,6 +277,37 @@ class ProjectionTests(unittest.TestCase):
             '#let part = "sections/a.typ"\n#include part\n',
         )
         with self.assertRaisesRegex(ProjectionError, r"dynamic|main\.typ"):
+            self.build()
+
+    def test_parent_relative_literal_include_normalizes_within_repository(self) -> None:
+        self.fixture.write("docs/typst/shared/appendix.typ", "@AppendixPaper\n")
+        self.fixture.write(
+            "docs/typst/thesis/main.typ",
+            '#include "sections/a.typ"\n#include "sections/b.typ"\n'
+            '#include "../shared/appendix.typ"\n',
+        )
+        self.fixture.write(
+            "docs/references.bib",
+            "@misc{PaperA, eprint={2406.10224v2}}\n"
+            "@misc{AppendixPaper, title={Appendix}}\n",
+        )
+        self.fixture.runner.citations.append({"key": "AppendixPaper"})
+
+        rendered = self.rendered(self.build())
+
+        self.assertIn(
+            "# thesis-source:docs/typst/shared/appendix.typ",
+            rendered,
+        )
+        self.assertIn("# citation:AppendixPaper", rendered)
+
+    def test_parent_relative_literal_include_cannot_escape_repository(self) -> None:
+        self.fixture.write(
+            "docs/typst/thesis/main.typ",
+            '#include "../../../../outside.typ"\n',
+        )
+
+        with self.assertRaisesRegex(ProjectionError, r"include escapes repository"):
             self.build()
 
     def test_duplicate_bibliography_key_fails(self) -> None:
@@ -256,6 +326,14 @@ class ProjectionTests(unittest.TestCase):
             ProjectionError, r"Missing.*bibliograph|bibliograph.*Missing"
         ):
             self.build()
+
+    def test_compiled_typst_label_wrapper_normalizes_to_bare_bibtex_key(self) -> None:
+        self.fixture.runner.citations[0] = {"key": "<PaperA>"}
+
+        rendered = self.rendered(self.build())
+
+        self.assertIn("# citation:PaperA", rendered)
+        self.assertNotIn("# citation:<PaperA>", rendered)
 
     def test_identity_only_join_uses_arxiv_then_doi_and_keeps_title_only_unmatched(
         self,
