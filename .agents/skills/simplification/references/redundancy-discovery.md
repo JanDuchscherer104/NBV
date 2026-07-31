@@ -21,7 +21,7 @@ Use this reference when `simplification` needs a deeper workflow for finding goo
 5. Escalate only when needed.
    - Look for multiple wrappers around the same concept, repeated DTO shaping, parallel service helpers, or temporary paths that still leak into first-class code.
    - Use `aria-nbv-context` when ownership or source-family routing is unclear.
-   - Use `plan-grill` when the simplification depends on a high-impact
+   - Use `aria-grill` when the simplification depends on a high-impact
      architecture or compatibility decision.
    - Use `analyze_python_package`, `get_package_metrics`, and `find_package_issues` only after code-index narrows the package.
    - Use `analyze_python_file`, `find_long_functions`, and `get_extraction_guidance` only after code-index narrows the file.

@@ -14,7 +14,7 @@ metadata:
     - "simplification for behavior-preserving AI-slop, dead-code, wrapper, or duplication cleanup"
     - "python-standards for Python API-contract findings"
     - "docs-curator or typst-authoring for public docs, thesis prose, citations, or Typst standards"
-    - "plan-grill for architecture decisions without concrete diffs"
+    - "aria-grill for architecture decisions without concrete diffs"
     - "diagnose-aria when a finding needs reproduction"
   evidence_required:
     - "review surface from git diff, PR diff, or named files"

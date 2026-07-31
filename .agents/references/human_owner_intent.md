@@ -66,11 +66,26 @@ or repeatable workflows.
   dispatcher concise.
 - Keep OMX, Graphify, MemPalace, and similar tools optional. Normal repository
   work and CI must still work from exact source without them.
+- Use the official upstream Codex plugin for MemPalace and keep its shared,
+  user-local project memory in the `aria-nbv` wing. Future live Codex work may
+  be retained through upstream hooks and explicit checkpoints.
+- Mine reviewed debriefs, canonical state, current source, reviewed references,
+  and tracked TeX, BibTeX, and literature notes as project documents. Any
+  historical Codex-session backfill must be project-filtered and reviewed as a
+  separate operation.
+- Exclude raw transcript stores, archives, runtime state, downloaded PDF
+  corpora, datasets, generated artifacts, caches, credentials, and private
+  unrelated sessions from MemPalace mining by default. MemPalace retrieval is
+  evidence and never promotes content into repository truth automatically.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
-- Keep raw transcripts, runtime identifiers, machine paths, credentials, and
-  private retrieval corpora untracked. Publish only reviewed distillations.
+- Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
+  and private retrieval corpora untracked. At most one deterministic,
+  pattern-sanitized, commit-scoped conversation slice may be tracked for a
+  Codex-authored commit only when a repository-owned provenance workflow
+  enforces the corresponding sanitization and commit-binding contract. Any
+  retained slice is provenance evidence, not a distillation or truth owner.
 - Preserve `measured-autoresearch` as a bounded, measurement-gated companion to
   generic research loops. It must support research-only, evaluator-design,
   measured implementation, and keep-or-discard iterations.

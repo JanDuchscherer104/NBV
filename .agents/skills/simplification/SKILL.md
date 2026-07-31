@@ -8,7 +8,7 @@ metadata:
     - "ownership is unclear and needs a high-impact decision first"
     - "the task is only general surgical-edit discipline"
   handoff_to:
-    - "plan-grill for unclear ownership or high-impact cleanup choices"
+    - "aria-grill for unclear ownership or high-impact cleanup choices"
     - "agent-behavior for general surgical-edit discipline"
     - "agents-db when cleanup materially changes active debt"
   evidence_required:

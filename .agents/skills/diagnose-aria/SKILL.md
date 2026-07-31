@@ -9,7 +9,7 @@ metadata:
     - "reviewing concrete diffs rather than reproducing a symptom"
   handoff_to:
     - "external analysis workflow capability for domain-agnostic read-only causal ranking before mutation"
-    - "plan-grill for broad planning without a concrete symptom"
+    - "aria-grill for broad planning without a concrete symptom"
     - "aria-nbv-context for localizing an unknown failure surface"
     - "code-review-aria-nbv for diff review"
     - "specialized contract skills after the failing surface is known"

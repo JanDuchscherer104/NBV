@@ -6,7 +6,7 @@
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
 .PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
-.PHONY: memory-mine agents-db glossary
+.PHONY: agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
 .PHONY: offline-info offline-tree offline-samples offline-random-index offline-rerun-random offline-sample-rerun-random
@@ -230,7 +230,7 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
-
+	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
 	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
 
@@ -360,13 +360,6 @@ rollouts-rerun-random: _check_python ## 🔍 Inspect a random multi-step rollout
 		else \
 			echo "RERUN_MODE must be view or save, got $(RERUN_MODE)" >&2; exit 2; \
 		fi'
-
-memory-mine: _check_python ## 🧠 Mine current repo state (docs, code, history) into repo-local MemPalace
-	@echo "$(BLUE)Mining project into MemPalace...$(NC)"
-	@mkdir -p .artifacts/mempalace/palace
-	@$(PYTHON_INTERPRETER) -m mempalace --palace .artifacts/mempalace/palace mine .
-	@$(PYTHON_INTERPRETER) -m mempalace --palace .artifacts/mempalace/palace mine .agents/memory --mode convos
-	@echo "$(GREEN)MemPalace mining complete.$(NC)"
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  🔧 LRZ AI Systems operator helpers

@@ -289,6 +289,8 @@ docs/literature/tex-src/**
 
 # Artifacts
 .artifacts/
+/mempalace.yaml
+/entities.json
 .codex/*
 !.codex/config.example.toml
 !.codex/hooks.example.json

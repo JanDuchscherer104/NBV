@@ -8,9 +8,7 @@ metadata:
     - "implementation behavior changes where Python standards are incidental"
     - "large API redesign before the target interface is stable"
   handoff_to:
-    - "codebase-design for a module-boundary design that precedes implementation"
-    - "design-an-interface for competing public interface shapes"
-    - "domain-modeling for ubiquitous-language and entity/value-object decisions"
+    - "aria-grill for unsettled module, interface, or domain-model decisions before implementation"
     - "docs-curator for public narrative, Quarto, or Typst documentation"
     - "nbv-geometry-contracts for frame, unit, or tensor-shape semantics"
     - "simplification for behavior-preserving API cleanup before documentation"
@@ -134,9 +132,10 @@ cross-references, equations, and Quartodoc rendering constraints.
 - Use standard Python annotations plus framework types (`Tensor`, `ndarray`,
   and project types). Do not introduce Jaxtyping or another runtime shape-type
   system; record shapes, frames, units, and support semantics in docstrings.
-- Use `codebase-design`, `design-an-interface`, or `domain-modeling` before
-  documenting a genuinely unsettled boundary. This skill records the resulting
-  source-level contract; it does not duplicate those design methods.
+- Use `aria-grill` before documenting a genuinely unsettled boundary. Aria
+  Grill may progressively invoke external architecture, interface, or domain-
+  modeling capabilities; this skill records the resulting source-level
+  contract and does not duplicate those design methods.
 - Use `Yields:` for generators, iterators, and streaming-style APIs.
 - Use `Examples:` for public APIs that are easy to misuse.
 - Use `Notes:` or `Theory:` when they materially help correct usage. A complex

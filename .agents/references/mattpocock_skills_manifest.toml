@@ -15,13 +15,12 @@ default_policy = "disabled_unless_selected"
 runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
 
 [postures]
-model = ["codebase-design", "tdd"]
-explicit = ["improve-codebase-architecture", "writing-great-skills", "handoff", "teach"]
+model = ["tdd"]
+explicit = ["codebase-design", "improve-codebase-architecture", "domain-modeling", "writing-great-skills", "handoff", "teach"]
 reference = [
   "ask-matt",
   "code-review",
   "diagnosing-bugs",
-  "domain-modeling",
   "grill-me",
   "grill-with-docs",
   "grilling",
@@ -38,7 +37,6 @@ reference = [
   "writing-shape",
 ]
 skip = [
-  "design-an-interface",
   "edit-article",
   "loop-me",
   "migrate-to-shoehorn",
@@ -72,9 +70,9 @@ reason = "Borrow Standards/Spec vocabulary; ARIA owns severity, domain invariant
 name = "codebase-design"
 bucket = "engineering"
 upstream_path = "skills/engineering/codebase-design/SKILL.md"
-posture = "model"
-aria_owner = "agent-behavior"
-reason = "Low-collision generic vocabulary for module, interface, depth, seam, adapter, leverage, and locality."
+posture = "explicit"
+aria_owner = "aria-grill"
+reason = "Aria Grill may progressively invoke this vocabulary; direct use requires explicit user invocation."
 
 [[skill]]
 name = "diagnosing-bugs"
@@ -88,16 +86,16 @@ reason = "Borrow the tight feedback-loop discipline; ARIA owns symptom surfaces,
 name = "domain-modeling"
 bucket = "engineering"
 upstream_path = "skills/engineering/domain-modeling/SKILL.md"
-posture = "reference"
-aria_owner = "plan-grill"
-reason = "Use as terminology-sharpening inspiration only; ARIA terms and decisions have different source owners."
+posture = "explicit"
+aria_owner = "aria-grill"
+reason = "Aria Grill may progressively invoke domain vocabulary, entity, and value-object analysis; direct use requires explicit user invocation."
 
 [[skill]]
 name = "grill-with-docs"
 bucket = "engineering"
 upstream_path = "skills/engineering/grill-with-docs/SKILL.md"
 posture = "reference"
-aria_owner = "plan-grill"
+aria_owner = "aria-grill"
 reason = "Generic grilling plus domain-doc assumptions collide with ARIA source order unless adapted."
 
 [[skill]]
@@ -113,8 +111,8 @@ name = "improve-codebase-architecture"
 bucket = "engineering"
 upstream_path = "skills/engineering/improve-codebase-architecture/SKILL.md"
 posture = "explicit"
-aria_owner = "simplification"
-reason = "Useful operator command for architecture scans; candidates must route back through ARIA owners."
+aria_owner = "aria-grill"
+reason = "Aria Grill may progressively invoke architecture scans; direct use requires explicit user invocation."
 
 [[skill]]
 name = "prototype"
@@ -169,7 +167,7 @@ name = "to-prd"
 bucket = "engineering"
 upstream_path = "skills/engineering/to-prd/SKILL.md"
 posture = "reference"
-aria_owner = "plan-grill"
+aria_owner = "aria-grill"
 reason = "ARIA roadmap/questions and OMX plans own PRD-like surfaces."
 
 [[skill]]
@@ -185,7 +183,7 @@ name = "grill-me"
 bucket = "productivity"
 upstream_path = "skills/productivity/grill-me/SKILL.md"
 posture = "reference"
-aria_owner = "plan-grill"
+aria_owner = "aria-grill"
 reason = "Use as interview inspiration only; ARIA thesis/source-order grilling stays local."
 
 [[skill]]
@@ -193,8 +191,8 @@ name = "grilling"
 bucket = "productivity"
 upstream_path = "skills/productivity/grilling/SKILL.md"
 posture = "reference"
-aria_owner = "plan-grill"
-reason = "Reusable generic loop behind Matt grilling; ARIA uses plan-grill for advisor-facing decisions."
+aria_owner = "aria-grill"
+reason = "Reusable generic loop behind Matt grilling; ARIA uses Aria Grill for advisor-facing decisions."
 
 [[skill]]
 name = "handoff"
@@ -226,7 +224,7 @@ bucket = "deprecated"
 upstream_path = "skills/deprecated/design-an-interface/SKILL.md"
 posture = "skip"
 aria_owner = "codebase-design"
-reason = "Deprecated upstream; use codebase-design vocabulary instead."
+reason = "Deprecated upstream; use the maintained codebase-design DESIGN-IT-TWICE workflow for competing interface shapes."
 
 [[skill]]
 name = "qa"
@@ -242,7 +240,7 @@ bucket = "deprecated"
 upstream_path = "skills/deprecated/request-refactor-plan/SKILL.md"
 posture = "skip"
 aria_owner = "simplification"
-reason = "Deprecated upstream; ARIA uses plan-grill/simplification for refactor decisions."
+reason = "Deprecated upstream; ARIA uses aria-grill/simplification for refactor decisions."
 
 [[skill]]
 name = "ubiquitous-language"

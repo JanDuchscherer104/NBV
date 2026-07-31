@@ -11,7 +11,7 @@ metadata:
     - "diagnose-aria for concrete target-RRI failures or suspicious metrics"
     - "nbv-geometry-contracts for pose, camera, crop-frame, or unit issues"
     - "counterfactual-rollout-planner for multi-step target-gain evaluation"
-    - "plan-grill for advisor-facing target-protocol decisions"
+    - "aria-grill for advisor-facing target-protocol decisions"
   evidence_required:
     - "V0 versus V1 actor-visibility path and OBS-SEL / PRED-Q / GT-EVAL status"
     - "target crop support, invalid-target reasons, and target/scene RRI comparison"
