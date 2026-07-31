@@ -10,8 +10,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/setup_worktree_env.sh [--check]
 
-Links this worktree to the primary checkout's Python runtime and generated data
-cache, then initializes the exact submodules recorded by this worktree.
+Links this worktree to the source checkout's Python runtime, ignored data cache,
+and downloaded literature PDFs, then initializes the exact submodules recorded
+by this worktree.
 
 Set ARIA_NBV_SHARED_ROOT to use a primary checkout other than Git's first
 registered worktree. Source .env afterwards to use the linked virtual
@@ -67,14 +68,20 @@ link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
   >/dev/null 2>&1 || fail "linked Python cannot run: $repo_root/aria_nbv/.venv/bin/python"
 
 if [[ "$check_only" == false ]]; then
-  mkdir -p .data
+  mkdir -p .data docs/literature
 fi
 
-for cache_dir in ase_efm ase_meshes ase_meshes_processed offline_cache worktree_migrations; do
-  source="$shared_root/.data/$cache_dir"
-  [[ -e "$source" ]] || continue
-  link_or_check "$source" ".data/$cache_dir"
-done
+# Download manifests are tracked; every other top-level .data directory is an
+# ignored cache and can be shared without copying it into each worktree.
+while IFS= read -r -d '' source; do
+  link_or_check "$source" ".data/$(basename "$source")"
+done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d ! -name aria_download_urls -print0)
+
+# TeX and bibliography sources are tracked and Git checks them out normally.
+# PDFs are ignored downloads, so retain one shared read-only cache for them.
+if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
+fi
 
 if [[ "$check_only" == false ]]; then
   git submodule update --init --recursive

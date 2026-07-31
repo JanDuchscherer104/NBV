@@ -12,12 +12,28 @@ FAKE_BIN="${SANDBOX}/bin"
 mkdir -p \
   "${SHARED_ROOT}/aria_nbv/.venv/bin" \
   "${SHARED_ROOT}/.data/ase_efm" \
+  "${SHARED_ROOT}/.data/offline_cache" \
+  "${SHARED_ROOT}/docs/literature/pdf" \
   "${WORKTREE_ROOT}/aria_nbv" \
+  "${WORKTREE_ROOT}/docs/literature" \
+  "${WORKTREE_ROOT}/.codex/environments" \
   "${WORKTREE_ROOT}/scripts" \
   "${FAKE_BIN}"
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${WORKTREE_ROOT}/scripts/"
 cp "${REPO_ROOT}/.env.example" "${WORKTREE_ROOT}/"
+cp "${REPO_ROOT}/.codex/environments/aria-nbv.toml" "${WORKTREE_ROOT}/.codex/environments/"
+
+python3 - "${WORKTREE_ROOT}/.codex/environments/aria-nbv.toml" <<'PY'
+import sys
+import tomllib
+
+environment = tomllib.load(open(sys.argv[1], "rb"))
+assert environment["version"] == 1
+assert environment["name"] == "ARIA-NBV shared runtime"
+assert "$CODEX_SOURCE_WORKSPACE_PATH" in environment["setup"]["script"]
+assert "$CODEX_WORKTREE_PATH/scripts/setup_worktree_env.sh" in environment["setup"]["script"]
+PY
 
 cat >"${FAKE_BIN}/readlink" <<'EOF'
 #!/usr/bin/env bash
@@ -51,6 +67,8 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
+[[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]
+[[ -L "${WORKTREE_ROOT}/docs/literature/pdf" ]]
 [[ -L "${WORKTREE_ROOT}/.env" ]]
 
 (
@@ -67,6 +85,18 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
   bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check
+
+unlink "${WORKTREE_ROOT}/docs/literature/pdf"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/missing-pdf.out" 2>"${SANDBOX}/missing-pdf.err"; then
+  echo "--check unexpectedly accepted a missing PDF cache link" >&2
+  exit 1
+fi
+grep -Fq "docs/literature/pdf is not linked" "${SANDBOX}/missing-pdf.err"
+
+ln -s "${SHARED_ROOT}/docs/literature/pdf" "${WORKTREE_ROOT}/docs/literature/pdf"
 
 unlink "${WORKTREE_ROOT}/.env"
 if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
