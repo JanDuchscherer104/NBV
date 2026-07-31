@@ -30,8 +30,6 @@ DOCS_PATHS = {
     ".graphifyignore",
     "README.md",
     "SETUP.md",
-    "docs/literature/README.md",
-    "docs/literature/sources.jsonl",
     "scripts/build_graphify_projection.py",
     "scripts/tests/test_build_graphify_projection.py",
     "scripts/tests/test_quarto_generate_api_docs.sh",

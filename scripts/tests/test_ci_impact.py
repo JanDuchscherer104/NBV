@@ -35,7 +35,11 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
         self.assertIn(
-            "make qmd-frontmatter-check graphify-projection-self-test", workflow
+            "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
+        )
+        self.assertIn(
+            "docs-render-core: graphify-projection-self-test",
+            (REPO_ROOT / "Makefile").read_text(encoding="utf-8"),
         )
 
     def test_representative_narrow_and_overlap_paths(self) -> None:

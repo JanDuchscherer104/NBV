@@ -13,15 +13,26 @@ files_touched:
   - .agents/references/human_owner_intent.md
   - .gitignore
   - .graphifyignore
+  - .github/workflows/ci.yml
   - Makefile
   - scripts/build_graphify_projection.py
+  - scripts/ci_impact.py
   - scripts/tests/test_build_graphify_projection.py
+  - scripts/tests/test_ci_impact.py
+  - scripts/validate_agent_memory.py
+  - .codex/skills/graphify/
+  - scripts/graphify_refresh.py
+  - scripts/check_graphify_freshness.py
+  - scripts/check_graphify_integration.py
+  - scripts/git_hooks/post-commit
 artifacts:
   - "commit:9d085d99"
   - "commit:f1b31443"
   - "commit:3ea8b57d"
   - "commit:63323508"
   - "commit:aee82c30"
+  - "commit:121dd235"
+  - "commit:8f3202c8"
   - ".omx/plans/graphify-thin-adapter.md"
   - ".omx/plans/test-spec-graphify-thin-adapter.md"
 ---
@@ -106,23 +117,20 @@ make Graphify a repository or CI prerequisite.
 ## Dispositions
 
 - **Retained:** exact source owners, source verification, optional upstream
-  Graphify, ignored generated projection state, and the dormant legacy
-  lifecycle temporarily until the now-unblocked deletion work is completed and
-  verified.
+  Graphify, and ignored generated projection state.
 - **Replaced:** the former unresolved three-option decision gate with the
   explicit option-3 target and its implemented deterministic Markdown
   projection boundary.
-- **Removed:** mandatory Graphify routing, normal hook installation, and
-  required root/hosted-CI Graphify execution from the earlier decoupling
-  change at `9d085d99`. No legacy Graphify implementation was deleted in this
-  in-progress phase.
-- **Deferred:** publication, PR creation, and hosted-CI monitoring remain
-  pending until the now-authorized legacy deletion, consumer repair, and final
-  independent review are complete.
-- **Open:** remove the vendored skill and custom lifecycle, repair their
-  remaining Make/CI/hook/guidance consumers, rerun repository verification and
-  final review, then publish and monitor exact-head hosted CI. The upstream
-  proof itself is complete.
+- **Removed:** mandatory Graphify routing and execution, the vendored skill,
+  refresh/freshness/integration scripts, post-commit hook, version pin, custom
+  tests, Graphify-specific Make/CI family, and their validation exceptions and
+  guidance consumers. Commit `121dd235` owns the final lifecycle deletion and
+  consumer repair.
+- **Deferred:** none inside the repository implementation.
+- **Open:** publish the committed branch, create the PR, monitor exact-head
+  hosted CI, and change this debrief to `complete`. The upstream proof,
+  lifecycle deletion, consumer repair, local verification, and final review
+  repair are complete.
 
 ## Verification
 

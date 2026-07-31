@@ -17,8 +17,6 @@ on:
       - "SETUP.md"
       - "aria_nbv/**"
       - "docs/**"
-      - "docs/literature/README.md"
-      - "docs/literature/sources.jsonl"
       - "scripts/agents_db.py"
       - "scripts/build_graphify_projection.py"
       - "scripts/templates/lrz/**"
@@ -101,4 +99,4 @@ jobs:
         if: steps.impact.outputs.docs == 'true'
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
-        run: make qmd-frontmatter-check graphify-projection-self-test api-docs-self-test docs-render-core
+        run: make qmd-frontmatter-check api-docs-self-test docs-render-core
