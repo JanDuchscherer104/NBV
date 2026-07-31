@@ -129,8 +129,8 @@ make Graphify a repository or CI prerequisite.
 - **Deferred:** none inside the repository implementation.
 - **Open:** publish the committed branch, create the PR, monitor exact-head
   hosted CI, and change this debrief to `complete`. The upstream proof,
-  lifecycle deletion, consumer repair, local verification, and final review
-  repair are complete.
+  lifecycle deletion, consumer repair, and local verification are complete;
+  final independent review clearance is being rerun after debrief repair.
 
 ## Verification
 
@@ -148,9 +148,22 @@ G006 evidence: the earlier installed Claude backend returned expired-OAuth
 The replacement proof then passed with Graphify 0.9.31 at source HEAD
 `3016d6c629a732dac30769039f734ff5496ad3f2`, using the disposable root
 `/tmp/aria-graphify-codex-proof.EjW8rf`. Authenticated Codex-host subagent
-semantic JSON fed a fresh 60-node/117-edge graph containing 51 native Python
-nodes from `aria_nbv/aria_nbv/lightning/qh_module.py`. Public `graphify path`
-showed the exact one-hop `EXTRACTED` `references` relation between
+semantic JSON fed the upstream skill's normal Graphify build, alongside native
+AST extraction of `aria_nbv/aria_nbv/lightning/qh_module.py`. The resulting
+fresh graph contained 60 nodes and 117 edges, including 51 native Python nodes.
+The user-scoped upstream skill digest was
+`9024289348cceb6140af33e9875742dc55f55e5d574e44e5a21bb36239b1bcf4`;
+its extraction-spec digest was
+`32d7decad42d58129c6694ea4e4ce1f72a531bc5161827d2095787e9448735e9`.
+The exact public read-side proof command was:
+
+```bash
+graphify path 'literature:arxiv:1509.06461' \
+  'pdf:docs/literature/pdf/Double-DQN.pdf' \
+  --graph /tmp/aria-graphify-codex-proof.EjW8rf/graphify-out/graph.json
+```
+
+It showed the exact one-hop `EXTRACTED` `references` relation between
 `literature:arxiv:1509.06461` (literature L8) and
 `pdf:docs/literature/pdf/Double-DQN.pdf`, backed by the expected repo-relative
 projection source files
@@ -158,14 +171,14 @@ projection source files
 `graphify-input/assets/pdf-docs-literature-pdf-double-dqn-pdf-fd61d0aa14bb.md`.
 No token was exported, no provider API key or repository secret participated,
 and no Graphify fork, repository-owned Graphify package import, or graph patch
-was used. This satisfies
-the hard upstream-consumption gate but does not claim legacy deletion,
-publication, PR creation, or hosted CI complete.
+was used. This satisfies the hard upstream-consumption gate. Commit `121dd235`
+then completed the authorized lifecycle deletion and consumer repair. Local
+verification is complete; publication, PR creation, and hosted CI remain open.
 
 ## Canonical-State Impact
 
 No additional canonical-state file is required. The committed guidance and
 human-owner-intent changes own the optional-tool and option-3 projection
-boundary. This record remains `in-progress` until upstream document consumption
-proof is followed by the authorized deletion, final review, publication, and
-hosted-CI completion work.
+boundary. Upstream consumption proof, authorized deletion, consumer repair, and
+local verification are complete. This record remains `in-progress` until final
+review clearance, publication, and hosted-CI completion.

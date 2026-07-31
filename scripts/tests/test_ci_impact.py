@@ -33,7 +33,9 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("Validate Graphify", workflow)
         self.assertNotIn('pip install "graphifyy==', workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )

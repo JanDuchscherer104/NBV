@@ -19,8 +19,10 @@ on:
       - "docs/**"
       - "scripts/agents_db.py"
       - "scripts/build_graphify_projection.py"
+      - "scripts/ci_impact.py"
       - "scripts/templates/lrz/**"
       - "scripts/tests/test_build_graphify_projection.py"
+      - "scripts/tests/test_ci_impact.py"
       - "scripts/validate_agent_memory.py"
       - "scripts/validate_qmd_frontmatter.py"
   workflow_dispatch:
