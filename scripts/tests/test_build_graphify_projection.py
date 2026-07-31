@@ -18,6 +18,7 @@ import build_graphify_projection as projection  # noqa: E402
 from build_graphify_projection import (  # noqa: E402
     ProjectionConfig,
     ProjectionError,
+    ProjectionResult,
     build_projection,
 )
 
@@ -68,7 +69,7 @@ class Fixture:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
         _git(root, "config", "user.email", "projection@example.invalid")
         _git(root, "config", "user.name", "Projection Test")
         self.write("src/model.py", "class Model:\n    pass\n")
@@ -153,24 +154,22 @@ class Fixture:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
-    def config(self, **overrides: object) -> ProjectionConfig:
-        values: dict[str, object] = {
-            "repo_root": self.root,
-            "thesis_root": Path("docs/typst/thesis/main.typ"),
-            "style_path": Path("docs/typst/shared/style.typ"),
-            "bibliography_paths": (
+    def config(self, *, output_path: Path = Path("graphify-input")) -> ProjectionConfig:
+        return ProjectionConfig(
+            repo_root=self.root,
+            thesis_root=Path("docs/typst/thesis/main.typ"),
+            style_path=Path("docs/typst/shared/style.typ"),
+            bibliography_paths=(
                 Path("docs/references.bib"),
                 Path("docs/references-qh.bib"),
             ),
-            "manifest_path": Path("docs/literature/sources.jsonl"),
-            "tex_root": Path("docs/literature/tex-src"),
-            "pdf_root": Path("docs/literature/pdf"),
-            "output_path": Path("graphify-input"),
-            "aria_code_ref": self.code_oid,
-            "aria_code_ref_source": "cli",
-        }
-        values.update(overrides)
-        return ProjectionConfig(**values)
+            manifest_path=Path("docs/literature/sources.jsonl"),
+            tex_root=Path("docs/literature/tex-src"),
+            pdf_root=Path("docs/literature/pdf"),
+            output_path=output_path,
+            aria_code_ref=self.code_oid,
+            aria_code_ref_source="cli",
+        )
 
 
 class ProjectionTests(unittest.TestCase):
@@ -179,9 +178,14 @@ class ProjectionTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.fixture = Fixture(Path(temp.name))
 
-    def build(self, *, check: bool = True, **overrides: object):
+    def build(
+        self,
+        *,
+        check: bool = True,
+        output_path: Path = Path("graphify-input"),
+    ) -> ProjectionResult:
         return build_projection(
-            self.fixture.config(**overrides),
+            self.fixture.config(output_path=output_path),
             runner=self.fixture.runner,
             check=check,
         )
@@ -215,6 +219,24 @@ class ProjectionTests(unittest.TestCase):
         )
         self.assertRegex(thesis_page, r"\]\(\.\./citations/[^)]+\.md\)")
 
+    def test_citations_are_linked_only_from_their_lexical_source(self) -> None:
+        result = self.build()
+        source_a = next(
+            body
+            for body in result.files.values()
+            if body.startswith("# thesis-source:docs/typst/thesis/sections/a.typ\n")
+        )
+        source_b = next(
+            body
+            for body in result.files.values()
+            if body.startswith("# thesis-source:docs/typst/thesis/sections/b.typ\n")
+        )
+
+        self.assertIn("citation:PaperA", source_a)
+        self.assertNotIn("citation:QhPaper", source_a)
+        self.assertIn("citation:QhPaper", source_b)
+        self.assertNotIn("citation:PaperA", source_b)
+
     def test_check_mode_leaves_existing_output_and_debris_unchanged(self) -> None:
         output = self.fixture.root / "graphify-input"
         output.mkdir()
@@ -232,6 +254,15 @@ class ProjectionTests(unittest.TestCase):
             with self.subTest(output=output):
                 with self.assertRaisesRegex(ProjectionError, r"outside|overlap|owner"):
                     self.build(output_path=output)
+
+    def test_output_with_symlink_ancestor_is_rejected(self) -> None:
+        outside_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(outside_temp.cleanup)
+        outside = Path(outside_temp.name)
+        (self.fixture.root / "generated").symlink_to(outside, target_is_directory=True)
+
+        with self.assertRaisesRegex(ProjectionError, r"symlink|physically"):
+            self.build(output_path=Path("generated/projection"))
 
     def test_runner_uses_only_git_and_typst_and_one_code_ref(self) -> None:
         self.build()
@@ -265,6 +296,23 @@ class ProjectionTests(unittest.TestCase):
                 call[call.index("--input") + 1],
                 f"aria-code-ref={self.fixture.code_oid}",
             )
+
+    def test_typst_verification_uses_unique_external_scratch_and_cleans_it(
+        self,
+    ) -> None:
+        self.build()
+        self.build()
+        outputs = [
+            Path(call[3])
+            for call in self.fixture.runner.calls
+            if call[:2] == ("typst", "compile")
+        ]
+
+        self.assertEqual(len(outputs), 2)
+        self.assertNotEqual(outputs[0], outputs[1])
+        for output in outputs:
+            self.assertFalse(output.is_relative_to(self.fixture.root))
+            self.assertFalse(output.exists())
 
     def test_dynamic_include_fails_while_inactive_comments_and_raw_are_ignored(
         self,
@@ -320,6 +368,26 @@ class ProjectionTests(unittest.TestCase):
         ):
             self.build()
 
+    def test_parenthesized_bibtex_entry_is_supported(self) -> None:
+        self.fixture.write(
+            "docs/references.bib",
+            "@misc(PaperA, title={Parenthesized}, eprint={2406.10224v2})\n",
+        )
+
+        rendered = self.rendered(self.build())
+
+        self.assertIn("# citation:PaperA", rendered)
+        self.assertIn("literature:arxiv:2406.10224", rendered)
+
+    def test_malformed_bibtex_entry_is_rejected(self) -> None:
+        self.fixture.write(
+            "docs/references.bib",
+            "@misc(PaperA, eprint={2406.10224v2}\n",
+        )
+
+        with self.assertRaisesRegex(ProjectionError, r"malformed.*BibTeX"):
+            self.build()
+
     def test_compiled_citation_missing_from_bibliographies_fails(self) -> None:
         self.fixture.runner.citations.append({"key": "Missing"})
         with self.assertRaisesRegex(
@@ -373,6 +441,102 @@ class ProjectionTests(unittest.TestCase):
         ]
         self.assertEqual(len(pages), 1)
 
+    def test_tag_and_sha_refs_at_same_oid_remain_distinct_targets(self) -> None:
+        section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
+        section.write_text(
+            section.read_text(encoding="utf-8")
+            + '#gh("src/model.py", ref: "v1.0.0", line: 1, end: 2)\n',
+            encoding="utf-8",
+        )
+        self.fixture.runner.links.append(
+            {"dest": f"{GITHUB}/blob/v1.0.0/src/model.py#L1-L2"}
+        )
+
+        rendered = self.rendered(self.build())
+
+        self.assertIn(
+            f"code-target:{REPOSITORY}@v1.0.0[{self.fixture.code_oid}]",
+            rendered,
+        )
+        self.assertIn(
+            f"code-target:{REPOSITORY}@{self.fixture.code_oid}"
+            f"[{self.fixture.code_oid}]",
+            rendered,
+        )
+        self.assertIn("pin_kind: release-tag", rendered)
+
+    def test_shared_code_target_has_one_page_and_source_local_relations(self) -> None:
+        self.fixture.write(
+            "docs/typst/thesis/sections/b.typ",
+            "@QhPaper\n"
+            f'#gh("src/model.py", ref: "{self.fixture.code_oid}", line: 1, end: 2)\n',
+        )
+        self.fixture.runner.links.append(
+            {"dest": f"{GITHUB}/blob/{self.fixture.code_oid}/src/model.py#L1-L2"}
+        )
+
+        result = self.build()
+        identity = (
+            f"code-target:{REPOSITORY}@{self.fixture.code_oid}"
+            f"[{self.fixture.code_oid}]:src/model.py:1-2"
+        )
+        target_pages = [
+            body for body in result.files.values() if body.startswith(f"# {identity}\n")
+        ]
+        source_pages = [
+            body
+            for body in result.files.values()
+            if body.startswith("# thesis-source:") and identity in body
+        ]
+
+        self.assertEqual(len(target_pages), 1)
+        self.assertEqual(len(source_pages), 2)
+
+    def test_gh_symbol_reconciles_only_its_exact_repository_search_url(self) -> None:
+        section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
+        section.write_text(
+            section.read_text(encoding="utf-8")
+            + '#gh-symbol("Model", language: "python")\n',
+            encoding="utf-8",
+        )
+        exact = (
+            f"https://github.com/search?q=repo%3A{REPOSITORY}"
+            "+language%3Apython+symbol%3AModel&type=code"
+        )
+        self.fixture.runner.links.extend(
+            [
+                {"dest": exact},
+                {
+                    "dest": f"https://github.com/search?q=repo%3A{REPOSITORY}"
+                    "+language%3Arust+symbol%3AModel&type=code"
+                },
+                {"dest": "https://github.com/search?q=Model&type=code"},
+            ]
+        )
+
+        rendered = self.rendered(self.build())
+
+        self.assertIn("status: unresolved-dynamic", rendered)
+        self.assertIn(f"compiled_url: {exact}", rendered)
+        self.assertNotIn("language%3Arust", rendered)
+
+    def test_gh_symbol_rejects_unrelated_search_as_compiled_evidence(self) -> None:
+        section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
+        section.write_text(
+            section.read_text(encoding="utf-8")
+            + '#gh-symbol("Model", language: "python")\n',
+            encoding="utf-8",
+        )
+        self.fixture.runner.links.append(
+            {
+                "dest": f"https://github.com/search?q=repo%3A{REPOSITORY}"
+                "+language%3Arust+symbol%3AModel&type=code"
+            }
+        )
+
+        with self.assertRaisesRegex(ProjectionError, r"destination multiplicity"):
+            self.build()
+
     def test_final_gh_with_mutable_main_ref_is_rejected(self) -> None:
         section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
         section.write_text(
@@ -384,6 +548,12 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ProjectionError, r"main.*final|mutable.*gh|gh.*mutable"
         ):
+            self.build()
+
+    def test_missing_main_ref_is_not_replaced_with_head(self) -> None:
+        _git(self.fixture.root, "branch", "-m", "trunk")
+
+        with self.assertRaisesRegex(ProjectionError, r"resolve ref main"):
             self.build()
 
     def test_asset_proxies_record_lexical_present_and_missing_without_content(
@@ -434,6 +604,26 @@ class ProjectionTests(unittest.TestCase):
         self.assertFalse(backup.exists())
         self.assertTrue(result.files)
 
+    def test_index_records_ref_resolution_counts_and_scoped_dirt(self) -> None:
+        self.fixture.write("unrelated.tmp", "dirty but out of scope\n")
+        clean_index = self.build().files["index.md"]
+        self.assertIn(
+            f"aria_code_ref_resolved_oid: {self.fixture.code_oid}", clean_index
+        )
+        self.assertIn("aria_code_ref_pin_kind: full-sha", clean_index)
+        self.assertRegex(clean_index, r"entity_count: \d+")
+        for family in ("thesis", "code", "citations", "literature", "assets"):
+            self.assertRegex(clean_index, rf"\[{family}\]\([^)]+\): \d+")
+        self.assertIn("owner_worktree_state: clean", clean_index)
+
+        bibliography = self.fixture.root / "docs/references.bib"
+        bibliography.write_text(
+            bibliography.read_text(encoding="utf-8") + "\n",
+            encoding="utf-8",
+        )
+        dirty_index = self.build().files["index.md"]
+        self.assertIn("owner_worktree_state: dirty", dirty_index)
+
     def test_failed_swap_restores_the_previous_output(self) -> None:
         output = self.fixture.root / "graphify-input"
         output.mkdir()
@@ -455,6 +645,16 @@ class ProjectionTests(unittest.TestCase):
                     self.fixture.config(), runner=self.fixture.runner, check=False
                 )
         self.assertEqual(old.read_text(encoding="utf-8"), "old\n")
+
+    def test_failed_first_install_leaves_no_partial_output_or_temp(self) -> None:
+        with mock.patch.object(
+            projection, "_replace_path", side_effect=OSError("first install failed")
+        ):
+            with self.assertRaisesRegex(ProjectionError, r"previous output restored"):
+                self.build(check=False)
+
+        self.assertFalse((self.fixture.root / "graphify-input").exists())
+        self.assertFalse((self.fixture.root / ".graphify-input.tmp").exists())
 
 
 if __name__ == "__main__":

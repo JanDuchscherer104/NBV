@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Callable, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
@@ -94,6 +95,40 @@ class _Page:
     lines: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class _RenderData:
+    revision: str
+    aria_code_oid: str
+    aria_code_pin_kind: str
+    closure: Sequence[Path]
+    citations_by_source: Mapping[Path, Counter[str]]
+    bib: Mapping[str, _BibEntry]
+    joined: Mapping[str, _ManifestEntry]
+    manifest: Sequence[_ManifestEntry]
+    targets: Mapping[str, Mapping[str, str]]
+    relations: Sequence[Mapping[str, object]]
+    warnings: Sequence[str]
+
+
+@dataclass
+class _Pages:
+    thesis: dict[Path, _Page]
+    citations: dict[str, _Page]
+    literature: dict[str, _Page]
+    code: dict[str, _Page]
+    assets: dict[str, _Page]
+    asset_owners: dict[str, tuple[str, str, str]]
+
+    def all(self) -> list[_Page]:
+        return [
+            *self.thesis.values(),
+            *self.citations.values(),
+            *self.literature.values(),
+            *self.code.values(),
+            *self.assets.values(),
+        ]
+
+
 def _default_runner(
     argv: Sequence[str], *, cwd: Path
 ) -> subprocess.CompletedProcess[str]:
@@ -146,6 +181,46 @@ def _strip_typst_noncode(text: str) -> str:
     return text
 
 
+def _literal_include(relative: Path, value: str, clean: str, position: int) -> Path:
+    if value.startswith("@"):
+        return relative
+    include = PurePosixPath(value)
+    line = clean.count("\n", 0, position) + 1
+    if include.is_absolute():
+        raise ProjectionError(
+            f"{relative.as_posix()}:{line}: include escapes repository"
+        )
+    normalized = posixpath.normpath(
+        posixpath.join(relative.parent.as_posix(), include.as_posix())
+    )
+    if normalized == ".." or normalized.startswith("../"):
+        raise ProjectionError(
+            f"{relative.as_posix()}:{line}: include escapes repository"
+        )
+    return Path(PurePosixPath(normalized))
+
+
+def _included_sources(relative: Path, clean: str) -> list[Path]:
+    literal_spans: list[tuple[int, int]] = []
+    targets: list[Path] = []
+    for match in re.finditer(r'#(?:include|import)\s+"([^"]+)"', clean):
+        literal_spans.append(match.span())
+        target = _literal_include(relative, match.group(1), clean, match.start())
+        if target != relative:
+            targets.append(target)
+    for match in re.finditer(r"#(?:include|import)\s+([^\s\n,;)]+)", clean):
+        if any(start <= match.start() < end for start, end in literal_spans):
+            continue
+        token = match.group(1)
+        if token.startswith('"') or token.startswith("@"):
+            continue
+        line = clean.count("\n", 0, match.start()) + 1
+        raise ProjectionError(
+            f"{relative.as_posix()}:{line}: dynamic include/import is unsupported"
+        )
+    return targets
+
+
 def _source_closure(config: ProjectionConfig) -> tuple[Path, ...]:
     root = _relative_path(config.thesis_root, label="thesis root")
     pending = [root]
@@ -159,38 +234,7 @@ def _source_closure(config: ProjectionConfig) -> tuple[Path, ...]:
             raise ProjectionError(f"missing active Typst owner: {relative.as_posix()}")
         seen.add(relative)
         clean = _strip_typst_noncode(source.read_text(encoding="utf-8"))
-        literal_spans: list[tuple[int, int]] = []
-        for match in re.finditer(r'#(?:include|import)\s+"([^"]+)"', clean):
-            literal_spans.append(match.span())
-            value = match.group(1)
-            if value.startswith("@"):
-                continue
-            include = PurePosixPath(value)
-            if include.is_absolute():
-                line = clean.count("\n", 0, match.start()) + 1
-                raise ProjectionError(
-                    f"{relative.as_posix()}:{line}: include escapes repository"
-                )
-            normalized = posixpath.normpath(
-                posixpath.join(relative.parent.as_posix(), include.as_posix())
-            )
-            if normalized == ".." or normalized.startswith("../"):
-                line = clean.count("\n", 0, match.start()) + 1
-                raise ProjectionError(
-                    f"{relative.as_posix()}:{line}: include escapes repository"
-                )
-            target = Path(PurePosixPath(normalized))
-            pending.append(target)
-        for match in re.finditer(r"#(?:include|import)\s+([^\s\n,;)]+)", clean):
-            if any(start <= match.start() < end for start, end in literal_spans):
-                continue
-            token = match.group(1)
-            if token.startswith('"') or token.startswith("@"):
-                continue
-            line = clean.count("\n", 0, match.start()) + 1
-            raise ProjectionError(
-                f"{relative.as_posix()}:{line}: dynamic include/import is unsupported"
-            )
+        pending.extend(_included_sources(relative, clean))
     return tuple(sorted(seen, key=lambda item: item.as_posix()))
 
 
@@ -198,8 +242,8 @@ def _lexical_sources(
     config: ProjectionConfig,
     closure: Iterable[Path],
     citation_keys: Iterable[str],
-) -> tuple[Counter[str], list[_Macro]]:
-    citations: Counter[str] = Counter()
+) -> tuple[dict[Path, Counter[str]], list[_Macro]]:
+    citations_by_source: dict[Path, Counter[str]] = {}
     macros: list[_Macro] = []
     macro_re = re.compile(r"#(gh-symbol|gh-wip|gh)\s*\(([^\n)]*)\)")
     citation_alternation = "|".join(
@@ -212,6 +256,7 @@ def _lexical_sources(
         else None
     )
     for relative in closure:
+        citations: Counter[str] = Counter()
         clean = _strip_typst_noncode(
             _owner_path(config, relative).read_text(encoding="utf-8")
         )
@@ -219,6 +264,7 @@ def _lexical_sources(
         if citation_re is not None:
             for token in citation_re.findall(citation_text):
                 citations[token] += 1
+        citations_by_source[relative] = citations
         for match in macro_re.finditer(clean):
             kind, body = match.groups()
             first = re.match(r'\s*"([^"]+)"', body)
@@ -248,7 +294,7 @@ def _lexical_sources(
                     language=named.get("language"),
                 )
             )
-    return citations, macros
+    return citations_by_source, macros
 
 
 def _query_typst(
@@ -366,6 +412,30 @@ def _normalize_url(value: object) -> str | None:
     )
 
 
+def _bib_entry_end(text: str, owner: Path, body_start: int, opener: str) -> int:
+    closer = "}" if opener == "{" else ")"
+    depth = 1
+    cursor = body_start
+    while cursor < len(text) and depth:
+        if text[cursor] == opener:
+            depth += 1
+        elif text[cursor] == closer:
+            depth -= 1
+        cursor += 1
+    if depth:
+        raise ProjectionError(f"{owner.as_posix()}: malformed BibTeX entry")
+    return cursor
+
+
+def _bib_fields(body: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for name in ("eprint", "arxiv", "doi", "url"):
+        match = re.search(rf'(?is)\b{name}\s*=\s*(?:{{([^{{}}]*)}}|"([^"]*)")', body)
+        if match:
+            fields[name] = (match.group(1) or match.group(2)).strip()
+    return fields
+
+
 def _bib_entries(config: ProjectionConfig) -> dict[str, _BibEntry]:
     entries: dict[str, _BibEntry] = {}
     for owner in config.bibliography_paths:
@@ -378,29 +448,12 @@ def _bib_entries(config: ProjectionConfig) -> dict[str, _BibEntry]:
             absolute = index + start.start()
             body_start = index + start.end()
             opener = "{" if "{" in start.group(0) else "("
-            closer = "}" if opener == "{" else ")"
-            depth = 1
-            cursor = body_start
-            while cursor < len(text) and depth:
-                if text[cursor] == opener:
-                    depth += 1
-                elif text[cursor] == closer:
-                    depth -= 1
-                cursor += 1
-            if depth:
-                raise ProjectionError(f"{owner.as_posix()}: malformed BibTeX entry")
+            cursor = _bib_entry_end(text, owner, body_start, opener)
             key = start.group(1)
             if key in entries:
                 raise ProjectionError(f"duplicate bibliography key {key}")
             body = text[body_start : cursor - 1]
-            fields: dict[str, str] = {}
-            for name in ("eprint", "arxiv", "doi", "url"):
-                match = re.search(
-                    rf"(?is)\b{name}\s*=\s*(?:{{([^{{}}]*)}}|\"([^\"]*)\")",
-                    body,
-                )
-                if match:
-                    fields[name] = (match.group(1) or match.group(2)).strip()
+            fields = _bib_fields(body)
             line = text.count("\n", 0, absolute) + 1
             entries[key] = _BibEntry(
                 key=key,
@@ -523,10 +576,6 @@ def _resolve_ref(config: ProjectionConfig, runner: Runner, ref: str) -> tuple[st
     )
     if result.returncode == 0:
         return result.stdout.strip(), pin_kind
-    if ref == "main" and pin_kind == "mutable":
-        return _run(
-            runner, ["git", "rev-parse", "HEAD"], config.repo_root
-        ).strip(), pin_kind
     detail = (result.stderr or result.stdout or "unresolved ref").strip()
     raise ProjectionError(f"git failed to resolve ref {ref}: {detail}")
 
@@ -546,6 +595,13 @@ def _code_url(repository: str, ref: str, path: str, start: int, end: int) -> str
     return f"https://github.com/{repository}/blob/{ref}/{path}{fragment}"
 
 
+def _symbol_url(repository: str, symbol: str, language: str) -> str:
+    return (
+        f"https://github.com/search?q=repo%3A{repository}"
+        f"+language%3A{language}+symbol%3A{symbol}&type=code"
+    )
+
+
 def _code_targets(
     config: ProjectionConfig,
     runner: Runner,
@@ -553,14 +609,18 @@ def _code_targets(
     macros: Sequence[_Macro],
     compiled_links: Sequence[str],
 ) -> tuple[dict[str, dict[str, str]], list[dict[str, object]]]:
+    expected_urls: list[str] = []
+    expected_symbol_urls = {
+        _symbol_url(repository, macro.target, macro.language or "python")
+        for macro in macros
+        if macro.kind == "gh-symbol"
+    }
     admitted = [
         link
         for link in compiled_links
         if link.startswith(f"https://github.com/{repository}/blob/")
-        or link.startswith("https://github.com/search?")
-        and f"repo%3A{repository}" in link
+        or link in expected_symbol_urls
     ]
-    expected_urls: list[str] = []
     relations: list[dict[str, object]] = []
     targets: dict[str, dict[str, str]] = {}
     head = _run(runner, ["git", "rev-parse", "HEAD"], config.repo_root).strip()
@@ -570,11 +630,14 @@ def _code_targets(
     dirty_paths = {line[3:] for line in dirty_output.splitlines() if len(line) > 3}
     for macro in macros:
         if macro.kind == "gh-symbol":
+            url = _symbol_url(repository, macro.target, macro.language or "python")
+            expected_urls.append(url)
             relations.append(
                 {
                     "kind": macro.kind,
                     "status": "unresolved-dynamic",
                     "target": macro.target,
+                    "compiled_url": url,
                     "source": macro.source.as_posix(),
                     "line": macro.line,
                     "column": macro.column,
@@ -668,36 +731,19 @@ def _human_link(source_path: str, owner: str, label: str) -> str:
     return f"[{label}]({posixpath.relpath(target, posixpath.dirname(source_path))}) (human provenance)"
 
 
-def _render_pages(
-    config: ProjectionConfig,
-    runner: Runner,
-    revision: str,
-    closure: Sequence[Path],
-    citations: Counter[str],
-    bib: Mapping[str, _BibEntry],
-    joined: Mapping[str, _ManifestEntry],
-    manifest: Sequence[_ManifestEntry],
-    targets: Mapping[str, Mapping[str, str]],
-    relations: Sequence[Mapping[str, object]],
-    warnings: Sequence[str],
-) -> dict[str, str]:
-    pages: list[_Page] = []
-    thesis_pages = {
+def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
+    thesis = {
         source: _Page(f"thesis-source:{source.as_posix()}", "thesis")
-        for source in closure
+        for source in data.closure
     }
-    pages.extend(thesis_pages.values())
-    citation_pages = {key: _Page(f"citation:{key}", "citations") for key in bib}
-    pages.extend(citation_pages.values())
-    literature_pages = {
-        row.identity: _Page(row.identity, "literature") for row in manifest
+    citations = {key: _Page(f"citation:{key}", "citations") for key in data.bib}
+    literature = {
+        row.identity: _Page(row.identity, "literature") for row in data.manifest
     }
-    pages.extend(literature_pages.values())
-    target_pages = {identity: _Page(identity, "code") for identity in targets}
-    pages.extend(target_pages.values())
-    asset_pages: dict[str, _Page] = {}
+    code = {identity: _Page(identity, "code") for identity in data.targets}
+    assets: dict[str, _Page] = {}
     asset_owners: dict[str, tuple[str, str, str]] = {}
-    for row in manifest:
+    for row in data.manifest:
         for kind, root, field_name in (
             ("tex-root", config.tex_root, "tex_dir"),
             ("pdf", config.pdf_root, "pdf_file"),
@@ -706,37 +752,46 @@ def _render_pages(
             if relative is None:
                 continue
             identity = f"{kind}:{relative.as_posix()}"
-            asset_pages.setdefault(identity, _Page(identity, "assets"))
+            assets.setdefault(identity, _Page(identity, "assets"))
             status = (
                 "present" if _lexists(config.repo_root / relative) else "missing-local"
             )
             asset_owners[identity] = (relative.as_posix(), status, kind)
-    pages.extend(asset_pages.values())
+    return _Pages(thesis, citations, literature, code, assets, asset_owners)
+
+
+def _page_paths(pages: _Pages) -> dict[str, str]:
     paths: dict[str, str] = {}
-    for page in pages:
+    for page in pages.all():
         path = _page_path(page)
         if page.identity in paths or path in paths.values():
             raise ProjectionError(
                 f"duplicate generated identity or filename: {page.identity}"
             )
         paths[page.identity] = path
+    return paths
 
-    for source, page in thesis_pages.items():
+
+def _populate_thesis_pages(
+    data: _RenderData, pages: _Pages, paths: Mapping[str, str]
+) -> None:
+    for source, page in pages.thesis.items():
         source_path = paths[page.identity]
         page.lines.append(
             f"owner: {_human_link(source_path, source.as_posix(), source.as_posix())}"
         )
-        for key in sorted(citations):
+        for key in sorted(data.citations_by_source[source]):
             page.lines.append(
                 f"citation: {_link(source_path, paths[f'citation:{key}'], f'citation:{key}')}"
             )
-        for relation in relations:
+        for relation in data.relations:
             if relation.get("source") != source.as_posix():
                 continue
             target = str(relation["target"])
-            page.lines.append(
-                f"relation: {_link(source_path, paths[target], target) if target in paths else target}"
+            linked_target = (
+                _link(source_path, paths[target], target) if target in paths else target
             )
+            page.lines.append(f"relation: {linked_target}")
             for key in (
                 "kind",
                 "compiled_url",
@@ -749,24 +804,37 @@ def _render_pages(
             ):
                 if key in relation:
                     page.lines.append(f"  {key}: {relation[key]}")
-    for key, page in citation_pages.items():
+
+
+def _populate_citation_pages(
+    data: _RenderData, pages: _Pages, paths: Mapping[str, str]
+) -> None:
+    for key, page in pages.citations.items():
         source_path = paths[page.identity]
-        entry = bib[key]
+        entry = data.bib[key]
         page.lines.append(
             f"owner: {_human_link(source_path, entry.owner.as_posix(), entry.locator)}"
         )
-        if key in joined:
-            target = joined[key].identity
+        if key in data.joined:
+            target = data.joined[key].identity
             page.lines.append(
                 f"literature: {_link(source_path, paths[target], target)}"
             )
         else:
             page.lines.append("join_status: unmatched")
+
+
+def _populate_literature_pages(
+    config: ProjectionConfig,
+    data: _RenderData,
+    pages: _Pages,
+    paths: Mapping[str, str],
+) -> None:
     matched_by_row: dict[str, list[str]] = defaultdict(list)
-    for key, row in joined.items():
+    for key, row in data.joined.items():
         matched_by_row[row.identity].append(key)
-    for row in manifest:
-        page = literature_pages[row.identity]
+    for row in data.manifest:
+        page = pages.literature[row.identity]
         source_path = paths[page.identity]
         page.lines.extend(
             [
@@ -789,13 +857,18 @@ def _render_pages(
                 page.lines.append(
                     f"asset: {_link(source_path, paths[identity], identity)}"
                 )
-    for identity, facts in targets.items():
-        target_pages[identity].lines.extend(
+
+
+def _populate_fact_pages(
+    data: _RenderData, pages: _Pages, paths: Mapping[str, str]
+) -> None:
+    for identity, facts in data.targets.items():
+        pages.code[identity].lines.extend(
             f"{key}: {value}" for key, value in facts.items()
         )
-    for identity, page in asset_pages.items():
+    for identity, page in pages.assets.items():
         source_path = paths[identity]
-        owner, status, kind = asset_owners[identity]
+        owner, status, kind = pages.asset_owners[identity]
         page.lines.extend(
             [
                 f"owner: {_human_link(source_path, owner, owner)}",
@@ -806,11 +879,24 @@ def _render_pages(
             ]
         )
 
-    owner_paths = list(closure) + [
+
+def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path]:
+    return [
+        *closure,
         config.style_path,
         *config.bibliography_paths,
         config.manifest_path,
     ]
+
+
+def _render_index(
+    config: ProjectionConfig,
+    runner: Runner,
+    data: _RenderData,
+    pages: _Pages,
+    paths: Mapping[str, str],
+) -> str:
+    owner_paths = _owner_paths(config, data.closure)
     owner_rows = []
     for owner in sorted(set(owner_paths), key=lambda path: path.as_posix()):
         digest = hashlib.sha256(_owner_path(config, owner).read_bytes()).hexdigest()
@@ -821,11 +907,15 @@ def _render_pages(
         "Derived navigation only; exact repository sources remain authoritative.",
         "",
         f"schema_version: {SCHEMA_VERSION}",
-        f"source_revision: {revision}",
+        f"source_revision: {data.revision}",
         f"aria_code_ref: {config.aria_code_ref}",
         f"aria_code_ref_source: {config.aria_code_ref_source}",
+        f"aria_code_ref_pin_kind: {data.aria_code_pin_kind}",
+        f"aria_code_ref_resolved_oid: {data.aria_code_oid}",
         f"owner_worktree_state: {'dirty' if _owners_dirty(config, runner, owner_paths) else 'clean'}",
-        f"warnings: {len(warnings)}",
+        f"entity_count: {len(pages.all())}",
+        "errors: 0",
+        f"warnings: {len(data.warnings)}",
         "",
         "## Owner digests",
         "",
@@ -834,15 +924,34 @@ def _render_pages(
         "## Families",
         "",
     ]
+    families = Counter(page.family for page in pages.all())
+    for family in ("thesis", "code", "citations", "literature", "assets"):
+        if families[family]:
+            candidates = sorted(
+                path for path in paths.values() if path.startswith(f"{family}/")
+            )
+            index.append(
+                f"- {_link('index.md', candidates[0], family)}: {families[family]}"
+            )
+    return "\n".join(index) + "\n"
+
+
+def _render_pages(
+    config: ProjectionConfig,
+    runner: Runner,
+    data: _RenderData,
+) -> dict[str, str]:
+    pages = _make_pages(config, data)
+    paths = _page_paths(pages)
+    _populate_thesis_pages(data, pages, paths)
+    _populate_citation_pages(data, pages, paths)
+    _populate_literature_pages(config, data, pages, paths)
+    _populate_fact_pages(data, pages, paths)
     files: dict[str, str] = {}
-    for page in sorted(pages, key=lambda item: item.identity):
+    for page in sorted(pages.all(), key=lambda item: item.identity):
         path = paths[page.identity]
         files[path] = "\n".join([f"# {page.identity}", "", *page.lines, ""]) + "\n"
-    for family in ("thesis", "code", "citations", "literature", "assets"):
-        candidates = sorted(path for path in files if path.startswith(f"{family}/"))
-        if candidates:
-            index.append(f"- {_link('index.md', candidates[0], family)}")
-    files["index.md"] = "\n".join(index) + "\n"
+    files["index.md"] = _render_index(config, runner, data, pages, paths)
     _validate_markdown_links(files)
     return dict(sorted(files.items()))
 
@@ -881,6 +990,14 @@ def _validate_output(
         if relative == owner or relative in owner.parents or owner in relative.parents:
             raise ProjectionError(f"output overlaps owner path: {owner.as_posix()}")
     output = config.repo_root / relative
+    repository = config.repo_root.resolve()
+    if not output.resolve(strict=False).is_relative_to(repository):
+        raise ProjectionError("output physically escapes repository")
+    cursor = config.repo_root
+    for part in relative.parts:
+        cursor /= part
+        if _lexists(cursor) and cursor.is_symlink():
+            raise ProjectionError(f"output path has symlink component: {cursor}")
     temporary = output.parent / f".{output.name}.tmp"
     backup = output.parent / f".{output.name}.backup"
     return output, temporary, backup
@@ -962,16 +1079,15 @@ def build_projection(
         if _lexists(path)
     )
     bib = _bib_entries(config)
-    lexical_citations, macros = _lexical_sources(config, closure, bib)
+    citations_by_source, macros = _lexical_sources(config, closure, bib)
+    lexical_citations: Counter[str] = Counter()
+    for citations in citations_by_source.values():
+        lexical_citations.update(citations)
     compiled_cites = _query_typst(config, runner, "cite")
     compiled_links = _query_typst(config, runner, "link")
     _query_typst(config, runner, "heading")
-    compile_output = temporary.parent / f".{output.name}.verify.pdf"
-    try:
-        _compile_typst(config, runner, compile_output)
-    finally:
-        if _lexists(compile_output):
-            compile_output.unlink()
+    with tempfile.TemporaryDirectory(prefix="aria-graphify-verify-") as scratch:
+        _compile_typst(config, runner, Path(scratch) / "thesis.pdf")
     compiled_keys = Counter(
         _citation_key(value)
         for row in compiled_cites
@@ -1001,18 +1117,25 @@ def build_projection(
     ]
     targets, relations = _code_targets(config, runner, repository, macros, link_values)
     revision = _run(runner, ["git", "rev-parse", "HEAD"], config.repo_root).strip()
+    aria_code_oid, aria_code_pin_kind = _resolve_ref(
+        config, runner, config.aria_code_ref
+    )
     files = _render_pages(
         config,
         runner,
-        revision,
-        closure,
-        lexical_citations,
-        bib,
-        joined,
-        manifest,
-        targets,
-        relations,
-        warnings,
+        _RenderData(
+            revision=revision,
+            aria_code_oid=aria_code_oid,
+            aria_code_pin_kind=aria_code_pin_kind,
+            closure=closure,
+            citations_by_source=citations_by_source,
+            bib=bib,
+            joined=joined,
+            manifest=manifest,
+            targets=targets,
+            relations=relations,
+            warnings=warnings,
+        ),
     )
     if not check:
         _install(output, temporary, backup, files)
