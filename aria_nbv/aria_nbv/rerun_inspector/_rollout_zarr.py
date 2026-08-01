@@ -1,4 +1,4 @@
-"""Inspect validated rollout Zarr facts without mutating replay artifacts.
+"""Inspect rollout Zarr facts without mutating replay artifacts.
 
 This module owns rollout-row resolution, full-shell candidate visualization,
 selected-path timelines, branch plots, target provenance, and selected-depth
@@ -85,7 +85,13 @@ _TARGET_RRI_RANK_SEMANTICS = "valid_finite_target_rri_desc"
 
 
 class RerunRolloutZarrLogger:
-    """Log one multistep rollout chain from ``rollouts.zarr`` to Rerun."""
+    """Log one multistep rollout chain from ``rollouts.zarr`` to Rerun.
+
+    Shared rollout, step, target, and selected-depth interpretation comes from
+    :mod:`aria_nbv.rollouts.read_model`; this logger owns only Rerun entities,
+    timelines, layer policy, and diagnostic presentation.  It records
+    validation findings as metadata and never mutates the source store.
+    """
 
     def __init__(self, config: RerunOfflineInspectorConfig, *, rr_module: RerunModule | None = None) -> None:
         """Create a rollout-store logger."""
