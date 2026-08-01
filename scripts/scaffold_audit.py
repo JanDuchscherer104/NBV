@@ -43,6 +43,7 @@ NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
         "entity-aware-rri",
         "nbv-geometry-contracts",
         "rerun-nbv-inspector",
+        "zarr-python",
     }
 )
 OPTIONAL_METADATA = {
