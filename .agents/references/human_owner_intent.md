@@ -69,17 +69,25 @@ or repeatable workflows.
   source without them. Graphify's two content-addressed semantic cache
   namespaces are nevertheless standard worktree prerequisites so every agent
   can reuse extraction results whenever Graphify is available.
-- Use the official upstream Codex plugin for MemPalace and keep its shared,
-  user-local project memory in the `aria-nbv` wing. Future live Codex work may
-  be retained through upstream hooks and explicit checkpoints.
-- Mine reviewed debriefs, canonical state, current source, reviewed references,
-  and tracked TeX, BibTeX, and literature notes as project documents. Any
-  historical Codex-session backfill must be project-filtered and reviewed as a
-  separate operation.
-- Exclude raw transcript stores, archives, runtime state, downloaded PDF
-  corpora, datasets, generated artifacts, caches, credentials, and private
-  unrelated sessions from MemPalace mining by default. MemPalace retrieval is
-  evidence and never promotes content into repository truth automatically.
+- Use the official upstream Codex plugin for MemPalace and keep its reviewed
+  corpus in user-local wings for the current thesis, curated literature reviews,
+  primary-paper PDFs, remaining project documentation, native debriefs, and an
+  explicitly opt-in ARIA Codex history. The repository owns neither a wrapper
+  nor a tracked runtime corpus.
+- Preserve composition through source files and canonical rooms: thesis rooms
+  follow the Typst chapter/include structure; literature-review and paper rooms
+  follow the domain hierarchy in `docs/contents/literature/index.qmd`; debrief
+  and Codex-history sources retain authored-date provenance. Retrieval chunks
+  remain evidence, not independent claims or reconstructed document hierarchy.
+- Mine all reviewed primary PDFs under `docs/literature/pdf` but not their
+  duplicate TeX mirrors. Historical Codex backfill is limited to root ARIA-NBV
+  tasks, excludes child-agent/tool/system/runtime content, and remains a
+  separate opt-in wing rather than the default search corpus.
+- Exclude code, tests, active configuration, archives, runtime state, datasets,
+  generated artifacts, caches, credentials, and private unrelated sessions.
+  Locate implementation behavior only from its defining repository source,
+  tests, and configuration. MemPalace retrieval is evidence and never promotes
+  content into repository truth automatically.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.

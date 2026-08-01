@@ -1,6 +1,6 @@
 ---
 name: aria-nbv-context
-description: Use to localize unknown ARIA-NBV files, symbols, docs, or source families through deterministic local discovery or eligible Graphify navigation before handoff.
+description: Use to localize unknown ARIA-NBV owners through deterministic discovery or optional semantic recall of prior decisions, related work, and failed approaches before handoff.
 metadata:
   mode: router
   not_when:
@@ -15,6 +15,7 @@ metadata:
     - "nearest applicable AGENTS.md"
     - "targeted rg or generated context evidence"
     - "freshness evidence before any Graphify-backed claim"
+    - "exact-source verification after any MemPalace result"
   applies_to:
     - "**"
   triggers:
@@ -23,6 +24,7 @@ metadata:
     - "where is this implemented"
     - "source family"
     - "codebase architecture, file relationships, or project-content questions"
+    - "semantic recall of prior decisions, related work, or failed approaches"
   must_read:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
@@ -91,21 +93,47 @@ content-addressed cache namespaces. Only those caches are shared. Projections,
 graphs, manifests, AST state, and semantic run state remain worktree-local, and
 cache presence never establishes graph freshness.
 
+## MemPalace semantic-recall branch
+
+Use semantic recall only when prior decisions, failed approaches, unknown
+ownership, or cross-surface relationships materially improve the task. Known
+files and symbols, implementation, tests, and active configuration use direct
+`rg`, code-index, and exact-source reads; code is outside the reviewed corpus.
+Use only a prompt-visible MCP search surface verified by upstream `--read-only`
+plus Codex's explicit fail-closed `enabled_tools` allowlist. Otherwise report it
+unavailable or unverified and continue deterministically.
+Read-only means mutating MCP tools are hidden and refused, although Chroma may
+still update internal bookkeeping while serving a search.
+
+Choose the smallest wing: `aria-thesis`; `aria-literature-reviews` then the
+matching `aria-papers` room for primary evidence; `aria-project-docs`;
+`aria-debriefs`; or, only for explicit raw-history requests,
+`aria-codex-history`. Treat results as candidate evidence: record source and
+authored date, open the exact current-worktree source, and apply source order.
+Chronology alone never implies supersession; ingestion-only dates stay unknown.
+
 ## Workflow
 
 1. Read `AGENTS.md` and `.agents/references/source_order.md`.
-2. Take the Graphify branch above only when its eligibility gate succeeds;
+2. Route implementation, test, configuration, or known-symbol questions
+   directly to `rg`, code-index, and the defining source; do not query
+   MemPalace for them.
+3. When semantic recall is eligible, choose one reviewed wing and normally one
+   room through the MemPalace branch above. Search `aria-codex-history` only for
+   an explicit raw-history request.
+4. Take the Graphify branch above only when its eligibility gate succeeds;
    otherwise continue with exact-source discovery.
-3. Use `docs/_generated/context/source_index.md` only when it already exists or
+5. Use `docs/_generated/context/source_index.md` only when it already exists or
    source-family routing is unclear; refresh with `make context` only when
    needed.
-4. Use source-specific outline tools before broad raw reads:
+6. Use source-specific outline tools before broad raw reads:
    - Quarto: `scripts/nbv_qmd_outline.sh --compact`
    - Typst: `scripts/nbv_typst_includes.py --paper --mode outline`
    - Literature: `scripts/nbv_literature_index.sh`
    - Code/contracts: `scripts/nbv_get_context.sh modules|contracts|match <term>`
-5. Open the nearest nested `AGENTS.md` once the surface is known.
-6. Use targeted `rg` inside the narrowed file set.
+7. Open the exact candidate source and nearest nested `AGENTS.md` once the
+   surface is known; reject optional retrieval that conflicts with its owner.
+8. Use targeted `rg` inside the narrowed file set.
 
 ## Zoom-Out Output
 

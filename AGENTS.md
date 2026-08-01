@@ -65,9 +65,14 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Optional OMX, MCP, graph, memory, and autoresearch tools produce evidence or
   proposals, not repo-owned truth. Apply durable changes only through the
   owning source, package guidance, docs, or Agents DB surface.
-- Optional MemPalace use comes from the official upstream Codex plugin, uses
-  the `aria-nbv` wing, and follows the reviewed corpus boundary in
-  `.agents/references/human_owner_intent.md`; the repository owns no wrapper.
+- Optional MemPalace use comes from the official upstream Codex plugin and the
+  reviewed user-local thesis, literature, project-docs, debrief, and opt-in
+  Codex-history wings in `.agents/references/human_owner_intent.md`; the
+  repository owns no wrapper. Code, tests, and active configuration stay out of
+  MemPalace and are discovered from their exact repository owners.
+- For semantic recall of prior decisions, related work, failed approaches, or
+  cross-surface context, use `aria-nbv-context` lazily. If MemPalace is absent
+  or its read-only status is unverified, continue through exact-source discovery.
 
 ## Instruction Capture
 - Repo invariant: update this file or the nearest nested `AGENTS.md`.
