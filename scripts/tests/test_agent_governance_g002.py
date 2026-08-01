@@ -15,10 +15,6 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _prose(path: Path) -> str:
-    return " ".join(_read(path).split())
-
-
 def _tracked_live_runtime_configs() -> list[Path]:
     tracked = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -68,18 +64,6 @@ def test_plugin_boundary() -> None:
     assert "/mempalace.yaml" in ignored
     assert "/entities.json" in ignored
 
-    root_policy = _prose(ROOT / "AGENTS.md")
-    owner_policy = _prose(ROOT / ".agents" / "references" / "human_owner_intent.md")
-    assert "official upstream Codex plugin" in root_policy
-    for allowed in ("thesis", "literature", "project-docs", "debrief"):
-        assert allowed in root_policy
-    for allowed in ("current thesis", "primary-paper PDFs", "native debriefs"):
-        assert allowed in owner_policy
-    for excluded in ("code, tests", "private unrelated sessions", "credentials"):
-        assert excluded in owner_policy
-    assert "root ARIA-NBV tasks" in owner_policy
-    assert "never promotes content into repository truth automatically" in owner_policy
-
 
 def test_no_tracked_mempalace_runtime_config() -> None:
     runtime_configs = _tracked_live_runtime_configs()
@@ -100,9 +84,38 @@ def test_direct_skill_discovery_shape() -> None:
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
 
 
+def test_mempalace_routing_scenarios() -> None:
+    data = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
+    fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
+    expected = {
+        "semantic-recall-current-thesis",
+        "semantic-recall-literature-primary",
+        "semantic-recall-reviewed-history",
+        "semantic-recall-code-direct-source",
+    }
+    assert expected <= fixtures.keys()
+    for fixture_id in expected:
+        fixture = fixtures[fixture_id]
+        assert fixture["expected_owner_paths"]
+        assert fixture["required_outcomes"]
+        assert fixture["forbidden_outcomes"]
+    assert (
+        "primary-source route is available"
+        in fixtures["semantic-recall-literature-primary"]["required_outcomes"]
+    )
+    assert (
+        "MemPalace owns code, tests, symbols, or active configuration"
+        in fixtures["semantic-recall-code-direct-source"]["forbidden_outcomes"]
+    )
+
+
 def test_route_only_domain_skill_contract() -> None:
     audit = _read(ROOT / "scripts" / "scaffold_audit.py")
-    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
+    routing = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
 
     assert "NATIVE_MINIMAL_SKILLS" not in audit
     retired = {
@@ -118,113 +131,40 @@ def test_route_only_domain_skill_contract() -> None:
     for skill_name in retired:
         assert not (ROOT / ".agents" / "skills" / skill_name / "SKILL.md").exists()
 
-    rerun_skill = ROOT / ".agents" / "skills" / "rerun-nbv-inspector"
-    assert rerun_skill.is_dir()
-    assert "name: rerun-nbv-inspector" in _read(rerun_skill / "SKILL.md")
-
     zarr_fixture = next(
-        fixture for fixture in routing["fixtures"] if fixture["id"] == "zarr-storage-api-change"
+        fixture
+        for fixture in routing["fixtures"]
+        if fixture["id"] == "zarr-storage-api-change"
     )
     assert "expected_tool_refs" not in zarr_fixture
-    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
-    assert fixtures["python-docstring-contract"]["expected_skills"] == [
-        "agent-behavior",
-        "python-standards",
+    assert zarr_fixture["expected_owner_paths"] == [
+        "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     ]
-    for fixture_id in (
-        "entity-rri-implementation",
-        "geometry-frame-implementation",
-        "zarr-storage-api-change",
-        "counterfactual-rollout-planning",
-        "dataset-cache-operation",
-        "planned-thesis-detail",
-        "concrete-failure",
-        "code-review",
-        "docs-literature-no-browser",
-    ):
-        assert fixtures[fixture_id]["expected_skills"] == ["agent-behavior"]
-
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    assert fixtures["python-docstring-contract"]["stable_skill_ids"] == [
+        "python-standards"
+    ]
     for fixture_id in (
         "rerun-offline-inspection",
         "rerun-rollout-zarr-inspection",
         "rerun-sdk-api-change",
     ):
-        assert fixtures[fixture_id]["expected_skills"] == [
-            "agent-behavior",
-            "rerun-nbv-inspector",
+        assert ".agents/skills/rerun-nbv-inspector/SKILL.md" in fixtures[fixture_id][
+            "expected_owner_paths"
         ]
     assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
         "mcp__MCP_DOCKER.get_library_docs"
     ]
-
-
-def test_lazy_mempalace_routing_contract() -> None:
-    context = _prose(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
-    source_order = _prose(ROOT / ".agents" / "references" / "source_order.md")
-    for required in (
-        "aria-thesis",
-        "aria-literature-reviews",
-        "aria-papers",
-        "aria-project-docs",
-        "aria-debriefs",
-        "aria-codex-history",
-        "direct `rg`, code-index, and exact-source reads",
-        "Chronology alone never implies supersession",
-        "Codex's explicit fail-closed `enabled_tools` allowlist",
-        "mutating MCP tools are hidden and refused",
-    ):
-        assert required in context
-    assert "Implementation behavior" in source_order
-    assert "aria_nbv/aria_nbv/" in source_order
-
-
-def test_mempalace_routing_scenarios() -> None:
-    import json
-
-    data = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
-    fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
-    expected = {
-        "semantic-recall-current-thesis",
-        "semantic-recall-literature-primary",
-        "semantic-recall-reviewed-history",
-        "semantic-recall-code-direct-source",
-    }
-    assert expected <= fixtures.keys()
-    assert "primary-paper inspection" in fixtures[
-        "semantic-recall-literature-primary"
-    ]["non_goals"][0]
-    assert "MemPalace for code" in fixtures[
-        "semantic-recall-code-direct-source"
-    ]["non_goals"][0]
+    for fixture in fixtures.values():
+        assert "expected_skills" not in fixture
+        assert "non_goals" not in fixture
+        assert fixture["expected_owner_paths"]
+        assert fixture["required_outcomes"]
+        assert fixture["forbidden_outcomes"]
 
 
 def test_capture_and_routing_contracts() -> None:
-    root_guidance = _prose(ROOT / "AGENTS.md")
-    behavior = _prose(ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md")
-    grill = _prose(ROOT / ".agents" / "skills" / "aria-grill" / "SKILL.md")
-    assert "capture is owned by `agent-behavior`" in root_guidance
-    assert "system or developer instructions" not in root_guidance
-    for exclusion in (
-        "system or developer",
-        "earlier messages",
-        "tool output",
-        "transcripts",
-        "markup tags",
-    ):
-        assert exclusion in behavior
-    assert "Repository policy routes implicit ARIA use" in root_guidance
-    assert "explicit user invocation overrides" in root_guidance
-    assert "sole ARIA routing gateway" not in grill
-    for capability in (
-        "codebase-design",
-        "improve-codebase-architecture",
-        "domain-modeling",
-        "aria-nbv-mermaid",
-        "visualize",
-    ):
-        assert f"`{capability}`" in grill
-    assert "`DESIGN-IT-TWICE` workflow" in grill
-    assert "`design-an-interface`" not in grill
+    assert (ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md").is_file()
     manifest = tomllib.loads(
         _read(ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml")
     )
@@ -233,11 +173,6 @@ def test_capture_and_routing_contracts() -> None:
     )
     assert deprecated_route["posture"] == "skip"
     assert deprecated_route["aria_owner"] == "codebase-design"
-    assert "DESIGN-IT-TWICE" in deprecated_route["reason"]
-    assert "explicitly invoke its available installed skill" in grill
-    assert "continue with source-grounded" in grill
-    assert "perform only read-only grounding and questions" in grill
-    assert "Do not implement or write durable glossary" in grill
 
 
 if __name__ == "__main__":

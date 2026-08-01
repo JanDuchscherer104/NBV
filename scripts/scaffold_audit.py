@@ -41,7 +41,9 @@ BLOCKED_HANDOFF_PREFIXES = {"omx", "github", "oh-my-codex"}
 DECLARED_CAPABILITY_TOKENS = {"external", "GitHub", "owning", "nearest", "specialized"}
 HOT_PATH_LINE_BUDGET = 150
 BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
-CONTEXT_MAP = ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
+CONTEXT_MAP = (
+    ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
+)
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
 AUDIT_OWNED_TOOL_REFS = {
     "mcp__MCP_DOCKER.analyze_python_file",
@@ -164,37 +166,6 @@ def markdown_anchors(path: Path) -> set[str]:
     return anchors
 
 
-STOPWORDS = {
-    "and",
-    "are",
-    "aria",
-    "but",
-    "for",
-    "from",
-    "into",
-    "lookup",
-    "nbv",
-    "not",
-    "only",
-    "route",
-    "routing",
-    "skill",
-    "task",
-    "the",
-    "this",
-    "through",
-    "use",
-    "when",
-    "with",
-    "without",
-}
-
-
-def tokens(text: str) -> set[str]:
-    raw = re.findall(r"[a-z0-9_]+", text.lower())
-    return {token for token in raw if token not in STOPWORDS and len(token) >= 3}
-
-
 def metadata_strings(metadata: dict[str, Any], fields: set[str]) -> list[str]:
     values: list[str] = []
     for field in fields:
@@ -211,7 +182,9 @@ def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         return set(), [f"{rel(path)}: cannot read bibliography: {exc}"]
-    keys = {match.group(1).strip() for match in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", text)}
+    keys = {
+        match.group(1).strip() for match in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", text)
+    }
     if not keys:
         return keys, [f"{rel(path)}: no BibTeX keys found"]
     return keys, []
@@ -263,22 +236,6 @@ class Skill:
     has_metadata: bool
     line_count: int
     text: str
-
-
-def skill_route_tokens(skill: Skill) -> set[str]:
-    text = " ".join([skill.name, skill.description] + metadata_strings(skill.metadata, {"triggers", "applies_to"}))
-    return tokens(text)
-
-
-def skill_boundary_tokens(skill: Skill) -> set[str]:
-    text = " ".join(
-        [skill.name, skill.description, skill.text]
-        + metadata_strings(
-            skill.metadata,
-            {"not_when", "handoff_to", "evidence_required", "must_read"},
-        )
-    )
-    return tokens(text)
 
 
 def rel(path: Path) -> str:
@@ -412,7 +369,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
 
         unknown_metadata = sorted(set(skill.metadata) - METADATA_KEYS)
         if unknown_metadata:
-            errors.append(f"{prefix}: unknown metadata fields: {', '.join(unknown_metadata)}")
+            errors.append(
+                f"{prefix}: unknown metadata fields: {', '.join(unknown_metadata)}"
+            )
 
         mode = skill.metadata.get("mode")
         if mode not in ALLOWED_MODES:
@@ -427,7 +386,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             elif isinstance(value, list):
                 for item in value:
                     if not isinstance(item, str) or not item.strip():
-                        errors.append(f"{prefix}: metadata.{field} entries must be non-empty strings")
+                        errors.append(
+                            f"{prefix}: metadata.{field} entries must be non-empty strings"
+                        )
 
         canonical_sources = skill.metadata.get("canonical_sources") or []
         if isinstance(canonical_sources, list):
@@ -435,24 +396,34 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 errors.append(f"{prefix}: metadata.canonical_sources must not be empty")
             for source in canonical_sources:
                 if not isinstance(source, str) or not source.strip():
-                    errors.append(f"{prefix}: metadata.canonical_sources entries must be non-empty strings")
+                    errors.append(
+                        f"{prefix}: metadata.canonical_sources entries must be non-empty strings"
+                    )
                     continue
                 source_path, _, anchor = source.partition("#")
                 path = ROOT / source_path
                 if not source_path or source_path.startswith("/"):
-                    errors.append(f"{prefix}: canonical source {source!r} must be a relative repo path")
+                    errors.append(
+                        f"{prefix}: canonical source {source!r} must be a relative repo path"
+                    )
                     continue
                 resolved_path = path.resolve()
                 if not is_relative_to(resolved_path, ROOT_RESOLVED):
-                    errors.append(f"{prefix}: canonical source {source_path!r} escapes the repo root")
+                    errors.append(
+                        f"{prefix}: canonical source {source_path!r} escapes the repo root"
+                    )
                     continue
                 if not resolved_path.exists():
-                    errors.append(f"{prefix}: canonical source {source_path!r} does not exist")
+                    errors.append(
+                        f"{prefix}: canonical source {source_path!r} does not exist"
+                    )
                     continue
                 if anchor and resolved_path.suffix in {".md", ".qmd"}:
                     anchors = markdown_anchors(resolved_path)
                     if anchor not in anchors:
-                        errors.append(f"{prefix}: canonical source anchor {source!r} was not found")
+                        errors.append(
+                            f"{prefix}: canonical source anchor {source!r} was not found"
+                        )
 
         handoffs = skill.metadata.get("handoff_to") or []
         if isinstance(handoffs, list):
@@ -468,8 +439,12 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                             f"{prefix}: unresolved handoff namespace in {handoff!r}; "
                             "use a local skill name or declared capability wording"
                         )
-                elif token not in known_names and token not in DECLARED_CAPABILITY_TOKENS:
-                    warnings.append(f"{prefix}: handoff target {token!r} is not a known skill name")
+                elif (
+                    token not in known_names and token not in DECLARED_CAPABILITY_TOKENS
+                ):
+                    warnings.append(
+                        f"{prefix}: handoff target {token!r} is not a known skill name"
+                    )
 
         applies_to = skill.metadata.get("applies_to") or []
         if isinstance(applies_to, list) and "**" in applies_to:
@@ -487,7 +462,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 if not isinstance(ref, str) or not ref.strip():
                     continue
                 if not ref.startswith("/"):
-                    errors.append(f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID")
+                    errors.append(
+                        f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID"
+                    )
 
         literature_refs = skill.metadata.get("literature_refs") or []
         if isinstance(literature_refs, list):
@@ -499,7 +476,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                         f"{prefix}: metadata.literature_refs entry {ref!r} points to generated evidence, "
                         "not an owning literature source"
                     )
-                elif ref in bibtex_keys or ref in context_routes or repo_path_exists(ref):
+                elif (
+                    ref in bibtex_keys or ref in context_routes or repo_path_exists(ref)
+                ):
                     continue
                 else:
                     errors.append(
@@ -526,7 +505,10 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
 
         trigger_text = " ".join(
             [skill.description]
-            + metadata_strings(skill.metadata, {"triggers", "evidence_required", "handoff_to", "must_read"})
+            + metadata_strings(
+                skill.metadata,
+                {"triggers", "evidence_required", "handoff_to", "must_read"},
+            )
         )
         if CONTEXT7_TRIGGER_RE.search(trigger_text) and not context7_refs:
             warnings.append(
@@ -563,7 +545,9 @@ def audit_semantic_drift(skills: list[Skill]) -> list[str]:
     return warnings
 
 
-def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tuple[list[str], list[str]]:
+def audit_routing_fixtures(
+    path: Path, skills_by_name: dict[str, Skill]
+) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     if not path.is_file():
@@ -574,7 +558,22 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
     except (OSError, json.JSONDecodeError) as exc:
         return [f"{rel(path)}: unreadable JSON: {exc}"], []
 
-    fixtures = data.get("fixtures") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return [f"{rel(path)}: top level must be an object"], []
+    if set(data) != {"version", "purpose", "fixtures"}:
+        unknown = sorted(set(data) - {"version", "purpose", "fixtures"})
+        missing = sorted({"version", "purpose", "fixtures"} - set(data))
+        return [
+            f"{rel(path)}: top-level keys must be version, purpose, fixtures"
+            + (f"; unknown: {', '.join(unknown)}" if unknown else "")
+            + (f"; missing: {', '.join(missing)}" if missing else "")
+        ], []
+    if not isinstance(data["version"], int):
+        errors.append(f"{rel(path)}: version must be an integer")
+    if not isinstance(data["purpose"], str) or not data["purpose"].strip():
+        errors.append(f"{rel(path)}: purpose must be a non-empty string")
+
+    fixtures = data["fixtures"]
     if not isinstance(fixtures, list) or not fixtures:
         return [f"{rel(path)}: fixtures must be a non-empty list"], []
 
@@ -582,21 +581,23 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
     allowed_fixture_keys = {
         "id",
         "task",
-        "expected_skills",
+        "expected_owner_paths",
+        "stable_skill_ids",
         "expected_tool_refs",
         "forbidden_tool_refs",
-        "non_goals",
+        "required_outcomes",
+        "forbidden_outcomes",
     }
-    known_names = set(skills_by_name)
-    route_tokens_by_skill = {name: skill_route_tokens(skill) for name, skill in skills_by_name.items()}
-    boundary_tokens_by_skill = {name: skill_boundary_tokens(skill) for name, skill in skills_by_name.items()}
+    skills_by_path = {skill.path.resolve(): skill for skill in skills_by_name.values()}
     for index, fixture in enumerate(fixtures, start=1):
         if not isinstance(fixture, dict):
             errors.append(f"{rel(path)} fixture #{index}: must be an object")
             continue
         extra_keys = sorted(set(fixture) - allowed_fixture_keys)
         if extra_keys:
-            errors.append(f"{rel(path)} fixture #{index}: unknown keys: {', '.join(extra_keys)}")
+            errors.append(
+                f"{rel(path)} fixture #{index}: unknown keys: {', '.join(extra_keys)}"
+            )
         fixture_id = fixture.get("id")
         if not isinstance(fixture_id, str) or not fixture_id:
             errors.append(f"{rel(path)} fixture #{index}: missing id")
@@ -608,105 +609,112 @@ def audit_routing_fixtures(path: Path, skills_by_name: dict[str, Skill]) -> tupl
         task = fixture.get("task")
         if not isinstance(task, str) or not task.strip():
             errors.append(f"{rel(path)} fixture {fixture_id or index}: missing task")
-            fixture_tokens = tokens(str(fixture_id or ""))
-        else:
-            fixture_tokens = tokens(f"{fixture_id or ''} {task}")
-
-        expected = fixture.get("expected_skills")
-        expected_tool_refs = fixture.get("expected_tool_refs", [])
-        forbidden_tool_refs = fixture.get("forbidden_tool_refs", [])
-        if not isinstance(expected, list) or not expected:
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: expected_skills must be a non-empty list")
-        elif not all(isinstance(skill, str) and skill.strip() for skill in expected):
+        owner_paths = fixture.get("expected_owner_paths")
+        resolved_owner_paths: list[Path] = []
+        if not isinstance(owner_paths, list) or not owner_paths:
             errors.append(
-                f"{rel(path)} fixture {fixture_id or index}: expected_skills entries must be non-empty strings"
+                f"{rel(path)} fixture {fixture_id or index}: expected_owner_paths must be a non-empty list"
+            )
+        elif not all(isinstance(owner, str) and owner.strip() for owner in owner_paths):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: expected_owner_paths entries must be non-empty strings"
             )
         else:
-            missing = sorted(skill for skill in expected if skill not in known_names)
-            if missing:
-                errors.append(
-                    f"{rel(path)} fixture {fixture_id or index}: unknown expected skill(s): {', '.join(missing)}"
-                )
-
-            if len(expected) > 2:
-                warnings.append(
-                    f"{rel(path)} fixture {fixture_id or index}: more than two expected skills; "
-                    "keep routing fixtures focused"
-                )
-
-            for skill_name in expected:
-                if skill_name == "agent-behavior":
-                    continue
-                overlap = fixture_tokens & route_tokens_by_skill.get(skill_name, set())
-                if not overlap:
+            for owner in owner_paths:
+                owner_path = (ROOT / owner).resolve()
+                if not owner_path.is_relative_to(ROOT_RESOLVED):
                     errors.append(
-                        f"{rel(path)} fixture {fixture_id or index}: expected skill "
-                        f"{skill_name!r} has no routing-cue overlap with fixture id/task"
+                        f"{rel(path)} fixture {fixture_id or index}: owner path escapes repo root: {owner!r}"
                     )
+                elif not owner_path.exists():
+                    errors.append(
+                        f"{rel(path)} fixture {fixture_id or index}: owner path does not exist: {owner!r}"
+                    )
+                else:
+                    resolved_owner_paths.append(owner_path)
 
-            expected_skill_tool_refs: set[str] = set()
-            for skill_name in expected:
-                expected_skill_tool_refs.update(skills_by_name[skill_name].metadata.get("tool_refs") or [])
-
-            if not isinstance(expected_tool_refs, list):
-                errors.append(f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs must be a list")
-            elif not all(isinstance(item, str) and item.strip() for item in expected_tool_refs):
-                errors.append(
-                    f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs entries must be non-empty strings"
-                )
-            else:
-                for tool_ref in expected_tool_refs:
-                    if not TOOL_REF_RE.match(tool_ref):
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref "
-                            f"{tool_ref!r} must use canonical mcp__<server>.<tool_name> form"
-                        )
-                    elif tool_ref not in expected_skill_tool_refs:
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref "
-                            f"{tool_ref!r} is not declared by expected skills"
-                        )
-
-            if not isinstance(forbidden_tool_refs, list):
-                errors.append(f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs must be a list")
-            elif not all(isinstance(item, str) and item.strip() for item in forbidden_tool_refs):
-                errors.append(
-                    f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs entries must be non-empty strings"
-                )
-            else:
-                for tool_ref in forbidden_tool_refs:
-                    if not TOOL_REF_RE.match(tool_ref):
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_ref "
-                            f"{tool_ref!r} must use canonical mcp__<server>.<tool_name> form"
-                        )
-                    elif tool_ref in expected_skill_tool_refs:
-                        errors.append(
-                            f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_ref "
-                            f"{tool_ref!r} is declared by expected skills"
-                        )
-
-        non_goals = fixture.get("non_goals")
-        if not isinstance(non_goals, list) or not non_goals:
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: non_goals must be a non-empty list")
-        elif not all(isinstance(item, str) and item.strip() for item in non_goals):
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: non_goals entries must be non-empty strings")
+        stable_skill_ids = fixture.get("stable_skill_ids", [])
+        if not isinstance(stable_skill_ids, list):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: stable_skill_ids must be a list"
+            )
+        elif not all(
+            isinstance(skill_id, str) and skill_id.strip()
+            for skill_id in stable_skill_ids
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: stable_skill_ids entries must be non-empty strings"
+            )
         else:
-            expected_set = set(expected) if isinstance(expected, list) else set()
-            boundary_tokens = set()
-            for skill_name in expected_set:
-                boundary_tokens |= boundary_tokens_by_skill.get(skill_name, set())
-            for skill_name, route_tokens in route_tokens_by_skill.items():
-                if skill_name not in expected_set:
-                    boundary_tokens |= route_tokens
-
-            for item in non_goals:
-                item_tokens = tokens(item)
-                if item_tokens and not item_tokens & boundary_tokens:
+            for skill_id in stable_skill_ids:
+                if skill_id != "python-standards":
                     errors.append(
-                        f"{rel(path)} fixture {fixture_id or index}: non_goal "
-                        f"{item!r} does not match expected-skill boundaries or adjacent skill cues"
+                        f"{rel(path)} fixture {fixture_id or index}: unapproved stable skill id: {skill_id!r}"
                     )
+                elif (
+                    skills_by_name[skill_id].path.resolve() not in resolved_owner_paths
+                ):
+                    errors.append(
+                        f"{rel(path)} fixture {fixture_id or index}: stable skill id {skill_id!r} lacks its owner path"
+                    )
+
+        expected_tool_refs = fixture.get("expected_tool_refs", [])
+        forbidden_tool_refs = fixture.get("forbidden_tool_refs", [])
+        expected_owner_tool_refs: set[str] = set()
+        for owner_path in resolved_owner_paths:
+            owner_skill = skills_by_path.get(owner_path)
+            if owner_skill:
+                expected_owner_tool_refs.update(
+                    owner_skill.metadata.get("tool_refs") or []
+                )
+
+        if not isinstance(expected_tool_refs, list) or not all(
+            isinstance(item, str) and item.strip() for item in expected_tool_refs
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: expected_tool_refs must be a list of strings"
+            )
+        else:
+            for tool_ref in expected_tool_refs:
+                if not TOOL_REF_RE.match(tool_ref):
+                    errors.append(
+                        f"{rel(path)} fixture {fixture_id or index}: malformed expected_tool_ref {tool_ref!r}"
+                    )
+                elif tool_ref not in expected_owner_tool_refs:
+                    errors.append(
+                        f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref {tool_ref!r} is not declared by an expected owner"
+                    )
+        if not isinstance(forbidden_tool_refs, list) or not all(
+            isinstance(item, str) and item.strip() for item in forbidden_tool_refs
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: forbidden_tool_refs must be a list of strings"
+            )
+        else:
+            for tool_ref in forbidden_tool_refs:
+                if not TOOL_REF_RE.match(tool_ref):
+                    errors.append(
+                        f"{rel(path)} fixture {fixture_id or index}: malformed forbidden_tool_ref {tool_ref!r}"
+                    )
+        if isinstance(expected_tool_refs, list) and isinstance(
+            forbidden_tool_refs, list
+        ):
+            overlap = sorted(set(expected_tool_refs) & set(forbidden_tool_refs))
+            if overlap:
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: expected and forbidden tool refs overlap: {', '.join(overlap)}"
+                )
+
+        for field in ("required_outcomes", "forbidden_outcomes"):
+            value = fixture.get(field)
+            if not isinstance(value, list) or not value:
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: {field} must be a non-empty list"
+                )
+            elif not all(isinstance(item, str) and item.strip() for item in value):
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: {field} entries must be non-empty strings"
+                )
 
     return errors, warnings
 
@@ -763,15 +771,6 @@ def self_test_fixture_path(root: Path, data: dict[str, Any]) -> Path:
     return path
 
 
-def routing_fixture_with_expected(fixture_id: str, expected: list[str]) -> dict[str, Any]:
-    data = json.loads(ROUTING_FIXTURES.read_text(encoding="utf-8"))
-    for fixture in data["fixtures"]:
-        if fixture["id"] == fixture_id:
-            fixture["expected_skills"] = expected
-            return data
-    raise AssertionError(f"missing fixture {fixture_id}")
-
-
 def run_self_tests() -> tuple[list[str], list[str]]:
     failures: list[str] = []
     passes: list[str] = []
@@ -797,7 +796,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "canonical-source-escape",
-            not load_errors and any("escapes the repo root" in error for error in errors),
+            not load_errors
+            and any("escapes the repo root" in error for error in errors),
             "escaped canonical source was not rejected",
         )
 
@@ -811,7 +811,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "missing-canonical-anchor",
-            not load_errors and any("canonical source anchor" in error for error in errors),
+            not load_errors
+            and any("canonical source anchor" in error for error in errors),
             "missing markdown anchor was not rejected",
         )
 
@@ -841,7 +842,8 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         errors, _ = audit_skills(skills)
         expect(
             "directory-frontmatter-mismatch",
-            not load_errors and any("directory/frontmatter mismatch" in error for error in errors),
+            not load_errors
+            and any("directory/frontmatter mismatch" in error for error in errors),
             "directory/frontmatter mismatch was not rejected",
         )
 
@@ -856,40 +858,96 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         (tmp_root / "skills" / "missing-description" / "SKILL.md").unlink()
         (tmp_root / "skills" / "missing-description").rmdir()
 
-        unconverted_text = "---\nname: unconverted-no-metadata\ndescription: Test fixture.\n---\n"
+        unconverted_text = (
+            "---\nname: unconverted-no-metadata\ndescription: Test fixture.\n---\n"
+        )
         write_self_test_skill(tmp_root, "unconverted-no-metadata", unconverted_text)
         _, load_errors = load_skills(tmp_root / "skills")
         expect(
             "unconverted-metadata-absent",
-            any("unconverted-no-metadata/SKILL.md: missing metadata mapping" in error for error in load_errors),
+            any(
+                "unconverted-no-metadata/SKILL.md: missing metadata mapping" in error
+                for error in load_errors
+            ),
             "unconverted skill without legacy metadata was not rejected",
         )
         (tmp_root / "skills" / "unconverted-no-metadata" / "SKILL.md").unlink()
         (tmp_root / "skills" / "unconverted-no-metadata").rmdir()
 
         partial_legacy_text = "---\nname: unconverted-partial-metadata\ndescription: Test fixture.\nmetadata:\n  mode: router\n---\n"
-        write_self_test_skill(tmp_root, "unconverted-partial-metadata", partial_legacy_text)
+        write_self_test_skill(
+            tmp_root, "unconverted-partial-metadata", partial_legacy_text
+        )
         skills, load_errors = load_skills(tmp_root / "skills")
         errors, _ = audit_skills(skills)
         expect(
             "unconverted-partial-legacy-metadata",
-            not load_errors and any("missing metadata fields" in error for error in errors),
+            not load_errors
+            and any("missing metadata fields" in error for error in errors),
             "unconverted skill with partial legacy metadata was not rejected",
         )
 
         missing_fixture = {
+            "version": 1,
+            "purpose": "fixture schema probe",
+            "fixtures": [{"id": "missing-required-fields"}],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, missing_fixture), skills_by_name
+        )
+        expect(
+            "fixture-required-fields",
+            any("missing task" in error for error in errors)
+            and any("expected_owner_paths must be" in error for error in errors)
+            and any("required_outcomes must be" in error for error in errors)
+            and any("forbidden_outcomes must be" in error for error in errors),
+            "fixture schema omissions were not rejected",
+        )
+
+        owner_path_probe = {
+            "version": 1,
+            "purpose": "owner path probe",
             "fixtures": [
                 {
-                    "id": "missing-task-and-non-goals",
-                    "expected_skills": ["agent-behavior", "aria-nbv-context"],
+                    "id": "owner-path-probe",
+                    "task": "Validate owner paths.",
+                    "expected_owner_paths": ["../outside.md", "missing-owner.md"],
+                    "required_outcomes": ["owner path validation"],
+                    "forbidden_outcomes": ["missing owner accepted"],
                 }
-            ]
+            ],
         }
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, missing_fixture), skills_by_name)
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, owner_path_probe), skills_by_name
+        )
         expect(
-            "fixture-missing-task-non-goals",
-            any("missing task" in error for error in errors) and any("non_goals must be" in error for error in errors),
-            "fixture schema omissions were not rejected",
+            "fixture-owner-path-containment-and-existence",
+            any("escapes repo root" in error for error in errors)
+            and any("does not exist" in error for error in errors),
+            "escaping or missing owner paths were not rejected",
+        )
+
+        stable_id_probe = {
+            "version": 1,
+            "purpose": "stable id probe",
+            "fixtures": [
+                {
+                    "id": "stable-id-probe",
+                    "task": "Validate stable identifiers.",
+                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
+                    "stable_skill_ids": ["agent-behavior"],
+                    "required_outcomes": ["stable id validation"],
+                    "forbidden_outcomes": ["unapproved stable id accepted"],
+                }
+            ],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, stable_id_probe), skills_by_name
+        )
+        expect(
+            "fixture-stable-skill-id",
+            any("unapproved stable skill id" in error for error in errors),
+            "unapproved stable skill id was not rejected",
         )
 
         drift_text = self_test_skill_text(
@@ -921,12 +979,15 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "Use this test body for literature ref validation.",
             '  literature_refs:\n    - "DefinitelyMissingBibKey2026"',
         )
-        write_self_test_skill(tmp_root, "missing-literature-skill", missing_literature_text)
+        write_self_test_skill(
+            tmp_root, "missing-literature-skill", missing_literature_text
+        )
         skills, load_errors = load_skills(tmp_root / "skills")
         errors, _ = audit_skills(skills)
         expect(
             "missing-literature-ref",
-            not load_errors and any("metadata.literature_refs" in error for error in errors),
+            not load_errors
+            and any("metadata.literature_refs" in error for error in errors),
             "missing literature ref was not rejected",
         )
 
@@ -956,50 +1017,60 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         _, warnings = audit_skills(skills)
         expect(
             "unknown-tool-ref-warned",
-            not load_errors and any("audit-owned tool registry" in warning for warning in warnings),
+            not load_errors
+            and any("audit-owned tool registry" in warning for warning in warnings),
             "unknown canonical-looking tool ref was not warned",
         )
 
         browser_overtrigger_fixture = {
+            "version": 1,
+            "purpose": "tool-ref probe",
             "fixtures": [
                 {
                     "id": "browser-overtrigger-probe",
                     "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
-                    "expected_skills": ["agent-behavior"],
+                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
                     "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
-                    "non_goals": ["Do not use browser MCP tools for non-live docs planning."],
+                    "required_outcomes": ["owner path is available"],
+                    "forbidden_outcomes": ["browser use is required"],
                 }
-            ]
+            ],
         }
         errors, _ = audit_routing_fixtures(
             self_test_fixture_path(tmp_root, browser_overtrigger_fixture),
             skills_by_name,
         )
         expect(
-            "route-only-no-tool-registry",
+            "forbidden-tool-without-owner-declaration",
             not errors,
             "; ".join(errors),
         )
 
         python_analyzer_overtrigger_fixture = {
+            "version": 1,
+            "purpose": "tool contradiction probe",
             "fixtures": [
                 {
                     "id": "python-analyzer-overtrigger-probe",
                     "task": "Simplify Python code with analyzer guidance after code-index localization.",
-                    "expected_skills": ["agent-behavior", "simplification"],
+                    "expected_owner_paths": [".agents/skills/simplification/SKILL.md"],
+                    "expected_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
                     "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
-                    "non_goals": ["Do not use Python analyzer tools for pure Typst prose edits."],
+                    "required_outcomes": ["owner path is available"],
+                    "forbidden_outcomes": ["tool contradiction is accepted"],
                 }
-            ]
+            ],
         }
         errors, _ = audit_routing_fixtures(
             self_test_fixture_path(tmp_root, python_analyzer_overtrigger_fixture),
             skills_by_name,
         )
         expect(
-            "python-analyzer-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "analyze_python_file" in error for error in errors),
-            "forbidden Python analyzer activation was not rejected",
+            "expected-forbidden-tool-contradiction",
+            any(
+                "expected and forbidden tool refs overlap" in error for error in errors
+            ),
+            "expected/forbidden tool contradiction was not rejected",
         )
 
     return passes, failures
@@ -1007,7 +1078,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="emit machine-readable audit output")
+    parser.add_argument(
+        "--json", action="store_true", help="emit machine-readable audit output"
+    )
     parser.add_argument(
         "--self-test",
         action="store_true",
@@ -1021,7 +1094,9 @@ def main() -> int:
         if args.json:
             print(json.dumps(payload, indent=2, sort_keys=True))
         else:
-            print(f"scaffold-audit self-test: passed={len(passes)} failures={len(failures)}")
+            print(
+                f"scaffold-audit self-test: passed={len(passes)} failures={len(failures)}"
+            )
             for failure in failures:
                 print(f"- {failure}")
         return 1 if failures else 0
@@ -1045,7 +1120,9 @@ def main() -> int:
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(f"scaffold-audit: skills={len(skills)} errors={len(errors)} warnings={len(warnings)}")
+        print(
+            f"scaffold-audit: skills={len(skills)} errors={len(errors)} warnings={len(warnings)}"
+        )
         if errors:
             print("\nErrors:")
             for error in errors:

@@ -1,198 +1,37 @@
 {
   "version": 1,
-  "purpose": "Minimal routing fixtures for scaffold-audit. These fixtures protect owner selection before any skill deletion or router merge.",
+  "purpose": "Deterministic owner, outcome, and tool-reference fixtures for scaffold-audit.",
   "fixtures": [
-    {
-      "id": "local-file-lookup",
-      "task": "Find where a cross-surface ARIA-NBV symbol or document owner lives.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not use an optional index as the source of truth for a localized lookup."]
-    },
-    {
-      "id": "graphify-codebase-navigation",
-      "task": "Use the existing Graphify graph to answer a codebase architecture, dependency-path, or cross-document relationship question.",
-      "expected_skills": ["aria-nbv-context", "graphify"],
-      "non_goals": ["Do not trust a stale graph or treat Graphify as the owner of a consequential claim."]
-    },
-    {
-      "id": "entity-rri-implementation",
-      "task": "Change target-specific RRI labels, GT OBB crop support, target validity reasons, or target-conditioned VIN fields.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not treat a routing aid as the owner of target/RRI implementation contracts."]
-    },
-    {
-      "id": "geometry-frame-implementation",
-      "task": "Change pose, camera, coordinate-frame, CW90, PyTorch3D projection, depth backprojection, or candidate-frustum contracts.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not treat observer presentation or target-label semantics as the owner of geometry contracts."]
-    },
-    {
-      "id": "zarr-storage-api-change",
-      "task": "Change rollout or offline Zarr chunking, codecs, LocalStore, create_array, sharding, concurrency, or Zarr v3 API usage.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not replace local storage owners and round-trip tests with version-drifting API prose."]
-    },
-    {
-      "id": "counterfactual-rollout-planning",
-      "task": "Plan counterfactual rollouts or compare finite-candidate Q_H evaluation evidence.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not let a planning aid own target-label semantics or scientific direction."]
-    },
-    {
-      "id": "dataset-cache-operation",
-      "task": "Operate ASE downloads, shards, meshes, immutable stores, manifests, storage estimates, or a data smoke check.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not let an operator router replace CLI help, the data-handling guide, or store validation."]
-    },
-    {
-      "id": "rerun-offline-inspection",
-      "task": "Inspect ARIA-NBV offline samples in Rerun with entities, layers, validity, sinks, or display frames.",
-      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
-      "non_goals": ["Do not change package-owned geometry or data semantics merely to alter an observer display."]
-    },
-    {
-      "id": "rerun-rollout-zarr-inspection",
-      "task": "Inspect an ARIA-NBV rollout store through Rerun, including rollout entities, validity, layers, or display frames.",
-      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
-      "non_goals": ["Do not use a Rerun inspection route to change rollout-store Zarr APIs or storage layout."]
-    },
-    {
-      "id": "rerun-sdk-api-change",
-      "task": "Change Rerun Python SDK sink, Transform3D, Pinhole, DepthImage, entity, timeline, or blueprint usage in the ARIA inspector.",
-      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
-      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
-      "non_goals": ["Current official Rerun evidence informs SDK usage but does not replace ARIA package contracts or tests."]
-    },
-    {
-      "id": "context7-pytorch3d-conceptual-plan",
-      "task": "Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence.",
-      "expected_skills": ["agent-behavior", "aria-grill"],
-      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
-      "non_goals": ["Do not let Context7 replace local geometry owners or focused geometry tests."]
-    },
-    {
-      "id": "thesis-aria-grill-matt-collision",
-      "task": "Stress-test a thesis scope, advisor-facing decision, or Aria Grill question that resembles generic Matt grilling.",
-      "expected_skills": ["agent-behavior", "aria-grill"],
-      "non_goals": ["Do not route ARIA thesis planning to generic Matt grilling, grill-with-docs, or domain-modeling."]
-    },
-    {
-      "id": "aria-grill-progressive-interface-design",
-      "task": "Compare materially different public interface shapes for a high-impact ARIA module after grounding the owning contract.",
-      "expected_skills": ["agent-behavior", "aria-grill"],
-      "non_goals": ["Repository policy must not route implicit codebase-design, improve-codebase-architecture, design-an-interface, domain-modeling, or visualize use outside Aria Grill; explicit user invocation remains allowed, and guidance must not claim runtime disabling."]
-    },
-    {
-      "id": "context7-not-needed-target-rri-section",
-      "task": "Find the source family and thesis target-RRI section owner for a local wording check.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "forbidden_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
-      "non_goals": ["Do not use Context7 or external library docs for local source family lookup."]
-    },
-    {
-      "id": "local-source-mirror-vin-nbv-methods",
-      "task": "Locate the local literature source family for a narrow VIN-NBV methods claim before writing thesis prose.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not use an optional index as the default owner for deterministic local source family discovery."]
-    },
-    {
-      "id": "code-index-frustum-rendering",
-      "task": "Locate the implementation of candidate frustum rendering with source family and code-index evidence.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "expected_tool_refs": ["mcp__code_index.search_code_advanced"],
-      "non_goals": ["Do not start with browser tools when local code-index and rg can localize the source."]
-    },
-    {
-      "id": "semantic-recall-current-thesis",
-      "task": "Recall related current thesis sections before locating and opening the authoritative Typst source.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not treat a retrieved thesis drawer as independent from its source section or include hierarchy."]
-    },
-    {
-      "id": "semantic-recall-literature-primary",
-      "task": "Find the relevant ARIA literature-review domain and then verify its claim in the matching primary paper.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not substitute a review drawer or manifest sidecar for direct primary-paper inspection."]
-    },
-    {
-      "id": "semantic-recall-reviewed-history",
-      "task": "Recall a reviewed historical diagnosis from native debriefs before checking the current owner.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not infer current truth or supersession from debrief age or retrieval rank."]
-    },
-    {
-      "id": "semantic-recall-code-direct-source",
-      "task": "Localize an unknown implementation, test, or active-configuration owner without searching MemPalace code.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not use MemPalace for code, tests, symbols, or active configuration; use rg, code-index, and exact sources."]
-    },
-    {
-      "id": "planned-thesis-detail",
-      "task": "Place planned but unimplemented target-RRI, rollout, or Q_H research details in canonical thesis or Quarto owners.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not store planned implementation detail in a skill body."]
-    },
-    {
-      "id": "package-contract-owner",
-      "task": "Localize the nearest aria_nbv package AGENTS.md owner before changing Python API contracts or generated implementation docs.",
-      "expected_skills": ["agent-behavior", "aria-nbv-context"],
-      "non_goals": ["Do not store package API contract detail in a skill body."]
-    },
-    {
-      "id": "skill-truth-leakage-review",
-      "task": "Simplify scaffold skills by reviewing skill bodies for duplicated formulas, roadmap claims, future-work plans, or implementation contracts.",
-      "expected_skills": ["agent-behavior", "simplification"],
-      "non_goals": ["Do not merge or delete a skill before replacement-owner evidence and routing fixtures pass."]
-    },
-    {
-      "id": "concrete-failure",
-      "task": "Diagnose a failing command, traceback, suspicious metric, or bad runtime output.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not patch by guesswork or route concrete ARIA failures to raw Matt diagnosing-bugs before a reproducer or explicit blocker exists."]
-    },
-    {
-      "id": "code-review",
-      "task": "Review ARIA-NBV working-tree or PR diffs and produce severity-ranked findings.",
-      "expected_skills": ["agent-behavior"],
-      "non_goals": ["Do not let a generic review harness replace exact ARIA-NBV owners and line evidence."]
-    },
-    {
-      "id": "python-docstring-contract",
-      "task": "Write or refactor docstrings for Python public API contracts.",
-      "expected_skills": ["agent-behavior", "python-standards"],
-      "non_goals": ["Do not store package semantics in the generic Python standards skill."]
-    },
-    {
-      "id": "typst-thesis-edit",
-      "task": "Edit Typst thesis prose, shared notation, citations, figures, or rendered-page QA.",
-      "expected_skills": ["agent-behavior", "typst-authoring"],
-      "non_goals": ["Do not route pure Quarto navigation work through Typst authoring."]
-    },
-    {
-      "id": "docs-literature-no-browser",
-      "task": "Plan a Quarto literature navigation cleanup with local bibliography and source-order evidence.",
-      "expected_skills": ["agent-behavior"],
-      "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
-      "non_goals": ["Do not route local docs literature planning through live browser diagnosis."]
-    },
-    {
-      "id": "typst-prose-no-python-analyzer",
-      "task": "Polish Typst thesis prose and citations without changing Python implementation code.",
-      "expected_skills": ["agent-behavior", "typst-authoring"],
-      "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
-      "non_goals": ["Do not use simplification Python analyzer tools for pure Typst prose and citation edits."]
-    },
-    {
-      "id": "typst-prose-matt-writing-modes",
-      "task": "Draft or polish ARIA thesis prose using fragment-capture, shape-pass, or beat-pass writing mechanics inspired by Matt writing modes.",
-      "expected_skills": ["agent-behavior", "typst-authoring"],
-      "non_goals": ["Do not route thesis prose to raw Matt writing-fragments, writing-shape, or writing-beats."]
-    },
-    {
-      "id": "scaffold-cleanup",
-      "task": "Prune or simplify scaffold skills, metadata, or references while preserving behavior.",
-      "expected_skills": ["agent-behavior", "simplification"],
-      "non_goals": ["Do not delete or merge skills without replacement-owner evidence."]
-    }
+    {"id":"local-file-lookup","task":"Find where a cross-surface ARIA-NBV symbol or document owner lives.","expected_owner_paths":[".agents/skills/agent-behavior/SKILL.md",".agents/skills/aria-nbv-context/SKILL.md"],"required_outcomes":["owner path is available for exact-source discovery"],"forbidden_outcomes":["optional index becomes source of truth"]},
+    {"id":"graphify-codebase-navigation","task":"Use existing Graphify navigation for a codebase relationship question.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md",".agents/skills/graphify/SKILL.md"],"required_outcomes":["direct source owner remains available"],"forbidden_outcomes":["Graphify becomes owner of a consequential claim"]},
+    {"id":"entity-rri-implementation","task":"Change target-specific RRI labels or target-conditioned VIN fields.","expected_owner_paths":["aria_nbv/aria_nbv/rri_metrics/AGENTS.md"],"required_outcomes":["nearest RRI guide is available"],"forbidden_outcomes":["routing aid owns target or RRI implementation"]},
+    {"id":"geometry-frame-implementation","task":"Change pose, camera, coordinate-frame, projection, backprojection, or candidate-frustum contracts.","expected_owner_paths":["aria_nbv/aria_nbv/vin/AGENTS.md"],"required_outcomes":["nearest VIN guide is available"],"forbidden_outcomes":["observer or target-label semantics own geometry"]},
+    {"id":"zarr-storage-api-change","task":"Change rollout or offline Zarr storage APIs.","expected_owner_paths":["aria_nbv/aria_nbv/data_handling/AGENTS.md"],"required_outcomes":["nearest storage guide is available"],"forbidden_outcomes":["version-drifting API prose replaces storage owners and tests"]},
+    {"id":"counterfactual-rollout-planning","task":"Plan counterfactual rollouts or compare finite-candidate Q_H evidence.","expected_owner_paths":["aria_nbv/aria_nbv/rollouts/AGENTS.md"],"required_outcomes":["nearest rollout guide is available"],"forbidden_outcomes":["planning aid owns target-label semantics or scientific direction"]},
+    {"id":"dataset-cache-operation","task":"Operate ASE downloads, shards, meshes, immutable stores, manifests, storage estimates, or a data smoke check.","expected_owner_paths":["aria_nbv/aria_nbv/data_handling/AGENTS.md"],"required_outcomes":["nearest data-handling guide is available"],"forbidden_outcomes":["operator router replaces CLI help, guide, or validation"]},
+    {"id":"rerun-offline-inspection","task":"Inspect ARIA-NBV offline samples in Rerun.","expected_owner_paths":[".agents/skills/rerun-nbv-inspector/SKILL.md","aria_nbv/AGENTS.md"],"required_outcomes":["Rerun inspection workflow and package guide are available"],"forbidden_outcomes":["observer display changes package geometry or data semantics"]},
+    {"id":"rerun-rollout-zarr-inspection","task":"Inspect an ARIA-NBV rollout store through Rerun.","expected_owner_paths":[".agents/skills/rerun-nbv-inspector/SKILL.md","aria_nbv/aria_nbv/rollouts/AGENTS.md"],"required_outcomes":["Rerun inspection workflow and rollout guide are available"],"forbidden_outcomes":["inspection route changes rollout-store storage layout"]},
+    {"id":"rerun-sdk-api-change","task":"Change Rerun Python SDK usage in the ARIA inspector.","expected_owner_paths":[".agents/skills/rerun-nbv-inspector/SKILL.md","aria_nbv/AGENTS.md"],"required_outcomes":["Rerun inspection workflow and current SDK evidence are available"],"forbidden_outcomes":["external SDK documentation replaces ARIA package contracts or tests"],"expected_tool_refs":["mcp__MCP_DOCKER.get_library_docs"]},
+    {"id":"context7-pytorch3d-conceptual-plan","task":"Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence.","expected_owner_paths":[".agents/skills/aria-grill/SKILL.md","aria_nbv/aria_nbv/vin/AGENTS.md"],"required_outcomes":["architecture and geometry owners are available"],"forbidden_outcomes":["external documentation replaces local owners or focused tests"],"expected_tool_refs":["mcp__MCP_DOCKER.get_library_docs"]},
+    {"id":"thesis-aria-grill-matt-collision","task":"Stress-test a thesis scope or advisor-facing decision.","expected_owner_paths":[".agents/skills/aria-grill/SKILL.md"],"required_outcomes":["Aria Grill owner is available"],"forbidden_outcomes":["generic external grilling becomes ARIA owner"]},
+    {"id":"aria-grill-progressive-interface-design","task":"Compare high-impact ARIA interface shapes after grounding the owning contract.","expected_owner_paths":[".agents/skills/aria-grill/SKILL.md"],"required_outcomes":["Aria Grill owner is available"],"forbidden_outcomes":["implicit capability routing bypasses Aria Grill"]},
+    {"id":"context7-not-needed-target-rri-section","task":"Find a local source family and thesis target-RRI section owner.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md"],"required_outcomes":["local source owner is available"],"forbidden_outcomes":["external library docs are required for local lookup"],"forbidden_tool_refs":["mcp__MCP_DOCKER.get_library_docs"]},
+    {"id":"local-source-mirror-vin-nbv-methods","task":"Locate a local literature source family for a narrow VIN-NBV methods claim.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md"],"required_outcomes":["local source owner is available"],"forbidden_outcomes":["optional index is default owner for deterministic discovery"]},
+    {"id":"code-index-frustum-rendering","task":"Locate candidate-frustum rendering implementation with source family and code-index evidence.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md","aria_nbv/aria_nbv/vin/AGENTS.md"],"required_outcomes":["implementation owner is available"],"forbidden_outcomes":["browser tools are required before local source localization"],"expected_tool_refs":["mcp__code_index.search_code_advanced"]},
+    {"id":"semantic-recall-current-thesis","task":"Recall related current thesis sections before opening authoritative Typst source.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md","docs/AGENTS.md"],"required_outcomes":["authoritative thesis owner is available"],"forbidden_outcomes":["retrieved thesis drawer replaces source section or hierarchy"]},
+    {"id":"semantic-recall-literature-primary","task":"Find literature-review domain and verify a claim in matching primary paper.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md","docs/AGENTS.md"],"required_outcomes":["primary-source route is available"],"forbidden_outcomes":["review drawer or manifest sidecar replaces primary-paper inspection"]},
+    {"id":"semantic-recall-reviewed-history","task":"Recall reviewed historical diagnosis before checking current owner.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md"],"required_outcomes":["current owner route is available"],"forbidden_outcomes":["retrieval rank or age establishes current truth"]},
+    {"id":"semantic-recall-code-direct-source","task":"Localize unknown implementation, test, or active-configuration owner without semantic code retrieval.","expected_owner_paths":[".agents/skills/aria-nbv-context/SKILL.md"],"required_outcomes":["exact-source route is available"],"forbidden_outcomes":["MemPalace owns code, tests, symbols, or active configuration"]},
+    {"id":"planned-thesis-detail","task":"Place planned research details in canonical thesis or Quarto owners.","expected_owner_paths":["docs/AGENTS.md"],"required_outcomes":["documentation owner is available"],"forbidden_outcomes":["planned implementation detail becomes skill-body truth"]},
+    {"id":"package-contract-owner","task":"Localize nearest aria_nbv package guide before changing Python API contracts.","expected_owner_paths":["aria_nbv/AGENTS.md"],"required_outcomes":["package guide is available"],"forbidden_outcomes":["skill body owns package API contract detail"]},
+    {"id":"skill-truth-leakage-review","task":"Review scaffold skills for duplicated formulas, roadmap claims, plans, or implementation contracts.","expected_owner_paths":[".agents/skills/simplification/SKILL.md"],"required_outcomes":["simplification owner is available"],"forbidden_outcomes":["skill is merged or deleted before replacement-owner evidence"]},
+    {"id":"concrete-failure","task":"Diagnose a failing command, traceback, suspicious metric, or bad runtime output.","expected_owner_paths":[".agents/skills/agent-behavior/SKILL.md"],"required_outcomes":["owner-first diagnostic route is available"],"forbidden_outcomes":["patch is guessed without reproducer or blocker"]},
+    {"id":"code-review","task":"Review ARIA-NBV working-tree or PR diffs with severity-ranked findings.","expected_owner_paths":["AGENTS.md"],"required_outcomes":["repository review route is available"],"forbidden_outcomes":["generic review harness replaces exact owners and line evidence"]},
+    {"id":"python-docstring-contract","task":"Write or refactor docstrings for Python public API contracts.","expected_owner_paths":[".agents/skills/python-standards/SKILL.md"],"stable_skill_ids":["python-standards"],"required_outcomes":["Python documentation owner is available"],"forbidden_outcomes":["generic skill owns package semantics"]},
+    {"id":"typst-thesis-edit","task":"Edit Typst thesis prose, notation, citations, figures, or rendered-page QA.","expected_owner_paths":["docs/AGENTS.md",".agents/skills/typst-authoring/SKILL.md"],"required_outcomes":["documentation and Typst owners are available"],"forbidden_outcomes":["pure Quarto navigation is treated as Typst authoring"]},
+    {"id":"docs-literature-no-browser","task":"Plan a Quarto literature navigation cleanup with local bibliography evidence.","expected_owner_paths":["docs/AGENTS.md"],"required_outcomes":["documentation owner is available"],"forbidden_outcomes":["live browser diagnosis is required for local literature planning"],"forbidden_tool_refs":["mcp__MCP_DOCKER.browser_run_code"]},
+    {"id":"typst-prose-no-python-analyzer","task":"Polish Typst thesis prose and citations without changing Python code.","expected_owner_paths":["docs/AGENTS.md",".agents/skills/typst-authoring/SKILL.md"],"required_outcomes":["Typst owner is available"],"forbidden_outcomes":["Python analyzer is used for pure Typst prose"],"forbidden_tool_refs":["mcp__MCP_DOCKER.analyze_python_file"]},
+    {"id":"typst-prose-matt-writing-modes","task":"Draft or polish ARIA thesis prose with writing mechanics.","expected_owner_paths":["docs/AGENTS.md",".agents/skills/typst-authoring/SKILL.md"],"required_outcomes":["Typst owner is available"],"forbidden_outcomes":["raw external writing modes become thesis owner"]},
+    {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior.","expected_owner_paths":[".agents/skills/simplification/SKILL.md"],"required_outcomes":["simplification owner is available"],"forbidden_outcomes":["skills are deleted or merged without replacement-owner evidence"]}
   ]
 }
