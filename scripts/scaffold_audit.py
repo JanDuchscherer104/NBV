@@ -37,6 +37,7 @@ NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
     {
         "code-review-aria-nbv",
         "counterfactual-rollout-planner",
+        "dataset-cache-ops",
     }
 )
 OPTIONAL_METADATA = {
