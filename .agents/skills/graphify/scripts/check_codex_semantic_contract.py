@@ -32,6 +32,13 @@ def _assert_skill_contract() -> None:
         "RUN_DIR=\"$(pwd)/graphify-out/.graphify_runs/${RUN_ID}\"",
         "mkdir -p \"$RUN_DIR\"",
         "expected_chunks.json').write_text('[]'",
+        "repository root is the single `INPUT_PATH` and `root`",
+        "never use `graphify-input/` as that root",
+        "result = detect(Path('INPUT_PATH'))",
+        "check_semantic_cache(all_files, root='INPUT_PATH'",
+        "save_semantic_cache(new.get('nodes', []), new.get('edges', []), new.get('hyperedges', []), root='INPUT_PATH'",
+        "build_from_json(extraction, root='INPUT_PATH'",
+        "save_manifest(_manifest_files, root='INPUT_PATH'",
     )
     missing = [phrase for phrase in required if phrase not in text]
     if missing:
@@ -49,6 +56,10 @@ def _assert_skill_contract() -> None:
     present = [phrase for phrase in forbidden if phrase in text]
     if present:
         raise AssertionError(f"skill retains shared or partial-success workflow: {present}")
+    forbidden_roots = ("root='graphify-input", "Path('graphify-input')")
+    present_roots = [phrase for phrase in forbidden_roots if phrase in text]
+    if present_roots:
+        raise AssertionError(f"skill anchors Graphify operations to projection root: {present_roots}")
     if text.index("RUN_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')") > text.index("Path('RUN_DIR')"):
         raise AssertionError("RUN_DIR initialization must precede every run-scoped recipe")
 

@@ -119,6 +119,10 @@ routing metadata; the scaffold and CI-impact tests enforce both.
 6. Use the authenticated Codex host for semantic extraction when available.
    Never export a Codex/ChatGPT token as an API key, add repository secrets, or
    create a second repository-owned Graphify lifecycle.
+7. For ARIA-NBV, the repository root is the single `INPUT_PATH` and `root` for
+   detect, semantic cache, build, and manifest operations. Do not scan, hash,
+   build, or save a manifest with `graphify-input/` as the root; it is a
+   projection file within the repository corpus.
 
 ## What You Must Do When Invoked
 
@@ -287,6 +291,8 @@ printf '%s\n' "$RUN_ID" > graphify-out/.graphify_runs/latest
 
 `RUN_DIR` is the literal absolute path substituted into every Part B recipe.
 The `latest` file is diagnostics-only; never read it to locate run inputs.
+For ARIA-NBV, substitute the repository root for `INPUT_PATH` and every
+`root=` argument in this Part B flow; never use `graphify-input/` as that root.
 
 **ARIA-NBV run-isolation override (authoritative for this project):** Before
 cache lookup, create a UUID directory under

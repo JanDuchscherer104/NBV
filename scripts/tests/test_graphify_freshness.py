@@ -14,6 +14,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts/check_graphify_freshness.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+from check_graphify_freshness import _upstream_file_hash  # noqa: E402
 
 
 class FreshnessTests(unittest.TestCase):
@@ -37,8 +39,8 @@ class FreshnessTests(unittest.TestCase):
     def _write_fresh_fixture(self) -> None:
         index = self.root / "graphify-input/index.md"
         index.parent.mkdir(parents=True, exist_ok=True)
-        index.write_text(f"# graphify-projection:index\nsource_revision: {self.head}\n", encoding="utf-8")
-        digest = hashlib.sha256(index.read_bytes()).hexdigest()
+        index.write_text(f"---\nowner: generated\n---\n# graphify-projection:index\nsource_revision: {self.head}\n", encoding="utf-8")
+        digest = _upstream_file_hash(index.read_bytes(), "graphify-input/index.md")
         output = self.root / "graphify-out"
         (output / "cache").mkdir(parents=True, exist_ok=True)
         (output / "graph.json").write_text(
@@ -66,6 +68,22 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(quiet.returncode, 0)
         self.assertEqual(quiet.stdout, "")
         self.assertEqual(quiet.stderr, "")
+
+    def test_digest_uses_frontmatter_stripping_and_path_salt(self) -> None:
+        index = self.root / "graphify-input/index.md"
+        raw = index.read_bytes()
+        salted = _upstream_file_hash(raw, "graphify-input/index.md")
+        self.assertNotEqual(salted, hashlib.sha256(raw).hexdigest())
+        stat_index = self.root / "graphify-out/cache/stat-index.json"
+        stat_index.write_text(json.dumps({"graphify-input/index.md": {"hashes": {"graphify-input/index.md": hashlib.sha256(raw).hexdigest()}}}), encoding="utf-8")
+        self.assertEqual(json.loads(self._run("--json").stdout)["state"], "structural-stale")
+
+    def test_digest_path_salt_is_case_normalized(self) -> None:
+        content = b"# projection\n"
+        self.assertEqual(
+            _upstream_file_hash(content, "Graphify-Input/INDEX.md"),
+            _upstream_file_hash(content, "graphify-input/index.md"),
+        )
 
     def test_nodes_without_source_metadata_do_not_invalidate_a_graph(self) -> None:
         graph_path = self.root / "graphify-out/graph.json"

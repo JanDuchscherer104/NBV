@@ -18,6 +18,7 @@ GRAPH = Path("graphify-out/graph.json")
 STAT_INDEX = Path("graphify-out/cache/stat-index.json")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
+_FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
 
 
 def _head(root: Path) -> str:
@@ -70,6 +71,21 @@ def _normalize_path(value: str) -> str:
     while result.startswith("./"):
         result = result[2:]
     return result
+
+
+def _upstream_file_hash(content: bytes, relative_path: str) -> str:
+    """Reproduce Graphify 0.9.31's content-plus-relative-path digest."""
+    text = content.decode(errors="replace")
+    opener = _FRONTMATTER_DELIM.match(text)
+    if opener is not None:
+        closer = _FRONTMATTER_DELIM.search(text, opener.end())
+        if closer is not None:
+            content = text[closer.start() + 3 :].encode()
+    digest = hashlib.sha256()
+    digest.update(content)
+    digest.update(b"\x00")
+    digest.update(relative_path.lower().encode())
+    return digest.hexdigest()
 
 
 def _index_digest(stat_index: dict[str, Any]) -> str:
@@ -154,7 +170,9 @@ def check(root: Path) -> dict[str, Any]:
         if graph is not None and graph["built_at_commit"] != head:
             reasons.append("graph built_at_commit does not match HEAD")
         if (root / PROJECTION_INDEX).is_file() and digest is not None:
-            actual_digest = hashlib.sha256((root / PROJECTION_INDEX).read_bytes()).hexdigest()
+            actual_digest = _upstream_file_hash(
+                (root / PROJECTION_INDEX).read_bytes(), INDEX_PATH
+            )
         else:
             actual_digest = None
         if actual_digest is not None and digest != actual_digest:
