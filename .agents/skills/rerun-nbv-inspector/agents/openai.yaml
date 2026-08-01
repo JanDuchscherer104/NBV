@@ -1,4 +1,0 @@
-interface:
-  display_name: "Rerun NBV Inspector"
-  short_description: "Inspect ARIA artifacts through Rerun"
-  default_prompt: "Use $rerun-nbv-inspector to inspect an ARIA-NBV offline sample or rollout store through its package-owned adapter and focused Rerun proof."

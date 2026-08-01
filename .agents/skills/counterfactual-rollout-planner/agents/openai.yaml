@@ -1,4 +1,0 @@
-interface:
-  display_name: "Counterfactual Rollout Planner"
-  short_description: "Plan counterfactual rollout comparisons"
-  default_prompt: "Use $counterfactual-rollout-planner to plan ARIA-NBV counterfactual rollouts or compare finite-candidate Q_H evaluation."

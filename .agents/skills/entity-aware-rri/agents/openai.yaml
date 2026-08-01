@@ -1,4 +1,0 @@
-interface:
-  display_name: "Entity-Aware RRI"
-  short_description: "Validate target-specific RRI evidence"
-  default_prompt: "Use $entity-aware-rri for ARIA-NBV target selection or target-specific RRI labels and diagnostics."

@@ -45,6 +45,6 @@ using facebookresearch/efm3d examples as LRZ input.
 
 ## Handoffs
 
-- Use `dataset-cache-ops` for ARIA-owned dataset/cache contracts.
-- Use `counterfactual-rollout-planner` for rollout or `Q_H` workload semantics.
-- Use `diagnose-aria` for concrete failed EFM3D/ARIA job logs.
+- Use `aria_nbv/aria_nbv/data_handling/AGENTS.md` for ARIA-owned dataset/cache contracts.
+- Use `aria_nbv/aria_nbv/rollouts/AGENTS.md` for rollout or `Q_H` workload semantics.
+- Use the nearest owning guide for concrete failed EFM3D/ARIA job logs.

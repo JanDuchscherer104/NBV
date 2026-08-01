@@ -8,8 +8,8 @@ metadata:
     - "a systemic, CI-specific, or persistent docs build failure owns the task"
     - "a broad advisor-facing thesis-scope decision is unresolved"
   handoff_to:
-    - "docs-curator for public Quarto navigation or docs-boundary edits"
-    - "diagnose-aria for systemic build failures or suspicious rendered output that persists after the Typst loop"
+    - "nearest docs guide for public Quarto navigation or docs-boundary edits"
+    - "nearest build owner for systemic failures or suspicious rendered output that persists after the Typst loop"
     - "aria-grill for ambiguous advisor-facing research-contract decisions"
   evidence_required:
     - "nearest docs guidance and target Typst imports"
@@ -77,9 +77,9 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 
 ## Do Not Use When
 
-- The task is only Quarto navigation/frontmatter; use `docs-curator`.
+- The task is only Quarto navigation/frontmatter; use the nearest docs guide.
 - A failure is systemic, CI-specific, multi-surface, or persists after the
-  compile/render loop; use `diagnose-aria`.
+  compile/render loop; use the nearest build owner.
 - The research contract or thesis scope is still ambiguous; use `aria-grill`.
 
 ## Task Modes

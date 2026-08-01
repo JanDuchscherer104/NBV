@@ -1,4 +1,0 @@
-interface:
-  display_name: "Code Review ARIA-NBV"
-  short_description: "Review ARIA-NBV diffs and review feedback"
-  default_prompt: "Use $code-review-aria-nbv to review an ARIA-NBV diff or validate review feedback against the current source."

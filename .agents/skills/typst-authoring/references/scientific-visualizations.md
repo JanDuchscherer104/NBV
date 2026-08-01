@@ -3,7 +3,7 @@
 Use this reference for scientific, geometric, spatial, or 3D figures. Generic
 captions, labels, tables, and Mermaid inclusion remain in `figures-tables.md`;
 renderer setup remains in `packages/`; Rerun entity and frame behavior remains
-with the `rerun-nbv-inspector` skill.
+with `aria_nbv/aria_nbv/rerun_inspector/README.md`.
 
 ## Admissibility
 
@@ -32,7 +32,7 @@ annotation.
 | Dense or strongly intersecting local meshes | Maquette PNG, Rerun, or PyTorch3D | Use a z-buffered raster base and retain vector labels, axes, frusta, and callouts in Typst. |
 | Quantitative fields, complete-domain projections, publication plots | Matplotlib | Fixed data, axes, scales, and SVG/PDF export. Use 3D only for simple scenes with inspected depth order. |
 | Interactive 3D exploration | Plotly | Freeze camera and scales before export; treat WebGL 3D inside SVG/PDF as raster content. |
-| Real ARIA scenes, cameras, OBBs, meshes, points, trajectories | Rerun | Preserve recording, view specification, frame, and screenshot metadata; hand SDK work to `rerun-nbv-inspector`. |
+| Real ARIA scenes, cameras, OBBs, meshes, points, trajectories | Rerun | Preserve recording, view specification, frame, and screenshot metadata; use the inspector README, implementation, and focused tests for SDK work. |
 | Architecture, process, topology, state transition | Fletcher or Mermaid | Use nodes and edges for relations rather than coordinate geometry. |
 | Final panels, notation, labels, callouts, captions, alt text | Typst | Keep semantic text and mathematics editable and consistent with `docs/typst/shared`. |
 

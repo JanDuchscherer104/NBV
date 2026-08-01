@@ -12,7 +12,7 @@ canonical_updates_needed:
   - .agents/issues.toml
   - .agents/todos.toml
   - .agents/resolved.toml
-  - .agents/skills/counterfactual-rollout-planner/SKILL.md
+  - aria_nbv/aria_nbv/rollouts/AGENTS.md
 files_touched:
   - .agents/AGENTS_INTERNAL_DB.md
   - .agents/skills/agents-db/SKILL.md

@@ -26,11 +26,13 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
   policy routes implicit ARIA use of optional architecture, interface-design,
   committed Mermaid, and interactive-visualization capabilities through Aria
   Grill; explicit user invocation overrides that route.
-- PR or working-tree review: use `code-review-aria-nbv`; actionable P0--P2
-  findings on a PR are published and resolved as GitHub review threads, while
-  local-only reviews report the same line-referenced findings locally.
-- Bugs, regressions, suspicious metrics, or failing docs/data checks: use
-  `diagnose-aria`.
+- PR or working-tree review: inspect the exact diff and nearest owners;
+  report severity-ranked, line-referenced findings. Actionable P0--P2 PR
+  findings are published and resolved as GitHub review threads; local-only
+  reviews report the same findings locally.
+- Bugs, regressions, suspicious metrics, or failing docs/data checks: open the
+  nearest owner, reproduce the failure with the smallest red loop, and verify
+  the cause before changing behavior.
 - Backlog or memory changes: use the `agents-db` skill.
 - Cleanup, pruning, or simplification: use the `simplification` skill.
 - LRZ AI Systems, Slurm, DSS, Pyxis, or remote compute work: use `lrz-ai-systems`.

@@ -8,7 +8,7 @@ metadata:
     - "ordinary KG retrieval or claim checking without backlog edits"
     - "tiny cleanup that does not change active debt"
   handoff_to:
-    - "docs-curator for public docs or thesis narrative"
+    - "nearest docs guide for public docs or thesis narrative"
     - "simplification for behavior-preserving pruning"
   evidence_required:
     - "existing record search before adding duplicates"

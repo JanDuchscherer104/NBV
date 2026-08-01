@@ -9,8 +9,8 @@ metadata:
     - "large API redesign before the target interface is stable"
   handoff_to:
     - "aria-grill for unsettled module, interface, or domain-model decisions before implementation"
-    - "docs-curator for public narrative, Quarto, or Typst documentation"
-    - "nbv-geometry-contracts for frame, unit, or tensor-shape semantics"
+    - "nearest docs guide for public narrative, Quarto, or Typst documentation"
+    - "nearest package guide for frame, unit, or tensor-shape semantics"
     - "simplification for behavior-preserving API cleanup before documentation"
   evidence_required:
     - "public API or cross-module contract being changed or documented"

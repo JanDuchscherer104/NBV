@@ -1,4 +1,0 @@
-interface:
-  display_name: "Docs Curator"
-  short_description: "Curate public documentation and bibliography"
-  default_prompt: "Use $docs-curator for ARIA-NBV Quarto navigation, bibliography, or public/internal documentation-boundary work."

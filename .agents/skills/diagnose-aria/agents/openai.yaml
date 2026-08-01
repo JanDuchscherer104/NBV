@@ -1,4 +1,0 @@
-interface:
-  display_name: "Diagnose ARIA"
-  short_description: "Feedback-loop-first ARIA-NBV bug investigation"
-  default_prompt: "Use $diagnose-aria to diagnose a concrete ARIA-NBV failure through its exact owner and smallest reproducible loop."

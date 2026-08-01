@@ -69,21 +69,6 @@ to satisfy this validator. Put repository activation, source-order, safety, and
 verification instructions in the nearest ARIA companion skill, and enforce the
 declared upstream bytes with a separate integrity test.
 
-## Temporary Dual-Schema Bridge
-
-Unconverted skills use the complete `legacy-structured` frontmatter above and
-remain subject to every `make scaffold-audit` metadata check. Only an identifier
-in the audit-owned `NATIVE_MINIMAL_SKILLS` migration set may instead use
-non-empty `name` and `description` frontmatter without `metadata`. Its body
-must include a direct repository-relative Markdown link to an owner and put
-handoffs, evidence, verification, and completion beside the relevant procedure.
-Do not retain a `When To Use` section or a second activation statement.
-
-The allowlist is temporary scaffold-migration mechanics, not a domain owner or
-skill registry. Add an entry only in the same change that converts a skill, and
-remove it when that conversion is rolled back. Absence of legacy metadata does
-not imply native-minimal conversion.
-
 ## OMX Sidecar Pattern
 
 ARIA-NBV skills are sidecars for Codex/OMX orchestration. OMX owns workflow

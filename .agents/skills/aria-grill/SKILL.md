@@ -8,10 +8,10 @@ metadata:
     - "the edit is already localized and low impact"
     - "the user asks for code review of concrete diffs"
   handoff_to:
-    - "diagnose-aria for concrete failures"
+    - "nearest owning guide for concrete failures"
     - "aria-nbv-context when the affected surface is unknown"
-    - "code-review-aria-nbv for concrete diff review"
-    - "docs-curator for public narrative edits after the decision"
+    - "nearest owning guide for concrete diff review"
+    - "nearest docs guide for public narrative edits after the decision"
   evidence_required:
     - "source-order owner for the decision"
     - "success criteria, in/out of scope, and deferred decisions"

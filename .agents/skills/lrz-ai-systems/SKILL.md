@@ -8,9 +8,9 @@ metadata:
     - "experiment design before a concrete remote resource or batch need exists"
     - "credential, quota, or production action that lacks user authority"
   handoff_to:
-    - "dataset-cache-ops for ASE shards, offline stores, and data smoke contracts"
-    - "counterfactual-rollout-planner for rollout/Q_H workload semantics"
-    - "diagnose-aria for concrete failed job logs or suspicious remote output"
+    - "nearest data-handling guide for ASE shards, offline stores, and data smoke contracts"
+    - "nearest rollout guide for rollout/Q_H workload semantics"
+    - "nearest owning guide for concrete failed job logs or suspicious remote output"
     - "agents-db for durable blocked access, quota, or remote-run debt"
   evidence_required:
     - "target LRZ partition, DSS/container path policy, and intended workload class"

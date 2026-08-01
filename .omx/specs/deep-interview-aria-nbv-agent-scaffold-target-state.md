@@ -931,6 +931,31 @@ overlap: scoped instructions, finite context, focused skills, simple interfaces,
 outcome evaluations, least privilege, provenance, and small changes. The source
 URLs remain owned by that report to avoid duplicating a bibliography here.
 
+## Accepted 2026-08-01 Domain Skill Route-Only Supersession
+
+Post-distillation review showed that the nine retained domain skills had become
+shallow restatements of repository owners. The human owner therefore selected
+route-only pruning for `code-review-aria-nbv`,
+`counterfactual-rollout-planner`, `dataset-cache-ops`, `diagnose-aria`,
+`docs-curator`, `entity-aware-rri`, `nbv-geometry-contracts`,
+`rerun-nbv-inspector`, and `zarr-python`.
+
+- Repository structure, root and nearest `AGENTS.md`, and deterministic local
+  discovery own routing. Eligible Graphify output remains navigation evidence.
+- Code, CLI help, module-local README files, docstrings, and focused tests own
+  invocation and validation commands.
+- Thesis sections and package owners retain scientific and implementation
+  truth; no replacement skill or metadata registry may duplicate it.
+- Review and diagnosis use the native workflow discipline plus the exact diff,
+  reproducer, and nearest owner. Data, geometry, rollout, RRI, and Rerun work
+  start from their package guides or module README files.
+- The temporary dual-schema audit bridge is removed because its only consumers
+  are retired.
+
+This decision supersedes retained-skill dispositions in the implementation PRD
+and its first debrief. Those artifacts remain historical evidence of the
+earlier accepted implementation, not current routing authority.
+
 ## Brownfield Evidence Versus Inference
 
 Confirmed from current artifacts:

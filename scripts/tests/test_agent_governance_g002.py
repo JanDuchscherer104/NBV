@@ -98,17 +98,24 @@ def test_direct_skill_discovery_shape() -> None:
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
 
 
-def test_dual_schema_scaffold_contract() -> None:
+def test_route_only_domain_skill_contract() -> None:
     audit = _read(ROOT / "scripts" / "scaffold_audit.py")
-    skills_guide = _prose(ROOT / ".agents" / "skills" / "README.md")
-    source_order = _prose(ROOT / ".agents" / "references" / "source_order.md")
     routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
 
-    assert "NATIVE_MINIMAL_SKILLS: frozenset[str]" in audit
-    assert "legacy-structured" in skills_guide
-    assert "NATIVE_MINIMAL_SKILLS" in skills_guide
-    assert "Absence of legacy metadata does not imply native-minimal conversion" in skills_guide
-    assert "missing legacy metadata block never selects the native profile" in source_order
+    assert "NATIVE_MINIMAL_SKILLS" not in audit
+    retired = {
+        "code-review-aria-nbv",
+        "counterfactual-rollout-planner",
+        "dataset-cache-ops",
+        "diagnose-aria",
+        "docs-curator",
+        "entity-aware-rri",
+        "nbv-geometry-contracts",
+        "rerun-nbv-inspector",
+        "zarr-python",
+    }
+    for skill_name in retired:
+        assert not (ROOT / ".agents" / "skills" / skill_name / "SKILL.md").exists()
 
     zarr_fixture = next(
         fixture for fixture in routing["fixtures"] if fixture["id"] == "zarr-storage-api-change"
@@ -119,16 +126,20 @@ def test_dual_schema_scaffold_contract() -> None:
         "agent-behavior",
         "python-standards",
     ]
-    for fixture_id, expected_skill in (
-        ("counterfactual-rollout-planning", "counterfactual-rollout-planner"),
-        ("dataset-cache-operation", "dataset-cache-ops"),
-        ("rerun-offline-inspection", "rerun-nbv-inspector"),
-        ("rerun-rollout-zarr-inspection", "rerun-nbv-inspector"),
+    for fixture_id in (
+        "entity-rri-implementation",
+        "geometry-frame-implementation",
+        "zarr-storage-api-change",
+        "counterfactual-rollout-planning",
+        "dataset-cache-operation",
+        "rerun-offline-inspection",
+        "rerun-rollout-zarr-inspection",
+        "planned-thesis-detail",
+        "concrete-failure",
+        "code-review",
+        "docs-literature-no-browser",
     ):
-        assert fixtures[fixture_id]["expected_skills"] == [
-            "agent-behavior",
-            expected_skill,
-        ]
+        assert fixtures[fixture_id]["expected_skills"] == ["agent-behavior"]
 
 
 def test_capture_and_routing_contracts() -> None:

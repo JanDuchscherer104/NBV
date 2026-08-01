@@ -166,7 +166,7 @@
         "task target",
       ),
       category: "entity.targeting",
-      parent: "entity-aware-rri",
+      parent: "target-specific-rri",
       definition_short: "Selected entity, object crop, point, region, or surface-deficit hypothesis whose reconstruction quality should be improved.",
       definition_long: "Target-conditioned ARIA-NBV variants use this target as an explicit input to candidate scoring and planning instead of optimizing only scene-level RRI.",
       internal_links: (

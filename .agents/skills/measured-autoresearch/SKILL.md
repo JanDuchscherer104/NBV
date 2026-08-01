@@ -7,7 +7,7 @@ metadata:
     - "literature-only research with no executable evaluator"
     - "no active OMX autoresearch or autoresearch-goal mission"
   handoff_to:
-    - "diagnose-aria when the evaluator or baseline is failing"
+    - "nearest owning guide when the evaluator or baseline is failing"
   evidence_required:
     - "one unambiguous active mission root"
     - "a frozen evaluator contract and measured baseline"

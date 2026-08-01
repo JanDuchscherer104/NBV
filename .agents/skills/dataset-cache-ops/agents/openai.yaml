@@ -1,4 +1,0 @@
-interface:
-  display_name: "Dataset Cache Ops"
-  short_description: "Operate ARIA datasets and immutable stores"
-  default_prompt: "Use $dataset-cache-ops to inspect or operate an ARIA-NBV dataset or immutable store through its owning CLI and validation surface."

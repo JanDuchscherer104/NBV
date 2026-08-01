@@ -8,7 +8,7 @@ metadata:
     - "a concrete failure command or traceback owns the task"
   handoff_to:
     - "graphify for an eligible fresh graph"
-    - "diagnose-aria for concrete failures"
+    - "nearest owning guide for concrete failures"
     - "nearest AGENTS.md or narrow skill after localization"
   evidence_required:
     - "localized owning files or source family"
