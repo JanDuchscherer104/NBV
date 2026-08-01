@@ -33,7 +33,12 @@ REQUIRED_METADATA = {
 }
 # Temporary audit-owned migration discriminator. A one-skill conversion updates
 # this set atomically; omitted legacy metadata never opts a skill in.
-NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset({"code-review-aria-nbv"})
+NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
+    {
+        "code-review-aria-nbv",
+        "counterfactual-rollout-planner",
+    }
+)
 OPTIONAL_METADATA = {
     "context7_refs",
     "literature_refs",
