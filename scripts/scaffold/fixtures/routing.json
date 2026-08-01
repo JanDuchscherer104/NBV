@@ -11,7 +11,7 @@
     {
       "id": "graphify-codebase-navigation",
       "task": "Use the existing Graphify graph to answer a codebase architecture, dependency-path, or cross-document relationship question.",
-      "expected_skills": ["graphify"],
+      "expected_skills": ["aria-nbv-context", "graphify"],
       "non_goals": ["Do not trust a stale graph or treat Graphify as the owner of a consequential claim."]
     },
     {

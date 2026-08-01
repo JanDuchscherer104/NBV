@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-projection-self-test graphify-projection-live-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -231,6 +231,9 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
+graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
+
 graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
 	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
@@ -722,7 +725,7 @@ package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contrac
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

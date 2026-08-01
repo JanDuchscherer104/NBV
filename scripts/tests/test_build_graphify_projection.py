@@ -396,6 +396,32 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, r"include escapes repository"):
             self.build()
 
+    def test_readable_owner_symlinks_cannot_escape_repository(self) -> None:
+        readable_owners = (
+            "docs/typst/thesis/main.typ",
+            "docs/typst/thesis/sections/a.typ",
+            "docs/typst/shared/style.typ",
+            "docs/references.bib",
+            "docs/references-qh.bib",
+            "docs/literature/sources.jsonl",
+        )
+        for index, relative in enumerate(readable_owners):
+            with self.subTest(relative=relative):
+                owner = self.fixture.root / relative
+                original = owner.read_bytes()
+                outside = self.fixture.root.parent / f"outside-owner-{index}"
+                outside.write_bytes(original)
+                owner.unlink()
+                owner.symlink_to(outside)
+                try:
+                    with self.assertRaisesRegex(
+                        ProjectionError, r"owner.*physically escapes repository"
+                    ):
+                        self.build()
+                finally:
+                    owner.unlink()
+                    owner.write_bytes(original)
+
     def test_duplicate_bibliography_key_fails(self) -> None:
         self.fixture.write(
             "docs/references-qh.bib",

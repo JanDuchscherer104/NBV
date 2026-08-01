@@ -18,6 +18,7 @@ STAT_INDEX = Path("graphify-out/cache/stat-index.json")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
 _FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
+_OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
 
 
 def _head(root: Path) -> str:
@@ -44,21 +45,53 @@ def _json_object(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
-def _source_revision(index: Path) -> str:
+def _projection_metadata(index: Path) -> tuple[str, str, dict[str, str]]:
     try:
         text = index.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise ValueError(f"invalid projection index: {error}") from error
-    values = [
-        line.split(":", 1)[1].strip()
-        for line in text.splitlines()
-        if line.startswith("source_revision:")
-    ]
-    if len(values) != 1 or not values[0]:
+
+    def single_value(key: str) -> str:
+        values = [
+            line.split(":", 1)[1].strip()
+            for line in text.splitlines()
+            if line.startswith(f"{key}:")
+        ]
+        if len(values) != 1 or not values[0]:
+            raise ValueError(
+                f"invalid projection index: {key} must be one non-empty string"
+            )
+        return values[0]
+
+    revision = single_value("source_revision")
+    owner_state = single_value("owner_worktree_state")
+    if owner_state not in {"clean", "dirty"}:
         raise ValueError(
-            "invalid projection index: source_revision must be one non-empty string"
+            "invalid projection index: owner_worktree_state must be clean or dirty"
         )
-    return values[0]
+
+    lines = text.splitlines()
+    try:
+        section_start = lines.index("## Owner digests") + 1
+    except ValueError as error:
+        raise ValueError("invalid projection index: missing Owner digests") from error
+    owner_digests: dict[str, str] = {}
+    for line in lines[section_start:]:
+        if line.startswith("## "):
+            break
+        if not line.strip():
+            continue
+        match = _OWNER_DIGEST.fullmatch(line)
+        if match is None:
+            raise ValueError(f"invalid projection index owner digest: {line}")
+        owner, digest = match.groups()
+        normalized = _normalize_path(owner)
+        if normalized in owner_digests:
+            raise ValueError(f"invalid projection index: duplicate owner {normalized}")
+        owner_digests[normalized] = digest
+    if not owner_digests:
+        raise ValueError("invalid projection index: Owner digests must not be empty")
+    return revision, owner_state, owner_digests
 
 
 def _normalize_path(value: str) -> str:
@@ -121,6 +154,44 @@ def _contains_index_node(graph: dict[str, Any]) -> bool:
     return False
 
 
+def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
+    reasons: list[str] = []
+    repository = root.resolve()
+    owners = sorted(owner_digests)
+    for relative in owners:
+        owner = repository / relative
+        try:
+            resolved = owner.resolve(strict=False)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(
+                f"projection owner cannot be resolved: {relative}: {error}"
+            )
+        if not resolved.is_relative_to(repository):
+            raise ValueError(f"projection owner escapes repository: {relative}")
+        if not resolved.is_file():
+            reasons.append(f"projection owner is missing: {relative}")
+            continue
+        try:
+            digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        except OSError as error:
+            raise ValueError(f"projection owner cannot be read: {relative}: {error}")
+        if digest != owner_digests[relative]:
+            reasons.append(f"projection owner digest changed: {relative}")
+
+    result = subprocess.run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *owners],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise ValueError("projection owner worktree status is unavailable")
+    if result.stdout.strip():
+        reasons.append("projection owner worktree is dirty")
+    return reasons
+
+
 def check(root: Path) -> dict[str, Any]:
     """Return the stable freshness result without printing or exiting."""
     reasons: list[str] = []
@@ -145,12 +216,18 @@ def check(root: Path) -> dict[str, Any]:
             reasons.append(f"missing {label}: {relative.as_posix()}")
 
     projection_revision: str | None = None
+    owner_worktree_state: str | None = None
+    owner_digests: dict[str, str] | None = None
     graph: dict[str, Any] | None = None
     digest: str | None = None
     node_present: bool | None = None
     if (root / PROJECTION_INDEX).is_file():
         try:
-            projection_revision = _source_revision(root / PROJECTION_INDEX)
+            (
+                projection_revision,
+                owner_worktree_state,
+                owner_digests,
+            ) = _projection_metadata(root / PROJECTION_INDEX)
         except ValueError as error:
             invalid = True
             reasons.append(str(error))
@@ -176,6 +253,14 @@ def check(root: Path) -> dict[str, Any]:
     if head is not None:
         if projection_revision is not None and projection_revision != head:
             reasons.append("projection source_revision does not match HEAD")
+        if owner_worktree_state == "dirty":
+            reasons.append("projection was built from a dirty owner worktree")
+        if owner_digests is not None:
+            try:
+                reasons.extend(_live_owner_reasons(root, owner_digests))
+            except ValueError as error:
+                invalid = True
+                reasons.append(str(error))
         if graph is not None and graph["built_at_commit"] != head:
             reasons.append("graph built_at_commit does not match HEAD")
         if (root / PROJECTION_INDEX).is_file() and digest is not None:

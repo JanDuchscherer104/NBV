@@ -19,6 +19,14 @@ from check_graphify_freshness import _upstream_file_hash  # noqa: E402
 
 
 class FreshnessTests(unittest.TestCase):
+    OWNER_PATHS = (
+        "docs/typst/thesis/main.typ",
+        "docs/typst/shared/style.typ",
+        "docs/references.bib",
+        "docs/references-qh.bib",
+        "docs/literature/sources.jsonl",
+    )
+
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
@@ -32,7 +40,12 @@ class FreshnessTests(unittest.TestCase):
             ["git", "config", "user.name", "Test"], cwd=self.root, check=True
         )
         (self.root / "seed").write_text("seed\n", encoding="utf-8")
+        for relative in self.OWNER_PATHS:
+            owner = self.root / relative
+            owner.parent.mkdir(parents=True, exist_ok=True)
+            owner.write_text(f"owner: {relative}\n", encoding="utf-8")
         subprocess.run(["git", "add", "seed"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "docs"], cwd=self.root, check=True)
         subprocess.run(["git", "commit", "-qm", "seed"], cwd=self.root, check=True)
         self.head = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -49,8 +62,16 @@ class FreshnessTests(unittest.TestCase):
     def _write_fresh_fixture(self) -> None:
         index = self.root / "graphify-input/index.md"
         index.parent.mkdir(parents=True, exist_ok=True)
+        owner_rows = "\n".join(
+            f"- {relative}: sha256:"
+            f"{hashlib.sha256((self.root / relative).read_bytes()).hexdigest()}"
+            for relative in self.OWNER_PATHS
+        )
         index.write_text(
-            f"---\nowner: generated\n---\n# graphify-projection:index\nsource_revision: {self.head}\n",
+            f"---\nowner: generated\n---\n# graphify-projection:index\n"
+            f"source_revision: {self.head}\n"
+            "owner_worktree_state: clean\n\n"
+            f"## Owner digests\n\n{owner_rows}\n\n## Families\n",
             encoding="utf-8",
         )
         digest = _upstream_file_hash(index.read_bytes(), "graphify-input/index.md")
@@ -157,7 +178,10 @@ class FreshnessTests(unittest.TestCase):
     def test_structural_staleness_predicates_fail_closed(self) -> None:
         cases = {
             "projection": lambda: (self.root / "graphify-input/index.md").write_text(
-                "source_revision: wrong\n", encoding="utf-8"
+                (self.root / "graphify-input/index.md")
+                .read_text(encoding="utf-8")
+                .replace(self.head, "wrong", 1),
+                encoding="utf-8",
             ),
             "graph": lambda: (self.root / "graphify-out/graph.json").write_text(
                 json.dumps(
@@ -198,12 +222,43 @@ class FreshnessTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(json.loads(result.stdout)["state"], "structural-stale")
 
+    def test_dirty_live_owner_classes_fail_closed(self) -> None:
+        for relative in self.OWNER_PATHS:
+            with self.subTest(relative=relative):
+                owner = self.root / relative
+                original = owner.read_text(encoding="utf-8")
+                owner.write_text(original + "dirty\n", encoding="utf-8")
+                payload = self._json()
+                self.assertEqual(payload["state"], "structural-stale")
+                self.assertTrue(
+                    any(relative in reason for reason in payload["reasons"])
+                )
+                self.assertIn("projection owner worktree is dirty", payload["reasons"])
+                owner.write_text(original, encoding="utf-8")
+
+    def test_owner_symlink_escaping_repository_is_invalid(self) -> None:
+        relative = self.OWNER_PATHS[-1]
+        owner = self.root / relative
+        outside = self.root.parent / "outside-owner"
+        outside.write_bytes(owner.read_bytes())
+        owner.unlink()
+        owner.symlink_to(outside)
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "invalid")
+        self.assertTrue(
+            any("owner escapes repository" in reason for reason in payload["reasons"])
+        )
+
     def test_semantic_marker_wins_over_structural_staleness(self) -> None:
         (self.root / "graphify-out/needs_update").write_text(
             "pending\n", encoding="utf-8"
         )
-        (self.root / "graphify-input/index.md").write_text(
-            "source_revision: wrong\n", encoding="utf-8"
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(self.head, "wrong", 1),
+            encoding="utf-8",
         )
         result = self._run("--json")
         self.assertEqual(result.returncode, 1)
@@ -231,8 +286,10 @@ class FreshnessTests(unittest.TestCase):
         )
 
     def test_available_structural_reasons_survive_an_invalid_artifact(self) -> None:
-        (self.root / "graphify-input/index.md").write_text(
-            "source_revision: wrong\n", encoding="utf-8"
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(self.head, "wrong", 1),
+            encoding="utf-8",
         )
         (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
         payload = self._json()

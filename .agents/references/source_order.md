@@ -34,6 +34,9 @@ Use this reference when a task needs current project truth or sources disagree.
   read-first, evidence, and verification loops only. They must point to
   canonical sources through `metadata.canonical_sources` instead of restating
   thesis claims, formulas, package contracts, or planned implementation detail.
+  A byte-identical, separately pinned upstream skill is exempt from ARIA
+  metadata; its ARIA activation and safety boundary belongs in a companion
+  repository skill instead of an upstream-file overlay.
   Optional `metadata.context7_refs`, `metadata.literature_refs`, and
   `metadata.tool_refs` are horizontal evidence-routing hints; they do not
   override the owner ladder in this file.

@@ -76,12 +76,14 @@ python3 scripts/build_graphify_projection.py \
 ```
 
 The repository includes the upstream project skill at
-`.agents/skills/graphify/SKILL.md`. It owns agent-facing Graphify commands, the
-ARIA-NBV freshness gate, exact-source fallback, corpus exclusions, and the
-projection's explicit capability limits. The Graphify package itself remains a
-user-installed tool; Codex authentication remains operator-local. Direct PDF
-extraction is a separate, disposable operator experiment, not part of the root
-graph.
+`.agents/skills/graphify/SKILL.md` byte-identical to Graphify 0.9.31 at upstream
+commit `4fe11092ccbe9f543608f140c790f68d5d83cae4`. It owns only upstream
+Graphify commands. `aria-nbv-context` owns the ARIA-NBV freshness,
+exact-source-fallback, corpus, projection, and client-compatibility preflight;
+project instructions must never be inserted into the upstream bundle. The
+Graphify package itself remains a user-installed tool; Codex authentication
+remains operator-local. Direct PDF extraction is a separate, disposable
+operator experiment, not part of the root graph.
 
 ## Why these sources are kept locally
 

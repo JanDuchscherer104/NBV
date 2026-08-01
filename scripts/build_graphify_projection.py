@@ -167,7 +167,20 @@ def _relative_path(path: Path, *, label: str) -> Path:
 
 
 def _owner_path(config: ProjectionConfig, relative: Path) -> Path:
-    return config.repo_root / _relative_path(relative, label="owner")
+    relative = _relative_path(relative, label="owner")
+    repository = config.repo_root.resolve()
+    candidate = repository / relative
+    try:
+        resolved = candidate.resolve(strict=False)
+    except (OSError, RuntimeError) as error:
+        raise ProjectionError(
+            f"owner path cannot be resolved safely: {relative.as_posix()}: {error}"
+        ) from error
+    if not resolved.is_relative_to(repository):
+        raise ProjectionError(
+            f"owner path physically escapes repository: {relative.as_posix()}"
+        )
+    return resolved
 
 
 def _lexists(path: Path) -> bool:

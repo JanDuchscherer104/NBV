@@ -106,9 +106,10 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Use the project-installed Graphify skill at
-`.agents/skills/graphify/SKILL.md` for codebase architecture, relationship, and
-project-content questions. That skill owns Graphify commands, the ARIA-NBV
-projection/freshness preflight, exact-source fallback, and capability limits.
-Graphify remains optional derived navigation, never a knowledge owner or a
-prerequisite for repository work.
+Use `aria-nbv-context` for the ARIA-NBV Graphify eligibility, projection,
+freshness, and exact-source preflight, then hand eligible queries to the
+byte-identical upstream skill at `.agents/skills/graphify/SKILL.md`. Graphify
+remains derived navigation and never a knowledge owner. The executable and
+graph artifacts remain optional; the shared content-addressed Graphify cache
+namespaces are standard worktree prerequisites created by
+`scripts/setup_worktree_env.sh`.

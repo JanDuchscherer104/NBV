@@ -1,16 +1,10 @@
-# graphify reference: optional Git hook
+# graphify reference: commit hook and native AGENTS.md integration
 
-Load this only when the user asks to install the optional upstream Git hook.
+Load this when the user asked to install the post-commit hook or wire graphify into a project's AGENTS.md.
 
-## ARIA-NBV boundary
+## For git commit hook
 
-The upstream hook is a local accelerator for incremental code refresh and
-semantic invalidation. It is not a freshness authority: its absence or failure
-cannot make a graph fresh, remove `graphify-out/needs_update`, or change
-`scripts/check_graphify_freshness.py` output. Only a successful freshness check
-authorizes graph-backed claims.
-
-If the hook is useful locally, use the upstream Git hook command:
+Install a post-commit hook that auto-rebuilds the graph after every commit. No background process needed - triggers once per commit, works with any editor.
 
 ```bash
 graphify hook install    # install
@@ -18,17 +12,22 @@ graphify hook uninstall  # remove
 graphify hook status     # check
 ```
 
-Do not run `graphify install --project --platform codex`, `graphify agents
-install`, or any installer that rewrites root `AGENTS.md`. Do not install the
-upstream Codex hook: its pre-tool hook is a no-op, while ARIA-NBV routing is
-already owned by `.agents/skills/graphify/`.
+After every `git commit`, the hook detects which code files changed (via `git diff HEAD~1`), re-runs AST extraction on those files, and rebuilds `graph.json` and `GRAPH_REPORT.md`. Doc/image changes are ignored by the hook - run `/graphify --update` manually for those.
 
-Code-only staleness may use upstream incremental AST update. Projection,
-documentation, paper, citation, or diagram staleness requires an explicit
-Graphify workflow: rebuild `graphify-input/` at current `HEAD`, run isolated
-Codex semantic extraction, complete the upstream graph update, then pass
-`python3 scripts/check_graphify_freshness.py --quiet`. Ordinary questions use
-exact sources while that work is pending.
+If a post-commit hook already exists, graphify appends to it rather than replacing it.
 
-Clearing either shared semantic-cache link affects every linked worktree and
-increases future extraction cost. It cannot make a stale graph current.
+---
+
+## For native AGENTS.md integration
+
+Run once per project to make graphify always-on in your agent sessions:
+
+```bash
+graphify agents install
+```
+
+This writes a `## graphify` section to the local `AGENTS.md` that instructs your agent to check the graph before answering codebase questions and rebuild it after code changes. No manual `/graphify` needed in future sessions.
+
+```bash
+graphify agents uninstall  # remove the section
+```

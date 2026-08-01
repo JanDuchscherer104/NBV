@@ -63,6 +63,12 @@ in `aria-nbv-context/references/context_map.md`; tool refs use canonical
 `mcp__<server>.<tool_name>` names. Do not point skill metadata at generated
 context indexes as source owners.
 
+Byte-identical, separately pinned upstream skill bundles are exempt from ARIA
+frontmatter and hot-path-style requirements. Do not patch upstream frontmatter
+to satisfy this validator. Put repository activation, source-order, safety, and
+verification instructions in the nearest ARIA companion skill, and enforce the
+declared upstream bytes with a separate integrity test.
+
 ## OMX Sidecar Pattern
 
 ARIA-NBV skills are sidecars for Codex/OMX orchestration. OMX owns workflow

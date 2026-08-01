@@ -27,6 +27,7 @@ SCAFFOLD_PATHS = {
     "scripts/setup_worktree_env.sh",
     "scripts/validate_agent_memory.py",
     "scripts/tests/test_graphify_freshness.py",
+    "scripts/tests/test_graphify_upstream_skill.py",
     "scripts/tests/test_setup_worktree_env.sh",
 }
 

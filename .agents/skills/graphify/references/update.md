@@ -1,19 +1,5 @@
 # graphify reference: incremental update and cluster-only
 
-## ARIA-NBV refresh boundary
-
-`--update` is an explicit Graphify workflow, never a normal-question action.
-Code-only staleness may use the upstream incremental AST path below. Any
-projection, documentation, paper, citation, or diagram change requires a full
-explicit refresh: rebuild `graphify-input/` at current `HEAD`, run isolated
-Codex semantic extraction, complete the upstream graph update, then require
-`python3 scripts/check_graphify_freshness.py --quiet` to succeed. Until then,
-use exact-source discovery.
-
-The optional upstream Git hook may accelerate code refresh or invalidate stale
-semantic work, but neither its success, failure, nor absence is freshness
-proof. It cannot remove `graphify-out/needs_update` or alter the checker.
-
 Load this only when the user passed `--update` or `--cluster-only`. A first-time full build never reads this file.
 
 ## For --update (incremental re-extraction)

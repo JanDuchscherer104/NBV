@@ -39,11 +39,12 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
         self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
         self.assertIn(
-            "python3 .agents/skills/graphify/scripts/check_codex_semantic_contract.py",
+            "python3 scripts/tests/test_graphify_upstream_skill.py",
             workflow,
         )
         self.assertIn(
@@ -75,6 +76,7 @@ class SelectionTests(unittest.TestCase):
             "scripts/check_graphify_freshness.py": {"scaffold"},
             "scripts/setup_worktree_env.sh": {"scaffold"},
             "scripts/tests/test_graphify_freshness.py": {"scaffold"},
+            "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
             "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},
             "docs/literature/README.md": {"docs"},
@@ -119,17 +121,21 @@ class SelectionTests(unittest.TestCase):
 
     def test_graphify_guidance_requires_same_commit_projection_digest(self) -> None:
         skill_root = REPO_ROOT / ".agents/skills/graphify"
-        guidance = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        context_guidance = (
+            REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
+        ).read_text(encoding="utf-8")
         root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-        self.assertIn("graphify-out/cache/stat-index.json", guidance)
-        self.assertIn("graphify-input/index.md", guidance)
+        self.assertIn("scripts/check_graphify_freshness.py --quiet", context_guidance)
+        self.assertIn("scripts/build_graphify_projection.py", context_guidance)
+        self.assertIn('fork_turns="none"', context_guidance)
+        self.assertIn("every dispatched file", context_guidance)
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
             "0.9.31",
         )
         self.assertTrue((skill_root / "references/query.md").is_file())
-        self.assertIn(".agents/skills/graphify/SKILL.md", root_guidance)
+        self.assertIn("aria-nbv-context", root_guidance)
         self.assertNotIn("graphify query", root_guidance)
         self.assertNotIn("graphify install", root_guidance)
 

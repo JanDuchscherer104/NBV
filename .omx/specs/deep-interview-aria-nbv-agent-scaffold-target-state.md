@@ -94,6 +94,23 @@ authentication, freshness authority, or lifecycle ownership; hook success,
 failure, or absence cannot establish graph freshness. The project skill owns
 this operational detail, while root `AGENTS.md` remains a compact pointer.
 
+### Accepted 2026-08-01 Graphify remediation amendment
+
+This amendment supersedes the two ownership sentences above that place an
+ARIA-NBV preflight or operational detail inside the project-installed Graphify
+skill. The complete skill bundle under `.agents/skills/graphify/` remains
+byte-identical to upstream Graphify 0.9.31 at commit
+`4fe11092ccbe9f543608f140c790f68d5d83cae4`; `aria-nbv-context` owns all
+ARIA-NBV-specific eligibility, projection, freshness, exact-source fallback,
+and current-client compatibility instructions.
+
+The Graphify executable, graph outputs, and refresh remain optional, but the
+shared content-addressed `semantic` and `semantic-deep` cache namespaces are
+standard worktree-environment prerequisites. Standard setup creates and links
+those namespaces so any agent can reuse them when Graphify is available. No
+graph, projection, manifest, AST state, or semantic run state is shared, and
+cache presence never establishes freshness or gates exact-source work.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
