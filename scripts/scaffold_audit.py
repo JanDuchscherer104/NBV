@@ -42,6 +42,7 @@ NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
         "docs-curator",
         "entity-aware-rri",
         "nbv-geometry-contracts",
+        "rerun-nbv-inspector",
     }
 )
 OPTIONAL_METADATA = {
