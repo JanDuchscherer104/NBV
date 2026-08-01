@@ -30,8 +30,31 @@
       "id": "zarr-storage-api-change",
       "task": "Change rollout or offline Zarr chunking, codecs, LocalStore, create_array, sharding, concurrency, or Zarr v3 API usage.",
       "expected_skills": ["agent-behavior", "zarr-python"],
-      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
       "non_goals": ["Do not route pure ASE download, offline-store smoke, manifest, split, or existing-store validation work away from dataset-cache-ops."]
+    },
+    {
+      "id": "counterfactual-rollout-planning",
+      "task": "Plan counterfactual rollouts or compare finite-candidate Q_H evaluation evidence.",
+      "expected_skills": ["agent-behavior", "counterfactual-rollout-planner"],
+      "non_goals": ["Do not use this planning route for target-label semantics without a rollout comparison decision."]
+    },
+    {
+      "id": "dataset-cache-operation",
+      "task": "Operate ASE downloads, shards, meshes, immutable stores, manifests, storage estimates, or a data smoke check.",
+      "expected_skills": ["agent-behavior", "dataset-cache-ops"],
+      "non_goals": ["Do not use a storage operation route for a Zarr API, codec, layout, or concurrency implementation change."]
+    },
+    {
+      "id": "rerun-offline-inspection",
+      "task": "Inspect ARIA-NBV offline samples in Rerun with entities, layers, validity, sinks, or display frames.",
+      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
+      "non_goals": ["Do not change package-owned geometry or data semantics merely to alter an observer display."]
+    },
+    {
+      "id": "rerun-rollout-zarr-inspection",
+      "task": "Inspect an ARIA-NBV rollout store through Rerun, including rollout entities, validity, layers, or display frames.",
+      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
+      "non_goals": ["Do not use a Rerun inspection route to change rollout-store Zarr APIs or storage layout."]
     },
     {
       "id": "context7-pytorch3d-conceptual-plan",

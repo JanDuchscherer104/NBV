@@ -97,6 +97,39 @@ def test_direct_skill_discovery_shape() -> None:
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
 
 
+def test_dual_schema_scaffold_contract() -> None:
+    audit = _read(ROOT / "scripts" / "scaffold_audit.py")
+    skills_guide = _prose(ROOT / ".agents" / "skills" / "README.md")
+    source_order = _prose(ROOT / ".agents" / "references" / "source_order.md")
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
+
+    assert "NATIVE_MINIMAL_SKILLS: frozenset[str]" in audit
+    assert "legacy-structured" in skills_guide
+    assert "NATIVE_MINIMAL_SKILLS" in skills_guide
+    assert "Absence of legacy metadata does not imply native-minimal conversion" in skills_guide
+    assert "missing legacy metadata block never selects the native profile" in source_order
+
+    zarr_fixture = next(
+        fixture for fixture in routing["fixtures"] if fixture["id"] == "zarr-storage-api-change"
+    )
+    assert "expected_tool_refs" not in zarr_fixture
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    assert fixtures["python-docstring-contract"]["expected_skills"] == [
+        "agent-behavior",
+        "python-standards",
+    ]
+    for fixture_id, expected_skill in (
+        ("counterfactual-rollout-planning", "counterfactual-rollout-planner"),
+        ("dataset-cache-operation", "dataset-cache-ops"),
+        ("rerun-offline-inspection", "rerun-nbv-inspector"),
+        ("rerun-rollout-zarr-inspection", "rerun-nbv-inspector"),
+    ):
+        assert fixtures[fixture_id]["expected_skills"] == [
+            "agent-behavior",
+            expected_skill,
+        ]
+
+
 def test_capture_and_routing_contracts() -> None:
     root_guidance = _prose(ROOT / "AGENTS.md")
     behavior = _prose(ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md")

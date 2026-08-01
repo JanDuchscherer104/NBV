@@ -31,6 +31,9 @@ REQUIRED_METADATA = {
     "canonical_sources",
     "verification",
 }
+# Temporary audit-owned migration discriminator. A one-skill conversion updates
+# this set atomically; omitted legacy metadata never opts a skill in.
+NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset()
 OPTIONAL_METADATA = {
     "context7_refs",
     "literature_refs",
@@ -257,6 +260,7 @@ class Skill:
     name: str
     description: str
     metadata: dict[str, Any]
+    has_metadata: bool
     line_count: int
     text: str
 
@@ -340,14 +344,14 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
             continue
 
         name = data.get("name")
-        metadata = data.get("metadata")
         if not isinstance(name, str) or not name.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty name")
             continue
-        if not isinstance(metadata, dict) and not is_upstream_skill(skill_md):
-            errors.append(f"{rel(skill_md)}: missing metadata mapping")
-            metadata = {}
-        elif not isinstance(metadata, dict):
+        has_metadata = "metadata" in data
+        metadata = data.get("metadata")
+        if not isinstance(metadata, dict):
+            if not is_upstream_skill(skill_md) and name.strip() not in NATIVE_MINIMAL_SKILLS:
+                errors.append(f"{rel(skill_md)}: missing metadata mapping")
             metadata = {}
         description = data.get("description")
         if not isinstance(description, str) or not description.strip():
@@ -363,6 +367,7 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
                 name=name.strip(),
                 description=description.strip(),
                 metadata=metadata,
+                has_metadata=has_metadata,
                 line_count=line_count,
                 text=text,
             )
@@ -391,6 +396,13 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
     errors.extend(bibtex_errors)
     errors.extend(context_route_errors)
 
+    missing_native_skills = sorted(NATIVE_MINIMAL_SKILLS - known_names)
+    if missing_native_skills:
+        errors.append(
+            "NATIVE_MINIMAL_SKILLS names missing skill directories: "
+            + ", ".join(missing_native_skills)
+        )
+
     for skill in skills:
         prefix = rel(skill.path)
         if skill.dirname != skill.name:
@@ -399,6 +411,10 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             )
 
         if is_upstream_skill(skill.path):
+            continue
+
+        if skill.name in NATIVE_MINIMAL_SKILLS:
+            audit_native_minimal_skill(skill, errors)
             continue
 
         missing = sorted(REQUIRED_METADATA - skill.metadata.keys())
@@ -533,6 +549,44 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             )
 
     return errors, warnings
+
+
+MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
+
+
+def audit_native_minimal_skill(skill: Skill, errors: list[str]) -> None:
+    """Validate the temporary native-minimal profile without legacy metadata."""
+    prefix = rel(skill.path)
+    if skill.has_metadata:
+        errors.append(
+            f"{prefix}: native-minimal skills must not retain legacy metadata; "
+            "description is the sole activation statement"
+        )
+
+    body = body_without_frontmatter(skill.text)
+    if re.search(r"(?mi)^##\s+when\s+to\s+use\b", body):
+        errors.append(
+            f"{prefix}: native-minimal skills must not duplicate description in a When To Use section"
+        )
+
+    owner_links: list[str] = []
+    for raw_target in MARKDOWN_LINK_RE.findall(body):
+        target = raw_target.strip().strip("<>")
+        if not target or target.startswith(("#", "http://", "https://", "mailto:")):
+            continue
+        owner_links.append(target)
+
+    if not owner_links:
+        errors.append(
+            f"{prefix}: native-minimal skills need a direct repository-relative owner pointer"
+        )
+        return
+
+    for target in owner_links:
+        if not repo_path_exists(target):
+            errors.append(
+                f"{prefix}: native-minimal owner pointer {target!r} does not resolve in the repository"
+            )
 
 
 def audit_semantic_drift(skills: list[Skill]) -> list[str]:
@@ -744,6 +798,19 @@ metadata:
 """
 
 
+def self_test_native_skill_text(name: str, body: str, metadata: str = "") -> str:
+    metadata_block = f"\nmetadata:\n{metadata.rstrip()}" if metadata else ""
+    return f"""---
+name: {name}
+description: Test-only native skill fixture.{metadata_block}
+---
+
+# Test Skill
+
+{body}
+"""
+
+
 def write_self_test_skill(root: Path, name: str, text: str) -> Path:
     skill_dir = root / "skills" / name
     skill_dir.mkdir(parents=True, exist_ok=True)
@@ -768,6 +835,8 @@ def routing_fixture_with_expected(fixture_id: str, expected: list[str]) -> dict[
 
 
 def run_self_tests() -> tuple[list[str], list[str]]:
+    global NATIVE_MINIMAL_SKILLS
+
     failures: list[str] = []
     passes: list[str] = []
 
@@ -814,6 +883,137 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         skills_by_name = {skill.name: skill for skill in skills}
         expect("live-skills-load", not load_errors, "; ".join(load_errors))
 
+        malformed_path = tmp_root / "skills" / "malformed-yaml" / "SKILL.md"
+        malformed_path.parent.mkdir(parents=True, exist_ok=True)
+        malformed_path.write_text("---\nname: [\n---\n", encoding="utf-8")
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "malformed-yaml",
+            any("unreadable frontmatter" in error for error in load_errors),
+            "malformed YAML was not rejected",
+        )
+        malformed_path.unlink()
+        malformed_path.parent.rmdir()
+
+        mismatch_text = self_test_skill_text(
+            "other-name",
+            [".agents/references/source_order.md#role-split"],
+            "Use this test body for directory-name validation.",
+        )
+        write_self_test_skill(tmp_root, "mismatched-name", mismatch_text)
+        skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(skills)
+        expect(
+            "directory-frontmatter-mismatch",
+            not load_errors and any("directory/frontmatter mismatch" in error for error in errors),
+            "directory/frontmatter mismatch was not rejected",
+        )
+
+        missing_description = "---\nname: missing-description\nmetadata: {}\n---\n"
+        write_self_test_skill(tmp_root, "missing-description", missing_description)
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "missing-description",
+            any("missing non-empty description" in error for error in load_errors),
+            "missing description was not rejected",
+        )
+        (tmp_root / "skills" / "missing-description" / "SKILL.md").unlink()
+        (tmp_root / "skills" / "missing-description").rmdir()
+
+        unconverted_text = "---\nname: unconverted-no-metadata\ndescription: Test fixture.\n---\n"
+        write_self_test_skill(tmp_root, "unconverted-no-metadata", unconverted_text)
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "unconverted-metadata-absent",
+            any("unconverted-no-metadata/SKILL.md: missing metadata mapping" in error for error in load_errors),
+            "unconverted skill without legacy metadata was not rejected",
+        )
+        (tmp_root / "skills" / "unconverted-no-metadata" / "SKILL.md").unlink()
+        (tmp_root / "skills" / "unconverted-no-metadata").rmdir()
+
+        partial_legacy_text = "---\nname: unconverted-partial-metadata\ndescription: Test fixture.\nmetadata:\n  mode: router\n---\n"
+        write_self_test_skill(tmp_root, "unconverted-partial-metadata", partial_legacy_text)
+        skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(skills)
+        expect(
+            "unconverted-partial-legacy-metadata",
+            not load_errors and any("missing metadata fields" in error for error in errors),
+            "unconverted skill with partial legacy metadata was not rejected",
+        )
+
+        original_native_minimal_skills = NATIVE_MINIMAL_SKILLS
+        try:
+            NATIVE_MINIMAL_SKILLS = frozenset({"native-minimal-fixture"})
+            native_body = (
+                "Read the [source order](.agents/references/source_order.md#role-split) "
+                "before acting."
+            )
+            write_self_test_skill(
+                tmp_root,
+                "native-minimal-fixture",
+                self_test_native_skill_text("native-minimal-fixture", native_body),
+            )
+            skills, load_errors = load_skills(tmp_root / "skills")
+            native_skill = next(skill for skill in skills if skill.name == "native-minimal-fixture")
+            errors, _ = audit_skills([native_skill])
+            expect(
+                "native-minimal-allowlisted",
+                not load_errors and not errors,
+                "; ".join(load_errors + errors),
+            )
+
+            write_self_test_skill(
+                tmp_root,
+                "native-minimal-fixture",
+                self_test_native_skill_text(
+                    "native-minimal-fixture",
+                    "Read the [missing owner](missing-owner.md) before acting.",
+                ),
+            )
+            skills, load_errors = load_skills(tmp_root / "skills")
+            errors, _ = audit_skills([next(skill for skill in skills if skill.name == "native-minimal-fixture")])
+            expect(
+                "native-minimal-broken-owner-pointer",
+                not load_errors and any("owner pointer" in error for error in errors),
+                "broken native-minimal owner pointer was not rejected",
+            )
+
+            write_self_test_skill(
+                tmp_root,
+                "native-minimal-fixture",
+                self_test_native_skill_text(
+                    "native-minimal-fixture",
+                    native_body,
+                    "  triggers:\n    - test",
+                ),
+            )
+            skills, load_errors = load_skills(tmp_root / "skills")
+            errors, _ = audit_skills([next(skill for skill in skills if skill.name == "native-minimal-fixture")])
+            expect(
+                "native-minimal-partial-legacy-metadata",
+                not load_errors and any("must not retain legacy metadata" in error for error in errors),
+                "native-minimal skill with partial legacy metadata was not rejected",
+            )
+
+            write_self_test_skill(
+                tmp_root,
+                "native-minimal-fixture",
+                self_test_skill_text(
+                    "native-minimal-fixture",
+                    [".agents/references/source_order.md#role-split"],
+                    native_body,
+                ),
+            )
+            skills, load_errors = load_skills(tmp_root / "skills")
+            errors, _ = audit_skills([next(skill for skill in skills if skill.name == "native-minimal-fixture")])
+            expect(
+                "native-minimal-complete-legacy-metadata",
+                not load_errors and any("must not retain legacy metadata" in error for error in errors),
+                "native-minimal skill with complete legacy metadata was not rejected",
+            )
+        finally:
+            NATIVE_MINIMAL_SKILLS = original_native_minimal_skills
+
         missing_fixture = {
             "fixtures": [
                 {
@@ -851,6 +1051,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             name="truth-leak-skill",
             description="Test-only skill fixture.",
             metadata={},
+            has_metadata=False,
             line_count=len(drift_text.splitlines()),
             text=drift_text,
         )
@@ -922,9 +1123,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             skills_by_name,
         )
         expect(
-            "browser-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "browser_run_code" in error for error in errors),
-            "forbidden browser tool activation was not rejected",
+            "native-minimal-no-tool-registry",
+            not errors,
+            "; ".join(errors),
         )
 
         python_analyzer_overtrigger_fixture = {

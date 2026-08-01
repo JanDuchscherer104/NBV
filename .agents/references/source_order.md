@@ -43,6 +43,12 @@ Use this reference when a task needs current project truth or sources disagree.
   Semantic-drift warnings from `make scaffold-audit` are source-order review
   prompts: move durable truth to the owner above, or justify the text as a
   compact routing/evidence cue.
+  During the temporary dual-schema migration, unconverted skills retain the
+  complete legacy metadata contract. Only the audit-owned
+  `NATIVE_MINIMAL_SKILLS` set may use `name`/`description`-only frontmatter;
+  those skills provide direct repository-relative owner links in their bodies.
+  The set is migration mechanics, not an owner or authority surface, and a
+  missing legacy metadata block never selects the native profile.
 - Optional tools and adapters provide evidence, not truth. Tool-specific
   operating details remain with the retained tool owner.
   - External research and automation propose source-linked changes; ordinary
