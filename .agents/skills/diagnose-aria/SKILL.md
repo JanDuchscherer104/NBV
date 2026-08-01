@@ -5,7 +5,7 @@ description: Diagnose a concrete ARIA-NBV command, metric, UI, document-build, o
 
 # Diagnose ARIA
 
-1. **Localize the symptom.** Read [root guidance](AGENTS.md), the exact failing
+1. **Localize the symptom.** Read [root guidance](../../../AGENTS.md), the exact failing
    output, and the nearest guide for its owner. Completion: the symptom and its
    owner are concrete, or the missing artifact is named.
 2. **Build a red loop.** Reproduce and minimize the symptom, then rank

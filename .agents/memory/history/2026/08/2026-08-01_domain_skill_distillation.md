@@ -43,6 +43,9 @@ and rollback boundaries.
 - Ran fresh read-only Codex probes with ignored user configuration and structured
   JSON output. JSONL command events confirmed the reported skill paths were
   opened inside the isolated worktree.
+- Closed independent-review findings by resolving Markdown owners relative to
+  each skill directory and rejecting every native-minimal frontmatter key except
+  `name` and `description`.
 
 # Invocation dispositions
 
@@ -115,7 +118,7 @@ read-model migration.
 
 - Nine `quick_validate.py` skill checks: passed.
 - `make scaffold-audit`: passed with 13 warnings on unrelated legacy skills.
-- `make scaffold-audit-self-test`: 20 passed, 0 failures.
+- `make scaffold-audit-self-test`: 22 passed, 0 failures.
 - Governance G002: 7 passed.
 - `make check-agent-memory`: passed.
 - `make ci`: passed, including 266 package tests, 112 smoke tests, and the

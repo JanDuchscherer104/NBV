@@ -5,7 +5,7 @@ description: Curate ARIA-NBV Quarto navigation, bibliography, or the public/inte
 
 # Curate ARIA-NBV Docs
 
-1. **Locate the source role.** Read [docs guidance](docs/AGENTS.md), source
+1. **Locate the source role.** Read [docs guidance](../../../docs/AGENTS.md), source
    order, and the exact public source being changed. Hand off Typst narrative,
    notation, or rendering work to `typst-authoring`. Completion: the public
    owner and its source role are explicit.

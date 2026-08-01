@@ -9,8 +9,8 @@ Use an owner-first operation loop. This skill coordinates an operation; the
 owning package and command surface define the data contract.
 
 1. Localize the active data surface through the data-handling
-   [`AGENTS.md`](aria_nbv/aria_nbv/data_handling/AGENTS.md), its module
-   [`README.md`](aria_nbv/aria_nbv/data_handling/README.md), and the exact
+   [`AGENTS.md`](../../../aria_nbv/aria_nbv/data_handling/AGENTS.md), its module
+   [`README.md`](../../../aria_nbv/aria_nbv/data_handling/README.md), and the exact
    CLI or source being exercised. Localization is complete when the input, store,
    and validation owner are named.
 2. Inspect before mutation. Run the owner-provided listing, dry-run, status, or

@@ -5,7 +5,7 @@ description: Plan ARIA-NBV counterfactual rollouts or compare finite-candidate Q
 
 # Plan Counterfactual Rollouts
 
-1. **Locate the decision owner.** Read [rollout guidance](aria_nbv/aria_nbv/rollouts/AGENTS.md)
+1. **Locate the decision owner.** Read [rollout guidance](../../../aria_nbv/aria_nbv/rollouts/AGENTS.md)
    and the exact active method or experiment section. Completion: the code,
    claim, and evaluation owners are identified.
 2. **Frame the comparison.** Obtain the owner-defined budget, validity, and

@@ -7,7 +7,7 @@ description: Verify ARIA-NBV pose, camera, coordinate-frame, projection, backpro
 
 Use an evidence-tuple loop across the exact geometry boundary.
 
-1. Read the package [`AGENTS.md`](aria_nbv/AGENTS.md), then the nearest
+1. Read the package [`AGENTS.md`](../../../aria_nbv/AGENTS.md), then the nearest
    guide and typed source for the changed pose, rendering, data-view, target, or
    rollout surface. Localization is complete when both sides of the transform or
    projection are named.

@@ -5,7 +5,7 @@ description: Review an ARIA-NBV working-tree or pull-request diff, or validate r
 
 # Review ARIA-NBV
 
-1. **Establish the surface.** Read [root guidance](AGENTS.md), the exact diff
+1. **Establish the surface.** Read [root guidance](../../../AGENTS.md), the exact diff
    or review artifact, and the nearest guide for every touched owner.
    Completion: every candidate finding has a current source and owner.
 2. **Validate findings.** Check each reported or discovered issue against the

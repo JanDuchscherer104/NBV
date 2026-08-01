@@ -9,7 +9,7 @@ Use an observer-artifact loop. Rerun presents package-owned data and never
 settles data, geometry, or scientific meaning.
 
 1. Read the inspector
-   [`README.md`](aria_nbv/aria_nbv/rerun_inspector/README.md), then the
+   [`README.md`](../../../aria_nbv/aria_nbv/rerun_inspector/README.md), then the
    exact logger, session, offline-sample, or rollout adapter and its focused
    tests. When the input store is involved, also read its owning data-handling or
    rollout guide. Localization is complete when the input adapter, entity/layer

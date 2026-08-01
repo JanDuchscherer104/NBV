@@ -252,13 +252,16 @@ def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[st
     return routes, []
 
 
-def repo_path_exists(ref: str) -> bool:
+def repo_path_exists(ref: str, *, base: Path = ROOT) -> bool:
     path_text, _, anchor = ref.partition("#")
-    if not path_text or path_text.startswith("/") or path_text.startswith("docs/_generated/"):
+    if not path_text or path_text.startswith("/"):
         return False
-    path = ROOT / path_text
+    path = base / path_text
     resolved = path.resolve()
     if not is_relative_to(resolved, ROOT_RESOLVED) or not resolved.exists():
+        return False
+    generated_docs = (ROOT / "docs" / "_generated").resolve()
+    if is_relative_to(resolved, generated_docs):
         return False
     if anchor and resolved.suffix in {".md", ".qmd"}:
         return anchor in markdown_anchors(resolved)
@@ -569,6 +572,13 @@ MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
 def audit_native_minimal_skill(skill: Skill, errors: list[str]) -> None:
     """Validate the temporary native-minimal profile without legacy metadata."""
     prefix = rel(skill.path)
+    frontmatter = load_frontmatter(skill.path)
+    unexpected_keys = sorted(set(frontmatter) - {"name", "description"})
+    if unexpected_keys:
+        errors.append(
+            f"{prefix}: native-minimal frontmatter only permits name and description; "
+            f"unexpected keys: {', '.join(unexpected_keys)}"
+        )
     if skill.has_metadata:
         errors.append(
             f"{prefix}: native-minimal skills must not retain legacy metadata; "
@@ -595,7 +605,7 @@ def audit_native_minimal_skill(skill: Skill, errors: list[str]) -> None:
         return
 
     for target in owner_links:
-        if not repo_path_exists(target):
+        if not repo_path_exists(target, base=skill.path.parent):
             errors.append(
                 f"{prefix}: native-minimal owner pointer {target!r} does not resolve in the repository"
             )
@@ -956,14 +966,14 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         original_native_minimal_skills = NATIVE_MINIMAL_SKILLS
         try:
             NATIVE_MINIMAL_SKILLS = frozenset({"native-minimal-fixture"})
-            native_body = (
-                "Read the [source order](.agents/references/source_order.md#role-split) "
-                "before acting."
-            )
+            native_body = "Read the [owner](OWNER.md#owner) before acting."
             write_self_test_skill(
                 tmp_root,
                 "native-minimal-fixture",
                 self_test_native_skill_text("native-minimal-fixture", native_body),
+            )
+            (tmp_root / "skills" / "native-minimal-fixture" / "OWNER.md").write_text(
+                "# Owner\n", encoding="utf-8"
             )
             skills, load_errors = load_skills(tmp_root / "skills")
             native_skill = next(skill for skill in skills if skill.name == "native-minimal-fixture")
@@ -988,6 +998,37 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 "native-minimal-broken-owner-pointer",
                 not load_errors and any("owner pointer" in error for error in errors),
                 "broken native-minimal owner pointer was not rejected",
+            )
+
+            write_self_test_skill(
+                tmp_root,
+                "native-minimal-fixture",
+                self_test_native_skill_text(
+                    "native-minimal-fixture",
+                    "Read the [root-looking owner](.agents/references/source_order.md) before acting.",
+                ),
+            )
+            skills, load_errors = load_skills(tmp_root / "skills")
+            errors, _ = audit_skills([next(skill for skill in skills if skill.name == "native-minimal-fixture")])
+            expect(
+                "native-minimal-owner-relative-to-skill",
+                not load_errors and any("owner pointer" in error for error in errors),
+                "repository-root-looking native owner pointer was not resolved relative to the skill",
+            )
+
+            extra_frontmatter = self_test_native_skill_text(
+                "native-minimal-fixture", native_body
+            ).replace(
+                "description: Test-only native skill fixture.\n",
+                "description: Test-only native skill fixture.\ntriggers:\n  - test\n",
+            )
+            write_self_test_skill(tmp_root, "native-minimal-fixture", extra_frontmatter)
+            skills, load_errors = load_skills(tmp_root / "skills")
+            errors, _ = audit_skills([next(skill for skill in skills if skill.name == "native-minimal-fixture")])
+            expect(
+                "native-minimal-extra-frontmatter",
+                not load_errors and any("frontmatter only permits" in error for error in errors),
+                "native-minimal top-level activation or authority fields were not rejected",
             )
 
             write_self_test_skill(

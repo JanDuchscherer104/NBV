@@ -5,7 +5,7 @@ description: Validate ARIA-NBV target selection or target-specific RRI labels an
 
 # Validate Target-Aware RRI
 
-1. **Locate the evidence owner.** Read [RRI guidance](aria_nbv/aria_nbv/rri_metrics/AGENTS.md)
+1. **Locate the evidence owner.** Read [RRI guidance](../../../aria_nbv/aria_nbv/rri_metrics/AGENTS.md)
    and the exact active target-task or replay-contract section. Completion: the
    label, implementation, and claim owners are identified.
 2. **Classify the evidence.** Use the owner to separate selection, label, and
