@@ -71,11 +71,13 @@ def test_plugin_boundary() -> None:
     root_policy = _prose(ROOT / "AGENTS.md")
     owner_policy = _prose(ROOT / ".agents" / "references" / "human_owner_intent.md")
     assert "official upstream Codex plugin" in root_policy
-    assert "`aria-nbv` wing" in root_policy
-    for allowed in ("reviewed debriefs", "canonical state", "tracked TeX"):
+    for allowed in ("thesis", "literature", "project-docs", "debrief"):
+        assert allowed in root_policy
+    for allowed in ("current thesis", "primary-paper PDFs", "native debriefs"):
         assert allowed in owner_policy
-    for excluded in ("raw transcript stores", "downloaded PDF", "credentials"):
+    for excluded in ("code, tests", "private unrelated sessions", "credentials"):
         assert excluded in owner_policy
+    assert "root ARIA-NBV tasks" in owner_policy
     assert "never promotes content into repository truth automatically" in owner_policy
 
 
@@ -154,6 +156,46 @@ def test_route_only_domain_skill_contract() -> None:
     assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
         "mcp__MCP_DOCKER.get_library_docs"
     ]
+
+
+def test_lazy_mempalace_routing_contract() -> None:
+    context = _prose(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    source_order = _prose(ROOT / ".agents" / "references" / "source_order.md")
+    for required in (
+        "aria-thesis",
+        "aria-literature-reviews",
+        "aria-papers",
+        "aria-project-docs",
+        "aria-debriefs",
+        "aria-codex-history",
+        "direct `rg`, code-index, and exact-source reads",
+        "Chronology alone never implies supersession",
+        "Codex's explicit fail-closed `enabled_tools` allowlist",
+        "mutating MCP tools are hidden and refused",
+    ):
+        assert required in context
+    assert "Implementation behavior" in source_order
+    assert "aria_nbv/aria_nbv/" in source_order
+
+
+def test_mempalace_routing_scenarios() -> None:
+    import json
+
+    data = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
+    fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
+    expected = {
+        "semantic-recall-current-thesis",
+        "semantic-recall-literature-primary",
+        "semantic-recall-reviewed-history",
+        "semantic-recall-code-direct-source",
+    }
+    assert expected <= fixtures.keys()
+    assert "primary-paper inspection" in fixtures[
+        "semantic-recall-literature-primary"
+    ]["non_goals"][0]
+    assert "MemPalace for code" in fixtures[
+        "semantic-recall-code-direct-source"
+    ]["non_goals"][0]
 
 
 def test_capture_and_routing_contracts() -> None:

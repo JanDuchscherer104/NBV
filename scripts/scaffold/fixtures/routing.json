@@ -103,6 +103,30 @@
       "non_goals": ["Do not start with browser tools when local code-index and rg can localize the source."]
     },
     {
+      "id": "semantic-recall-current-thesis",
+      "task": "Recall related current thesis sections before locating and opening the authoritative Typst source.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not treat a retrieved thesis drawer as independent from its source section or include hierarchy."]
+    },
+    {
+      "id": "semantic-recall-literature-primary",
+      "task": "Find the relevant ARIA literature-review domain and then verify its claim in the matching primary paper.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not substitute a review drawer or manifest sidecar for direct primary-paper inspection."]
+    },
+    {
+      "id": "semantic-recall-reviewed-history",
+      "task": "Recall a reviewed historical diagnosis from native debriefs before checking the current owner.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not infer current truth or supersession from debrief age or retrieval rank."]
+    },
+    {
+      "id": "semantic-recall-code-direct-source",
+      "task": "Localize an unknown implementation, test, or active-configuration owner without searching MemPalace code.",
+      "expected_skills": ["agent-behavior", "aria-nbv-context"],
+      "non_goals": ["Do not use MemPalace for code, tests, symbols, or active configuration; use rg, code-index, and exact sources."]
+    },
+    {
       "id": "planned-thesis-detail",
       "task": "Place planned but unimplemented target-RRI, rollout, or Q_H research details in canonical thesis or Quarto owners.",
       "expected_skills": ["agent-behavior"],
