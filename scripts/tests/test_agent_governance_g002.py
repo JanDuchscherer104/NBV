@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 import tomllib
 
@@ -15,16 +16,16 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _tracked_live_runtime_configs() -> list[Path]:
+def _tracked_live_runtime_configs(root: Path = ROOT) -> list[Path]:
     tracked = subprocess.run(
         ["git", "ls-files", "-z"],
-        cwd=ROOT,
+        cwd=root,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.split("\0")
     return [
-        ROOT / relative
+        root / relative
         for relative in tracked
         if relative
         and (
@@ -41,6 +42,21 @@ def _tracked_live_runtime_configs() -> list[Path]:
             or relative == ".codex/config.toml"
         )
     ]
+
+
+def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
+    return [
+        path.relative_to(root).as_posix()
+        for path in _tracked_live_runtime_configs(root)
+        if "mempalace" in _read(path).lower()
+    ]
+
+
+def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
+    owner_paths = fixture.get("expected_owner_paths")
+    return isinstance(owner_paths, list) and all(
+        isinstance(path, str) and (root / path).is_file() for path in owner_paths
+    )
 
 
 def test_plugin_boundary() -> None:
@@ -68,12 +84,23 @@ def test_plugin_boundary() -> None:
 def test_no_tracked_mempalace_runtime_config() -> None:
     runtime_configs = _tracked_live_runtime_configs()
     assert ROOT / ".gemini" / "settings.json" in runtime_configs
-    offenders = [
-        path.relative_to(ROOT).as_posix()
-        for path in runtime_configs
-        if "mempalace" in _read(path).lower()
-    ]
-    assert not offenders, f"tracked runtime configs invoke MemPalace: {offenders}"
+    assert not _mempalace_runtime_offenders()
+
+
+def test_mempalace_runtime_and_owner_path_negative_fixtures() -> None:
+    with tempfile.TemporaryDirectory(prefix="g002-negative-") as tmp:
+        root = Path(tmp)
+        runtime = root / ".mcp.json"
+        runtime.write_text(
+            '{"mcpServers":{"mempalace":{"command":"mempalace"}}}', encoding="utf-8"
+        )
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "add", ".mcp.json"], cwd=root, check=True)
+        assert _mempalace_runtime_offenders(root) == [".mcp.json"]
+        assert not _fixture_owner_paths_exist(
+            root,
+            {"expected_owner_paths": ["missing-required-owner.md"]},
+        )
 
 
 def test_direct_skill_discovery_shape() -> None:
@@ -99,6 +126,7 @@ def test_mempalace_routing_scenarios() -> None:
     for fixture_id in expected:
         fixture = fixtures[fixture_id]
         assert fixture["expected_owner_paths"]
+        assert _fixture_owner_paths_exist(ROOT, fixture)
         assert fixture["required_outcomes"]
         assert fixture["forbidden_outcomes"]
     assert (
