@@ -39,6 +39,7 @@ NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
         "counterfactual-rollout-planner",
         "dataset-cache-ops",
         "diagnose-aria",
+        "docs-curator",
     }
 )
 OPTIONAL_METADATA = {
