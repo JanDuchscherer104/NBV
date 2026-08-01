@@ -183,9 +183,10 @@ returned `CLEAR` with no remaining P0--P2 findings.
 - **Deferred:** section/subsection projection, native proxy-to-Python graph
   edges, and package-test indexing. Each requires measured value or an upstream
   capability rather than expansion of this thin adapter.
-- **Open:** exact-head hosted CI for the project-skill follow-up remains the
-  publication gate. The file-level proxy boundary is an accepted limitation,
-  not evidence of section-level or native-code traversal.
+- **Open:** publication remains pending at record authoring. The exact pushed
+  head and hosted CI outcome must be evidenced on PR #45. The file-level proxy
+  boundary is an accepted limitation, not evidence of section-level or
+  native-code traversal.
 
 ## Verification
 
@@ -255,3 +256,45 @@ returned `CLEAR`, and PR #45 Root Verification passed at publication head
 `6c0eafa99242398404effe85bac639798ad12834` in 10m24s. Those results do not close
 the later review: the remediation requires fresh exact-head local verification,
 hosted CI, and reviewer thread resolution before merge.
+
+## 2026-08-01 Final PR #45 Remediation Record
+
+At local head `8f6123e2f8ca62fca3e1e42bbd33d57752abf641`, commits `9597c8ee`
+and `8f6123e2` complete the final local remediation. The Graphify skill now
+uses the native Codex `executor` through `spawn_agent`/`wait_agent`, with a
+UUID-scoped run directory and an exact expected-chunk manifest. Interrupted,
+zero-input, and all-cache runs are isolated; missing or invalid expected chunks
+fail closed and cannot make a graph current.
+
+The repository-owned freshness CLI records the `invalid`, `missing`,
+`semantic-stale`, `structural-stale`, and `fresh` states. It checks the
+repository root, exact head, projection/index membership, and upstream's salted
+stat-index hash semantics. The upstream Git hook remains optional local
+invalidation/acceleration only; `hook status` reported no `post-commit` hook,
+an installed `post-checkout` hook, and no merge driver, none of which authorizes
+freshness.
+
+The one-time shared-cache migration found 350 live entries: 126 unique payload
+groups, 112 byte-identical duplicate groups, 224 redundant entries, and zero
+conflicts. Replaced local directories were retained under the suffix
+`semantic.pre-shared-20260801T124302Z`. Two-worktree validation recorded 386
+cross-worktree cache hits and zero misses; graph, projection, manifest,
+stat-index, and run state remain worktree-local.
+
+The authenticated local Graphify `0.9.31` run at `8f6123e2` used semantic run
+`c2c0daeb-3c79-4824-8d82-61e82bee1366`, produced fresh JSON, and yielded 6,222
+nodes, 14,268 edges, and 519 communities. The live query traversal reached 85
+BFS nodes before output truncation; the verified path was
+`aria_nbv/__init__.py --imports [EXTRACTED]--> AseEfmDataset`. The read-only
+multigraph diagnostic reported 1,288 dangling endpoint edges, one self-loop,
+and 1,574 undirected same-endpoint collapses. These are non-blocking upstream
+health diagnostics, not freshness or publication gates.
+
+Local `make ci` passed: the QH/package contract suite had 266 passing tests
+(159 warnings, 50.42s), package smoke had 112 passing tests (142 warnings,
+16.31s), the projection suite had 41 passing tests, CI-impact and freshness
+suites had 11 passing tests each, and the setup shell plus docs/Quarto and Typst
+core render gates passed. The warnings and upstream diagnostics were
+non-blocking. `make check-agent-memory` and `git diff --check` are the final
+record checks. No commit or push is implied by this record: publication remains
+pending and must be evidenced on PR #45.
