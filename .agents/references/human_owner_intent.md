@@ -142,14 +142,7 @@ policy:
 
 ## Instruction Capture
 
-- Repository invariant or safety rule: root or nearest nested `AGENTS.md`.
-- Repeatable workflow: the narrow owning `.agents/skills/*/SKILL.md`.
-- Human scaffold preference: this file.
-- Current technical or scientific truth: exact owning code, configuration,
-  test, thesis source, evidence bundle, or paper.
-- Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
-  `.agents/refactors.toml`.
-- Generated routing or context: ignored, reproducible output with provenance.
-
-Use the smallest authoritative surface that preserves the information without
-creating a second source of truth.
+The exact destination map is owned by
+`.agents/references/source_order.md#capture-rule`. The `agent-behavior` skill
+owns the procedure for recognizing explicit current-user capture requests and
+applying that map. This file retains only reviewed human preferences.

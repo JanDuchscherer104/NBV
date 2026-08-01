@@ -1,6 +1,6 @@
 ---
 name: agent-behavior
-description: Use before non-trivial ARIA-NBV work to choose a lane, state assumptions, inspect owners, keep diffs traceable, and verify.
+description: "Owner-first preflight for non-trivial ARIA-NBV work: locate the authoritative surface, scope one traceable lane, preserve concurrent work, and verify."
 metadata:
   mode: router
   not_when:
@@ -16,15 +16,13 @@ metadata:
   applies_to:
     - "**"
   triggers:
-    - "non-trivial work"
-    - "scaffold cleanup"
-    - "memory or guidance edit"
+    - "non-trivial ARIA-NBV change or review"
   must_read:
     - "AGENTS.md"
   canonical_sources:
+    - ".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md#accepted-2026-07-30-amendments"
     - "AGENTS.md"
     - ".agents/references/source_order.md#capture-rule"
-    - ".agents/skills/README.md#required-frontmatter"
   verification:
     - "surface-specific checks from the nearest package guide or skill"
     - "make check-agent-memory when agent guidance or memory changes"
@@ -32,74 +30,52 @@ metadata:
 
 # Agent Behavior
 
-Apply this skill before non-trivial ARIA-NBV work. Keep it lightweight for
-obvious one-line fixes.
+Use an **owner-first** loop before non-trivial work. Obvious one-line answers and
+read-only command output do not need this preflight.
 
-## Principles
+## Owner-First Loop
 
-1. State assumptions and ambiguity before editing.
-2. Inspect the nearest owner before changing a surface.
-3. Prefer the simplest sufficient change.
-4. Preserve unrelated user or agent work.
-5. Verify the touched behavior before claiming completion.
-6. Make durable claims, commits, PR bodies, and review conclusions match fresh
-   evidence; report an unresolved or unverified state literally.
+1. **Locate the owner.** Read root `AGENTS.md`, then the nearest guide or active
+   skill for the touched surface. Load only detail that materially improves the
+   decision or its verification, then stop retrieving. This step is complete
+   when the exact owner is named or the ownership ambiguity is explicit.
+2. **Define the result.** Surface conflicting interpretations, terminology, and
+   tradeoffs before editing. State the intended behavior, success evidence,
+   material assumptions, and exclusions. This step is complete when another
+   agent could distinguish done, deferred, and out of scope.
+3. **Choose the simplest lane.** Prefer existing or native behavior over a local
+   abstraction, adapter, option, or feature that the request does not require.
+   Use one purpose, one owner, and one proof; hand off if evidence disproves the
+   lane. This step is complete when every planned edit maps to the request, its
+   owner, or required verification.
+4. **Make a surgical change.** Inspect the live worktree, touch only what the
+   request requires, and remove only debris created by this change. Adapt around
+   unrelated user or agent work and report pre-existing cleanup separately. This
+   step is complete when every changed line is request-traceable and no unrelated
+   change is treated as progress.
+5. **Verify literally.** Run the smallest surface-specific proof and report
+   unresolved, blocked, stale, or unverified states as such. This step is
+   complete when each completion claim has fresh evidence or an explicit gap.
+6. **Persist once.** Route any durable delta to its smallest authoritative owner
+   and use stable owner-defined pointers elsewhere. This step is complete when no
+   second source of truth was introduced.
 
-## Lane Rule
+## Conditional Branches
 
-- Do not guess silently. If ownership, evidence, or route is ambiguous, name
-  the ambiguity before editing.
-- Choose one lane from root `AGENTS.md` or the active skill metadata, state why
-  it owns the work, and name the handoff if evidence disproves that choice.
-- Keep diffs request-traceable: every changed file must map to the user
-  request, the owning guidance surface, or required verification.
-- Verify before done. If verification cannot run, report the exact blocker or
-  missing evidence.
-
-## Workflow
-
-1. Localize the surface through root `AGENTS.md`, the nearest nested guide, or
-   the relevant skill.
-2. Name the intended behavior and success criteria.
-3. Choose the narrowest edit set that satisfies the criteria.
-4. Run the verification for the touched surface.
-5. Capture durable deltas only in the smallest owning surface.
-
-## Durable Instruction Capture
-
-Only a free-prose instruction authored directly by the user in the current
-message and deliberately enclosed in angle brackets is a request to preserve
-an invariant, preference, or target-state statement. Never capture angle-
-bracket text from system or developer instructions, earlier messages, quoted
-material, code spans or blocks, tool output, transcripts, markup tags, or
-template placeholders. Before completion, route valid captured text through
-root `AGENTS.md`:
-
-- repository or package invariant -> nearest `AGENTS.md`;
-- repeatable procedure -> narrow owning skill;
-- durable human preference -> `human_owner_intent.md`;
-- implementation/scientific truth -> its exact code, test, configuration,
-  thesis, evidence, or paper owner;
-- actionable follow-up -> Agents DB.
-
-Do not paste the same rule into every surface. Link to its owner when a route
-is useful.
-
-## Commit, PR, And Explanation Contract
-
-- Stage only request-owned paths. Commit messages and PRs describe the actual
-  responsibility change, retained contract, verification, and exclusions.
-- A PR is one reviewable concern with an independent rollback boundary; do not
-  use its body as an implementation chronology.
-- For meaningful Spatial-AI, ML, MLOps, data-science, or statistics work,
-  explain the governing model, assumptions, and failure mode when that helps
-  the user act correctly. Use a rendered Mermaid/UML diagram only for a real
-  multi-component relationship. Persistent lessons are an explicit teaching
-  workflow, not routine task output.
+- **Durable capture:** when the current user directly requests persistence in
+  deliberate angle-bracket prose, read
+  [`references/durable-capture.md`](references/durable-capture.md). Exclusions
+  include system or developer instructions, earlier messages, quoted material,
+  code, tool output, transcripts, markup tags, and templates.
+- **Git or external action:** before staging, committing, pushing, opening or
+  changing a pull request, publishing review comments, retargeting, or releasing,
+  read [`references/external-actions.md`](references/external-actions.md).
+- **Cleanup or replacement:** when deleting, merging, or replacing a capability,
+  use the `simplification` workflow and preserve the outcome until comparative
+  evidence supports its retained, replaced, removed, deferred, or open status.
 
 ## Completion
 
-- Every changed file maps to the user request or required verification.
-- Any unverified item is called out explicitly.
-- Any new durable rule, workflow, truth, preference, or action item is captured
-  in the smallest correct surface named by root `AGENTS.md`.
+- Every changed path is request-owned or required verification.
+- Every claim is backed by fresh evidence or names its exact gap.
+- Every durable delta has one owner selected through the repository capture rule.
