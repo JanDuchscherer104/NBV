@@ -409,10 +409,14 @@ run.joinpath('expected_chunks.json').write_text(json.dumps([f'chunk_{index:02d}.
 "
 ```
 
-**Step B2 - Dispatch ALL subagents in a single message**
+**Step B2 - Dispatch bounded native-agent batches**
 
-> Use native Codex `spawn_agent` once per chunk — all in the same response so
-> they run in parallel — then collect each with `wait_agent`.
+Use native Codex `spawn_agent` once for each pending manifest chunk, up to the
+currently available `executor` slots. Call `wait_agent` for every dispatched
+chunk and validate its run-scoped output before dispatching the next batch.
+Repeat until the same run's `expected_chunks.json` is exhausted. This preserves
+one agent invocation and one literal output path per chunk without exceeding
+bounded native-agent concurrency; never merge a partial batch or partial run.
 
 Pass the extraction prompt as the task description:
 

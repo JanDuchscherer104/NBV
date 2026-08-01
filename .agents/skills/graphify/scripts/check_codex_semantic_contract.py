@@ -32,6 +32,9 @@ def _assert_skill_contract() -> None:
         'RUN_DIR="$(pwd)/graphify-out/.graphify_runs/${RUN_ID}"',
         'mkdir -p "$RUN_DIR"',
         "expected_chunks.json').write_text('[]'",
+        "currently available `executor` slots",
+        "before dispatching the next batch",
+        "never merge a partial batch or partial run",
         "rm -f graphify-out/needs_update",
         "repository root is the single `INPUT_PATH` and `root`",
         "never use `graphify-input/` as that root",
@@ -55,6 +58,7 @@ def _assert_skill_contract() -> None:
         "glob(",
         "more than half the chunks",
         "skip that chunk",
+        "all in the same response",
         "graphify-out/.needs_update",
     )
     present = [phrase for phrase in forbidden if phrase in text]
