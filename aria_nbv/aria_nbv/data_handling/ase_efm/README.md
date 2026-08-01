@@ -19,8 +19,6 @@ Baseline: `14e1f5f`
 
 Inventory refreshed: `2026-07-13`
 
-Graphify refresh: `2026-07-13`
-
 ## Symbol Ownership Matrix
 
 ### `__init__.py`

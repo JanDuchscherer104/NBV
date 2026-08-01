@@ -39,9 +39,6 @@ delegate to them.
 
 ## Symbol Ownership Matrix
 
-Exact top-level AST inventory generated on 2026-07-10 after a Graphify owner
-query. Imported names, methods, fields, and `__all__` are excluded.
-
 ### `__init__.py`
 
 Owner role: four-symbol stable root.
