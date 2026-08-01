@@ -4,7 +4,7 @@ status: complete
 slug: aria-nbv-domain-skill-distillation
 terminal_planning_state: complete
 amended: 2026-08-01
-implementation_go_no_go: no-go
+implementation_go_no_go: go
 ralplan_consensus_gate:
   complete: true
   order:
@@ -71,7 +71,27 @@ ralplan_consensus_gate:
 
 ## Implementation gate
 
-**IMPLEMENTATION GO/NO-GO: NO-GO.**
+**IMPLEMENTATION GO/NO-GO: GO.**
+
+The implementation preflight passed on 2026-08-01 in the clean dedicated
+worktree `/home/jd/repos/ARIA-NBV-domain-skill-distillation`, branch
+`codex/domain-skill-distillation`, at frozen baseline
+`d1bfef7d904626bdd1e196377c34c99eefc516fa`. That revision tracks the approved
+PRD, test specification, handoff, context, and approving reviews; the primary
+checkout's unrelated dirty paths were not copied. `python-docstrings` is already
+isolated in commit `773992f3712b5d1efb9f09066bbb63cea2f042a0`.
+
+Fresh baseline commands all exited zero:
+
+- `make scaffold-audit` (`21` warnings, no errors);
+- `make scaffold-audit-self-test` (`11` passed, no failures, G002 `6` passed);
+- `make check-agent-memory`.
+
+Graphify freshness exited `1`, so implementation uses the approved exact-source
+fallback. The prerequisites below are therefore satisfied at the selected
+revision and WP0 may proceed.
+
+### Prior blocked baseline
 
 Live reinspection on 2026-08-01 found branch
 `codex/mempalace-agent-scaffold` at `438bbb53f2569bf4f66766b0c0382a65428f7eb8`.
@@ -83,8 +103,7 @@ while `make scaffold-audit-self-test` fails because the dirty tree removes
 dirty validator rejects the still-present vendored Graphify skill. Graphify
 freshness exits 1, so exact sources remain the discovery fallback.
 
-Implementation becomes **GO** only after all of these prerequisites are true at
-one selected revision:
+Implementation required all of these prerequisites at one selected revision:
 
 1. the amended PRD, test specification, handoff, and approving amendment reviews
    are tracked/frozen;
