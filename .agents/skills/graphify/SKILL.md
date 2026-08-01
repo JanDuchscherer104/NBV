@@ -447,7 +447,7 @@ import re
 
 run = Path('RUN_DIR')
 expected = json.loads((run / 'expected_chunks.json').read_text(encoding=\"utf-8\"))
-if not isinstance(expected, list) or not all(isinstance(name, str) and re.fullmatch(r'chunk_[0-9]{2}\\.json', name) for name in expected):
+if not isinstance(expected, list) or not all(isinstance(name, str) and re.fullmatch(r'chunk_[0-9]+\\.json', name) for name in expected):
     raise SystemExit('Invalid expected chunk manifest; semantic refresh remains stale.')
 chunks = [run / name for name in expected]
 all_nodes, all_edges, all_hyperedges = [], [], []
@@ -770,7 +770,7 @@ print(f'This run: {input_tok:,} input tokens, {output_tok:,} output tokens')
 print(f'All time: {cost[\"total_input_tokens\"]:,} input, {cost[\"total_output_tokens\"]:,} output ({len(cost[\"runs\"])} runs)')
 "
 rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json
-rm -f graphify-out/.needs_update 2>/dev/null || true
+rm -f graphify-out/needs_update 2>/dev/null || true
 ```
 
 Replace INPUT_PATH with the actual path (same value used in Steps 4-5) so the manifest is relativized to the scan root.

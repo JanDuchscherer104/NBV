@@ -9,7 +9,6 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
-import sys
 from typing import Any
 
 
@@ -56,7 +55,9 @@ def _source_revision(index: Path) -> str:
         if line.startswith("source_revision:")
     ]
     if len(values) != 1 or not values[0]:
-        raise ValueError("invalid projection index: source_revision must be one non-empty string")
+        raise ValueError(
+            "invalid projection index: source_revision must be one non-empty string"
+        )
     return values[0]
 
 
@@ -91,7 +92,9 @@ def _upstream_file_hash(content: bytes, relative_path: str) -> str:
 def _index_digest(stat_index: dict[str, Any]) -> str:
     entry = stat_index.get(INDEX_PATH)
     if not isinstance(entry, dict):
-        raise ValueError("invalid stat index: missing object entry for graphify-input/index.md")
+        raise ValueError(
+            "invalid stat index: missing object entry for graphify-input/index.md"
+        )
     hashes = entry.get("hashes")
     if not isinstance(hashes, dict):
         raise ValueError("invalid stat index: index hashes must be an object")
@@ -131,7 +134,11 @@ def check(root: Path) -> dict[str, Any]:
         invalid = True
         reasons.append(str(error))
 
-    paths = ((PROJECTION_INDEX, "projection index"), (GRAPH, "graph"), (STAT_INDEX, "stat index"))
+    paths = (
+        (PROJECTION_INDEX, "projection index"),
+        (GRAPH, "graph"),
+        (STAT_INDEX, "stat index"),
+    )
     for relative, label in paths:
         if not (root / relative).is_file():
             missing = True
@@ -152,7 +159,9 @@ def check(root: Path) -> dict[str, Any]:
             graph = _json_object(root / GRAPH, "graph")
             built_at_commit = graph.get("built_at_commit")
             if not isinstance(built_at_commit, str) or not built_at_commit:
-                raise ValueError("invalid graph: built_at_commit must be a non-empty string")
+                raise ValueError(
+                    "invalid graph: built_at_commit must be a non-empty string"
+                )
             node_present = _contains_index_node(graph)
         except ValueError as error:
             invalid = True
