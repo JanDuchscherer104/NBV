@@ -61,9 +61,11 @@ than copied or individually registered.
 ## Accepted 2026-08-01 Graphify Decision Supersession
 
 The human owner selected the third Graphify option after reviewing the
-comparison evidence: optional, unmodified upstream Graphify plus one thin,
-deterministic Markdown projection for source-owned modalities that upstream
-does not parse natively. This section explicitly supersedes the former open
+comparison evidence: optional upstream Graphify, a project-installed upstream
+skill under `.agents/skills/graphify/`, and one thin deterministic Markdown
+projection for source-owned modalities that upstream does not parse natively.
+The skill carries the small ARIA-NBV preflight instead of expanding root
+`AGENTS.md`. This section explicitly supersedes the former open
 Graphify-role decision in this specification. The projection remains ignored,
 derived, and non-authoritative; it is not a parser framework, graph schema,
 query layer, hook, refresh service, or repository-owned Graphify lifecycle.

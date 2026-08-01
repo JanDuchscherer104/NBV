@@ -75,33 +75,13 @@ python3 scripts/build_graphify_projection.py \
   --aria-code-ref "$(git rev-parse HEAD)"
 ```
 
-All repository-side setup is included here. With the normal user-installed
-upstream Graphify tool and skill available, authenticate the Codex host once
-with `codex login` and invoke `$graphify` from the repository root. The
-unmodified upstream skill can use authenticated Codex subagents to extract the
-projection Markdown and then run Graphify's normal build/read surfaces. Do not
-export a ChatGPT/Codex token, map it to `OPENAI_API_KEY`, add a repository
-secret, or install a repository-local Graphify fork or lifecycle.
-
-Before relying on a query, path, or explanation, confirm that the task revision
-matches `source_revision` in `graphify-input/index.md`, that the top-level
-`built_at_commit` in `graphify-out/graph.json` has that same value, that the
-SHA-256 of the current `graphify-input/index.md` equals the same file's hash in
-`graphify-out/cache/stat-index.json`, and that the graph contains a node with
-`source_file: graphify-input/index.md`. The digest comparison catches a graph
-built from different projection bytes at the same commit. If any check fails,
-use the exact owners until rebuilding the graph, and always verify consequential
-claims in the linked owner.
-
-The default graph intentionally excludes raw `.typ`, `.bib`, `.jsonl`, and
-`.tex` inputs, the bulk PDF corpus, and package tests. Projection pages represent
-file-level identities and exact paths without parsing scientific content.
-Compiled heading queries validate the active thesis closure, but headings are
-not emitted as section/subsection identities and citation/code relations remain
-file-level. Code-target proxies preserve path, ref, and line provenance for
-human navigation; they do not promise a Graphify edge to a native Python file
-or symbol. Direct PDF extraction is a separate, disposable operator experiment,
-not part of the root graph.
+The repository includes the upstream project skill at
+`.agents/skills/graphify/SKILL.md`. It owns agent-facing Graphify commands, the
+ARIA-NBV freshness gate, exact-source fallback, corpus exclusions, and the
+projection's explicit capability limits. The Graphify package itself remains a
+user-installed tool; Codex authentication remains operator-local. Direct PDF
+extraction is a separate, disposable operator experiment, not part of the root
+graph.
 
 ## Why these sources are kept locally
 

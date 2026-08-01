@@ -104,10 +104,20 @@ class SelectionTests(unittest.TestCase):
                 )
 
     def test_graphify_guidance_requires_same_commit_projection_digest(self) -> None:
-        guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        skill_root = REPO_ROOT / ".agents/skills/graphify"
+        guidance = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
         self.assertIn("graphify-out/cache/stat-index.json", guidance)
-        self.assertIn("even at the same commit", guidance)
+        self.assertIn("graphify-input/index.md", guidance)
+        self.assertEqual(
+            (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
+            "0.9.31",
+        )
+        self.assertTrue((skill_root / "references/query.md").is_file())
+        self.assertIn(".agents/skills/graphify/SKILL.md", root_guidance)
+        self.assertNotIn("graphify query", root_guidance)
+        self.assertNotIn("graphify install", root_guidance)
 
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(

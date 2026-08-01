@@ -256,16 +256,17 @@ This must pass before legacy deletion or PR publication:
 
 1. Confirm upstream Graphify 0.9.31 or re-review a newer version and capture
    exact `graphify extract --help` output relevant to document extraction.
-2. Confirm the normal user-installed upstream Graphify skill/tool is available
-   and the host Codex session is authenticated with `codex login`. The
-   repository supplies every project-side setup surface.
-3. Build the live projection, then invoke the unmodified upstream `$graphify`
+2. Confirm the project-installed Graphify skill and the user-installed upstream
+   Graphify CLI are available, and the host Codex session is authenticated with
+   `codex login`. The repository supplies every project-side skill and setup
+   surface.
+3. Build the live projection, then invoke the project-installed `$graphify`
    skill. It may dispatch authenticated Codex subagents to produce semantic
    JSON before running the ordinary upstream Graphify build into a disposable
    directory. Never export a ChatGPT/Codex token, reuse it as
    `OPENAI_API_KEY`, add repository secrets, or use a Graphify fork,
    repository-owned package import, or repository-owned lifecycle. The
-   unmodified user-scoped skill may use its upstream package implementation.
+   project skill may use its upstream package implementation.
 4. Prove from the fresh manifest/report/read-side CLI that:
    - projection Markdown inputs were consumed;
    - native Python nodes remain present;

@@ -106,33 +106,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 ## Graphify
 
-Graphify is an optional derived navigation aid, never a knowledge owner or a
-prerequisite for repository work. Start from exact code, Typst, bibliography,
-and literature sources. Before using a local graph, require all three read-side
-facts to agree: `graphify-input/index.md` has the task's expected
-`source_revision`, `graphify-out/graph.json` has the same top-level
-`built_at_commit`, the SHA-256 of the current `graphify-input/index.md` equals
-the corresponding hash in `graphify-out/cache/stat-index.json`, and the graph
-contains a node whose `source_file` is `graphify-input/index.md`. The digest
-comparison is required even at the same commit because ignored assets or dirty
-owners can change projection bytes. If any fact is absent or mismatched, use
-exact-source discovery until the graph is rebuilt. Always verify consequential
-links or claims in their owning source.
-
-Build the ignored evidence projection with
-`python3 scripts/build_graphify_projection.py`, setting
-`--output graphify-input` and `--aria-code-ref <full-sha-or-release-tag>`.
-The repository supplies all project-side setup. After merge, an operator needs
-only a normal user-installed upstream Graphify tool/skill (install it if
-absent) and an authenticated Codex session via `codex login`, then invokes
-`$graphify` on the corpus selected by `.graphifyignore`. The unmodified upstream
-skill may dispatch authenticated Codex subagents for semantic extraction. Never
-export a ChatGPT/Codex token, reuse it as `OPENAI_API_KEY`, add repository
-secrets, or introduce a Graphify fork, repository-owned package import, or
-local lifecycle.
-
-The projection exposes file-level thesis, citation, literature, code-target,
-and asset proxy identities. Compiled heading queries validate the active thesis
-closure but do not create section/subsection nodes. Code-target proxies preserve
-human-resolvable path, ref, and line provenance; they do not promise a native
-Graphify edge to a Python file or symbol.
+Use the project-installed Graphify skill at
+`.agents/skills/graphify/SKILL.md` for codebase architecture, relationship, and
+project-content questions. That skill owns Graphify commands, the ARIA-NBV
+projection/freshness preflight, exact-source fallback, and capability limits.
+Graphify remains optional derived navigation, never a knowledge owner or a
+prerequisite for repository work.

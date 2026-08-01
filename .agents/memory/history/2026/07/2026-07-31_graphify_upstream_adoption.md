@@ -24,6 +24,7 @@ files_touched:
   - scripts/tests/test_build_graphify_projection.py
   - scripts/tests/test_ci_impact.py
   - scripts/validate_agent_memory.py
+  - .agents/skills/graphify/
   - .codex/skills/graphify/
   - scripts/graphify_refresh.py
   - scripts/check_graphify_freshness.py
@@ -44,9 +45,10 @@ artifacts:
 
 ## Task
 
-Adopt the owner's selected option 3: retain user-installed upstream Graphify
-and add one deterministic, ignored Markdown projection for source-owned links
-that upstream Graphify does not natively extract. Exact code, Typst, BibTeX,
+Adopt the owner's selected option 3: retain the user-installed upstream
+Graphify tool, install its project skill under `.agents/skills/graphify/`, and
+add one deterministic ignored Markdown projection for source-owned links that
+upstream Graphify does not natively extract. Exact code, Typst, BibTeX,
 `sources.jsonl`, PDF, and TeX sources remain authoritative. The approved stop
 rule requires a real upstream projection-edge proof before the dormant legacy
 lifecycle may be deleted or a replacement PR may be published.
@@ -108,8 +110,11 @@ edge to the corresponding Python file or symbol is promised.
   files, while the attempted `claude-cli` backend returned an expired-OAuth
   `401`; all five semantic chunks failed, so no projection nodes or expected
   reference edge were produced.
-- The approved continuation uses the unmodified user-installed upstream
-  `$graphify` skill in a `codex login` authenticated session. Its authenticated
+- The approved continuation initially used the user-installed upstream
+  `$graphify` skill in a `codex login` authenticated session. The final
+  remediation installs the upstream 0.9.31 skill under
+  `.agents/skills/graphify/`, adds only the ARIA-NBV preflight and routing
+  metadata, and reduces root `AGENTS.md` to a pointer. Its authenticated
   Codex subagents may produce semantic JSON before the normal upstream build.
   No ChatGPT/Codex token export, `OPENAI_API_KEY` reuse, repository secret,
   Graphify fork, repository-owned Graphify package import, or repository-owned
@@ -164,21 +169,23 @@ returned `CLEAR` with no remaining P0--P2 findings.
 ## Dispositions
 
 - **Retained:** exact source owners, source verification, optional upstream
-  Graphify, and ignored generated projection state.
+  Graphify, the project-installed `.agents/skills/graphify/` usage surface, and
+  ignored generated projection state.
 - **Replaced:** the former unresolved three-option decision gate with the
   explicit option-3 target and its implemented deterministic Markdown
   projection boundary.
-- **Removed:** mandatory Graphify routing and execution, the vendored skill,
-  refresh/freshness/integration scripts, post-commit hook, version pin, custom
-  tests, Graphify-specific Make/CI family, and their validation exceptions and
-  guidance consumers. Commit `121dd235` owns the final lifecycle deletion and
-  consumer repair.
+- **Removed:** mandatory Graphify execution, the retired `.codex` skill and
+  hook, refresh/freshness/integration scripts, custom lifecycle tests,
+  Graphify-specific Make/CI family, and their validation exceptions and
+  guidance consumers. Commit `121dd235` owns the legacy lifecycle deletion and
+  consumer repair; the replacement `.agents` skill is an upstream workflow
+  surface, not a lifecycle.
 - **Deferred:** section/subsection projection, native proxy-to-Python graph
   edges, and package-test indexing. Each requires measured value or an upstream
   capability rather than expansion of this thin adapter.
-- **Open:** exact-head hosted CI and reviewer recheck for the 2026-08-01
-  remediation remain publication gates. The file-level proxy boundary is an
-  accepted limitation, not evidence of section-level or native-code traversal.
+- **Open:** exact-head hosted CI for the project-skill follow-up remains the
+  publication gate. The file-level proxy boundary is an accepted limitation,
+  not evidence of section-level or native-code traversal.
 
 ## Verification
 
@@ -224,12 +231,25 @@ was used. This satisfies the hard upstream-consumption gate. Commit `121dd235`
 then completed the authorized lifecycle deletion and consumer repair. Local
 verification is complete; publication, PR creation, and hosted CI remain open.
 
+The project-skill follow-up ran
+`graphify install --project --platform agents` with upstream Graphify 0.9.31.
+The installed `.agents/skills/graphify/` bundle contains the progressive
+references shipped by upstream plus the compact ARIA-NBV preflight and required
+repository routing metadata. The follow-up passed 41 projection tests, 11
+CI-impact tests, the 288-page live-owner check, scaffold audit with 21 skills
+and zero errors, scaffold self-tests, agent-memory validation, `git diff
+--check`, and `docs-render-core`. The first docs attempt hit the shared `/tmp`
+quota; the identical gate passed with a task-specific `TMPDIR` on the main
+filesystem.
+
 ## Canonical-State Impact
 
 The accepted target-state specification now explicitly owns the option-3
 supersession and bounded corpus; `source_order.md` points to that decision, while
-human-owner intent remains the cross-task preference summary. Upstream
-consumption proof, authorized deletion, and consumer repair remain complete.
+human-owner intent remains the cross-task preference summary. The project skill
+now owns agent-facing Graphify usage and the ARIA preflight; root `AGENTS.md`
+contains only its dispatcher pointer. Upstream consumption proof, authorized
+legacy deletion, and consumer repair remain complete.
 The earlier independent review returned `APPROVE`, Architect verification
 returned `CLEAR`, and PR #45 Root Verification passed at publication head
 `6c0eafa99242398404effe85bac639798ad12834` in 10m24s. Those results do not close

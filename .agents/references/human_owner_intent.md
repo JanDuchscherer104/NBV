@@ -81,17 +81,19 @@ or repeatable workflows.
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
 - The accepted scaffold target-state specification records the human owner's
-  Graphify option-3 selection: unmodified upstream Graphify plus one thin,
-  deterministic Markdown evidence projection for source-owned thesis links,
-  both bibliography owners, the literature manifest, and local TeX/PDF asset
-  identities. This file preserves the cross-task preference; the specification
-  owns the scoped decision and its bounded corpus and capability limits. The
-  projection is ignored, reproducible, and derived; it must not grow into a
-  parser framework, graph schema, query layer, lifecycle manager, or alternative
-  source of truth.
-- The Graphify replacement branch carries all repository-side setup. After
-  merge, the only external operator steps are normal Codex authentication and,
-  if absent, installing the unmodified user-scoped upstream Graphify tool/skill.
+  Graphify option-3 selection: the upstream Graphify tool, its project-installed
+  skill under `.agents/skills/graphify/`, and one thin deterministic Markdown
+  evidence projection for source-owned thesis links, both bibliography owners,
+  the literature manifest, and local TeX/PDF asset identities. The skill, not
+  root `AGENTS.md`, owns agent-facing Graphify usage and the ARIA preflight. This
+  file preserves the cross-task preference; the specification owns the scoped
+  decision and its bounded corpus and capability limits. The projection is
+  ignored, reproducible, and derived; it must not grow into a parser framework,
+  graph schema, query layer, lifecycle manager, or alternative source of truth.
+- The Graphify replacement branch carries the project skill and all other
+  repository-side setup. After merge, the only external operator steps are
+  normal Codex authentication and, if absent, installing the upstream Graphify
+  package that supplies the `graphify` CLI.
   Semantic extraction may use authenticated Codex host subagents. Never export
   or reuse a ChatGPT/Codex token as `OPENAI_API_KEY` or another provider API
   key, add repository or CI secrets, introduce a Graphify fork,
