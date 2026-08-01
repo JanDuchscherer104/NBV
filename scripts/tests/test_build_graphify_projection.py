@@ -38,6 +38,7 @@ class FakeRunner:
         self.call_cwds: list[Path] = []
         self.citations: list[dict[str, object]] = []
         self.links: list[dict[str, object]] = []
+        self.headings: list[dict[str, object]] = []
 
     def __call__(
         self, argv: list[str] | tuple[str, ...], *, cwd: Path
@@ -55,7 +56,7 @@ class FakeRunner:
             rows = {
                 "cite": self.citations,
                 "link": self.links,
-                "heading": [{"body": "Introduction", "level": 1}],
+                "heading": self.headings,
             }[command[3]]
             return subprocess.CompletedProcess(command, 0, json.dumps(rows), "")
         if command[1] == "compile":
@@ -115,6 +116,12 @@ class Fixture:
         rows = [
             {
                 "title": "Paper A",
+                "short_title": "Paper A short",
+                "relevance_category": "projection evidence",
+                "relevance_rank": 5,
+                "adoptable_ideas": ["Keep the owner boundary explicit."],
+                "url": "https://example.invalid/paper-a",
+                "private_notes": "must not enter the projection",
                 "arxiv_id": "2406.10224",
                 "tex_dir": "paper-a",
                 "pdf_file": "paper-a.pdf",
@@ -136,6 +143,13 @@ class Fixture:
 
         self.runner = FakeRunner()
         self.runner.citations = [{"key": "PaperA"}, {"key": "QhPaper"}]
+        self.runner.headings = [
+            {
+                "body": {"func": "text", "text": "Introduction"},
+                "level": 1,
+                "label": "<sec:introduction>",
+            }
+        ]
         blob = f"{GITHUB}/blob/{self.code_oid}/src/model.py#L1-L2"
         self.runner.links = [
             {"dest": blob},
@@ -202,6 +216,13 @@ class ProjectionTests(unittest.TestCase):
         rendered = self.rendered(first)
         self.assertNotIn(str(self.fixture.root), rendered)
         self.assertNotRegex(rendered, r"20\d\d-\d\d-\d\d[T ]")
+
+    def test_compiled_headings_are_catalogued_without_source_attribution(self) -> None:
+        index = self.build().files["index.md"]
+
+        self.assertIn("heading_source_attribution: unavailable", index)
+        self.assertIn("heading_count: 1", index)
+        self.assertIn('- level=1; text="Introduction"; label=<sec:introduction>', index)
 
     def test_owner_links_leave_projection_while_identity_links_stay_inside(
         self,
@@ -275,6 +296,23 @@ class ProjectionTests(unittest.TestCase):
             self.assertEqual(call.count(f"aria-code-ref={self.fixture.code_oid}"), 1)
         with self.assertRaisesRegex(AssertionError, "unexpected executable"):
             self.fixture.runner(["curl"], cwd=self.fixture.root)
+
+    def test_equals_form_code_ref_is_recorded_as_cli_provenance(self) -> None:
+        captured: list[ProjectionConfig] = []
+
+        def fake_build(
+            config: ProjectionConfig, *, check: bool = False
+        ) -> ProjectionResult:
+            captured.append(config)
+            return ProjectionResult(files={})
+
+        with mock.patch.object(projection, "build_projection", side_effect=fake_build):
+            self.assertEqual(
+                projection.main(["--aria-code-ref=deadbeef", "--check"]), 0
+            )
+
+        self.assertEqual(captured[0].aria_code_ref, "deadbeef")
+        self.assertEqual(captured[0].aria_code_ref_source, "cli")
 
     def test_typst_commands_share_owner_root_entry_and_code_ref(self) -> None:
         self.build()
@@ -414,6 +452,81 @@ class ProjectionTests(unittest.TestCase):
             r"Title-only Paper A[\s\S]*unmatched|unmatched[\s\S]*Title-only Paper A",
         )
 
+    def test_metadata_only_identity_is_stable_across_row_reordering(self) -> None:
+        def identity(result: ProjectionResult) -> str:
+            page = next(
+                body
+                for body in result.files.values()
+                if "title: Title-only Paper A" in body
+            )
+            return page.splitlines()[0]
+
+        first = identity(self.build())
+        manifest = self.fixture.root / "docs/literature/sources.jsonl"
+        rows = [json.loads(line) for line in manifest.read_text().splitlines()]
+        rows.insert(0, {"title": "Unrelated metadata-only paper"})
+        manifest.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+
+        second = identity(self.build())
+
+        self.assertEqual(first, second)
+        self.assertRegex(first, r"^# literature:metadata-sha256:[0-9a-f]{64}$")
+
+    def test_explicit_metadata_id_is_used_and_identity_collisions_fail(self) -> None:
+        manifest = self.fixture.root / "docs/literature/sources.jsonl"
+        rows = [json.loads(line) for line in manifest.read_text().splitlines()]
+        rows[-1]["stable_id"] = "title-only-paper-a"
+        manifest.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+        self.assertIn("# literature:id:title-only-paper-a", self.rendered(self.build()))
+
+        rows.append(dict(rows[-1]))
+        manifest.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+        with self.assertRaisesRegex(ProjectionError, r"duplicate|colliding"):
+            self.build()
+
+    def test_explicit_metadata_id_rejects_markdown_control_content(self) -> None:
+        manifest = self.fixture.root / "docs/literature/sources.jsonl"
+        rows = [json.loads(line) for line in manifest.read_text().splitlines()]
+        rows[-1]["stable_id"] = "paper\n# injected-heading"
+        manifest.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ProjectionError, r"explicit ID must use"):
+            self.build()
+
+    def test_literature_pages_render_only_allowlisted_catalogue_fields(self) -> None:
+        page = next(
+            body
+            for body in self.build().files.values()
+            if body.startswith("# literature:arxiv:2406.10224\n")
+        )
+
+        self.assertIn("short_title: Paper A short", page)
+        self.assertIn("relevance_category: projection evidence", page)
+        self.assertIn("relevance_rank: 5", page)
+        self.assertIn("adoptable_idea: Keep the owner boundary explicit.", page)
+        self.assertIn("landing_url: https://example.invalid/paper-a", page)
+        self.assertIn("source_locator: docs/literature/sources.jsonl:1", page)
+        self.assertNotIn("private_notes", page)
+
+    def test_invalid_allowlisted_catalogue_field_fails(self) -> None:
+        manifest = self.fixture.root / "docs/literature/sources.jsonl"
+        rows = [json.loads(line) for line in manifest.read_text().splitlines()]
+        rows[0]["adoptable_ideas"] = "not a list"
+        manifest.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ProjectionError, r"adoptable_ideas.*list"):
+            self.build()
+
     def test_conflicting_identity_signals_fail_instead_of_fuzzy_joining(self) -> None:
         rows = [
             {"title": "By arXiv", "arxiv_id": "2406.10224"},
@@ -440,6 +553,11 @@ class ProjectionTests(unittest.TestCase):
             body for body in result.files.values() if body.startswith(f"# {identity}\n")
         ]
         self.assertEqual(len(pages), 1)
+        self.assertIn(
+            f"owner: [src/model.py:1-2]({GITHUB}/blob/"
+            f"{self.fixture.code_oid}/src/model.py#L1-L2) (human provenance)",
+            pages[0],
+        )
 
     def test_tag_and_sha_refs_at_same_oid_remain_distinct_targets(self) -> None:
         section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
@@ -564,8 +682,35 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn("# pdf:docs/literature/pdf/paper-a.pdf", rendered)
         self.assertIn("status: present", rendered)
         self.assertIn("status: missing-local", rendered)
+        self.assertIn("status_provenance: environment-local-path-presence", rendered)
         self.assertNotIn("PRIVATE TEX", rendered)
         self.assertNotIn("PRIVATE PDF", rendered)
+
+    def test_asset_inventory_qualifies_environment_dependent_projection(self) -> None:
+        present = self.build()
+        pdf = self.fixture.root / "docs/literature/pdf/paper-a.pdf"
+        pdf.unlink()
+        missing = self.build()
+
+        def index_value(result: ProjectionResult, key: str) -> str:
+            prefix = f"{key}: "
+            return next(
+                line.removeprefix(prefix)
+                for line in result.files["index.md"].splitlines()
+                if line.startswith(prefix)
+            )
+
+        self.assertEqual(
+            index_value(present, "asset_presence_scope"), "environment-local"
+        )
+        self.assertNotEqual(
+            index_value(present, "asset_inventory_sha256"),
+            index_value(missing, "asset_inventory_sha256"),
+        )
+        self.assertEqual(
+            index_value(present, "source_revision"),
+            index_value(missing, "source_revision"),
+        )
 
     def test_pdf_symlink_does_not_leak_realpath_or_target_bytes(self) -> None:
         outside = self.fixture.root.parent / "outside.pdf"
@@ -590,6 +735,7 @@ class ProjectionTests(unittest.TestCase):
                     self.build()
 
     def test_normal_build_removes_stale_debris_and_replaces_old_output(self) -> None:
+        expected = self.build(check=True).files
         output = self.fixture.root / "graphify-input"
         output.mkdir()
         old = output / "old.md"
@@ -602,7 +748,8 @@ class ProjectionTests(unittest.TestCase):
         self.assertFalse(old.exists())
         self.assertFalse(temp.exists())
         self.assertFalse(backup.exists())
-        self.assertTrue(result.files)
+        self.assertEqual(result.files, expected)
+        self.assertEqual(result.warnings, ())
 
     def test_index_records_ref_resolution_counts_and_scoped_dirt(self) -> None:
         self.fixture.write("unrelated.tmp", "dirty but out of scope\n")

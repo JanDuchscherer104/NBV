@@ -7,7 +7,8 @@
 *
 **
 
-# Python package code and maintained package orientation.
+# Root dispatcher plus Python package code and maintained package orientation.
+!AGENTS.md
 !aria_nbv/
 !aria_nbv/**/
 !aria_nbv/**/*.py
@@ -66,7 +67,6 @@ graphify-out/
 external/
 .agent/
 .agents/external/
-.agents/skills/
 .agents/memory/history/
 .agents/memory/transcripts/
 .agents/archive/
@@ -80,8 +80,18 @@ external/
 aria_nbv/.omc/
 aria_nbv/.venv/
 aria_nbv/scripts/
-aria_nbv/tests/
 scripts/
+
+# Bounded procedural routing owners. Admit skill entrypoints only; their
+# references and helper code remain exact-source, progressively loaded context.
+!.agents/skills/
+!.agents/skills/**/
+!.agents/skills/*/SKILL.md
+
+# Package tests intentionally remain outside the navigation graph. Their volume
+# would dominate routine owner discovery; use exact-source test search unless a
+# measured follow-up justifies explicit code-to-test projection links.
+aria_nbv/tests/
 
 **/__pycache__/
 **/.pytest_cache/

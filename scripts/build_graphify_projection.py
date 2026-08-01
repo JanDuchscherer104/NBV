@@ -96,6 +96,13 @@ class _Page:
 
 
 @dataclass(frozen=True)
+class _Heading:
+    text: str
+    level: int
+    label: str | None = None
+
+
+@dataclass(frozen=True)
 class _RenderData:
     revision: str
     aria_code_oid: str
@@ -107,6 +114,7 @@ class _RenderData:
     manifest: Sequence[_ManifestEntry]
     targets: Mapping[str, Mapping[str, str]]
     relations: Sequence[Mapping[str, object]]
+    headings: Sequence[_Heading]
     warnings: Sequence[str]
 
 
@@ -339,6 +347,36 @@ def _compiled_value(row: Mapping[str, object], *names: str) -> str | None:
     return None
 
 
+def _compiled_text(value: object) -> str:
+    """Flatten Typst's compiled content tree without inferring source structure."""
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(_compiled_text(item) for item in value)
+    if not isinstance(value, dict):
+        return ""
+    if isinstance(value.get("text"), str):
+        return str(value["text"])
+    return _compiled_text(value.get("child")) + _compiled_text(value.get("children"))
+
+
+def _compiled_headings(rows: Sequence[Mapping[str, object]]) -> tuple[_Heading, ...]:
+    """Retain compiled heading facts while leaving source attribution unresolved."""
+
+    headings: list[_Heading] = []
+    for row in rows:
+        level = row.get("level")
+        if not isinstance(level, int) or isinstance(level, bool) or level < 1:
+            raise ProjectionError("typst heading query returned an invalid level")
+        text = _compiled_text(row.get("body"))
+        label = row.get("label")
+        if label is not None and not isinstance(label, str):
+            raise ProjectionError("typst heading query returned an invalid label")
+        headings.append(_Heading(text=text, level=level, label=label))
+    return tuple(headings)
+
+
 def _citation_key(value: str) -> str:
     """Normalize Typst's serialized label wrapper to its BibTeX key."""
 
@@ -480,6 +518,32 @@ def _asset_relative(root: Path, value: object, *, line: int) -> Path | None:
     return Path(PurePosixPath((root / path).as_posix()))
 
 
+def _manifest_explicit_id(data: Mapping[str, object], *, line: int) -> str | None:
+    values = [data[key] for key in ("stable_id", "id") if key in data]
+    if not values:
+        return None
+    if not all(isinstance(value, str) and value.strip() for value in values):
+        raise ProjectionError(
+            f"manifest line {line}: explicit ID must be non-empty text"
+        )
+    normalized = {str(value).strip() for value in values}
+    if len(normalized) != 1:
+        raise ProjectionError(f"manifest line {line}: conflicting explicit IDs")
+    explicit_id = normalized.pop()
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", explicit_id) is None:
+        raise ProjectionError(
+            f"manifest line {line}: explicit ID must use letters, digits, '.', '_', or '-'"
+        )
+    return explicit_id
+
+
+def _manifest_content_digest(data: Mapping[str, object]) -> str:
+    canonical = json.dumps(
+        data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def _manifest_entries(config: ProjectionConfig) -> list[_ManifestEntry]:
     result: list[_ManifestEntry] = []
     text = _owner_path(config, config.manifest_path).read_text(encoding="utf-8")
@@ -506,13 +570,18 @@ def _manifest_entries(config: ProjectionConfig) -> list[_ManifestEntry]:
         elif url:
             identity = f"literature:url:{url}"
         else:
-            identity = f"literature:manifest-line:{line}"
+            explicit_id = _manifest_explicit_id(data, line=line)
+            identity = (
+                f"literature:id:{explicit_id}"
+                if explicit_id is not None
+                else f"literature:metadata-sha256:{_manifest_content_digest(data)}"
+            )
         _asset_relative(config.tex_root, data.get("tex_dir"), line=line)
         _asset_relative(config.pdf_root, data.get("pdf_file"), line=line)
         result.append(_ManifestEntry(line, data, identity, arxiv, doi, url))
     identities = [entry.identity for entry in result]
     if len(identities) != len(set(identities)):
-        raise ProjectionError("duplicate manifest generated identity")
+        raise ProjectionError("duplicate or colliding manifest generated identity")
     return result
 
 
@@ -683,6 +752,7 @@ def _code_targets(
                 "path": path,
                 "line_range": f"{start}-{end}",
                 "validation": status,
+                "owner_url": url,
             },
         )
         relations.append(
@@ -824,6 +894,60 @@ def _populate_citation_pages(
             page.lines.append("join_status: unmatched")
 
 
+def _manifest_text_field(
+    row: _ManifestEntry, field_name: str, *, required: bool = False
+) -> str | None:
+    value = row.data.get(field_name)
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or (required and not value.strip()):
+        raise ProjectionError(f"manifest line {row.line}: {field_name} must be text")
+    if "\n" in value or "\r" in value:
+        raise ProjectionError(
+            f"manifest line {row.line}: {field_name} must be single-line text"
+        )
+    return value
+
+
+def _literature_metadata_lines(row: _ManifestEntry) -> list[str]:
+    """Render only the factual catalogue fields admitted by the projection."""
+
+    lines = [f"title: {_manifest_text_field(row, 'title', required=True)}"]
+    for field_name, output_name in (
+        ("short_title", "short_title"),
+        ("relevance_category", "relevance_category"),
+        ("url", "landing_url"),
+    ):
+        value = _manifest_text_field(row, field_name)
+        if value is not None:
+            lines.append(f"{output_name}: {value}")
+    rank = row.data.get("relevance_rank")
+    if rank is not None:
+        if not isinstance(rank, int) or isinstance(rank, bool):
+            raise ProjectionError(
+                f"manifest line {row.line}: relevance_rank must be an integer"
+            )
+        lines.append(f"relevance_rank: {rank}")
+    ideas = row.data.get("adoptable_ideas")
+    if ideas is not None:
+        if not isinstance(ideas, list):
+            raise ProjectionError(
+                f"manifest line {row.line}: adoptable_ideas must be a list of text"
+            )
+        for idea in ideas:
+            if (
+                not isinstance(idea, str)
+                or not idea.strip()
+                or "\n" in idea
+                or "\r" in idea
+            ):
+                raise ProjectionError(
+                    f"manifest line {row.line}: adoptable_ideas must contain single-line text"
+                )
+            lines.append(f"adoptable_idea: {idea}")
+    return lines
+
+
 def _populate_literature_pages(
     config: ProjectionConfig,
     data: _RenderData,
@@ -838,8 +962,9 @@ def _populate_literature_pages(
         source_path = paths[page.identity]
         page.lines.extend(
             [
-                f"title: {row.data.get('title', '')}",
+                *_literature_metadata_lines(row),
                 f"owner: {_human_link(source_path, config.manifest_path.as_posix(), f'{config.manifest_path.as_posix()}:{row.line}')}",
+                f"source_locator: {config.manifest_path.as_posix()}:{row.line}",
                 f"join_status: {'matched' if matched_by_row[row.identity] else 'unmatched'}",
             ]
         )
@@ -863,8 +988,12 @@ def _populate_fact_pages(
     data: _RenderData, pages: _Pages, paths: Mapping[str, str]
 ) -> None:
     for identity, facts in data.targets.items():
+        owner_label = f"{facts['path']}:{facts['line_range']}"
+        pages.code[identity].lines.append(
+            f"owner: [{owner_label}]({facts['owner_url']}) (human provenance)"
+        )
         pages.code[identity].lines.extend(
-            f"{key}: {value}" for key, value in facts.items()
+            f"{key}: {value}" for key, value in facts.items() if key != "owner_url"
         )
     for identity, page in pages.assets.items():
         source_path = paths[identity]
@@ -873,6 +1002,7 @@ def _populate_fact_pages(
             [
                 f"owner: {_human_link(source_path, owner, owner)}",
                 f"status: {status}",
+                "status_provenance: environment-local-path-presence",
                 "page_locator: unavailable"
                 if kind == "pdf"
                 else "content_parsed: false",
@@ -887,6 +1017,22 @@ def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path
         *config.bibliography_paths,
         config.manifest_path,
     ]
+
+
+def _asset_inventory_digest(pages: _Pages) -> str:
+    inventory = [
+        {
+            "identity": identity,
+            "owner": owner,
+            "status": status,
+            "kind": kind,
+        }
+        for identity, (owner, status, kind) in sorted(pages.asset_owners.items())
+    ]
+    encoded = json.dumps(
+        inventory, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _render_index(
@@ -913,6 +1059,10 @@ def _render_index(
         f"aria_code_ref_pin_kind: {data.aria_code_pin_kind}",
         f"aria_code_ref_resolved_oid: {data.aria_code_oid}",
         f"owner_worktree_state: {'dirty' if _owners_dirty(config, runner, owner_paths) else 'clean'}",
+        "asset_presence_scope: environment-local",
+        f"asset_inventory_sha256: {_asset_inventory_digest(pages)}",
+        "heading_source_attribution: unavailable",
+        f"heading_count: {len(data.headings)}",
         f"entity_count: {len(pages.all())}",
         "errors: 0",
         f"warnings: {len(data.warnings)}",
@@ -933,6 +1083,12 @@ def _render_index(
             index.append(
                 f"- {_link('index.md', candidates[0], family)}: {families[family]}"
             )
+    index.extend(["", "## Compiled headings", ""])
+    for heading in data.headings:
+        label = heading.label if heading.label is not None else "unavailable"
+        index.append(
+            f"- level={heading.level}; text={json.dumps(heading.text, ensure_ascii=False)}; label={label}"
+        )
     return "\n".join(index) + "\n"
 
 
@@ -1085,7 +1241,7 @@ def build_projection(
         lexical_citations.update(citations)
     compiled_cites = _query_typst(config, runner, "cite")
     compiled_links = _query_typst(config, runner, "link")
-    _query_typst(config, runner, "heading")
+    compiled_headings = _compiled_headings(_query_typst(config, runner, "heading"))
     with tempfile.TemporaryDirectory(prefix="aria-graphify-verify-") as scratch:
         _compile_typst(config, runner, Path(scratch) / "thesis.pdf")
     compiled_keys = Counter(
@@ -1134,12 +1290,13 @@ def build_projection(
             manifest=manifest,
             targets=targets,
             relations=relations,
-            warnings=warnings,
+            headings=compiled_headings,
+            warnings=warnings if check else (),
         ),
     )
     if not check:
         _install(output, temporary, backup, files)
-    return ProjectionResult(files=files, warnings=warnings)
+    return ProjectionResult(files=files, warnings=warnings if check else ())
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1152,8 +1309,16 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    source = "cli" if argv and "--aria-code-ref" in argv else "default"
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = _parser().parse_args(raw_argv)
+    source = (
+        "cli"
+        if any(
+            argument == "--aria-code-ref" or argument.startswith("--aria-code-ref=")
+            for argument in raw_argv
+        )
+        else "default"
+    )
     config = ProjectionConfig(
         repo_root=args.repo_root,
         output_path=args.output,

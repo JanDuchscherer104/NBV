@@ -39,9 +39,17 @@ class SelectionTests(unittest.TestCase):
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn(
-            "docs-render-core: graphify-projection-self-test",
-            (REPO_ROOT / "Makefile").read_text(encoding="utf-8"),
+            "docs-render-core: graphify-projection-self-test "
+            "graphify-projection-live-check",
+            makefile,
+        )
+        self.assertIn("graphify-projection-live-check: _check_python", makefile)
+        self.assertIn(
+            "scripts/build_graphify_projection.py --check --aria-code-ref "
+            '"$$(git rev-parse HEAD)"',
+            makefile,
         )
 
     def test_representative_narrow_and_overlap_paths(self) -> None:
@@ -60,6 +68,46 @@ class SelectionTests(unittest.TestCase):
         for path, expected in cases.items():
             with self.subTest(path=path):
                 self.assertEqual(select_families([path]), expected)
+
+    def test_graphify_corpus_admits_only_bounded_routing_owners(self) -> None:
+        policy = (REPO_ROOT / ".graphifyignore").read_text(encoding="utf-8")
+        cases = {
+            "AGENTS.md": False,
+            "aria_nbv/AGENTS.md": False,
+            "docs/AGENTS.md": False,
+            ".agents/skills/agent-behavior/SKILL.md": False,
+            ".agents/skills/agent-behavior/references/detail.md": True,
+            ".agents/skills/agent-behavior/scripts/helper.py": True,
+            "aria_nbv/tests/test_projection.py": True,
+            "scripts/tests/test_ci_impact.py": True,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / ".gitignore").write_text(policy, encoding="utf-8")
+            for relative in cases:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture\n", encoding="utf-8")
+
+            for relative, expected_ignored in cases.items():
+                result = subprocess.run(
+                    ["git", "check-ignore", "--no-index", "--quiet", relative],
+                    cwd=root,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode == 0,
+                    expected_ignored,
+                    f"unexpected corpus policy for {relative}",
+                )
+
+    def test_graphify_guidance_requires_same_commit_projection_digest(self) -> None:
+        guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+        self.assertIn("graphify-out/cache/stat-index.json", guidance)
+        self.assertIn("even at the same commit", guidance)
 
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(

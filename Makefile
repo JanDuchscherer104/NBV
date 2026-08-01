@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-projection-self-test agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-projection-self-test graphify-projection-live-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -233,6 +233,9 @@ scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
 	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
+
+graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
+	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
@@ -707,7 +710,7 @@ thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
 thesis-watch: ## Watch and recompile the Typst thesis
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
-docs-render-core: graphify-projection-self-test quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

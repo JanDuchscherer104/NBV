@@ -108,10 +108,16 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 
 Graphify is an optional derived navigation aid, never a knowledge owner or a
 prerequisite for repository work. Start from exact code, Typst, bibliography,
-and literature sources. When `graphify-input/` and a local graph exist, qualify
-navigation results with the projection's `source_revision`, and verify every
-consequential link or claim in its owning source. If Graphify is absent or its
-revision does not match the task, continue with exact-source discovery.
+and literature sources. Before using a local graph, require all three read-side
+facts to agree: `graphify-input/index.md` has the task's expected
+`source_revision`, `graphify-out/graph.json` has the same top-level
+`built_at_commit`, the SHA-256 of the current `graphify-input/index.md` equals
+the corresponding hash in `graphify-out/cache/stat-index.json`, and the graph
+contains a node whose `source_file` is `graphify-input/index.md`. The digest
+comparison is required even at the same commit because ignored assets or dirty
+owners can change projection bytes. If any fact is absent or mismatched, use
+exact-source discovery until the graph is rebuilt. Always verify consequential
+links or claims in their owning source.
 
 Build the ignored evidence projection with
 `python3 scripts/build_graphify_projection.py`, setting
@@ -124,3 +130,9 @@ skill may dispatch authenticated Codex subagents for semantic extraction. Never
 export a ChatGPT/Codex token, reuse it as `OPENAI_API_KEY`, add repository
 secrets, or introduce a Graphify fork, repository-owned package import, or
 local lifecycle.
+
+The projection exposes file-level thesis, citation, literature, code-target,
+and asset proxy identities. Compiled heading queries validate the active thesis
+closure but do not create section/subsection nodes. Code-target proxies preserve
+human-resolvable path, ref, and line provenance; they do not promise a native
+Graphify edge to a Python file or symbol.

@@ -80,12 +80,15 @@ or repeatable workflows.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
-- The human owner selected Graphify option 3: unmodified upstream Graphify plus
-  one thin, deterministic Markdown evidence projection for source-owned thesis
-  links, both bibliography owners, the literature manifest, and local TeX/PDF
-  asset identities. The projection is ignored, reproducible, and derived; it
-  must not grow into a parser framework, graph schema, query layer, lifecycle
-  manager, or alternative source of truth.
+- The accepted scaffold target-state specification records the human owner's
+  Graphify option-3 selection: unmodified upstream Graphify plus one thin,
+  deterministic Markdown evidence projection for source-owned thesis links,
+  both bibliography owners, the literature manifest, and local TeX/PDF asset
+  identities. This file preserves the cross-task preference; the specification
+  owns the scoped decision and its bounded corpus and capability limits. The
+  projection is ignored, reproducible, and derived; it must not grow into a
+  parser framework, graph schema, query layer, lifecycle manager, or alternative
+  source of truth.
 - The Graphify replacement branch carries all repository-side setup. After
   merge, the only external operator steps are normal Codex authentication and,
   if absent, installing the unmodified user-scoped upstream Graphify tool/skill.

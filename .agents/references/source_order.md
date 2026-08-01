@@ -23,8 +23,9 @@ Use this reference when a task needs current project truth or sources disagree.
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
 - Accepted scaffold-rework target state:
   `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` owns the
-  scoped scaffold requirements and planning bounds. It does not replace the
-  exact code, test, configuration, thesis, or human-preference owners above.
+  scoped scaffold requirements and planning bounds, including the explicit
+  2026-08-01 Graphify option-3 supersession. It does not replace the exact code,
+  test, configuration, thesis, or human-preference owners above.
 - Generated routing artifacts: `docs/_generated/context/source_index.md`,
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.
@@ -69,6 +70,9 @@ implemented evidence. Do not promote planned work to implemented results.
 - Public narrative: Quarto or Typst docs.
 - Human-owner preference: `.agents/references/human_owner_intent.md`.
 - Accepted scoped target state: the relevant `.omx/specs/` artifact named in
-  the role split above; later plans implement it but do not redefine it.
+  the role split above; later plans implement it but do not redefine it. A
+  later human decision that changes an open choice must be recorded as an
+  explicit supersession in that accepted artifact before implementation claims
+  closure.
 - Optional tools provide evidence or proposals; their owning source remains
   authoritative.

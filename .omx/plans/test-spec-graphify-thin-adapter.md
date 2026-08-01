@@ -1,6 +1,6 @@
 ---
 kind: test-spec
-status: approved-ready-for-ultragoal
+status: implemented
 plan: .omx/plans/graphify-thin-adapter.md
 architect_round_1: ITERATE
 architect_round_2: ITERATE
@@ -19,6 +19,16 @@ context: .omx/context/graphify-thin-adapter-20260731T175054Z.md
 ---
 
 # Test specification: Graphify source-link projection
+
+## Post-implementation review amendment
+
+The final regression suite extends this pre-implementation specification with
+stable metadata-only identities, strict catalogue-field projection, compiled
+heading cataloguing without section attribution, environment-local asset
+inventory provenance, human code-owner links, both CLI argument spellings,
+debris-independent successful bytes, live-owner CI validation, executable
+bounded-corpus cases, and same-commit projection-digest freshness guidance.
+These additions retain the original proxy-only, no-Graphify-import boundary.
 
 ## Purpose
 

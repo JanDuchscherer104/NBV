@@ -1,6 +1,6 @@
 ---
 kind: plan
-status: approved-ready-for-ultragoal
+status: implemented
 owner: scaffold-tooling
 decision: upstream-plus-one-thin-adapter
 context: .omx/context/graphify-thin-adapter-20260731T175054Z.md
@@ -10,6 +10,19 @@ external_runtime_requirement: authenticated-codex-session
 ---
 
 # Upstream Graphify with one thin source-link projection
+
+## Post-implementation review amendment
+
+PR #45 review remediation supersedes the provisional details below where they
+conflict with the accepted target-state specification and implemented tests.
+Metadata-only literature identities now use an explicit stable ID or canonical
+content digest rather than a JSONL line number. The projection catalogues
+compiled heading text without claiming section ownership, projects a strict
+allowlist of source-owned literature metadata, qualifies machine-local asset
+presence with an inventory digest, and gives code proxies human owner links
+without promising native Python graph edges. Credential-free CI runs both the
+hermetic suite and a live owner check. Read-side freshness additionally compares
+the current projection-index SHA-256 with upstream Graphify's stat-index hash.
 
 ## Desired result
 

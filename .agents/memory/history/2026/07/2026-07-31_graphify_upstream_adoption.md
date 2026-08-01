@@ -10,7 +10,11 @@ files_touched:
   - AGENTS.md
   - docs/AGENTS.md
   - docs/literature/README.md
+  - .agents/references/source_order.md
   - .agents/references/human_owner_intent.md
+  - .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md
+  - .omx/plans/graphify-thin-adapter.md
+  - .omx/plans/test-spec-graphify-thin-adapter.md
   - .gitignore
   - .graphifyignore
   - .github/workflows/ci.yml
@@ -74,6 +78,13 @@ declared local PDF/TeX identities. It emits ignored Markdown proxy pages only;
 it does not parse scientific PDF/TeX content, write Graphify's graph schema, or
 make Graphify a repository or CI prerequisite.
 
+The retained capability is deliberately file-level. The compiled `heading`
+query validates that the active thesis closure compiles, but heading results are
+not projected into section/subsection nodes. Thesis citations and code targets
+therefore remain attached to their owning source file. Code-target pages record
+exact path, ref, and line provenance for human resolution; no native Graphify
+edge to the corresponding Python file or symbol is promised.
+
 ## Findings
 
 - All 33 hermetic adapter unit tests passed. The broader focused pytest slice,
@@ -82,9 +93,13 @@ make Graphify a repository or CI prerequisite.
   projections containing 288 Markdown pages at the exact branch head.
 - An independent Typst compile and the configured `cite`, `link`, and `heading`
   queries passed, so the projection was checked against compiled thesis
-  evidence rather than lexical scanning alone.
-- The independent pre-gate code review has no unresolved P0--P2 findings after
-  the eight accepted repairs.
+  evidence rather than lexical scanning alone. This is compilation/closure
+  evidence, not section-granular retrieval evidence.
+- The independent pre-gate code review had no unresolved P0--P2 findings after
+  the eight accepted repairs. The later PR review found additional governance,
+  routing-corpus, live-CI, and stale-graph read-side gaps; the 2026-08-01
+  remediation updated the accepted decision owner, bounded corpus, live owner
+  check, and read-side fallback contract.
 - Ruff formatting, default lint, and the strict complexity selection passed;
   mypy passed for the adapter and its tests. The focused scaffold checks and
   agent-memory validation also passed.
@@ -115,6 +130,37 @@ make Graphify a repository or CI prerequisite.
   The proof used no token export, API key, repository secret, Graphify fork,
   repository-owned Graphify package import, or graph patch.
 
+## 2026-08-01 Review Remediation
+
+The exact-head PR review identified deterministic-projection defects,
+provenance and identity gaps, retrieval limitations, and governance or
+verification gaps. The remediation preserves the thin-adapter boundary:
+
+- successful builds remove stale swap debris without serializing it; read-only
+  checks still report and preserve debris;
+- both argparse spellings of `--aria-code-ref` record CLI provenance;
+- metadata-only literature identities use an explicit constrained stable ID or
+  a canonical-content SHA-256, while JSONL line numbers remain locators only;
+- literature pages project only the reviewed source-owned catalogue allowlist;
+- local asset status is explicitly environment-scoped and summarized by a
+  deterministic inventory digest;
+- compiled headings are catalogued without inventing section nodes or source
+  attribution, and code proxies gain exact human owner links without claiming
+  native Python graph edges;
+- the accepted target-state specification owns the option-3 supersession, while
+  the root corpus admits bounded dispatcher and skill entrypoints and keeps
+  package tests on exact-source search;
+- hosted docs CI runs both the hermetic suite and the live owner projection
+  check; read-side freshness requires commit agreement plus the upstream
+  stat-index SHA-256 of the current projection index, so same-commit stale graphs
+  fail closed.
+
+The original plan and test specification are marked implemented and carry a
+post-implementation amendment rather than remaining active instructions that
+contradict the remediated contracts. The final focused suite contains 41
+projection tests and 11 CI-impact tests. Independent exact-diff re-review
+returned `CLEAR` with no remaining P0--P2 findings.
+
 ## Dispositions
 
 - **Retained:** exact source owners, source verification, optional upstream
@@ -127,10 +173,12 @@ make Graphify a repository or CI prerequisite.
   tests, Graphify-specific Make/CI family, and their validation exceptions and
   guidance consumers. Commit `121dd235` owns the final lifecycle deletion and
   consumer repair.
-- **Deferred:** none inside the repository implementation.
-- **Open:** none. The upstream proof, lifecycle deletion, consumer repair,
-  local verification, independent review, publication, and hosted-CI gate are
-  complete.
+- **Deferred:** section/subsection projection, native proxy-to-Python graph
+  edges, and package-test indexing. Each requires measured value or an upstream
+  capability rather than expansion of this thin adapter.
+- **Open:** exact-head hosted CI and reviewer recheck for the 2026-08-01
+  remediation remain publication gates. The file-level proxy boundary is an
+  accepted limitation, not evidence of section-level or native-code traversal.
 
 ## Verification
 
@@ -140,8 +188,9 @@ default lint, the clean `C901`/`PLR0911`/`PLR0912`/`PLR0913`/`PLR0915` strict
 complexity selection, mypy over the adapter and its tests, live `--check` over
 288 generated Markdown pages, two byte-identical live builds, an independent
 Typst compile plus `cite`/`link`/`heading` queries, focused scaffold checks, and
-`make check-agent-memory`. The pre-gate review has no unresolved P0--P2
-findings. The failed Graphify probe is preserved in the Ultragoal ledger as
+`make check-agent-memory`. The pre-gate review was clear at that earlier head;
+the later PR review and its follow-up verification supersede that closure claim.
+The failed Graphify probe is preserved in the Ultragoal ledger as
 G006 evidence: the earlier installed Claude backend returned expired-OAuth
 `401`.
 
@@ -177,11 +226,12 @@ verification is complete; publication, PR creation, and hosted CI remain open.
 
 ## Canonical-State Impact
 
-No additional canonical-state file is required. The committed guidance and
-human-owner-intent changes own the optional-tool and option-3 projection
-boundary. Upstream consumption proof, authorized deletion, consumer repair, and
-local verification are complete. Independent code review returned `APPROVE`,
-Architect verification returned `CLEAR`, and PR #45 Root Verification passed at
-publication head `6c0eafa99242398404effe85bac639798ad12834` in 10m24s. This
-closure-only record is covered by the same required exact-head check before
-merge.
+The accepted target-state specification now explicitly owns the option-3
+supersession and bounded corpus; `source_order.md` points to that decision, while
+human-owner intent remains the cross-task preference summary. Upstream
+consumption proof, authorized deletion, and consumer repair remain complete.
+The earlier independent review returned `APPROVE`, Architect verification
+returned `CLEAR`, and PR #45 Root Verification passed at publication head
+`6c0eafa99242398404effe85bac639798ad12834` in 10m24s. Those results do not close
+the later review: the remediation requires fresh exact-head local verification,
+hosted CI, and reviewer thread resolution before merge.

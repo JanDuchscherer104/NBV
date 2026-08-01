@@ -58,6 +58,33 @@ than copied or individually registered.
   genuine multi-component relationship; persistent teaching lessons require an
   explicit teaching request.
 
+## Accepted 2026-08-01 Graphify Decision Supersession
+
+The human owner selected the third Graphify option after reviewing the
+comparison evidence: optional, unmodified upstream Graphify plus one thin,
+deterministic Markdown projection for source-owned modalities that upstream
+does not parse natively. This section explicitly supersedes the former open
+Graphify-role decision in this specification. The projection remains ignored,
+derived, and non-authoritative; it is not a parser framework, graph schema,
+query layer, hook, refresh service, or repository-owned Graphify lifecycle.
+
+The selected root corpus is bounded to package code and maintained package
+orientation, maintained Markdown/Quarto documentation, root and nested
+`AGENTS.md` dispatchers, `.agents/skills/*/SKILL.md` entrypoints, the small
+current `.agents/references/` shelf, canonical Markdown state, and the generated
+projection. Package tests remain outside the default graph: they are numerous,
+can dominate navigation context, and stay available through exact-source search
+and ordinary test tooling. Adding tests later requires measured retrieval value
+or explicit code-to-test projection links, not automatic corpus expansion.
+
+The retained projection exposes file-level proxy identities and source-owned
+relations. Compiled Typst heading queries validate the active closure, but the
+current projection does not emit heading or subsection nodes and does not claim
+section-granular ownership. Code proxies preserve exact repository path, ref,
+and line provenance for humans; they do not promise a native Graphify edge to a
+Python file or symbol. These are explicit capability limits, not inferred
+successes.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
@@ -436,11 +463,13 @@ layouts:
   context cost, generated size, and custom LOC.
 - Keep generated graph, report, and wiki output local, reproducible, and
   non-authoritative.
-- After the comparison, the human owner selects complete deletion, optional
-  unmodified upstream use, or upstream plus one proven thin adapter. A planning
-  agent must not infer that choice from a composite score.
-- The exact optional corpus, refresh model, and retained local outputs remain
-  open until that selection. Graphify does not return to required routing or CI.
+- The human owner's accepted 2026-08-01 decision selects optional unmodified
+  upstream use plus the thin file-level projection described above. Later plans
+  implement that boundary; they do not redefine it from a composite score.
+- Graphify does not return to required routing, authentication-backed CI, hooks,
+  or an automatic refresh lifecycle. Credential-free CI validates the
+  repository-owned projection against the live owners; graph construction and
+  semantic extraction remain local operator actions.
 
 The frozen PR #30 evidence establishes a narrower historical result: exact
 `path`/`explain` traversal and native hierarchy were useful when the symbol or
@@ -682,9 +711,9 @@ make either change invalid.
 
 These remain unresolved and block only their affected workpackage:
 
-- Which optional Graphify role, if any, the human owner selects after the
-  exact-source/current-integration/unmodified-upstream comparison, followed by
-  the exact corpus, refresh behavior, and retained local outputs for that role.
+- Whether later measured evidence justifies changing the accepted thin
+  Graphify projection, expanding its bounded corpus, or retaining additional
+  local generated outputs.
 - Exact external-skill reference, allowlist, pinning, vendoring, and integrity
   policy.
 - Which handwritten state surfaces can retire after owner/consumer migration.
