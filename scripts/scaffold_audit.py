@@ -40,6 +40,7 @@ NATIVE_MINIMAL_SKILLS: frozenset[str] = frozenset(
         "dataset-cache-ops",
         "diagnose-aria",
         "docs-curator",
+        "entity-aware-rri",
     }
 )
 OPTIONAL_METADATA = {

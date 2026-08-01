@@ -1,4 +1,4 @@
 interface:
   display_name: "Entity-Aware RRI"
-  short_description: "Target-specific RRI and target-conditioned VIN workflow"
-  default_prompt: "Use $entity-aware-rri for ARIA-NBV target/entity selection, OBB-cropped RRI, target-conditioned VIN, and entity diagnostics work."
+  short_description: "Validate target-specific RRI evidence"
+  default_prompt: "Use $entity-aware-rri for ARIA-NBV target selection or target-specific RRI labels and diagnostics."
