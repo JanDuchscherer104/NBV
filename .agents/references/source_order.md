@@ -19,6 +19,9 @@ Use this reference when a task needs current project truth or sources disagree.
 - Seminar evidence: `docs/typst/seminar_paper/main.typ` and included sections
   describe the older implemented substrate and past seminar writeup. Use them
   for historical evidence, not for current thesis priority.
+- Implementation behavior: `aria_nbv/aria_nbv/`, `aria_nbv/tests/`, and the
+  active configuration files own executable package behavior. Optional memory
+  or graph retrieval never substitutes for opening these exact sources.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
 - Accepted scaffold-rework target state:
