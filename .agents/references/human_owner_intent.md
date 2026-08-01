@@ -99,6 +99,12 @@ or repeatable workflows.
   key, add repository or CI secrets, introduce a Graphify fork,
   repository-owned package import, hook/freshness lifecycle, or patch generated
   graph output.
+- The optional upstream Git hook is allowed only as a local incremental-code
+  accelerator and semantic-invalidation aid. It never becomes required routing,
+  CI, authentication, freshness authority, or lifecycle ownership; its success,
+  failure, or absence cannot make a graph current. The project Graphify skill
+  owns the operational refresh protocol, while root `AGENTS.md` remains a
+  compact routing pointer.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
   and private retrieval corpora untracked. At most one deterministic,
   pattern-sanitized, commit-scoped conversation slice may be tracked for a

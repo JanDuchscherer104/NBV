@@ -11,8 +11,8 @@ usage() {
 Usage: scripts/setup_worktree_env.sh [--check]
 
 Links this worktree to the source checkout's Python runtime, ignored data cache,
-and downloaded literature PDFs, then initializes the exact submodules recorded
-by this worktree.
+downloaded literature PDFs, and content-addressed Graphify semantic caches,
+then initializes the exact submodules recorded by this worktree.
 
 Set ARIA_NBV_SHARED_ROOT to use a primary checkout other than Git's first
 registered worktree. Source .env afterwards to use the linked virtual
@@ -45,6 +45,17 @@ shared_python="$shared_root/aria_nbv/.venv/bin/python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
 
+shared_graphify_cache_root="$shared_root/.data/graphify-semantic-cache"
+shared_graphify_semantic_cache="$shared_graphify_cache_root/semantic"
+shared_graphify_semantic_deep_cache="$shared_graphify_cache_root/semantic-deep"
+
+if [[ "$check_only" == false ]]; then
+  mkdir -p "$shared_graphify_semantic_cache" "$shared_graphify_semantic_deep_cache"
+else
+  [[ -d "$shared_graphify_semantic_cache" ]] || fail "shared Graphify semantic cache is missing: $shared_graphify_semantic_cache"
+  [[ -d "$shared_graphify_semantic_deep_cache" ]] || fail "shared Graphify semantic-deep cache is missing: $shared_graphify_semantic_deep_cache"
+fi
+
 link_or_check() {
   local source="$1"
   local target="$2"
@@ -68,20 +79,30 @@ link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
   >/dev/null 2>&1 || fail "linked Python cannot run: $repo_root/aria_nbv/.venv/bin/python"
 
 if [[ "$check_only" == false ]]; then
-  mkdir -p .data docs/literature
+  mkdir -p .data docs/literature graphify-out/cache
 fi
 
 # Download manifests are tracked; every other top-level .data directory is an
-# ignored cache and can be shared without copying it into each worktree.
+# ignored cache and can be shared without copying it into each worktree. The
+# Graphify semantic cache is intentionally excluded: only its two content-
+# addressed namespaces are linked under graphify-out/cache below.
 while IFS= read -r -d '' source; do
   link_or_check "$source" ".data/$(basename "$source")"
-done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d ! -name aria_download_urls -print0)
+done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
+  ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
 
 # TeX and bibliography sources are tracked and Git checks them out normally.
 # PDFs are ignored downloads, so retain one shared read-only cache for them.
 if [[ -e "$shared_root/docs/literature/pdf" ]]; then
   link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
 fi
+
+# These content-addressed semantic results are the only Graphify state shared
+# between worktrees. Graphs, manifests, projections, AST state, and run state
+# stay local. Clearing either cache increases future extraction cost everywhere
+# but cannot make a stale graph current.
+link_or_check "$shared_graphify_semantic_cache" "graphify-out/cache/semantic"
+link_or_check "$shared_graphify_semantic_deep_cache" "graphify-out/cache/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
   git submodule update --init --recursive

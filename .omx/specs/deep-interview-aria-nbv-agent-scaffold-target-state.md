@@ -87,6 +87,13 @@ and line provenance for humans; they do not promise a native Graphify edge to a
 Python file or symbol. These are explicit capability limits, not inferred
 successes.
 
+The accepted 2026-08-01 remediation narrows the earlier hook prohibition: the
+optional upstream Git hook is permitted only as a local incremental-code
+accelerator and semantic-invalidation aid. It is not required routing, CI,
+authentication, freshness authority, or lifecycle ownership; hook success,
+failure, or absence cannot establish graph freshness. The project skill owns
+this operational detail, while root `AGENTS.md` remains a compact pointer.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
@@ -468,8 +475,10 @@ layouts:
 - The human owner's accepted 2026-08-01 decision selects optional unmodified
   upstream use plus the thin file-level projection described above. Later plans
   implement that boundary; they do not redefine it from a composite score.
-- Graphify does not return to required routing, authentication-backed CI, hooks,
-  or an automatic refresh lifecycle. Credential-free CI validates the
+- Graphify does not return to required routing, authentication-backed CI, or an
+  automatic refresh lifecycle. The optional upstream Git hook is limited to
+  local acceleration and invalidation; it is never freshness authority.
+  Credential-free CI validates the
   repository-owned projection against the live owners; graph construction and
   semantic extraction remain local operator actions.
 

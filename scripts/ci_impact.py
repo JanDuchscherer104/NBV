@@ -23,7 +23,11 @@ FULL_PATHS = {
 SCAFFOLD_PATHS = {
     "AGENTS.md",
     "scripts/agents_db.py",
+    "scripts/check_graphify_freshness.py",
+    "scripts/setup_worktree_env.sh",
     "scripts/validate_agent_memory.py",
+    "scripts/tests/test_graphify_freshness.py",
+    "scripts/tests/test_setup_worktree_env.sh",
 }
 
 DOCS_PATHS = {

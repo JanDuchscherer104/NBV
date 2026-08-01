@@ -7,22 +7,30 @@ trap 'rm -rf "${SANDBOX}"' EXIT
 
 SHARED_ROOT="${SANDBOX}/shared"
 WORKTREE_ROOT="${SANDBOX}/worktree"
+SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 FAKE_BIN="${SANDBOX}/bin"
 
 mkdir -p \
   "${SHARED_ROOT}/aria_nbv/.venv/bin" \
   "${SHARED_ROOT}/.data/ase_efm" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
   "${SHARED_ROOT}/.data/offline_cache" \
   "${SHARED_ROOT}/docs/literature/pdf" \
   "${WORKTREE_ROOT}/aria_nbv" \
   "${WORKTREE_ROOT}/docs/literature" \
   "${WORKTREE_ROOT}/.codex/environments" \
   "${WORKTREE_ROOT}/scripts" \
+  "${SECOND_WORKTREE_ROOT}/aria_nbv" \
+  "${SECOND_WORKTREE_ROOT}/docs/literature" \
+  "${SECOND_WORKTREE_ROOT}/scripts" \
   "${FAKE_BIN}"
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${WORKTREE_ROOT}/scripts/"
 cp "${REPO_ROOT}/.env.example" "${WORKTREE_ROOT}/"
 cp "${REPO_ROOT}/.codex/environments/aria-nbv.toml" "${WORKTREE_ROOT}/.codex/environments/"
+cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${SECOND_WORKTREE_ROOT}/scripts/"
+cp "${REPO_ROOT}/.env.example" "${SECOND_WORKTREE_ROOT}/"
 
 python3 - "${WORKTREE_ROOT}/.codex/environments/aria-nbv.toml" <<'PY'
 import sys
@@ -52,6 +60,7 @@ EOF
 chmod +x "${FAKE_BIN}/mamba"
 
 git -C "${WORKTREE_ROOT}" init -q
+git -C "${SECOND_WORKTREE_ROOT}" init -q
 
 if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
@@ -72,6 +81,27 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 [[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]
 [[ -L "${WORKTREE_ROOT}/docs/literature/pdf" ]]
 [[ -L "${WORKTREE_ROOT}/.env" ]]
+[[ ! -e "${WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+[[ ! -L "${WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+[[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
+[[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
+[[ "$(readlink -f "${WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
+[[ "$(readlink -f "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
+
+ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${SECOND_WORKTREE_ROOT}/scripts/setup_worktree_env.sh"
+
+[[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
+[[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic-deep")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
+[[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+[[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
+grep -Fqx 'cache-hit' "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
+touch "${WORKTREE_ROOT}/graphify-out/graph.json"
+[[ ! -e "${SECOND_WORKTREE_ROOT}/graphify-out/graph.json" ]]
+[[ ! -L "${WORKTREE_ROOT}/graphify-out" ]]
+[[ ! -L "${SECOND_WORKTREE_ROOT}/graphify-out" ]]
 
 (
   cd "${WORKTREE_ROOT}"
@@ -87,6 +117,66 @@ ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
 ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
   bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check
+
+unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/offline_cache" \
+  "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" \
+  >"${SANDBOX}/wrong-semantic.out" 2>"${SANDBOX}/wrong-semantic.err"; then
+  echo "setup unexpectedly replaced a wrong semantic cache link" >&2
+  exit 1
+fi
+grep -Fq "graphify-out/cache/semantic points somewhere else" "${SANDBOX}/wrong-semantic.err"
+[[ "$(readlink -f "${WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/offline_cache" ]]
+unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+
+unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/missing-semantic.out" 2>"${SANDBOX}/missing-semantic.err"; then
+  echo "--check unexpectedly accepted a missing semantic cache link" >&2
+  exit 1
+fi
+grep -Fq "graphify-out/cache/semantic is not linked" "${SANDBOX}/missing-semantic.err"
+[[ ! -e "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" "${WORKTREE_ROOT}/graphify-out/cache/semantic"
+
+unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+mkdir "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+touch "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep/keep"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" \
+  >"${SANDBOX}/semantic-collision.out" 2>"${SANDBOX}/semantic-collision.err"; then
+  echo "setup unexpectedly replaced a semantic cache collision" >&2
+  exit 1
+fi
+grep -Fq "graphify-out/cache/semantic-deep already exists" "${SANDBOX}/semantic-collision.err"
+[[ -f "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep/keep" ]]
+rm -f "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep/keep"
+rmdir "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
+  "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+
+unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+printf 'do-not-overwrite\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
+  PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" \
+  >"${SANDBOX}/semantic-deep-file.out" 2>"${SANDBOX}/semantic-deep-file.err"; then
+  echo "setup unexpectedly replaced a semantic-deep cache file" >&2
+  exit 1
+fi
+grep -Fq "graphify-out/cache/semantic-deep already exists" "${SANDBOX}/semantic-deep-file.err"
+grep -Fqx 'do-not-overwrite' "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+rm -f "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
+  "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
 
 unlink "${WORKTREE_ROOT}/docs/literature/pdf"
 if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \

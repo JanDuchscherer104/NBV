@@ -33,9 +33,19 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("Validate Graphify", workflow)
         self.assertNotIn('pip install "graphifyy==', workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
+        self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
+        self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
+        self.assertIn(
+            "python3 .agents/skills/graphify/scripts/check_codex_semantic_contract.py",
+            workflow,
+        )
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )
@@ -62,6 +72,10 @@ class SelectionTests(unittest.TestCase):
             ".graphifyignore": {"docs"},
             "scripts/build_graphify_projection.py": {"docs"},
             "scripts/tests/test_build_graphify_projection.py": {"docs"},
+            "scripts/check_graphify_freshness.py": {"scaffold"},
+            "scripts/setup_worktree_env.sh": {"scaffold"},
+            "scripts/tests/test_graphify_freshness.py": {"scaffold"},
+            "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},
             "docs/literature/README.md": {"docs"},
         }
