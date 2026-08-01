@@ -1,116 +1,30 @@
 ---
 name: nbv-geometry-contracts
-description: Use when ARIA-NBV work touches pose, camera, coordinate-frame, CW90, PyTorch3D projection, depth backprojection, candidate frusta, or geometry diagnostics contracts.
-metadata:
-  mode: implementation
-  not_when:
-    - "model-head, docs-only, or app-only changes with no pose, camera, depth, or frame contract"
-    - "target/entity RRI semantics where geometry contracts are unchanged"
-    - "Rerun viewer layout work that is display-only and already frame-verified"
-  handoff_to:
-    - "diagnose-aria for concrete geometry failures or suspicious rendered output"
-    - "rerun-nbv-inspector for Rerun frame-coordinate or entity-tree diagnostics"
-    - "entity-aware-rri for target crop semantics and target-specific labels"
-    - "counterfactual-rollout-planner for rollout candidate geometry in non-myopic evaluation"
-  evidence_required:
-    - "frame convention, transform direction, tensor shape, and units for touched data"
-    - "focused rendering, pose-generation, or RRI test output"
-    - "visual diagnostic only when static tests cannot prove the frame contract"
-  applies_to:
-    - "aria_nbv/aria_nbv/pose_generation/**"
-    - "aria_nbv/aria_nbv/rendering/**"
-    - "aria_nbv/aria_nbv/rri_metrics/**"
-    - "aria_nbv/aria_nbv/utils/data_plotting.py"
-  triggers:
-    - "PoseTW"
-    - "CameraTW"
-    - "CW90"
-    - "backprojection"
-  must_read:
-    - "AGENTS.md"
-    - "aria_nbv/AGENTS.md"
-    - ".agents/memory/state/GOTCHAS.md"
-  canonical_sources:
-    - "aria_nbv/AGENTS.md#core-rules"
-    - "aria_nbv/AGENTS.md#core-rules"
-    - "aria_nbv/aria_nbv/data_handling/ase_efm/views.py"
-    - "aria_nbv/aria_nbv/rendering/unproject.py"
-    - "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ"
-    - ".agents/memory/state/GOTCHAS.md"
-  context7_refs:
-    - "/facebookresearch/pytorch3d"
-    - "/pytorch/pytorch"
-  literature_refs:
-    - "egocentric-aria-substrate"
-  tool_refs:
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__code_index.get_symbol_body"
-    - "mcp__MCP_DOCKER.get_library_docs"
-  verification:
-    - "cd aria_nbv && uv run pytest tests/pose_generation tests/rendering"
-    - "cd aria_nbv && uv run pytest tests/rri_metrics when labels change"
-    - "make context-contracts when generated contract context is needed"
+description: Verify ARIA-NBV pose, camera, coordinate-frame, projection, backprojection, frustum, shape, or unit changes.
 ---
 
 # NBV Geometry Contracts
 
-## OMX Integration
+Use an evidence-tuple loop across the exact geometry boundary.
 
-OMX owns orchestration; this skill owns ARIA geometry invariants used by an OMX
-phase. Return frame/shape/unit evidence, the smallest failing or passing test,
-and any required handoff to Rerun, RRI, or rollout sidecars.
+1. Read the package [`AGENTS.md`](aria_nbv/AGENTS.md), then the nearest
+   guide and typed source for the changed pose, rendering, data-view, target, or
+   rollout surface. Localization is complete when both sides of the transform or
+   projection are named.
+2. Write down the evidence tuple required by that owner: frame convention,
+   transform direction, tensor shape, and units. Source docstrings and tests
+   settle executable behavior; the active thesis section settles scientific
+   interpretation.
+3. Follow the active branch:
+   - semantic pose, frame, projection, or backprojection changes stay here;
+   - target crop or target-label meaning hands off to `entity-aware-rri`;
+   - Rerun entity or display output hands off to `rerun-nbv-inspector` after the
+     semantic tuple is settled;
+   - non-myopic candidate evaluation hands off to
+     `counterfactual-rollout-planner`.
+4. Run the narrowest pose-generation, rendering, or target test that proves the
+   tuple. Use a visual artifact only when static evidence cannot settle the
+   display branch.
 
-## When To Use
-
-Use this skill for changes or reviews involving:
-
-- `PoseTW`, `CameraTW`, rig/camera/world transforms, or `T_target_source` naming
-- candidate poses, candidate frusta, PyTorch3D cameras, NDC, or depth maps
-- CW90 corrections, gravity alignment, or display-only rotations
-- depth backprojection, point-cloud construction, or visibility diagnostics
-
-Do not use it for pure model-head, docs-only, or non-geometry app changes.
-
-## Read First
-
-1. `AGENTS.md`
-2. `aria_nbv/AGENTS.md`
-3. `aria_nbv/AGENTS.md` and `python-standards` when generic Python guidance is needed
-4. `aria_nbv/aria_nbv/data_handling/ase_efm/views.py` and the focused rendering
-   module
-5. `.agents/memory/state/GOTCHAS.md`
-6. `aria_nbv/aria_nbv/vin/AGENTS.md` when VIN batch/candidate fields are touched
-7. The focused rendering or pose-generation tests for the changed path
-8. `docs/_generated/context/data_contracts.md` only after `make
-   context-contracts` when you need the generated contract index
-
-## Contract Rules
-
-- Treat `aria_nbv/AGENTS.md`, the `python-standards` skill, and the focused
-  typed data/rendering source modules as the canonical owners for frame,
-  transform, camera, and external-stack conventions.
-- Return the frame convention, transform direction, tensor shape, units, and
-  smallest relevant test evidence for the touched surface.
-- Keep display-only visualization corrections out of training, rendering, and
-  store semantics unless the canonical owner and tests change together.
-- Hand off target crop semantics to `entity-aware-rri` and Rerun entity-tree or
-  visual artifact issues to `rerun-nbv-inspector`.
-
-## Verification
-
-- `cd aria_nbv && uv run pytest tests/rendering/test_depth_backprojection_conventions.py`
-- `cd aria_nbv && uv run pytest tests/rendering/test_candidate_renderer_integration.py tests/rendering/test_pytorch3d_renderer.py`
-- `cd aria_nbv && uv run pytest tests/vin/test_vin_utils.py` when VIN diagnostics or batch fields are affected
-- `make check-agent-memory` for guidance or memory edits
-
-## Diagnostics Matrix
-
-- Pose/frame edits: assert transform direction, units, and `PoseTW` batch shape.
-- Camera/projection edits: assert `CameraTW` intrinsics/extrinsics and
-  PyTorch3D/NDC conventions.
-- Depth/backprojection edits: assert metric-depth interpretation, valid masks,
-  and world-frame point bounds.
-- Candidate-frustum edits: assert display-only CW90 corrections do not mutate
-  training, rendering, or store semantics.
-- Streamlit diagnostics: verify figures are display transforms only and do not
-  feed back into model or oracle data.
+Completion requires a resolved evidence tuple and focused passing proof, or the
+exact unresolved owner boundary.

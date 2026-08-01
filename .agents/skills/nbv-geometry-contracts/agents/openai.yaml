@@ -1,4 +1,4 @@
 interface:
   display_name: "NBV Geometry Contracts"
   short_description: "Pose, camera, frame, and projection contracts"
-  default_prompt: "Use $nbv-geometry-contracts for ARIA-NBV pose, camera, CW90, PyTorch3D, frustum, and backprojection contract work."
+  default_prompt: "Use $nbv-geometry-contracts to verify an ARIA-NBV frame, transform, projection, shape, or unit contract through its exact code owner and focused test."
