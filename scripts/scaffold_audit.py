@@ -950,6 +950,90 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "unapproved stable skill id was not rejected",
         )
 
+        duplicate_and_unknown_probe = {
+            "version": 1,
+            "purpose": "fixture identity probe",
+            "fixtures": [
+                {
+                    "id": "duplicate-fixture",
+                    "task": "Validate fixture identity.",
+                    "expected_owner_paths": ["AGENTS.md"],
+                    "required_outcomes": ["owner path is available"],
+                    "forbidden_outcomes": ["duplicate id is accepted"],
+                },
+                {
+                    "id": "duplicate-fixture",
+                    "task": "Validate unknown keys.",
+                    "expected_owner_paths": ["AGENTS.md"],
+                    "required_outcomes": ["owner path is available"],
+                    "forbidden_outcomes": ["unknown key is accepted"],
+                    "unexpected": True,
+                },
+            ],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, duplicate_and_unknown_probe),
+            skills_by_name,
+        )
+        expect(
+            "fixture-duplicate-id-and-unknown-key",
+            any("duplicate id" in error for error in errors)
+            and any("unknown keys" in error for error in errors),
+            "duplicate fixture ID or unknown fixture key was not rejected",
+        )
+
+        empty_outcomes_probe = {
+            "version": 1,
+            "purpose": "outcome probe",
+            "fixtures": [
+                {
+                    "id": "empty-outcomes",
+                    "task": "Validate outcome fields.",
+                    "expected_owner_paths": ["AGENTS.md"],
+                    "required_outcomes": [],
+                    "forbidden_outcomes": [],
+                }
+            ],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, empty_outcomes_probe), skills_by_name
+        )
+        expect(
+            "fixture-empty-outcomes",
+            any("required_outcomes must be" in error for error in errors)
+            and any("forbidden_outcomes must be" in error for error in errors),
+            "empty outcome fields were not rejected",
+        )
+
+        malformed_and_undeclared_tool_probe = {
+            "version": 1,
+            "purpose": "tool declaration probe",
+            "fixtures": [
+                {
+                    "id": "malformed-and-undeclared-tools",
+                    "task": "Validate expected owner tool declarations.",
+                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
+                    "expected_tool_refs": [
+                        "malformed tool",
+                        "mcp__code_index.search_code_advanced",
+                    ],
+                    "forbidden_tool_refs": ["also malformed"],
+                    "required_outcomes": ["tool declaration validation"],
+                    "forbidden_outcomes": ["malformed tool declaration accepted"],
+                }
+            ],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, malformed_and_undeclared_tool_probe),
+            skills_by_name,
+        )
+        expect(
+            "fixture-malformed-and-undeclared-tool-refs",
+            sum("malformed" in error for error in errors) >= 2
+            and any("not declared by an expected owner" in error for error in errors),
+            "malformed or undeclared tool refs were not rejected",
+        )
+
         drift_text = self_test_skill_text(
             "truth-leak-skill",
             [".agents/references/source_order.md#role-split"],
