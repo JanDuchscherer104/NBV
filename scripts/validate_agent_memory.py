@@ -29,8 +29,6 @@ FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".codex/config.toml",
     ".codex/hooks.json",
 }
-ALLOWED_CODEX_MD_PREFIXES = (".codex/skills/graphify/",)
-
 REQUIRED_NATIVE_KEYS = {
     "id",
     "date",
@@ -87,7 +85,9 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         if list_match and current_key is not None:
             current_value = data.get(current_key)
             if not isinstance(current_value, list):
-                raise ValueError(f"`{current_key}` must be a list when using list items")
+                raise ValueError(
+                    f"`{current_key}` must be a list when using list items"
+                )
             current_value.append(list_match.group(1).strip().strip("\"'"))
             continue
 
@@ -104,7 +104,15 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
 
 def check_codex_notes() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", ".codex"],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ".codex",
+        ],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -118,15 +126,14 @@ def check_codex_notes() -> list[str]:
     notes = sorted(
         rel
         for line in result.stdout.splitlines()
-        if (rel := line.strip()).endswith(".md")
-        and not any(rel.startswith(prefix) for prefix in ALLOWED_CODEX_MD_PREFIXES)
+        if (rel := line.strip()).endswith(".md") and (REPO_ROOT / rel).is_file()
     )
     if not notes:
         return []
 
-    errors = ["legacy `.codex/*.md` notes are not allowed outside approved project skills:"] + [
-        f"  - {note}" for note in notes
-    ]
+    errors = [
+        "legacy `.codex/*.md` notes are not allowed outside approved project skills:"
+    ] + [f"  - {note}" for note in notes]
     return errors
 
 
@@ -146,7 +153,9 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
 def check_history_records() -> list[str]:
     errors: list[str] = []
     if not HISTORY_ROOT.exists():
-        return [f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"]
+        return [
+            f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"
+        ]
 
     for path in sorted(HISTORY_ROOT.rglob("*.md")):
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -162,7 +171,9 @@ def check_history_records() -> list[str]:
 
         missing_keys = sorted(REQUIRED_NATIVE_KEYS - frontmatter.keys())
         if missing_keys:
-            errors.append(f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}")
+            errors.append(
+                f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}"
+            )
             continue
 
         canonical_updates = frontmatter.get("canonical_updates_needed")
@@ -177,7 +188,9 @@ def check_history_records() -> list[str]:
                 continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists():
-                errors.append(f"{rel}: canonical update path does not exist: {update_text}")
+                errors.append(
+                    f"{rel}: canonical update path does not exist: {update_text}"
+                )
 
     return errors
 
@@ -195,10 +208,14 @@ def check_scaffold_alignment() -> list[str]:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         suffix = f": {stderr}" if stderr else ""
-        errors.append(f"git ls-files failed while checking tracked runtime state{suffix}")
+        errors.append(
+            f"git ls-files failed while checking tracked runtime state{suffix}"
+        )
         return errors
 
-    tracked_paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    tracked_paths = [
+        line.strip() for line in result.stdout.splitlines() if line.strip()
+    ]
     for tracked_path in tracked_paths:
         if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
             errors.append(f"runtime state must not be tracked: {tracked_path}")
@@ -209,7 +226,11 @@ def check_scaffold_alignment() -> list[str]:
 
 
 def main() -> int:
-    errors = [*check_codex_notes(), *check_history_records(), *check_scaffold_alignment()]
+    errors = [
+        *check_codex_notes(),
+        *check_history_records(),
+        *check_scaffold_alignment(),
+    ]
     if not errors:
         print("agent memory validation passed")
         return 0

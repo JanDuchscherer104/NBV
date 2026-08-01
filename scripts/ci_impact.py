@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sys
 
-FAMILIES = ("scaffold", "package", "docs", "graphify")
+FAMILIES = ("scaffold", "package", "docs")
 
 FULL_PATHS = {
     ".github/workflows/ci.yml",
@@ -23,24 +23,22 @@ FULL_PATHS = {
 SCAFFOLD_PATHS = {
     "AGENTS.md",
     "scripts/agents_db.py",
+    "scripts/check_graphify_freshness.py",
+    "scripts/setup_worktree_env.sh",
     "scripts/validate_agent_memory.py",
+    "scripts/tests/test_graphify_freshness.py",
+    "scripts/tests/test_graphify_upstream_skill.py",
+    "scripts/tests/test_setup_worktree_env.sh",
 }
 
 DOCS_PATHS = {
+    ".graphifyignore",
     "README.md",
     "SETUP.md",
+    "scripts/build_graphify_projection.py",
+    "scripts/tests/test_build_graphify_projection.py",
     "scripts/tests/test_quarto_generate_api_docs.sh",
     "scripts/validate_qmd_frontmatter.py",
-}
-
-GRAPHIFY_PATHS = {
-    ".graphifyignore",
-    "scripts/check_graphify_freshness.py",
-    "scripts/check_graphify_integration.py",
-    "scripts/graphify_refresh.py",
-    "scripts/tests/test_graphify_freshness.py",
-    "scripts/tests/test_graphify_integration.py",
-    "scripts/tests/test_post_commit_graph_dispatch.sh",
 }
 
 
@@ -62,14 +60,6 @@ def select_families(paths: list[str]) -> set[str]:
             matched = True
         if path.startswith("docs/") or path in DOCS_PATHS:
             selected.add("docs")
-            matched = True
-        if (
-            path.startswith((".agents/", "aria_nbv/", "docs/"))
-            or path.startswith(".codex/skills/graphify/")
-            or path.startswith("scripts/git_hooks/")
-            or path in GRAPHIFY_PATHS
-        ):
-            selected.add("graphify")
             matched = True
 
         unknown = unknown or not matched

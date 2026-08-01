@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
+UPSTREAM_SKILL_PATHS = {SKILLS_DIR / "graphify" / "SKILL.md"}
 
 ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
 REQUIRED_METADATA = {
@@ -288,6 +289,12 @@ def is_relative_to(path: Path, parent: Path) -> bool:
     return True
 
 
+def is_upstream_skill(path: Path) -> bool:
+    """Return whether a live skill is governed by an exact upstream bundle."""
+
+    return path in UPSTREAM_SKILL_PATHS
+
+
 def load_frontmatter(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
@@ -337,8 +344,10 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
         if not isinstance(name, str) or not name.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty name")
             continue
-        if not isinstance(metadata, dict):
+        if not isinstance(metadata, dict) and not is_upstream_skill(skill_md):
             errors.append(f"{rel(skill_md)}: missing metadata mapping")
+            metadata = {}
+        elif not isinstance(metadata, dict):
             metadata = {}
         description = data.get("description")
         if not isinstance(description, str) or not description.strip():
@@ -388,6 +397,9 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             errors.append(
                 f"{prefix}: directory/frontmatter mismatch (directory={skill.dirname!r}, name={skill.name!r})"
             )
+
+        if is_upstream_skill(skill.path):
+            continue
 
         missing = sorted(REQUIRED_METADATA - skill.metadata.keys())
         if missing:
@@ -527,6 +539,8 @@ def audit_semantic_drift(skills: list[Skill]) -> list[str]:
     """Warn when hot-path skills look like durable project-truth owners."""
     warnings: list[str] = []
     for skill in skills:
+        if is_upstream_skill(skill.path):
+            continue
         body = body_without_frontmatter(skill.text)
         if not body.strip():
             continue

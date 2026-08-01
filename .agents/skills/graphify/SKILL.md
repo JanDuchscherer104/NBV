@@ -50,18 +50,7 @@ Drop any folder of code, docs, papers, images, or video into graphify and get a 
 
 If the user invoked `/graphify --help` or `/graphify -h` (with no other arguments), print the contents of the `## Usage` section above verbatim and stop. Do not run any commands, do not detect files, do not default the path to `.`. Just print the Usage block and return.
 
-**Fast path — fresh existing graph:** Before doing anything else, check whether
-`graphify-out/graph.json` exists. In ARIA-NBV, also run
-`python3 scripts/check_graphify_freshness.py --quiet`; the graph is eligible for
-the fast path only when that command succeeds. A failed check means the graph's
-commit, corpus policy, or semantic sources are stale, so fall back to the owning
-source files until refresh completes. If the graph is fresh AND the user's
-request is a natural-language question about the codebase (e.g. "How does X
-work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit
-rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies
-fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For
-/graphify query`.** Run `graphify query "<question>"` immediately. Do not run
-detect. Do not check corpus size. Do not ask the user to narrow.
+**Fast path — existing graph:** Before doing anything else, check whether `graphify-out/graph.json` exists. The expected location is `graphify-out/graph.json` relative to the **current working directory** (i.e. the project root where you are running commands). If it exists AND the user's request is a natural-language question about the codebase (e.g. "How does X work?", "What calls Y?", "Trace the data flow through Z") and NOT an explicit rebuild command (`--update`, `--cluster-only`, or a bare path/URL that implies fresh extraction): **skip Steps 1–5 entirely and jump straight to `## For /graphify query`.** Run `graphify query "<question>"` immediately. Do not run detect. Do not check corpus size. Do not ask the user to narrow. The graph is already built — use it.
 
 If no path was given, use `.` (current directory). Do not ask the user for a path.
 
@@ -78,34 +67,31 @@ Only when the path is one or more `https://github.com/...` URLs, or several loca
 ```bash
 # Detect the correct Python interpreter (handles uv tool, pipx, venv, system installs)
 PYTHON=""
-GRAPHIFY_BIN=$(command -v graphify 2>/dev/null || true)
-# Read the installed entry point's shebang; it identifies the owning uv/pipx/venv.
-if [ -n "$GRAPHIFY_BIN" ]; then
+GRAPHIFY_BIN=$(which graphify 2>/dev/null)
+# 1. uv tool installs — most reliable on modern Mac/Linux
+if [ -z "$PYTHON" ] && command -v uv >/dev/null 2>&1; then
+    _UV_PY=$(uv tool run --from graphifyy python -c "import sys; print(sys.executable)" 2>/dev/null)
+    if [ -n "$_UV_PY" ]; then PYTHON="$_UV_PY"; fi
+fi
+# 2. Read shebang from graphify binary (pipx and direct pip installs)
+if [ -z "$PYTHON" ] && [ -n "$GRAPHIFY_BIN" ]; then
     _SHEBANG=$(head -1 "$GRAPHIFY_BIN" | tr -d '#!')
     case "$_SHEBANG" in
         *[!a-zA-Z0-9/_.@-]*) ;;
         *) "$_SHEBANG" -c "import graphify" 2>/dev/null && PYTHON="$_SHEBANG" ;;
     esac
 fi
-# Fall back to python3, installing the tool when no usable interpreter exists.
+# 3. Fall back to python3
 if [ -z "$PYTHON" ]; then PYTHON="python3"; fi
 if ! "$PYTHON" -c "import graphify" 2>/dev/null; then
     if command -v uv >/dev/null 2>&1; then
         uv tool install --upgrade graphifyy -q 2>&1 | tail -3
-        GRAPHIFY_BIN=$(command -v graphify 2>/dev/null || true)
-        if [ -z "$GRAPHIFY_BIN" ]; then
-            _UV_BIN=$(uv tool dir --bin 2>/dev/null || true)
-            if [ -x "${_UV_BIN}/graphify" ]; then GRAPHIFY_BIN="${_UV_BIN}/graphify"; fi
-        fi
-        if [ -n "$GRAPHIFY_BIN" ]; then PYTHON=$(head -1 "$GRAPHIFY_BIN" | tr -d '#!'); fi
+        _UV_PY=$(uv tool run --from graphifyy python -c "import sys; print(sys.executable)" 2>/dev/null)
+        if [ -n "$_UV_PY" ]; then PYTHON="$_UV_PY"; fi
     else
         "$PYTHON" -m pip install graphifyy -q 2>/dev/null \
           || "$PYTHON" -m pip install graphifyy -q --break-system-packages 2>&1 | tail -3
     fi
-fi
-if ! "$PYTHON" -c "import graphify" 2>/dev/null; then
-    echo "graphifyy installed but no importable Graphify interpreter was found." >&2
-    exit 1
 fi
 # Write interpreter path for all subsequent steps (persists across invocations)
 mkdir -p graphify-out
@@ -119,11 +105,6 @@ If the import succeeds, print nothing and move straight to Step 2.
 **In every subsequent bash block, replace `python3` with `$(cat graphify-out/.graphify_python)` to use the correct interpreter.**
 
 ### Step 2 - Detect files
-
-ARIA-NBV boundary: the internal Python imports in this vendored skill are
-upstream-owned, version-pinned pipeline recipes. Repo-owned CI, hooks, and
-runtime checks must use Graphify's public CLI and must not copy these private
-imports into ARIA-NBV scripts.
 
 ```bash
 $(cat graphify-out/.graphify_python) -c "
@@ -150,7 +131,7 @@ Omit any category with 0 files from the summary.
 
 Then act on it:
 - If `total_files` is 0: stop with "No supported files found in [path]."
-- If `skipped_sensitive` is non-empty: mention file count skipped, not the file names.
+- If `skipped_sensitive` is non-empty: report the count and list the skipped file names, so a wrongly-flagged source or doc is visible and can be renamed or moved (#2106).
 - If `total_words` > 2,000,000 OR `total_files` > 500: show the warning. Then compute the top 5 first-level subdirectories by file count:
   - Read `scan_root` from the detect JSON (always an absolute path to the resolved INPUT_PATH).
   - Concatenate all file lists across all types (`code`, `document`, `paper`, `image`, `video`).
@@ -229,179 +210,110 @@ Before dispatching subagents, print a timing estimate:
 - Estimate time: ~45s per agent batch (they run in parallel, so total ≈ 45s × ceil(agents/parallel_limit))
 - Print: "Semantic extraction: ~N files → X agents, estimated ~Ys"
 
-**Step B0 - Create an isolated run and check the extraction cache**
-
-Create a unique directory for this semantic pass before checking the cache.
-Agents from an interrupted pass may finish late, so never reuse its chunk paths:
-
-```bash
-GRAPHIFY_PYTHON="$(cat graphify-out/.graphify_python)"
-GRAPHIFY_RUN_ID="$("$GRAPHIFY_PYTHON" -c 'import uuid; print(uuid.uuid4().hex)')"
-GRAPHIFY_RUN_DIR="graphify-out/.graphify_runs/$GRAPHIFY_RUN_ID"
-mkdir -p "$GRAPHIFY_RUN_DIR"
-printf '%s\n' "$GRAPHIFY_RUN_DIR" | tee graphify-out/.graphify_run_dir
-printf '[]\n' > "$GRAPHIFY_RUN_DIR/expected_chunks.json"
-```
-
-Capture the printed path as the immutable `RUN_DIR` for this invocation and
-substitute that literal into every Step B0-B3 block below. The pointer file is
-only a human-visible marker for the newest run; never read it again during the
-invocation because another run may replace it while this one is still active.
+**Step B0 - Check extraction cache first**
 
 Before dispatching any subagents, check which files already have cached extraction results:
 
+SPEC_PATH below is the **absolute** path of the `references/extraction-spec.md` that ships beside this SKILL.md — the same file Step B2 loads and hands to every subagent. It is the extraction prompt, so cache entries are attributed to it: when a graphify upgrade changes the prompt, entries produced by the old one are re-extracted instead of replayed, and unchanged prompts keep their entries (#1939). Substitute the real path in both Step B0 and Step B3 — pass the same one to each, and do not drop the argument.
+
 ```bash
-GRAPHIFY_PYTHON="$(cat graphify-out/.graphify_python)"
-"$GRAPHIFY_PYTHON" -c "
+$(cat graphify-out/.graphify_python) -c "
 import json
 from graphify.cache import check_semantic_cache
 from pathlib import Path
 
 detect = json.loads(Path('graphify-out/.graphify_detect.json').read_text(encoding=\"utf-8\"))
-run_dir = Path('RUN_DIR')
 # Only content files go to semantic extraction. Code is already covered structurally
 # by the AST pass (Part A); flattening every category here makes subagents re-read
 # every source file (#1392). Video is transcribed to a document in Step 2.5 first.
 all_files = [f for cat in ('document', 'paper', 'image') for f in detect['files'].get(cat, [])]
 
-cached_nodes, cached_edges, cached_hyperedges, uncached = check_semantic_cache(all_files, root='INPUT_PATH')
+cached_nodes, cached_edges, cached_hyperedges, uncached = check_semantic_cache(all_files, root='INPUT_PATH', prompt_file='SPEC_PATH')
 
-# Keep all intermediate semantic artifacts inside this run's directory.
+# Always (re)write the cache file: write hits, else DELETE any leftover from a prior
+# run so Part C never merges a stale .graphify_cached.json (#1392).
 if cached_nodes or cached_edges or cached_hyperedges:
-    (run_dir / 'cached.json').write_text(json.dumps({'nodes': cached_nodes, 'edges': cached_edges, 'hyperedges': cached_hyperedges}, ensure_ascii=False), encoding=\"utf-8\")
+    Path('graphify-out/.graphify_cached.json').write_text(json.dumps({'nodes': cached_nodes, 'edges': cached_edges, 'hyperedges': cached_hyperedges}, ensure_ascii=False), encoding=\"utf-8\")
 else:
-    (run_dir / 'cached.json').unlink(missing_ok=True)
-(run_dir / 'uncached.txt').write_text('\n'.join(uncached), encoding=\"utf-8\")
+    Path('graphify-out/.graphify_cached.json').unlink(missing_ok=True)
+Path('graphify-out/.graphify_uncached.txt').write_text('\n'.join(uncached), encoding=\"utf-8\")
 print(f'Cache: {len(all_files)-len(uncached)} files hit, {len(uncached)} files need extraction')
 "
 ```
 
-Only dispatch subagents for files listed in the current run's `uncached.txt`.
-If all files are cached, skip Steps B1-B2 and continue at Step B3 so the cache
-is still materialized into `.graphify_semantic.json`. The initialized empty
-`expected_chunks.json` makes that route explicit.
+Only dispatch subagents for files listed in `graphify-out/.graphify_uncached.txt`. If all files are cached, skip to Part C directly.
 
 **Step B1 - Split into chunks**
 
-Load files from the current run's `uncached.txt`. Split into chunks of 20-25
-files each. Each image gets its own chunk (vision needs separate context). When
-splitting, group files from the same directory together so related artifacts
-land in the same chunk and cross-file relationships are more likely to be
-extracted.
+Load files from `graphify-out/.graphify_uncached.txt`. Split into chunks of 20-25 files each. Each image gets its own chunk (vision needs separate context). When splitting, group files from the same directory together so related artifacts land in the same chunk and cross-file relationships are more likely to be extracted.
 
-Once the number of chunks is known, write the exact expected filenames to the
-run manifest (substitute `TOTAL_CHUNKS`):
+**Step B2 - Dispatch ALL subagents in a single message**
 
+> Uses the `Task` tool for parallel subagent dispatch.
+> Call `Task` once per chunk — ALL in the same response so they run in parallel.
+
+Pass the extraction prompt as the task description:
+
+```
+Task(description="Your task is to perform the following. Follow the instructions below exactly.\n\n<agent-instructions>\n[extraction prompt, with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE substituted]\n</agent-instructions>\n\nExecute this now. Output ONLY the structured JSON response.")
+```
+
+Each subagent writes its result to its own `graphify-out/.graphify_chunk_NN.json`. Collect results as each `Task` completes and parse each as JSON.
+
+CHUNK_PATH must be an **absolute** path — derive it before dispatching:
 ```bash
-$(cat graphify-out/.graphify_python) -c "
-import json
-from pathlib import Path
-run_dir = Path('RUN_DIR')
-total = TOTAL_CHUNKS
-(run_dir / 'expected_chunks.json').write_text(
-    json.dumps([f'chunk_{i:02d}.json' for i in range(1, total + 1)]),
-    encoding='utf-8',
-)
-"
+PROJECT_ROOT=$(pwd)  # cwd — where Part C globs graphify-out/ (NOT .graphify_root/scan dir, #1392)
+# Then for chunk N: CHUNK_PATH="${PROJECT_ROOT}/graphify-out/.graphify_chunk_0N.json"
 ```
-
-**Step B2 - Dispatch semantic subagents (Codex)**
-
-> **Codex platform:** Uses `spawn_agent` plus the available agent wait/status tools.
-> Requires `multi_agent = true` under `[features]` in `~/.codex/config.toml`.
-> If `spawn_agent` is unavailable, tell the user to add that config and restart Codex.
-
-Call `spawn_agent` once per chunk. Fill the platform's parallel slots in one
-response; when a chunk finishes, immediately dispatch the next pending chunk.
-Every agent receives the exact run-scoped artifact path listed in
-`expected_chunks.json` so large JSON results do not depend on chat-result
-truncation. When the host exposes role selection, use its
-write-capable `executor` role (`worker` is reserved for an active team runtime).
-Build the message by wrapping the extraction prompt in task-delegation framing:
-
-```
-spawn_agent(
-    task_name="graphify_chunk_NN",
-    fork_turns="none",
-    message="Your task is to perform the following. Follow the instructions below exactly.\n\n<agent-instructions>\n[extraction prompt, with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE substituted]\n</agent-instructions>\n\nWrite the exact JSON response to RUN_DIR/chunk_NN.json, then output ONLY that structured JSON.",
-)
-```
-
-Use the immutable `RUN_DIR` captured when Step B0 created this invocation and
-substitute its literal value before dispatch. Never ask an agent to discover
-the current run; the shared pointer may legitimately change while this
-invocation is still active.
-
-Wait until every dispatched agent reaches a terminal state. Treat the persisted
-chunk file—not a possibly truncated chat result—as the merge input and success
-signal. Validate every file before dispatching the next batch.
 
 Subagent prompt template:
 
-See `references/extraction-spec.md` for the compact subagent prompt (rules, node-ID format, confidence rubric, hyperedge and vision rules, JSON schema). Load it only here, only when at least one chunk holds a doc, paper, or image; a pure-code corpus has skipped Part B and never reads it. Pass each agent that prompt verbatim with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, and DEEP_MODE substituted, and have it return the JSON inline.
+See `references/extraction-spec.md` for the exact subagent prompt (JSON schema, node-ID rules, confidence rubric, hyperedge, and vision rules). Load it only here, only when at least one chunk holds a doc, paper, or image; a pure-code corpus has skipped Part B and never reads it. Pass each subagent that prompt verbatim with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE, and CHUNK_PATH substituted, and have it write the result to CHUNK_PATH.
 
 **Step B3 - Collect, cache, and merge**
 
 Wait for all subagents. For each result:
-- Check that its exact manifest path exists on disk — this is the success signal
+- Check that `graphify-out/.graphify_chunk_NN.json` exists on disk — this is the success signal
 - If the file exists and contains valid JSON with `nodes` and `edges`, include it and save to cache
-- If the file is missing, print a warning: "chunk N missing from disk — re-run with a write-capable agent." Do not silently skip.
+- If the file is missing, the subagent was likely dispatched as read-only (Explore type) — print a warning: "chunk N missing from disk — subagent may have been read-only. Re-run with general-purpose agent." Do not silently skip.
 - If a subagent failed or returned invalid JSON, print a warning and skip that chunk - do not abort
 
-If more than half the chunks failed or are missing, stop and tell the user to
-re-run with write-capable agents.
+If more than half the chunks failed or are missing, stop and tell the user to re-run and ensure `subagent_type="general-purpose"` is used.
 
-Merge only the files named by `expected_chunks.json`; never glob chunk files
-from this or any earlier run. Write the result to the current run's
-`semantic_new.json`. When the agent tool
-exposes usage metadata, copy those counts into the corresponding chunk first;
-otherwise retain the schema's explicit zero placeholders. Then run:
+Merge all chunk files into `.graphify_semantic_new.json`. **After each Agent call completes, read the real token counts from the Agent tool result's `usage` field and write them back into the chunk JSON before merging** — the chunk JSON itself always has placeholder zeros. Then run:
 ```bash
 $(cat graphify-out/.graphify_python) -c "
-import json
+import json, glob
 from pathlib import Path
 
-run_dir = Path('RUN_DIR')
-expected = json.loads((run_dir / 'expected_chunks.json').read_text(encoding='utf-8'))
+chunks = sorted(glob.glob('graphify-out/.graphify_chunk_*.json'))
 all_nodes, all_edges, all_hyperedges = [], [], []
 total_in, total_out = 0, 0
-failed = 0
-for name in expected:
-    path = run_dir / name
-    try:
-        d = json.loads(path.read_text(encoding=\"utf-8\"))
-        if not isinstance(d.get('nodes'), list) or not isinstance(d.get('edges'), list):
-            raise ValueError('nodes and edges must be lists')
-    except (OSError, ValueError) as exc:
-        failed += 1
-        print(f'Warning: {name} is missing or invalid: {exc}')
-        continue
+for c in chunks:
+    d = json.loads(Path(c).read_text(encoding=\"utf-8\"))
     all_nodes += d.get('nodes', [])
     all_edges += d.get('edges', [])
     all_hyperedges += d.get('hyperedges', [])
     total_in += d.get('input_tokens', 0)
     total_out += d.get('output_tokens', 0)
-if expected and failed > len(expected) / 2:
-    raise SystemExit('More than half the semantic chunks failed; re-run with write-capable agents')
-(run_dir / 'semantic_new.json').write_text(json.dumps({
+Path('graphify-out/.graphify_semantic_new.json').write_text(json.dumps({
     'nodes': all_nodes, 'edges': all_edges, 'hyperedges': all_hyperedges,
     'input_tokens': total_in, 'output_tokens': total_out,
 }, indent=2, ensure_ascii=False), encoding=\"utf-8\")
-print(f'Merged {len(expected) - failed}/{len(expected)} chunks: {total_in:,} in / {total_out:,} out tokens')
+print(f'Merged {len(chunks)} chunks: {total_in:,} in / {total_out:,} out tokens')
 "
 ```
 
-Save new results to cache:
+Save new results to cache. Pass the same SPEC_PATH as Step B0 — it stamps each entry with the prompt that produced it, and a write under a different prompt than the read lands where the next run won't look (#1939):
 ```bash
 $(cat graphify-out/.graphify_python) -c "
 import json
 from graphify.cache import save_semantic_cache
 from pathlib import Path
 
-run_dir = Path('RUN_DIR')
-new_path = run_dir / 'semantic_new.json'
-new = json.loads(new_path.read_text(encoding=\"utf-8\")) if new_path.exists() else {'nodes':[],'edges':[],'hyperedges':[]}
-saved = save_semantic_cache(new.get('nodes', []), new.get('edges', []), new.get('hyperedges', []), root='INPUT_PATH')
+new = json.loads(Path('graphify-out/.graphify_semantic_new.json').read_text(encoding=\"utf-8\")) if Path('graphify-out/.graphify_semantic_new.json').exists() else {'nodes':[],'edges':[],'hyperedges':[]}
+uncached = [line for line in Path('graphify-out/.graphify_uncached.txt').read_text(encoding=\"utf-8\").splitlines() if line]
+saved = save_semantic_cache(new.get('nodes', []), new.get('edges', []), new.get('hyperedges', []), root='INPUT_PATH', allowed_source_files=uncached, prompt_file='SPEC_PATH')
 print(f'Cached {saved} files')
 "
 ```
@@ -412,11 +324,8 @@ $(cat graphify-out/.graphify_python) -c "
 import json
 from pathlib import Path
 
-run_dir = Path('RUN_DIR')
-cached_path = run_dir / 'cached.json'
-new_path = run_dir / 'semantic_new.json'
-cached = json.loads(cached_path.read_text(encoding=\"utf-8\")) if cached_path.exists() else {'nodes':[],'edges':[],'hyperedges':[]}
-new = json.loads(new_path.read_text(encoding=\"utf-8\")) if new_path.exists() else {'nodes':[],'edges':[],'hyperedges':[]}
+cached = json.loads(Path('graphify-out/.graphify_cached.json').read_text(encoding=\"utf-8\")) if Path('graphify-out/.graphify_cached.json').exists() else {'nodes':[],'edges':[],'hyperedges':[]}
+new = json.loads(Path('graphify-out/.graphify_semantic_new.json').read_text(encoding=\"utf-8\")) if Path('graphify-out/.graphify_semantic_new.json').exists() else {'nodes':[],'edges':[],'hyperedges':[]}
 
 all_nodes = cached['nodes'] + new.get('nodes', [])
 all_edges = cached['edges'] + new.get('edges', [])
@@ -439,9 +348,7 @@ Path('graphify-out/.graphify_semantic.json').write_text(json.dumps(merged, inden
 print(f'Extraction complete - {len(deduped)} nodes, {len(all_edges)} edges ({len(cached[\"nodes\"])} from cache, {len(new.get(\"nodes\",[]))} new)')
 "
 ```
-Retain the run directory as an ignored audit artifact. Never glob or sweep old
-run directories: an interrupted agent may still own one, and later runs are
-isolated by their new ID plus exact manifest.
+Clean up temp files: `rm -f graphify-out/.graphify_cached.json graphify-out/.graphify_uncached.txt graphify-out/.graphify_semantic_new.json`
 
 #### Part C - Merge AST + semantic into final extraction
 
@@ -644,15 +551,37 @@ from graphify.detect import save_manifest
 
 # Save manifest for --update
 detect = json.loads(Path('graphify-out/.graphify_detect.json').read_text(encoding=\"utf-8\"))
+extract = json.loads(Path('graphify-out/.graphify_extract.json').read_text(encoding=\"utf-8\"))
 # In --update mode, 'all_files' carries the full corpus; 'files' is the changed
 # subset. Full-rebuild mode populates only 'files', so the fallback handles that.
 # root= relativizes the manifest keys to the scan root (same base as the build),
 # so the on-disk manifest is portable across clones/machines and a later --update
 # matches cached files instead of missing every one (#1417).
-save_manifest(detect.get('all_files') or detect['files'], root='INPUT_PATH')
+#
+# Only stamp semantic files (docs/papers/images) that ACTUALLY produced output:
+# a detected file whose chunk failed or was omitted must stay unstamped so the
+# next --update re-queues it, otherwise it is marked done and its content is lost
+# forever (#2015). This mirrors the library extract path exactly
+# (cli._stamped_manifest_files + clear_semantic + scan_corpus); do not stamp the
+# raw corpus. Code files are always stamped (AST is deterministic); only semantic
+# types are gated on output.
+from graphify.cli import _stamped_manifest_files
+_corpus = detect.get('all_files') or detect['files']
+_manifest_files = _stamped_manifest_files(_corpus, extract, Path('INPUT_PATH'))
+# Files dispatched this run (the changed subset) but NOT stamped above still carry
+# a stale semantic_hash from a prior run; clear it so detect_incremental re-queues
+# them instead of reading them as unchanged (#1948).
+_sem_types = ('document', 'paper', 'image')
+_dispatched = {f for t, fl in detect['files'].items() if t in _sem_types for f in fl}
+_stamped = {f for fl in _manifest_files.values() for f in fl}
+_cleared = _dispatched - _stamped
+# scan_corpus = the RAW full corpus (not the stamp-filtered subset) so in-root
+# files newly excluded since last run are dropped rather than masquerading as
+# deletions; untouched files' prior rows are still preserved (#1908).
+_scan = {f for fl in _corpus.values() for f in fl}
+save_manifest(_manifest_files, root='INPUT_PATH', scan_corpus=_scan, clear_semantic=_cleared or None)
 
 # Update cumulative cost tracker
-extract = json.loads(Path('graphify-out/.graphify_extract.json').read_text(encoding=\"utf-8\"))
 input_tok = extract.get('input_tokens', 0)
 output_tok = extract.get('output_tokens', 0)
 
@@ -676,7 +605,8 @@ print(f'This run: {input_tok:,} input tokens, {output_tok:,} output tokens')
 print(f'All time: {cost[\"total_input_tokens\"]:,} input, {cost[\"total_output_tokens\"]:,} output ({len(cost[\"runs\"])} runs)')
 "
 rm -f graphify-out/.graphify_detect.json graphify-out/.graphify_extract.json graphify-out/.graphify_ast.json graphify-out/.graphify_semantic.json graphify-out/.graphify_analysis.json
-GRAPHIFY_SEMANTIC_COMPLETE=1 python3 scripts/graphify_refresh.py
+find graphify-out -maxdepth 1 -name '.graphify_chunk_*.json' -delete 2>/dev/null
+rm -f graphify-out/.needs_update 2>/dev/null || true
 ```
 
 Replace INPUT_PATH with the actual path (same value used in Steps 4-5) so the manifest is relativized to the scan root.
@@ -718,7 +648,7 @@ Before running any subcommand below (`--update`, `--cluster-only`, `query`, `pat
 
 ```bash
 if [ ! -f graphify-out/.graphify_python ]; then
-    GRAPHIFY_BIN=$(command -v graphify 2>/dev/null || true)
+    GRAPHIFY_BIN=$(which graphify 2>/dev/null)
     if [ -n "$GRAPHIFY_BIN" ]; then
         PYTHON=$(head -1 "$GRAPHIFY_BIN" | tr -d '#!')
         case "$PYTHON" in *[!a-zA-Z0-9/_.@-]*) PYTHON="python3" ;; esac
@@ -754,9 +684,9 @@ Neither is part of the default build. When the user runs `/graphify add <url>` t
 
 ---
 
-## For the commit hook and native CLAUDE.md integration
+## For the commit hook and native AGENTS.md integration
 
-When the user asks to install the post-commit auto-rebuild hook or wire graphify into a project's CLAUDE.md, see `references/hooks.md`.
+When the user asks to install the post-commit auto-rebuild hook or wire graphify into a project's AGENTS.md, see `references/hooks.md`.
 
 ---
 

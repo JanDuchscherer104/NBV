@@ -1,162 +1,312 @@
 #!/usr/bin/env python3
-"""Regression checks for the local Graphify freshness contract."""
+"""Hermetic regression tests for the Graphify freshness gate."""
 
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
-
-SCRIPT = Path(__file__).resolve().parents[1] / "check_graphify_freshness.py"
-SPEC = importlib.util.spec_from_file_location("check_graphify_freshness", SCRIPT)
-assert SPEC is not None and SPEC.loader is not None
-freshness = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(freshness)
-
-REFRESH_SCRIPT = Path(__file__).resolve().parents[1] / "graphify_refresh.py"
-REFRESH_SPEC = importlib.util.spec_from_file_location(
-    "graphify_refresh", REFRESH_SCRIPT
-)
-assert REFRESH_SPEC is not None and REFRESH_SPEC.loader is not None
-refresh = importlib.util.module_from_spec(REFRESH_SPEC)
-REFRESH_SPEC.loader.exec_module(refresh)
+import unittest
 
 
-def _git(root: Path, *args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+ROOT = Path(__file__).resolve().parents[2]
+CHECKER = ROOT / "scripts/check_graphify_freshness.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+from check_graphify_freshness import _upstream_file_hash  # noqa: E402
 
 
-def _write_fresh_graph(root: Path, out: Path, head: str) -> None:
-    policy = root / ".graphifyignore"
-    (out / "graph.json").write_text(
-        json.dumps({"built_at_commit": head}), encoding="utf-8"
-    )
-    (out / "aria_nbv_freshness.json").write_text(
-        json.dumps(
-            {
-                "built_at_commit": head,
-                "corpus_policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
-                "semantic_pending": False,
-            }
-        ),
-        encoding="utf-8",
+class FreshnessTests(unittest.TestCase):
+    OWNER_PATHS = (
+        "docs/typst/thesis/main.typ",
+        "docs/typst/shared/style.typ",
+        "docs/references.bib",
+        "docs/references-qh.bib",
+        "docs/literature/sources.jsonl",
     )
 
-
-def main() -> None:
-    assert refresh._is_code(Path("aria_nbv/aria_nbv/model.py"))
-    assert refresh._is_code(Path(".agents/issues.toml"))
-    assert refresh._is_code(Path("Makefile"))
-    assert refresh._is_semantic(Path("aria_nbv/README.md"))
-    assert refresh._is_semantic(Path("docs/typst/thesis/main.typ"))
-    assert refresh._is_semantic(Path(".graphifyignore"))
-
-    with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory)
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
         subprocess.run(
-            ["git", "config", "user.email", "freshness@example.invalid"],
-            cwd=root,
+            ["git", "config", "user.email", "test@example.invalid"],
+            cwd=self.root,
             check=True,
         )
         subprocess.run(
-            ["git", "config", "user.name", "freshness-test"], cwd=root, check=True
+            ["git", "config", "user.name", "Test"], cwd=self.root, check=True
         )
-        policy_text = (
-            "*\n**\n!aria_nbv/\n!aria_nbv/**\naria_nbv/tests/\ngraphify-out/\n"
+        (self.root / "seed").write_text("seed\n", encoding="utf-8")
+        for relative in self.OWNER_PATHS:
+            owner = self.root / relative
+            owner.parent.mkdir(parents=True, exist_ok=True)
+            owner.write_text(f"owner: {relative}\n", encoding="utf-8")
+        subprocess.run(["git", "add", "seed"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "docs"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-qm", "seed"], cwd=self.root, check=True)
+        self.head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self._write_fresh_fixture()
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def _write_fresh_fixture(self) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.parent.mkdir(parents=True, exist_ok=True)
+        owner_rows = "\n".join(
+            f"- {relative}: sha256:"
+            f"{hashlib.sha256((self.root / relative).read_bytes()).hexdigest()}"
+            for relative in self.OWNER_PATHS
         )
-        policy = root / ".graphifyignore"
-        policy.write_text(policy_text, encoding="utf-8")
-        source = root / "aria_nbv/aria_nbv/model.py"
-        source.parent.mkdir(parents=True)
-        source.write_text("VALUE = 1\n", encoding="utf-8")
-        excluded = root / "aria_nbv/tests/test_model.py"
-        excluded.parent.mkdir(parents=True)
-        excluded.write_text("VALUE = 1\n", encoding="utf-8")
-        subprocess.run(
-            ["git", "add", ".graphifyignore", "aria_nbv"], cwd=root, check=True
+        index.write_text(
+            f"---\nowner: generated\n---\n# graphify-projection:index\n"
+            f"source_revision: {self.head}\n"
+            "owner_worktree_state: clean\n\n"
+            f"## Owner digests\n\n{owner_rows}\n\n## Families\n",
+            encoding="utf-8",
         )
-        subprocess.run(["git", "commit", "-qm", "initial"], cwd=root, check=True)
-        head = _git(root, "rev-parse", "HEAD")
-
-        out = root / "graphify-out"
-        out.mkdir()
-        _write_fresh_graph(root, out, head)
-        freshness.ROOT = root
-        freshness.OUT = out
-        assert freshness.freshness_errors() == []
-
-        source.write_text("VALUE = 2\n", encoding="utf-8")
-        assert "aria_nbv/aria_nbv/model.py" in " ".join(freshness.freshness_errors())
-        source.write_text("VALUE = 1\n", encoding="utf-8")
-        assert freshness.freshness_errors() == []
-
-        new_source = root / "aria_nbv/aria_nbv/new_model.py"
-        new_source.write_text("VALUE = 1\n", encoding="utf-8")
-        assert "aria_nbv/aria_nbv/new_model.py" in " ".join(
-            freshness.freshness_errors()
+        digest = _upstream_file_hash(index.read_bytes(), "graphify-input/index.md")
+        output = self.root / "graphify-out"
+        (output / "cache").mkdir(parents=True, exist_ok=True)
+        (output / "graph.json").write_text(
+            json.dumps(
+                {
+                    "built_at_commit": self.head,
+                    "nodes": [{"source_file": "./graphify-input/index.md"}],
+                }
+            ),
+            encoding="utf-8",
         )
-        new_source.unlink()
-
-        excluded.write_text("VALUE = 2\n", encoding="utf-8")
-        assert freshness.freshness_errors() == []
-        excluded.write_text("VALUE = 1\n", encoding="utf-8")
-
-        (out / "graph.json").write_text("[", encoding="utf-8")
-        assert "graphify-out/graph.json is malformed JSON" in " ".join(
-            freshness.freshness_errors()
+        (output / "cache/stat-index.json").write_text(
+            json.dumps(
+                {
+                    "graphify-input/index.md": {
+                        "hashes": {"graphify-input/index.md": digest}
+                    }
+                }
+            ),
+            encoding="utf-8",
         )
-        (out / "graph.json").write_text("[]", encoding="utf-8")
-        assert "graphify-out/graph.json is not a JSON object" in " ".join(
-            freshness.freshness_errors()
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(CHECKER), *args],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
         )
-        _write_fresh_graph(root, out, head)
-        (out / "aria_nbv_freshness.json").write_text("[", encoding="utf-8")
-        assert "freshness metadata is malformed JSON" in " ".join(
-            freshness.freshness_errors()
+
+    def _json(self) -> dict[str, object]:
+        result = self._run("--json")
+        return json.loads(result.stdout)
+
+    def test_fresh_json_and_quiet_forms(self) -> None:
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            set(json.loads(result.stdout)),
+            {"state", "fresh", "head", "reasons", "next_action"},
         )
-        (out / "aria_nbv_freshness.json").write_text("[]", encoding="utf-8")
-        assert "freshness metadata is not a JSON object" in " ".join(
-            freshness.freshness_errors()
+        self.assertEqual(json.loads(result.stdout)["state"], "fresh")
+        quiet = self._run("--quiet")
+        self.assertEqual(quiet.returncode, 0)
+        self.assertEqual(quiet.stdout, "")
+        self.assertEqual(quiet.stderr, "")
+
+    def test_digest_uses_frontmatter_stripping_and_path_salt(self) -> None:
+        index = self.root / "graphify-input/index.md"
+        raw = index.read_bytes()
+        salted = _upstream_file_hash(raw, "graphify-input/index.md")
+        self.assertNotEqual(salted, hashlib.sha256(raw).hexdigest())
+        stat_index = self.root / "graphify-out/cache/stat-index.json"
+        stat_index.write_text(
+            json.dumps(
+                {
+                    "graphify-input/index.md": {
+                        "hashes": {
+                            "graphify-input/index.md": hashlib.sha256(raw).hexdigest()
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
         )
-        _write_fresh_graph(root, out, head)
+        self.assertEqual(
+            json.loads(self._run("--json").stdout)["state"], "structural-stale"
+        )
 
-        policy.write_text(policy_text + "docs/_site/\n", encoding="utf-8")
-        assert ".graphifyignore changed" in " ".join(freshness.freshness_errors())
-        policy.write_text(policy_text, encoding="utf-8")
-        (out / "needs_update").touch()
-        assert "extraction is pending" in " ".join(freshness.freshness_errors())
+    def test_digest_path_salt_is_case_normalized(self) -> None:
+        content = b"# projection\n"
+        self.assertEqual(
+            _upstream_file_hash(content, "Graphify-Input/INDEX.md"),
+            _upstream_file_hash(content, "graphify-input/index.md"),
+        )
 
-        refresh.ROOT = root
-        refresh.OUT = out
-        refresh.STATE = out / "aria_nbv_freshness.json"
-        refresh.shutil.which = lambda _: "/usr/bin/true"
-        refresh.os.environ["GRAPHIFY_CHANGED"] = "aria_nbv/aria_nbv/model.py"
-        assert refresh.main() == 0
-        state = json.loads(refresh.STATE.read_text(encoding="utf-8"))
-        assert state["semantic_pending"] is True
-        assert (out / "needs_update").exists()
+    def test_nodes_without_source_metadata_do_not_invalidate_a_graph(self) -> None:
+        graph_path = self.root / "graphify-out/graph.json"
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        graph["nodes"].append({"id": "community_summary"})
+        graph_path.write_text(json.dumps(graph), encoding="utf-8")
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout)["state"], "fresh")
 
-        captured: list[str] = []
+    def test_near_collision_and_windows_source_paths_fail_closed(self) -> None:
+        graph_path = self.root / "graphify-out/graph.json"
+        for source, state in (
+            (".graphify-input/index.md", "structural-stale"),
+            ("C:\\repo\\graphify-input\\index.md", "invalid"),
+        ):
+            with self.subTest(source=source):
+                self._write_fresh_fixture()
+                graph = json.loads(graph_path.read_text(encoding="utf-8"))
+                graph["nodes"] = [{"source_file": source}]
+                graph_path.write_text(json.dumps(graph), encoding="utf-8")
+                result = self._run("--json")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["state"], state)
 
-        class _Completed:
-            returncode = 0
+    def test_structural_staleness_predicates_fail_closed(self) -> None:
+        cases = {
+            "projection": lambda: (self.root / "graphify-input/index.md").write_text(
+                (self.root / "graphify-input/index.md")
+                .read_text(encoding="utf-8")
+                .replace(self.head, "wrong", 1),
+                encoding="utf-8",
+            ),
+            "graph": lambda: (self.root / "graphify-out/graph.json").write_text(
+                json.dumps(
+                    {
+                        "built_at_commit": "wrong",
+                        "nodes": [{"source_file": "graphify-input/index.md"}],
+                    }
+                ),
+                encoding="utf-8",
+            ),
+            "digest": lambda: (
+                self.root / "graphify-out/cache/stat-index.json"
+            ).write_text(
+                json.dumps(
+                    {
+                        "graphify-input/index.md": {
+                            "hashes": {"graphify-input/index.md": "wrong"}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            ),
+            "node": lambda: (self.root / "graphify-out/graph.json").write_text(
+                json.dumps(
+                    {
+                        "built_at_commit": self.head,
+                        "nodes": [{"source_file": "docs/index.md"}],
+                    }
+                ),
+                encoding="utf-8",
+            ),
+        }
+        for name, mutate in cases.items():
+            with self.subTest(name=name):
+                self._write_fresh_fixture()
+                mutate()
+                result = self._run("--json")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["state"], "structural-stale")
 
-        def _run(command: list[str], **_: object) -> _Completed:
-            captured.extend(command)
-            return _Completed()
+    def test_dirty_live_owner_classes_fail_closed(self) -> None:
+        for relative in self.OWNER_PATHS:
+            with self.subTest(relative=relative):
+                owner = self.root / relative
+                original = owner.read_text(encoding="utf-8")
+                owner.write_text(original + "dirty\n", encoding="utf-8")
+                payload = self._json()
+                self.assertEqual(payload["state"], "structural-stale")
+                self.assertTrue(
+                    any(relative in reason for reason in payload["reasons"])
+                )
+                self.assertIn("projection owner worktree is dirty", payload["reasons"])
+                owner.write_text(original, encoding="utf-8")
 
-        (out / "needs_update").unlink()
-        refresh.STATE.unlink()
-        refresh.shutil.which = lambda _: None
-        refresh.subprocess.run = _run
-        refresh._git_head = lambda: head
-        assert refresh.main() == 0
-        assert captured[:3] == [refresh.sys.executable, "-m", "graphify"]
+    def test_owner_symlink_escaping_repository_is_invalid(self) -> None:
+        relative = self.OWNER_PATHS[-1]
+        owner = self.root / relative
+        outside = self.root.parent / "outside-owner"
+        outside.write_bytes(owner.read_bytes())
+        owner.unlink()
+        owner.symlink_to(outside)
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "invalid")
+        self.assertTrue(
+            any("owner escapes repository" in reason for reason in payload["reasons"])
+        )
+
+    def test_semantic_marker_wins_over_structural_staleness(self) -> None:
+        (self.root / "graphify-out/needs_update").write_text(
+            "pending\n", encoding="utf-8"
+        )
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(self.head, "wrong", 1),
+            encoding="utf-8",
+        )
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["state"], "semantic-stale")
+
+    def test_invalid_and_missing_precedence(self) -> None:
+        (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["state"], "invalid")
+        (self.root / "graphify-out/graph.json").unlink()
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["state"], "missing")
+
+    def test_invalid_existing_artifact_beats_another_missing_artifact(self) -> None:
+        (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
+        (self.root / "graphify-out/cache/stat-index.json").unlink()
+        result = self._run("--json")
+        payload = json.loads(result.stdout)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload["state"], "invalid")
+        self.assertTrue(
+            any("missing stat index" in reason for reason in payload["reasons"])
+        )
+
+    def test_available_structural_reasons_survive_an_invalid_artifact(self) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(self.head, "wrong", 1),
+            encoding="utf-8",
+        )
+        (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
+        payload = self._json()
+        self.assertEqual(payload["state"], "invalid")
+        self.assertTrue(
+            any("projection source_revision" in reason for reason in payload["reasons"])
+        )
+        self.assertTrue(any("invalid graph" in reason for reason in payload["reasons"]))
+
+    def test_missing_artifact_and_option_conflict_fail_closed(self) -> None:
+        (self.root / "graphify-input/index.md").unlink()
+        result = self._run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("missing", result.stdout)
+        conflict = self._run("--quiet", "--json")
+        self.assertNotEqual(conflict.returncode, 0)
 
 
 if __name__ == "__main__":
-    main()
+    unittest.main()

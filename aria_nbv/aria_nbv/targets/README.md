@@ -15,8 +15,6 @@ targets/
 
 Baseline: `4daf9d4`
 
-Graphify refresh: `2026-07-11`
-
 ## Symbol Ownership Matrix
 
 ### `__init__.py`

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-ci agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
-.PHONY: graphify-integration-self-test graphify-skill-self-test api-docs-self-test
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
@@ -231,16 +231,14 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
-graphify-skill-self-test: _check_python ## 🕸️ Verify semantic-run isolation survives pointer replacement
-	@$(PYTHON_INTERPRETER) .codex/skills/graphify/scripts/check_run_isolation.py
+graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
+	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
 
-graphify-integration-self-test: _check_python ## 🕸️ Verify corpus policy, freshness wiring, and hook dispatch
-	@$(PYTHON_INTERPRETER) scripts/check_graphify_integration.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_freshness.py
-	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_integration.py
-	@./scripts/tests/test_post_commit_graph_dispatch.sh
+graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
+	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
-graphify-ci: graphify-integration-self-test ## 🕸️ Run opt-in Graphify integration checks (requires pinned graphifyy)
+graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
+	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
@@ -255,7 +253,7 @@ new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/mem
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
 	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
 
-install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto-refresh on commit)
+install-git-hooks: ## 🪝 Symlink normal scripts/git_hooks/* into .git/hooks/
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
 	if [ -z "$$HOOK_DIR" ]; then \
 		echo "$(RED)not inside a git tree$(NC)" >&2; exit 1; \
@@ -269,7 +267,7 @@ install-git-hooks: ## 🪝 Symlink scripts/git_hooks/* into .git/hooks/ (KG auto
 			echo "$(GREEN)linked $$target -> $(CURDIR)/$$hook$(NC)"; \
 	done
 
-install-hooks: install-git-hooks ## 🪝 Activate KG auto-refresh hooks for Codex, Gemini, and git
+install-hooks: install-git-hooks ## 🪝 Activate normal Codex, Gemini, and git hooks
 	@if [ ! -f .codex/hooks.json ]; then \
 		cp .codex/hooks.example.json .codex/hooks.json && \
 			echo "$(GREEN)copied .codex/hooks.example.json -> .codex/hooks.json$(NC)"; \
@@ -715,7 +713,7 @@ thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
 thesis-watch: ## Watch and recompile the Typst thesis
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
-docs-render-core: quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
@@ -727,7 +725,7 @@ package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contrac
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

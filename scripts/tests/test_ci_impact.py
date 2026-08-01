@@ -29,24 +29,120 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
         self.assertNotIn("ci-gate", workflow)
+        self.assertNotIn("Install Graphify", workflow)
+        self.assertNotIn("Validate Graphify", workflow)
+        self.assertNotIn('pip install "graphifyy==', workflow)
+        self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
+        self.assertIn('"scripts/ci_impact.py"', workflow)
+        self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
+        self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
+        self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
+        self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
+        self.assertIn(
+            "python3 scripts/tests/test_graphify_upstream_skill.py",
+            workflow,
+        )
+        self.assertIn(
+            "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
+        )
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn(
+            "docs-render-core: graphify-projection-self-test "
+            "graphify-projection-live-check",
+            makefile,
+        )
+        self.assertIn("graphify-projection-live-check: _check_python", makefile)
+        self.assertIn(
+            "scripts/build_graphify_projection.py --check --aria-code-ref "
+            '"$$(git rev-parse HEAD)"',
+            makefile,
+        )
 
     def test_representative_narrow_and_overlap_paths(self) -> None:
         cases = {
-            "docs/index.qmd": {"docs", "graphify"},
-            ".agents/references/source_order.md": {"scaffold", "graphify"},
-            ".agents/example.qmd": {"scaffold", "graphify"},
-            "aria_nbv/aria_nbv/__init__.py": {"package", "graphify"},
+            "docs/index.qmd": {"docs"},
+            ".agents/references/source_order.md": {"scaffold"},
+            ".agents/example.qmd": {"scaffold"},
+            "aria_nbv/aria_nbv/__init__.py": {"package"},
             ".configs/example.toml": {"package"},
-            ".graphifyignore": {"graphify"},
+            ".graphifyignore": {"docs"},
+            "scripts/build_graphify_projection.py": {"docs"},
+            "scripts/tests/test_build_graphify_projection.py": {"docs"},
+            "scripts/check_graphify_freshness.py": {"scaffold"},
+            "scripts/setup_worktree_env.sh": {"scaffold"},
+            "scripts/tests/test_graphify_freshness.py": {"scaffold"},
+            "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
+            "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
+            "docs/literature/sources.jsonl": {"docs"},
+            "docs/literature/README.md": {"docs"},
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
                 self.assertEqual(select_families([path]), expected)
 
+    def test_graphify_corpus_admits_only_bounded_routing_owners(self) -> None:
+        policy = (REPO_ROOT / ".graphifyignore").read_text(encoding="utf-8")
+        cases = {
+            "AGENTS.md": False,
+            "aria_nbv/AGENTS.md": False,
+            "docs/AGENTS.md": False,
+            ".agents/skills/agent-behavior/SKILL.md": False,
+            ".agents/skills/agent-behavior/references/detail.md": True,
+            ".agents/skills/agent-behavior/scripts/helper.py": True,
+            "aria_nbv/tests/test_projection.py": True,
+            "scripts/tests/test_ci_impact.py": True,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / ".gitignore").write_text(policy, encoding="utf-8")
+            for relative in cases:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture\n", encoding="utf-8")
+
+            for relative, expected_ignored in cases.items():
+                result = subprocess.run(
+                    ["git", "check-ignore", "--no-index", "--quiet", relative],
+                    cwd=root,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode == 0,
+                    expected_ignored,
+                    f"unexpected corpus policy for {relative}",
+                )
+
+    def test_graphify_guidance_requires_same_commit_projection_digest(self) -> None:
+        skill_root = REPO_ROOT / ".agents/skills/graphify"
+        context_guidance = (
+            REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
+        ).read_text(encoding="utf-8")
+        root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+        self.assertIn("scripts/check_graphify_freshness.py --quiet", context_guidance)
+        self.assertIn("scripts/build_graphify_projection.py", context_guidance)
+        self.assertIn('fork_turns="none"', context_guidance)
+        self.assertIn("every dispatched file", context_guidance)
+        self.assertEqual(
+            (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
+            "0.9.31",
+        )
+        self.assertTrue((skill_root / "references/query.md").is_file())
+        self.assertIn("aria-nbv-context", root_guidance)
+        self.assertNotIn("graphify query", root_guidance)
+        self.assertNotIn("graphify install", root_guidance)
+
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(
             select_families(["docs/index.qmd", ".configs/example.toml"]),
-            {"docs", "package", "graphify"},
+            {"docs", "package"},
         )
 
     def test_cross_family_rename_reports_source_and_destination(self) -> None:
@@ -88,7 +184,7 @@ class SelectionTests(unittest.TestCase):
 
             self.assertEqual(
                 select_families(parse_nul_paths(changed)),
-                {"package", "docs", "graphify"},
+                {"package", "docs"},
             )
 
     def test_shared_control_paths_select_full(self) -> None:

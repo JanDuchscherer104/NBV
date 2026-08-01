@@ -1,86 +1,51 @@
 # ARIA-NBV root Graphify corpus policy.
 #
-# The graph should cover code/navigation surfaces without indexing operator
-# state, vendored repositories, generated sites, cache directories, or bulky
-# media. Graphify merges this with .gitignore using last-match-wins semantics.
-
-# Start closed, then opt in the maintained navigation surfaces.
+# Start closed. Admit only high-signal formats handled directly by upstream
+# Graphify plus the reproducible Markdown projection. Raw Typst, BibTeX,
+# JSONL, TeX, and bulk PDFs stay in their exact-source owners and are exposed
+# to navigation only through graphify-input/ identity pages.
 *
 **
 
-!Makefile
-
+# Root dispatcher plus Python package code and maintained package orientation.
+!AGENTS.md
 !aria_nbv/
-!aria_nbv/**
+!aria_nbv/**/
+!aria_nbv/**/*.py
+!aria_nbv/**/*.md
+!aria_nbv/**/*.rst
+!aria_nbv/**/*.txt
+!aria_nbv/**/*.yaml
+!aria_nbv/**/*.yml
 
+# Maintained public documentation in upstream-native text formats.
 !docs/
-!docs/index.qmd
-!docs/contents/
-!docs/contents/**
-!docs/typst/
-!docs/typst/shared/
-!docs/typst/shared/**
-!docs/typst/thesis/
-!docs/typst/thesis/**
-!docs/figures/
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-!docs/literature/
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
-!docs/references.bib
+!docs/**/
+!docs/**/*.md
+!docs/**/*.qmd
+!docs/**/*.rst
+!docs/**/*.txt
+!docs/**/*.yaml
+!docs/**/*.yml
+!docs/**/*.html
 
+# High-signal internal references and canonical state, not runtime/history.
 !.agents/
-!.agents/AGENTS_INTERNAL_DB.md
-!.agents/issues.toml
-!.agents/todos.toml
-!.agents/refactors.toml
-!.agents/resolved.toml
 !.agents/references/
-!.agents/references/*.md
+!.agents/references/**/
+!.agents/references/**/*.md
 !.agents/memory/
 !.agents/memory/state/
-!.agents/memory/state/*.md
+!.agents/memory/state/**/
+!.agents/memory/state/**/*.md
 
-# Prune broad directory reincludes down to the intended files.
-.agents/references/**
-!.agents/references/*.md
-.agents/memory/**
-!.agents/memory/state/
-!.agents/memory/state/*.md
-docs/figures/**
-!docs/figures/diagrams/
-!docs/figures/diagrams/**/*.svg
-docs/literature/**
-!docs/literature/*.md
-!docs/literature/*.qmd
-!docs/literature/*.jsonl
+# Deterministic identities for Typst links, citations, and local source assets.
+!graphify-input/
+!graphify-input/**/
+!graphify-input/*.md
+!graphify-input/**/*.md
 
-# Explicit exclusions after reincludes.
-AGENTS.md
-graphify-out/
-graphify-out/**
-external/
-.agent/skills/
-.agents/external/
-.agents/skills/
-.agents/memory/history/
-.agents/memory/transcripts/
-.agents/archive/
-.agents/work/
-.codex/
-.configs/
-.omx/
-.git/
-.claude/
-.venv/
-aria_nbv/.omc/
-aria_nbv/.venv/
-aria_nbv/scripts/
-aria_nbv/tests/
-scripts/
-
+# Generated sites, raw scientific owners, large assets, and operator state.
 docs/_build/
 docs/_extensions/
 docs/_inv/
@@ -96,8 +61,37 @@ docs/search.json
 docs/literature/pdf/
 docs/literature/tex-src/
 docs/**/.jupyter_cache/
-docs/**/*.html
 docs/**/*_files/
+
+graphify-out/
+external/
+.agent/
+.agents/external/
+.agents/memory/history/
+.agents/memory/transcripts/
+.agents/archive/
+.agents/work/
+.codex/
+.configs/
+.omx/
+.git/
+.claude/
+.venv/
+aria_nbv/.omc/
+aria_nbv/.venv/
+aria_nbv/scripts/
+scripts/
+
+# Bounded procedural routing owners. Admit skill entrypoints only; their
+# references and helper code remain exact-source, progressively loaded context.
+!.agents/skills/
+!.agents/skills/**/
+!.agents/skills/*/SKILL.md
+
+# Package tests intentionally remain outside the navigation graph. Their volume
+# would dominate routine owner discovery; use exact-source test search unless a
+# measured follow-up justifies explicit code-to-test projection links.
+aria_nbv/tests/
 
 **/__pycache__/
 **/.pytest_cache/
@@ -107,6 +101,14 @@ docs/**/*_files/
 **/.tox/
 **/.nox/
 
+# Raw/non-native inputs are intentionally represented through the projection.
+**/*.typ
+**/*.bib
+**/*.jsonl
+**/*.tex
+**/*.pdf
+
+# Other bulky media and archives stay outside the navigation corpus.
 **/*.7z
 **/*.avi
 **/*.bin
@@ -116,7 +118,6 @@ docs/**/*_files/
 **/*.jpg
 **/*.mov
 **/*.mp4
-**/*.pdf
 **/*.png
 **/*.tar
 **/*.tgz

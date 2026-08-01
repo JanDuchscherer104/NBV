@@ -102,38 +102,14 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Native debriefs must follow `.agents/memory/README.md` and
   include `canonical_updates_needed` even when the list is empty.
 - Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
-  bucket; only checked-in `.codex/*.example.*` templates are allowed, except
-  the intentionally vendored `.codex/skills/graphify/**` project skill.
+  bucket; only checked-in `.codex/*.example.*` templates are allowed.
 
 ## Graphify
 
-Graphify is the default ARIA-NBV navigation graph when
-`graphify-out/graph.json` exists. The graph is generated local state and should
-remain untracked unless a later artifact or LFS policy changes that.
-
-The repo-owned `.graphifyignore` defines the root corpus for `graphify .`:
-package code, docs, and important `.agents/` references/memory/backlog. It
-excludes runtime state, external repos, generated docs/sites, caches, large
-media, `graphify-out/`, `.codex/`, `.configs/`, root `scripts/`, `AGENTS.md`,
-`.agents/skills/`, `aria_nbv/scripts/`, and `aria_nbv/tests/`.
-
-Rules:
-- For architecture, codebase, file-relationship, or project-content questions,
-  first run `python3 scripts/check_graphify_freshness.py --quiet`. When it
-  succeeds, use `graphify query "<question>"`; otherwise fall back to the
-  owning source files until the graph is refreshed. Use
-  `graphify path "<A>" "<B>"` for relationships and
-  `graphify explain "<concept>"` for focused concepts.
-- Dirty `graphify-out/` files are expected after hooks or incremental updates;
-  dirty graph files are not a reason to skip Graphify. Only skip Graphify if
-  the task is about stale or incorrect graph output, or the user explicitly says
-  not to use it.
-- If `graphify-out/wiki/index.md` exists, use it for broad navigation before
-  raw source browsing. Read `graphify-out/GRAPH_REPORT.md` for broad
-  architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `python3 scripts/graphify_refresh.py` with the
-  changed paths in `GRAPHIFY_CHANGED`, or run `graphify update .` followed by
-  the freshness check. Documentation, paper, and diagram changes set
-  `graphify-out/needs_update`; refresh them with the Graphify extraction
-  workflow, whose completion records the current policy digest, before treating
-  semantic links as current.
+Use `aria-nbv-context` for the ARIA-NBV Graphify eligibility, projection,
+freshness, and exact-source preflight, then hand eligible queries to the
+byte-identical upstream skill at `.agents/skills/graphify/SKILL.md`. Graphify
+remains derived navigation and never a knowledge owner. The executable and
+graph artifacts remain optional; the shared content-addressed Graphify cache
+namespaces are standard worktree prerequisites created by
+`scripts/setup_worktree_env.sh`.

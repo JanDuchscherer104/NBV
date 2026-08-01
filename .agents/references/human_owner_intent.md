@@ -64,8 +64,11 @@ or repeatable workflows.
 
 - Keep `.agents/` as the canonical repository scaffold and keep the root
   dispatcher concise.
-- Keep OMX, Graphify, MemPalace, and similar tools optional. Normal repository
-  work and CI must still work from exact source without them.
+- Keep OMX, the Graphify executable and graph artifacts, MemPalace, and similar
+  tools optional. Normal repository work and CI must still work from exact
+  source without them. Graphify's two content-addressed semantic cache
+  namespaces are nevertheless standard worktree prerequisites so every agent
+  can reuse extraction results whenever Graphify is available.
 - Use the official upstream Codex plugin for MemPalace and keep its shared,
   user-local project memory in the `aria-nbv` wing. Future live Codex work may
   be retained through upstream hooks and explicit checkpoints.
@@ -80,6 +83,32 @@ or repeatable workflows.
 - Graphify should preserve native source hierarchy and provenance, use upstream
   behavior wherever possible, and remain a navigation accelerator rather than
   a knowledge owner.
+- The accepted scaffold target-state specification records the human owner's
+  Graphify option-3 selection: the upstream Graphify tool, its project-installed
+  skill under `.agents/skills/graphify/`, and one thin deterministic Markdown
+  evidence projection for source-owned thesis links, both bibliography owners,
+  the literature manifest, and local TeX/PDF asset identities. The upstream
+  skill stays byte-identical; `aria-nbv-context`, not the upstream bundle or
+  root `AGENTS.md`, owns the ARIA preflight. This file preserves the cross-task
+  preference; the specification owns the scoped decision and its bounded
+  corpus and capability limits. The projection is
+  ignored, reproducible, and derived; it must not grow into a parser framework,
+  graph schema, query layer, lifecycle manager, or alternative source of truth.
+- The Graphify replacement branch carries the exact upstream skill and all other
+  repository-side setup. After merge, the only external operator steps are
+  normal Codex authentication and, if absent, installing the upstream Graphify
+  package that supplies the `graphify` CLI.
+  Semantic extraction may use authenticated Codex host subagents. Never export
+  or reuse a ChatGPT/Codex token as `OPENAI_API_KEY` or another provider API
+  key, add repository or CI secrets, introduce a Graphify fork or skill overlay,
+  repository-owned package import, hook/freshness lifecycle, or patch generated
+  graph output.
+- The optional upstream Git hook is allowed only as a local incremental-code
+  accelerator and semantic-invalidation aid. It never becomes required routing,
+  CI, authentication, freshness authority, or lifecycle ownership; its success,
+  failure, or absence cannot make a graph current. `aria-nbv-context` owns the
+  ARIA-NBV operational preflight, while upstream Graphify owns its lifecycle
+  and root `AGENTS.md` remains a compact routing pointer.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
   and private retrieval corpora untracked. At most one deterministic,
   pattern-sanitized, commit-scoped conversation slice may be tracked for a
@@ -132,7 +161,9 @@ or repeatable workflows.
 These are intentionally unresolved and must not be presented as accepted
 policy:
 
-- Graphify's exact corpus, refresh model, and retained generated artifacts.
+- Whether later evidence justifies changing the selected thin Graphify adapter
+  or retaining additional generated outputs; the current option-3 boundary is
+  accepted.
 - LitKG is retired; reintroduction requires a new evidence-backed decision.
 - Whether `aria-nbv-context` remains a thin router or owns a small amount of
   stable project orientation.

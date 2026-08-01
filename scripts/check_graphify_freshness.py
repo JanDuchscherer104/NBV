@@ -1,129 +1,332 @@
 #!/usr/bin/env python3
-"""Validate that the local Graphify graph matches source and corpus policy."""
+"""Fail-closed freshness check for the optional local Graphify artifact."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import subprocess
-
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "graphify-out"
+from typing import Any
 
 
-def _head() -> str:
-    return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
+PROJECTION_INDEX = Path("graphify-input/index.md")
+GRAPH = Path("graphify-out/graph.json")
+STAT_INDEX = Path("graphify-out/cache/stat-index.json")
+NEEDS_UPDATE = Path("graphify-out/needs_update")
+INDEX_PATH = "graphify-input/index.md"
+_FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
+_OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
 
 
-def _policy_digest() -> str:
-    return hashlib.sha256((ROOT / ".graphifyignore").read_bytes()).hexdigest()
+def _head(root: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    value = result.stdout.strip()
+    if result.returncode or not value:
+        raise ValueError("current Git HEAD is unavailable")
+    return value
 
 
-def _git_paths(*args: str) -> set[Path]:
-    output = subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.STDOUT)
+def _json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid {label}: {error}") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"invalid {label}: expected a JSON object")
+    return value
+
+
+def _projection_metadata(index: Path) -> tuple[str, str, dict[str, str]]:
+    try:
+        text = index.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ValueError(f"invalid projection index: {error}") from error
+
+    def single_value(key: str) -> str:
+        values = [
+            line.split(":", 1)[1].strip()
+            for line in text.splitlines()
+            if line.startswith(f"{key}:")
+        ]
+        if len(values) != 1 or not values[0]:
+            raise ValueError(
+                f"invalid projection index: {key} must be one non-empty string"
+            )
+        return values[0]
+
+    revision = single_value("source_revision")
+    owner_state = single_value("owner_worktree_state")
+    if owner_state not in {"clean", "dirty"}:
+        raise ValueError(
+            "invalid projection index: owner_worktree_state must be clean or dirty"
+        )
+
+    lines = text.splitlines()
+    try:
+        section_start = lines.index("## Owner digests") + 1
+    except ValueError as error:
+        raise ValueError("invalid projection index: missing Owner digests") from error
+    owner_digests: dict[str, str] = {}
+    for line in lines[section_start:]:
+        if line.startswith("## "):
+            break
+        if not line.strip():
+            continue
+        match = _OWNER_DIGEST.fullmatch(line)
+        if match is None:
+            raise ValueError(f"invalid projection index owner digest: {line}")
+        owner, digest = match.groups()
+        normalized = _normalize_path(owner)
+        if normalized in owner_digests:
+            raise ValueError(f"invalid projection index: duplicate owner {normalized}")
+        owner_digests[normalized] = digest
+    if not owner_digests:
+        raise ValueError("invalid projection index: Owner digests must not be empty")
+    return revision, owner_state, owner_digests
+
+
+def _normalize_path(value: str) -> str:
+    normalized = value.replace("\\", "/")
+    if re.match(r"^[A-Za-z]:/", normalized):
+        raise ValueError("unsafe source path")
+    path = PurePosixPath(normalized)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError("unsafe source path")
+    result = path.as_posix()
+    while result.startswith("./"):
+        result = result[2:]
+    return result
+
+
+def _upstream_file_hash(content: bytes, relative_path: str) -> str:
+    """Reproduce Graphify 0.9.31's content-plus-relative-path digest."""
+    text = content.decode(errors="replace")
+    opener = _FRONTMATTER_DELIM.match(text)
+    if opener is not None:
+        closer = _FRONTMATTER_DELIM.search(text, opener.end())
+        if closer is not None:
+            content = text[closer.start() + 3 :].encode()
+    digest = hashlib.sha256()
+    digest.update(content)
+    digest.update(b"\x00")
+    digest.update(relative_path.lower().encode())
+    return digest.hexdigest()
+
+
+def _index_digest(stat_index: dict[str, Any]) -> str:
+    entry = stat_index.get(INDEX_PATH)
+    if not isinstance(entry, dict):
+        raise ValueError(
+            "invalid stat index: missing object entry for graphify-input/index.md"
+        )
+    hashes = entry.get("hashes")
+    if not isinstance(hashes, dict):
+        raise ValueError("invalid stat index: index hashes must be an object")
+    digest = hashes.get(INDEX_PATH)
+    if not isinstance(digest, str) or not digest:
+        raise ValueError("invalid stat index: index digest must be a non-empty string")
+    return digest
+
+
+def _contains_index_node(graph: dict[str, Any]) -> bool:
+    nodes = graph.get("nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("invalid graph: nodes must be a list")
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise ValueError("invalid graph: node must be an object")
+        source = node.get("source_file")
+        if source is None:
+            continue
+        if not isinstance(source, str):
+            raise ValueError("invalid graph: node source_file must be a string")
+        if _normalize_path(source) == INDEX_PATH:
+            return True
+    return False
+
+
+def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
+    reasons: list[str] = []
+    repository = root.resolve()
+    owners = sorted(owner_digests)
+    for relative in owners:
+        owner = repository / relative
+        try:
+            resolved = owner.resolve(strict=False)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(
+                f"projection owner cannot be resolved: {relative}: {error}"
+            )
+        if not resolved.is_relative_to(repository):
+            raise ValueError(f"projection owner escapes repository: {relative}")
+        if not resolved.is_file():
+            reasons.append(f"projection owner is missing: {relative}")
+            continue
+        try:
+            digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        except OSError as error:
+            raise ValueError(f"projection owner cannot be read: {relative}: {error}")
+        if digest != owner_digests[relative]:
+            reasons.append(f"projection owner digest changed: {relative}")
+
+    result = subprocess.run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *owners],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise ValueError("projection owner worktree status is unavailable")
+    if result.stdout.strip():
+        reasons.append("projection owner worktree is dirty")
+    return reasons
+
+
+def check(root: Path) -> dict[str, Any]:
+    """Return the stable freshness result without printing or exiting."""
+    reasons: list[str] = []
+    invalid = False
+    missing = False
+
+    try:
+        head = _head(root)
+    except ValueError as error:
+        head = None
+        invalid = True
+        reasons.append(str(error))
+
+    paths = (
+        (PROJECTION_INDEX, "projection index"),
+        (GRAPH, "graph"),
+        (STAT_INDEX, "stat index"),
+    )
+    for relative, label in paths:
+        if not (root / relative).is_file():
+            missing = True
+            reasons.append(f"missing {label}: {relative.as_posix()}")
+
+    projection_revision: str | None = None
+    owner_worktree_state: str | None = None
+    owner_digests: dict[str, str] | None = None
+    graph: dict[str, Any] | None = None
+    digest: str | None = None
+    node_present: bool | None = None
+    if (root / PROJECTION_INDEX).is_file():
+        try:
+            (
+                projection_revision,
+                owner_worktree_state,
+                owner_digests,
+            ) = _projection_metadata(root / PROJECTION_INDEX)
+        except ValueError as error:
+            invalid = True
+            reasons.append(str(error))
+    if (root / GRAPH).is_file():
+        try:
+            graph = _json_object(root / GRAPH, "graph")
+            built_at_commit = graph.get("built_at_commit")
+            if not isinstance(built_at_commit, str) or not built_at_commit:
+                raise ValueError(
+                    "invalid graph: built_at_commit must be a non-empty string"
+                )
+            node_present = _contains_index_node(graph)
+        except ValueError as error:
+            invalid = True
+            reasons.append(str(error))
+    if (root / STAT_INDEX).is_file():
+        try:
+            digest = _index_digest(_json_object(root / STAT_INDEX, "stat index"))
+        except ValueError as error:
+            invalid = True
+            reasons.append(str(error))
+
+    if head is not None:
+        if projection_revision is not None and projection_revision != head:
+            reasons.append("projection source_revision does not match HEAD")
+        if owner_worktree_state == "dirty":
+            reasons.append("projection was built from a dirty owner worktree")
+        if owner_digests is not None:
+            try:
+                reasons.extend(_live_owner_reasons(root, owner_digests))
+            except ValueError as error:
+                invalid = True
+                reasons.append(str(error))
+        if graph is not None and graph["built_at_commit"] != head:
+            reasons.append("graph built_at_commit does not match HEAD")
+        if (root / PROJECTION_INDEX).is_file() and digest is not None:
+            actual_digest = _upstream_file_hash(
+                (root / PROJECTION_INDEX).read_bytes(), INDEX_PATH
+            )
+        else:
+            actual_digest = None
+        if actual_digest is not None and digest != actual_digest:
+            reasons.append("projection index digest does not match stat index")
+        if node_present is False:
+            reasons.append("graph has no node sourced from graphify-input/index.md")
+
+    semantic_stale = (root / NEEDS_UPDATE).exists()
+    if semantic_stale:
+        reasons.append("semantic refresh required: graphify-out/needs_update exists")
+
+    if invalid:
+        state = "invalid"
+    elif missing:
+        state = "missing"
+    elif semantic_stale:
+        state = "semantic-stale"
+    elif reasons:
+        state = "structural-stale"
+    else:
+        state = "fresh"
+
+    fresh = state == "fresh"
     return {
-        Path(value.decode(errors="surrogateescape"))
-        for value in output.split(b"\0")
-        if value
+        "state": state,
+        "fresh": fresh,
+        "head": head,
+        "reasons": reasons,
+        "next_action": (
+            "graph-backed claims are permitted"
+            if fresh
+            else "use exact-source discovery; run an explicit Graphify refresh before graph-backed claims"
+        ),
     }
 
 
-def _is_graphify_source(path: Path) -> bool:
-    if path.name == ".graphifyignore":
-        return True
-    result = subprocess.run(
-        [
-            "git",
-            "-c",
-            f"core.excludesFile={ROOT / '.graphifyignore'}",
-            "check-ignore",
-            "--no-index",
-            "-q",
-            "--",
-            path.as_posix(),
-        ],
-        cwd=ROOT,
-        check=False,
-    )
-    return result.returncode != 0
-
-
-def _dirty_graphify_sources() -> list[str]:
-    changed = _git_paths("diff", "--name-only", "-z", "HEAD", "--")
-    untracked = _git_paths("ls-files", "--others", "--exclude-standard", "-z")
-    return sorted(
-        path.as_posix() for path in changed | untracked if _is_graphify_source(path)
-    )
-
-
-def _read_json_object(
-    path: Path, label: str
-) -> tuple[dict[str, object] | None, str | None]:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--quiet", action="store_true", help="emit no output")
+    output.add_argument("--json", action="store_true", help="emit stable JSON")
+    args = parser.parse_args(argv)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return None, f"{label} is malformed JSON: {exc}"
-    except OSError as exc:
-        return None, f"{label} cannot be read: {exc}"
-    if not isinstance(data, dict):
-        return None, f"{label} is not a JSON object"
-    return data, None
-
-
-def freshness_errors() -> list[str]:
-    """Return reasons the local graph must not be trusted for navigation."""
-    graph_path = OUT / "graph.json"
-    state_path = OUT / "aria_nbv_freshness.json"
-    if not graph_path.exists():
-        return ["graphify-out/graph.json is absent"]
-    if not state_path.exists():
-        return ["Graphify freshness metadata is absent"]
-
-    errors: list[str] = []
-    graph, graph_error = _read_json_object(graph_path, "graphify-out/graph.json")
-    state, state_error = _read_json_object(state_path, "Graphify freshness metadata")
-    if graph_error:
-        errors.append(graph_error)
-    if state_error:
-        errors.append(state_error)
-    if errors:
-        return errors
-
-    assert graph is not None and state is not None
-    head = _head()
-    if graph.get("built_at_commit") != head:
-        errors.append("graph.json was built from a different commit")
-    if state.get("built_at_commit") != head:
-        errors.append("freshness metadata was built from a different commit")
-    if state.get("corpus_policy_sha256") != _policy_digest():
-        errors.append(".graphifyignore changed since the last refresh")
-    dirty_sources = _dirty_graphify_sources()
-    if dirty_sources:
-        errors.append(
-            "Graphify corpus sources have uncommitted changes: "
-            + ", ".join(dirty_sources[:10])
-        )
-    if state.get("semantic_pending") or (OUT / "needs_update").exists():
-        errors.append("documentation, literature, or diagram extraction is pending")
-    return errors
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--quiet", action="store_true")
-    args = parser.parse_args()
-    errors = freshness_errors()
-    if errors and not args.quiet:
-        print("Graphify is stale; fall back to source files:")
-        for error in errors:
-            print(f"- {error}")
-    elif not errors and not args.quiet:
-        print("Graphify is fresh for the current commit and corpus policy.")
-    return int(bool(errors))
+        result = check(Path.cwd())
+    except Exception as error:  # Defensive outer fail-closed boundary.
+        result = {
+            "state": "invalid",
+            "fresh": False,
+            "head": None,
+            "reasons": [f"unexpected freshness-check failure: {error}"],
+            "next_action": "use exact-source discovery; run an explicit Graphify refresh before graph-backed claims",
+        }
+    if not args.quiet:
+        if args.json:
+            print(json.dumps(result, sort_keys=True))
+        else:
+            reasons = "; ".join(result["reasons"]) or "all freshness predicates pass"
+            print(f"Graphify freshness: {result['state']} — {reasons}")
+            print(f"Next action: {result['next_action']}")
+    return 0 if result["fresh"] else 1
 
 
 if __name__ == "__main__":

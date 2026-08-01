@@ -23,8 +23,6 @@ G009 baseline: `5c4c450`
 
 Inventory refreshed: `2026-07-13`
 
-Graphify refresh: `2026-07-13` (`5,512` nodes, `12,601` edges)
-
 ## Symbol Ownership Matrix
 
 ### `__init__.py`

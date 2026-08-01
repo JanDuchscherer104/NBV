@@ -58,6 +58,33 @@ uv run python scripts/download_arxiv_tex_src.py docs/literature/sources.jsonl --
 
 By default the script writes extracted source trees into `docs/literature/tex-src/` and PDFs into `docs/literature/pdf/`. Use `--overwrite` to replace an existing extracted tree or PDF target.
 
+## Optional Graphify projection
+
+The exact literature owners remain `sources.jsonl`, `docs/references.bib`,
+`docs/references-qh.bib`, the active Typst thesis,
+`docs/typst/shared/style.typ` for thesis-to-code link syntax, and the local
+files under `pdf/` and `tex-src/`. Graphify is a derived navigation view and
+never changes or supersedes those sources.
+
+From the repository root, build the ignored Markdown projection at the exact
+revision used for navigation:
+
+```bash
+python3 scripts/build_graphify_projection.py \
+  --output graphify-input \
+  --aria-code-ref "$(git rev-parse HEAD)"
+```
+
+The repository includes the upstream project skill at
+`.agents/skills/graphify/SKILL.md` byte-identical to Graphify 0.9.31 at upstream
+commit `4fe11092ccbe9f543608f140c790f68d5d83cae4`. It owns only upstream
+Graphify commands. `aria-nbv-context` owns the ARIA-NBV freshness,
+exact-source-fallback, corpus, projection, and client-compatibility preflight;
+project instructions must never be inserted into the upstream bundle. The
+Graphify package itself remains a user-installed tool; Codex authentication
+remains operator-local. Direct PDF extraction is a separate, disposable
+operator experiment, not part of the root graph.
+
 ## Why these sources are kept locally
 
 - to inspect the exact paper contribution statements and method structure

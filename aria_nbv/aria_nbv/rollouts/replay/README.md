@@ -17,8 +17,6 @@ replay/
 
 Baseline: `d6b809a`
 
-Graphify refresh: `2026-07-11T20:46:10+02:00`
-
 ## Symbol Ownership Matrix
 
 ### `__init__.py`

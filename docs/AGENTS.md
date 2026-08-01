@@ -15,7 +15,8 @@ Apply this file when working under `docs/`.
 - `docs/typst/seminar_paper/main.typ` is historical implemented evidence.
 - Keep Quarto docs aligned to the correct source role instead of introducing
   competing top-level narratives.
-- Keep `docs/references.bib` as the single bibliography source of truth.
+- Keep `docs/references.bib` and `docs/references-qh.bib` as the bibliography
+  owners; the latter is the Q_H-specific supplement consumed by the thesis.
 - Preserve established Quarto and Typst structure unless the task explicitly changes it.
 - Prefer links to canonical state docs in `.agents/memory/state/` over re-explaining the same guidance in multiple places.
 - Keep internal agent guidance, generated context, and OMX runtime notes out of
@@ -65,7 +66,9 @@ Apply this file when working under `docs/`.
 
 ## Writing Rules
 - Keep cross-references and bibliography entries synchronized.
-- Add new references to `docs/references.bib` when introducing important concepts or papers.
+- Add references to the owning bibliography: general project sources belong in
+  `docs/references.bib`; Q_H-specific sources belong in
+  `docs/references-qh.bib`.
 - Replace temporary citation placeholders such as `cite…` before finishing.
 - Use links to relevant internal docs or authoritative external references when introducing non-obvious concepts.
 - Use the documented `#gh`, `#gh-wip`, and `#gh-symbol` contracts in
