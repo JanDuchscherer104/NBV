@@ -1,32 +1,29 @@
 ---
 scope: module
 applies_to: aria_nbv/aria_nbv/vin/**
-summary: VIN scorer, batch-contract, and candidate-context guidance for work under aria_nbv/aria_nbv/vin/.
+summary: VIN scorer, batch contract, candidate-frame, and validation boundary.
 ---
 
 # VIN Boundary
 
-Apply this file when working under `aria_nbv/aria_nbv/vin/`.
+This module owns VIN scorer and prediction behavior; `models/scene_myopic.py`,
+`scorer_context.py`, `ordinal.py`, and `diagnostics/` are the defining sources.
+Shared snippet/batch contracts remain in `data_handling`; Lightning owns training
+integration.
 
-## Public Contracts
-- Core scorer surface: `aria_nbv/aria_nbv/vin/models/scene_myopic.py`, `scorer_context.py`, `ordinal.py`, `diagnostics/summarize.py`
-- Shared batch and snippet containers: `aria_nbv/aria_nbv/data_handling/ase_efm/views.py`, `aria_nbv/aria_nbv/data_handling/vin_store/batch.py`
-- Training integration: `aria_nbv/aria_nbv/lightning/lit_module.py`, `lit_datamodule.py`
-- Narrative surfaces: `docs/typst/seminar_paper/sections/06-architecture.typ`, `docs/typst/seminar_paper/sections/07-training-objective.typ`, `docs/typst/seminar_paper/sections/12g-appendix-vin-v3-streamline.typ`
+## Local Hazards
 
-## Boundary Rules
-- Treat scorer inputs, prediction semantics, and shared batch/container shapes as cross-surface contracts across VIN, Lightning, diagnostics, and docs.
-- Preserve candidate-vs-rig frame semantics. Display-only rotations, plotting helpers, or UI conveniences must not leak into training, cache, or model inputs.
-- If VIN needs new cached or raw data fields, extend the owning `data_handling.ase_efm` or `data_handling.vin_store` leaf contract instead of reaching into ad hoc dict payloads or broadening the package root.
-- Keep `VinSnippetView` and `VinOracleBatch` semantics aligned with the active scorer path; update docs and targeted tests together when those contracts change.
-- Prefer the active VIN v3 path unless the task explicitly targets experimental or legacy modules.
+- Scorer inputs, prediction semantics, and shared container shapes cross VIN,
+  Lightning, diagnostics, and documentation; change them together.
+- Preserve candidate-versus-rig frame semantics. Display rotations and plotting
+  conveniences must not leak into model inputs, training, or caches.
+- Add cached/raw fields through the owning `data_handling` leaf contract, not
+  ad-hoc payloads or package-root expansion. Prefer the active VIN v3 path.
 
-## Verification
-- Run `ruff format` and `ruff check` on touched VIN or Lightning files.
-- Run targeted pytest in `aria_nbv/tests/vin/` plus the relevant Lightning coverage such as `aria_nbv/tests/lightning/test_vin_batch_collate.py` and `aria_nbv/tests/lightning/test_vin_datamodule_sources.py` when batch or training contracts change.
-- If frame semantics or candidate evidence flow changes, run the most direct related rendering or integration test that covers the touched behavior.
+## Procedure And Proof
 
-## Completion Criteria
-- Candidate-frame assumptions are explicit in code or docstrings when touched.
-- Shared batch/container tests covering the changed VIN behavior were run.
-- Paper or implementation docs were updated when scorer semantics or training-visible interfaces changed.
+- Run `ruff format` and `ruff check` on touched VIN/Lightning files, then the
+  nearest `tests/vin/` test; include Lightning batch/datamodule coverage when
+  shared containers or training selection changes.
+- For frame or candidate evidence changes, run the matching rendering test, such
+  as `cd aria_nbv && uv run pytest tests/vin/test_vin_plotting_v3.py`.

@@ -1,37 +1,27 @@
 ---
 scope: module
 applies_to: aria_nbv/aria_nbv/rri_metrics/**
-summary: RRI formulas, binning, and metric-contract guidance for work under aria_nbv/aria_nbv/rri_metrics/.
+summary: RRI semantic, binning, and metric-validation boundary.
 ---
 
 # RRI Metrics Boundary
 
-Apply this file when working under `aria_nbv/aria_nbv/rri_metrics/`.
+This module owns prepared RRI, returns, ranking, stateful metrics, binning, and
+metric-facing plots. Oracle scorer evidence belongs to `aria_nbv.oracle`; CORAL
+model/loss behavior belongs to `aria_nbv.vin.ordinal`.
 
-## Public Contracts
-- Prepared RRI: `rri.py`; point-mesh primitives: `point_mesh.py`.
-- Differentiable gains/returns: `returns.py`; evaluation-only ranking: `ranking.py`.
-- Stateful evaluation: `torchmetrics_single.py` and `torchmetrics_multi.py`.
-- Binning: `ordinal.py`; CORAL model/loss behavior lives in `aria_nbv.vin.ordinal`.
-- Names and lightweight plots: `logging.py`, `plotting.py`.
-- Privileged evidence and scorer facades live in `aria_nbv.oracle`.
-- Narrative surfaces: `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/07a-binning.typ`, generated API docs under `docs/reference/`, `docs/contents/theory/rri_theory.qmd`
+## Local Hazards
 
-## Boundary Rules
-- Treat oracle-label semantics, binning definitions, and reported metric meaning as contract changes, not local refactors.
-- If a change alters supervision meaning, decoded target semantics, or reported metric interpretation, update docs and targeted tests in the same change.
-- Keep metric names, logged summaries, and paper terminology aligned with the underlying definitions; do not silently reinterpret an existing name.
-- Prefer additive diagnostics over changing canonical RRI behavior unless the task explicitly asks for a semantic change.
-- Plotting helpers are secondary surfaces; core metric functions own the semantics.
-- Operational provenance, invalidity, path, entropy, and order checks belong in `aria_nbv.rollouts.audits`.
-- Tensor return kernels are authoritative; scalar/table adapters delegate to them.
+- Oracle-label semantics, binning, decoded target meaning, and reported metrics
+  are contracts, not local refactors. Keep names and paper terminology aligned.
+- Prefer additive diagnostics to altering canonical RRI behavior. Tensor kernels
+  own semantics; scalar/table adapters and plotting remain secondary.
+- Operational invalidity, provenance, path, entropy, and order checks belong in
+  `aria_nbv.rollouts.audits`.
 
-## Verification
-- Run `ruff format` and `ruff check` on touched metrics files.
-- Run the most direct targeted pytest for the touched semantics, typically `aria_nbv/tests/vin/test_rri_binning.py`, `test_coral.py`, and any affected data, rendering, or integration tests when oracle geometry or labels change.
-- Update the relevant Quarto or paper text when equations, supervision meaning, or metric terminology changes.
+## Procedure And Proof
 
-## Completion Criteria
-- Canonical metric semantics remain explicit and synchronized across code and docs.
-- Targeted tests covering the changed oracle, binning, or ordinal behavior were run.
-- No metric rename or meaning change is left implicit.
+- Run `ruff format` and `ruff check` on touched files and the nearest semantics
+  test (commonly `tests/vin/test_rri_binning.py` or `test_coral.py`).
+- Update the owning documentation when equations, supervision, or terminology
+  changes.
