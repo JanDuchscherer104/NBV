@@ -1,125 +1,59 @@
 # ARIA-NBV Agent Guidance
 
-Use this file as the root dispatcher. Detailed rules live in the nearest
-`AGENTS.md`, `.agents/skills/`, and `.agents/references/`.
+Use this dispatcher with the nearest applicable `AGENTS.md`. Exact sources,
+tests, configuration, and Typst own behavior and scientific claims.
 
 ## Source Order
+
 - Use `.agents/references/source_order.md` for current truth and conflict
-  resolution.
-- Current thesis direction is owned by thesis roadmap/questions plus canonical
-  memory. The seminar paper is historical implemented evidence, not current
-  thesis priority.
+  resolution. Generated, retrieved, and historical material is evidence, not
+  current authority.
 
 ## Routing
-- Non-trivial coding, docs, scaffold, research, or memory edits: apply
+
+- For non-trivial coding, docs, scaffold, research, or memory edits, apply
   `agent-behavior` first.
-- Package work under `aria_nbv/`: read `aria_nbv/AGENTS.md`, then one nested
-  guide only when that module contract is touched.
-- Docs, bibliography, Typst, or Quarto work: read `docs/AGENTS.md`.
-- Mermaid `.mmd` or thesis diagram work: use `aria-nbv-mermaid`; math notation
-	must come from `docs/typst/shared`; validate with
-	`tools/mermaid/scripts/aria_mermaid_lint.py`; render locally with `mmdc`
-	through `tools/mermaid/scripts/render_mermaid.sh` and do not use online
-	renderers unless explicitly permitted.
-- Need file localization or deterministic local discovery: use `aria-nbv-context`.
-- Vague, high-impact, or advisor-facing plans: use `aria-grill`. Repository
-  policy routes implicit ARIA use of optional architecture, interface-design,
-  committed Mermaid, and interactive-visualization capabilities through Aria
-  Grill; explicit user invocation overrides that route.
-- PR or working-tree review: inspect the exact diff and nearest owners;
-  report severity-ranked, line-referenced findings. Actionable P0--P2 PR
-  findings are published and resolved as GitHub review threads; local-only
-  reviews report the same findings locally.
-- Bugs, regressions, suspicious metrics, or failing docs/data checks: open the
-  nearest owner, reproduce the failure with the smallest red loop, and verify
-  the cause before changing behavior.
-- Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, or offline/
-  rollout inspection work: use `rerun-nbv-inspector`; package code, README files,
-  configuration, and tests remain the behavioral owners.
-- Backlog or memory changes: use the `agents-db` skill.
-- Cleanup, pruning, or simplification: use the `simplification` skill.
-- LRZ AI Systems, Slurm, DSS, Pyxis, or remote compute work: use `lrz-ai-systems`.
+- Package work reads `aria_nbv/AGENTS.md`, then the one nested guide that owns
+  the touched contract. Docs, bibliography, Typst, and Quarto work starts at
+  `docs/AGENTS.md`.
+- Mermaid and thesis-diagram work uses `aria-nbv-mermaid`; notation is owned by
+  `docs/typst/shared`. Use `aria-nbv-context` for deterministic discovery.
+- Vague, high-impact, advisor-facing, architecture, interface-design, committed
+  Mermaid, or interactive-visualization work routes through `aria-grill` unless
+  the user explicitly chooses another route.
+- Review exact diffs with nearest owners; diagnose failures from a smallest
+  reproducer before changing behavior. Backlog or memory changes use `agents-db`;
+  cleanup uses `simplification`; LRZ work uses `lrz-ai-systems`.
+- Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, and offline/
+  rollout inspection work uses `rerun-nbv-inspector`. It provides the current
+  official-reference and Context7 route; package README files, code,
+  configuration, and tests remain behavioral owners.
 
-## Non-Negotiables
+## Universal Safety
+
 - Do not use `git restore` or `git reset --hard` unless explicitly requested.
-- Assume the worktree can be dirty; never revert unrelated user or agent
-  changes.
-- Keep public docs aligned with current thesis direction, current code, and
-  historical evidence only when cited.
-- Internal agent memory, generated context, and OMX runtime state are not public
-  documentation surfaces.
-- Do not treat V0 GT actor-visible target runs as main V1 performance.
-- Invalidity is a hard mask/reason contract, not low RRI.
-- Generic Gymnasium/SB3 or external online-simulator work is stretch or M6
-  bridge work unless the task explicitly targets that gate. Online discrete
-  `Q_H` over the existing finite-candidate ASE mesh/oracle loop is the
-  advisor-facing RQ5 bridge after offline `Q_H` evidence is stable.
+- Assume the worktree can be dirty; never revert unrelated user or agent work.
+- Keep public docs aligned with their current thesis/code owners; historical
+  evidence is cited as historical. Do not publish internal agent/runtime state.
 
-## Optional Operator Tools
-- Externally installed skills are optional capabilities, not ARIA-NBV truth
-  owners. Translate any proposed output path through the repository source order
-  before creating a new tracked surface.
-- OMX remains optional operator orchestration; use its upstream help only when
-  a task explicitly asks for operator orchestration. Do not make it required
-  for normal repo work.
-- Optional OMX, MCP, graph, memory, and autoresearch tools produce evidence or
-  proposals, not repo-owned truth. Apply durable changes only through the
-  owning source, package guidance, docs, or Agents DB surface.
-- Optional MemPalace use comes from the official upstream Codex plugin and the
-  reviewed user-local thesis, literature, project-docs, debrief, and opt-in
-  Codex-history wings in `.agents/references/human_owner_intent.md`; the
-  repository owns no wrapper. Code, tests, and active configuration stay out of
-  MemPalace and are discovered from their exact repository owners.
-- For semantic recall of prior decisions, related work, failed approaches, or
-  cross-surface context, use `aria-nbv-context` lazily. If MemPalace is absent
-  or its read-only status is unverified, continue through exact-source discovery.
+## Optional Tools And Capture
 
-## Instruction Capture
-- Repo invariant: update this file or the nearest nested `AGENTS.md`.
-- Repeatable workflow: update or add a compact `.agents/skills/*/SKILL.md`.
-- Human-owner preference: update `.agents/references/human_owner_intent.md`.
-- Current truth: update `.agents/memory/state/`.
-- Actionable work: update `.agents/issues.toml`, `.agents/todos.toml`, or
-  `.agents/refactors.toml` through `agents-db`.
-- Public narrative: update Quarto or Typst docs.
-- Angle-bracket instruction capture is owned by `agent-behavior`; apply its
-  current-user-message eligibility rule and route valid captures here.
+- External skills, OMX, MCP, Graphify, MemPalace, memory, and autoresearch are
+  optional evidence or orchestration, never ARIA truth owners or prerequisites
+  for normal work. Route durable changes through the source-order owner.
+- Use `aria-nbv-context` only when useful for semantic recall; if a tool is
+  absent or unverified, continue with direct repository search and exact sources.
+- Graphify eligibility, freshness, projection, and fallback belong to
+  `aria-nbv-context`; eligible queries use the byte-identical upstream Graphify
+  skill. Graph outputs remain derived navigation, never authority.
+- The source-order capture rule selects the smallest owner. `agent-behavior`
+  owns angle-bracket eligibility and the capture procedure.
 
-## Commands
-- Python: `aria_nbv/.venv/bin/python`
-- Package format/lint: `ruff format <file>` and `ruff check <file>`
-- Package tests: `cd aria_nbv && uv run pytest <path>`
-- Context refresh: `make context`; contract index: `make context-contracts`
-- Agents DB: `make agents-db`; memory check: `make check-agent-memory`
-- Surface checks: use the nearest package guide or skill, then the narrowest
-  test, render, or command that proves the changed contract.
+## Verification And Debriefs
 
-## Verification
-- Repo guidance, canonical state, debriefs, or skills: `make check-agent-memory`
-  and validate changed skills with the local skill validator when available.
-- Agents DB edits: `make agents-db AGENTS_ARGS='validate'` and `make agents-db`.
-- Python/package edits: format, lint, and targeted pytest for the touched
-  surface.
-- Data-handling, RRI, or VIN contract edits: follow the nearest nested guide and
-  update docs/memory when behavior changes.
-- Docs edits: render the touched Quarto or Typst surface when non-trivial.
-- Advisor-facing proposal, roadmap, research-question, or literature-synthesis
-  claims require direct inspection of the cited primary source and exact local
-  implementation or measurement evidence where applicable.
-
-## Debriefs
+- Follow the nearest guide and run the narrowest proof of the changed contract.
+  Guidance, state, and debrief changes require `make check-agent-memory`;
+  advisor-facing claims require the cited primary source and exact local evidence.
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
-- Native debriefs must follow `.agents/memory/README.md` and
-  include `canonical_updates_needed` even when the list is empty.
-- Legacy `.codex/*.md` notes were migrated. Do not recreate `.codex` as a notes
-  bucket; only checked-in `.codex/*.example.*` templates are allowed.
-
-## Graphify
-
-Use `aria-nbv-context` for the ARIA-NBV Graphify eligibility, projection,
-freshness, and exact-source preflight, then hand eligible queries to the
-byte-identical upstream skill at `.agents/skills/graphify/SKILL.md`. Graphify
-remains derived navigation and never a knowledge owner. The executable and
-graph artifacts remain optional; the shared content-addressed Graphify cache
-namespaces are standard worktree prerequisites created by
-`scripts/setup_worktree_env.sh`.
+  Native debriefs follow `.agents/memory/README.md`; do not recreate `.codex` as
+  a notes bucket.
