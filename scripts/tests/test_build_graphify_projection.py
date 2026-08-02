@@ -893,6 +893,28 @@ class ProjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ProjectionError, r"unknown #"):
                 self.build()
 
+    def test_section_usage_ignores_notation_tokens_in_typst_strings(self) -> None:
+        section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
+        section.write_text(
+            (
+                '= Introduction\n@PaperA @term-a @term-a:short #symb.rl.qh. '
+                '#eqs.rl.q_h,\n'
+                '#raw("#symb.rl.missing")\n'
+                f'#gh("src/model.py", ref: "{self.fixture.code_oid}", line: 1, end: 2)\n'
+                f'#gh("src/model.py", ref: "{self.fixture.code_oid}", line: 1, end: 2)\n'
+                '#gh-wip("src/model.py", ref: "main", line: 1)\n'
+            ),
+            encoding="utf-8",
+        )
+        result = self.build()
+        thesis_page = next(
+            body
+            for body in result.files.values()
+            if body.startswith("# thesis-source:docs/typst/thesis/sections/a.typ\n")
+        )
+        self.assertIn("uses_symbol: [symbol:rl.qh]", thesis_page)
+        self.assertNotIn("rl.missing", thesis_page)
+
     def test_term_relations_owners_and_index_families_are_explicit(self) -> None:
         result = self.build()
         term = next(

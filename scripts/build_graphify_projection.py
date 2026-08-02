@@ -207,14 +207,16 @@ def _lexists(path: Path) -> bool:
     return os.path.lexists(path)
 
 
-def _strip_typst_noncode(text: str) -> str:
-    """Blank comments and raw blocks while retaining source line positions."""
+def _strip_typst_noncode(text: str, *, blank_strings: bool = False) -> str:
+    """Blank comments and raw blocks, optionally strings, preserving line positions."""
 
     def blank(match: re.Match[str]) -> str:
         return "".join("\n" if char == "\n" else " " for char in match.group(0))
 
     text = re.sub(r"(?s)```.*?```", blank, text)
     text = re.sub(r"(?s)`[^`]*`", blank, text)
+    if blank_strings:
+        text = re.sub(r'"(?:\\.|[^"\\])*"', blank, text, flags=re.S)
     text = re.sub(r"/\*.*?\*/", blank, text, flags=re.S)
     text = re.sub(r"//[^\n]*", blank, text)
     return text
@@ -436,7 +438,8 @@ def _section_usage(
         if not source.is_relative_to(Path("docs/typst/thesis/sections")):
             continue
         clean = _strip_typst_noncode(
-            _owner_path(config, source).read_text(encoding="utf-8")
+            _owner_path(config, source).read_text(encoding="utf-8"),
+            blank_strings=True,
         )
         clean = re.sub(r'#(?:include|import)\s+"[^"]+"[^\n]*', "", clean)
         usages: dict[str, Counter[str]] = {

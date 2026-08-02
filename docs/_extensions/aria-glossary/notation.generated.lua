@@ -587,7 +587,7 @@ return {
       thesis_list = false,
     },
     ["entity.q_recovery"] = {
-      tex = "\\eta_Q=(J_e^{(H)}(\\pi_Q)-J_e^{(H)}(\\pi_{\\mathrm{learned-1}}))/(J_e^{(H)}(\\pi_{\\mathrm{oracle-look}})-J_e^{(H)}(\\pi_{\\mathrm{learned-1}}))",
+      tex = "\\eta_Q=(J_e^{(H)}(\\pi_Q)-J_e^{(H)}(\\pi_{\\mathrm{learned-1}}))/(J_e^{(H)}(\\pi_{\\mathrm{oracle-look}})-J_e^{(H)}(\\pi_{\\mathrm{learned-1}})+\\varepsilon)",
       typst = "#eqs.entity.q_recovery",
       description = "",
       thesis_list = false,
@@ -719,13 +719,13 @@ return {
       thesis_list = false,
     },
     ["rl.qh_candidate_token"] = {
-      tex = "\\boldsymbol{u}_{t,i}=\\operatorname{CrossAttn}_\\theta(\\boldsymbol{x}_{t,i},\\{\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t\\})",
+      tex = "\\boldsymbol{u}_{t,i}=\\operatorname{Enc}_\\theta(\\mathcal{I}_{t,e},q_{t,i})",
       typst = "#eqs.rl.qh_candidate_token",
       description = "",
       thesis_list = false,
     },
     ["rl.qh_coral_interface"] = {
-      tex = "\\boldsymbol{p}_{t,i}=\\operatorname{CORAL}(Q_{H,\\theta,i})",
+      tex = "\\begin{gathered}p_{t,i,k}^{\\mathrm{CORAL}}=\\sigma(o_{t,i,k}^{\\mathrm{CORAL}}),\\quad k=0,\\ldots,K-2;\\\\ \\pi_{t,i,k}^{\\mathrm{CORAL}}=p_{t,i,k-1}^{\\mathrm{CORAL}}-p_{t,i,k}^{\\mathrm{CORAL}},\\quad p_{t,i,-1}^{\\mathrm{CORAL}}=1,\\quad p_{t,i,K-1}^{\\mathrm{CORAL}}=0;\\\\ \\hat{r}_\\psi^e(s_t^{\\mathrm{cf0}},\\boldsymbol{\\phi}_e,q_{t,i})=\\sum_{k=0}^{K-1}\\pi_{t,i,k}^{\\mathrm{CORAL}}u_k\\end{gathered}",
       typst = "#eqs.rl.qh_coral_interface",
       description = "",
       thesis_list = false,
@@ -839,7 +839,7 @@ return {
       thesis_list = false,
     },
     ["scene.actor_state_read"] = {
-      tex = "\\boldsymbol{\\Phi}_t^{\\mathrm{scene}}=\\operatorname{Read}(\\mathcal{P}_t,\\mathcal{R}_{1:t},\\mathcal{E}_t)",
+      tex = "\\boldsymbol{h}_{t,e,i}=\\operatorname{Read}(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},q_{t,i},\\boldsymbol{H}_t,t,H)",
       typst = "#eqs.scene.actor_state_read",
       description = "",
       thesis_list = false,
