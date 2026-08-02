@@ -2,7 +2,7 @@
 id: 2026-08-02_thin_root_nested_agents_rewrite
 date: 2026-08-02
 title: "Thin Root and Nested AGENTS Rewrite Closeout"
-status: in-progress
+status: done
 topics: [scaffold, agents, progressive-disclosure, governance]
 confidence: high
 canonical_updates_needed: []
@@ -59,13 +59,13 @@ Graphify content remain deferred and out of scope. The retained universal safety
 and stable rollout/API identities are deliberate exceptions, not unfinished
 thinning.
 
-# Remaining G006 Work
+# Final Acceptance Boundary
 
-G006 is still in progress. Do not mark this rewrite complete until the frozen
-candidate S1-S6 trials receive independent grading and verifier audit under the
-retry rule, final deterministic gates and dirty-path comparison pass at the
-exact candidate commit, and the required independent final reviews clear. A
-later finalization executor may update this debrief with those exact receipts.
+Frozen candidate S1-S6 grading, verifier audit under the retry rule, deterministic
+final gates and dirty-path comparison at the exact candidate commit, and
+independent final reviews are external acceptance evidence. They belong in
+`.omx/ultragoal/ledger.jsonl` and the G006 quality-gate artifact; this debrief
+intentionally neither duplicates nor pre-claims those outcomes.
 
 # Canonical-State Impact
 
