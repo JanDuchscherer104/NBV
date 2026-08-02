@@ -70,6 +70,11 @@ read-only command output do not need this preflight.
 - **Git or external action:** before staging, committing, pushing, opening or
   changing a pull request, publishing review comments, retargeting, or releasing,
   read [`references/external-actions.md`](references/external-actions.md).
+- **Commit cadence:** after each completed workpackage or self-contained task,
+  make a focused local commit before starting unrelated work. Stage only
+  request-owned paths, preserve concurrent edits, and keep each commit an
+  independent rollback boundary. A local commit does not authorize any push,
+  pull request, review comment, retarget, or release.
 - **Cleanup or replacement:** when deleting, merging, or replacing a capability,
   use the `simplification` workflow and preserve the outcome until comparative
   evidence supports its retained, replaced, removed, deferred, or open status.
