@@ -96,6 +96,16 @@ class FreshnessTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        manifest: dict[str, dict[str, object]] = {}
+        for relative in (*self.OWNER_PATHS, "graphify-input/index.md"):
+            source = self.root / relative
+            digest = hashlib.md5(source.read_bytes(), usedforsecurity=False).hexdigest()
+            manifest[relative] = {
+                "mtime": source.stat().st_mtime,
+                "ast_hash": digest,
+                "semantic_hash": digest,
+            }
+        (output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     def _run(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -114,13 +124,33 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             set(json.loads(result.stdout)),
-            {"state", "fresh", "head", "reasons", "next_action"},
+            {
+                "state",
+                "fresh",
+                "usable",
+                "head",
+                "graph_revision",
+                "stale_sources",
+                "reasons",
+                "next_action",
+            },
         )
         self.assertEqual(json.loads(result.stdout)["state"], "fresh")
         quiet = self._run("--quiet")
         self.assertEqual(quiet.returncode, 0)
         self.assertEqual(quiet.stdout, "")
         self.assertEqual(quiet.stderr, "")
+
+    def test_head_only_drift_keeps_content_addressed_graph_fresh(self) -> None:
+        (self.root / "unrelated").write_text("new commit\n", encoding="utf-8")
+        subprocess.run(["git", "add", "unrelated"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-qm", "unrelated"], cwd=self.root, check=True)
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "fresh")
+        self.assertTrue(payload["fresh"])
+        self.assertTrue(payload["usable"])
 
     def test_digest_uses_frontmatter_stripping_and_path_salt(self) -> None:
         index = self.root / "graphify-input/index.md"
@@ -234,7 +264,24 @@ class FreshnessTests(unittest.TestCase):
                     any(relative in reason for reason in payload["reasons"])
                 )
                 self.assertIn("projection owner worktree is dirty", payload["reasons"])
+                self.assertIn(relative, payload["stale_sources"])
                 owner.write_text(original, encoding="utf-8")
+
+    def test_stale_graph_is_still_usable_for_default_navigation(self) -> None:
+        relative = self.OWNER_PATHS[0]
+        owner = self.root / relative
+        owner.write_text("changed owner\n", encoding="utf-8")
+
+        strict = self._run("--quiet")
+        usable = self._run("--quiet", "--usable")
+        payload = self._json()
+
+        self.assertEqual(strict.returncode, 1)
+        self.assertEqual(usable.returncode, 0)
+        self.assertEqual(payload["state"], "structural-stale")
+        self.assertFalse(payload["fresh"])
+        self.assertTrue(payload["usable"])
+        self.assertIn(relative, payload["stale_sources"])
 
     def test_owner_symlink_escaping_repository_is_invalid(self) -> None:
         relative = self.OWNER_PATHS[-1]

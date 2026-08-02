@@ -70,6 +70,13 @@ read-only command output do not need this preflight.
 - **Git or external action:** before staging, committing, pushing, opening or
   changing a pull request, publishing review comments, retargeting, or releasing,
   read [`references/external-actions.md`](references/external-actions.md).
+- **Publication completion:** when the current user has explicitly authorized a
+  push and pull request for a durable implementation or fix, publication is part
+  of completion, not an optional follow-up. After verification, stage only the
+  owned paths, create the focused commit, push the intended branch, and open a
+  draft pull request in the same task without another permission handoff. Report
+  the PR URL and exact validation. Without current external-action authorization,
+  stop at the focused local commit and name the publication boundary explicitly.
 - **Cleanup or replacement:** when deleting, merging, or replacing a capability,
   use the `simplification` workflow and preserve the outcome until comparative
   evidence supports its retained, replaced, removed, deferred, or open status.
@@ -79,3 +86,5 @@ read-only command output do not need this preflight.
 - Every changed path is request-owned or required verification.
 - Every claim is backed by fresh evidence or names its exact gap.
 - Every durable delta has one owner selected through the repository capture rule.
+- Every currently authorized publication has a pushed branch and pull request,
+  rather than an unstaged or local-only handoff.
