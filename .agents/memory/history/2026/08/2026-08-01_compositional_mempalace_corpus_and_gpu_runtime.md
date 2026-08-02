@@ -16,10 +16,10 @@ files_touched:
   - scripts/scaffold/fixtures/routing.json
   - scripts/tests/test_agent_governance_g002.py
 artifacts:
-  - /home/jd/.mempalace/palaces/aria-nbv-compositional-v1
-  - /home/jd/.mempalace/corpora/aria-nbv/snapshots/773992f3712b5d1efb9f09066bbb63cea2f042a0
-  - /home/jd/.mempalace/corpora/aria-nbv/codex-history
-  - /home/jd/.mempalace/logs/compositional-v1-clean
+  - ~/.mempalace/palaces/aria-nbv-compositional-v1
+  - ~/.mempalace/corpora/aria-nbv/snapshots/773992f3712b5d1efb9f09066bbb63cea2f042a0
+  - ~/.mempalace/corpora/aria-nbv/codex-history
+  - ~/.mempalace/logs/compositional-v1-clean
 ---
 
 ## Task
