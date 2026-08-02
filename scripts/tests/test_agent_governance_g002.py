@@ -160,7 +160,18 @@ def test_route_only_domain_skill_contract() -> None:
 
 def test_lazy_mempalace_routing_contract() -> None:
     context = _prose(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    recall = _prose(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "aria-nbv-context"
+        / "references"
+        / "mempalace-recall.md"
+    )
     source_order = _prose(ROOT / ".agents" / "references" / "source_order.md")
+    assert "references/mempalace-recall.md" in context
+    assert "aria-codex-history" not in context
+    assert "enabled_tools" not in context
     for required in (
         "aria-thesis",
         "aria-literature-reviews",
@@ -170,10 +181,10 @@ def test_lazy_mempalace_routing_contract() -> None:
         "aria-codex-history",
         "direct `rg`, code-index, and exact-source reads",
         "Chronology alone never implies supersession",
-        "Codex's explicit fail-closed `enabled_tools` allowlist",
-        "mutating MCP tools are hidden and refused",
+        "Codex's fail-closed `enabled_tools` allowlist",
+        "Mutating MCP tools remain hidden and refused",
     ):
-        assert required in context
+        assert required in recall
     assert "Implementation behavior" in source_order
     assert "aria_nbv/aria_nbv/" in source_order
 
@@ -181,7 +192,9 @@ def test_lazy_mempalace_routing_contract() -> None:
 def test_mempalace_routing_scenarios() -> None:
     import json
 
-    data = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
+    data = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
     fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
     expected = {
         "semantic-recall-current-thesis",
@@ -190,12 +203,14 @@ def test_mempalace_routing_scenarios() -> None:
         "semantic-recall-code-direct-source",
     }
     assert expected <= fixtures.keys()
-    assert "primary-paper inspection" in fixtures[
-        "semantic-recall-literature-primary"
-    ]["non_goals"][0]
-    assert "MemPalace for code" in fixtures[
-        "semantic-recall-code-direct-source"
-    ]["non_goals"][0]
+    assert (
+        "primary-paper inspection"
+        in fixtures["semantic-recall-literature-primary"]["non_goals"][0]
+    )
+    assert (
+        "MemPalace for code"
+        in fixtures["semantic-recall-code-direct-source"]["non_goals"][0]
+    )
 
 
 def test_capture_and_routing_contracts() -> None:
