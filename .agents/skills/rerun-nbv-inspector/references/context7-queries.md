@@ -1,58 +1,42 @@
-# Context7 Queries
+# Rerun Current-Docs Queries
 
-Use Context7 library id `/rerun-io/rerun`.
+These are query templates, not API authority. Use the Context7 library id
+`/rerun-io/rerun` when that optional capability is available; otherwise open the
+equivalent official Rerun documentation. Request only the slice needed for the
+touched call and verify the installed Python signature locally.
 
-Start with one narrow query and only broaden if results are shallow. If the
-repo is pinned to a specific `rerun-sdk` version, also inspect local signatures:
+## Recording and sinks
 
-```bash
-cd aria_nbv
-uv run python - <<'PY'
-import inspect, rerun as rr
-for name in ["init", "save", "spawn", "connect_grpc", "log"]:
-    print(name, inspect.signature(getattr(rr, name)))
-for name in ["Transform3D", "Pinhole", "DepthImage", "LineStrips3D", "Points3D"]:
-    print(name, inspect.signature(getattr(rr, name)))
-PY
-```
+- `Python recording initialization save spawn connect_grpc sink ordering`
+- `Python RecordingStream stable recording_id save rrd flush disconnect`
+- `Python multiple sinks set_sinks file and grpc current API`
 
-## Core Logging
+Use for `_session.py`, CLI output modes, lifecycle ordering, or `.rrd` creation.
 
-| Goal | Query |
-| --- | --- |
-| Recording lifecycle | `Python init save spawn connect_grpc RecordingStream recording_id` |
-| Explicit sinks | `FileSink GrpcSink set_sinks Python` |
-| Entity logging | `rr.log entity path static Python` |
-| Timelines | `set_time sequence timeline Python` |
-| Saved recordings | `save rrd recording Python` |
+## Cameras, transforms, and coordinates
 
-## Frames And Cameras
+- `Python Transform3D parent child relation translation quaternion matrix`
+- `Python Pinhole resolution focal_length principal_point camera_xyz`
+- `Python ViewCoordinates right hand Z up static logging`
 
-| Goal | Query |
-| --- | --- |
-| Transform relation | `Transform3D TransformRelation ParentFromChild ChildFromParent Python` |
-| World basis | `ViewCoordinates RIGHT_HAND_Z_UP RIGHT_HAND_Y_UP Python` |
-| Pinhole camera | `Pinhole image_from_camera resolution camera_xyz Python` |
-| Resolution semantics | `Pinhole resolution width height Python` |
-| Metric depth | `DepthImage meter Pinhole Python` |
-| Camera image tree | `Pinhole Image DepthImage same entity Python` |
+Use for `_geometry.py`, camera entities, frusta, pose direction, or coordinate
+basis work. Local `PoseTW` and `CameraTW` source/tests still own ARIA semantics.
 
-## Geometry
+## RGB and metric depth
 
-| Goal | Query |
-| --- | --- |
-| Point clouds | `Points3D colors radii labels Python` |
-| Frusta/lines | `LineStrips3D labels radii Python` |
-| Meshes | `Mesh3D triangle_indices vertex_positions Python` |
-| Boxes/OBBs | `Boxes3D InstancePoses3D Python` |
-| Blueprints | `Spatial3DView Spatial2DView Blueprint Python` |
+- `Python Pinhole Image DepthImage same camera entity meter backprojection`
+- `Python DepthImage meter datatype invalid pixels colormap 3D interpretation`
 
-## Example Queries
+Use when depth should be spatially interpreted rather than shown only as a 2D
+diagnostic. Verify width/height ordering and local display rotations in code and
+tests.
 
-| Need | Query |
-| --- | --- |
-| RGB-D baseline | `RGBD example Pinhole DepthImage Python` |
-| SLAM-style layout | `DROID example depth pinhole blueprint Python` |
-| Transform trees | `ROS TF example transform coordinate frame Python` |
-| Mixed RGB/depth/mesh | `ARKit scenes example depth mesh pinhole Python` |
-| Multi-camera layout | `nuScenes example pinhole blueprint Python` |
+## Entities, timelines, and blueprints
+
+- `Python entity path hierarchy static temporal logging set_time sequence`
+- `Python blueprint Spatial3DView TimeSeriesView contents overrides current API`
+- `Python batch Points3D LineStrips3D Boxes3D labels colors radii`
+
+Use for entity-tree, timeline, viewer-layout, or repeated-geometry changes.
+Blueprints remain presentation policy; local masks and scientific meaning stay
+with package owners.

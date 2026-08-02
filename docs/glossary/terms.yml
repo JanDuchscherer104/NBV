@@ -117,7 +117,7 @@
   - inspection target
   - task target
   category: entity.targeting
-  parent: entity-aware-rri
+  parent: target-specific-rri
   tier: core
   lookup_rank: 40
   definition_short: Selected entity, object crop, point, region, or surface-deficit hypothesis

@@ -7,7 +7,7 @@ metadata:
     - "obvious one-line answer or command output with no durable edit"
   handoff_to:
     - "aria-nbv-context for unknown local ownership"
-    - "diagnose-aria for concrete failures"
+    - "nearest owning guide for concrete failures"
     - "aria-grill for ambiguous high-impact decisions"
   evidence_required:
     - "root or nearest AGENTS.md for touched surface"

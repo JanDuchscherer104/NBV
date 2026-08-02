@@ -931,6 +931,55 @@ overlap: scoped instructions, finite context, focused skills, simple interfaces,
 outcome evaluations, least privilege, provenance, and small changes. The source
 URLs remain owned by that report to avoid duplicating a bibliography here.
 
+## Accepted 2026-08-01 Domain Skill Route-Only Supersession
+
+Post-distillation review showed that the nine retained domain skills had become
+shallow restatements of repository owners. The human owner therefore selected
+route-only pruning for `code-review-aria-nbv`,
+`counterfactual-rollout-planner`, `dataset-cache-ops`, `diagnose-aria`,
+`docs-curator`, `entity-aware-rri`, `nbv-geometry-contracts`,
+`rerun-nbv-inspector`, and `zarr-python`.
+
+- Repository structure, root and nearest `AGENTS.md`, and deterministic local
+  discovery own routing. Eligible Graphify output remains navigation evidence.
+- Code, CLI help, module-local README files, docstrings, and focused tests own
+  invocation and validation commands.
+- Thesis sections and package owners retain scientific and implementation
+  truth; no replacement skill or metadata registry may duplicate it.
+- Review and diagnosis use the native workflow discipline plus the exact diff,
+  reproducer, and nearest owner. Data, geometry, rollout, RRI, and Rerun work
+  start from their package guides or module README files.
+- The temporary dual-schema audit bridge is removed because its only consumers
+  are retired.
+
+This decision supersedes retained-skill dispositions in the implementation PRD
+and its first debrief. Those artifacts remain historical evidence of the
+earlier accepted implementation, not current routing authority.
+
+## Accepted 2026-08-02 Rerun Procedural Exception
+
+The human owner superseded only the `rerun-nbv-inspector` part of the route-only
+decision after exact-base/head review showed that the removed bundle contained a
+distinct Rerun SDK and artifact-production procedure. The other eight domain
+skills remain pruned.
+
+- `rerun-nbv-inspector` owns activation, current-official-doc and example
+  routing, ordered call-chain review, saved `.rrd` evidence preference,
+  blocked-store fallback, and focused completion evidence.
+- The skill and its references are not authoritative for geometry, RRI,
+  validity, store schemas, SDK versions, entity paths, or implemented behavior.
+  Those meanings remain with package README files, code, configuration, tests,
+  active thesis sections, and current official Rerun documentation.
+- Fixed Context7 queries and official-example links are progressive-disclosure
+  routing aids. They must be refreshed or rejected at use time and cannot settle
+  a local or upstream API claim.
+- Concrete offline and rollout inspection commands live in the Rerun package
+  README and CLI help; the skill points to those owners rather than maintaining
+  a second command catalogue.
+
+This exception preserves the target state's single-ownership rule while
+restoring an independently useful external-SDK integration workflow.
+
 ## Brownfield Evidence Versus Inference
 
 Confirmed from current artifacts:

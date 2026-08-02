@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 import tomllib
@@ -95,6 +96,64 @@ def test_direct_skill_discovery_shape() -> None:
     assert not (ROOT / ".agents" / "skills" / "plan-grill").exists()
     assert "name: aria-grill" in _read(skill / "SKILL.md")
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
+
+
+def test_route_only_domain_skill_contract() -> None:
+    audit = _read(ROOT / "scripts" / "scaffold_audit.py")
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
+
+    assert "NATIVE_MINIMAL_SKILLS" not in audit
+    retired = {
+        "code-review-aria-nbv",
+        "counterfactual-rollout-planner",
+        "dataset-cache-ops",
+        "diagnose-aria",
+        "docs-curator",
+        "entity-aware-rri",
+        "nbv-geometry-contracts",
+        "zarr-python",
+    }
+    for skill_name in retired:
+        assert not (ROOT / ".agents" / "skills" / skill_name / "SKILL.md").exists()
+
+    rerun_skill = ROOT / ".agents" / "skills" / "rerun-nbv-inspector"
+    assert rerun_skill.is_dir()
+    assert "name: rerun-nbv-inspector" in _read(rerun_skill / "SKILL.md")
+
+    zarr_fixture = next(
+        fixture for fixture in routing["fixtures"] if fixture["id"] == "zarr-storage-api-change"
+    )
+    assert "expected_tool_refs" not in zarr_fixture
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    assert fixtures["python-docstring-contract"]["expected_skills"] == [
+        "agent-behavior",
+        "python-standards",
+    ]
+    for fixture_id in (
+        "entity-rri-implementation",
+        "geometry-frame-implementation",
+        "zarr-storage-api-change",
+        "counterfactual-rollout-planning",
+        "dataset-cache-operation",
+        "planned-thesis-detail",
+        "concrete-failure",
+        "code-review",
+        "docs-literature-no-browser",
+    ):
+        assert fixtures[fixture_id]["expected_skills"] == ["agent-behavior"]
+
+    for fixture_id in (
+        "rerun-offline-inspection",
+        "rerun-rollout-zarr-inspection",
+        "rerun-sdk-api-change",
+    ):
+        assert fixtures[fixture_id]["expected_skills"] == [
+            "agent-behavior",
+            "rerun-nbv-inspector",
+        ]
+    assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
+        "mcp__MCP_DOCKER.get_library_docs"
+    ]
 
 
 def test_capture_and_routing_contracts() -> None:

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Counterfactual Rollout Planner"
-  short_description: "Bounded rollout and RL planning workflow"
-  default_prompt: "Use $counterfactual-rollout-planner for ARIA-NBV ASE counterfactual rollouts, planning metrics, invalid-action handling, stochastic branches, and finite-candidate Q_H work."

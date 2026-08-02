@@ -4,6 +4,27 @@
 audits, and read-side inspection. Rollout dataset/shard generation lives in
 `aria_nbv.oracle.pipelines`; the top-level scene labeler moves there in WP12.
 
+## Persisted-store status and Rerun seam
+
+`zarr_contract.md` remains a draft design for future writer capabilities. It is
+not evidence that every listed table, migration, generator, Q_H training path,
+or operational deployment exists. Implemented store behavior is owned by
+`zarr_store.py`, `trace.py`, and their focused tests; `read_model.py` owns the
+shared, presentation-free interpretation of persisted rollout rows.
+
+The implemented read model resolves ordered rollout steps, full-shell candidate
+rows, hard action masks, selected rows, decoded target fields, and selected
+depth. `aria_nbv.rerun_inspector._rollout_zarr` uses those projections for its
+chain/step/target display. It still reads a small set of arrays directly for
+branch selection and Q_H metadata summaries, so a complete read-model migration
+is **open**. That presentation-only migration is not made here because it would
+change the package boundary; no README claim should treat it as complete.
+
+The current proof points are `tests/rollouts/test_zarr_store.py` for store
+validation, `tests/rollouts/test_read_model.py` for the typed projections, and
+`tests/rerun_inspector/test_rollout_zarr_logger.py` for Rerun's consumption of
+the persisted chain.
+
 ## Layout
 
 ```text

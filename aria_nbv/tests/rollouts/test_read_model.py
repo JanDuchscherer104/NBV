@@ -83,7 +83,7 @@ def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:
 
     target = target_rows(reader)[0]
 
-    assert (target.target_row_id, target.target_id, target.source) == (0, "fixture-target-0", "fixture_obbs")
+    assert (target.target_row_id, target.target_id, target.source) == (0, "fixture-target-0", "gt_obbs_oracle")
     assert target.class_name == "fixture_object"
     assert (target.selection_rank, target.selection_score) == (0, 1.0)
     assert target.target_valid is True

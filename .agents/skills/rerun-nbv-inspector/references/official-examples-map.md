@@ -1,69 +1,27 @@
-# Official Rerun Examples Map
+# Official Rerun Example Routes
 
-Prefer official docs and examples over recollection. Use direct example pages
-first, then Context7 or GitHub source when implementation details matter.
+Use this file to choose an upstream comparison, not to copy an API contract.
+Pages and examples can change; confirm the page is current and then verify the
+installed SDK plus ARIA call sites and tests.
 
-## Start Here
+- [Examples index](https://rerun.io/examples) — search current examples by
+  archetype or task before relying on recollection.
+- [RGBD](https://rerun.io/examples/robotics/rgbd) — choose for paired pinhole,
+  RGB, metric depth, entity hierarchy, and timelines.
+- [Live depth sensor](https://rerun.io/examples/robotics/live_depth_sensor) —
+  choose for `Transform3D`, calibrated pinholes, streaming RGB/depth, and metric
+  depth units.
+- [SDK operating modes](https://rerun.io/docs/reference/sdk-operating-modes) —
+  choose for `save`, `spawn`, `connect_grpc`, servers, or multiple sinks.
+- [DepthImage archetype](https://rerun.io/docs/reference/types/archetypes/depth_image)
+  — choose for depth scaling and camera-backed 3D interpretation.
+- [Boxes3D archetype](https://rerun.io/docs/reference/types/archetypes/boxes3d)
+  — choose for batched oriented boxes, labels, colours, and radii.
+- [Eye control](https://rerun.io/examples/feature-showcase/eye_control) — choose
+  only for blueprint-driven viewer camera or presentation behavior.
+- [Stable Python API](https://ref.rerun.io/docs/python/stable/common/) — use for
+  the current public Python signatures after selecting an example.
 
-- Examples index: `https://rerun.io/examples`
-- Python SDK reference: `https://ref.rerun.io/docs/python/stable/common/`
-- Context7 library id: `/rerun-io/rerun`
-
-## Example Selection
-
-### RGBD
-
-- Page: `https://rerun.io/examples/robotics/rgbd`
-- Source: `https://github.com/rerun-io/rerun/tree/docs-latest/examples/python/rgbd`
-- Use for: correct `Pinhole` + `DepthImage`, `resolution=[width, height]`,
-  metric depth scaling, and camera/image/depth entity layout.
-- Query: `RGBD example Pinhole DepthImage Python`
-
-### Live depth sensor
-
-- Page: `https://rerun.io/examples/robotics/live_depth_sensor`
-- Use for: live RGB/depth camera intrinsics and metric depth conventions.
-- Query: `Live depth sensor example depth Pinhole Python`
-
-### DROID
-
-- Page: `https://rerun.io/examples/robotics/droid`
-- Use for: SLAM-style dense geometry, keyframes, pinhole cameras, trajectories,
-  and blueprints.
-- Query: `DROID example depth pinhole blueprint Python`
-
-### ROS TF
-
-- Page: `https://rerun.io/examples/robotics/ros_tf`
-- Use for: transform tree reasoning, parent/child frames, and timeline
-  debugging when geometry lands in the wrong place.
-- Query: `ROS TF example Transform3D coordinate frame Python`
-
-### ARKit scenes
-
-- Page: `https://rerun.io/examples/spatial-computing/arkit_scenes`
-- Use for: mixed RGB, depth, mesh, OBB-like annotations, camera pose, and
-  spatial-computing scene layout.
-- Query: `ARKit scenes example depth mesh pinhole Python`
-
-### nuScenes
-
-- Page: `https://rerun.io/examples/robotics/nuscenes`
-- Source: `https://github.com/rerun-io/rerun/tree/docs-latest/examples/python/nuscenes_dataset`
-- Use for: multi-camera layout, static sensor calibration, transforms, and
-  blueprint organization.
-- Query: `nuScenes example pinhole Transform3D blueprint Python`
-
-### Objectron
-
-- Page: `https://rerun.io/examples/spatial-computing/objectron`
-- Use for: compact camera-centric 2D/3D overlays and pinhole projections.
-- Query: `Objectron example pinhole camera_xyz Python`
-
-## Heuristic
-
-- Start with RGBD for depth/camera questions.
-- Use ROS TF for transform-relation suspicion.
-- Use DROID for SLAM/reconstruction-style layout.
-- Use ARKit scenes when combining mesh, depth, cameras, and boxes.
-- Use nuScenes when multiple cameras or static calibration dominate.
+Do not make example entity paths, defaults, versions, or viewer layouts into
+ARIA invariants. The repository package README, code, configuration, and tests
+remain authoritative.

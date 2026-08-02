@@ -9,8 +9,8 @@ metadata:
     - "the requested visual is better as a raster image or non-Mermaid asset"
   handoff_to:
     - "typst-authoring for shared notation changes, Typst inclusion, captions, and final-page QA"
-    - "docs-curator for Quarto pages containing Mermaid fences"
-    - "diagnose-aria for reproduced local lint or Mermaid CLI failures"
+    - "nearest docs guide for Quarto pages containing Mermaid fences"
+    - "nearest owning guide for reproduced local lint or Mermaid CLI failures"
   evidence_required:
     - "the source `.mmd` and its destination surface"
     - "the local style guide and symbol map before math-heavy or thesis-figure edits"
@@ -61,7 +61,7 @@ document integration, and diagnosed tool failures to their existing owners.
 2. For a thesis figure or any math label, read the local style guide and symbol
    map; also inspect the relevant `docs/typst/shared` source.
 3. For a rendering or linting failure, capture the exact local command and
-   output before handing off to `diagnose-aria`.
+   output before handing the evidence to the nearest owning guide.
 
 ## Seam Rules
 
@@ -101,7 +101,7 @@ document integration, and diagnosed tool failures to their existing owners.
    tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg
    ```
 
-6. Hand off Quarto inclusion to `docs-curator`; hand off Typst asset inclusion,
+6. Hand off Quarto inclusion to the nearest docs guide; hand off Typst asset inclusion,
    captioning, and page inspection to `typst-authoring`.
 
 ## Completion

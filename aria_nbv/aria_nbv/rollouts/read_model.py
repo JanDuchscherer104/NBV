@@ -1,4 +1,11 @@
-"""Typed, presentation-free projections over persisted rollout stores."""
+"""Typed, presentation-free projections over persisted rollout stores.
+
+This module is the shared read-side owner for persisted rollout, step, target,
+and selected-depth meaning.  Consumers such as the Rerun inspector may choose
+their own entities, colours, transforms, and plots, but obtain the ordered
+full-shell rows, action masks, selected transitions, and decoded dictionaries
+from these projections.  It performs no store mutation or display policy.
+"""
 
 from __future__ import annotations
 

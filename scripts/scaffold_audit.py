@@ -237,13 +237,16 @@ def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[st
     return routes, []
 
 
-def repo_path_exists(ref: str) -> bool:
+def repo_path_exists(ref: str, *, base: Path = ROOT) -> bool:
     path_text, _, anchor = ref.partition("#")
-    if not path_text or path_text.startswith("/") or path_text.startswith("docs/_generated/"):
+    if not path_text or path_text.startswith("/"):
         return False
-    path = ROOT / path_text
+    path = base / path_text
     resolved = path.resolve()
     if not is_relative_to(resolved, ROOT_RESOLVED) or not resolved.exists():
+        return False
+    generated_docs = (ROOT / "docs" / "_generated").resolve()
+    if is_relative_to(resolved, generated_docs):
         return False
     if anchor and resolved.suffix in {".md", ".qmd"}:
         return anchor in markdown_anchors(resolved)
@@ -257,6 +260,7 @@ class Skill:
     name: str
     description: str
     metadata: dict[str, Any]
+    has_metadata: bool
     line_count: int
     text: str
 
@@ -340,14 +344,14 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
             continue
 
         name = data.get("name")
-        metadata = data.get("metadata")
         if not isinstance(name, str) or not name.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty name")
             continue
-        if not isinstance(metadata, dict) and not is_upstream_skill(skill_md):
-            errors.append(f"{rel(skill_md)}: missing metadata mapping")
-            metadata = {}
-        elif not isinstance(metadata, dict):
+        has_metadata = "metadata" in data
+        metadata = data.get("metadata")
+        if not isinstance(metadata, dict):
+            if not is_upstream_skill(skill_md):
+                errors.append(f"{rel(skill_md)}: missing metadata mapping")
             metadata = {}
         description = data.get("description")
         if not isinstance(description, str) or not description.strip():
@@ -363,6 +367,7 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
                 name=name.strip(),
                 description=description.strip(),
                 metadata=metadata,
+                has_metadata=has_metadata,
                 line_count=line_count,
                 text=text,
             )
@@ -814,6 +819,64 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         skills_by_name = {skill.name: skill for skill in skills}
         expect("live-skills-load", not load_errors, "; ".join(load_errors))
 
+        malformed_path = tmp_root / "skills" / "malformed-yaml" / "SKILL.md"
+        malformed_path.parent.mkdir(parents=True, exist_ok=True)
+        malformed_path.write_text("---\nname: [\n---\n", encoding="utf-8")
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "malformed-yaml",
+            any("unreadable frontmatter" in error for error in load_errors),
+            "malformed YAML was not rejected",
+        )
+        malformed_path.unlink()
+        malformed_path.parent.rmdir()
+
+        mismatch_text = self_test_skill_text(
+            "other-name",
+            [".agents/references/source_order.md#role-split"],
+            "Use this test body for directory-name validation.",
+        )
+        write_self_test_skill(tmp_root, "mismatched-name", mismatch_text)
+        skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(skills)
+        expect(
+            "directory-frontmatter-mismatch",
+            not load_errors and any("directory/frontmatter mismatch" in error for error in errors),
+            "directory/frontmatter mismatch was not rejected",
+        )
+
+        missing_description = "---\nname: missing-description\nmetadata: {}\n---\n"
+        write_self_test_skill(tmp_root, "missing-description", missing_description)
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "missing-description",
+            any("missing non-empty description" in error for error in load_errors),
+            "missing description was not rejected",
+        )
+        (tmp_root / "skills" / "missing-description" / "SKILL.md").unlink()
+        (tmp_root / "skills" / "missing-description").rmdir()
+
+        unconverted_text = "---\nname: unconverted-no-metadata\ndescription: Test fixture.\n---\n"
+        write_self_test_skill(tmp_root, "unconverted-no-metadata", unconverted_text)
+        _, load_errors = load_skills(tmp_root / "skills")
+        expect(
+            "unconverted-metadata-absent",
+            any("unconverted-no-metadata/SKILL.md: missing metadata mapping" in error for error in load_errors),
+            "unconverted skill without legacy metadata was not rejected",
+        )
+        (tmp_root / "skills" / "unconverted-no-metadata" / "SKILL.md").unlink()
+        (tmp_root / "skills" / "unconverted-no-metadata").rmdir()
+
+        partial_legacy_text = "---\nname: unconverted-partial-metadata\ndescription: Test fixture.\nmetadata:\n  mode: router\n---\n"
+        write_self_test_skill(tmp_root, "unconverted-partial-metadata", partial_legacy_text)
+        skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(skills)
+        expect(
+            "unconverted-partial-legacy-metadata",
+            not load_errors and any("missing metadata fields" in error for error in errors),
+            "unconverted skill with partial legacy metadata was not rejected",
+        )
+
         missing_fixture = {
             "fixtures": [
                 {
@@ -829,16 +892,6 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "fixture schema omissions were not rejected",
         )
 
-        geometry_as_entity = routing_fixture_with_expected(
-            "geometry-frame-implementation", ["agent-behavior", "entity-aware-rri"]
-        )
-        errors, _ = audit_routing_fixtures(self_test_fixture_path(tmp_root, geometry_as_entity), skills_by_name)
-        expect(
-            "geometry-not-entity-rri",
-            any("entity-aware-rri" in error and "no routing-cue overlap" in error for error in errors),
-            "geometry contract incorrectly passed as entity-RRI routing",
-        )
-
         drift_text = self_test_skill_text(
             "truth-leak-skill",
             [".agents/references/source_order.md#role-split"],
@@ -851,6 +904,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             name="truth-leak-skill",
             description="Test-only skill fixture.",
             metadata={},
+            has_metadata=False,
             line_count=len(drift_text.splitlines()),
             text=drift_text,
         )
@@ -911,7 +965,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 {
                     "id": "browser-overtrigger-probe",
                     "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
-                    "expected_skills": ["agent-behavior", "diagnose-aria"],
+                    "expected_skills": ["agent-behavior"],
                     "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
                     "non_goals": ["Do not use browser MCP tools for non-live docs planning."],
                 }
@@ -922,9 +976,9 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             skills_by_name,
         )
         expect(
-            "browser-forbidden-tool-probe",
-            any("forbidden_tool_ref" in error and "browser_run_code" in error for error in errors),
-            "forbidden browser tool activation was not rejected",
+            "route-only-no-tool-registry",
+            not errors,
+            "; ".join(errors),
         )
 
         python_analyzer_overtrigger_fixture = {
