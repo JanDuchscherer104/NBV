@@ -38,6 +38,7 @@ metadata:
     - ".agents/references/source_order.md#role-split"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
+    - "docs/notation.yml"
     - "docs/typst/shared/style.typ"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
@@ -45,6 +46,10 @@ metadata:
     - ".agents/skills/typst-authoring/references/scientific-visualizations.md"
   context7_refs:
     - "/websites/typst_app"
+    - "/typst-community/glossarium"
+    - "/cetz-package/cetz"
+    - "/jollywatt/typst-fletcher"
+    - "/touying-typ/touying"
     - "/websites/quarto"
   literature_refs:
     - "docs/references.bib"
@@ -52,6 +57,8 @@ metadata:
     - "quality-driven-rri"
     - "finite-candidate-rl"
   tool_refs:
+    - "mcp__MCP_DOCKER.resolve_library_id"
+    - "mcp__MCP_DOCKER.get_library_docs"
     - "mcp__code_index.search_code_advanced"
   verification:
     - "skill quick_validate.py when available for skill edits"
@@ -138,7 +145,6 @@ Read only the reference needed for the task: notation, math attachments,
 notation migration, thesis writing, section contracts, claim/citation
 discipline, figures/tables, workflow, external research, data loading, scripting,
 layout, Typst symbols, scientific visualizations, packages, or slides.
-
 Primary checks are `make check-agent-memory` for skill/guidance edits,
 `make thesis-pdf` or focused `typst compile ... --root .` for document edits,
 and the local render/hygiene scripts when visual QA is required.

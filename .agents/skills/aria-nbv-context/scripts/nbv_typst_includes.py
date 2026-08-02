@@ -34,7 +34,9 @@ def _repo_relative(path: Path, repo_root: Path) -> str:
     return path.resolve().relative_to(repo_root.resolve()).as_posix()
 
 
-def _walk_outline(path: Path, typst_root: Path, repo_root: Path, stack: list[Path]) -> None:
+def _walk_outline(
+    path: Path, typst_root: Path, repo_root: Path, stack: list[Path]
+) -> None:
     if path in stack:
         print(f"warning: include cycle detected: {path}", file=sys.stderr)
         return
@@ -88,24 +90,41 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     repo_root = (script_dir / "../../../../").resolve()
     default_typst_root = (repo_root / "docs" / "typst").resolve()
-    default_paper = default_typst_root / "seminar_paper" / "main.typ"
+    default_thesis = default_typst_root / "thesis" / "main.typ"
+    default_seminar = default_typst_root / "seminar_paper" / "main.typ"
     default_slides = default_typst_root / "seminar_slides"
 
     parser = argparse.ArgumentParser(
-        description="Outline Typst includes for the paper by default; opt into slides when needed."
+        description="Outline the active thesis by default; opt into historical seminar or slides when needed."
     )
-    parser.add_argument("--root", default=str(default_typst_root), help="Typst root directory")
+    parser.add_argument(
+        "--root", default=str(default_typst_root), help="Typst root directory"
+    )
+    parser.add_argument(
+        "--thesis",
+        nargs="?",
+        const=str(default_thesis),
+        default=None,
+        help="Active thesis entrypoint. Defaults to docs/typst/thesis/main.typ.",
+    )
+    parser.add_argument(
+        "--seminar",
+        nargs="?",
+        const=str(default_seminar),
+        default=None,
+        help="Historical seminar entrypoint. Defaults to docs/typst/seminar_paper/main.typ.",
+    )
     parser.add_argument(
         "--paper",
         nargs="?",
-        const=str(default_paper),
-        default=str(default_paper),
-        help="Paper entrypoint path. Defaults to docs/typst/seminar_paper/main.typ.",
+        const=str(default_seminar),
+        default=None,
+        help="Compatibility alias for --seminar.",
     )
     parser.add_argument(
         "--with-slides",
         action="store_true",
-        help="Include slide entrypoints in addition to the paper.",
+        help="Include slide entrypoints in addition to the selected entrypoint.",
     )
     parser.add_argument(
         "--slides-root",
@@ -121,12 +140,16 @@ def main() -> int:
     args = parser.parse_args()
 
     typst_root = Path(args.root).resolve()
-    paper = Path(args.paper).resolve()
     slides_root = Path(args.slides_root).resolve()
 
     targets: list[Path] = []
-    if paper.exists():
-        targets.append(paper)
+    selected = [value for value in (args.thesis, args.seminar, args.paper) if value]
+    if not selected:
+        selected = [str(default_thesis)]
+    for value in selected:
+        target = Path(value).resolve()
+        if target.exists() and target not in targets:
+            targets.append(target)
     if args.with_slides and slides_root.exists():
         targets.extend(sorted(slides_root.glob("*.typ")))
 

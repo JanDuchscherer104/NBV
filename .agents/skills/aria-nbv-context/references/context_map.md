@@ -2,13 +2,26 @@
 
 Use this map to pick the smallest relevant set of files before broad search.
 
+## Active thesis and shared scientific language
+
+Use this lane before historical papers whenever the question is thesis-facing.
+Generated files are projections; open the human-edited owner named below.
+
+| Intent | Current owner | Supporting surface | First reveal |
+|---|---|---|---|
+| Active thesis prose and section hierarchy | `docs/typst/thesis/main.typ` and its recursive includes | `docs/contents/thesis/roadmap.qmd`, `docs/contents/thesis/questions.qmd` | `scripts/nbv_typst_includes.py --thesis --mode outline` |
+| Durable term or glossary anchor | `docs/typst/shared/glossary.typ` | `docs/contents/glossary.qmd` is generated public output | `rg -n 'key:|short:|long:|anchor:' docs/typst/shared/glossary.typ` |
+| Reusable Typst symbol body | `docs/typst/shared/symbols.typ` and `docs/typst/shared/symbols/*.typ` | `docs/notation.yml` records cross-format lookup metadata | `rg -n '<term>|#let' docs/typst/shared/symbols*.typ docs/typst/shared/symbols` |
+| Reusable equation body | `docs/typst/shared/equations.typ` and `docs/typst/shared/equations/*.typ` | `docs/notation.yml` records cross-format lookup metadata | `rg -n '<term>|#let' docs/typst/shared/equations*.typ docs/typst/shared/equations` |
+| Printed thesis symbol list | `docs/notation.yml` plus shared symbol/equation bodies | `docs/typst/shared/notation.typ`; `notation.generated.typ` is generated | `rg -n '<term>|thesis_list' docs/notation.yml docs/typst/shared/{symbols,equations}.typ` |
+
 ## Concept-to-source matrix
 
 Only the non-obvious cross-surface routes live here. Obvious file-name or heading matches should be handled by `source_index.md`, outlines, or direct `rg`.
 
-| Topic | Canonical state | References | Paper | Quarto docs | Literature | Code | First reveal command |
+| Topic | Canonical state | References | Historical seminar evidence | Quarto docs | Literature | Code | First reveal command |
 |---|---|---|---|---|---|---|---|
-| Coordinate frames and conventions | `.agents/memory/state/DECISIONS.md`, `.agents/memory/state/GOTCHAS.md` | `aria_nbv/AGENTS.md` | `docs/typst/seminar_paper/sections/05-coordinate-conventions.typ`, `docs/typst/seminar_paper/sections/12f-appendix-pose-frames.typ` | `docs/contents/glossary.qmd`, `docs/contents/literature/efm3d.qmd` | `literature/tex-src/arXiv-project-aria/definitions.tex` | `aria_nbv/aria_nbv/pose_generation`, `aria_nbv/aria_nbv/rendering` | `scripts/nbv_typst_includes.py --paper --mode outline` |
+| Coordinate frames and conventions | `.agents/memory/state/DECISIONS.md`, `.agents/memory/state/GOTCHAS.md` | `aria_nbv/AGENTS.md` | `docs/typst/seminar_paper/sections/05-coordinate-conventions.typ`, `docs/typst/seminar_paper/sections/12f-appendix-pose-frames.typ` | `docs/contents/glossary.qmd`, `docs/contents/literature/efm3d.qmd` | `literature/tex-src/arXiv-project-aria/definitions.tex` | `aria_nbv/aria_nbv/pose_generation`, `aria_nbv/aria_nbv/rendering` | `scripts/nbv_typst_includes.py --seminar --mode outline` |
 | Oracle RRI computation | `.agents/memory/state/PROJECT_STATE.md`, `.agents/memory/state/DECISIONS.md`, `.agents/memory/state/GOTCHAS.md` | `aria_nbv/AGENTS.md` | `docs/typst/seminar_paper/sections/05-oracle-rri.typ`, `docs/typst/seminar_paper/sections/12c-appendix-oracle-rri-labeler.typ` | `docs/reference/index.qmd`, `docs/contents/theory/rri_theory.qmd` | `literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex` | `aria_nbv/aria_nbv/oracle/pipelines/scene_labels.py`, `aria_nbv/aria_nbv/rendering/candidate_depth_renderer.py` | `scripts/nbv_get_context.sh match OracleRriLabeler` |
 | Candidate generation and pose sampling | `.agents/memory/state/PROJECT_STATE.md`, `.agents/memory/state/GOTCHAS.md` | `aria_nbv/AGENTS.md` | `docs/typst/seminar_paper/sections/08-system-pipeline.typ` | `docs/reference/index.qmd`, `docs/contents/thesis/questions.qmd#rq3-candidates` | `literature/tex-src/arXiv-GenNBV/3-Method.tex` | `aria_nbv/aria_nbv/pose_generation/` | `scripts/nbv_get_context.sh match candidate` |
 | Data contracts and typed containers | `.agents/memory/state/GOTCHAS.md` | `aria_nbv/AGENTS.md` | `docs/typst/seminar_paper/sections/06-architecture.typ` | `docs/reference/index.qmd` | — | `aria_nbv/aria_nbv/data_handling/efm_views.py`, `aria_nbv/aria_nbv/vin/types.py`, `aria_nbv/aria_nbv/utils/base_config.py` | `scripts/nbv_get_context.sh contracts` |

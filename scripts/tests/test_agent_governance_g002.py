@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import tomllib
@@ -177,9 +178,10 @@ def test_route_only_domain_skill_contract() -> None:
         "rerun-rollout-zarr-inspection",
         "rerun-sdk-api-change",
     ):
-        assert ".agents/skills/rerun-nbv-inspector/SKILL.md" in fixtures[fixture_id][
-            "expected_owner_paths"
-        ]
+        assert (
+            ".agents/skills/rerun-nbv-inspector/SKILL.md"
+            in fixtures[fixture_id]["expected_owner_paths"]
+        )
     assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
         "mcp__MCP_DOCKER.get_library_docs"
     ]
@@ -201,6 +203,87 @@ def test_capture_and_routing_contracts() -> None:
     )
     assert deprecated_route["posture"] == "skip"
     assert deprecated_route["aria_owner"] == "codebase-design"
+
+
+def test_thesis_context_and_context7_routing() -> None:
+    context_skill = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    for owner in (
+        "docs/typst/thesis/main.typ",
+        "docs/typst/shared/glossary.typ",
+        "docs/typst/shared/symbols.typ",
+        "docs/typst/shared/equations.typ",
+        "docs/notation.yml",
+        ".agents/skills/aria-nbv-context/references/context7_library_ids.md",
+    ):
+        assert owner in context_skill
+
+    context_map = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "aria-nbv-context"
+        / "references"
+        / "context_map.md"
+    )
+    assert "Active thesis and shared scientific language" in context_map
+    assert "scripts/nbv_typst_includes.py --thesis --mode outline" in context_map
+
+    context7_registry = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "aria-nbv-context"
+        / "references"
+        / "context7_library_ids.md"
+    )
+    for library_id in (
+        "/websites/hydra_cc",
+        "/omry/omegaconf",
+        "/websites/zarr_readthedocs_io_en_stable",
+        "/websites/mojolang",
+        "/websites/jcristharif_msgspec",
+    ):
+        assert library_id in context7_registry
+    for superseded_id in (
+        "/websites/modular_mojo",
+        "/jcrist/msgspec",
+        "/zarr-developers/zarr-python",
+    ):
+        assert superseded_id not in context7_registry
+
+    typst_skill = _read(ROOT / ".agents" / "skills" / "typst-authoring" / "SKILL.md")
+    for library_id in (
+        "/websites/typst_app",
+        "/typst-community/glossarium",
+        "/cetz-package/cetz",
+        "/jollywatt/typst-fletcher",
+        "/touying-typ/touying",
+    ):
+        assert library_id in typst_skill
+
+    mermaid_skill = _read(ROOT / ".agents" / "skills" / "aria-nbv-mermaid" / "SKILL.md")
+    assert "/mermaid-js/mermaid" in mermaid_skill
+
+    outline_script = ROOT / "scripts" / "nbv_typst_includes.py"
+    assert outline_script.is_file()
+    default_result = subprocess.run(
+        [sys.executable, str(outline_script), "--mode", "includes"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "# docs/typst/thesis/main.typ" in default_result.stdout
+    assert "# docs/typst/seminar_paper/main.typ" not in default_result.stdout
+
+    seminar_result = subprocess.run(
+        [sys.executable, str(outline_script), "--seminar", "--mode", "includes"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "# docs/typst/seminar_paper/main.typ" in seminar_result.stdout
 
 
 if __name__ == "__main__":

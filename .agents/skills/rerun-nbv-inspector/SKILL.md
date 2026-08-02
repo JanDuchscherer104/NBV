@@ -38,6 +38,7 @@ metadata:
   context7_refs:
     - "/rerun-io/rerun"
   tool_refs:
+    - "mcp__MCP_DOCKER.resolve_library_id"
     - "mcp__MCP_DOCKER.get_library_docs"
     - "mcp__code_index.search_code_advanced"
   verification:

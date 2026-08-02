@@ -3,6 +3,11 @@
 Use packages only when they reduce real document complexity and are already
 available in the local Typst environment.
 
+For current upstream behavior, select only the relevant ID from
+`typst-authoring` metadata: Typst core, Glossarium, CeTZ, Fletcher, or Touying.
+Do not retrieve all package docs by default; confirm the locked package version
+and compile the local fixture after any API-sensitive change.
+
 | Need | Prefer | Notes |
 | --- | --- | --- |
 | Prose glossary terms | `@preview/glossarium:0.5.10` | Owns thesis/proposal term entries and native `@term` / `@term:short` references. |
