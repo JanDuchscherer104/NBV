@@ -29,6 +29,8 @@ Native debriefs use absolute ISO dates and include `id`, `date`, `title`,
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
+Artifact locators use repository-relative paths, `~/` paths, or logical IDs;
+the validator rejects machine-local absolute locators in current records.
 
 Existing records with `status: legacy-imported` are grandfathered archive
 evidence and do not need backfilling unless a task explicitly requests it.

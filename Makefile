@@ -231,6 +231,7 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
+	@$(PYTHON_INTERPRETER) scripts/tests/test_validate_agent_memory.py
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
 

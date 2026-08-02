@@ -38,6 +38,8 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
+PORTABLE_ARTIFACTS_SINCE = "2026-08-01"
+WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -150,6 +152,30 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
     return errors
 
 
+def artifact_locator_errors(
+    relative_path: str, frontmatter: dict[str, object]
+) -> list[str]:
+    """Reject machine-local artifact locators for current native debriefs."""
+    date_text = str(frontmatter.get("date", "")).strip()
+    if date_text < PORTABLE_ARTIFACTS_SINCE:
+        return []
+
+    artifacts = frontmatter.get("artifacts")
+    if artifacts is None:
+        return []
+    if not isinstance(artifacts, list):
+        return [f"{relative_path}: `artifacts` must be a list"]
+
+    errors: list[str] = []
+    for locator in artifacts:
+        value = str(locator).strip()
+        if value.startswith(("/", "\\\\")) or WINDOWS_ABSOLUTE_PATH.match(value):
+            errors.append(
+                f"{relative_path}: use a portable artifact locator instead of {value}"
+            )
+    return errors
+
+
 def check_history_records() -> list[str]:
     errors: list[str] = []
     if not HISTORY_ROOT.exists():
@@ -175,6 +201,8 @@ def check_history_records() -> list[str]:
                 f"{rel}: missing required frontmatter keys: {', '.join(missing_keys)}"
             )
             continue
+
+        errors.extend(artifact_locator_errors(rel, frontmatter))
 
         canonical_updates = frontmatter.get("canonical_updates_needed")
         if not isinstance(canonical_updates, list):

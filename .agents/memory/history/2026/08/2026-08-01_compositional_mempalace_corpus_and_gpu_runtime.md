@@ -13,8 +13,13 @@ files_touched:
   - .agents/references/human_owner_intent.md
   - .agents/references/source_order.md
   - .agents/skills/aria-nbv-context/SKILL.md
+  - .agents/skills/aria-nbv-context/references/mempalace-recall.md
+  - .agents/memory/README.md
+  - scripts/validate_agent_memory.py
   - scripts/scaffold/fixtures/routing.json
   - scripts/tests/test_agent_governance_g002.py
+  - scripts/tests/test_validate_agent_memory.py
+  - Makefile
 artifacts:
   - ~/.mempalace/palaces/aria-nbv-compositional-v1
   - ~/.mempalace/corpora/aria-nbv/snapshots/773992f3712b5d1efb9f09066bbb63cea2f042a0
@@ -41,6 +46,10 @@ upstream single-writer contract.
   conversations outside the corpus.
 - Updated only repository routing and policy owners; no MemPalace wrapper,
   runtime corpus, environment, or dependency was added to the repository.
+- Kept the discovery router thin by disclosing corpus and runtime mechanics only
+  when semantic recall is eligible.
+- Added a debrief-validation ratchet so current records reject machine-local
+  absolute artifact locators before review.
 
 ## Findings
 
@@ -70,6 +79,7 @@ upstream single-writer contract.
 - A fresh read-only MCP protocol probe exposed no mutating tools, and a direct
   `mempalace_mine` dispatch was refused with JSON-RPC error `-32003`.
 - `scripts/tests/test_agent_governance_g002.py`: 6 passed.
+- `scripts/tests/test_validate_agent_memory.py`: 3 passed.
 - `make scaffold-audit`: zero errors; pre-existing warnings only.
 - `make scaffold-audit-self-test`, `make check-agent-memory`, and
   `git diff --check`: passed.
