@@ -27,6 +27,22 @@ repos:
         pass_filenames: false
         files: ^(\.agents/memory/|scripts/validate_agent_memory\.py|AGENTS\.md|Makefile)$
 
+      - id: graphify-usable-check
+        name: graphify usable snapshot
+        entry: make graphify-usable-check
+        language: system
+        pass_filenames: false
+        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
+
+      - id: graphify-state-check
+        name: graphify strict state
+        entry: make graphify-state-check
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
+        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
+
       - id: docs-render-core
         name: core docs render
         entry: make docs-render-core

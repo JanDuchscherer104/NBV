@@ -15,6 +15,7 @@ from typing import Any
 PROJECTION_INDEX = Path("graphify-input/index.md")
 GRAPH = Path("graphify-out/graph.json")
 STAT_INDEX = Path("graphify-out/cache/stat-index.json")
+MANIFEST = Path("graphify-out/manifest.json")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
 _FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
@@ -33,6 +34,17 @@ def _head(root: Path) -> str:
     if result.returncode or not value:
         raise ValueError("current Git HEAD is unavailable")
     return value
+
+
+def _is_ancestor(root: Path, older: str, newer: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", older, newer],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
 
 def _json_object(path: Path, label: str) -> dict[str, Any]:
@@ -137,6 +149,42 @@ def _index_digest(stat_index: dict[str, Any]) -> str:
     return digest
 
 
+def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
+    """Return indexed source paths whose current bytes differ from the manifest."""
+    stale: list[str] = []
+    repository = root.resolve()
+    for raw_path, raw_entry in sorted(manifest.items()):
+        if not isinstance(raw_path, str):
+            raise ValueError("invalid manifest: source path must be a string")
+        relative = _normalize_path(raw_path)
+        source = repository / relative
+        try:
+            resolved = source.resolve(strict=False)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(
+                f"manifest source cannot be resolved: {relative}: {error}"
+            ) from error
+        if not resolved.is_relative_to(repository):
+            raise ValueError(f"manifest source escapes repository: {relative}")
+        if not resolved.is_file():
+            stale.append(relative)
+            continue
+        if not isinstance(raw_entry, dict):
+            raise ValueError(f"invalid manifest entry: {relative}")
+        expected = (
+            raw_entry.get("semantic_hash")
+            or raw_entry.get("ast_hash")
+            or raw_entry.get("hash")
+        )
+        if not isinstance(expected, str) or not expected:
+            stale.append(relative)
+            continue
+        digest = hashlib.md5(resolved.read_bytes(), usedforsecurity=False).hexdigest()
+        if digest != expected:
+            stale.append(relative)
+    return stale
+
+
 def _contains_index_node(graph: dict[str, Any]) -> bool:
     nodes = graph.get("nodes")
     if not isinstance(nodes, list):
@@ -209,6 +257,7 @@ def check(root: Path) -> dict[str, Any]:
         (PROJECTION_INDEX, "projection index"),
         (GRAPH, "graph"),
         (STAT_INDEX, "stat index"),
+        (MANIFEST, "manifest"),
     )
     for relative, label in paths:
         if not (root / relative).is_file():
@@ -219,6 +268,8 @@ def check(root: Path) -> dict[str, Any]:
     owner_worktree_state: str | None = None
     owner_digests: dict[str, str] | None = None
     graph: dict[str, Any] | None = None
+    graph_revision: str | None = None
+    manifest: dict[str, Any] | None = None
     digest: str | None = None
     node_present: bool | None = None
     if (root / PROJECTION_INDEX).is_file():
@@ -239,6 +290,7 @@ def check(root: Path) -> dict[str, Any]:
                 raise ValueError(
                     "invalid graph: built_at_commit must be a non-empty string"
                 )
+            graph_revision = built_at_commit
             node_present = _contains_index_node(graph)
         except ValueError as error:
             invalid = True
@@ -249,10 +301,21 @@ def check(root: Path) -> dict[str, Any]:
         except ValueError as error:
             invalid = True
             reasons.append(str(error))
+    if (root / MANIFEST).is_file():
+        try:
+            manifest = _json_object(root / MANIFEST, "manifest")
+        except ValueError as error:
+            invalid = True
+            reasons.append(str(error))
 
+    stale_sources: list[str] = []
     if head is not None:
-        if projection_revision is not None and projection_revision != head:
-            reasons.append("projection source_revision does not match HEAD")
+        if (
+            projection_revision is not None
+            and projection_revision != head
+            and not _is_ancestor(root, projection_revision, head)
+        ):
+            reasons.append("projection source_revision is not an ancestor of HEAD")
         if owner_worktree_state == "dirty":
             reasons.append("projection was built from a dirty owner worktree")
         if owner_digests is not None:
@@ -261,8 +324,22 @@ def check(root: Path) -> dict[str, Any]:
             except ValueError as error:
                 invalid = True
                 reasons.append(str(error))
-        if graph is not None and graph["built_at_commit"] != head:
-            reasons.append("graph built_at_commit does not match HEAD")
+        if (
+            graph_revision is not None
+            and graph_revision != head
+            and not _is_ancestor(root, graph_revision, head)
+        ):
+            reasons.append("graph built_at_commit is not an ancestor of HEAD")
+        if manifest is not None:
+            try:
+                stale_sources = _manifest_drift(root, manifest)
+            except ValueError as error:
+                invalid = True
+                reasons.append(str(error))
+            if stale_sources:
+                reasons.append(
+                    f"{len(stale_sources)} indexed source(s) differ from the Graphify manifest"
+                )
         if (root / PROJECTION_INDEX).is_file() and digest is not None:
             actual_digest = _upstream_file_hash(
                 (root / PROJECTION_INDEX).read_bytes(), INDEX_PATH
@@ -290,15 +367,23 @@ def check(root: Path) -> dict[str, Any]:
         state = "fresh"
 
     fresh = state == "fresh"
+    usable = state not in {"invalid", "missing"}
     return {
         "state": state,
         "fresh": fresh,
+        "usable": usable,
         "head": head,
+        "graph_revision": graph_revision,
+        "stale_sources": stale_sources,
         "reasons": reasons,
         "next_action": (
-            "graph-backed claims are permitted"
+            "query Graphify first; validate consequential claims at source_location"
             if fresh
-            else "use exact-source discovery; run an explicit Graphify refresh before graph-backed claims"
+            else (
+                "query Graphify first; verify stale source_location paths directly and refresh before strict scaffold validation"
+                if usable
+                else "repair or rebuild Graphify before graph queries"
+            )
         ),
     }
 
@@ -308,6 +393,11 @@ def main(argv: list[str] | None = None) -> int:
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--quiet", action="store_true", help="emit no output")
     output.add_argument("--json", action="store_true", help="emit stable JSON")
+    parser.add_argument(
+        "--usable",
+        action="store_true",
+        help="succeed for a structurally valid graph even when refresh is pending",
+    )
     args = parser.parse_args(argv)
     try:
         result = check(Path.cwd())
@@ -315,9 +405,12 @@ def main(argv: list[str] | None = None) -> int:
         result = {
             "state": "invalid",
             "fresh": False,
+            "usable": False,
             "head": None,
+            "graph_revision": None,
+            "stale_sources": [],
             "reasons": [f"unexpected freshness-check failure: {error}"],
-            "next_action": "use exact-source discovery; run an explicit Graphify refresh before graph-backed claims",
+            "next_action": "repair or rebuild Graphify before graph queries",
         }
     if not args.quiet:
         if args.json:
@@ -326,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
             reasons = "; ".join(result["reasons"]) or "all freshness predicates pass"
             print(f"Graphify freshness: {result['state']} — {reasons}")
             print(f"Next action: {result['next_action']}")
-    return 0 if result["fresh"] else 1
+    return 0 if (result["usable"] if args.usable else result["fresh"]) else 1
 
 
 if __name__ == "__main__":

@@ -57,6 +57,13 @@ class SelectionTests(unittest.TestCase):
             makefile,
         )
         self.assertIn("graphify-projection-live-check: _check_python", makefile)
+        self.assertIn("graphify-usable-check: _check_python", makefile)
+        self.assertIn("graphify-state-check: _check_python", makefile)
+        self.assertIn(
+            "scaffold-check: agents-db-validate check-agent-memory "
+            "scaffold-audit scaffold-audit-self-test graphify-state-check",
+            makefile,
+        )
         self.assertIn(
             "scripts/build_graphify_projection.py --check --aria-code-ref "
             '"$$(git rev-parse HEAD)"',
@@ -119,14 +126,16 @@ class SelectionTests(unittest.TestCase):
                     f"unexpected corpus policy for {relative}",
                 )
 
-    def test_graphify_guidance_requires_same_commit_projection_digest(self) -> None:
+    def test_graphify_guidance_uses_graph_by_default_and_validates_state(self) -> None:
         skill_root = REPO_ROOT / ".agents/skills/graphify"
         context_guidance = (
             REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         ).read_text(encoding="utf-8")
         root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-        self.assertIn("scripts/check_graphify_freshness.py --quiet", context_guidance)
+        self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
+        self.assertIn("result says `usable: true`", context_guidance)
+        self.assertIn("make graphify-state-check", context_guidance)
         self.assertIn("scripts/build_graphify_projection.py", context_guidance)
         self.assertIn('fork_turns="none"', context_guidance)
         self.assertIn("every dispatched file", context_guidance)
@@ -138,6 +147,13 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("aria-nbv-context", root_guidance)
         self.assertNotIn("graphify query", root_guidance)
         self.assertNotIn("graphify install", root_guidance)
+
+        hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        self.assertIn("id: graphify-usable-check", hooks)
+        self.assertIn("entry: make graphify-usable-check", hooks)
+        self.assertIn("id: graphify-state-check", hooks)
+        self.assertIn("entry: make graphify-state-check", hooks)
+        self.assertIn("- pre-push", hooks)
 
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(

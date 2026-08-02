@@ -7,7 +7,7 @@ metadata:
     - "exact file and owner are already known"
     - "a concrete failure command or traceback owns the task"
   handoff_to:
-    - "graphify for an eligible fresh graph"
+    - "graphify for an existing usable graph"
     - "typst-authoring for thesis, glossary, shared-symbol, or shared-equation edits"
     - "nearest owning guide for concrete failures"
     - "nearest AGENTS.md or narrow skill after localization"
@@ -56,7 +56,8 @@ metadata:
     - "mcp__code_index.get_symbol_body"
   verification:
     - "make context when generated context is stale or missing"
-    - "python3 scripts/check_graphify_freshness.py --quiet before Graphify-backed claims"
+    - "python3 scripts/check_graphify_freshness.py --json before Graphify-backed claims"
+    - "make graphify-state-check for strict scaffold validation"
 ---
 
 # Aria NBV Context
@@ -67,18 +68,30 @@ diagnostic workflow.
 
 ## Graphify branch
 
-For architecture, relationship, or broad project-content discovery, check
-`graphify-out/graph.json` and run
-`python3 scripts/check_graphify_freshness.py --quiet` first. A zero exit permits
-handoff to the byte-identical upstream skill at
-`.agents/skills/graphify/SKILL.md`; verify every consequential graph result in
-its exact owner. Any other exit stays in the deterministic workflow below.
+For architecture, relationship, or broad project-content discovery, treat an
+existing `graphify-out/graph.json` as the default trusted retrieval index. Run
+`python3 scripts/check_graphify_freshness.py --json`, then hand off to the
+byte-identical upstream skill at `.agents/skills/graphify/SKILL.md` whenever the
+result says `usable: true`, including `structural-stale` or `semantic-stale`.
+Query Graphify first; its provenance and `source_location` route the exact-source
+check. For paths listed in `stale_sources`, verify consequential claims directly
+before acting. Only `missing` or `invalid` states bypass Graphify entirely.
+
+Freshness is a validation concern, not a global read gate. `make
+graphify-state-check` remains strict for scaffold and pre-push validation, while
+`make graphify-usable-check` proves the graph is safe to query during ordinary
+agent work. A Git HEAD mismatch alone is not staleness when the recorded graph
+and projection revisions are ancestors and indexed bytes still match. Refreshes
+first regenerate the deterministic projection with
+`scripts/build_graphify_projection.py`. Native semantic refreshes use
+`fork_turns="none"` and are accepted only after every dispatched file is
+accounted for.
 
 Before any build or semantic refresh, read
 [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
 It owns ARIA's projection, upstream-only, coverage, marker, and linked-worktree
-rules. Leave an incomplete or unreconciled graph stale and continue from exact
-sources.
+rules. Leave an incomplete or unreconciled graph strict-gate stale, keep its last
+valid snapshot queryable, and verify affected sources directly.
 
 ## MemPalace semantic-recall branch
 
@@ -112,8 +125,9 @@ Chronology alone never implies supersession; ingestion-only dates stay unknown.
 4. When semantic recall is eligible, choose one reviewed wing and normally one
    room through the MemPalace branch above. Search `aria-codex-history` only for
    an explicit raw-history request.
-5. Take the Graphify branch above only when its eligibility gate succeeds;
-   otherwise continue with exact-source discovery.
+5. Take the Graphify branch above whenever the artifact is usable; use its
+   `stale_sources` list to scope exact-source verification. Continue without
+   Graphify only when the artifact is missing or invalid.
 6. Use `docs/_generated/context/source_index.md` only when it already exists or
    source-family routing is unclear; refresh with `make context` only when
    needed.

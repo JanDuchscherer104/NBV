@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -231,6 +231,9 @@ scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, a
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
+
+scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test graphify-state-check ## 🧭 Run the strict local agent-scaffold gate
+
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
 
@@ -239,6 +242,12 @@ graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic
 
 graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
 	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
+
+graphify-usable-check: _check_python ## 🕸️ Require a valid Graphify snapshot for default agent navigation
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py --usable
+
+graphify-state-check: _check_python ## 🕸️ Require indexed Graphify bytes to match the current worktree
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py

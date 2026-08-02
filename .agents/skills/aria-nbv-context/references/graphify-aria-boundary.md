@@ -1,12 +1,14 @@
 # ARIA Graphify Boundary
 
 Read this only before a Graphify build, refresh, or semantic reconciliation.
-Graphify is derived navigation; exact repository owners remain authoritative.
+Graphify is the default trusted retrieval index; exact repository owners remain
+authoritative for behavior and scientific claims.
 
 ## Corpus And Upstream Ownership
 
 - ARIA owns the freshness preflight, `.graphifyignore`, the ignored Markdown
-  projection, and the read-side freshness gate.
+  projection, and source-scoped degradation metadata. Freshness validation must
+  not disable a structurally valid graph globally.
 - Build the projection with `python3 scripts/build_graphify_projection.py
   --output graphify-input --aria-code-ref "$(git rev-parse HEAD)"`, then use the
   repository root as Graphify's corpus root.
@@ -21,8 +23,9 @@ Graphify is derived navigation; exact repository owners remain authoritative.
   with `fork_turns="none"`; explicit roles and inherited full history are not
   callable together.
 - Accept a refresh only when upstream Graphify accounts for every dispatched
-  file and excludes existing-file nodes outside the dispatched set. Otherwise
-  leave the graph stale and continue from exact sources.
+  file and excludes existing-file nodes outside the dispatched set. An
+  incomplete refresh remains strict-gate stale, but the last valid graph stays
+  queryable; verify any `stale_sources` result directly at `source_location`.
 
 ## Marker And Worktree Rules
 
