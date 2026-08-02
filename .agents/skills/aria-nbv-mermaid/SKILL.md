@@ -36,6 +36,11 @@ metadata:
     - "tools/mermaid/scripts/aria_mermaid_lint.py"
     - "tools/mermaid/scripts/render_mermaid.sh"
     - "docs/typst/shared"
+  context7_refs:
+    - "/mermaid-js/mermaid"
+  tool_refs:
+    - "mcp__MCP_DOCKER.resolve_library_id"
+    - "mcp__MCP_DOCKER.get_library_docs"
   verification:
     - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>"
     - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when `mmdc` is available"
@@ -62,6 +67,8 @@ document integration, and diagnosed tool failures to their existing owners.
    map; also inspect the relevant `docs/typst/shared` source.
 3. For a rendering or linting failure, capture the exact local command and
    output before handing the evidence to the nearest owning guide.
+4. Query `/mermaid-js/mermaid` only when current upstream grammar or renderer
+   behavior is material; local source, lint, and render results remain decisive.
 
 ## Seam Rules
 

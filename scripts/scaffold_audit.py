@@ -44,6 +44,15 @@ BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
 CONTEXT_MAP = (
     ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
 )
+CONTEXT7_REGISTRY = (
+    ROOT
+    / ".agents"
+    / "skills"
+    / "aria-nbv-context"
+    / "references"
+    / "context7_library_ids.md"
+)
+CONTEXT7_ID_RE = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
 AUDIT_OWNED_TOOL_REFS = {
     "mcp__MCP_DOCKER.analyze_python_file",
@@ -210,6 +219,23 @@ def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[st
     return routes, []
 
 
+def load_context7_registry(
+    path: Path = CONTEXT7_REGISTRY,
+) -> tuple[set[str], list[str]]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return set(), [f"{rel(path)}: cannot read Context7 registry: {exc}"]
+    ids = {
+        match.group(1)
+        for match in re.finditer(r"`(/[^`\s]+/[^`\s]+)`", text)
+        if CONTEXT7_ID_RE.fullmatch(match.group(1))
+    }
+    if not ids:
+        return ids, [f"{rel(path)}: no exact Context7 IDs found"]
+    return ids, []
+
+
 def repo_path_exists(ref: str, *, base: Path = ROOT) -> bool:
     path_text, _, anchor = ref.partition("#")
     if not path_text or path_text.startswith("/"):
@@ -350,8 +376,10 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
     known_names = {skill.name for skill in skills}
     bibtex_keys, bibtex_errors = load_bibtex_keys()
     context_routes, context_route_errors = load_context_map_routes()
+    context7_registry, context7_registry_errors = load_context7_registry()
     errors.extend(bibtex_errors)
     errors.extend(context_route_errors)
+    errors.extend(context7_registry_errors)
 
     for skill in skills:
         prefix = rel(skill.path)
@@ -461,9 +489,14 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
             for ref in context7_refs:
                 if not isinstance(ref, str) or not ref.strip():
                     continue
-                if not ref.startswith("/"):
+                if not CONTEXT7_ID_RE.fullmatch(ref):
                     errors.append(
                         f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID"
+                    )
+                elif ref not in context7_registry:
+                    errors.append(
+                        f"{prefix}: metadata.context7_refs entry {ref!r} is absent from "
+                        f"{rel(CONTEXT7_REGISTRY)}"
                     )
 
         literature_refs = skill.metadata.get("literature_refs") or []
@@ -510,7 +543,12 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 {"triggers", "evidence_required", "handoff_to", "must_read"},
             )
         )
-        if CONTEXT7_TRIGGER_RE.search(trigger_text) and not context7_refs:
+        routes_to_context7_registry = rel(CONTEXT7_REGISTRY) in canonical_sources
+        if (
+            CONTEXT7_TRIGGER_RE.search(trigger_text)
+            and not context7_refs
+            and not routes_to_context7_registry
+        ):
             warnings.append(
                 f"{prefix}: external-library/API trigger language has no metadata.context7_refs"
             )
@@ -1073,6 +1111,23 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             not load_errors
             and any("metadata.literature_refs" in error for error in errors),
             "missing literature ref was not rejected",
+        )
+
+        unregistered_context7_text = self_test_skill_text(
+            "unregistered-context7-skill",
+            [".agents/references/source_order.md#role-split"],
+            "Use this test body for Context7 registry validation.",
+            '  context7_refs:\n    - "/example/not-in-registry"',
+        )
+        write_self_test_skill(
+            tmp_root, "unregistered-context7-skill", unregistered_context7_text
+        )
+        skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(skills)
+        expect(
+            "unregistered-context7-ref",
+            not load_errors and any("absent from" in error for error in errors),
+            "unregistered Context7 ref was not rejected",
         )
 
         malformed_tool_text = self_test_skill_text(

@@ -48,6 +48,8 @@ metadata:
     - "/pytorch/pytorch"
     - "/pydantic/pydantic"
   tool_refs:
+    - "mcp__MCP_DOCKER.resolve_library_id"
+    - "mcp__MCP_DOCKER.get_library_docs"
     - "mcp__code_index.search_code_advanced"
     - "mcp__code_index.get_symbol_body"
   verification:

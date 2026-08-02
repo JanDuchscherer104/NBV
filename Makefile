@@ -57,8 +57,8 @@ GET_CONTEXT_MODE ?= packages
 GET_CONTEXT_QUERY ?=
 GET_CONTEXT_ROOT ?=
 QMD_OUTLINE_ARGS ?= --compact
-TYPST_OUTLINE_ARGS ?= --paper --mode outline
-TYPST_INCLUDES_ARGS ?= --paper --mode includes
+TYPST_OUTLINE_ARGS ?= --thesis --mode outline
+TYPST_INCLUDES_ARGS ?= --thesis --mode includes
 LITERATURE_SEARCH_QUERY ?=
 MIGRATE_CODEX_MEMORY_ARGS ?=
 CODEX_TRANSCRIPT_ARGS ?=
@@ -203,10 +203,10 @@ context-match: _check_python ## 🗺️ Search AST summaries (set GET_CONTEXT_QU
 context-qmd-outline: _check_python ## 🗺️ Outline Quarto pages (QMD_OUTLINE_ARGS='--compact' by default)
 	@./scripts/nbv_qmd_outline.sh $(QMD_OUTLINE_ARGS)
 
-context-typst-outline: _check_python ## 🗺️ Outline Typst paper/slides (TYPST_OUTLINE_ARGS='--paper --mode outline')
+context-typst-outline: _check_python ## 🗺️ Outline active thesis by default (TYPST_OUTLINE_ARGS='--thesis --mode outline')
 	@$(PYTHON_INTERPRETER) ./scripts/nbv_typst_includes.py $(TYPST_OUTLINE_ARGS)
 
-context-typst-includes: _check_python ## 🗺️ Print Typst include edges (TYPST_INCLUDES_ARGS='--paper --mode includes')
+context-typst-includes: _check_python ## 🗺️ Print active-thesis include edges (TYPST_INCLUDES_ARGS='--thesis --mode includes')
 	@$(PYTHON_INTERPRETER) ./scripts/nbv_typst_includes.py $(TYPST_INCLUDES_ARGS)
 
 context-literature-index: ## 🗺️ Regenerate docs/_generated/context/literature_index.md

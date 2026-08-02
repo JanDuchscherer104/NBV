@@ -8,10 +8,11 @@ owners conflict.
 - Current thesis direction is owned by `contents/thesis/roadmap.qmd` and
   `questions.qmd`; the active thesis is `typst/thesis/main.typ` and its includes.
   Seminar and archived proposal material is historical evidence, not priority.
-- `typst/shared/glossary.typ` owns terminology; `references.bib` and
-  `references-qh.bib` own citation identities; exact primary sources support
-  advisor-facing scientific claims. `typst/shared/style.typ` owns thesis-to-code
-  link behavior.
+- `typst/shared/glossary.typ` owns durable terms; `typst/shared/symbols.typ` and
+  `equations.typ` own reusable Typst bodies; `notation.yml` owns their
+  cross-format lookup registry. `references.bib` and `references-qh.bib` own
+  citation identities; exact primary sources support advisor-facing scientific
+  claims. `typst/shared/style.typ` owns thesis-to-code link behavior.
 - Keep public docs aligned with these owners. Do not expose agent guidance,
   generated context, OMX state, or rendered artifacts as public source content.
 - Do not present V0 GT actor-visible-target runs as main V1 performance. The
