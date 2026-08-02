@@ -8,7 +8,9 @@ confidence: high
 canonical_updates_needed: []
 files_touched:
   - .agents/skills/agent-behavior/SKILL.md
+  - .agents/skills/agent-behavior/references/external-actions.md
   - .agents/skills/aria-nbv-context/SKILL.md
+  - .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md
   - .pre-commit-config.yaml
   - .gitattributes
   - Makefile
@@ -46,13 +48,15 @@ artifact; pre-push and `scaffold-check` run the strict state check. Upstream
 post-commit and post-checkout hooks plus the Graphify merge
 driver were installed without modifying the byte-identical upstream skill.
 `agent-behavior` now also treats an explicitly authorized push and pull request
-as part of task completion, while retaining the per-action authorization and
-path-scoped staging boundary.
+as part of task completion through its conditional external-action reference,
+while retaining the per-action authorization and path-scoped staging boundary.
+Graphify build, refresh, marker, and worktree mechanics likewise live behind a
+build-or-refresh context pointer instead of expanding the discovery router.
 
 ## Verification
 
 - Graphify freshness tests: 17 passed.
-- CI-impact tests: 11 passed.
+- CI-impact tests: 12 passed.
 - Upstream Graphify skill tests: 2 passed.
 - Focused Ruff format and lint passed.
 - `make graphify-usable-check` passed on the live usable snapshot.

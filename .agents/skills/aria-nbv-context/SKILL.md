@@ -63,54 +63,14 @@ Query Graphify first; its provenance and `source_location` route the exact-sourc
 check. For paths listed in `stale_sources`, verify consequential claims directly
 before acting. Only `missing` or `invalid` states bypass Graphify entirely.
 
-Freshness is a validation concern, not a global read gate. `make
-graphify-state-check` remains strict for scaffold and pre-push validation, while
-`make graphify-usable-check` proves the graph is safe to query during ordinary
-agent work. A Git HEAD mismatch alone is not staleness when the recorded graph
-and projection revisions are ancestors and indexed bytes still match. Refreshes
-first regenerate the deterministic projection with
-`scripts/build_graphify_projection.py`. Native semantic refreshes use
-`fork_turns="none"` and are accepted only after every dispatched file is
-accounted for.
-
-ARIA-NBV owns only this preflight, `.graphifyignore`, the ignored Markdown
-projection, and the read-side freshness gate. Do not patch, overlay, append to,
-or add helper scripts beneath the upstream Graphify skill bundle. Build the
-projection with `python3 scripts/build_graphify_projection.py --output
-graphify-input --aria-code-ref "$(git rev-parse HEAD)"`, then use the repository
-root as Graphify's corpus root.
-
-Use upstream Graphify lifecycle and semantic reconciliation instead of a
-repository-owned dispatch, cache, merge, or manifest implementation. Prefer an
-upstream-supported CLI backend for semantic refreshes. If an explicitly chosen
-Codex host-agent flow selects an agent role, use a self-contained prompt with
-`fork_turns="none"`; inherited full history and explicit role selection are not
-callable together. Do not accept a semantic refresh unless upstream Graphify
-accounts for every dispatched file and excludes existing-file nodes outside the
-dispatched set. If the current client cannot satisfy that contract, leave the
-graph strict-gate stale, keep its last valid snapshot queryable, and verify
-affected sources directly.
-
-Graphify 0.9.31 writes the semantic-refresh marker at
-`graphify-out/needs_update`, while its host-agent runbook clears the historical
-`.needs_update` spelling. Until upstream aligns those names, remove
-`graphify-out/needs_update` only after the upstream refresh has completed and
-the coverage and reconciliation checks above have passed. Leave the marker in
-place after any partial, failed, or unverified refresh so the read-side gate
-continues to fail closed.
-
-Every linked worktree must run `scripts/setup_worktree_env.sh`; its standard
-contract creates and links the shared `semantic` and `semantic-deep`
-content-addressed cache namespaces. Only those caches are shared. Projections,
-graphs, manifests, AST state, and semantic run state remain worktree-local, and
-cache presence never establishes graph freshness.
+Before a build, refresh, or semantic reconciliation, read
+[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
+It owns the conditional lifecycle and acceptance mechanics.
 
 ## Workflow
 
 1. Read `AGENTS.md` and `.agents/references/source_order.md`.
-2. Take the Graphify branch above whenever the artifact is usable; use its
-   `stale_sources` list to scope exact-source verification. Continue without
-   Graphify only when the artifact is missing or invalid.
+2. Apply the Graphify branch above for broad project discovery.
 3. Use `docs/_generated/context/source_index.md` only when it already exists or
    source-family routing is unclear; refresh with `make context` only when
    needed.

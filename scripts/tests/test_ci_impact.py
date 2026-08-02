@@ -132,14 +132,21 @@ class SelectionTests(unittest.TestCase):
         context_guidance = (
             REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         ).read_text(encoding="utf-8")
+        graphify_boundary = (
+            REPO_ROOT
+            / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
+        ).read_text(encoding="utf-8")
         root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("result says `usable: true`", context_guidance)
-        self.assertIn("make graphify-state-check", context_guidance)
-        self.assertIn("scripts/build_graphify_projection.py", context_guidance)
-        self.assertIn('fork_turns="none"', context_guidance)
-        self.assertIn("every dispatched file", context_guidance)
+        self.assertIn("references/graphify-aria-boundary.md", context_guidance)
+        self.assertNotIn("fork_turns=", context_guidance)
+        self.assertNotIn("Graphify 0.9.31", context_guidance)
+        self.assertIn("make graphify-state-check", graphify_boundary)
+        self.assertIn("scripts/build_graphify_projection.py", graphify_boundary)
+        self.assertIn('fork_turns="none"', graphify_boundary)
+        self.assertIn("every dispatched file", graphify_boundary)
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
             "0.9.31",
@@ -155,6 +162,20 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
         self.assertIn("- pre-push", hooks)
+
+    def test_agent_behavior_discloses_external_action_mechanics(self) -> None:
+        behavior = (REPO_ROOT / ".agents/skills/agent-behavior/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        external_actions = (
+            REPO_ROOT / ".agents/skills/agent-behavior/references/external-actions.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("references/external-actions.md", behavior)
+        self.assertNotIn("draft pull request", behavior)
+        self.assertNotIn("currently authorized publication", behavior)
+        self.assertIn("Publication Completion", external_actions)
+        self.assertIn("open a draft pull request", external_actions)
 
     def test_multi_family_diff_unions_selections(self) -> None:
         self.assertEqual(
