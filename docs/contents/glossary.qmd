@@ -821,7 +821,7 @@ $$
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
-<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-vin-nbv">vin-nbv</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
 <div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollout And Q_H Contract</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 </div>
 </details>

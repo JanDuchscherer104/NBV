@@ -702,7 +702,7 @@
       citations: (),
       related: (
         "historic-snippet-state",
-        "vin-nbv",
+        "view-introspection-network",
         "oracle-rri",
       ),
       kg_tags: (
