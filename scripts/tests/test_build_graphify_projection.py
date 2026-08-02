@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+from typing import cast
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -39,6 +40,7 @@ class FakeRunner:
         self.citations: list[dict[str, object]] = []
         self.links: list[dict[str, object]] = []
         self.headings: list[dict[str, object]] = []
+        self.glossary_terms: list[dict[str, object]] = []
 
     def __call__(
         self, argv: list[str] | tuple[str, ...], *, cwd: Path
@@ -57,6 +59,7 @@ class FakeRunner:
                 "cite": self.citations,
                 "link": self.links,
                 "heading": self.headings,
+                "<aria-glossary-term>": self.glossary_terms,
             }[command[3]]
             return subprocess.CompletedProcess(command, 0, json.dumps(rows), "")
         if command[1] == "compile":
@@ -96,7 +99,7 @@ class Fixture:
         self.write(
             "docs/typst/thesis/sections/a.typ",
             (
-                "= Introduction\n@PaperA\n"
+                "= Introduction\n@PaperA @term-a @term-a:short #symb.rl.qh. #eqs.rl.q_h,\n"
                 f'#gh("src/model.py", ref: "{self.code_oid}", line: 1, end: 2)\n'
                 f'#gh("src/model.py", ref: "{self.code_oid}", line: 1, end: 2)\n'
                 '#gh-wip("src/model.py", ref: "main", line: 1)\n'
@@ -105,6 +108,17 @@ class Fixture:
         )
         self.write("docs/typst/thesis/sections/b.typ", "@QhPaper\n")
         self.write("docs/typst/thesis/inactive.typ", "@Inactive\n")
+        self.write(
+            "docs/typst/shared/glossary.typ", "// queried by the fake Typst runner\n"
+        )
+        self.write(
+            "docs/notation.yml",
+            "symbols:\n  rl.qh:\n    tex: Q_H\n    typst: '#symb.rl.qh'\n    description: Q value\n    thesis_list: true\nequations:\n  rl.q_h:\n    tex: Q_H = r\n    typst: '#eqs.rl.q_h'\n    description: Q equation\n    thesis_list: true\n",
+        )
+        self.write("docs/typst/shared/symbols/rl.typ", "#let rl = (\n  qh: $Q_H$,\n)\n")
+        self.write(
+            "docs/typst/shared/equations/rl.typ", "#let rl = (\n  q_h: $Q_H = r$,\n)\n"
+        )
         self.write(
             "docs/references.bib",
             "@misc{PaperA, title={{Complex, Nested} Title}, eprint={2406.10224v2}}\n",
@@ -143,6 +157,36 @@ class Fixture:
 
         self.runner = FakeRunner()
         self.runner.citations = [{"key": "PaperA"}, {"key": "QhPaper"}]
+        self.runner.glossary_terms = [
+            {
+                "value": {
+                    "id": "term-a",
+                    "anchor": "term-a",
+                    "label": "Term A",
+                    "category": "test",
+                    "definition_short": "A term.",
+                    "internal_links": [],
+                    "citations": [],
+                    "related": ["term-b"],
+                    "kg_tags": [],
+                    "symbol_refs": ["rl.qh"],
+                    "equation_refs": ["rl.q_h"],
+                }
+            },
+            {
+                "value": {
+                    "id": "term-b",
+                    "anchor": "term-b",
+                    "label": "Term B",
+                    "category": "test",
+                    "definition_short": "B term.",
+                    "internal_links": [],
+                    "citations": [],
+                    "related": [],
+                    "kg_tags": [],
+                }
+            },
+        ]
         self.runner.headings = [
             {
                 "body": {"func": "text", "text": "Introduction"},
@@ -184,6 +228,9 @@ class Fixture:
             aria_code_ref=self.code_oid,
             aria_code_ref_source="cli",
         )
+
+    def glossary_value(self, index: int) -> dict[str, object]:
+        return cast(dict[str, object], self.runner.glossary_terms[index]["value"])
 
 
 class ProjectionTests(unittest.TestCase):
@@ -276,6 +323,10 @@ class ProjectionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ProjectionError, r"outside|overlap|owner"):
                     self.build(output_path=output)
 
+    def test_output_overlapping_notation_implementation_owner_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ProjectionError, r"output overlaps owner path"):
+            self.build(output_path=Path("docs/typst/shared/symbols/rl.typ"))
+
     def test_output_with_symlink_ancestor_is_rejected(self) -> None:
         outside_temp = tempfile.TemporaryDirectory()
         self.addCleanup(outside_temp.cleanup)
@@ -291,9 +342,12 @@ class ProjectionTests(unittest.TestCase):
             {call[0] for call in self.fixture.runner.calls}, {"git", "typst"}
         )
         typst_calls = [call for call in self.fixture.runner.calls if call[0] == "typst"]
-        self.assertEqual(len(typst_calls), 4)
+        self.assertEqual(len(typst_calls), 5)
         for call in typst_calls:
-            self.assertEqual(call.count(f"aria-code-ref={self.fixture.code_oid}"), 1)
+            expected = 0 if call[2] == "docs/typst/shared/glossary.typ" else 1
+            self.assertEqual(
+                call.count(f"aria-code-ref={self.fixture.code_oid}"), expected
+            )
         with self.assertRaisesRegex(AssertionError, "unexpected executable"):
             self.fixture.runner(["curl"], cwd=self.fixture.root)
 
@@ -325,8 +379,12 @@ class ProjectionTests(unittest.TestCase):
             )
             if call[0] == "typst"
         ]
-        self.assertEqual(len(typst_invocations), 4)
+        self.assertEqual(len(typst_invocations), 5)
         for call, cwd in typst_invocations:
+            if call[2] == "docs/typst/shared/glossary.typ":
+                self.assertEqual(cwd, self.fixture.root)
+                self.assertEqual(call[3], "<aria-glossary-term>")
+                continue
             self.assertEqual(cwd, self.fixture.root / "docs")
             self.assertEqual(call[2], "typst/thesis/main.typ")
             self.assertEqual(call[call.index("--root") + 1], ".")
@@ -796,6 +854,102 @@ class ProjectionTests(unittest.TestCase):
         )
         dirty_index = self.build().files["index.md"]
         self.assertIn("owner_worktree_state: dirty", dirty_index)
+
+    def test_shared_typst_entities_and_section_usage_render_stably(self) -> None:
+        first = self.build()
+        second = self.build()
+        self.assertEqual(first.files, second.files)
+        rendered = self.rendered(first)
+        self.assertIn("# glossary-term:term-a", rendered)
+        self.assertIn("# symbol:rl.qh", rendered)
+        self.assertIn("# equation:rl.q_h", rendered)
+        source = next(
+            body
+            for body in first.files.values()
+            if body.startswith("# thesis-source:docs/typst/thesis/sections/a.typ")
+        )
+        self.assertIn("uses_term:", source)
+        self.assertIn("multiplicity: 2", source)
+        self.assertIn("uses_symbol:", source)
+        self.assertIn("uses_equation:", source)
+        self.assertIn("docs/notation.yml", rendered)
+        self.assertIn("docs/typst/shared/symbols/rl.typ", rendered)
+
+    def test_unknown_section_notation_and_short_glossary_fail_closed(self) -> None:
+        section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
+        section.write_text("#symb.rl.unknown\n", encoding="utf-8")
+        with self.assertRaisesRegex(ProjectionError, r"sections/a\.typ:1: unknown"):
+            self.build()
+        section.write_text("@missing:short\n", encoding="utf-8")
+        with self.assertRaisesRegex(
+            ProjectionError, r"sections/a\.typ:1: unknown glossary"
+        ):
+            self.build()
+        section.write_text("@term-a:shorter\n", encoding="utf-8")
+        with self.assertRaisesRegex(ProjectionError, r"invalid glossary suffix"):
+            self.build()
+        for token in ("#symb.rl.qh.extra", "#eqs.rl.q_h.extra"):
+            section.write_text(token + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ProjectionError, r"unknown #"):
+                self.build()
+
+    def test_term_relations_owners_and_index_families_are_explicit(self) -> None:
+        result = self.build()
+        term = next(
+            body
+            for body in result.files.values()
+            if body.startswith("# glossary-term:term-a")
+        )
+        symbol = next(
+            body for body in result.files.values() if body.startswith("# symbol:rl.qh")
+        )
+        self.assertIn("related: [glossary-term:term-b]", term)
+        self.assertIn("symbol: [symbol:rl.qh]", term)
+        self.assertIn("equation: [equation:rl.q_h]", term)
+        self.assertIn("metadata_owner:", symbol)
+        self.assertIn("implementation_owner:", symbol)
+        index = result.files["index.md"]
+        for family in ("glossary", "symbols", "equations"):
+            self.assertRegex(index, rf"\[{family}\]\([^)]+\): [1-9]")
+
+    def test_invalid_metadata_and_implementation_owner_fail_closed(self) -> None:
+        self.fixture.glossary_value(0)["symbol_refs"] = ["missing"]
+        with self.assertRaisesRegex(ProjectionError, r"term-a.*unknown symbol_ref"):
+            self.build()
+        self.fixture.glossary_value(0)["symbol_refs"] = ["rl.qh"]
+        self.fixture.write(
+            "docs/notation.yml",
+            self.fixture.root.joinpath("docs/notation.yml")
+            .read_text(encoding="utf-8")
+            .replace("#symb.rl.qh", "#symb.rl.missing"),
+        )
+        with self.assertRaisesRegex(ProjectionError, r"symbols.rl.qh.*declaration"):
+            self.build()
+
+    def test_missing_related_term_fails_and_parent_is_taxonomy_label(self) -> None:
+        self.fixture.glossary_value(0)["parent"] = "taxonomy-label"
+        term = next(
+            body
+            for body in self.build().files.values()
+            if body.startswith("# glossary-term:term-a")
+        )
+        self.assertIn("parent_label: taxonomy-label", term)
+        self.fixture.glossary_value(0)["related"] = ["missing"]
+        with self.assertRaisesRegex(ProjectionError, r"term-a.*unknown related"):
+            self.build()
+
+    def test_rebuild_removes_obsolete_entity_pages(self) -> None:
+        self.build(check=False)
+        old = next(
+            path
+            for path in (self.fixture.root / "graphify-input").glob("glossary/*.md")
+            for body in (path.read_text(encoding="utf-8"),)
+            if body.startswith("# glossary-term:term-b")
+        )
+        self.fixture.runner.glossary_terms.pop()
+        self.fixture.glossary_value(0)["related"] = []
+        self.build(check=False)
+        self.assertFalse(old.exists())
 
     def test_failed_swap_restores_the_previous_output(self) -> None:
         output = self.fixture.root / "graphify-input"

@@ -525,7 +525,7 @@
   - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   related:
   - historic-snippet-state
-  - vin-nbv
+  - view-introspection-network
   - oracle-rri
   kg_tags:
   - planning

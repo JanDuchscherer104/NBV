@@ -19,6 +19,12 @@ import tempfile
 from typing import Callable, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
+from glossary_build import (
+    GlossaryError,
+    load_notation,
+    normalize_and_validate_metadata,
+)
+
 
 SCHEMA_VERSION = "1"
 Runner = Callable[..., subprocess.CompletedProcess[str]]
@@ -35,6 +41,8 @@ class ProjectionConfig:
     repo_root: Path
     thesis_root: Path = Path("docs/typst/thesis/main.typ")
     style_path: Path = Path("docs/typst/shared/style.typ")
+    glossary_path: Path = Path("docs/typst/shared/glossary.typ")
+    notation_path: Path = Path("docs/notation.yml")
     bibliography_paths: tuple[Path, ...] = (
         Path("docs/references.bib"),
         Path("docs/references-qh.bib"),
@@ -116,6 +124,10 @@ class _RenderData:
     relations: Sequence[Mapping[str, object]]
     headings: Sequence[_Heading]
     warnings: Sequence[str]
+    terms: Mapping[str, Mapping[str, object]]
+    notation: Mapping[str, Mapping[str, Mapping[str, object]]]
+    notation_owners: Mapping[tuple[str, str], Path]
+    usage_by_source: Mapping[Path, Mapping[str, Counter[str]]]
 
 
 @dataclass
@@ -126,6 +138,9 @@ class _Pages:
     code: dict[str, _Page]
     assets: dict[str, _Page]
     asset_owners: dict[str, tuple[str, str, str]]
+    terms: dict[str, _Page]
+    symbols: dict[str, _Page]
+    equations: dict[str, _Page]
 
     def all(self) -> list[_Page]:
         return [
@@ -134,6 +149,9 @@ class _Pages:
             *self.literature.values(),
             *self.code.values(),
             *self.assets.values(),
+            *self.terms.values(),
+            *self.symbols.values(),
+            *self.equations.values(),
         ]
 
 
@@ -316,6 +334,153 @@ def _lexical_sources(
                 )
             )
     return citations_by_source, macros
+
+
+def _glossary_terms(
+    config: ProjectionConfig, runner: Runner, bib: Mapping[str, _BibEntry]
+) -> dict[str, Mapping[str, object]]:
+    """Query the canonical Glossarium rows through the injected Typst runner."""
+
+    output = _run(
+        runner,
+        [
+            "typst",
+            "query",
+            config.glossary_path.as_posix(),
+            "<aria-glossary-term>",
+            "--field",
+            "value",
+            "--format",
+            "json",
+        ],
+        config.repo_root,
+    )
+    try:
+        queried = json.loads(output or "[]")
+    except json.JSONDecodeError as error:
+        raise ProjectionError("glossary query returned invalid JSON") from error
+    if not isinstance(queried, list) or not all(
+        isinstance(row, dict) for row in queried
+    ):
+        raise ProjectionError("glossary query must return a JSON list of metadata")
+    raw = [dict(row.get("value", row)) for row in queried]
+    try:
+        notation = load_notation(_owner_path(config, config.notation_path))
+        terms = normalize_and_validate_metadata(raw, notation)
+    except GlossaryError as error:
+        raise ProjectionError(f"glossary metadata invalid: {error}") from error
+    term_map: dict[str, Mapping[str, object]] = {
+        str(term["id"]): term for term in terms
+    }
+    if len(term_map) != len(terms):  # Defensive: validation normally catches this.
+        raise ProjectionError("duplicate glossary term identity")
+    for term_id, term in term_map.items():
+        citations = term.get("citations", [])
+        if not isinstance(citations, list):
+            raise ProjectionError(f"{term_id}: citations must be a list")
+        for key in citations:
+            if not isinstance(key, str):
+                raise ProjectionError(f"{term_id}: citations must contain strings")
+            if key not in bib:
+                raise ProjectionError(f"{term_id}: unknown citation {key!r}")
+    return term_map
+
+
+def _notation_owners(
+    config: ProjectionConfig, notation: Mapping[str, Mapping[str, Mapping[str, object]]]
+) -> dict[tuple[str, str], Path]:
+    owners: dict[tuple[str, str], Path] = {}
+    for group, prefix, directory in (
+        ("symbols", "symb", "symbols"),
+        ("equations", "eqs", "equations"),
+    ):
+        for key, entry in notation[group].items():
+            expression = str(entry["typst"])
+            match = re.fullmatch(
+                rf"#{prefix}\.([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)",
+                expression,
+            )
+            if match is None:
+                raise ProjectionError(
+                    f"{group}.{key}: malformed Typst expression {expression!r}"
+                )
+            namespace, member = match.groups()
+            owner = Path(f"docs/typst/shared/{directory}/{namespace}.typ")
+            try:
+                text = _owner_path(config, owner).read_text(encoding="utf-8")
+            except (OSError, ProjectionError) as error:
+                raise ProjectionError(
+                    f"{group}.{key}: missing implementation module {owner.as_posix()}"
+                ) from error
+            declarations = re.findall(rf"(?m)^\s*{re.escape(member)}\s*:", text)
+            if len(declarations) != 1:
+                raise ProjectionError(
+                    f"{group}.{key}: expected one declaration of {member!r} in {owner.as_posix()}, found {len(declarations)}"
+                )
+            owners[(group, key)] = owner
+    return owners
+
+
+def _section_usage(
+    config: ProjectionConfig,
+    closure: Iterable[Path],
+    terms: Mapping[str, Mapping[str, object]],
+    notation: Mapping[str, Mapping[str, Mapping[str, object]]],
+    bib: Mapping[str, _BibEntry],
+) -> dict[Path, dict[str, Counter[str]]]:
+    """Return delimiter-safe lexical references from active thesis sections only."""
+
+    result: dict[Path, dict[str, Counter[str]]] = {}
+    known_terms = set(terms)
+    for source in closure:
+        if not source.is_relative_to(Path("docs/typst/thesis/sections")):
+            continue
+        clean = _strip_typst_noncode(
+            _owner_path(config, source).read_text(encoding="utf-8")
+        )
+        clean = re.sub(r'#(?:include|import)\s+"[^"]+"[^\n]*', "", clean)
+        usages: dict[str, Counter[str]] = {
+            "term": Counter(),
+            "symbol": Counter(),
+            "equation": Counter(),
+        }
+        for match in re.finditer(
+            r"(?<![\w])@([A-Za-z0-9_+-]+)(:[A-Za-z0-9_+-]+)?(?![A-Za-z0-9_+-])",
+            clean,
+        ):
+            key, suffix = match.groups()
+            line = clean.count("\n", 0, match.start()) + 1
+            if key in known_terms:
+                if key in bib:
+                    raise ProjectionError(
+                        f"{source.as_posix()}:{line}: ambiguous glossary/bibliography ID {key}"
+                    )
+                if suffix not in (None, ":short"):
+                    raise ProjectionError(
+                        f"{source.as_posix()}:{line}: invalid glossary suffix {suffix}"
+                    )
+                usages["term"][key] += 1
+            elif suffix == ":short":
+                raise ProjectionError(
+                    f"{source.as_posix()}:{line}: unknown glossary term {key}:short"
+                )
+        for family, prefix, group in (
+            ("symbol", "symb", "symbols"),
+            ("equation", "eqs", "equations"),
+        ):
+            for match in re.finditer(
+                rf"#{prefix}\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)",
+                clean,
+            ):
+                key = match.group(1)
+                line = clean.count("\n", 0, match.start()) + 1
+                if key not in notation[group]:
+                    raise ProjectionError(
+                        f"{source.as_posix()}:{line}: unknown #{prefix}.{key}"
+                    )
+                usages[family][key] += 1
+        result[source] = usages
+    return result
 
 
 def _query_typst(
@@ -826,6 +991,13 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
     code = {identity: _Page(identity, "code") for identity in data.targets}
     assets: dict[str, _Page] = {}
     asset_owners: dict[str, tuple[str, str, str]] = {}
+    terms = {key: _Page(f"glossary-term:{key}", "glossary") for key in data.terms}
+    symbols = {
+        key: _Page(f"symbol:{key}", "symbols") for key in data.notation["symbols"]
+    }
+    equations = {
+        key: _Page(f"equation:{key}", "equations") for key in data.notation["equations"]
+    }
     for row in data.manifest:
         for kind, root, field_name in (
             ("tex-root", config.tex_root, "tex_dir"),
@@ -840,7 +1012,17 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
                 "present" if _lexists(config.repo_root / relative) else "missing-local"
             )
             asset_owners[identity] = (relative.as_posix(), status, kind)
-    return _Pages(thesis, citations, literature, code, assets, asset_owners)
+    return _Pages(
+        thesis=thesis,
+        citations=citations,
+        literature=literature,
+        code=code,
+        assets=assets,
+        asset_owners=asset_owners,
+        terms=terms,
+        symbols=symbols,
+        equations=equations,
+    )
 
 
 def _page_paths(pages: _Pages) -> dict[str, str]:
@@ -867,6 +1049,19 @@ def _populate_thesis_pages(
             page.lines.append(
                 f"citation: {_link(source_path, paths[f'citation:{key}'], f'citation:{key}')}"
             )
+        for kind, label, identity_prefix in (
+            ("term", "uses_term", "glossary-term"),
+            ("symbol", "uses_symbol", "symbol"),
+            ("equation", "uses_equation", "equation"),
+        ):
+            for key, count in sorted(
+                data.usage_by_source.get(source, {}).get(kind, {}).items()
+            ):
+                identity = f"{identity_prefix}:{key}"
+                page.lines.append(
+                    f"{label}: {_link(source_path, paths[identity], identity)}"
+                )
+                page.lines.append(f"  multiplicity: {count}")
         for relation in data.relations:
             if relation.get("source") != source.as_posix():
                 continue
@@ -1023,12 +1218,74 @@ def _populate_fact_pages(
         )
 
 
+def _populate_entity_pages(
+    config: ProjectionConfig, data: _RenderData, pages: _Pages, paths: Mapping[str, str]
+) -> None:
+    for key, page in pages.terms.items():
+        term = data.terms[key]
+        source_path = paths[page.identity]
+        page.lines.extend(
+            [
+                f"label: {term['label']}",
+                f"definition: {term['definition_short']}",
+                f"owner: {_human_link(source_path, config.glossary_path.as_posix(), config.glossary_path.as_posix())}",
+            ]
+        )
+        if term.get("parent"):
+            page.lines.append(f"parent_label: {term['parent']}")
+        related = term.get("related", [])
+        if not isinstance(related, list):
+            raise ProjectionError(f"{key}: related must be a list")
+        for target in related:
+            if not isinstance(target, str):
+                raise ProjectionError(f"{key}: related must contain strings")
+            identity = f"glossary-term:{target}"
+            page.lines.append(
+                f"related: {_link(source_path, paths[identity], identity)}"
+            )
+        for ref_field, prefix in (
+            ("symbol_refs", "symbol"),
+            ("equation_refs", "equation"),
+            ("citations", "citation"),
+        ):
+            refs = term.get(ref_field, [])
+            if not isinstance(refs, list):
+                raise ProjectionError(f"{key}: {ref_field} must be a list")
+            for target in refs:
+                if not isinstance(target, str):
+                    raise ProjectionError(f"{key}: {ref_field} must contain strings")
+                identity = f"{prefix}:{target}"
+                page.lines.append(
+                    f"{ref_field.removesuffix('_refs')}: {_link(source_path, paths[identity], identity)}"
+                )
+    for group, collection, prefix in (
+        ("symbols", pages.symbols, "symbol"),
+        ("equations", pages.equations, "equation"),
+    ):
+        for key, page in collection.items():
+            source_path = paths[page.identity]
+            entry = data.notation[group][key]
+            owner = data.notation_owners[(group, key)]
+            page.lines.extend(
+                [
+                    f"tex: {entry['tex']}",
+                    f"typst: {entry['typst']}",
+                    f"metadata_owner: {_human_link(source_path, config.notation_path.as_posix(), config.notation_path.as_posix())}",
+                    f"implementation_owner: {_human_link(source_path, owner.as_posix(), owner.as_posix())}",
+                ]
+            )
+            if entry.get("description"):
+                page.lines.append(f"description: {entry['description']}")
+
+
 def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path]:
     return [
         *closure,
         config.style_path,
         *config.bibliography_paths,
         config.manifest_path,
+        config.glossary_path,
+        config.notation_path,
     ]
 
 
@@ -1055,7 +1312,7 @@ def _render_index(
     pages: _Pages,
     paths: Mapping[str, str],
 ) -> str:
-    owner_paths = _owner_paths(config, data.closure)
+    owner_paths = [*_owner_paths(config, data.closure), *data.notation_owners.values()]
     owner_rows = []
     for owner in sorted(set(owner_paths), key=lambda path: path.as_posix()):
         digest = hashlib.sha256(_owner_path(config, owner).read_bytes()).hexdigest()
@@ -1088,7 +1345,16 @@ def _render_index(
         "",
     ]
     families = Counter(page.family for page in pages.all())
-    for family in ("thesis", "code", "citations", "literature", "assets"):
+    for family in (
+        "thesis",
+        "code",
+        "citations",
+        "literature",
+        "assets",
+        "glossary",
+        "symbols",
+        "equations",
+    ):
         if families[family]:
             candidates = sorted(
                 path for path in paths.values() if path.startswith(f"{family}/")
@@ -1116,6 +1382,7 @@ def _render_pages(
     _populate_citation_pages(data, pages, paths)
     _populate_literature_pages(config, data, pages, paths)
     _populate_fact_pages(data, pages, paths)
+    _populate_entity_pages(config, data, pages, paths)
     files: dict[str, str] = {}
     for page in sorted(pages.all(), key=lambda item: item.identity):
         path = paths[page.identity]
@@ -1240,14 +1507,25 @@ def build_projection(
         config.style_path,
         *config.bibliography_paths,
         config.manifest_path,
+        config.glossary_path,
+        config.notation_path,
     )
-    output, temporary, backup = _validate_output(config, owner_paths)
+    bib = _bib_entries(config)
+    terms = _glossary_terms(config, runner, bib)
+    try:
+        notation = load_notation(_owner_path(config, config.notation_path))
+    except GlossaryError as error:
+        raise ProjectionError(f"notation metadata invalid: {error}") from error
+    notation_owners = _notation_owners(config, notation)
+    output, temporary, backup = _validate_output(
+        config, (*owner_paths, *notation_owners.values())
+    )
     warnings = tuple(
         f"stale projection debris: {path.relative_to(config.repo_root).as_posix()}"
         for path in (temporary, backup)
         if _lexists(path)
     )
-    bib = _bib_entries(config)
+    usage_by_source = _section_usage(config, closure, terms, notation, bib)
     citations_by_source, macros = _lexical_sources(config, closure, bib)
     lexical_citations: Counter[str] = Counter()
     for citations in citations_by_source.values():
@@ -1305,6 +1583,10 @@ def build_projection(
             relations=relations,
             headings=compiled_headings,
             warnings=warnings if check else (),
+            terms=terms,
+            notation=notation,
+            notation_owners=notation_owners,
+            usage_by_source=usage_by_source,
         ),
     )
     if not check:
