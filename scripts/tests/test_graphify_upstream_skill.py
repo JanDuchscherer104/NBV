@@ -11,6 +11,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SKILL_ROOT = ROOT / ".agents/skills/graphify"
 CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
+ARIA_BOUNDARY = (
+    ROOT / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
+)
 UPSTREAM_COMMIT = "4fe11092ccbe9f543608f140c790f68d5d83cae4"
 UPSTREAM_BLOBS = {
     ".graphify_version": "425d81acf4c7433074588660fbe9bfc32b79d1b0",
@@ -53,9 +56,11 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
 
     def test_aria_companion_owns_upstream_marker_compatibility(self) -> None:
         context = CONTEXT_SKILL.read_text(encoding="utf-8")
-        self.assertIn("Graphify 0.9.31 writes the semantic-refresh marker", context)
-        self.assertRegex(context, r"remove\s+`graphify-out/needs_update` only after")
-        self.assertRegex(context, r"Leave the marker\s+in\s+place after any partial, failed")
+        boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
+        self.assertIn("references/graphify-aria-boundary.md", context)
+        self.assertIn("Graphify 0.9.31 writes `graphify-out/needs_update`", boundary)
+        self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
+        self.assertIn("leave it after partial, failed, or unverified work", boundary)
 
 
 if __name__ == "__main__":
