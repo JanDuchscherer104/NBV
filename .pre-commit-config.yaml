@@ -27,9 +27,9 @@ repos:
         pass_filenames: false
         files: ^(\.agents/memory/|scripts/validate_agent_memory\.py|AGENTS\.md|Makefile)$
 
-      - id: graphify-usable-check
-        name: graphify usable snapshot
-        entry: make graphify-usable-check
+      - id: graphify-optional-check
+        name: graphify optional snapshot
+        entry: make graphify-optional-check
         language: system
         pass_filenames: false
         files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$

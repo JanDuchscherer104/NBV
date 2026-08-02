@@ -36,11 +36,14 @@ The checker now treats ancestor-only revision drift as valid and compares every
 indexed source against Graphify's content-addressed manifest. It reports
 `usable`, `graph_revision`, and `stale_sources`; stale but structurally valid
 graphs remain queryable by default, while missing or invalid graphs do not.
-Consequential results from stale source locations are verified directly.
+It also detects currently admitted sources missing from an old manifest and
+includes changed projection owners in `stale_sources`. Consequential results
+from stale source locations are verified directly.
 
 Local make targets split ordinary usability from strict closeout freshness.
-Pre-commit runs the usability check; pre-push and `scaffold-check` run the strict
-state check. Upstream post-commit and post-checkout hooks plus the Graphify merge
+Pre-commit validates a snapshot when present without requiring this optional
+artifact; pre-push and `scaffold-check` run the strict state check. Upstream
+post-commit and post-checkout hooks plus the Graphify merge
 driver were installed without modifying the byte-identical upstream skill.
 `agent-behavior` now also treats an explicitly authorized push and pull request
 as part of task completion, while retaining the per-action authorization and
@@ -48,7 +51,7 @@ path-scoped staging boundary.
 
 ## Verification
 
-- Graphify freshness tests: 15 passed.
+- Graphify freshness tests: 17 passed.
 - CI-impact tests: 11 passed.
 - Upstream Graphify skill tests: 2 passed.
 - Focused Ruff format and lint passed.

@@ -57,6 +57,7 @@ class SelectionTests(unittest.TestCase):
             makefile,
         )
         self.assertIn("graphify-projection-live-check: _check_python", makefile)
+        self.assertIn("graphify-optional-check: _check_python", makefile)
         self.assertIn("graphify-usable-check: _check_python", makefile)
         self.assertIn("graphify-state-check: _check_python", makefile)
         self.assertIn(
@@ -149,8 +150,8 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("graphify install", root_guidance)
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-        self.assertIn("id: graphify-usable-check", hooks)
-        self.assertIn("entry: make graphify-usable-check", hooks)
+        self.assertIn("id: graphify-optional-check", hooks)
+        self.assertIn("entry: make graphify-optional-check", hooks)
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
         self.assertIn("- pre-push", hooks)

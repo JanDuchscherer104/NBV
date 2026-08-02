@@ -20,6 +20,9 @@ NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
 _FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
 _OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
+_NATIVE_TEXT_SUFFIXES = {".html", ".md", ".py", ".qmd", ".rst", ".txt", ".yaml", ".yml"}
+_DOC_TEXT_SUFFIXES = _NATIVE_TEXT_SUFFIXES - {".py"}
+_NOISE_PARTS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 
 
 def _head(root: Path) -> str:
@@ -150,7 +153,7 @@ def _index_digest(stat_index: dict[str, Any]) -> str:
 
 
 def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
-    """Return indexed source paths whose current bytes differ from the manifest."""
+    """Return indexed paths whose current bytes differ from the manifest."""
     stale: list[str] = []
     repository = root.resolve()
     for raw_path, raw_entry in sorted(manifest.items()):
@@ -185,6 +188,84 @@ def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
     return stale
 
 
+def _fallback_graphify_admitted(relative: str) -> bool:
+    """Mirror the stable root corpus policy when Graphify is not importable."""
+    path = PurePosixPath(relative)
+    parts = path.parts
+    if not parts or any(part in _NOISE_PARTS for part in parts):
+        return False
+    if relative == "AGENTS.md":
+        return True
+    if parts[0] == "aria_nbv":
+        if len(parts) > 1 and parts[1] in {"tests", "scripts", ".omc", ".venv"}:
+            return False
+        return path.suffix in _NATIVE_TEXT_SUFFIXES
+    if parts[0] == "docs":
+        excluded = {
+            "_build",
+            "_extensions",
+            "_freeze",
+            "_generated",
+            "_inv",
+            "_site",
+            "literature/pdf",
+            "literature/tex-src",
+            "reference",
+            "site_libs",
+        }
+        scoped = "/".join(parts[1:3])
+        if len(parts) > 1 and (parts[1] in excluded or scoped in excluded):
+            return False
+        return path.suffix in _DOC_TEXT_SUFFIXES
+    if parts[:2] == (".agents", "references"):
+        return path.suffix == ".md"
+    if parts[:3] == (".agents", "memory", "state"):
+        return path.suffix == ".md"
+    if len(parts) == 4 and parts[:2] == (".agents", "skills"):
+        return parts[-1] == "SKILL.md"
+    if parts[0] == "graphify-input":
+        return path.suffix == ".md"
+    return False
+
+
+def _unindexed_sources(root: Path, manifest: dict[str, Any]) -> list[str]:
+    """Return currently admitted Graphify inputs absent from the manifest."""
+    indexed = {_normalize_path(path) for path in manifest}
+    try:
+        from graphify.detect import detect
+    except ImportError:
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        )
+        if result.returncode:
+            raise ValueError("tracked source inventory is unavailable")
+        admitted = {
+            _normalize_path(raw.decode("utf-8", errors="surrogateescape"))
+            for raw in result.stdout.split(b"\0")
+            if raw
+            and _fallback_graphify_admitted(
+                _normalize_path(raw.decode("utf-8", errors="surrogateescape"))
+            )
+        }
+    else:
+        detection = detect(root)
+        admitted = set()
+        repository = root.resolve()
+        for paths in detection.get("files", {}).values():
+            for raw_path in paths:
+                try:
+                    relative = Path(raw_path).resolve().relative_to(repository)
+                except (OSError, RuntimeError, ValueError) as error:
+                    raise ValueError(
+                        f"detected source escapes repository: {raw_path}: {error}"
+                    ) from error
+                admitted.add(_normalize_path(relative.as_posix()))
+    return sorted(admitted - indexed)
+
+
 def _contains_index_node(graph: dict[str, Any]) -> bool:
     nodes = graph.get("nodes")
     if not isinstance(nodes, list):
@@ -202,8 +283,11 @@ def _contains_index_node(graph: dict[str, Any]) -> bool:
     return False
 
 
-def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
+def _live_owner_drift(
+    root: Path, owner_digests: dict[str, str]
+) -> tuple[list[str], list[str]]:
     reasons: list[str] = []
+    stale: list[str] = []
     repository = root.resolve()
     owners = sorted(owner_digests)
     for relative in owners:
@@ -218,6 +302,7 @@ def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
             raise ValueError(f"projection owner escapes repository: {relative}")
         if not resolved.is_file():
             reasons.append(f"projection owner is missing: {relative}")
+            stale.append(relative)
             continue
         try:
             digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
@@ -225,6 +310,7 @@ def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
             raise ValueError(f"projection owner cannot be read: {relative}: {error}")
         if digest != owner_digests[relative]:
             reasons.append(f"projection owner digest changed: {relative}")
+            stale.append(relative)
 
     result = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *owners],
@@ -237,7 +323,7 @@ def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
         raise ValueError("projection owner worktree status is unavailable")
     if result.stdout.strip():
         reasons.append("projection owner worktree is dirty")
-    return reasons
+    return reasons, stale
 
 
 def check(root: Path) -> dict[str, Any]:
@@ -320,7 +406,9 @@ def check(root: Path) -> dict[str, Any]:
             reasons.append("projection was built from a dirty owner worktree")
         if owner_digests is not None:
             try:
-                reasons.extend(_live_owner_reasons(root, owner_digests))
+                owner_reasons, stale_owners = _live_owner_drift(root, owner_digests)
+                reasons.extend(owner_reasons)
+                stale_sources.extend(stale_owners)
             except ValueError as error:
                 invalid = True
                 reasons.append(str(error))
@@ -332,13 +420,15 @@ def check(root: Path) -> dict[str, Any]:
             reasons.append("graph built_at_commit is not an ancestor of HEAD")
         if manifest is not None:
             try:
-                stale_sources = _manifest_drift(root, manifest)
+                stale_sources.extend(_manifest_drift(root, manifest))
+                stale_sources.extend(_unindexed_sources(root, manifest))
             except ValueError as error:
                 invalid = True
                 reasons.append(str(error))
+            stale_sources = sorted(set(stale_sources))
             if stale_sources:
                 reasons.append(
-                    f"{len(stale_sources)} indexed source(s) differ from the Graphify manifest"
+                    f"{len(stale_sources)} source(s) differ from or are absent from the Graphify manifest"
                 )
         if (root / PROJECTION_INDEX).is_file() and digest is not None:
             actual_digest = _upstream_file_hash(
@@ -398,6 +488,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="succeed for a structurally valid graph even when refresh is pending",
     )
+    parser.add_argument(
+        "--optional",
+        action="store_true",
+        help="also succeed when no local Graphify snapshot exists",
+    )
     args = parser.parse_args(argv)
     try:
         result = check(Path.cwd())
@@ -419,7 +514,10 @@ def main(argv: list[str] | None = None) -> int:
             reasons = "; ".join(result["reasons"]) or "all freshness predicates pass"
             print(f"Graphify freshness: {result['state']} — {reasons}")
             print(f"Next action: {result['next_action']}")
-    return 0 if (result["usable"] if args.usable else result["fresh"]) else 1
+    success = result["usable"] if args.usable else result["fresh"]
+    if args.optional and result["state"] == "missing":
+        success = True
+    return 0 if success else 1
 
 
 if __name__ == "__main__":

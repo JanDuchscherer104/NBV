@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-optional-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -242,6 +242,9 @@ graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic
 
 graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
 	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
+
+graphify-optional-check: _check_python ## 🕸️ Validate Graphify when a local snapshot exists
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py --usable --optional
 
 graphify-usable-check: _check_python ## 🕸️ Require a valid Graphify snapshot for default agent navigation
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py --usable

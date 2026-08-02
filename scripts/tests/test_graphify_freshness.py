@@ -40,11 +40,21 @@ class FreshnessTests(unittest.TestCase):
             ["git", "config", "user.name", "Test"], cwd=self.root, check=True
         )
         (self.root / "seed").write_text("seed\n", encoding="utf-8")
+        (self.root / ".graphifyignore").write_text(
+            "*\n**\n!aria_nbv/\n!aria_nbv/**/\n!aria_nbv/**/*.py\n"
+            "!docs/\n!docs/**/\n!docs/**/*.md\n!docs/**/*.typ\n"
+            "!docs/**/*.bib\n!docs/**/*.jsonl\n"
+            "!graphify-input/\n!graphify-input/**/\n!graphify-input/**/*.md\n"
+            "aria_nbv/tests/\n",
+            encoding="utf-8",
+        )
         for relative in self.OWNER_PATHS:
             owner = self.root / relative
             owner.parent.mkdir(parents=True, exist_ok=True)
             owner.write_text(f"owner: {relative}\n", encoding="utf-8")
-        subprocess.run(["git", "add", "seed"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "add", "seed", ".graphifyignore"], cwd=self.root, check=True
+        )
         subprocess.run(["git", "add", "docs"], cwd=self.root, check=True)
         subprocess.run(["git", "commit", "-qm", "seed"], cwd=self.root, check=True)
         self.head = subprocess.run(
@@ -151,6 +161,34 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(payload["state"], "fresh")
         self.assertTrue(payload["fresh"])
         self.assertTrue(payload["usable"])
+
+    def test_new_admitted_source_is_structurally_stale(self) -> None:
+        source = self.root / "aria_nbv/new_module.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("VALUE = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(source)], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "new source"], cwd=self.root, check=True
+        )
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "structural-stale")
+        self.assertIn("aria_nbv/new_module.py", payload["stale_sources"])
+
+    def test_new_excluded_source_does_not_stale_snapshot(self) -> None:
+        source = self.root / "aria_nbv/tests/test_new_module.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("def test_placeholder(): pass\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-f", str(source)], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "excluded source"], cwd=self.root, check=True
+        )
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "fresh")
+        self.assertNotIn("aria_nbv/tests/test_new_module.py", payload["stale_sources"])
 
     def test_digest_uses_frontmatter_stripping_and_path_salt(self) -> None:
         index = self.root / "graphify-input/index.md"
@@ -320,6 +358,8 @@ class FreshnessTests(unittest.TestCase):
         result = self._run("--json")
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout)["state"], "missing")
+        optional = self._run("--quiet", "--usable", "--optional")
+        self.assertEqual(optional.returncode, 0)
 
     def test_invalid_existing_artifact_beats_another_missing_artifact(self) -> None:
         (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
