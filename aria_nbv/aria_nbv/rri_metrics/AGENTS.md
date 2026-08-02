@@ -14,6 +14,10 @@ model/loss behavior belongs to `aria_nbv.vin.ordinal`.
 
 - Oracle-label semantics, binning, decoded target meaning, and reported metrics
   are contracts, not local refactors. Keep names and paper terminology aligned.
+- RRI metrics describe values for valid supervised cases. Invalidity is not an
+  RRI value: hard-mask/reason and `q_train_mask` semantics belong to
+  `aria_nbv.rollouts`. A report that treats invalidity as low RRI crosses both
+  the rollout and RRI semantic owners.
 - Prefer additive diagnostics to altering canonical RRI behavior. Tensor kernels
   own semantics; scalar/table adapters and plotting remain secondary.
 - Operational invalidity, provenance, path, entropy, and order checks belong in
