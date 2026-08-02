@@ -40,6 +40,25 @@ rollout schema.
 `spawn`, or `connect` sink before entity logging; save mode writes the requested
 `.rrd` destination only.
 
+Prefer the Make targets `offline-sample-rerun-random` and
+`rollouts-rerun-random` for random local inspection. Reproduce a specific sample
+or rollout with the owning CLI:
+
+```bash
+cd aria_nbv
+uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml \
+  --offline-store <vin-offline-store> --split val --index 0 \
+  --save ../.artifacts/rerun/offline-sample.rrd
+
+uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline.toml \
+  --rollout-store <rollout-store.zarr> --rollout-index 0 \
+  --rollout-context auto --save ../.artifacts/rerun/rollout.rrd
+```
+
+Keep saved recordings outside VIN and rollout stores. When a real store is
+unavailable or version-blocked, preserve the strict reader failure and use the
+fixture/fake-Rerun tests below rather than weakening validation.
+
 Focused test seams are fake-Rerun lifecycle and logger tests in
 `tests/rerun_inspector/test_loggers.py`, public CLI override and preflight tests
 in `tests/rerun_inspector/test_rerun_cli.py`, frustum/display tests in

@@ -33,6 +33,9 @@ Use this file as the root dispatcher. Detailed rules live in the nearest
 - Bugs, regressions, suspicious metrics, or failing docs/data checks: open the
   nearest owner, reproduce the failure with the smallest red loop, and verify
   the cause before changing behavior.
+- Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, or offline/
+  rollout inspection work: use `rerun-nbv-inspector`; package code, README files,
+  configuration, and tests remain the behavioral owners.
 - Backlog or memory changes: use the `agents-db` skill.
 - Cleanup, pruning, or simplification: use the `simplification` skill.
 - LRZ AI Systems, Slurm, DSS, Pyxis, or remote compute work: use `lrz-ai-systems`.

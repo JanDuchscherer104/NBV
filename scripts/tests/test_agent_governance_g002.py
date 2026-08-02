@@ -111,11 +111,14 @@ def test_route_only_domain_skill_contract() -> None:
         "docs-curator",
         "entity-aware-rri",
         "nbv-geometry-contracts",
-        "rerun-nbv-inspector",
         "zarr-python",
     }
     for skill_name in retired:
         assert not (ROOT / ".agents" / "skills" / skill_name / "SKILL.md").exists()
+
+    rerun_skill = ROOT / ".agents" / "skills" / "rerun-nbv-inspector"
+    assert rerun_skill.is_dir()
+    assert "name: rerun-nbv-inspector" in _read(rerun_skill / "SKILL.md")
 
     zarr_fixture = next(
         fixture for fixture in routing["fixtures"] if fixture["id"] == "zarr-storage-api-change"
@@ -132,14 +135,25 @@ def test_route_only_domain_skill_contract() -> None:
         "zarr-storage-api-change",
         "counterfactual-rollout-planning",
         "dataset-cache-operation",
-        "rerun-offline-inspection",
-        "rerun-rollout-zarr-inspection",
         "planned-thesis-detail",
         "concrete-failure",
         "code-review",
         "docs-literature-no-browser",
     ):
         assert fixtures[fixture_id]["expected_skills"] == ["agent-behavior"]
+
+    for fixture_id in (
+        "rerun-offline-inspection",
+        "rerun-rollout-zarr-inspection",
+        "rerun-sdk-api-change",
+    ):
+        assert fixtures[fixture_id]["expected_skills"] == [
+            "agent-behavior",
+            "rerun-nbv-inspector",
+        ]
+    assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
+        "mcp__MCP_DOCKER.get_library_docs"
+    ]
 
 
 def test_capture_and_routing_contracts() -> None:

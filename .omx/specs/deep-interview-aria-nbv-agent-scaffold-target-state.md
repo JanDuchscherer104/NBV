@@ -956,6 +956,30 @@ This decision supersedes retained-skill dispositions in the implementation PRD
 and its first debrief. Those artifacts remain historical evidence of the
 earlier accepted implementation, not current routing authority.
 
+## Accepted 2026-08-02 Rerun Procedural Exception
+
+The human owner superseded only the `rerun-nbv-inspector` part of the route-only
+decision after exact-base/head review showed that the removed bundle contained a
+distinct Rerun SDK and artifact-production procedure. The other eight domain
+skills remain pruned.
+
+- `rerun-nbv-inspector` owns activation, current-official-doc and example
+  routing, ordered call-chain review, saved `.rrd` evidence preference,
+  blocked-store fallback, and focused completion evidence.
+- The skill and its references are not authoritative for geometry, RRI,
+  validity, store schemas, SDK versions, entity paths, or implemented behavior.
+  Those meanings remain with package README files, code, configuration, tests,
+  active thesis sections, and current official Rerun documentation.
+- Fixed Context7 queries and official-example links are progressive-disclosure
+  routing aids. They must be refreshed or rejected at use time and cannot settle
+  a local or upstream API claim.
+- Concrete offline and rollout inspection commands live in the Rerun package
+  README and CLI help; the skill points to those owners rather than maintaining
+  a second command catalogue.
+
+This exception preserves the target state's single-ownership rule while
+restoring an independently useful external-SDK integration workflow.
+
 ## Brownfield Evidence Versus Inference
 
 Confirmed from current artifacts:

@@ -47,14 +47,21 @@
     {
       "id": "rerun-offline-inspection",
       "task": "Inspect ARIA-NBV offline samples in Rerun with entities, layers, validity, sinks, or display frames.",
-      "expected_skills": ["agent-behavior"],
+      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
       "non_goals": ["Do not change package-owned geometry or data semantics merely to alter an observer display."]
     },
     {
       "id": "rerun-rollout-zarr-inspection",
       "task": "Inspect an ARIA-NBV rollout store through Rerun, including rollout entities, validity, layers, or display frames.",
-      "expected_skills": ["agent-behavior"],
+      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
       "non_goals": ["Do not use a Rerun inspection route to change rollout-store Zarr APIs or storage layout."]
+    },
+    {
+      "id": "rerun-sdk-api-change",
+      "task": "Change Rerun Python SDK sink, Transform3D, Pinhole, DepthImage, entity, timeline, or blueprint usage in the ARIA inspector.",
+      "expected_skills": ["agent-behavior", "rerun-nbv-inspector"],
+      "expected_tool_refs": ["mcp__MCP_DOCKER.get_library_docs"],
+      "non_goals": ["Current official Rerun evidence informs SDK usage but does not replace ARIA package contracts or tests."]
     },
     {
       "id": "context7-pytorch3d-conceptual-plan",
