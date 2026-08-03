@@ -64,14 +64,14 @@ metadata:
 
 ## Graphify branch
 
-For architecture, relationship, or broad project-content discovery, treat an
-existing `graphify-out/graph.json` as the default trusted retrieval index. Run
-`python3 scripts/check_graphify_freshness.py --json`; whenever the result says
-`usable: true`, including `structural-stale` or `semantic-stale`, hand off to the
-byte-identical upstream skill at `.agents/skills/graphify/SKILL.md`. Query
-Graphify first; its provenance and `source_location` route the exact-source
-check. Verify consequential `stale_sources` claims directly; only `missing` or
-`invalid` states bypass Graphify entirely.
+For broad architecture, relationship, or project-content discovery, prefer an
+existing `graphify-out/graph.json` when its query interface is available,
+verified, and materially useful. Run `scripts/check_graphify_freshness.py
+--json`; for any `usable: true` state, prefer the byte-identical upstream skill.
+Its provenance and `source_location` route exact-source checks; verify
+consequential `stale_sources` directly. If Graphify is unavailable, unverified,
+or not the narrowest useful route, use direct search; `missing` or `invalid`
+states bypass it entirely.
 
 Freshness validates rather than globally gates reads. `make graphify-state-check`
 remains strict for scaffold and pre-push validation; `make graphify-usable-check`
@@ -118,9 +118,9 @@ implies supersession; ingestion-only dates stay unknown.
 4. When semantic recall is eligible, choose one reviewed wing and normally one
    room through the MemPalace branch above. Search `aria-codex-history` only for
    an explicit raw-history request.
-5. Take the Graphify branch above whenever the artifact is usable; use its
-   `stale_sources` list to scope exact-source verification. Continue without
-   Graphify only when the artifact is missing or invalid.
+5. Prefer Graphify when its artifact is usable and its query interface is
+   available, verified, and materially useful; use `stale_sources` for scoped
+   verification. Otherwise continue with direct search without blocking.
 6. Use `docs/_generated/context/source_index.md` only when it already exists or
    source-family routing is unclear; refresh with `make context` only as needed.
 7. Use source-specific outline tools before broad raw reads:
