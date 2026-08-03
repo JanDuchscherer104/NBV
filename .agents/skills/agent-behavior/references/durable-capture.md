@@ -15,8 +15,9 @@ guidance in deliberate angle-bracket prose.
    meanings, separate them only when each has a distinct owner.
 4. Preserve the intent once in the smallest authoritative surface. Other
    surfaces may point to that owner but must not restate the rule.
-5. Run the verification required by the changed owner and report any part that
-   remains ambiguous, deferred, or unverified.
+5. Identify the verification required by each selected owner, including in a
+   read-only routing answer. Run it after an edit; otherwise name it as the
+   route, and report any part that remains ambiguous, deferred, or unverified.
 
 ## Completion
 
