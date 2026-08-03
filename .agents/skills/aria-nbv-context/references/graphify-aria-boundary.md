@@ -1,8 +1,9 @@
 # ARIA Graphify Boundary
 
 Read this only before a Graphify build, refresh, or semantic reconciliation.
-Graphify is the default trusted retrieval index; exact repository owners remain
-authoritative for behavior and scientific claims.
+When available for eligible broad discovery, Graphify is the preferred retrieval
+index; exact repository owners remain authoritative for behavior and scientific
+claims.
 
 ## Corpus And Upstream Ownership
 
