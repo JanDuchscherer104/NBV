@@ -11,24 +11,13 @@ from pathlib import Path
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from scaffold_audit import load_frontmatter  # noqa: E402
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
-
-
-def _frontmatter_list(document: str, field: str) -> list[str]:
-    """Return a simple YAML-frontmatter list field from a skill document."""
-    _, frontmatter, _ = document.split("---", 2)
-    lines = frontmatter.splitlines()
-    start = lines.index(f"  {field}:") + 1
-    values: list[str] = []
-    for line in lines[start:]:
-        if line.startswith("  ") and not line.startswith("    - "):
-            break
-        if line.startswith("    - "):
-            values.append(line.removeprefix("    - ").strip().strip('"'))
-    return values
 
 
 def _tracked_live_runtime_configs(root: Path = ROOT) -> list[Path]:
@@ -220,8 +209,11 @@ def test_capture_and_routing_contracts() -> None:
 
 
 def test_thesis_context_and_context7_routing() -> None:
-    context_skill = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
-    canonical_sources = _frontmatter_list(context_skill, "canonical_sources")
+    context_path = ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md"
+    metadata = load_frontmatter(context_path)["metadata"]
+    assert isinstance(metadata, dict)
+    canonical_sources = metadata["canonical_sources"]
+    assert isinstance(canonical_sources, list)
     for owner in (
         "docs/typst/thesis/main.typ",
         "docs/typst/shared/glossary.typ",

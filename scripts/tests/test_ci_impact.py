@@ -13,22 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
+from scaffold_audit import load_frontmatter  # noqa: E402
 
 ALL = set(FAMILIES)
-
-
-def frontmatter_list(document: str, field: str) -> list[str]:
-    """Return a simple YAML-frontmatter list field from a skill document."""
-    _, frontmatter, _ = document.split("---", 2)
-    lines = frontmatter.splitlines()
-    start = lines.index(f"  {field}:") + 1
-    values: list[str] = []
-    for line in lines[start:]:
-        if line.startswith("  ") and not line.startswith("    - "):
-            break
-        if line.startswith("    - "):
-            values.append(line.removeprefix("    - ").strip().strip('"'))
-    return values
 
 
 class SelectionTests(unittest.TestCase):
@@ -142,10 +129,12 @@ class SelectionTests(unittest.TestCase):
 
     def test_graphify_guidance_uses_graph_by_default_and_validates_state(self) -> None:
         skill_root = REPO_ROOT / ".agents/skills/graphify"
-        context_guidance = (
-            REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
-        ).read_text(encoding="utf-8")
-        canonical_sources = frontmatter_list(context_guidance, "canonical_sources")
+        context_path = REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
+        context_guidance = context_path.read_text(encoding="utf-8")
+        metadata = load_frontmatter(context_path)["metadata"]
+        self.assertIsInstance(metadata, dict)
+        canonical_sources = metadata["canonical_sources"]
+        self.assertIsInstance(canonical_sources, list)
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
