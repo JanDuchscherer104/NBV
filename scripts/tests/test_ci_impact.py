@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -16,6 +15,31 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
 
 ALL = set(FAMILIES)
+
+
+def frontmatter_list_items(document: str, key: str) -> list[str]:
+    """Return scalar items from one top-level frontmatter list."""
+    frontmatter = document.split("---", 2)[1]
+    lines = frontmatter.splitlines()
+    key_index = next(
+        index for index, line in enumerate(lines) if line.strip() == f"{key}:"
+    )
+    key_indent = len(lines[key_index]) - len(lines[key_index].lstrip())
+    items: list[str] = []
+    for line in lines[key_index + 1 :]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent <= key_indent:
+            break
+        if not stripped.startswith("- "):
+            continue
+        value = stripped.removeprefix("- ").strip()
+        if value[:1] in {"'", '"'} and value[-1:] == value[:1]:
+            value = value[1:-1]
+        items.append(value)
+    return items
 
 
 class SelectionTests(unittest.TestCase):
@@ -134,19 +158,27 @@ class SelectionTests(unittest.TestCase):
         boundary_owner = (
             ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
         )
-        boundary_pattern = re.compile(
-            rf"(?m)^\s*-\s*['\"]?{re.escape(boundary_owner)}['\"]?\s*$"
+        canonical_sources = frontmatter_list_items(
+            context_guidance, "canonical_sources"
         )
-        frontmatter = context_guidance.split("---", 2)[1]
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
         self.assertIn("scripts/build_graphify_projection.py", context_guidance)
         self.assertIn('fork_turns="none"', context_guidance)
-        self.assertRegex(frontmatter, boundary_pattern)
+        self.assertIn(boundary_owner, canonical_sources)
         for scalar in (boundary_owner, f"'{boundary_owner}'", f'"{boundary_owner}"'):
             with self.subTest(scalar=scalar):
-                self.assertRegex(f"    - {scalar}", boundary_pattern)
+                fixture = f"---\nmetadata:\n  canonical_sources:\n    - {scalar}\n---\n"
+                self.assertIn(
+                    boundary_owner,
+                    frontmatter_list_items(fixture, "canonical_sources"),
+                )
+        wrong_list = f"---\nmetadata:\n  must_read:\n    - {boundary_owner}\n  canonical_sources:\n    - AGENTS.md\n---\n"
+        self.assertNotIn(
+            boundary_owner,
+            frontmatter_list_items(wrong_list, "canonical_sources"),
+        )
         self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
