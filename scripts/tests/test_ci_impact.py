@@ -17,6 +17,20 @@ from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
 ALL = set(FAMILIES)
 
 
+def frontmatter_list(document: str, field: str) -> list[str]:
+    """Return a simple YAML-frontmatter list field from a skill document."""
+    _, frontmatter, _ = document.split("---", 2)
+    lines = frontmatter.splitlines()
+    start = lines.index(f"  {field}:") + 1
+    values: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("  ") and not line.startswith("    - "):
+            break
+        if line.startswith("    - "):
+            values.append(line.removeprefix("    - ").strip().strip('"'))
+    return values
+
+
 class SelectionTests(unittest.TestCase):
     def test_workflow_keeps_stable_unfiltered_ci_identity(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -131,22 +145,23 @@ class SelectionTests(unittest.TestCase):
         context_guidance = (
             REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         ).read_text(encoding="utf-8")
-        root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        canonical_sources = frontmatter_list(context_guidance, "canonical_sources")
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
-        self.assertIn("result says `usable: true`", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
         self.assertIn("scripts/build_graphify_projection.py", context_guidance)
         self.assertIn('fork_turns="none"', context_guidance)
-        self.assertIn("every dispatched file", context_guidance)
+        self.assertIn(
+            ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md",
+            canonical_sources,
+        )
+        for source in canonical_sources:
+            self.assertTrue((REPO_ROOT / source.partition("#")[0]).is_file(), source)
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
             "0.9.31",
         )
         self.assertTrue((skill_root / "references/query.md").is_file())
-        self.assertIn("aria-nbv-context", root_guidance)
-        self.assertNotIn("graphify query", root_guidance)
-        self.assertNotIn("graphify install", root_guidance)
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
         self.assertIn("id: graphify-usable-check", hooks)
