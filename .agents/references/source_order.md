@@ -24,8 +24,8 @@ Use this reference when a task needs current project truth or sources disagree.
 - Accepted scaffold-rework target state:
   `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` owns the
   scoped scaffold requirements and planning bounds, including the explicit
-  2026-08-01 Graphify option-3 supersession. It does not replace the exact code,
-  test, configuration, thesis, or human-preference owners above.
+  2026-08-03 canonical Graphify publication supersession. It does not replace
+  the exact code, test, configuration, thesis, or human-preference owners above.
 - Generated routing artifacts: `docs/_generated/context/source_index.md`,
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.

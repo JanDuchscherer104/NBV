@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -25,9 +26,30 @@ from build_graphify_projection import (  # noqa: E402
 REPOSITORY = "JanDuchscherer104/ARIA-NBV"
 GITHUB = f"https://github.com/{REPOSITORY}"
 
+_GIT_REPOSITORY_ENV = {
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_WORK_TREE",
+}
+
+
+def _isolated_git_env() -> dict[str, str]:
+    """Keep hook-local Git state out of the fixture repository."""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key not in _GIT_REPOSITORY_ENV
+    }
+
 
 def _git(root: Path, *args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+    return subprocess.check_output(
+        ["git", *args], cwd=root, env=_isolated_git_env(), text=True
+    ).strip()
 
 
 class FakeRunner:
@@ -48,7 +70,12 @@ class FakeRunner:
         self.call_cwds.append(cwd)
         if command[0] == "git":
             return subprocess.run(
-                command, cwd=cwd, check=False, capture_output=True, text=True
+                command,
+                cwd=cwd,
+                env=_isolated_git_env(),
+                check=False,
+                capture_output=True,
+                text=True,
             )
         if command[0] != "typst":
             raise AssertionError(f"unexpected executable: {command[0]}")
@@ -70,12 +97,24 @@ class Fixture:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "init", "-q", "-b", "main"],
+            cwd=root,
+            env=_isolated_git_env(),
+            check=True,
+        )
         _git(root, "config", "user.email", "projection@example.invalid")
         _git(root, "config", "user.name", "Projection Test")
         self.write("src/model.py", "class Model:\n    pass\n")
-        subprocess.run(["git", "add", "."], cwd=root, check=True)
-        subprocess.run(["git", "commit", "-qm", "code"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=root, env=_isolated_git_env(), check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-qm", "code"],
+            cwd=root,
+            env=_isolated_git_env(),
+            check=True,
+        )
         self.code_oid = _git(root, "rev-parse", "HEAD")
         _git(root, "tag", "v1.0.0", self.code_oid)
 
@@ -138,8 +177,15 @@ class Fixture:
         )
         self.write("docs/literature/tex-src/paper-a/main.tex", "PRIVATE TEX\n")
         self.write_bytes("docs/literature/pdf/paper-a.pdf", b"PRIVATE PDF\n")
-        subprocess.run(["git", "add", "."], cwd=root, check=True)
-        subprocess.run(["git", "commit", "-qm", "owners"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=root, env=_isolated_git_env(), check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-qm", "owners"],
+            cwd=root,
+            env=_isolated_git_env(),
+            check=True,
+        )
 
         self.runner = FakeRunner()
         self.runner.citations = [{"key": "PaperA"}, {"key": "QhPaper"}]

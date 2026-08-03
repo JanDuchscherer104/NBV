@@ -32,16 +32,16 @@ repos:
         entry: make graphify-optional-check
         language: system
         pass_filenames: false
-        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
+        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|graphify-out/(graph\.json|GRAPH_REPORT\.md|manifest\.json|graph\.html)|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
 
-      - id: graphify-state-check
-        name: graphify strict state
-        entry: make graphify-state-check
+      - id: graphify-worktree-check
+        name: graphify usable worktree baseline
+        entry: make graphify-usable-check
         language: system
         pass_filenames: false
         stages:
           - pre-push
-        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
+        files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|graphify-out/(graph\.json|GRAPH_REPORT\.md|manifest\.json|graph\.html)|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
 
       - id: docs-render-core
         name: core docs render

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed freshness check for the optional local Graphify artifact."""
+"""Classify the committed Graphify snapshot against the current worktree."""
 
 from __future__ import annotations
 
@@ -14,11 +14,9 @@ from typing import Any
 
 PROJECTION_INDEX = Path("graphify-input/index.md")
 GRAPH = Path("graphify-out/graph.json")
-STAT_INDEX = Path("graphify-out/cache/stat-index.json")
 MANIFEST = Path("graphify-out/manifest.json")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
-_FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
 _OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
 _NATIVE_TEXT_SUFFIXES = {".html", ".md", ".py", ".qmd", ".rst", ".txt", ".yaml", ".yml"}
 _DOC_TEXT_SUFFIXES = _NATIVE_TEXT_SUFFIXES - {".py"}
@@ -122,36 +120,6 @@ def _normalize_path(value: str) -> str:
     return result
 
 
-def _upstream_file_hash(content: bytes, relative_path: str) -> str:
-    """Reproduce Graphify 0.9.31's content-plus-relative-path digest."""
-    text = content.decode(errors="replace")
-    opener = _FRONTMATTER_DELIM.match(text)
-    if opener is not None:
-        closer = _FRONTMATTER_DELIM.search(text, opener.end())
-        if closer is not None:
-            content = text[closer.start() + 3 :].encode()
-    digest = hashlib.sha256()
-    digest.update(content)
-    digest.update(b"\x00")
-    digest.update(relative_path.lower().encode())
-    return digest.hexdigest()
-
-
-def _index_digest(stat_index: dict[str, Any]) -> str:
-    entry = stat_index.get(INDEX_PATH)
-    if not isinstance(entry, dict):
-        raise ValueError(
-            "invalid stat index: missing object entry for graphify-input/index.md"
-        )
-    hashes = entry.get("hashes")
-    if not isinstance(hashes, dict):
-        raise ValueError("invalid stat index: index hashes must be an object")
-    digest = hashes.get(INDEX_PATH)
-    if not isinstance(digest, str) or not digest:
-        raise ValueError("invalid stat index: index digest must be a non-empty string")
-    return digest
-
-
 def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
     """Return indexed paths whose current bytes differ from the manifest."""
     stale: list[str] = []
@@ -160,6 +128,8 @@ def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
         if not isinstance(raw_path, str):
             raise ValueError("invalid manifest: source path must be a string")
         relative = _normalize_path(raw_path)
+        if relative.startswith("graphify-input/"):
+            continue
         source = repository / relative
         try:
             resolved = source.resolve(strict=False)
@@ -186,6 +156,24 @@ def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
         if digest != expected:
             stale.append(relative)
     return stale
+
+
+def _projection_inventory_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
+    """Compare deterministic projection membership without volatile Git metadata."""
+    indexed = {
+        _normalize_path(path)
+        for path in manifest
+        if isinstance(path, str) and _normalize_path(path).startswith("graphify-input/")
+    }
+    projection_root = root / "graphify-input"
+    if not projection_root.is_dir():
+        return [INDEX_PATH] if indexed else []
+    current = {
+        path.relative_to(root).as_posix()
+        for path in projection_root.rglob("*.md")
+        if path.is_file()
+    }
+    return sorted(indexed.symmetric_difference(current))
 
 
 def _fallback_graphify_admitted(relative: str) -> bool:
@@ -339,12 +327,7 @@ def check(root: Path) -> dict[str, Any]:
         invalid = True
         reasons.append(str(error))
 
-    paths = (
-        (PROJECTION_INDEX, "projection index"),
-        (GRAPH, "graph"),
-        (STAT_INDEX, "stat index"),
-        (MANIFEST, "manifest"),
-    )
+    paths = ((GRAPH, "graph"), (MANIFEST, "manifest"))
     for relative, label in paths:
         if not (root / relative).is_file():
             missing = True
@@ -356,7 +339,6 @@ def check(root: Path) -> dict[str, Any]:
     graph: dict[str, Any] | None = None
     graph_revision: str | None = None
     manifest: dict[str, Any] | None = None
-    digest: str | None = None
     node_present: bool | None = None
     if (root / PROJECTION_INDEX).is_file():
         try:
@@ -378,12 +360,6 @@ def check(root: Path) -> dict[str, Any]:
                 )
             graph_revision = built_at_commit
             node_present = _contains_index_node(graph)
-        except ValueError as error:
-            invalid = True
-            reasons.append(str(error))
-    if (root / STAT_INDEX).is_file():
-        try:
-            digest = _index_digest(_json_object(root / STAT_INDEX, "stat index"))
         except ValueError as error:
             invalid = True
             reasons.append(str(error))
@@ -421,6 +397,7 @@ def check(root: Path) -> dict[str, Any]:
         if manifest is not None:
             try:
                 stale_sources.extend(_manifest_drift(root, manifest))
+                stale_sources.extend(_projection_inventory_drift(root, manifest))
                 stale_sources.extend(_unindexed_sources(root, manifest))
             except ValueError as error:
                 invalid = True
@@ -430,14 +407,6 @@ def check(root: Path) -> dict[str, Any]:
                 reasons.append(
                     f"{len(stale_sources)} source(s) differ from or are absent from the Graphify manifest"
                 )
-        if (root / PROJECTION_INDEX).is_file() and digest is not None:
-            actual_digest = _upstream_file_hash(
-                (root / PROJECTION_INDEX).read_bytes(), INDEX_PATH
-            )
-        else:
-            actual_digest = None
-        if actual_digest is not None and digest != actual_digest:
-            reasons.append("projection index digest does not match stat index")
         if node_present is False:
             reasons.append("graph has no node sourced from graphify-input/index.md")
 

@@ -11,6 +11,10 @@ on:
       - ".pre-commit-config.yaml"
       - ".configs/**"
       - ".graphifyignore"
+      - "graphify-out/GRAPH_REPORT.md"
+      - "graphify-out/graph.html"
+      - "graphify-out/graph.json"
+      - "graphify-out/manifest.json"
       - "AGENTS.md"
       - "Makefile"
       - "README.md"
@@ -101,6 +105,10 @@ jobs:
           bash scripts/tests/test_setup_worktree_env.sh
           python3 scripts/tests/test_graphify_freshness.py
           python3 scripts/tests/test_graphify_upstream_skill.py
+
+      - name: Validate canonical Graphify publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: make graphify-publish-check PYTHON_INTERPRETER=python
 
       - name: Validate package contracts
         if: steps.impact.outputs.package == 'true'

@@ -5,8 +5,13 @@ Graphify is trusted navigation; exact repository owners remain authoritative.
 
 ## Freshness And Corpus
 
-- `make graphify-state-check` is the strict scaffold and pre-push gate;
-  `make graphify-usable-check` validates ordinary navigation.
+- The committed `graphify-out/{graph.json,GRAPH_REPORT.md,manifest.json,graph.html}`
+  snapshot is the shared navigation baseline. The primary integration checkout
+  publishes it; linked worktrees consume it and verify reported branch-local
+  `stale_sources` directly.
+- `make graphify-usable-check` validates ordinary worktree navigation and
+  pre-push use. `make graphify-state-check` is an explicit strict diagnostic;
+  `make graphify-publish-check` is the strict canonical-publication gate.
 - A Git HEAD mismatch alone is not stale when recorded revisions are ancestors
   and indexed bytes match.
 - ARIA owns `.graphifyignore`, the freshness checker, and the ignored Markdown
@@ -24,6 +29,11 @@ Graphify is trusted navigation; exact repository owners remain authoritative.
   existing-file nodes outside that set are excluded. Until then, keep the last
   valid graph queryable, leave the strict gate stale, and verify affected source
   locations directly.
+- Keep the upstream post-commit and post-checkout worktree guard. Use
+  `graphify hook install` in the primary checkout; do not add an ARIA hook or
+  writable shared graph directory. `make graphify-refresh` covers deterministic
+  code-only integration refreshes and fails when semantic owners need the full
+  upstream skill workflow.
 
 ## Marker And Worktrees
 
@@ -32,4 +42,6 @@ Graphify is trusted navigation; exact repository owners remain authoritative.
   pass; leave it after partial, failed, or unverified work.
 - Run `scripts/setup_worktree_env.sh` in linked worktrees. Only the
   content-addressed `semantic` and `semantic-deep` caches are shared; projection,
-  graph, manifest, AST, and run state stay worktree-local.
+  AST, and run state stay worktree-local. The committed graph and manifest are
+  read as the branch baseline; generated updates remain local until the primary
+  integration checkout deliberately publishes them.

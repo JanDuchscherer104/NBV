@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-optional-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-refresh graphify-optional-check graphify-usable-check graphify-state-check graphify-publish-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -18,6 +18,9 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m
 RED := \033[0;31m
+GIT_CLEAN_ENV := env -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_COMMON_DIR \
+	-u GIT_DIR -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_PREFIX \
+	-u GIT_WORK_TREE
 
 # Project directories
 PKG_DIR := aria_nbv
@@ -232,7 +235,7 @@ scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 
-scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test graphify-state-check ## 🧭 Run the strict local agent-scaffold gate
+scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test graphify-usable-check ## 🧭 Validate the scaffold with a usable shared Graphify baseline
 
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
@@ -241,7 +244,17 @@ graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic
 	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
 graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
-	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
+	@$(GIT_CLEAN_ENV) $(PYTHON_INTERPRETER) scripts/build_graphify_projection.py \
+		--check --aria-code-ref "$$($(GIT_CLEAN_ENV) git rev-parse HEAD)"
+
+graphify-refresh: _check_python ## 🕸️ Refresh code topology; fail when semantic owners need a full Graphify run
+	@command -v graphify >/dev/null 2>&1 || { echo "graphify is required: uv tool install graphifyy" >&2; exit 1; }
+	@test -f graphify-out/graph.json || { echo "build the initial graph with the upstream \$$graphify skill" >&2; exit 1; }
+	@graph_ref="$$($(PYTHON_INTERPRETER) -c 'import json; print(json.load(open("graphify-out/graph.json"))["built_at_commit"])')"; \
+		$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --output graphify-input --aria-code-ref "$$graph_ref"
+	@graphify update .
+	@graphify export html
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
 
 graphify-optional-check: _check_python ## 🕸️ Validate Graphify when a local snapshot exists
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py --usable --optional
@@ -251,6 +264,14 @@ graphify-usable-check: _check_python ## 🕸️ Require a valid Graphify snapsho
 
 graphify-state-check: _check_python ## 🕸️ Require indexed Graphify bytes to match the current worktree
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+
+graphify-publish-check: _check_python ## 🕸️ Require a fresh, committed canonical Graphify snapshot
+	@test -f graphify-out/graph.json || { echo "missing committed Graphify snapshot" >&2; exit 1; }
+	@git ls-files --error-unmatch graphify-out/graph.json graphify-out/GRAPH_REPORT.md graphify-out/manifest.json graphify-out/graph.html >/dev/null
+	@graph_ref="$$($(PYTHON_INTERPRETER) -c 'import json; print(json.load(open("graphify-out/graph.json"))["built_at_commit"])')"; \
+		$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --output graphify-input --aria-code-ref "$$graph_ref"
+	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+	@git diff --exit-code HEAD -- graphify-out/graph.json graphify-out/GRAPH_REPORT.md graphify-out/manifest.json graphify-out/graph.html
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py

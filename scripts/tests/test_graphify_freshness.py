@@ -14,8 +14,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts/check_graphify_freshness.py"
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_graphify_freshness import _upstream_file_hash  # noqa: E402
 
 
 class FreshnessTests(unittest.TestCase):
@@ -84,24 +82,13 @@ class FreshnessTests(unittest.TestCase):
             f"## Owner digests\n\n{owner_rows}\n\n## Families\n",
             encoding="utf-8",
         )
-        digest = _upstream_file_hash(index.read_bytes(), "graphify-input/index.md")
         output = self.root / "graphify-out"
-        (output / "cache").mkdir(parents=True, exist_ok=True)
+        output.mkdir(parents=True, exist_ok=True)
         (output / "graph.json").write_text(
             json.dumps(
                 {
                     "built_at_commit": self.head,
                     "nodes": [{"source_file": "./graphify-input/index.md"}],
-                }
-            ),
-            encoding="utf-8",
-        )
-        (output / "cache/stat-index.json").write_text(
-            json.dumps(
-                {
-                    "graphify-input/index.md": {
-                        "hashes": {"graphify-input/index.md": digest}
-                    }
                 }
             ),
             encoding="utf-8",
@@ -124,6 +111,12 @@ class FreshnessTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
+    def _corrupt_manifest_digest(self) -> None:
+        path = self.root / "graphify-out/manifest.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest[self.OWNER_PATHS[0]]["semantic_hash"] = "wrong"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
 
     def _json(self) -> dict[str, object]:
         result = self._run("--json")
@@ -190,34 +183,27 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(payload["state"], "fresh")
         self.assertNotIn("aria_nbv/tests/test_new_module.py", payload["stale_sources"])
 
-    def test_digest_uses_frontmatter_stripping_and_path_salt(self) -> None:
-        index = self.root / "graphify-input/index.md"
-        raw = index.read_bytes()
-        salted = _upstream_file_hash(raw, "graphify-input/index.md")
-        self.assertNotEqual(salted, hashlib.sha256(raw).hexdigest())
-        stat_index = self.root / "graphify-out/cache/stat-index.json"
-        stat_index.write_text(
-            json.dumps(
-                {
-                    "graphify-input/index.md": {
-                        "hashes": {
-                            "graphify-input/index.md": hashlib.sha256(raw).hexdigest()
-                        }
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-        self.assertEqual(
-            json.loads(self._run("--json").stdout)["state"], "structural-stale"
-        )
+    def test_missing_local_projection_keeps_committed_snapshot_usable(self) -> None:
+        (self.root / "graphify-input/index.md").unlink()
 
-    def test_digest_path_salt_is_case_normalized(self) -> None:
-        content = b"# projection\n"
-        self.assertEqual(
-            _upstream_file_hash(content, "Graphify-Input/INDEX.md"),
-            _upstream_file_hash(content, "graphify-input/index.md"),
-        )
+        strict = self._run("--quiet")
+        usable = self._run("--quiet", "--usable")
+        payload = self._json()
+
+        self.assertEqual(strict.returncode, 1)
+        self.assertEqual(usable.returncode, 0)
+        self.assertEqual(payload["state"], "structural-stale")
+        self.assertTrue(payload["usable"])
+        self.assertIn("graphify-input/index.md", payload["stale_sources"])
+
+    def test_projection_inventory_drift_is_structurally_stale(self) -> None:
+        extra = self.root / "graphify-input/new-proxy.md"
+        extra.write_text("# new proxy\n", encoding="utf-8")
+
+        payload = self._json()
+
+        self.assertEqual(payload["state"], "structural-stale")
+        self.assertIn("graphify-input/new-proxy.md", payload["stale_sources"])
 
     def test_nodes_without_source_metadata_do_not_invalidate_a_graph(self) -> None:
         graph_path = self.root / "graphify-out/graph.json"
@@ -260,18 +246,7 @@ class FreshnessTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             ),
-            "digest": lambda: (
-                self.root / "graphify-out/cache/stat-index.json"
-            ).write_text(
-                json.dumps(
-                    {
-                        "graphify-input/index.md": {
-                            "hashes": {"graphify-input/index.md": "wrong"}
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            ),
+            "manifest": self._corrupt_manifest_digest,
             "node": lambda: (self.root / "graphify-out/graph.json").write_text(
                 json.dumps(
                     {
@@ -361,15 +336,15 @@ class FreshnessTests(unittest.TestCase):
         optional = self._run("--quiet", "--usable", "--optional")
         self.assertEqual(optional.returncode, 0)
 
-    def test_invalid_existing_artifact_beats_another_missing_artifact(self) -> None:
+    def test_invalid_existing_artifact_beats_missing_manifest(self) -> None:
         (self.root / "graphify-out/graph.json").write_text("not json", encoding="utf-8")
-        (self.root / "graphify-out/cache/stat-index.json").unlink()
+        (self.root / "graphify-out/manifest.json").unlink()
         result = self._run("--json")
         payload = json.loads(result.stdout)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(payload["state"], "invalid")
         self.assertTrue(
-            any("missing stat index" in reason for reason in payload["reasons"])
+            any("missing manifest" in reason for reason in payload["reasons"])
         )
 
     def test_available_structural_reasons_survive_an_invalid_artifact(self) -> None:
@@ -387,7 +362,7 @@ class FreshnessTests(unittest.TestCase):
         self.assertTrue(any("invalid graph" in reason for reason in payload["reasons"]))
 
     def test_missing_artifact_and_option_conflict_fail_closed(self) -> None:
-        (self.root / "graphify-input/index.md").unlink()
+        (self.root / "graphify-out/graph.json").unlink()
         result = self._run()
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing", result.stdout)

@@ -111,6 +111,30 @@ those namespaces so any agent can reuse them when Graphify is available. No
 graph, projection, manifest, AST state, or semantic run state is shared, and
 cache presence never establishes freshness or gates exact-source work.
 
+## Accepted 2026-08-03 Canonical Graphify Publication Supersession
+
+The human owner selected the upstream team topology after reviewing Graphify's
+documented post-commit and linked-worktree behavior. This decision supersedes
+the earlier prohibitions on tracked generated graph output, source/graph
+publication pairs, Graphify validation in scaffold gates, and an automatic
+refresh lifecycle where those statements conflict with this section.
+
+ARIA tracks the query-critical upstream snapshot
+`graphify-out/{graph.json,GRAPH_REPORT.md,manifest.json,graph.html}`. It remains
+derived navigation rather than project truth. The primary integration checkout
+is the sole publisher; linked worktrees consume the committed baseline, query it
+when usable, and verify branch-local `stale_sources` against exact owners. Cache,
+projection, AST, semantic-run, cost, memory, and temporary extraction state stay
+ignored and must not be shared as writable graph state.
+
+The unmodified upstream post-commit and post-checkout hooks remain primary-only,
+including their linked-worktree guard. Feature-worktree pre-commit, pre-push,
+and scaffold checks validate a usable baseline without rejecting ordinary
+branch drift. Strict freshness is retained as an explicit diagnostic and is
+required when the primary checkout publishes the canonical snapshot or `main`
+accepts it. Code-only refresh uses upstream incremental extraction; changed
+semantic owners require the full upstream skill workflow before publication.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the

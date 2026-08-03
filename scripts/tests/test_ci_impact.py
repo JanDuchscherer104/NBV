@@ -30,8 +30,9 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("jobs:\n  ci:\n", workflow)
         self.assertNotIn("ci-gate", workflow)
         self.assertNotIn("Install Graphify", workflow)
-        self.assertNotIn("Validate Graphify", workflow)
         self.assertNotIn('pip install "graphifyy==', workflow)
+        self.assertIn("Validate canonical Graphify publication", workflow)
+        self.assertIn("make graphify-publish-check PYTHON_INTERPRETER=python", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
@@ -60,9 +61,13 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("graphify-optional-check: _check_python", makefile)
         self.assertIn("graphify-usable-check: _check_python", makefile)
         self.assertIn("graphify-state-check: _check_python", makefile)
+        self.assertIn("graphify-refresh: _check_python", makefile)
+        self.assertIn("graphify-publish-check: _check_python", makefile)
+        self.assertIn("git ls-files --error-unmatch graphify-out/graph.json", makefile)
+        self.assertIn("git diff --exit-code HEAD -- graphify-out/graph.json", makefile)
         self.assertIn(
             "scaffold-check: agents-db-validate check-agent-memory "
-            "scaffold-audit scaffold-audit-self-test graphify-state-check",
+            "scaffold-audit scaffold-audit-self-test graphify-usable-check",
             makefile,
         )
         self.assertIn(
@@ -159,9 +164,19 @@ class SelectionTests(unittest.TestCase):
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
         self.assertIn("id: graphify-optional-check", hooks)
         self.assertIn("entry: make graphify-optional-check", hooks)
-        self.assertIn("id: graphify-state-check", hooks)
-        self.assertIn("entry: make graphify-state-check", hooks)
+        self.assertIn("id: graphify-worktree-check", hooks)
+        self.assertIn("entry: make graphify-usable-check", hooks)
         self.assertIn("- pre-push", hooks)
+
+        ignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("graphify-out/*", ignore)
+        for artifact in (
+            "graph.json",
+            "GRAPH_REPORT.md",
+            "manifest.json",
+            "graph.html",
+        ):
+            self.assertIn(f"!graphify-out/{artifact}", ignore)
 
     def test_agent_behavior_discloses_external_action_mechanics(self) -> None:
         behavior = (REPO_ROOT / ".agents/skills/agent-behavior/SKILL.md").read_text(
