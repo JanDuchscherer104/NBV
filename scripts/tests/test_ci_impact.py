@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -130,24 +131,23 @@ class SelectionTests(unittest.TestCase):
         skill_root = REPO_ROOT / ".agents/skills/graphify"
         context_path = REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         context_guidance = context_path.read_text(encoding="utf-8")
-        guidance_lines = context_guidance.splitlines()
-        source_start = guidance_lines.index("  canonical_sources:") + 1
-        canonical_sources = []
-        for line in guidance_lines[source_start:]:
-            if not line.startswith('    - "'):
-                break
-            canonical_sources.append(line.removeprefix('    - "').removesuffix('"'))
+        boundary_owner = (
+            ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
+        )
+        boundary_pattern = re.compile(
+            rf"(?m)^\s*-\s*['\"]?{re.escape(boundary_owner)}['\"]?\s*$"
+        )
+        frontmatter = context_guidance.split("---", 2)[1]
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
         self.assertIn("scripts/build_graphify_projection.py", context_guidance)
         self.assertIn('fork_turns="none"', context_guidance)
-        self.assertIn(
-            ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md",
-            canonical_sources,
-        )
-        for source in canonical_sources:
-            self.assertTrue((REPO_ROOT / source.partition("#")[0]).is_file(), source)
+        self.assertRegex(frontmatter, boundary_pattern)
+        for scalar in (boundary_owner, f"'{boundary_owner}'", f'"{boundary_owner}"'):
+            with self.subTest(scalar=scalar):
+                self.assertRegex(f"    - {scalar}", boundary_pattern)
+        self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
             "0.9.31",
