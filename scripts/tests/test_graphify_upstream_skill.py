@@ -9,12 +9,14 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+ROOT_AGENTS = ROOT / "AGENTS.md"
 SKILL_ROOT = ROOT / ".agents/skills/graphify"
 CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
 ARIA_BOUNDARY = (
     ROOT / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
 )
 UPSTREAM_COMMIT = "4fe11092ccbe9f543608f140c790f68d5d83cae4"
+UPSTREAM_AGENTS_MD_BLOB = "6511cd1dd5bda01b13d607ffb3ab76b865b77fc7"
 UPSTREAM_BLOBS = {
     ".graphify_version": "425d81acf4c7433074588660fbe9bfc32b79d1b0",
     "SKILL.md": "afb4ecc12169e247fcf65d4e5e64df5283064ef5",
@@ -34,7 +36,35 @@ def _git_blob_id(content: bytes) -> str:
     return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
 
 
+def _managed_section(content: str, marker: str) -> bytes:
+    """Return one exact H2 section without inter-section separator whitespace."""
+    lines = content.splitlines(keepends=True)
+    starts = [index for index, line in enumerate(lines) if line.strip() == marker]
+    if len(starts) != 1:
+        raise AssertionError(f"expected one {marker!r} section, found {len(starts)}")
+    start = starts[0]
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if lines[index].startswith("## ")
+        ),
+        len(lines),
+    )
+    return ("".join(lines[start:end]).rstrip() + "\n").encode()
+
+
 class UpstreamGraphifySkillTests(unittest.TestCase):
+    def test_root_always_on_block_is_byte_identical_to_upstream(self) -> None:
+        section = _managed_section(
+            ROOT_AGENTS.read_text(encoding="utf-8"), "## graphify"
+        )
+        self.assertEqual(
+            _git_blob_id(section),
+            UPSTREAM_AGENTS_MD_BLOB,
+            f"root graphify block differs from Graphify {UPSTREAM_COMMIT}",
+        )
+
     def test_bundle_is_byte_identical_to_declared_upstream_commit(self) -> None:
         actual_files = {
             path.relative_to(SKILL_ROOT).as_posix()

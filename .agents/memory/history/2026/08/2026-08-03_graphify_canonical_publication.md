@@ -7,6 +7,7 @@ topics: [graphify, scaffold, worktrees, publication]
 confidence: high
 canonical_updates_needed: []
 files_touched:
+  - AGENTS.md
   - .agents/references/source_order.md
   - .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md
   - .github/workflows/ci.yml
@@ -21,6 +22,7 @@ files_touched:
   - scripts/check_graphify_freshness.py
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_graphify_freshness.py
+  - scripts/tests/test_graphify_upstream_skill.py
 ---
 
 ## Task
@@ -52,11 +54,19 @@ the ignored projection at the graph revision, validates current owner bytes,
 and rejects uncommitted snapshot changes. Main-branch CI runs that gate without
 installing Graphify or invoking semantic extraction.
 
+The follow-up always-on integration restores Graphify 0.9.31's native lowercase
+`## graphify` block byte-for-byte in root `AGENTS.md`. The former custom
+uppercase section was replaced by a separate compact ARIA publication boundary,
+which keeps the primary-publisher invariant without paraphrasing upstream query
+routing. A scaffold regression validates the managed block by its upstream Git
+blob identity.
+
 ## Verification
 
 - Graphify freshness regression tests pass.
 - CI-impact and guidance regression tests pass.
 - The project Graphify skill remains byte-identical to upstream.
+- The root always-on Graphify block remains byte-identical to upstream.
 - The canonical graph was rebuilt at the PR head with deep-cache coverage and
   strict freshness validation.
 - Agent-memory, scaffold, formatting, and publication checks pass.

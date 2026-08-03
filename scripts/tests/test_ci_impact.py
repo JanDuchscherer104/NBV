@@ -71,8 +71,8 @@ class SelectionTests(unittest.TestCase):
             makefile,
         )
         self.assertIn(
-            "scripts/build_graphify_projection.py --check --aria-code-ref "
-            '"$$(git rev-parse HEAD)"',
+            "scripts/build_graphify_projection.py \\\n"
+            '\t\t--check --aria-code-ref "$$($(GIT_CLEAN_ENV) git rev-parse HEAD)"',
             makefile,
         )
 
@@ -158,7 +158,11 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertTrue((skill_root / "references/query.md").is_file())
         self.assertIn("aria-nbv-context", root_guidance)
-        self.assertNotIn("graphify query", root_guidance)
+        self.assertIn("\n## graphify\n", root_guidance)
+        self.assertIn('graphify query "<question>"', root_guidance)
+        self.assertIn("## ARIA Graphify Publication Boundary", root_guidance)
+        self.assertIn("Only the primary integration checkout publishes", root_guidance)
+        self.assertNotIn("\n## Graphify\n", root_guidance)
         self.assertNotIn("graphify install", root_guidance)
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")

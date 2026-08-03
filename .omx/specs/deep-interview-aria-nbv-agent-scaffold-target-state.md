@@ -135,6 +135,14 @@ required when the primary checkout publishes the canonical snapshot or `main`
 accepts it. Code-only refresh uses upstream incremental extraction; changed
 semantic owners require the full upstream skill workflow before publication.
 
+The root dispatcher retains Graphify 0.9.31's native lowercase `## graphify`
+always-on block byte-for-byte so codebase questions route through scoped graph
+queries by default. A separate compact ARIA publication-boundary section owns
+the sole necessary exception to upstream's generic update instruction: linked
+worktrees consume and validate the committed baseline, while only the primary
+integration checkout publishes tracked Graphify output. Scaffold validation
+guards the upstream block against local paraphrase or drift.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
