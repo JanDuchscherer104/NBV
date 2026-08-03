@@ -9,7 +9,7 @@ tests, configuration, and Typst own behavior and scientific claims.
   resolution. Generated, retrieved, and historical material is evidence, not
   current authority.
 
-## Routing
+## Diagnosis And Routing
 
 - For non-trivial coding, docs, scaffold, research, or memory edits, apply
   `agent-behavior` first.
@@ -21,11 +21,12 @@ tests, configuration, and Typst own behavior and scientific claims.
 - Vague, high-impact, advisor-facing, architecture, interface-design, committed
   Mermaid, or interactive-visualization work routes through `aria-grill` unless
   the user explicitly chooses another route.
-- Review exact diffs with nearest owners. For bugs, regressions, suspicious
-  metrics, or failing checks: open the nearest semantic owner(s), reproduce the
-  smallest failure, inspect the exact source and focused tests, and verify the
-  cause before changing behavior. Backlog or memory changes use `agents-db`;
-  cleanup uses `simplification`; LRZ work uses `lrz-ai-systems`.
+- Review exact diffs with nearest owners. Failure-first diagnosis is the
+  repository-wide route for bugs, regressions, suspicious metrics, and failing
+  checks: open the nearest semantic owner(s), reproduce the smallest failure,
+  inspect the exact source and focused tests, and verify the cause before
+  changing behavior. Backlog or memory changes use `agents-db`; cleanup uses
+  `simplification`; LRZ work uses `lrz-ai-systems`.
 - Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, and offline/
   rollout inspection work uses `rerun-nbv-inspector`. It provides the current
   official-reference and Context7 route; package README files, code,
