@@ -51,13 +51,14 @@ tests, configuration, and Typst own behavior and scientific claims.
   `aria-nbv-context`; eligible queries use the byte-identical upstream Graphify
   skill. Graph outputs remain derived navigation, never authority.
 - The source-order capture rule selects the smallest owner. `agent-behavior`
-  owns angle-bracket eligibility and the capture procedure.
+  owns angle-bracket eligibility and the capture procedure. A read-only capture
+  route still names each selected owner's verification; guidance, state, memory,
+  and debrief owners use `make check-agent-memory`.
 
 ## Verification And Debriefs
 
 - Follow the nearest guide and run the narrowest proof of the changed contract.
-  Guidance, state, and debrief changes require `make check-agent-memory`;
-  advisor-facing claims require the cited primary source and exact local evidence.
+  Advisor-facing claims require the cited primary source and exact local evidence.
 - Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
   Native debriefs follow `.agents/memory/README.md`; do not recreate `.codex` as
   a notes bucket.

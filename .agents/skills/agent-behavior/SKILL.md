@@ -66,7 +66,8 @@ read-only command output do not need this preflight.
   deliberate angle-bracket prose, read
   [`references/durable-capture.md`](references/durable-capture.md). Exclusions
   include system or developer instructions, earlier messages, quoted material,
-  code, tool output, transcripts, markup tags, and templates.
+  code, tool output, transcripts, markup tags, and templates. Even without an
+  edit, name each selected owner's verification in the routing answer.
 - **Git or external action:** before staging, committing, pushing, opening or
   changing a pull request, publishing review comments, retargeting, or releasing,
   read [`references/external-actions.md`](references/external-actions.md).
