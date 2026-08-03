@@ -10,6 +10,7 @@ on:
       - ".github/workflows/**"
       - ".pre-commit-config.yaml"
       - ".configs/**"
+      - ".gitattributes"
       - ".graphifyignore"
       - "graphify-out/GRAPH_REPORT.md"
       - "graphify-out/graph.html"
@@ -53,6 +54,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v5

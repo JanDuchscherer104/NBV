@@ -5,3 +5,4 @@
 .data/aria_download_urls/ase_mesh_download_urls.json filter=lfs diff=lfs merge=lfs -text
 *.pdf binary
 graphify-out/graph.json merge=graphify
+graphify-out/** filter=lfs diff=lfs merge=lfs -text

@@ -7,6 +7,7 @@ topics: [graphify, scaffold, worktrees, publication]
 confidence: high
 canonical_updates_needed: []
 files_touched:
+  - .gitattributes
   - AGENTS.md
   - .agents/references/source_order.md
   - .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md
@@ -61,6 +62,11 @@ which keeps the primary-publisher invariant without paraphrasing upstream query
 routing. A scaffold regression validates the managed block by its upstream Git
 blob identity.
 
+The tracked publication artifacts now use Git LFS through one directory-level
+attribute. Root CI checks out LFS objects before freshness and publication
+validation, while Graphify's earlier exact-file merge attribute remains present
+but is superseded by the later LFS merge attribute.
+
 ## Verification
 
 - Graphify freshness regression tests pass.
@@ -69,6 +75,8 @@ blob identity.
 - The root always-on Graphify block remains byte-identical to upstream.
 - The canonical graph was rebuilt at the PR head with deep-cache coverage and
   strict freshness validation.
+- Every tracked `graphify-out/` artifact resolves through the LFS filter, and CI
+  explicitly downloads those objects.
 - Agent-memory, scaffold, formatting, and publication checks pass.
 
 ## Canonical-State Impact

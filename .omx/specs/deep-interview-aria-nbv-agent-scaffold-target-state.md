@@ -121,8 +121,9 @@ refresh lifecycle where those statements conflict with this section.
 
 ARIA tracks the query-critical upstream snapshot
 `graphify-out/{graph.json,GRAPH_REPORT.md,manifest.json,graph.html}`. It remains
-derived navigation rather than project truth. The primary integration checkout
-is the sole publisher; linked worktrees consume the committed baseline, query it
+derived navigation rather than project truth, and every tracked artifact under
+`graphify-out/` is stored through Git LFS. The primary integration checkout is
+the sole publisher; linked worktrees consume the committed baseline, query it
 when usable, and verify branch-local `stale_sources` against exact owners. Cache,
 projection, AST, semantic-run, cost, memory, and temporary extraction state stay
 ignored and must not be shared as writable graph state.

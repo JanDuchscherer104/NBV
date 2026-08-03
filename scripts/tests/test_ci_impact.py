@@ -28,12 +28,14 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(pull_request_block.strip(), "")
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
+        self.assertIn("fetch-depth: 0\n          lfs: true", workflow)
         self.assertNotIn("ci-gate", workflow)
         self.assertNotIn("Install Graphify", workflow)
         self.assertNotIn('pip install "graphifyy==', workflow)
         self.assertIn("Validate canonical Graphify publication", workflow)
         self.assertIn("make graphify-publish-check PYTHON_INTERPRETER=python", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('      - ".gitattributes"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
@@ -173,6 +175,8 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("- pre-push", hooks)
 
         ignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+        attributes = (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("graphify-out/** filter=lfs diff=lfs merge=lfs -text", attributes)
         self.assertIn("graphify-out/*", ignore)
         for artifact in (
             "graph.json",
