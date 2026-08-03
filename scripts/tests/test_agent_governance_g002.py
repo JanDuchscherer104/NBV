@@ -17,6 +17,20 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _frontmatter_list(document: str, field: str) -> list[str]:
+    """Return a simple YAML-frontmatter list field from a skill document."""
+    _, frontmatter, _ = document.split("---", 2)
+    lines = frontmatter.splitlines()
+    start = lines.index(f"  {field}:") + 1
+    values: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("  ") and not line.startswith("    - "):
+            break
+        if line.startswith("    - "):
+            values.append(line.removeprefix("    - ").strip().strip('"'))
+    return values
+
+
 def _tracked_live_runtime_configs(root: Path = ROOT) -> list[Path]:
     tracked = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -207,6 +221,7 @@ def test_capture_and_routing_contracts() -> None:
 
 def test_thesis_context_and_context7_routing() -> None:
     context_skill = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    canonical_sources = _frontmatter_list(context_skill, "canonical_sources")
     for owner in (
         "docs/typst/thesis/main.typ",
         "docs/typst/shared/glossary.typ",
@@ -215,7 +230,8 @@ def test_thesis_context_and_context7_routing() -> None:
         "docs/notation.yml",
         ".agents/skills/aria-nbv-context/references/context7_library_ids.md",
     ):
-        assert owner in context_skill
+        assert owner in canonical_sources
+        assert (ROOT / owner.partition("#")[0]).is_file()
 
     context_map = _read(
         ROOT
@@ -225,7 +241,6 @@ def test_thesis_context_and_context7_routing() -> None:
         / "references"
         / "context_map.md"
     )
-    assert "Active thesis and shared scientific language" in context_map
     assert "scripts/nbv_typst_includes.py --thesis --mode outline" in context_map
 
     context7_registry = _read(

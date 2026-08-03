@@ -62,35 +62,29 @@ metadata:
 
 # Aria NBV Context
 
-Use this skill as the local discovery layer. It should identify the smallest
-relevant set of files, then hand off to a narrower implementation, docs, or
-diagnostic workflow.
-
 ## Graphify branch
 
 For architecture, relationship, or broad project-content discovery, treat an
 existing `graphify-out/graph.json` as the default trusted retrieval index. Run
-`python3 scripts/check_graphify_freshness.py --json`, then hand off to the
-byte-identical upstream skill at `.agents/skills/graphify/SKILL.md` whenever the
-result says `usable: true`, including `structural-stale` or `semantic-stale`.
-Query Graphify first; its provenance and `source_location` route the exact-source
-check. For paths listed in `stale_sources`, verify consequential claims directly
-before acting. Only `missing` or `invalid` states bypass Graphify entirely.
+`python3 scripts/check_graphify_freshness.py --json`; whenever the result says
+`usable: true`, including `structural-stale` or `semantic-stale`, hand off to the
+byte-identical upstream skill at `.agents/skills/graphify/SKILL.md`. Query
+Graphify first; its provenance and `source_location` route the exact-source
+check. Verify consequential `stale_sources` claims directly; only `missing` or
+`invalid` states bypass Graphify entirely.
 
-Freshness is a validation concern, not a global read gate. `make
-graphify-state-check` remains strict for scaffold and pre-push validation, while
-`make graphify-usable-check` proves the graph is safe to query during ordinary
-agent work. A Git HEAD mismatch alone is not staleness when the recorded graph
-and projection revisions are ancestors and indexed bytes still match. Refreshes
-first regenerate the deterministic projection with
+Freshness validates rather than globally gates reads. `make graphify-state-check`
+remains strict for scaffold and pre-push validation; `make graphify-usable-check`
+proves ordinary query safety. A Git HEAD mismatch alone is not staleness when the
+recorded graph and projection revisions are ancestors and indexed bytes still
+match. Refreshes first regenerate the deterministic projection with
 `scripts/build_graphify_projection.py`. Native semantic refreshes use
-`fork_turns="none"` and are accepted only after every dispatched file is
-accounted for.
+`fork_turns="none"` and require every dispatched file to be accounted for.
 
 Before any build or semantic refresh, read
-[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
-It owns ARIA's projection, upstream-only, coverage, marker, and linked-worktree
-rules. Leave an incomplete or unreconciled graph strict-gate stale, keep its last
+[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md),
+which owns ARIA's projection, upstream-only, coverage, marker, and linked-worktree
+rules. Leave incomplete or unreconciled graphs strict-gate stale, keep the last
 valid snapshot queryable, and verify affected sources directly.
 
 ## MemPalace semantic-recall branch
@@ -100,17 +94,16 @@ ownership, or cross-surface relationships materially improve the task. Known
 files and symbols, implementation, tests, and active configuration use direct
 `rg`, code-index, and exact-source reads; code is outside the reviewed corpus.
 Use only a prompt-visible MCP search surface verified by upstream `--read-only`
-plus Codex's explicit fail-closed `enabled_tools` allowlist. Otherwise report it
+plus Codex's explicit fail-closed `enabled_tools` allowlist; otherwise report it
 unavailable or unverified and continue deterministically.
-Read-only means mutating MCP tools are hidden and refused, although Chroma may
-still update internal bookkeeping while serving a search.
+Read-only hides/refuses mutating tools; backend bookkeeping may still occur.
 
 Choose the smallest wing: `aria-thesis`; `aria-literature-reviews` then the
 matching `aria-papers` room for primary evidence; `aria-project-docs`;
-`aria-debriefs`; or, only for explicit raw-history requests,
-`aria-codex-history`. Treat results as candidate evidence: record source and
-authored date, open the exact current-worktree source, and apply source order.
-Chronology alone never implies supersession; ingestion-only dates stay unknown.
+`aria-debriefs`; or `aria-codex-history` only for explicit raw-history requests.
+Treat results as candidate evidence: record source and authored date, open the
+exact current-worktree source, and apply source order. Chronology alone never
+implies supersession; ingestion-only dates stay unknown.
 
 ## Workflow
 
@@ -118,10 +111,10 @@ Chronology alone never implies supersession; ingestion-only dates stay unknown.
 2. Route implementation, test, configuration, or known-symbol questions
    directly to `rg`, code-index, and the defining source; do not query
    MemPalace for them.
-3. For thesis-facing sections, terms, symbols, or equations, use the active
-   thesis lane in `references/context_map.md`. Open the thesis include graph and
-   the smallest shared owner among `glossary.typ`, `symbols.typ`,
-   `equations.typ`, and `docs/notation.yml`; generated projections are not owners.
+3. For thesis-facing sections, terms, symbols, or equations, use the active thesis
+   lane in `references/context_map.md`, its include graph, and the smallest shared
+   owner among `glossary.typ`, `symbols.typ`, `equations.typ`, and `docs/notation.yml`;
+   generated projections are not owners.
 4. When semantic recall is eligible, choose one reviewed wing and normally one
    room through the MemPalace branch above. Search `aria-codex-history` only for
    an explicit raw-history request.
@@ -129,8 +122,7 @@ Chronology alone never implies supersession; ingestion-only dates stay unknown.
    `stale_sources` list to scope exact-source verification. Continue without
    Graphify only when the artifact is missing or invalid.
 6. Use `docs/_generated/context/source_index.md` only when it already exists or
-   source-family routing is unclear; refresh with `make context` only when
-   needed.
+   source-family routing is unclear; refresh with `make context` only as needed.
 7. Use source-specific outline tools before broad raw reads:
    - Quarto: `scripts/nbv_qmd_outline.sh --compact`
    - Active thesis: `scripts/nbv_typst_includes.py --thesis --mode outline`
@@ -139,14 +131,12 @@ Chronology alone never implies supersession; ingestion-only dates stay unknown.
    - Code/contracts: `scripts/nbv_get_context.sh modules|contracts|match <term>`
 8. Open the exact candidate source and nearest nested `AGENTS.md` once the
    surface is known; reject optional retrieval that conflicts with its owner.
-9. For external API behavior, use the localized skill's `metadata.context7_refs`.
-   If no narrow skill owns the question, consult `references/context7_library_ids.md`;
-   re-resolve consequential IDs at use time and verify against local source/tests.
+9. For external API behavior, use the localized skill's `metadata.context7_refs`;
+   otherwise consult `references/context7_library_ids.md`, re-resolve consequential
+   IDs at use time, and verify against local source/tests.
 10. Use targeted `rg` inside the narrowed file set.
 
 ## Zoom-Out Output
-
-When asked to map a surface, return:
 
 - domain term and glossary anchor when one exists
 - owning package/module and nearest `AGENTS.md`
