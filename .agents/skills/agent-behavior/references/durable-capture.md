@@ -17,7 +17,8 @@ guidance in deliberate angle-bracket prose.
    surfaces may point to that owner but must not restate the rule.
 5. Identify the verification required by each selected owner, including in a
    read-only routing answer. Run it after an edit; otherwise name it as the
-   route, and report any part that remains ambiguous, deferred, or unverified.
+   route. Guidance or memory owners use `make check-agent-memory`. Report any
+   part that remains ambiguous, deferred, or unverified.
 
 ## Completion
 
