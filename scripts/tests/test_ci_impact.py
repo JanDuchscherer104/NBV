@@ -13,7 +13,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
-from scaffold_audit import load_frontmatter  # noqa: E402
 
 ALL = set(FAMILIES)
 
@@ -131,10 +130,13 @@ class SelectionTests(unittest.TestCase):
         skill_root = REPO_ROOT / ".agents/skills/graphify"
         context_path = REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         context_guidance = context_path.read_text(encoding="utf-8")
-        metadata = load_frontmatter(context_path)["metadata"]
-        self.assertIsInstance(metadata, dict)
-        canonical_sources = metadata["canonical_sources"]
-        self.assertIsInstance(canonical_sources, list)
+        guidance_lines = context_guidance.splitlines()
+        source_start = guidance_lines.index("  canonical_sources:") + 1
+        canonical_sources = []
+        for line in guidance_lines[source_start:]:
+            if not line.startswith('    - "'):
+                break
+            canonical_sources.append(line.removeprefix('    - "').removesuffix('"'))
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
