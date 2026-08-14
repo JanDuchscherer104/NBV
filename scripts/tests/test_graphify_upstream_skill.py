@@ -75,7 +75,9 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertIn("## Graphify", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", root_guidance)
         self.assertIn("scripts/check_graphify_freshness.py --json", root_guidance)
-        self.assertIn("Accepted 2026-08-14 Mandatory Graphify Supersession", target_state)
+        self.assertIn(
+            "Accepted 2026-08-14 Mandatory Graphify Supersession", target_state
+        )
         for state in ("fresh", "usable-stale", "unusable"):
             with self.subTest(state=state):
                 self.assertIn(f"`{state}`", root_guidance)
