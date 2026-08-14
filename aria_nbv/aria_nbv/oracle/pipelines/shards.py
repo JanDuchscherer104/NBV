@@ -59,6 +59,14 @@ class RolloutShardRunResult:
     store_result: RolloutZarrWriteResult | None = None
     """Fresh write summary, or ``None`` when a completed shard was skipped."""
 
+    @property
+    def manifest_path(self) -> Path:
+        """Manifest path for fresh or skipped shards."""
+
+        if self.store_result is None:
+            return self.final_dir / "manifest.json"
+        return self.store_result.manifest_path
+
 
 @dataclass(frozen=True, slots=True)
 class RolloutShardStatus:
@@ -445,7 +453,15 @@ def _completed_shard_is_current(
         return False
     if success.get("rollout_manifest_sha256") != rollout_manifest_sha:
         return False
-    return store_manifest.get("generation", {}).get("shard") == shard_entry.to_jsonable()
+    expected_binding = None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
+    if success.get("campaign_binding") != expected_binding or owner.get("campaign_binding") != expected_binding:
+        return False
+    stored_shard = dict(store_manifest.get("generation", {}).get("shard") or {})
+    expected_shard = shard_entry.to_jsonable()
+    if expected_binding is None:
+        stored_shard.pop("campaign_binding", None)
+        expected_shard.pop("campaign_binding", None)
+    return stored_shard == expected_shard
 
 
 def _owner_payload(
@@ -475,6 +491,9 @@ def _owner_payload(
         },
         "runtime": collect_runtime_provenance(),
         "shard_entry": shard_entry.to_jsonable(),
+        "campaign_binding": None
+        if shard_entry.campaign_binding is None
+        else shard_entry.campaign_binding.to_jsonable(),
     }
 
 
@@ -496,6 +515,9 @@ def _success_payload(
         "num_source_rows": len(shard_entry.rows),
         "rollout_manifest_sha256": result.manifest_sha256,
         "owner_sha256": manifest_sha256(owner_payload),
+        "campaign_binding": None
+        if shard_entry.campaign_binding is None
+        else shard_entry.campaign_binding.to_jsonable(),
     }
 
 

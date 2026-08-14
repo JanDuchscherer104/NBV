@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import fields
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -20,11 +21,15 @@ from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
 from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
+    OracleMatchReason,
     OracleTargetTask,
     OracleTargetTaskSampler,
     OracleTargetTaskSamplerConfig,
     TargetTaskIdentityStatus,
+    match_observed_target_descriptors,
 )
+from aria_nbv.targets import ObservedTargetDescriptor, TargetDescriptor
+from aria_nbv.targets.selection import observed_target_descriptors
 
 
 def _poses(translations: list[list[float]]) -> PoseTW:
@@ -196,3 +201,120 @@ def test_oracle_target_task_sampler_rejects_non_offline_sample_input() -> None:
     assert not hasattr(sample, "to_vin_oracle_batch")
     with pytest.raises(TypeError, match="VinOfflineSample"):
         _oracle_sampler().sample(sample.vin_snippet)  # type: ignore[arg-type]
+
+
+def test_observed_descriptor_extraction_is_actor_only_and_deterministic() -> None:
+    detected = _obb_block(
+        [[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+        sem_ids=[1, 0],
+        inst_ids=[22, 11],
+    )
+    sample = _sample(detected_obbs=detected, gt_obbs=_obb_block([[99.0, 0.0, 0.0]], sem_ids=[2]))
+
+    first = observed_target_descriptors(sample)
+    second = observed_target_descriptors(sample)
+
+    assert first == second
+    assert [descriptor.source_row for descriptor in first] == [0, 1]
+    assert [descriptor.target_id for descriptor in first] == [
+        "scene/snippet/0:detected:0:22",
+        "scene/snippet/0:detected:1:11",
+    ]
+    assert all(descriptor.descriptor_hash for descriptor in first)
+    assert all(not hasattr(descriptor, "gt_match_row") for descriptor in first)
+
+
+def _observed_descriptor(*, source_row: int, sem_id: int = 1) -> ObservedTargetDescriptor:
+    descriptor = TargetDescriptor(
+        sem_id=sem_id,
+        class_name="chair" if sem_id == 1 else "table",
+        pose_world_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+        extents_m=(1.0, 1.0, 1.0),
+        relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+    )
+    return ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=source_row,
+        target_id=f"detected:{source_row}",
+        descriptor=descriptor,
+        confidence=0.9,
+        inst_id=source_row,
+    )
+
+
+@pytest.mark.parametrize(
+    ("iou", "admitted", "reason"),
+    [
+        (0.20, False, OracleMatchReason.BELOW_IOU_THRESHOLD),
+        (0.2001, True, OracleMatchReason.ADMITTED),
+    ],
+)
+def test_observed_gt_matching_uses_strict_iou_threshold(iou: float, admitted: bool, reason: OracleMatchReason) -> None:
+    descriptor = _observed_descriptor(source_row=0)
+    result = match_observed_target_descriptors(
+        [descriptor],
+        [SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt-0")],
+        iou_fn=lambda _descriptor, _row: iou,
+    )[0]
+
+    assert result.admitted is admitted
+    assert result.reason is reason
+    assert result.oriented_iou == pytest.approx(iou)
+
+
+@pytest.mark.parametrize(
+    ("gt_rows", "reason"),
+    [
+        ([SimpleNamespace(descriptor=SimpleNamespace(sem_id=2), target_id="wrong")], OracleMatchReason.WRONG_CLASS),
+        ([], OracleMatchReason.NO_MATCH),
+        (
+            [SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="invalid")],
+            OracleMatchReason.INVALID_GEOMETRY,
+        ),
+    ],
+)
+def test_observed_gt_matching_reports_rejection_reason(gt_rows: list[object], reason: OracleMatchReason) -> None:
+    descriptor = _observed_descriptor(source_row=0)
+    iou_fn = (
+        None if reason is not OracleMatchReason.INVALID_GEOMETRY else lambda *_args: (_ for _ in ()).throw(ValueError())
+    )
+    result = match_observed_target_descriptors([descriptor], gt_rows, iou_fn=iou_fn)[0]
+
+    assert result.admitted is False
+    assert result.reason is reason
+
+
+def test_observed_gt_matching_returns_all_admitted_descriptors_in_source_order() -> None:
+    descriptors = [_observed_descriptor(source_row=4), _observed_descriptor(source_row=1)]
+    rows = [SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt")]
+
+    result = match_observed_target_descriptors(descriptors, rows, iou_fn=lambda *_args: 0.8)
+
+    assert [item.descriptor.source_row for item in result] == [1, 4]
+    assert all(item.admitted for item in result)
+
+
+def test_observed_gt_matching_marks_equal_best_qualified_matches_ambiguous() -> None:
+    descriptor = _observed_descriptor(source_row=0)
+    rows = [
+        SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt-0"),
+        SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt-1"),
+    ]
+
+    result = match_observed_target_descriptors([descriptor], rows, iou_fn=lambda *_args: 0.8)[0]
+
+    assert result.admitted is False
+    assert result.reason is OracleMatchReason.AMBIGUOUS
+    assert result.gt_match_id == "gt-0"
+
+
+@pytest.mark.parametrize("iou", [float("nan"), float("inf"), -0.01, 1.01])
+def test_observed_gt_matching_rejects_nonfinite_or_out_of_range_iou_as_invalid_geometry(iou: float) -> None:
+    descriptor = _observed_descriptor(source_row=0)
+    row = SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="invalid")
+
+    result = match_observed_target_descriptors([descriptor], [row], iou_fn=lambda *_args: iou)[0]
+
+    assert result.admitted is False
+    assert result.reason is OracleMatchReason.INVALID_GEOMETRY

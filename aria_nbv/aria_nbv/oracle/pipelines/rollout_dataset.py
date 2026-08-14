@@ -60,6 +60,7 @@ from ...rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+from ...targets import ObservedTargetDescriptor
 from ...targets.protocol import (
     TargetDescriptorProvenance,
     TargetInputProtocol,
@@ -120,6 +121,90 @@ class RolloutDatasetWriterStats:
         """
 
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
+
+
+@dataclass(frozen=True, slots=True)
+class ExplicitRolloutTarget:
+    """Immutable V1 observed target consumed by one rollout writer unit."""
+
+    sample_key: str
+    actor_descriptor: ObservedTargetDescriptor
+    detected_source_row: int
+    gt_match_row: int
+    gt_match_id: str
+    oriented_iou: float
+    status: str
+    reason: str
+    target_id: str
+    protocol: TargetInputProtocol = TargetInputProtocol.V1_OBSERVED
+    explicit_target_hash: str = ""
+
+    def __post_init__(self) -> None:
+        if self.protocol is not TargetInputProtocol.V1_OBSERVED:
+            raise ValueError("ExplicitRolloutTarget requires protocol v1_observed.")
+        if self.sample_key != self.actor_descriptor.sample_key or self.target_id != self.actor_descriptor.target_id:
+            raise ValueError("Explicit target identity does not match its actor descriptor.")
+        if not 0.0 <= float(self.oriented_iou) <= 1.0:
+            raise ValueError("oriented_iou must be in [0, 1].")
+
+
+class ExplicitRolloutTargetConfig(BaseConfig):
+    """Discriminated configuration for one explicit observed target."""
+
+    protocol: TargetInputProtocol = TargetInputProtocol.V1_OBSERVED
+    sample_key: str
+    actor_descriptor: ObservedTargetDescriptor
+    detected_source_row: int = Field(ge=0)
+    gt_match_row: int = Field(ge=0)
+    gt_match_id: str
+    oriented_iou: float = Field(ge=0.0, le=1.0)
+    status: str = "admitted"
+    reason: str = "admitted"
+    target_id: str
+    explicit_target_hash: str
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> "ExplicitRolloutTargetConfig":
+        if self.protocol is not TargetInputProtocol.V1_OBSERVED:
+            raise ValueError("explicit target protocol must be v1_observed")
+        if self.status != "admitted" or self.reason != "admitted":
+            raise ValueError("explicit target must be admitted with reason=admitted")
+        if self.sample_key != self.actor_descriptor.sample_key or self.target_id != self.actor_descriptor.target_id:
+            raise ValueError("explicit target sample/target identity mismatch")
+        if not self.gt_match_id or not self.explicit_target_hash:
+            raise ValueError("explicit target requires GT match id and stable hash")
+        expected = stable_msgspec_hash(
+            {
+                "sample_key": self.sample_key,
+                "target_id": self.target_id,
+                "detected_source_row": self.detected_source_row,
+                "gt_match_row": self.gt_match_row,
+                "gt_match_id": self.gt_match_id,
+                "oriented_iou": self.oriented_iou,
+                "descriptor_hash": self.actor_descriptor.descriptor_hash,
+            }
+        )
+        if self.explicit_target_hash != expected:
+            raise ValueError("explicit_target_hash does not match explicit target identity")
+        return self
+
+    def setup_target(self) -> ExplicitRolloutTarget:
+        """Materialize the immutable runtime DTO without sampling."""
+        return ExplicitRolloutTarget(
+            sample_key=self.sample_key,
+            actor_descriptor=self.actor_descriptor,
+            detected_source_row=self.detected_source_row,
+            gt_match_row=self.gt_match_row,
+            gt_match_id=self.gt_match_id,
+            oriented_iou=self.oriented_iou,
+            status=self.status,
+            reason=self.reason,
+            target_id=self.target_id,
+            protocol=self.protocol,
+            explicit_target_hash=self.explicit_target_hash,
+        )
+
+    setup_runtime = setup_target
 
 
 class RolloutRecipeConfig(BaseConfig):
@@ -372,6 +457,9 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     oracle_target_task_sampler: OracleTargetTaskSamplerConfig = Field(default_factory=OracleTargetTaskSamplerConfig)
     """Oracle GT target-task sampler used by default for rollout data generation."""
 
+    explicit_target: ExplicitRolloutTargetConfig | None = Field(default=None, exclude=True)
+    """Optional one-target V1 input; mutually exclusive with target resampling."""
+
     candidate_mixture: CandidateMixtureViewGeneratorConfig = Field(default_factory=CandidateMixtureViewGeneratorConfig)
     """Fixed-count mixed finite-candidate generator regenerated at every rollout step."""
 
@@ -419,6 +507,21 @@ class RolloutDatasetWriterConfig(TargetConfig["RolloutDatasetWriter"]):
     def _validate_target_protocol(self) -> "RolloutDatasetWriterConfig":
         """Reject actor-visible protocol claims from the Oracle GT generator."""
 
+        explicit = self.explicit_target
+        if explicit is not None:
+            validate_target_protocol_admission(
+                self.store.target_protocol_version,
+                target_source=self.explicit_target.actor_descriptor.source,
+                descriptor_source=self.explicit_target.actor_descriptor.source,
+                descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
+            )
+            if self.store.target_protocol_version is not TargetInputProtocol.V1_OBSERVED:
+                raise ValueError("explicit_target requires store.target_protocol_version=v1_observed")
+            if self.max_targets_per_sample not in (None, 1):
+                raise ValueError("explicit_target is mutually exclusive with multi-target sampling.")
+            if self.oracle_target_task_sampler != OracleTargetTaskSamplerConfig():
+                raise ValueError("oracle_target_task_sampler is ignored for explicit targets; use defaults")
+            return self
         validate_target_protocol_admission(
             self.store.target_protocol_version,
             target_source=ORACLE_TARGET_TASK_SOURCE,
@@ -647,7 +750,10 @@ class RolloutDatasetWriter:
             self._apply_source_manifest(dataset, source_manifest, sample_keys=self.config.sample_keys)
         if shard_entry is not None:
             self._apply_shard_manifest(dataset, shard_entry)
-        oracle_sampler = OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
+        explicit_config = getattr(self.config, "explicit_target", None)
+        oracle_sampler = (
+            None if explicit_config is not None else OracleTargetTaskSampler(self.config.oracle_target_task_sampler)
+        )
         max_samples = (
             len(dataset)
             if shard_entry is not None or self.config.max_samples is None
@@ -673,7 +779,14 @@ class RolloutDatasetWriter:
                 self.stats.samples_without_snippet_or_mesh += 1
                 self.stats.skip("missing_snippet_or_mesh")
                 continue
-            target_result = oracle_sampler.sample(sample)
+            if explicit_config is not None:
+                explicit = explicit_config.setup_target()
+                if explicit.sample_key != sample.sample_key:
+                    continue
+                target_result = _explicit_target_result(explicit)
+            else:
+                assert oracle_sampler is not None
+                target_result = oracle_sampler.sample(sample)
             if not target_result.selected_rows:
                 reason = "no_geometry_valid_oracle_target_tasks" if target_result.rows else "no_oracle_target_tasks"
                 self.stats.skip(reason)
@@ -920,6 +1033,7 @@ class RolloutDatasetWriter:
     def _target_lineage(self, target: OracleTargetTask, *, target_rank: int) -> TargetLineage:
         """Encode one Oracle task into the frozen rollout target columns."""
 
+        explicit = getattr(self.config, "explicit_target", None)
         gt_valid = target.identity_status == TargetTaskIdentityStatus.MATCHED.value
         if gt_valid:
             primary_reason = TARGET_INVALID_REASON_CODES["VALID"]
@@ -940,7 +1054,7 @@ class RolloutDatasetWriter:
             target_selection_score=float("nan"),
             target_selection_probability=target.selection_probability,
             target_selection_temperature=None,
-            target_source=ORACLE_TARGET_TASK_SOURCE,
+            target_source=(explicit.actor_descriptor.source if explicit is not None else ORACLE_TARGET_TASK_SOURCE),
             target_source_index=target.source_index,
             target_sem_id=descriptor.sem_id,
             target_inst_id=target.inst_id,
@@ -961,11 +1075,17 @@ class RolloutDatasetWriter:
             target_invalid_reason_bitset=1 << primary_reason,
             target_primary_invalid_reason=primary_reason,
             target_reason_code_version=TARGET_INVALID_REASON_VERSION,
-            matched_gt_target_row_id=target.source_index if gt_valid else None,
-            matched_gt_target_id=target.target_id if gt_valid else None,
-            gt_match_iou=None,
+            matched_gt_target_row_id=(
+                explicit.gt_match_row if explicit is not None else (target.source_index if gt_valid else None)
+            ),
+            matched_gt_target_id=(
+                explicit.gt_match_id if explicit is not None else (target.target_id if gt_valid else None)
+            ),
+            gt_match_iou=(explicit.oriented_iou if explicit is not None else None),
             gt_match_score=None,
-            gt_match_status="matched" if gt_valid else target.identity_status,
+            gt_match_status=(
+                explicit.status if explicit is not None else ("matched" if gt_valid else target.identity_status)
+            ),
         )
 
     def _low_valid_root_reason(self, result: CounterfactualRolloutResult) -> str | None:
@@ -1039,9 +1159,30 @@ def _lineage_split(*, records: Sequence[_SplitRecord], fallback: str) -> str:
 
 
 __all__ = [
+    "ExplicitRolloutTarget",
+    "ExplicitRolloutTargetConfig",
     "RolloutDatasetWriter",
     "RolloutDatasetWriterConfig",
     "RolloutDatasetWriterStats",
     "RolloutRecipeConfig",
     "SelectedDepthRetentionConfig",
 ]
+
+
+def _explicit_target_result(target: ExplicitRolloutTarget):
+    """Adapt one explicit target to the writer's existing task loop."""
+
+    task = OracleTargetTask(
+        source_index=target.detected_source_row,
+        target_row_id=target.detected_source_row,
+        target_id=target.target_id,
+        descriptor=target.actor_descriptor.descriptor,
+        inst_id=target.actor_descriptor.inst_id,
+        confidence=target.actor_descriptor.confidence,
+        identity_status=TargetTaskIdentityStatus.MATCHED.value,
+        selected_rank=0,
+        selection_probability=1.0,
+    )
+    return type(
+        "_ExplicitResult", (), {"rows": (task,), "selected_rows": (task,), "source": "explicit_v1", "warnings": ()}
+    )()

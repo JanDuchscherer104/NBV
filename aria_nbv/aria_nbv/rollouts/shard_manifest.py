@@ -29,6 +29,51 @@ ROLLOUT_SHARD_OWNER_FILENAME = "_owner.json"
 
 
 @dataclass(frozen=True, slots=True)
+class RolloutShardCampaignBinding:
+    """Optional campaign identity carried by a shard entry."""
+
+    campaign_id: str
+    plan_hash: str
+    work_unit_hash: str
+    target_id: str
+    profile_hash: str
+    explicit_target_hash: str
+
+    def to_jsonable(self) -> dict[str, str]:
+        """Return stable JSON evidence."""
+
+        return {
+            name: str(getattr(self, name))
+            for name in (
+                "campaign_id",
+                "plan_hash",
+                "work_unit_hash",
+                "target_id",
+                "profile_hash",
+                "explicit_target_hash",
+            )
+        }
+
+    @classmethod
+    def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardCampaignBinding":
+        """Decode a campaign binding."""
+
+        return cls(
+            **{
+                name: str(payload[name])
+                for name in (
+                    "campaign_id",
+                    "plan_hash",
+                    "work_unit_hash",
+                    "target_id",
+                    "profile_hash",
+                    "explicit_target_hash",
+                )
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RolloutShardRow:
     """One VIN offline source row owned by a rollout shard."""
 
@@ -300,6 +345,9 @@ class RolloutShardEntry:
     manifest_version: str = ROLLOUT_SHARD_MANIFEST_VERSION
     """JSONL ownership-contract version."""
 
+    campaign_binding: RolloutShardCampaignBinding | None = None
+    """Optional campaign identity; ``None`` preserves legacy manifests."""
+
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardEntry":
         """Decode and canonicalize one JSONL shard ownership entry.
@@ -323,6 +371,9 @@ class RolloutShardEntry:
             source_cache_version=str(payload["source_cache_version"]),
             split_manifest_hash=str(payload["split_manifest_hash"]),
             source_store_dir=str(payload["source_store_dir"]),
+            campaign_binding=None
+            if payload.get("campaign_binding") is None
+            else RolloutShardCampaignBinding.from_jsonable(payload["campaign_binding"]),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -339,6 +390,7 @@ class RolloutShardEntry:
             "split_manifest_hash": self.split_manifest_hash,
             "source_store_dir": self.source_store_dir,
             "rows": [row.to_jsonable() for row in self.rows],
+            "campaign_binding": None if self.campaign_binding is None else self.campaign_binding.to_jsonable(),
         }
 
     def validate(self) -> None:
@@ -465,6 +517,7 @@ __all__ = [
     "ROLLOUT_SHARD_SUCCESS_FILENAME",
     "RolloutSourceManifest",
     "RolloutShardEntry",
+    "RolloutShardCampaignBinding",
     "RolloutShardRow",
     "build_rollout_split_manifest_hash",
     "canonical_rollout_shard_id",

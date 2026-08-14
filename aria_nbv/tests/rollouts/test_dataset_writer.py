@@ -13,14 +13,17 @@ from typing import Any
 import msgspec
 import pytest
 import torch
+import zarr
 
 from aria_nbv.oracle.evidence import OracleEvidenceInvalidReason
 from aria_nbv.oracle.pipelines.evaluated_rollout import OracleReplayInvalidityError
 from aria_nbv.oracle.pipelines.rollout_dataset import (
+    ExplicitRolloutTargetConfig,
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
     RolloutDatasetWriterStats,
     SelectedDepthRetentionConfig,
+    _explicit_target_result,
     _RolloutSourceLineageBuilder,
     _select_source_manifest_rows,
 )
@@ -37,10 +40,11 @@ from aria_nbv.oracle.target_selection import (
 )
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.rendering import CandidateDepthRendererConfig
-from aria_nbv.rollouts.manifest import RolloutStoreManifestContext
+from aria_nbv.rollouts.manifest import RolloutStoreManifestContext, manifest_sha256
 from aria_nbv.rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
 from aria_nbv.rollouts.shard_manifest import (
+    RolloutShardCampaignBinding,
     RolloutShardEntry,
     RolloutShardRow,
     RolloutSourceManifest,
@@ -50,7 +54,9 @@ from aria_nbv.rollouts.shard_manifest import (
     write_rollout_source_manifest,
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
-from aria_nbv.targets import TargetDescriptor
+from aria_nbv.targets import ObservedTargetDescriptor, TargetDescriptor
+from aria_nbv.targets.protocol import TargetInputProtocol
+from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -251,6 +257,7 @@ def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None
     writer.config = SimpleNamespace(
         store=SimpleNamespace(target_protocol_version="v0_gt_input"),
         target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
+        explicit_target=None,
     )
 
     lineage = writer._target_lineage(task, target_rank=0)
@@ -264,6 +271,365 @@ def test_rollout_writer_encodes_oracle_task_into_frozen_target_lineage() -> None
     assert lineage.target_semidense_support_count == 0
     assert lineage.target_visibility_score == 0.0
     assert lineage.target_invalid_reason_bitset == 1
+
+
+def test_explicit_v1_target_setup_validates_hash_sample_and_identity() -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=3,
+        target_id="scene/snippet/0:detected:3:7",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=7,
+    )
+    hash_payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 3,
+        "gt_match_row": 5,
+        "gt_match_id": "gt-5",
+        "oriented_iou": 0.6,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+    config = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=3,
+        gt_match_row=5,
+        gt_match_id="gt-5",
+        oriented_iou=0.6,
+        target_id=actor.target_id,
+        explicit_target_hash=stable_msgspec_hash(hash_payload),
+    )
+
+    runtime = config.setup_target()
+
+    assert runtime.protocol is TargetInputProtocol.V1_OBSERVED
+    assert runtime.explicit_target_hash == config.explicit_target_hash
+    with pytest.raises(ValueError, match="sample/target identity mismatch"):
+        ExplicitRolloutTargetConfig(
+            **{**config.model_dump(), "sample_key": "other/sample"},
+        )
+    with pytest.raises(ValueError, match="explicit_target_hash"):
+        ExplicitRolloutTargetConfig(
+            **{**config.model_dump(), "explicit_target_hash": "tampered"},
+        )
+
+
+def test_explicit_v1_target_preserves_actor_descriptor_and_v1_lineage_fields() -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=3,
+        target_id="scene/snippet/0:detected:3:7",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=7,
+    )
+    payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 3,
+        "gt_match_row": 5,
+        "gt_match_id": "gt-5",
+        "oriented_iou": 0.6,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+    explicit = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=3,
+        gt_match_row=5,
+        gt_match_id="gt-5",
+        oriented_iou=0.6,
+        status="admitted",
+        reason="admitted",
+        target_id=actor.target_id,
+        explicit_target_hash=stable_msgspec_hash(payload),
+    ).setup_target()
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = SimpleNamespace(
+        store=SimpleNamespace(target_protocol_version=TargetInputProtocol.V1_OBSERVED),
+        target_scorer=SimpleNamespace(target_crop_policy="gt-obb"),
+        explicit_target=explicit,
+    )
+
+    task = _explicit_target_result(explicit).selected_rows[0]
+    lineage = writer._target_lineage(task, target_rank=0)
+
+    assert task.descriptor == actor.descriptor
+    assert lineage.target_protocol_version == TargetInputProtocol.V1_OBSERVED
+    assert lineage.target_source == actor.source
+    assert lineage.matched_gt_target_row_id == 5
+    assert lineage.matched_gt_target_id == "gt-5"
+    assert lineage.gt_match_iou == pytest.approx(0.6)
+    assert lineage.gt_match_status == "admitted"
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [("rejected", "wrong_class"), ("admitted", "wrong_class")],
+)
+def test_explicit_v1_target_rejects_non_admitted_status_or_reason(status: str, reason: str) -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=0,
+        target_id="target-0",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=1,
+    )
+    payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 0,
+        "gt_match_row": 1,
+        "gt_match_id": "gt-1",
+        "oriented_iou": 0.7,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+
+    with pytest.raises(ValueError, match="admitted"):
+        ExplicitRolloutTargetConfig(
+            sample_key=actor.sample_key,
+            actor_descriptor=actor,
+            detected_source_row=0,
+            gt_match_row=1,
+            gt_match_id="gt-1",
+            oriented_iou=0.7,
+            status=status,
+            reason=reason,
+            target_id=actor.target_id,
+            explicit_target_hash=stable_msgspec_hash(payload),
+        )
+
+
+def test_explicit_v1_target_rejects_conflicting_oracle_sampler() -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=0,
+        target_id="target-0",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=1,
+    )
+    payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 0,
+        "gt_match_row": 1,
+        "gt_match_id": "gt-1",
+        "oriented_iou": 0.7,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+    explicit = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=0,
+        gt_match_row=1,
+        gt_match_id="gt-1",
+        oriented_iou=0.7,
+        target_id=actor.target_id,
+        explicit_target_hash=stable_msgspec_hash(payload),
+    )
+
+    with pytest.raises(ValueError, match="oracle_target_task_sampler"):
+        RolloutDatasetWriterConfig(
+            explicit_target=explicit,
+            store={"target_protocol_version": "v1_observed"},
+            oracle_target_task_sampler={"seed": 99},
+        )
+
+
+def test_writer_config_v0_dump_and_hash_omit_explicit_target_field() -> None:
+    config = RolloutDatasetWriterConfig.model_validate(
+        {"max_targets_per_sample": None, "store": {"target_protocol_version": "v0_gt_input"}}
+    )
+    payload = config.model_dump_jsonable()
+
+    class _LegacyConfig:
+        def model_dump_jsonable(self) -> dict[str, Any]:
+            return payload
+
+    assert "explicit_target" not in payload
+    assert stable_config_hash(config) == stable_config_hash(_LegacyConfig())  # type: ignore[arg-type]
+
+
+def test_writer_config_v1_dump_omits_explicit_target_but_accepts_explicit_target() -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=0,
+        target_id="target-0",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=1,
+    )
+    payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 0,
+        "gt_match_row": 1,
+        "gt_match_id": "gt-1",
+        "oriented_iou": 0.7,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+    explicit = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=0,
+        gt_match_row=1,
+        gt_match_id="gt-1",
+        oriented_iou=0.7,
+        target_id=actor.target_id,
+        explicit_target_hash=stable_msgspec_hash(payload),
+    )
+    config = RolloutDatasetWriterConfig(
+        explicit_target=explicit,
+        store={"target_protocol_version": "v1_observed"},
+    )
+
+    assert "explicit_target" not in config.model_dump_jsonable()
+
+
+def test_explicit_target_writer_path_does_not_construct_legacy_sampler(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=0,
+        target_id="target-0",
+        descriptor=_target_descriptor(),
+        confidence=0.9,
+        inst_id=1,
+    )
+    payload = {
+        "sample_key": actor.sample_key,
+        "target_id": actor.target_id,
+        "detected_source_row": 0,
+        "gt_match_row": 1,
+        "gt_match_id": "gt-1",
+        "oriented_iou": 0.7,
+        "descriptor_hash": actor.descriptor_hash,
+    }
+    explicit = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=0,
+        gt_match_row=1,
+        gt_match_id="gt-1",
+        oriented_iou=0.7,
+        target_id=actor.target_id,
+        explicit_target_hash=stable_msgspec_hash(payload),
+    )
+    config = _FakeRolloutConfig([], store_dir=Path("/tmp/unused"))
+    config.explicit_target = explicit
+    config.max_samples = None
+    config.max_targets_per_sample = None
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = config
+    writer.stats = RolloutDatasetWriterStats()
+    writer.console = SimpleNamespace(warn=lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.rollout_dataset.OracleTargetTaskSampler",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("legacy sampler constructed")),
+    )
+    # The explicit branch is selected before the source loop; an empty source
+    # fails only because no records can be generated, never because sampling ran.
+    with pytest.raises(RuntimeError, match="No rollout records"):
+        writer.run()
+
+
+def test_rollout_shard_campaign_binding_is_copied_and_required_for_resume(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    base_entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    binding = RolloutShardCampaignBinding("campaign", "plan", "work", "target", "profile", "explicit")
+    entry = replace(base_entry, campaign_binding=binding)
+    final_dir = tmp_path / "final" / entry.shard_id
+
+    result = run_rollout_shard(
+        config, shard_entry=entry, output_tmp=tmp_path / "tmp" / "unit.tmp", output_final=final_dir
+    )
+    owner = msgspec.json.decode(result.owner_path.read_bytes())
+    success = msgspec.json.decode(result.success_path.read_bytes())
+    expected = binding.to_jsonable()
+    assert owner["campaign_binding"] == expected
+    assert success["campaign_binding"] == expected
+    manifest = msgspec.json.decode((result.final_dir / result.store_result.manifest_path.name).read_bytes())
+    assert manifest["generation"]["shard"]["campaign_binding"] == expected
+    assert run_rollout_shard(
+        config, shard_entry=entry, output_tmp=tmp_path / "tmp" / "retry.tmp", output_final=final_dir
+    ).skipped
+
+    for field in ("campaign_id", "plan_hash", "work_unit_hash", "target_id", "profile_hash", "explicit_target_hash"):
+        tampered = replace(binding, **{field: f"tampered-{field}"})
+        with pytest.raises(RuntimeError, match="not a validated completed shard"):
+            run_rollout_shard(
+                config,
+                shard_entry=replace(entry, campaign_binding=tampered),
+                output_tmp=tmp_path / "tmp" / f"{field}.tmp",
+                output_final=final_dir,
+            )
+
+
+def test_rollout_shard_without_campaign_binding_preserves_legacy_evidence(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    result = run_rollout_shard(
+        config,
+        shard_entry=entry,
+        output_tmp=tmp_path / "tmp" / "unit.tmp",
+        output_final=tmp_path / "final" / entry.shard_id,
+    )
+
+    owner = msgspec.json.decode(result.owner_path.read_bytes())
+    success = msgspec.json.decode(result.success_path.read_bytes())
+    assert owner["campaign_binding"] is None
+    assert success["campaign_binding"] is None
+
+
+def test_rollout_shard_historical_evidence_without_binding_key_still_skips(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    final_dir = tmp_path / "final" / entry.shard_id
+    result = run_rollout_shard(
+        config,
+        shard_entry=entry,
+        output_tmp=tmp_path / "tmp" / "unit.tmp",
+        output_final=final_dir,
+    )
+
+    current_manifest = msgspec.json.decode((result.final_dir / result.store_result.manifest_path.name).read_bytes())
+    assert current_manifest["generation"]["shard"].get("campaign_binding") in (None,)
+
+    for sidecar in (result.owner_path, result.success_path):
+        payload = msgspec.json.decode(sidecar.read_bytes())
+        payload.pop("campaign_binding", None)
+        sidecar.write_bytes(msgspec.json.encode(payload))
+    manifest_path = final_dir / result.store_result.manifest_path.name
+    manifest = msgspec.json.decode(manifest_path.read_bytes())
+    manifest["generation"]["shard"].pop("campaign_binding", None)
+    manifest_path.write_bytes(msgspec.json.encode(manifest))
+    manifest_digest = manifest_sha256(manifest)
+    zarr.open_group(final_dir, mode="r+").attrs["manifest_sha256"] = manifest_digest
+    owner = msgspec.json.decode(result.owner_path.read_bytes())
+    owner["rollout_manifest_sha256"] = manifest_digest
+    result.owner_path.write_bytes(msgspec.json.encode(owner))
+    success = msgspec.json.decode(result.success_path.read_bytes())
+    success["rollout_manifest_sha256"] = manifest_digest
+    success["owner_sha256"] = manifest_sha256(owner)
+    result.success_path.write_bytes(msgspec.json.encode(success))
+
+    resumed = run_rollout_shard(
+        config,
+        shard_entry=entry,
+        output_tmp=tmp_path / "tmp" / "retry.tmp",
+        output_final=final_dir,
+    )
+
+    assert resumed.skipped
 
 
 def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:

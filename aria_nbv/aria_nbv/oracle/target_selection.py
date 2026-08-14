@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
-from efm3d.aria.obb import ObbTW
+from efm3d.aria.obb import ObbTW, obb_iou3d
 from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor
@@ -24,7 +24,7 @@ from torch import Tensor
 from ..data_handling.ase_efm.views import EfmSnippetView
 from ..data_handling.vin_store.batch import CompactObbBlock
 from ..data_handling.vin_store.views import VinSnippetView
-from ..targets import TargetDescriptor
+from ..targets import ObservedTargetDescriptor, TargetDescriptor
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
@@ -54,6 +54,129 @@ TARGET_INVALID_REASON_VERSION = "target-selection-invalidity-v1"
 
 ORACLE_TARGET_TASK_SOURCE = ORACLE_GT_TARGET_SOURCE
 """Source label for oracle target-task rows sampled from GT OBBs."""
+
+
+class OracleMatchReason(StrEnum):
+    """Stable reasons emitted by privileged observed-to-GT admission."""
+
+    ADMITTED = "admitted"
+    BELOW_IOU_THRESHOLD = "below_iou_threshold"
+    WRONG_CLASS = "wrong_class"
+    INVALID_GEOMETRY = "invalid_geometry"
+    NO_MATCH = "no_match"
+    AMBIGUOUS = "ambiguous_match"
+
+
+@dataclass(frozen=True, slots=True)
+class OracleMatchedTargetTask:
+    """Privileged evaluation of one immutable observed descriptor."""
+
+    descriptor: ObservedTargetDescriptor
+    """Actor-visible descriptor; never mutated by matching."""
+
+    gt_match_row: int | None
+    """Matched GT source row, when admitted."""
+
+    gt_match_id: str | None
+    """Matched GT identity, when admitted."""
+
+    oriented_iou: float | None
+    """Best oriented IoU used for strict admission."""
+
+    admitted: bool
+    """Whether oriented IoU is strictly greater than the threshold."""
+
+    reason: OracleMatchReason
+    """Explicit admission/rejection reason."""
+
+    @property
+    def admission_status(self) -> str:
+        """Serialized admission status for manifest consumers."""
+
+        return "admitted" if self.admitted else "rejected"
+
+    @property
+    def gt_match_row_id(self) -> int | None:
+        """Compatibility alias for the matched GT source row."""
+
+        return self.gt_match_row
+
+
+def match_observed_target_descriptors(
+    descriptors: tuple[ObservedTargetDescriptor, ...] | list[ObservedTargetDescriptor],
+    gt_rows: tuple[object, ...] | list[object],
+    *,
+    threshold: float = 0.20,
+    iou_fn: object | None = None,
+) -> tuple[OracleMatchedTargetTask, ...]:
+    """Match actor descriptors to GT rows, retaining every qualified row.
+
+    ``iou_fn`` may be injected as ``(descriptor, gt_row) -> float`` for tests;
+    absent one, rows must expose flattened OBB payloads for EFM oriented IoU.
+    Equality with ``threshold`` is rejected.
+    """
+
+    if not 0.0 <= float(threshold) < 1.0:
+        raise ValueError("threshold must be in [0, 1).")
+    output: list[OracleMatchedTargetTask] = []
+    for descriptor in sorted(descriptors, key=lambda value: (value.source_row, value.target_id)):
+        candidates: list[tuple[float, int, object]] = []
+        saw_wrong_class = False
+        saw_invalid_geometry = False
+        for index, row in enumerate(gt_rows):
+            gt_descriptor = getattr(row, "descriptor", row)
+            if not hasattr(gt_descriptor, "sem_id") or int(gt_descriptor.sem_id) != descriptor.descriptor.sem_id:
+                saw_wrong_class = True
+                continue
+            try:
+                if iou_fn is not None:
+                    iou = float(iou_fn(descriptor, row))
+                else:
+                    left = descriptor.obb_data
+                    right = getattr(row, "obb_data", None)
+                    if left is None or right is None:
+                        raise ValueError("OBB payloads required when iou_fn is omitted")
+                    iou = float(obb_iou3d(ObbTW(torch.tensor(left)), ObbTW(torch.tensor(right))).reshape(-1)[0].item())
+            except (TypeError, ValueError, RuntimeError, FloatingPointError):
+                saw_invalid_geometry = True
+                continue
+            if iou != iou or not 0.0 <= iou <= 1.0:
+                saw_invalid_geometry = True
+                continue
+            if iou == iou and iou >= 0.0:
+                candidates.append((iou, index, row))
+        candidates.sort(key=lambda item: (-item[0], item[1]))
+        if not candidates:
+            reason = (
+                OracleMatchReason.INVALID_GEOMETRY
+                if saw_invalid_geometry
+                else OracleMatchReason.WRONG_CLASS
+                if saw_wrong_class
+                else OracleMatchReason.NO_MATCH
+            )
+            output.append(OracleMatchedTargetTask(descriptor, None, None, None, False, reason))
+            continue
+        best_iou, best_index, best_row = candidates[0]
+        qualified = [item for item in candidates if item[0] > float(threshold)]
+        if len(qualified) > 1:
+            reason = OracleMatchReason.AMBIGUOUS
+            admitted = False
+        elif best_iou <= float(threshold):
+            reason = OracleMatchReason.BELOW_IOU_THRESHOLD
+            admitted = False
+        else:
+            reason = OracleMatchReason.ADMITTED
+            admitted = True
+        gt_id = getattr(best_row, "target_id", getattr(best_row, "gt_match_id", None))
+        output.append(
+            OracleMatchedTargetTask(
+                descriptor, best_index, None if gt_id is None else str(gt_id), best_iou, admitted, reason
+            )
+        )
+    return tuple(output)
+
+
+match_observed_targets = match_observed_target_descriptors
 
 
 class TargetTaskIdentityStatus(StrEnum):
