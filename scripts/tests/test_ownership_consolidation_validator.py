@@ -28,7 +28,7 @@ class OwnershipValidatorTests(unittest.TestCase):
         inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
         self.assertEqual(validate_inventory(inventory, mode="schema"), [])
 
-    def test_frozen_inventory_deletion_mode_reports_unverified_rows(self) -> None:
+    def test_frozen_inventory_deletion_mode_has_no_ledger_blockers(self) -> None:
         inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
         errors = validate_inventory(inventory, mode="deletion-ready")
         expected_ledger_blockers = [
@@ -37,10 +37,9 @@ class OwnershipValidatorTests(unittest.TestCase):
             if row["disposition"] == "unresolved" or row["destination_verified"] is False
         ]
         error_items = {error.item for error in errors}
-        self.assertTrue(expected_ledger_blockers)
-        self.assertTrue(set(expected_ledger_blockers) <= error_items)
-        self.assertTrue(any("python_docstring_coverage" in str(error) for error in errors))
-        self.assertGreaterEqual(len(errors), len(expected_ledger_blockers))
+        self.assertFalse(expected_ledger_blockers)
+        self.assertFalse(any(item.startswith("ledger[") for item in error_items))
+        self.assertTrue(any("consumer" in str(error) or "coverage" in str(error) for error in errors))
 
     def test_merged_baseline_receipt_requires_sha_and_tree(self) -> None:
         inventory = {"schema_version": 1, "baseline": {"pr50_commit": "bad", "tree": "bad", "receipt_status": "hosted-and-local-verification"}, "disposition_ledger": [], "theory_qmd_matrix": [], "consumer_inventory": {}, "python_docstring_coverage": {}, "verification": {}}
@@ -84,6 +83,8 @@ class OwnershipValidatorTests(unittest.TestCase):
 
     def test_reference_classifier_allows_only_provenance_classes(self) -> None:
         assert classify_reference(".agents/memory/history/2026/08/note.md") == "dated-history"
+        assert classify_reference(".agents/memory/transcripts/user/2026/08/messages.jsonl") == "transcript-provenance"
+        assert classify_reference(".agents/archive/docs/old.md") == "archive-provenance"
         assert classify_reference(".agents/resolved.toml") == "resolved-provenance"
         assert classify_reference(".omx/plans/migration-receipt.json") == "migration-receipt"
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md"}]))
@@ -92,6 +93,13 @@ class OwnershipValidatorTests(unittest.TestCase):
     def test_transcript_and_debrief_cannot_be_generic_decision_sinks(self) -> None:
         errors = validate_no_generic_sinks([("transcript.jsonl", 'promotion_target: .agents/memory/state/DECISIONS.md')])
         assert errors
+
+    def test_historical_transcript_sink_is_ignored_by_repository_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "transcript.jsonl"
+            path.write_text("promotion_target: .agents/memory/state/DECISIONS.md", encoding="utf-8")
+            assert validate_repository_sinks(root, [{"path": "transcript.jsonl", "classification": "transcript-provenance"}]) == []
 
 
     def test_theory_matrix_covers_every_page(self) -> None:

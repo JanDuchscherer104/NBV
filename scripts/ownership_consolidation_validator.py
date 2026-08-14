@@ -19,7 +19,13 @@ LEDGER_DISPOSITIONS = {
     "removed", "historical", "code-owned", "test-owned", "literature-owned",
     "deferred-action",
 }
-ALLOWED_REFERENCE_CLASSES = {"dated-history", "resolved-provenance", "migration-receipt"}
+ALLOWED_REFERENCE_CLASSES = {
+    "dated-history",
+    "transcript-provenance",
+    "archive-provenance",
+    "resolved-provenance",
+    "migration-receipt",
+}
 THEORY_CLASSES = {"keep", "thin", "delete"}
 INVENTORY_DISPOSITIONS = LEDGER_DISPOSITIONS | {"unresolved"}
 AGENTS_DB_MARKERS = ("agents-db", ".agents/issues.toml", ".agents/todos.toml", ".agents/refactors.toml")
@@ -91,6 +97,10 @@ def classify_reference(path: str, *, resolved: bool = False, receipt: bool = Fal
         return "migration-receipt"
     if resolved or normalized.startswith(".agents/resolved"):
         return "resolved-provenance"
+    if "/transcripts/" in normalized or normalized.startswith(".agents/memory/transcripts/"):
+        return "transcript-provenance"
+    if normalized.startswith(".agents/archive/") or "/archive/" in normalized:
+        return "archive-provenance"
     if "/history/" in normalized or normalized.startswith(".agents/archive/"):
         return "dated-history"
     return "live-reference"
@@ -103,6 +113,10 @@ def validate_reference_classes(references: Iterable[dict[str, Any]]) -> list[Val
         classification = ref.get("classification") or classify_reference(
             path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt"))
         )
+        if classification == "live-reference":
+            inferred = classify_reference(path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt")))
+            if inferred in ALLOWED_REFERENCE_CLASSES:
+                classification = inferred
         if classification not in ALLOWED_REFERENCE_CLASSES:
             errors.append(ValidationError(path, "live legacy-state reference is not allowed"))
     return errors
@@ -170,14 +184,22 @@ def validate_consumer_inventory(inventory: dict[str, Any]) -> list[ValidationErr
     return errors
 
 
-def validate_source_blobs(rows: Iterable[dict[str, Any]], root: Path) -> list[ValidationError]:
+def validate_source_blobs(rows: Iterable[dict[str, Any]], root: Path, *, receipt_commit: str | None = None) -> list[ValidationError]:
     """Ensure each source receipt still names the exact current Git blob."""
     errors: list[ValidationError] = []
     import subprocess
     for row in rows:
-        result = subprocess.run(["git", "rev-parse", f"HEAD:{row['source']}"], cwd=root, capture_output=True, text=True)
-        actual = result.stdout.strip()
-        if result.returncode or actual != row.get("source_blob_id"):
+        revisions = ["HEAD"]
+        if receipt_commit:
+            revisions.append(receipt_commit)
+        actual = ""
+        for revision in revisions:
+            result = subprocess.run(["git", "rev-parse", f"{revision}:{row['source']}"], cwd=root, capture_output=True, text=True)
+            if result.returncode == 0:
+                actual = result.stdout.strip()
+                if actual == row.get("source_blob_id"):
+                    break
+        if actual != row.get("source_blob_id"):
             errors.append(ValidationError(str(row.get("id", row.get("source"))), "source_blob_id does not match current Git blob"))
     return errors
 
@@ -187,6 +209,11 @@ def validate_repository_sinks(root: Path, refs: Iterable[dict[str, Any]]) -> lis
     for ref in refs:
         path = ref.get("path") if isinstance(ref, dict) else None
         if not isinstance(path, str):
+            continue
+        classification = ref.get("classification") if isinstance(ref, dict) else None
+        if classification == "live-reference":
+            classification = classify_reference(path)
+        if classification in ALLOWED_REFERENCE_CLASSES:
             continue
         candidate = root / path
         if candidate.is_file():
@@ -237,7 +264,7 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema") -> list[Va
         if row.get("disposition") == "unresolved" or row.get("destination_verified") is False:
             blockers.append(ValidationError(item, "unresolved or destination not verified"))
     errors.extend(validate_migration_ledger(ledger, root=Path.cwd(), full=True, materialize=(mode == "deletion-ready"), enforce_readiness=(mode == "deletion-ready")))
-    errors.extend(validate_source_blobs(ledger, Path.cwd()))
+    errors.extend(validate_source_blobs(ledger, Path.cwd(), receipt_commit=data.get("source_receipt_commit")))
     matrix = data.get("theory_qmd_matrix", [])
     if not isinstance(matrix, list):
         errors.append(ValidationError("theory_qmd_matrix", "must be a list")); matrix = []
