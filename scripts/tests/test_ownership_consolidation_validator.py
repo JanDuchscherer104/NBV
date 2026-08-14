@@ -83,12 +83,24 @@ class OwnershipValidatorTests(unittest.TestCase):
 
     def test_reference_classifier_allows_only_provenance_classes(self) -> None:
         assert classify_reference(".agents/memory/history/2026/08/note.md") == "dated-history"
-        assert classify_reference(".agents/memory/transcripts/user/2026/08/messages.jsonl") == "transcript-provenance"
+        assert classify_reference(".agents/memory/transcripts/user/2026/08/messages.jsonl") == "resolved-provenance"
         assert classify_reference(".agents/archive/docs/old.md") == "archive-provenance"
         assert classify_reference(".agents/resolved.toml") == "resolved-provenance"
         assert classify_reference(".omx/plans/migration-receipt.json") == "migration-receipt"
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md"}]))
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md", "classification": "transcript-provenance"}]))
+
+    def test_retired_paths_and_boolean_flags_never_bypass_provenance(self) -> None:
+        references = [
+            {"path": ".agents/memory/state/DECISIONS.md", "receipt": True},
+            {"path": ".agents/memory/state/PROJECT_STATE.md", "resolved": True},
+            {"path": "README.md", "resolved": True},
+            {"path": "AGENTS.md", "resolved": True},
+            {"path": "docs/index.qmd", "resolved": True},
+            {"path": ".agents/memory/transcripts/user/2026-05-09/user_messages.jsonl", "classification": "live-reference"},
+        ]
+        errors = validate_reference_classes(references, Path(__file__).parents[2])
+        assert len(errors) == len(references)
 
     def test_reference_classifier_rejects_traversal_and_fake_provenance(self) -> None:
         references = [

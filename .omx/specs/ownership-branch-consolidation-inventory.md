@@ -67,10 +67,11 @@ planned Typst destination with an exact existing owner and `destination_verified
 
 ## Live-consumer and provenance inventory
 
-The repository-wide tracked-reference scan records 123 concrete path groups with
-line locators: 85 dated-history, 18 resolved-provenance, 2 migration-receipt, and
-18 live-reference groups. Transcript paths are accepted as raw provenance by the
-validator; current live-reference groups must still be absent from this ledger.
+The repository-wide tracked-reference scan records 121 concrete path groups with
+line locators: 85 dated-history, 34 resolved-provenance, and 2 migration-receipt groups.
+Immutable transcript artifacts are recorded as resolved, historical, and
+non-authoritative provenance; retired state paths are omitted from the consumer
+ledger and remain covered only by bounded migration receipts.
 Each record uses the `classification` field, names its consumer type, disposition, and
 replacement owner. Executable and generated classes were classified by path;
 untracked derived artifacts remain an explicit scan gap. Only dated history,
