@@ -6,7 +6,7 @@
     N: $N$,
     // Number of candidates.
     Nq: $N_q$,
-    // Trajectory length / time steps.
+    // Trajectory length; glyph T can collide with `rl.transition` and bold transforms.
     Tlen: $T$,
     // Point count.
     P: $P$,
@@ -16,21 +16,21 @@
     Pproj: $P_"proj"$,
     // Frustum points.
     Pfr: $P_"fr"$,
-    // Feature dimension (generic).
+    // Generic feature dimension; glyph D can collide with `oracle.err`.
     D: $D$,
-    // Height.
+    // Image/tensor height; glyph H can collide with `rl.H` horizon.
     H: $H$,
     // Width.
     Wdim: $W$,
-    // Image height/width (pixel space).
+    // Reserved explicit image height; no direct authored use in the 2026-08-14 audit.
     Himg: $H_"img"$,
-    // Image width in pixels.
+    // Reserved explicit image width; no direct authored use in the 2026-08-14 audit.
     Wimg: $W_"img"$,
     // Voxel grid size.
     Vvox: $V$,
     // Global pooling dim.
     Gpool: $G_"pool"$,
-    // Global projection dim.
+    // Reserved global-projection dimension; no direct authored use in the 2026-08-14 audit.
     Gproj: $G_"proj"$,
     // Semidense projection grid size.
     Gsem: $G_"sem"$,
@@ -46,25 +46,25 @@
     Ffield: $F_"field"$,
     // Pose-feature dimension.
     Fpose: $F_"pose"$,
-    // Positional-encoding feature dimension.
+    // Reserved positional-encoding dimension; no direct authored use in the 2026-08-14 audit.
     Fpe: $F_"pe"$,
-    // Candidate-feature dimension.
+    // Reserved candidate-feature dimension; no direct authored use in the 2026-08-14 audit.
     Fq: $F_q$,
     // Global-context feature dimension.
     Fg: $F_g$,
-    // Trajectory-context feature dimension.
+    // Reserved trajectory-context dimension; no direct authored use in the 2026-08-14 audit.
     Ftau: $F_tau$,
-    // Projection-layer output dimension.
+    // Reserved projection output dimension; no direct authored use in the 2026-08-14 audit.
     Fproj: $F_"proj"$,
-    // Convolutional feature dimension.
+    // Reserved convolutional dimension; no direct authored use in the 2026-08-14 audit.
     Fcnn: $F_"cnn"$,
-    // Token embedding dimension.
+    // Reserved token dimension; no direct authored use in the 2026-08-14 audit.
     Ftok: $F_"tok"$,
-    // Frustum feature dimension.
+    // Reserved frustum-feature dimension; no direct authored use in the 2026-08-14 audit.
     Ffr: $F_"fr"$,
-    // Point feature dimension.
+    // Reserved point-feature dimension; no direct authored use in the 2026-08-14 audit.
     Fpt: $F_"pt"$,
-    // Auxiliary-head feature dimension.
+    // Reserved auxiliary dimension; no direct authored use in the 2026-08-14 audit.
     Faux: $F_"aux"$,
     // Prediction-head feature dimension.
     Fhead: $F_"head"$,

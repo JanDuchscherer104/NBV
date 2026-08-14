@@ -1,12 +1,12 @@
 // Candidate-relative pose, relation, and directional-history descriptors.
 #let spatial = (
-  // Reference pose for candidate-relative descriptors.
+  // Reserved reference pose; no direct authored use in the 2026-08-14 audit.
   ref_pose: $r_t$,
   // Relative transform from the reference pose to candidate i.
   ref_candidate_transform: $bold(T)_(r_t,i)^"rel"$,
-  // Continuous rotation representation used for neural pose features.
+  // Canonical 6D rotation form; `vin.pose_6d` is an unused duplicate.
   pose_6d: $bold(R)^"6D"$,
-  // Relative/local candidate pose descriptor.
+  // Canonical candidate pose descriptor; `vin.candidate_pose_feat` is an unused duplicate.
   candidate_pose_feat: $bold(h)_(t,i)^"pose"$,
   // Candidate-target relation descriptor.
   candidate_target_rel_feat: $bold(h)_(t,e|i)^"rel"$,
@@ -18,12 +18,12 @@
   local_delta_rot: $bold(delta)_(a|i)^"R"$,
   // Optical-axis or bearing alignment from candidate to target.
   target_bearing: $cos theta_(t,e,i)^"opt"$,
-  // Directional observation history on S^2.
+  // Canonical unit direction; duplicated by unused `oracle.dir` and `vin.dir_unit`.
   dir_unit: $bold(d)$,
-  // Learned summary of directional observation history.
+  // Canonical directional memory; VIN's unused alias changes this superscript to a subscript.
   dir_memory: $bold(h)^"dir"$,
-  // Directional moment matrix accumulated from observation history.
+  // Canonical directional moment; VIN's unused alias changes this superscript to a subscript.
   dir_moment: $bold(M)^"dir"$,
-  // Spherical-harmonic basis values through degree L.
+  // Canonical spherical-harmonic basis; `vin.sh_basis` is an unused duplicate.
   sh_basis: $bold(Y)_L$,
 )

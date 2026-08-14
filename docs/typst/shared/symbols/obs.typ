@@ -2,33 +2,33 @@
 #let obs = (
     // Logged RGB image stream.
     img_rgb: $bold(I)^"rgb"$,
-    // Optional grayscale image stream (used by Hestia-style formulations).
+    // Reserved Hestia-style grayscale stream; no direct authored use in the 2026-08-14 audit.
     img_gray: $bold(I)^"gray"$,
     // Depth image / rendered depth observation.
     depth: $bold(D)$,
     // Pose stream along the trajectory.
     pose: $bold(X)$,
-    // Pose / camera metadata bundle.
+    // Reserved pose/camera metadata bundle; no direct authored use in the 2026-08-14 audit.
     meta: $bold(M)$,
     // Semidense point-cloud observation stream as an abstract set.
     points_semi: $cal(P)^"semi"$,
-    // Time-indexed semi-dense evidence used in proposal state notation.
+    // Reserved time-indexed semi-dense set; duplicates the used `ase.points_semi` form.
     points_semi_t: $cal(P)_t^"semi"$,
-    // Actor-visible point set accumulated through rollout step t.
+    // Canonical actor-visible accumulated set; `oracle.points_t` is an unused duplicate.
     points_t: $cal(P)_t$,
-    // Accumulated point set after incorporating the next observation.
+    // Reserved next-step accumulated set; no direct authored use in the 2026-08-14 audit.
     points_next: $cal(P)_(t+1)$,
-    // Counterfactual point set associated with candidate i at step t.
+    // Reserved candidate-conditioned set; no direct authored use in the 2026-08-14 audit.
     points_cand_ti: $cal(P)_(t,i)^"cand"$,
-    // Sparse ray-aware occupied / free / unknown scene memory at step t.
+    // Unused duplicate of canonical `scene.ray_memory_t`; migrate or prune with its pair.
     ray_memory_t: $bold(M)_t^"ray"$,
-    // Ray-aware scene memory after incorporating the next observation.
+    // Unused duplicate of canonical `scene.ray_memory_next`; migrate or prune with its pair.
     ray_memory_next: $bold(M)_(t+1)^"ray"$,
-    // Selected candidate rays used to query or update scene memory.
+    // Reserved candidate-ray set; no direct authored use in the 2026-08-14 audit.
     selected_rays_ti: $cal(R)_(t,i)^"sel"$,
-    // Tensor encoding of accumulated geometry at step t.
+    // Reserved accumulated-geometry tensor; no direct authored use in the 2026-08-14 audit.
     points_tensor_t: $bold(P)_t$,
-    // Tensor encoding of candidate-conditioned geometry at step t.
+    // Reserved candidate-geometry tensor; no direct authored use in the 2026-08-14 audit.
     points_tensor_cand_ti: $bold(P)_(t,i)^"cand"$,
     // Point-attached logged visual descriptor bank.
     dino_point_bank_t: $bold(F)_t^"DINO@pt"$,
@@ -36,17 +36,17 @@
     point_tokens_t: $bold(X)_t^"pt"$,
     // Counterfactual / rendered geometry point-cloud stream.
     points_cf: $cal(P)^"cf"$,
-    // Geometry / voxel-grid observation bundle.
+    // Reserved geometry/grid bundle; no direct authored use in the 2026-08-14 audit.
     grid: $bold(G)$,
     // Generic visibility / directional-observability cue.
     vis: $bold(V)$,
-    // Target / look-at latent.
+    // Reserved look-at latent; no direct authored use in the 2026-08-14 audit.
     lookat: $bold(L)$,
-    // Cumulative face visibility tensor (Hestia-style).
+    // Reserved cumulative Hestia visibility; no direct authored use in the 2026-08-14 audit.
     face_vis: $bold(F)$,
-    // Instantaneous face visibility tensor (Hestia-style).
+    // Reserved instantaneous Hestia visibility; no direct authored use in the 2026-08-14 audit.
     face_vis_step: $bold(f)$,
-    // Voxel center position.
+    // Reserved voxel-center vector; no direct authored use in the 2026-08-14 audit.
     voxel_center: $bold(p)_v$,
     // Face normal vector.
     face_normal: $bold(n)$,

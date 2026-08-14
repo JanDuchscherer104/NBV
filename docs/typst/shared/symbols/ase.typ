@@ -10,6 +10,6 @@
     traj: $bold(T)_"rig"^"w" (t)$,
     // Final world-from-rig trajectory pose at step T.
     traj_final: $bold(T)_"rig"^"w" (T)$,
-    // Semi-dense point set.
+    // Canonical ASE time-indexed semi-dense set; `obs.points_semi_t` is unused duplicate notation.
     points_semi: $cal(P)_t^"semi"$,
   )

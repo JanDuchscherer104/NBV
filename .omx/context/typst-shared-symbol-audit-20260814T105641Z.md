@@ -40,6 +40,18 @@ above it. Existing keys, expressions, module boundaries, and compatibility
 aliases were preserved. A comment-stripped comparison against `origin/main`
 contains no changes.
 
+Definition-site comments now also encode the audit disposition where relevant:
+
+- every zero-direct-use key is marked as reserved, unused, duplicated, or a
+  compatibility candidate, with the 2026-08-14 audit date where the status is
+  purely usage-derived;
+- duplicate aliases name the preferred domain owner and whether migration is
+  required before pruning;
+- the VIN directional subscript/superscript disagreement is stated on both the
+  canonical spatial symbols and the inconsistent VIN aliases;
+- `H`, `D`, `T`, `r`, `c`, `v`, and `w` comments warn about their conflicting
+  rendered meanings at the relevant definition sites.
+
 ## Zero-direct-use review candidates
 
 The audit found 79 keys without a direct authored Typst call site. This is a
@@ -134,9 +146,15 @@ should prefer qualified subscripts or prose-local definitions.
    registry rationale to the prune triage rather than keeping it indefinitely
    without a disposition.
 
+The comments implement the audit's local guidance but do not resolve these
+follow-ups: no alias was removed, no rendered expression was changed, and no
+canonical-consumer migration was attempted in this documentation workpackage.
+
 ## Verification evidence
 
 - Immediate-comment adjacency audit: passed with zero missing entries.
+- Zero-use disposition audit: every zero-direct-use key has a local status or
+  owner note.
 - Comment-stripped diff against the base: clean.
 - `typst compile typst/thesis/main.typ /tmp/aria-symbol-comments-thesis.pdf
   --root .`: passed from `docs/`.
