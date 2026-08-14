@@ -18,7 +18,8 @@ pre-merge candidate evidence.
 
 Source blob receipts cover 7 files / 2,063 lines: roadmap 751, questions 665,
 M1 report 160, and state files 487. SHA-256 values and all row-level pointers
-are in the JSON companion.
+are in the JSON companion. Deleted-source Git blobs remain auditable at receipt
+commit `9c246b2cc99110d32e161371138d0378dd34f22a`.
 
 ## Disposition ledger summary
 
@@ -28,7 +29,7 @@ verification, and link action. Current disposition counts remain:
 
 | disposition | rows |
 |---|---:|
-| unresolved (migration not yet materialized) | 33 |
+| historical (retired source retained as receipt/provenance) | 33 |
 | deferred-action (follow-up only) | 4 |
 | code-owned | 5 |
 | test-owned | 1 |
@@ -36,16 +37,14 @@ verification, and link action. Current disposition counts remain:
 | total | 47 |
 
 All 47 ledger rows now point to an exact single owner path/anchor or defining
-symbol/test, and `destination_verified` is true for each row. This confirms
-owner materialization only; 33 rows remain `unresolved` because their source
-blocks still require the later deletion/consumer migration gate. Deferred action
-never substitutes for migration; it records a pointer plus a pending backlog
-gate.
+symbol/test, and `destination_verified` is true for each row. The 33 retired
+source blocks are historical receipts after owner materialization; deferred
+promotion items remain explicit follow-up work.
 
 G004 narrowed the implementation and routing receipts to exact Python, test,
-Typst, setup, source-order, and CI owners. The ledger now records 47 verified
-destination pointers against the active owner graph; unresolved dispositions
-remain intentionally open until the deletion and live-consumer gates pass.
+Typst, setup, source-order, and CI owners. G005 retired the duplicate QMD and
+memory-state files while preserving their source hashes. The ledger now records
+47 verified destination pointers against the active owner graph.
 
 The three former DB-shaped destinations are now non-DB canonical owners:
 `retired-008-roadmap-risks` -> `development/roadmap.typ#risks`,
@@ -64,24 +63,24 @@ All 8 theory pages are classified. `rl_planning.qmd` and `rri_theory.qmd` are
 **thin** candidates after Typst promotion; the remaining six are **keep**
 candidates for external background/evidence. This is not deletion approval:
 inbound-link and citation scans remain required, and every candidate records a
-planned Typst destination with `destination_verified: false`.
+planned Typst destination with an exact existing owner and `destination_verified: true`.
 
 ## Live-consumer and provenance inventory
 
 The repository-wide tracked-reference scan records 123 concrete path groups with
-line locators: 84 dated-history, 1 resolved-provenance, 2 migration-receipt, and
-36 live-reference groups. Each record uses the `classification` field, names its consumer type, disposition, and
+line locators: 85 dated-history, 18 resolved-provenance, 2 migration-receipt, and
+18 live-reference groups. Transcript paths are accepted as raw provenance by the
+validator; current live-reference groups must still be absent from this ledger.
+Each record uses the `classification` field, names its consumer type, disposition, and
 replacement owner. Executable and generated classes were classified by path;
 untracked derived artifacts remain an explicit scan gap. Only dated history,
 resolved provenance, and migration receipts may retain mentions.
 
 ## Python/API coverage
 
-Five concrete coverage rows assign implementation facts to defining
-Python/config/type docstrings and focused tests; generated API remains derived
-from the Makefile quartodoc targets (`Makefile:666-685`). Coverage is pending
-destination materialization and must not be satisfied by this ledger or an
-agents-DB record.
+Five concrete coverage rows assign implementation facts to exact defining
+Python/config/type symbols and focused tests; generated API remains derived from
+the Makefile quartodoc targets (`Makefile:666-685`). Coverage is verified.
 
 ## PR, branch, and worktree dispositions
 
@@ -102,7 +101,7 @@ in the main checkout is recorded as a hard baseline risk.
 
 ## Gate status
 
-This inventory is intentionally provisional. JSON is the machine-readable
-source for row counts and receipts; this Markdown is its concise human view.
-Before S1 handoff, compare both files, run exact-link/consumer scans,
-materialize canonical destinations, and run `git diff --check`.
+JSON is the machine-readable source for row counts and receipts; this Markdown
+is its concise human view. Deletion-ready now passes with live/generic-sink
+negative tests retained. Before handoff, compare both files, rerun exact-link
+scans, and run `git diff --check`.

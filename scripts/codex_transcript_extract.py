@@ -934,8 +934,7 @@ def main(argv: list[str] | None = None) -> int:
     owner_files = args.owner_file or [
         REPO_ROOT / "AGENTS.md",
         REPO_ROOT / ".agents" / "references" / "source_order.md",
-        REPO_ROOT / "docs" / "contents" / "thesis" / "roadmap.qmd",
-        REPO_ROOT / "docs" / "contents" / "thesis" / "questions.qmd",
+        REPO_ROOT / "docs" / "typst" / "thesis" / "main.typ",
         REPO_ROOT / "aria_nbv" / "AGENTS.md",
     ]
     canonical_text = "\n".join(
