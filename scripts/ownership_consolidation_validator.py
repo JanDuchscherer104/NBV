@@ -44,6 +44,11 @@ KNOWN_MIGRATION_RECEIPTS = {
     ".omx/specs/ownership-branch-consolidation-inventory.json",
     ".omx/specs/ownership-branch-consolidation-inventory.md",
 }
+SOURCE_ORDER_TYPST_OWNERS = {
+    "docs/typst/thesis/sections/01-research-questions.typ",
+    "docs/typst/thesis/development/roadmap.typ",
+    "docs/typst/thesis/development/m1-contract-report.typ",
+}
 RESOLVED_PROVENANCE_PATHS = {
     ".agents/AGENTS_INTERNAL_DB.md",
     ".agents/issues.toml",
@@ -391,6 +396,20 @@ def validate_typst_contract(text: str, *, future_integration: bool = False) -> l
     return []
 
 
+def validate_source_order_owners(root: Path) -> list[ValidationError]:
+    """Require source-order to link every Typst owner created by this migration."""
+    path = root / ".agents/references/source_order.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [ValidationError(path.relative_to(root).as_posix(), str(exc))]
+    return [
+        ValidationError(path.relative_to(root).as_posix(), f"missing Typst owner link: {owner}")
+        for owner in sorted(SOURCE_ORDER_TYPST_OWNERS)
+        if f"`{owner}`" not in text
+    ]
+
+
 def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path = Path.cwd()) -> list[ValidationError]:
     """Validate the frozen inventory schema, optionally enforcing deletion gates."""
     errors: list[ValidationError] = []
@@ -447,6 +466,7 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
             blockers.append(ValidationError(item, "destination not verified"))
     errors.extend(validate_theory_matrix(matrix, [p.relative_to(root).as_posix() for p in (root / "docs/contents/theory").glob("*.qmd")]))
     errors.extend(validate_theory_topology(matrix, root))
+    errors.extend(validate_source_order_owners(root))
     manifest = data.get("expected_pages_manifest", {})
     actual_pages = [p.relative_to(root / "docs").as_posix() for p in (root / "docs/contents").rglob("*.qmd")]
     errors.extend(validate_expected_pages(manifest, actual_pages))

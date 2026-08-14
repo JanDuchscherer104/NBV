@@ -28351,8 +28351,8 @@
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
         "classification": "resolved-provenance",
-        "blob_oid": "e1c66f1b2ba29750577c97a8681ca54c0d72e846",
-        "content_sha256": "381a8a3225b36acc60c460bc8e6e823ab66a17ec54302ddcd0dffc7b0d51ddbd"
+        "blob_oid": "e7b960e8ac8603ca5a106860bfc5254529503421",
+        "content_sha256": "a53bdba1ecfd4bb9b91c323a8c1c01288754fcd67b1773d45c46a789d76eeb23"
       },
       {
         "path": ".agents/resolved.toml",
