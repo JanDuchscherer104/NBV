@@ -27,8 +27,8 @@
       definition_long: "In ARIA-NBV, the preferred objective is reconstruction quality improvement rather than coverage alone, with candidate views ranked by oracle or learned RRI scores.",
       internal_links: (
         "docs/contents/theory/nbv_background.qmd",
-        "docs/contents/thesis/roadmap.qmd",
-        "docs/contents/thesis/questions.qmd#research-questions",
+        "docs/typst/thesis/development/roadmap.typ#roadmap",
+        "docs/typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -170,8 +170,8 @@
       definition_short: "Selected entity, object crop, point, region, or surface-deficit hypothesis whose reconstruction quality should be improved.",
       definition_long: "Target-conditioned ARIA-NBV variants use this target as an explicit input to candidate scoring and planning instead of optimizing only scene-level RRI.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq2-target-encoding",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/vin.types.qmd",
       ),
       citations: (),
@@ -214,8 +214,8 @@
       definition_short: "RRI computed only on the ground-truth and reconstructed geometry associated with a selected target of interest.",
       definition_long: "Target-specific RRI lets the thesis compare views by how much they improve a selected object or region, even when scene-level RRI would prefer large background surfaces.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq1-objective",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq1",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/contents/theory/rri_theory.qmd",
       ),
       citations: (
@@ -269,8 +269,8 @@
       definition_short: "Budget consumed to acquire observations, measured by view count, path length, elapsed time, invalid-action rate, or a weighted combination.",
       definition_long: "The thesis should first report cumulative root-normalized target gain, diagnostic target RRI, and acquisition cost separately, then use scalarized objectives only when the tradeoff is explicit.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq1-objective",
-        "docs/contents/thesis/roadmap.qmd#roadmap-m5",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq1",
+        "docs/typst/thesis/development/roadmap.typ#milestones",
       ),
       citations: (),
       related: (
@@ -311,7 +311,7 @@
       definition_short: "VIN-style candidate scorer that receives scene state, a candidate view, and an encoding of the target of interest.",
       definition_long: "The scorer predicts target-specific utility so view ranking can prioritize a selected entity or region instead of only optimizing scene-level RRI.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/vin.models.scene_myopic.qmd",
         "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
@@ -361,8 +361,8 @@
       definition_short: "Main thesis protocol component requiring target selection to use only actor-visible observed or predicted target evidence.",
       definition_long: "Observed Target Selection uses predicted or tracked OBBs, class probabilities, confidence, projected area, and semidense or EVL support. Ground-truth target annotations are not visible to the selector in the main thesis protocol.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq2-target-encoding",
-        "docs/contents/thesis/questions.qmd#rq-thesis-boundary",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq-objectives",
       ),
       citations: (
         "EFM3D-straub2024",
@@ -407,9 +407,9 @@
       definition_short: "Main thesis protocol component requiring scorer or Q_H inputs to use predicted or observed target descriptors.",
       definition_long: "Predicted-Target Q covers target-conditioned one-step scoring and finite-candidate Q_H selection whose target inputs are actor-visible predicted or observed descriptors, not ground-truth target annotations.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq2-target-encoding",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -461,8 +461,8 @@
       definition_short: "Main thesis protocol component using ground-truth OBBs and target mesh crops only for labels and evaluation.",
       definition_long: "Ground-Truth Target Evaluation uses GT OBBs and target mesh crops for oracle target-RRI labels, matching checks, and evaluation while keeping those annotations hidden from the actor-visible selector, scorer, and Q_H model in the main result.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq2-target-encoding",
-        "docs/contents/thesis/questions.qmd#rq1-objective",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq1",
         "docs/contents/theory/rri_theory.qmd",
       ),
       citations: (
@@ -511,8 +511,8 @@
       definition_long: "The ARIA-NBV MDP keeps actions restricted to sampled finite candidate views and keeps GT meshes or GT target crops outside the actor-visible state. It is the contract that connects target-conditioned rollout generation, reward computation, validity masks, and fitted finite-horizon Q learning.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
-        "docs/contents/thesis/roadmap.qmd#roadmap-m5",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
+        "docs/typst/thesis/development/roadmap.typ#milestones",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -576,7 +576,7 @@
       definition_long: "ARIA-NBV distinguishes raw historic snippet state, persisted VIN offline sample state, minimal counterfactual actor state, geometry-rich counterfactual ablation state, and privileged oracle rollout state. The main Q_H actor input starts from the minimal counterfactual state; all-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
       related: (
@@ -748,7 +748,7 @@
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
         "docs/contents/theory/efm3d_scene_embeddings.qmd",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
       related: (
@@ -797,7 +797,7 @@
       definition_long: "The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. It may include rendered depth, depth-valid masks, backprojected points, derived normals, and local support summaries for views that have already been selected. It does not include oracle renders for unselected candidates.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
       related: (
@@ -897,7 +897,7 @@
       definition_short: "Masked finite action-index set over sampled candidate views.",
       definition_long: "At each rollout step, ARIA-NBV samples a finite candidate table Q_t={q_{t,i}}. The admissible action set contains indices i whose validity mask m_{t,i} is true, and selecting a_t chooses pose q_t=q_{t,a_t}. This keeps planning bounded and preserves invalidity as a feasibility constraint rather than a low-quality RRI label.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq3-candidates",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq3",
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
         "docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd",
       ),
@@ -953,7 +953,7 @@
       definition_long: "For the thesis-core ASE mesh/oracle loop, the transition uses the selected candidate index to render or retrieve that candidate's depth, backproject points, and update the counterfactual point state and selected-view history. All-candidate GT renders and scores remain oracle-only before selection. The update must be deterministic under the stored seed and lineage.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd",
       ),
       citations: (),
@@ -1006,9 +1006,9 @@
       definition_short: "Quality-only immediate reward equal to root-normalized target gain for the selected candidate.",
       definition_long: "The main thesis reward is cumulative root-normalized target gain under equal acquisition budget. State-relative target RRI remains a one-step diagnostic and VIN-compatible label; log-improvement variants remain visible follow-up reward ablations, not the default target for the first Q_H result.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq1-objective",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq1",
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
-        "docs/contents/thesis/roadmap.qmd#roadmap-m5",
+        "docs/typst/thesis/development/roadmap.typ#milestones",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -1071,7 +1071,7 @@
       definition_long: "The return definition keeps gamma symbolic so discounted ablations remain possible. The first thesis result should report cumulative root-normalized target gain under an equal acquisition budget and treat log-improvement or scalarized rewards as follow-up analysis.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
-        "docs/contents/thesis/questions.qmd#rq4-planning",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
       related: (
@@ -1125,8 +1125,8 @@
       definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
       definition_long: "The mandatory M5 learned policy-like result is Q_H over finite candidate sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0}, actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory summaries, and candidate tokens, then emit one continuous return value per candidate. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the masked online-selector / target-evaluator backup to reduce max-over-candidate overestimation; IQL contributes the offline support rule that value learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect validity masks and beat one-step greedy or model scoring on cumulative root-normalized target gain under equal acquisition budget, with bounded oracle lookahead as an upper bound.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq4-planning",
-        "docs/contents/thesis/roadmap.qmd#roadmap-m5",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
+        "docs/typst/thesis/development/roadmap.typ#milestones",
         "docs/contents/theory/rl_planning.qmd#q-h-training-contract",
         "docs/contents/literature/rl_planning.qmd#q-h-and-dqn",
       ),
@@ -1198,7 +1198,7 @@
       definition_short: "Hard mask that separates feasible candidate actions from invalid candidates.",
       definition_long: "The mask m_{t,i} gates candidate actions, while invalid reason codes rho_{t,i} preserve why a candidate was rejected. Collision, outside-bounds poses, no target visibility, bad frusta, no depth hits, and outside-EVL-extent cases are constraints rather than low target-RRI examples.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq-evidence-protocol",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd",
       ),
       citations: (),
@@ -1411,7 +1411,7 @@
       definition_long: "OBBs are a natural target encoding for entity-aware ARIA-NBV because they provide center, extent, orientation, semantic class, and confidence signals.",
       internal_links: (
         "docs/contents/ase_dataset.qmd#oriented-bounding-boxes",
-        "docs/contents/thesis/questions.qmd#rq2-target-encoding",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
         "docs/reference/vin.types.qmd",
       ),
       citations: (
@@ -2006,7 +2006,7 @@
       definition_short: "Proposed camera pose whose expected reconstruction utility is evaluated before selecting the next observation.",
       definition_long: "ARIA-NBV samples candidate views around a reference pose or target, renders candidate depths from the mesh for oracle labels, and scores candidates with RRI or learned VIN predictions.",
       internal_links: (
-        "docs/contents/thesis/questions.qmd#rq3-candidates",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq3",
         "docs/contents/theory/rri_theory.qmd",
         "docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd",
       ),
@@ -2057,7 +2057,7 @@
       internal_links: (
         "docs/contents/theory/rri_theory.qmd",
         "docs/contents/ase_dataset.qmd",
-        "docs/contents/thesis/roadmap.qmd#roadmap-m1",
+        "docs/typst/thesis/development/roadmap.typ#milestones",
       ),
       citations: (
         "VIN-NBV-frahm2025",
@@ -2301,7 +2301,7 @@
       definition_short: "Reduced camera-action parameterization commonly used when roll is fixed or otherwise constrained.",
       definition_long: "ARIA-NBV uses 5-DoF language for candidate and planning abstractions where position and viewing direction matter while roll is not an independently optimized control dimension.",
       internal_links: (
-        "docs/contents/thesis/roadmap.qmd",
+        "docs/typst/thesis/development/roadmap.typ#roadmap",
         "docs/typst/seminar_paper/sections/10a-extensions.typ",
       ),
       citations: (
