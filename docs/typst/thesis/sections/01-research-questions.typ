@@ -32,16 +32,16 @@ $s_0$ with target $e$, let $cal(P)_t$ be the accumulated fused points and
 $cal(M)_e^"GT"$ the matched target surface. The oracle-only target crop gives
 
 $$
-  Delta_t^e = D_(P -> M,t)^e + D_(M -> P,t)^e;
-  J_H^e = (Delta_0^e - Delta_H^e)/(Delta_0^e + epsilon).
+  Δ_t^e = D_(P → M,t)^e + D_(M → P,t)^e;
+  J_H^e = (Δ_0^e - Δ_H^e)/(Δ_0^e + ε).
 $$
 
 The primary fixed-budget metric is endpoint gain $J_H^e$. The default
 multi-step reward is root-normalized target gain,
 
 $$
-  r_(t,"root")^e = (Delta_t^e - Delta_(t+1)^e)/(Delta_0^e + epsilon);
-  G_0^(H) = sum_(t=0)^(H-1) gamma^t r_(t,"root")^e.
+  r_(t,"root")^e = (Δ_t^e - Δ_(t+1)^e)/(Δ_0^e + ε);
+  G_0^(H) = ∑_(t=0)^(H-1) γ^t r_(t,"root")^e.
 $$
 
 State-relative target RRI remains a diagnostic and VIN-compatible one-step
@@ -58,7 +58,7 @@ a measurable fraction of it? The first comparison fixes target tasks, roots,
 candidate support, validity, horizon, and budget. Define
 
 $$
-  Delta_l = J_l^e - J_1^e.
+  Δ_l = J_l^e - J_1^e.
 $$
 
 If this headroom is indistinguishable from zero for the evaluated support, the
