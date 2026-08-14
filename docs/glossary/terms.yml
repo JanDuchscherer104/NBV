@@ -24,8 +24,8 @@
   - rl.nbv_mdp
   internal_links:
   - docs/contents/theory/nbv_background.qmd
-  - docs/contents/thesis/roadmap.qmd
-  - docs/contents/thesis/questions.qmd#research-questions
+  - docs/typst/thesis/development/roadmap.typ#roadmap
+  - docs/typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions
   citations:
   - VIN-NBV-frahm2025
   - GenNBV-chen2024
@@ -128,8 +128,8 @@
   - rl.target
   - ase.mesh_target
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq2-target-encoding
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/reference/vin.types.qmd
   related:
   - target-specific-rri
@@ -167,8 +167,8 @@
   equation_refs:
   - rri.target_rri
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq1-objective
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq1
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/contents/theory/rri_theory.qmd
   citations:
   - VIN-NBV-frahm2025
@@ -200,8 +200,8 @@
   symbol_refs:
   - rl.acquisition_cost
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq1-objective
-  - docs/contents/thesis/roadmap.qmd#roadmap-m5
+  - docs/typst/thesis/sections/01-research-questions.typ#rq1
+  - docs/typst/thesis/development/roadmap.typ#milestones
   related:
   - target-specific-rri
   - candidate-view
@@ -231,7 +231,7 @@
   - metrics.spearman
   - metrics.topk_acc
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/reference/vin.models.scene_myopic.qmd
   - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
@@ -262,8 +262,8 @@
     confidence, projected area, and semidense or EVL support. Ground-truth target annotations
     are not visible to the selector in the main thesis protocol.
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq2-target-encoding
-  - docs/contents/thesis/questions.qmd#rq-thesis-boundary
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq-objectives
   citations:
   - EFM3D-straub2024
   - ProjectAria-ASE-2025
@@ -300,9 +300,9 @@
   equation_refs:
   - rl.q_h
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq2-target-encoding
-  - docs/contents/thesis/questions.qmd#rq4-planning
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   citations:
   - VIN-NBV-frahm2025
   - DoubleDQN-vanHasselt2015
@@ -336,8 +336,8 @@
   symbol_refs:
   - ase.mesh_target
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq2-target-encoding
-  - docs/contents/thesis/questions.qmd#rq1-objective
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq1
   - docs/contents/theory/rri_theory.qmd
   citations:
   - ProjectAria-ASE-2025
@@ -385,8 +385,8 @@
   - rl.nbv_mdp
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/contents/thesis/questions.qmd#rq4-planning
-  - docs/contents/thesis/roadmap.qmd#roadmap-m5
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/development/roadmap.typ#milestones
   citations:
   - VIN-NBV-frahm2025
   - DoubleDQN-vanHasselt2015
@@ -443,7 +443,7 @@
   - rl.s_oracle
   internal_links:
   - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - historic-snippet-state
   - persisted-offline-state
@@ -559,7 +559,7 @@
   internal_links:
   - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
   - docs/contents/theory/efm3d_scene_embeddings.qmd
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - geometry-rich-counterfactual-state
   - finite-candidate-action-set
@@ -594,7 +594,7 @@
   - rl.s_cf_geom
   internal_links:
   - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - minimal-counterfactual-state
   - counterfactual-transition
@@ -671,7 +671,7 @@
   equation_refs:
   - rl.finite_action_set
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq3-candidates
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
   - docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd
   related:
@@ -713,7 +713,7 @@
   - rl.counterfactual_transition
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd
   related:
   - rollout-state
@@ -757,9 +757,9 @@
   equation_refs:
   - rl.target_rri_reward
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq1-objective
+  - docs/typst/thesis/sections/01-research-questions.typ#rq1
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/contents/thesis/roadmap.qmd#roadmap-m5
+  - docs/typst/thesis/development/roadmap.typ#milestones
   citations:
   - VIN-NBV-frahm2025
   related:
@@ -801,7 +801,7 @@
   - rl.finite_horizon_return
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/contents/thesis/questions.qmd#rq4-planning
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - target-rri-reward
   - finite-horizon-q-function
@@ -854,8 +854,8 @@
   - rl.q_h
   - rl.q_backup
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq4-planning
-  - docs/contents/thesis/roadmap.qmd#roadmap-m5
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/development/roadmap.typ#milestones
   - docs/contents/theory/rl_planning.qmd#q-h-training-contract
   - docs/contents/literature/rl_planning.qmd#q-h-and-dqn
   citations:
@@ -898,7 +898,7 @@
   - metrics.candidate_validity
   - rl.finite_action_set
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq-evidence-protocol
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd
   related:
   - finite-candidate-action-set
@@ -1042,7 +1042,7 @@
     provide center, extent, orientation, semantic class, and confidence signals.
   internal_links:
   - docs/contents/ase_dataset.qmd#oriented-bounding-boxes
-  - docs/contents/thesis/questions.qmd#rq2-target-encoding
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/reference/vin.types.qmd
   citations:
   - EFM3D-straub2024
@@ -1454,7 +1454,7 @@
   - oracle.candidates_t
   - oracle.candidate_qti
   internal_links:
-  - docs/contents/thesis/questions.qmd#rq3-candidates
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/contents/theory/rri_theory.qmd
   - docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd
   citations:
@@ -1492,7 +1492,7 @@
   internal_links:
   - docs/contents/theory/rri_theory.qmd
   - docs/contents/ase_dataset.qmd
-  - docs/contents/thesis/roadmap.qmd#roadmap-m1
+  - docs/typst/thesis/development/roadmap.typ#milestones
   citations:
   - VIN-NBV-frahm2025
   - EFM3D-straub2024
@@ -1654,7 +1654,7 @@
     position and viewing direction matter while roll is not an independently optimized control
     dimension.
   internal_links:
-  - docs/contents/thesis/roadmap.qmd
+  - docs/typst/thesis/development/roadmap.typ#roadmap
   - docs/typst/seminar_paper/sections/10a-extensions.typ
   citations:
   - GenNBV-chen2024

@@ -5,8 +5,10 @@ owners conflict.
 
 ## Owners And Hazards
 
-- Current thesis direction is owned by `contents/thesis/roadmap.qmd` and
-  `questions.qmd`; the active thesis is `typst/thesis/main.typ` and its includes.
+- Current thesis direction, research questions, and development gate views are
+  owned by `typst/thesis/main.typ` and its includes, especially
+  `typst/thesis/sections/01-research-questions.typ` and
+  `typst/thesis/development/{roadmap,m1-contract-report}.typ`.
   Seminar and archived proposal material is historical evidence, not priority.
 - `typst/shared/glossary.typ` owns durable terms; `typst/shared/symbols.typ` and
   `equations.typ` own reusable Typst bodies; `notation.yml` owns their

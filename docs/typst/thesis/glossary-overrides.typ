@@ -23,8 +23,8 @@
     definition_short: "Horizon-conditioned candidate-value family for target-conditioned ARIA-NBV.",
     definition_long: "The minimal learned method is one shared scorer Q_theta(s_t,e,i,h) that conditions on the actor state, target, candidate row, and requested residual horizon. H is the maximum supported horizon, h is the query, and h must not exceed the remaining budget. Offline fitted Q learning does not require online interaction. Q_1 is densely supervised, exact Q_2 is a base-case control when successor one-step labels exist, and Q_h for h>1 bootstraps only from a lower-horizon value Q_{h-1}. Double Q may separate successor selection from evaluation to reduce maximization bias, but it does not define the architecture or solve offline-support and state-aliasing failures. Optimality is bounded to the finite candidate, validity, state, and replay-support contract.",
     internal_links: (
-      "docs/contents/thesis/questions.qmd#rq4-planning",
-      "docs/contents/thesis/roadmap.qmd#roadmap-m5",
+      "docs/typst/thesis/sections/01-research-questions.typ#rq4",
+      "docs/typst/thesis/development/roadmap.typ#milestones",
       "docs/contents/theory/rl_planning.qmd#q-h-training-contract",
       "docs/contents/literature/rl_planning.qmd#q-h-and-dqn",
     ),

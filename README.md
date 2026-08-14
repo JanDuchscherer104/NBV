@@ -25,11 +25,11 @@ The public documentation is published at
   rendered Quarto site.
 - [Quarto home](docs/index.qmd) and [Quarto navigation](docs/_quarto.yml):
   public docs entry point and sidebar/navbar source.
-- [Roadmap](docs/contents/thesis/roadmap.qmd) and
-  [research questions](docs/contents/thesis/questions.qmd): current
-  advisor-facing thesis contract.
-- [M1 contract report](docs/contents/thesis/m1_contract_report.qmd):
-  data/cache/oracle correctness gate and evidence ledger.
+- [Active thesis](docs/typst/thesis/main.typ), including the
+  [research questions](docs/typst/thesis/sections/01-research-questions.typ),
+  [development roadmap](docs/typst/thesis/development/roadmap.typ), and
+  [M1 contract report](docs/typst/thesis/development/m1-contract-report.typ):
+  canonical thesis direction and development-only gate views.
 - [Literature index](docs/contents/literature/index.qmd): thesis-oriented
   adoption map for NBV, ARIA/EFM3D, rollout/value learning, 3DGS, and semantic
   scene references.
