@@ -4,6 +4,7 @@
 #import "glossary-overrides.typ": make-aria-glossary, register-aria-glossary, print-aria-glossary
 #import "../shared/notation.typ": print-thesis-symbols
 #import "experiment_data.typ": thesis-report-settings, load-thesis-report
+#import "draft_markers.typ": development_only
 #import "@preview/booktabs:0.0.4": *
 
 #let report-settings = thesis-report-settings()
@@ -80,3 +81,9 @@
 #include "sections/06-results.typ"
 #include "sections/07-discussion.typ"
 #include "sections/08-conclusion.typ"
+
+// Development planning and gate reports are omitted from submission output.
+#development_only[
+  #include "development/roadmap.typ"
+  #include "development/m1-contract-report.typ"
+]

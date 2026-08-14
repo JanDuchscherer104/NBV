@@ -1,5 +1,8 @@
 == Research Questions <sec:thesis-research-questions>
 
+#import "../draft_markers.typ": thesis_status
+#import "../../shared/equations.typ": eqs
+
 The thesis asks whether ARIA-NBV can perform target-conditioned, quality-driven
 multi-step next-best-view (NBV) selection with a finite candidate action space.
 The utility is target-specific Relative Reconstruction Improvement (RRI), and
@@ -7,7 +10,7 @@ every learned action is re-evaluated with the oracle under the same candidate
 support, validity rules, and acquisition budget. Ground-truth (GT) geometry
 defines target tasks, labels, and evaluation; it is not an ordinary actor input.
 
-=== Objectives and scope
+=== Objectives and scope <objectives>
 
 The work has six linked objectives. First, validate the geometry, candidate-label,
 invalidity, split, and oracle-RRI contracts on a trusted ASE subset before scale-up.
@@ -22,6 +25,13 @@ scene-level ASE evidence only while preserving mesh-supervised target RRI.
 Online discrete $Q_H$ is a deferred RQ5 bridge; continuous or simulator-backed
 actor--critic control is RQ6 and is not required for the finite-candidate thesis
 result. The active quantitative core is therefore RQ1--RQ4 below.
+
+#thesis_status(
+  implementation: "planned",
+  evidence: "pending",
+  gate: [V1 observed/predicted target matching and target-conditioned scoring are not yet implemented; current V0 GT tasks remain the only available protocol],
+)[The V1 descriptor and deterministic 3D-IoU matching below are a planned
+hypothesis and acceptance protocol, not an implemented result.]
 
 === RQ1 — Objective and endpoint contract <rq1>
 
@@ -58,7 +68,7 @@ a measurable fraction of it? The first comparison fixes target tasks, roots,
 candidate support, validity, horizon, and budget. Define
 
 $$
-  Δ_l = J_l^e - J_1^e.
+  #eqs.entity.lookahead_headroom
 $$
 
 If this headroom is indistinguishable from zero for the evaluated support, the
@@ -74,7 +84,7 @@ Gumbel-Top-$k$ is later diversity evidence, not a prerequisite for the first run
 
 Which actor-visible target descriptor and matching protocol support one-step and
 finite-horizon scoring without privileged target geometry or all-candidate oracle
-renders at decision time? The mandatory V1 protocol is observed or predicted
+renders at decision time? The proposed V1 protocol is observed or predicted
 target selection, predicted-target conditioning, and GT target-crop evaluation.
 The first descriptor contains observed/predicted OBB centre, extents,
 orientation, class, confidence, projected area, relative pose, semi-dense point
@@ -82,7 +92,7 @@ support, and EVL support. A compact crop descriptor from actor-visible spatial
 evidence is the first ablation; entity tokens and appearance features are later
 ablations. V0 GT-OBB input is a sanity or upper-bound path only.
 
-Observed targets are matched to GT targets by compatible class and a deterministic
+If implemented, observed targets will be matched to GT targets by compatible class and a deterministic
 geometry-first 3D-IoU rule, with visibility, projected area, and semi-dense/EVL
 support reported as eligibility and audit fields. Unmatched, unsupported, or
 ambiguous targets are protocol-invalid cases, not low-RRI examples.
