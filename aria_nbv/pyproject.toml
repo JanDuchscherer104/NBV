@@ -85,6 +85,7 @@ dependencies = [
     nbv-offline-info          = "aria_nbv.data_handling.vin_store.info_cli:main"
     nbv-plan-rollout-shards   = "aria_nbv.oracle.pipelines.cli:plan_main"
     nbv-build-rollouts        = "aria_nbv.oracle.pipelines.cli:main"
+    nbv-rollout-campaign      = "aria_nbv.oracle.pipelines.cli:campaign_main"
     nbv-status-rollout-shards = "aria_nbv.oracle.pipelines.cli:status_main"
     nbv-rollouts-info         = "aria_nbv.rollouts.info_cli:main"
     nbv-rerun-inspect         = "aria_nbv.rerun_inspector._cli:main"

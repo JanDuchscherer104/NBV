@@ -9,6 +9,8 @@ direct unsharded builds own their destination and never modify the VIN source.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from pathlib import Path
 from typing import Annotated, Any
@@ -20,11 +22,183 @@ from ...rollouts.manifest import RolloutStoreInvocation
 from ...rollouts.shard_manifest import load_rollout_shard_entry
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
+from ...utils.fingerprints import stable_config_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
+from .campaign import CudaRolloutCampaignConfig
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
+
+campaign_app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Plan and run CUDA rollout campaigns.",
+)
+
+
+def campaign_main(argv: list[str] | None = None) -> None:
+    """Entry point for the reviewed CUDA campaign CLI."""
+    raw = list(sys.argv[1:] if argv is None else argv)
+    run_typer_app(campaign_app, raw, prog_name="nbv-rollout-campaign")
+
+
+def _campaign(config_path: Path):
+    return CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
+
+
+@campaign_app.command("plan")
+def campaign_plan(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    output_json: Annotated[Path | None, typer.Option("--output-json")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+    source_manifest: Annotated[Path | None, typer.Option("--source-manifest")] = None,
+) -> None:
+    """Load the canonical campaign and render its typed configuration."""
+    cfg = _campaign(config_path)
+    campaign = cfg
+    if source_manifest is not None:
+        raw = source_manifest.read_bytes()
+        payload = campaign.plan(json.loads(raw), source_manifest_hash=hashlib.sha256(raw).hexdigest()).to_jsonable()
+    else:
+        payload = campaign.config.model_dump_jsonable()
+    if output_json:
+        output_json.write_text(json.dumps(payload, sort_keys=True, default=str, indent=2) + "\n")
+    typer.echo(json.dumps(payload, sort_keys=True, default=str) if json_output or not output_json else str(output_json))
+
+
+@campaign_app.command("preflight")
+def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
+    """Run the CUDA availability gate."""
+    _campaign(config_path).preflight()
+    typer.echo("cuda preflight passed")
+
+
+@campaign_app.command("status")
+def campaign_status(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Print persisted typed campaign status."""
+    cfg = _campaign(config_path)
+    status = cfg.read_status()
+    payload = {
+        "state": status.state,
+        "campaign_id": cfg.config.campaign_id,
+        "counts": status.counts,
+        "plan_hash": status.plan_hash,
+        "updated_at": status.updated_at,
+    }
+    typer.echo(json.dumps(payload, sort_keys=True))
+
+
+@campaign_app.command("smoke")
+def campaign_smoke(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
+    """Validate CUDA preflight before a smoke worker is launched."""
+    campaign = _campaign(config_path)
+    campaign.preflight()
+    plan_path = campaign.config.output_root / "plan.json"
+    if not plan_path.exists():
+        raise typer.BadParameter("plan.json is required before smoke")
+    campaign.smoke(
+        campaign.load_plan(plan_path), config_path=resolve_config_toml_path(config_path), plan_path=plan_path
+    )
+    typer.echo("smoke preflight passed")
+
+
+@campaign_app.command("run")
+def campaign_run(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    plan_path: Annotated[Path, typer.Option("--plan-path")],
+) -> None:
+    """Start a foreground campaign after preflight (planning is supplied by API callers)."""
+    campaign = _campaign(config_path)
+    plan = campaign.load_plan(plan_path)
+    evidence = campaign.config.output_root / "smoke-evidence.json"
+    if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
+        raise typer.BadParameter("current passing smoke evidence is required")
+    campaign.run(plan, plan_path=plan_path, config_path=config_path)
+    typer.echo("campaign run complete")
+
+
+@campaign_app.command("resume")
+def campaign_resume(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    plan_path: Annotated[Path, typer.Option("--plan-path")],
+) -> None:
+    """Resume a campaign through the Python campaign API."""
+    campaign = _campaign(config_path)
+    plan = campaign.load_plan(plan_path)
+    evidence = campaign.config.output_root / "smoke-evidence.json"
+    if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
+        raise typer.BadParameter("current passing smoke evidence is required")
+    campaign.run(plan, plan_path=plan_path, config_path=config_path)
+    typer.echo("campaign resume complete")
+
+
+@campaign_app.command("worker")
+def campaign_worker(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    plan_hash: Annotated[str, typer.Option("--plan-hash")],
+    work_unit_hash: Annotated[str, typer.Option("--work-unit-hash")],
+    plan_path: Annotated[Path, typer.Option("--plan-path")],
+    writer_config_path: Annotated[Path | None, typer.Option("--writer-config-path")] = None,
+) -> None:
+    """Validate internal worker identity arguments and dispatch one unit."""
+    if not plan_hash or not work_unit_hash:
+        raise typer.BadParameter("plan hash and work-unit hash are required")
+    campaign = _campaign(config_path)
+    plan = campaign.load_plan(plan_path)
+    if plan.plan_hash != plan_hash:
+        raise typer.BadParameter("plan hash mismatch")
+    unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
+    if unit is None:
+        raise typer.BadParameter("work-unit hash is not present in plan")
+    writer_path = writer_config_path or campaign.config.writer_config_path
+    if writer_path is None:
+        raise typer.BadParameter(
+            "writer config path is required; set writer_config_path in campaign TOML or pass --writer-config-path"
+        )
+    try:
+        writer_cfg = RolloutDatasetWriterConfig.from_toml(resolve_config_toml_path(writer_path))
+    except Exception as exc:
+        raise typer.BadParameter(f"writer config is required for worker: {exc}") from exc
+    entry = campaign.shard_entry_for_unit(plan, unit)
+    from dataclasses import replace
+
+    explicit_target = unit.explicit_target_config
+    if explicit_target is not None:
+        from .rollout_dataset import ExplicitRolloutTargetConfig
+
+        explicit_target = ExplicitRolloutTargetConfig.model_validate(explicit_target)
+    writer_cfg, entry = campaign.adapt_work_unit(
+        unit,
+        writer_config=writer_cfg,
+        shard_entry=entry,
+        explicit_target=explicit_target,
+        plan_hash=plan.plan_hash,
+        profile_hash=plan.profile_hash,
+    )
+    entry = replace(entry, writer_config_hash=stable_config_hash(writer_cfg))
+    result = run_rollout_shard(
+        writer_cfg,
+        shard_entry=entry,
+        output_tmp=campaign.config.output_root / "tmp" / unit.work_unit_hash,
+        output_final=campaign.config.output_root / "shards" / unit.work_unit_hash,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "outcome": "skipped" if result.skipped else "succeeded",
+                "validated": not result.skipped,
+                "plan_hash": plan_hash,
+                "work_unit_hash": unit.work_unit_hash,
+                "leaf_evidence": {"success_path": str(result.success_path), "owner_path": str(result.owner_path)},
+            },
+            sort_keys=True,
+        )
+    )
+
 
 _HELP_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
