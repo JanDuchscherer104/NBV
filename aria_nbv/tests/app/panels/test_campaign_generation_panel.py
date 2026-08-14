@@ -1,0 +1,404 @@
+"""Focused contracts for the bounded Campaign Generation Streamlit adapter."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from aria_nbv.app.panels import campaign_generation as panel
+
+
+@pytest.mark.parametrize("name", ["", "has space", "../escape", "semi;colon", "a/b", "ümlaut"])
+def test_tmux_session_name_rejects_unsafe_values(name: str) -> None:
+    with pytest.raises(ValueError):
+        panel.build_tmux_argv(name, ["nbv-rollout-campaign", "status"])
+
+
+def test_tmux_argv_is_shell_free_and_preserves_each_argument() -> None:
+    command = ["nbv-rollout-campaign", "run", "--config-path", "/tmp/space path.toml", "--flag=semi;colon"]
+    argv = panel.build_tmux_argv("cuda-campaign", command)
+    assert argv == ["tmux", "new-session", "-d", "-s", "cuda-campaign", "--", *command]
+
+
+@pytest.mark.parametrize("action", ["preflight", "plan", "smoke", "run", "resume", "status"])
+def test_campaign_argv_uses_one_canonical_cli_and_action(action: str, tmp_path: Path) -> None:
+    kwargs = {"config_path": tmp_path / "campaign.toml"}
+    if action in {"run", "resume"}:
+        kwargs["plan_path"] = tmp_path / "plan.json"
+    if action == "plan":
+        kwargs["source_manifest"] = tmp_path / "source.json"
+    argv = panel.build_campaign_argv(action, **kwargs)
+    assert argv[:3] == ["nbv-rollout-campaign", action, "--config-path"]
+    assert str(kwargs["config_path"]) in argv
+    if action in {"run", "resume"}:
+        assert argv[-2:] == ["--plan-path", str(kwargs["plan_path"])]
+    if action == "status":
+        assert argv[-1] == "--json"
+
+
+@dataclass
+class _Result:
+    returncode: int
+    stderr: str = ""
+
+
+def test_tmux_launch_rejects_existing_session_before_new_session(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(list(argv))
+        return _Result(0)
+
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    ok, message = panel.launch_campaign_tmux("already-running", ["nbv-rollout-campaign", "run"], runner=runner)
+    assert not ok
+    assert "already exists" in message
+    assert calls == [["tmux", "has-session", "-t", "already-running"]]
+
+
+def test_tmux_launch_rejects_existing_campaign_claim_before_tmux(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(list(argv))
+        return _Result(1)
+
+    claim = tmp_path / "run-claim.json"
+    claim.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    ok, message = panel.launch_campaign_tmux(
+        "cuda-campaign", ["nbv-rollout-campaign", "run"], claim_path=claim, runner=runner
+    )
+    assert not ok
+    assert "claim exists" in message
+    assert calls == []
+
+
+def test_tmux_launch_degrades_when_tmux_is_missing(monkeypatch) -> None:
+    monkeypatch.setattr(panel.shutil, "which", lambda _: None)
+    ok, message = panel.launch_campaign_tmux("cuda-campaign", ["nbv-rollout-campaign", "status"])
+    assert not ok
+    assert "unavailable" in message
+
+
+def test_tmux_launch_reports_nonzero_new_session_without_running_state(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(list(argv))
+        if argv[1] == "has-session":
+            return _Result(1)
+        return _Result(1, "cannot create session")
+
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    ok, message = panel.launch_campaign_tmux("cuda-campaign", ["nbv-rollout-campaign", "run"], runner=runner)
+    assert not ok
+    assert "cannot create session" in message
+    assert len(calls) == 2
+
+
+def test_tmux_launch_reports_immediate_session_exit(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(list(argv))
+        if argv[1] == "has-session":
+            return _Result(1 if len(calls) == 1 else 1)
+        return _Result(0)
+
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    ok, message = panel.launch_campaign_tmux("cuda-campaign", ["nbv-rollout-campaign", "run"], runner=runner)
+    assert not ok
+    assert "exited immediately" in message
+
+
+def test_tmux_launch_success_calls_new_session_once_and_keeps_argv(monkeypatch) -> None:
+    calls: list[tuple[list[str], dict]] = []
+
+    def runner(argv, **kwargs):
+        calls.append((list(argv), kwargs))
+        return _Result(1 if argv[1] == "has-session" and len(calls) == 1 else 0)
+
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    command = ["nbv-rollout-campaign", "run", "--config-path", "/tmp/path with spaces.toml"]
+    ok, _ = panel.launch_campaign_tmux("cuda-campaign", command, runner=runner)
+    assert ok
+    new_session = calls[1]
+    assert new_session[0] == ["tmux", "new-session", "-d", "-s", "cuda-campaign", "--", *command]
+    assert new_session[1].get("shell", False) is False
+
+
+def test_capture_tmux_tail_uses_safe_argv_and_bounds_output(monkeypatch) -> None:
+    calls: list[tuple[list[str], dict]] = []
+    huge = "x" * 5001
+
+    def runner(argv, **kwargs):
+        calls.append((list(argv), kwargs))
+        return type("Result", (), {"returncode": 0, "stdout": huge})()
+
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    output = panel.capture_tmux_tail("cuda-campaign", runner=runner)
+    assert output == huge[-4000:]
+    assert calls == [
+        (
+            ["tmux", "capture-pane", "-p", "-t", "cuda-campaign", "-S", "-80"],
+            {"check": False, "capture_output": True, "text": True, "shell": False},
+        )
+    ]
+
+
+def test_capture_tmux_tail_degrades_without_tmux_or_on_nonzero(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(panel.shutil, "which", lambda _: None)
+    assert panel.capture_tmux_tail("cuda-campaign", runner=lambda argv, **kwargs: calls.append(list(argv))) == ""
+    assert calls == []
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    assert panel.capture_tmux_tail("cuda-campaign", runner=lambda *args, **kwargs: _Result(1, "failed")) == ""
+
+
+class _FakeCampaign:
+    def __init__(self, output_root: Path, *, evidence: dict | None = None, error: Exception | None = None) -> None:
+        self.config = type(
+            "Config",
+            (),
+            {
+                "campaign_id": "cuda-campaign",
+                "output_root": output_root,
+                "writer_config_path": None,
+                "profiles": [],
+                "observed_target_iou_threshold": 0.2,
+                "seed": 20260728,
+                "expected_scene_count": 100,
+                "paired_panel_scene_count": 20,
+                "min_valid_root_candidates": 10,
+                "stage_timeout_seconds": 120,
+                "work_unit_timeout_seconds": 3600,
+            },
+        )()
+        self.evidence = evidence
+        self.error = error
+        self.progress_calls = 0
+        self.event_calls = 0
+
+    def load_plan(self, path: Path):
+        assert path.exists()
+        return object()
+
+    def smoke_evidence(self, plan):
+        if self.error:
+            raise self.error
+        return self.evidence or {}
+
+    def progress_summary(self):
+        self.progress_calls += 1
+        return {"state": "running", "counts": {"pending": 1}}
+
+    def read_events(self):
+        self.event_calls += 1
+        return []
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        {"config_hash": "cfg", "result": {"outcome": "succeeded", "validated": True}},
+        {"config_hash": "cfg", "result": "{'outcome': 'succeeded', 'validated': True}"},
+    ],
+)
+def test_launch_ready_requires_current_smoke_success(monkeypatch, tmp_path: Path, evidence: dict) -> None:
+    """Smoke success evidence is the gate; a persisted claim blocks launch."""
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    campaign = _FakeCampaign(tmp_path, evidence=evidence)
+    assert panel._launch_ready(campaign, plan_path) is True
+    (tmp_path / "run-claim.json").write_text("{}", encoding="utf-8")
+    assert panel._launch_ready(campaign, plan_path) is False
+
+
+def test_launch_ready_rejects_stale_smoke_evidence(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    campaign = _FakeCampaign(tmp_path, error=RuntimeError("stale smoke"))
+    assert panel._launch_ready(campaign, plan_path) is False
+
+
+class _FakeColumn:
+    def __init__(self, buttons: set[str]) -> None:
+        self.buttons = buttons
+
+    def button(self, label: str, **kwargs) -> bool:
+        return label in self.buttons
+
+
+class _FakeStreamlit:
+    def __init__(self, buttons: set[str] | None = None) -> None:
+        self.session_state: dict[str, object] = {}
+        self.buttons = buttons or set()
+        self.json_payloads: list[object] = []
+        self.messages: list[str] = []
+        self.captions: list[str] = []
+        self.codes: list[str] = []
+
+    def header(self, *args, **kwargs):
+        pass
+
+    def selectbox(self, label, options, **kwargs):
+        return options[0]
+
+    def text_input(self, label, value="", **kwargs):
+        return value
+
+    def caption(self, *args, **kwargs):
+        self.captions.extend(str(value) for value in args)
+
+    def json(self, *args, **kwargs):
+        if args:
+            self.json_payloads.append(args[0])
+
+    def columns(self, n):
+        return [_FakeColumn(self.buttons) for _ in range(n)]
+
+    def code(self, *args, **kwargs):
+        self.codes.extend(str(value) for value in args)
+
+    def subheader(self, *args, **kwargs):
+        pass
+
+    def info(self, *args, **kwargs):
+        pass
+
+    def success(self, *args, **kwargs):
+        self.messages.extend(str(value) for value in args)
+
+    def warning(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        self.messages.extend(str(value) for value in args)
+
+    def dataframe(self, *args, **kwargs):
+        pass
+
+
+def _patch_fake_page(monkeypatch, tmp_path: Path, *, buttons: set[str] | None = None):
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    campaign = _FakeCampaign(tmp_path, evidence={"result": {"outcome": "succeeded", "validated": True}})
+    recipes = [
+        {"name": "random_valid_h5", "horizon": 5, "branch": 2, "beam": 2},
+        {"name": "random_valid_h8", "horizon": 8, "branch": 2, "beam": 2},
+        {"name": "oracle_greedy_h5", "horizon": 5, "branch": 2, "beam": 2},
+        {"name": "oracle_greedy_h8", "horizon": 8, "branch": 2, "beam": 2},
+        {"name": "temperature_softmax_h5_t2", "horizon": 5, "branch": 2, "beam": 2, "temperature": 2.0},
+        {"name": "temperature_softmax_h8_t2", "horizon": 8, "branch": 2, "beam": 2, "temperature": 2.0},
+    ]
+    profile = type(
+        "Profile",
+        (),
+        {
+            "name": "realistic_core_60",
+            "components": [("forward_local", 24)],
+            "total_count": 60,
+            "device": "cuda",
+            "recipes": recipes,
+        },
+    )()
+    campaign.config.profiles = [profile]
+    monkeypatch.setattr(panel, "resolve_config_toml_path", lambda _: tmp_path / "cfg.toml")
+    monkeypatch.setattr(panel, "_campaign", lambda _: campaign)
+    monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
+    fake_st = _FakeStreamlit(buttons)
+    monkeypatch.setattr(panel, "st", fake_st)
+    return campaign, fake_st, plan_path
+
+
+def test_page_does_not_read_progress_until_explicit_refresh(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
+    capture_calls: list[str] = []
+    monkeypatch.setattr(panel, "capture_tmux_tail", lambda session: capture_calls.append(session) or "tail")
+    panel.render_campaign_generation_page()
+    assert campaign.progress_calls == 0
+    assert campaign.event_calls == 0
+    assert capture_calls == []
+    assert "campaign_generation_view" not in fake_st.session_state
+
+
+def test_page_refresh_reads_summary_and_events_once(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Refresh status"})
+    capture_calls: list[str] = []
+    monkeypatch.setattr(panel, "capture_tmux_tail", lambda session: capture_calls.append(session) or "tail")
+    panel.render_campaign_generation_page()
+    assert campaign.progress_calls == 1
+    assert campaign.event_calls == 1
+    assert capture_calls == ["cuda-campaign-campaign"]
+    assert "campaign_generation_view" in fake_st.session_state
+    assert fake_st.session_state["campaign_generation_view"]["tmux_output"] == "tail"
+    assert "tmux output (bounded)" in fake_st.captions
+    assert "tail" in fake_st.codes
+
+
+def test_page_renders_full_read_only_scientific_recipe_summary(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
+    panel.render_campaign_generation_page()
+    scientific = next(
+        payload["scientific_contract"] for payload in fake_st.json_payloads if "scientific_contract" in payload
+    )
+    assert [row[0] for row in scientific["recipes"]] == [
+        "random_valid_h5",
+        "random_valid_h8",
+        "oracle_greedy_h5",
+        "oracle_greedy_h8",
+        "temperature_softmax_h5_t2",
+        "temperature_softmax_h8_t2",
+    ]
+    assert scientific["device"] == "cuda"
+    assert scientific["total_candidates"] == 60
+
+
+def test_page_invalidates_cached_view_when_plan_changes(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, plan_path = _patch_fake_page(monkeypatch, tmp_path)
+    fake_st.session_state["campaign_generation_view"] = {
+        "key": (str(tmp_path / "cfg.toml"), str(plan_path), 0),
+        "summary": {"state": "stale"},
+        "events": [],
+    }
+    plan_path.write_text("changed", encoding="utf-8")
+    panel.render_campaign_generation_page()
+    assert campaign.progress_calls == 0
+    assert "campaign_generation_view" not in fake_st.session_state
+
+
+def test_page_launch_passes_canonical_claim_path(monkeypatch, tmp_path: Path) -> None:
+    campaign, _, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Launch in tmux"})
+    calls = []
+    monkeypatch.setattr(panel, "launch_campaign_tmux", lambda *args, **kwargs: calls.append(kwargs) or (True, "ok"))
+    panel.render_campaign_generation_page()
+    assert calls == [{"claim_path": tmp_path / "run-claim.json"}]
+
+
+def test_page_truncates_synchronous_command_output_before_render_and_cache(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Validate / preflight"})
+    huge = "x" * 5001
+    monkeypatch.setattr(
+        panel.subprocess,
+        "run",
+        lambda *args, **kwargs: type("Result", (), {"returncode": 0, "stdout": huge, "stderr": huge})(),
+    )
+    panel.render_campaign_generation_page()
+    last_action = fake_st.session_state["campaign_generation_last_action"]
+    assert len(last_action["stdout"]) == 4000
+    assert len(last_action["stderr"]) == 4000
+    assert all(len(message) <= 4000 for message in fake_st.messages)
+
+
+def test_campaign_source_excludes_unbounded_or_forbidden_ui_controls() -> None:
+    source = Path(panel.__file__).read_text(encoding="utf-8")
+    assert "text_area" not in source
+    assert "rerun" not in source.lower()
+    assert "st.plot" not in source
+    assert "st.kill" not in source
+    assert "st.delete" not in source
+    assert "autopoll" not in source.lower()
+    assert "Refresh status" in source

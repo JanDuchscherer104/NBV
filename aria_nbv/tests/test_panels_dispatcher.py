@@ -19,6 +19,19 @@ from aria_nbv.app.panels import (
 )
 
 
+def test_panels_dispatcher_exports_campaign_generation_lazily() -> None:
+    """Campaign page is a facade export, not an eager Streamlit import."""
+    import importlib
+    import sys
+
+    sys.modules.pop("aria_nbv.app.panels.campaign_generation", None)
+    dispatcher = importlib.reload(panels)
+    assert "aria_nbv.app.panels.campaign_generation" not in sys.modules
+    renderer = dispatcher.render_campaign_generation_page
+    assert callable(renderer)
+    assert "aria_nbv.app.panels.campaign_generation" in sys.modules
+
+
 def test_panels_dispatcher_reexports() -> None:
     """Ensure the package facade lazily exports dedicated panel renderers."""
     assert panels.render_candidates_page is candidates.render_candidates_page
