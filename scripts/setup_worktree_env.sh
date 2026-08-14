@@ -87,6 +87,18 @@ if [[ "$check_only" == false ]]; then
   mkdir -p .data docs/literature graphify-out/cache
 fi
 
+# Seed durable Graphify state from a sibling Git worktree. The helper copies a
+# strict allowlist and synthesizes child metadata; cache links below are the
+# only shared Graphify state.
+if git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1; then
+  seed_args=(--source "$shared_root" --destination "$repo_root")
+  seed_args+=(--destination-git-dir "$repo_git_dir")
+  [[ "$check_only" == true ]] && seed_args+=(--check)
+  "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
+elif [[ "$check_only" == true ]]; then
+  fail "shared root is not a Git worktree; cannot validate Graphify seed"
+fi
+
 # Download manifests are tracked; every other top-level .data directory is an
 # ignored cache and can be shared without copying it into each worktree. The
 # Graphify semantic cache is intentionally excluded: only its two content-
