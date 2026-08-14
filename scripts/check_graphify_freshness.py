@@ -363,7 +363,7 @@ def check(root: Path) -> dict[str, Any]:
             marker_value = root_marker.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:
             raise ValueError(f"invalid Graphify root marker: {error}") from error
-        if marker_value != f"{root}\n":
+        if marker_value not in {str(root), f"{root}\n"}:
             raise ValueError("Graphify root marker is not bound to this worktree")
         for relative, label in (
             (GRAPH, "graph"),

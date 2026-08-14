@@ -257,6 +257,12 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         cases = {
             "missing": lambda: marker.unlink(),
             "wrong": lambda: marker.write_text("/wrong/root\n", encoding="utf-8"),
+            "extra-newline": lambda: marker.write_text(
+                f"{self.root.resolve()}\n\n", encoding="utf-8"
+            ),
+            "trailing-space": lambda: marker.write_text(
+                f"{self.root.resolve()} ", encoding="utf-8"
+            ),
             "symlink": lambda: (
                 outside.write_text(f"{self.root.resolve()}\n", encoding="utf-8"),
                 marker.unlink(),
@@ -268,6 +274,12 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
                 self._write_graph()
                 mutate()
                 self.assertEqual(self.payload()["state"], "unusable")
+
+    def test_graphify_root_accepts_exact_absolute_path_without_newline(self) -> None:
+        marker = self.root / "graphify-out/.graphify_root"
+        marker.write_text(str(self.root.resolve()), encoding="utf-8")
+
+        self.assertEqual(self.payload()["state"], "fresh")
 
     def test_nonempty_detector_coverage_gaps_are_unusable(self) -> None:
         empty_files = {
