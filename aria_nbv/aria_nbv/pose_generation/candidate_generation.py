@@ -89,10 +89,12 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     filtering, and logging/debug controls used by `CandidateViewGenerator`.
 
     The config is a Pydantic boundary: ``device`` and ``verbosity`` are coerced
-    through the shared config helpers, ``view_kappa`` and per-axis view caps
-    inherit their positional defaults when omitted, and ``is_debug`` promotes
-    verbosity to ``VERBOSE``. Candidate poses remain physical world/camera
-    geometry in metres; display-only CW90 rotations belong to plotting callers.
+    through the shared config helpers, omitted ``view_kappa`` inherits
+    positional ``kappa`` and omitted per-axis caps keep their field defaults,
+    while explicit ``None`` on a view cap selects the shared
+    ``view_max_angle_deg`` fallback. ``is_debug`` promotes verbosity to
+    ``VERBOSE``. Candidate poses remain physical world/camera geometry in
+    metres; display-only CW90 rotations belong to plotting callers.
     """
 
     @property
@@ -237,10 +239,12 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     def set_debug(self) -> CandidateViewGeneratorConfig:
         """Resolve debug verbosity and inherited view-jitter defaults.
 
-        ``None`` on the view-specific fields means "inherit the positional
-        sampler setting"; it is not a request to disable view jitter. This
-        normalization happens once during model construction so generator
-        code can consume concrete values without branch-dependent defaults.
+        ``view_kappa=None`` inherits the positional ``kappa``. Explicit
+        ``None`` on either per-axis view cap selects ``view_max_angle_deg``;
+        omitting those fields instead preserves their distinct 60/30-degree
+        field defaults. This normalization happens once during model
+        construction so generator code can consume concrete values without
+        branch-dependent defaults.
         """
         if self.is_debug:
             object.__setattr__(self, "verbosity", Verbosity.VERBOSE)
