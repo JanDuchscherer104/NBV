@@ -12,14 +12,4 @@ The current data-generation tasks are defined directly from geometry-valid @grou
 
 The thesis separates supervision from decision-time information. Ground-truth geometry defines current target tasks, target crops, oracle labels, and evaluation; it is not an ordinary actor input. Invalid candidates are outside the admissible action set rather than examples with low utility. One-step oracle greedy is an immediate-reward comparator over the evaluated valid candidate table, while oracle lookahead is an upper reference only within the fixed candidate generator, horizon, branch factor, target pool, and validity regime. These restrictions make negative results interpretable without turning a bounded experiment into a universal statement about view planning.
 
-== Research Questions
-
-*RQ1 --- Objective and endpoint contract.* Do target-cropped point--mesh error, root-normalized immediate gain, and fixed-budget endpoint gain provide a repeatable objective for comparing target-conditioned view-selection policies?
-
-*RQ2 --- Offline finite-candidate planning.* Under identical target tasks, roots, candidate support, validity rules, and acquisition budgets, does bounded oracle lookahead exhibit positive endpoint-quality headroom over one-step oracle-greedy selection, and can an offline finite-horizon policy recover a meaningful fraction of that headroom?
-
-*RQ3 --- Actor-visible representation.* Which observed or predicted target descriptor and actor-visible state representation are sufficient for learned one-step and finite-horizon candidate scoring without privileged target geometry or all-candidate oracle renders at decision time?
-
-*RQ4 --- Support and scale.* How do target-task coverage, candidate support, hard validity, rollout diversity, and scene-level scale constrain the reliability and generality of the conclusions for RQ1--RQ3?
-
-Together, these questions delimit the evaluated contribution; online control, continuous actions, and real-device deployment remain outside it.
+#include "01-research-questions.typ"
