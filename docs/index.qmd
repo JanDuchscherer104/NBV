@@ -47,7 +47,7 @@ thesis contract.
 
 ## Thesis and Seminar Paper
 
-- [Thesis](typst/thesis/main.pdf), [Typst Source](typst/thesis/main.typ): Current thesis direction and canonical research + development memory.
+- [Thesis — DEVELOPMENT/DRAFT PDF](typst/thesis/main.pdf), [Typst Source](typst/thesis/main.typ): Tracked default development-mode artifact; roadmap, M1, and promotion-queue sections are intentionally present. A submission projection is separate and requires explicit submission mode plus the existing evidence gate.
 - [Project Paper](typst/seminar_paper/main.pdf), [Typst Source](typst/seminar_paper/main.typ): Historical implemented evidence from the earlier project phase: Single-step RRI based scene scorer.
 
 ## Project Slides
