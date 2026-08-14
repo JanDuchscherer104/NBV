@@ -10,7 +10,7 @@ every learned action is re-evaluated with the oracle under the same candidate
 support, validity rules, and acquisition budget. @ground-truth:short (GT) geometry
 defines target tasks, labels, and evaluation; it is not an ordinary actor input.
 
-=== Objectives and scope <objectives>
+=== Objectives and scope <rq-objectives>
 
 The work has six linked objectives. First, validate the geometry, candidate-label,
 invalidity, split, and oracle-RRI contracts on a trusted ASE subset before scale-up.

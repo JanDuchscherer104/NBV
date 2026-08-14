@@ -193,7 +193,7 @@
       "lines": "32-58",
       "subject": "objectives and evidence protocol",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#objectives",
+      "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq-objectives",
       "destination_verified": true,
       "link_action": "extract only active RQ1-RQ4",
       "id": "retired-011-rq-objectives",
