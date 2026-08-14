@@ -11,6 +11,8 @@ SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
+NON_GIT_WORKTREE_ROOT="${SANDBOX}/non-git-worktree"
+NON_GIT_SHARED_ROOT="${SANDBOX}/non-git-shared"
 FAKE_BIN="${SANDBOX}/bin"
 
 mkdir -p \
@@ -43,6 +45,13 @@ git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-non-git "${NON_GIT_WORKTREE_ROOT}"
+
+mkdir -p \
+  "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin" \
+  "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep"
+ln -s "$(command -v python3)" "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin/python"
 
 # The source seed is deliberately untracked. Graphify output is an ignored,
 # derived artifact and setup must nevertheless require a complete valid parent.
@@ -99,6 +108,22 @@ snapshot_tree() {
   find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
   find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
+
+# A shared root without Git ownership cannot supply a mandatory Graphify seed.
+# Both modes must reject it before creating or linking anything in the child.
+non_git_before="$(snapshot_tree "${NON_GIT_WORKTREE_ROOT}")"
+for mode in normal check; do
+  args=()
+  [[ "${mode}" == check ]] && args+=(--check)
+  if ARIA_NBV_SHARED_ROOT="${NON_GIT_SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
+    bash "${NON_GIT_WORKTREE_ROOT}/scripts/setup_worktree_env.sh" "${args[@]}" \
+    >"${SANDBOX}/non-git-${mode}.out" 2>"${SANDBOX}/non-git-${mode}.err"; then
+    echo "setup unexpectedly accepted a non-Git shared root in ${mode} mode" >&2
+    exit 1
+  fi
+  grep -Fq "shared root is not a Git worktree" "${SANDBOX}/non-git-${mode}.err"
+  [[ "$(snapshot_tree "${NON_GIT_WORKTREE_ROOT}")" == "${non_git_before}" ]]
+done
 
 # Setup must reject Graphify directory symlinks before mkdir or cache linking can
 # mutate an existing external target or create a dangling target.
