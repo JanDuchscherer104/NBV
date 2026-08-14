@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -504,6 +504,39 @@ def _completed_shard_is_current(
         stored_shard.pop("campaign_binding", None)
         expected_shard.pop("campaign_binding", None)
     return stored_shard == expected_shard
+
+
+def read_validated_completed_shard(
+    final_dir: Path,
+    *,
+    shard_entry: RolloutShardEntry,
+    writer_config_hash: str = "",
+) -> dict[str, Any] | None:
+    """Read one promoted shard only when its complete currentness contract holds.
+
+    This is the presentation-free read seam shared by campaign status and
+    resume logic.  ``None`` means the path is missing, malformed, stale, or
+    otherwise failed full shard validation.
+    """
+    try:
+        owner = json.loads((final_dir / ROLLOUT_SHARD_OWNER_FILENAME).read_text(encoding="utf-8"))
+        success = json.loads((final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME).read_text(encoding="utf-8"))
+        store_manifest = read_rollout_store_manifest(final_dir)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    stored_writer_hash = str(store_manifest.get("generation", {}).get("shard", {}).get("writer_config_hash", ""))
+    if writer_config_hash and stored_writer_hash != writer_config_hash:
+        return None
+    effective_entry = replace(shard_entry, writer_config_hash=stored_writer_hash)
+    if not _completed_shard_is_current(final_dir, shard_entry=effective_entry, writer_config_hash=stored_writer_hash):
+        return None
+    return {
+        "owner_evidence": owner,
+        "success_evidence": success,
+        "store_manifest": store_manifest,
+        "validation": "passed",
+        "store_path": str(final_dir.resolve()),
+    }
 
 
 def _owner_payload(

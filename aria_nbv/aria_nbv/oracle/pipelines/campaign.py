@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -318,6 +318,9 @@ class CampaignStatus:
     finished_at: str | None = None
     bounded_error: str | None = None
     last_timeout: dict[str, Any] | None = None
+    active_pid: int | None = None
+    active_process_group: int | None = None
+    active_started_at: str | None = None
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignStatus":
@@ -347,6 +350,9 @@ class CampaignStatus:
             payload.get("finished_at"),
             payload.get("bounded_error"),
             payload.get("last_timeout"),
+            payload.get("active_pid"),
+            payload.get("active_process_group"),
+            payload.get("active_started_at"),
         )
 
 
@@ -450,10 +456,21 @@ class CampaignProcessRunner:
         timeout: float,
         stdout: Any = None,
         stderr: Any = None,
+        on_started: Callable[[int, int | None], None] | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> tuple[int, str, str]:
         """Run one opaque child while draining pipes and enforcing its watchdog."""
         process = self.start(argv, stdout=stdout, stderr=stderr)
+        try:
+            process_group = os.getpgid(process.pid)
+        except ProcessLookupError:
+            process_group = None
+        if on_started is not None:
+            try:
+                on_started(process.pid, process_group)
+            except Exception:
+                self.terminate_group(process)
+                raise
         started = clock()
         try:
             out, err = process.communicate(timeout=timeout)
@@ -1494,18 +1511,19 @@ class CudaRolloutCampaign:
                     started_at=started_at_iso,
                 )
             )
-            self.append_event(self._event(plan, "unit_started", unit=unit, stage="worker"))
-            self.write_status(
-                self.status(
-                    plan,
-                    results,
-                    current_unit=unit,
-                    stage="worker",
-                    elapsed_seconds=self.clock() - started_at,
-                    last_timeout=last_timeout,
-                    started_at=started_at_iso,
+            if worker is not None:
+                self.append_event(self._event(plan, "unit_started", unit=unit, stage="worker"))
+                self.write_status(
+                    self.status(
+                        plan,
+                        results,
+                        current_unit=unit,
+                        stage="worker",
+                        elapsed_seconds=self.clock() - started_at,
+                        last_timeout=last_timeout,
+                        started_at=started_at_iso,
+                    )
                 )
-            )
             try:
                 if worker is not None:
                     self.append_event(self._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
@@ -1523,6 +1541,14 @@ class CudaRolloutCampaign:
                         timeout=self.config.work_unit_timeout_seconds,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        on_started=self._child_started_callback(
+                            plan,
+                            results,
+                            unit,
+                            started_at=started_at,
+                            started_at_iso=started_at_iso,
+                            last_timeout=last_timeout,
+                        ),
                     )
                     if returncode:
                         raise RuntimeError((stderr or stdout or f"worker exited {returncode}")[-2000:])
@@ -1755,6 +1781,9 @@ class CudaRolloutCampaign:
         elapsed_seconds: float = 0.0,
         bounded_error: str | None = None,
         last_timeout: dict[str, Any] | None = None,
+        active_pid: int | None = None,
+        active_process_group: int | None = None,
+        active_started_at: str | None = None,
         started_at: str | None = None,
         finished_at: str | None = None,
     ) -> CampaignStatus:
@@ -1851,6 +1880,9 @@ class CudaRolloutCampaign:
             smoke_evidence_hash=smoke_hash,
             smoke_evidence_summary=smoke_summary,
             last_timeout=last_timeout,
+            active_pid=active_pid,
+            active_process_group=active_process_group,
+            active_started_at=active_started_at,
             started_at=started_at,
             finished_at=finished_at,
         )
@@ -1868,6 +1900,40 @@ class CudaRolloutCampaign:
         if self.clock() - started >= (self.config.work_unit_timeout_seconds if timeout is None else timeout):
             raise TimeoutError(f"work unit timed out: {unit.work_unit_hash}")
         return result
+
+    def _child_started_callback(
+        self,
+        plan: CampaignPlan,
+        results: Sequence[Any],
+        unit: CampaignWorkUnit,
+        *,
+        started_at: float,
+        started_at_iso: str,
+        last_timeout: dict[str, Any] | None,
+    ) -> Callable[[int, int | None], None]:
+        """Persist child identity immediately after subprocess creation."""
+
+        def callback(pid: int, process_group: int | None) -> None:
+            now = self.utc_now().isoformat()
+            self.append_event(
+                self._event(plan, "unit_started", unit=unit, stage="worker", pid=pid, process_group=process_group)
+            )
+            self.write_status(
+                self.status(
+                    plan,
+                    results,
+                    current_unit=unit,
+                    stage="worker",
+                    elapsed_seconds=self.clock() - started_at,
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
+                    active_pid=pid,
+                    active_process_group=process_group,
+                    active_started_at=now,
+                )
+            )
+
+        return callback
 
     def acquire_claim(
         self, plan: CampaignPlan, path: Path | None = None, *, tmux_session: str | None = None
@@ -2048,6 +2114,12 @@ class CudaRolloutCampaign:
                 plan = self.load_plan(plan_path)
         status = self.read_status(plan=plan)
         payload = asdict(status)
+        if status.state == "running" and status.started_at:
+            try:
+                started = datetime.fromisoformat(status.started_at)
+                payload["elapsed_seconds"] = max(0.0, (self.utc_now() - started).total_seconds())
+            except ValueError:
+                pass
         payload["campaign_id"] = self.config.campaign_id
         raw = status.counts
         completed = int(raw.get("succeeded", 0)) + int(raw.get("skipped", 0))
@@ -2063,6 +2135,48 @@ class CudaRolloutCampaign:
         }
         if plan is not None and status.plan_hash and status.plan_hash != plan.plan_hash:
             payload["latest_failure_reason"] = "stale_status_plan_hash"
+        artifacts: list[dict[str, Any]] = []
+        shards_root = self.config.output_root / "shards"
+        if shards_root.is_dir() and plan is not None:
+            from .shards import read_validated_completed_shard
+
+            for unit in plan.work_units:
+                try:
+                    writer_hash = unit.writer_config_hash or plan.writer_config_hash
+                    entry = replace(self.shard_entry_for_unit(plan, unit), writer_config_hash=writer_hash)
+                except (TypeError, ValueError, KeyError):
+                    continue
+                path = shards_root / unit.work_unit_hash
+                evidence = read_validated_completed_shard(path, shard_entry=entry)
+                if evidence is None:
+                    continue
+                binding = entry.campaign_binding.to_jsonable() if entry.campaign_binding else {}
+                artifacts.append(
+                    {
+                        "work_unit_hash": unit.work_unit_hash,
+                        "store_path": evidence["store_path"],
+                        "owner_evidence_path": str((path / "_owner.json").resolve()),
+                        "success_evidence_path": str((path / "_SUCCESS.json").resolve()),
+                        "owner_sha256": evidence["success_evidence"].get("owner_sha256", ""),
+                        "rollout_manifest_sha256": evidence["success_evidence"].get("rollout_manifest_sha256", ""),
+                        "validation": evidence["validation"],
+                        "campaign_binding": binding,
+                        "campaign_id": self.config.campaign_id,
+                        "config_hash": plan.config_hash,
+                        "plan_hash": plan.plan_hash,
+                        "target_id": unit.target_id,
+                        "profile": unit.profile,
+                        "profile_hash": unit.profile_hash,
+                        "source_identity_hash": unit.source_identity_hash,
+                        "split_manifest_hash": entry.split_manifest_hash,
+                        "campaign_writer_config_hash": plan.writer_config_hash,
+                        "effective_writer_config_hash": evidence["owner_evidence"].get("writer_config_hash", ""),
+                        "campaign_source_manifest_hash": plan.source_manifest_hash,
+                        "shard_source_manifest_hash": evidence["owner_evidence"].get("source_manifest_hash", ""),
+                        "outcome": "succeeded",
+                    }
+                )
+        payload["validated_artifacts"] = artifacts
         return payload
 
     def write_status(self, status: CampaignStatus, path: Path | None = None) -> Path:

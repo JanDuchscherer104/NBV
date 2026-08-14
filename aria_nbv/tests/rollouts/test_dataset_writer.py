@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -32,6 +33,7 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
 from aria_nbv.oracle.pipelines.shards import (
     plan_rollout_shards,
     plan_rollout_source_manifest,
+    read_validated_completed_shard,
     run_rollout_shard,
     summarize_rollout_shard_campaign,
 )
@@ -889,6 +891,25 @@ def test_rollout_shard_atomic_promotion_writes_markers_and_skips_completed(tmp_p
     assert result.owner_path.exists()
     assert not tmp_dir.exists()
     assert skipped.skipped
+
+
+def test_read_validated_completed_shard_rejects_tampered_success_binding(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    final_dir = tmp_path / "final" / entry.shard_id
+    run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "tmp", output_final=final_dir)
+    assert (
+        read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
+        is not None
+    )
+    success_path = final_dir / "_SUCCESS.json"
+    payload = json.loads(success_path.read_text(encoding="utf-8"))
+    payload["split_manifest_hash"] = "tampered"
+    success_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert (
+        read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
+        is None
+    )
 
 
 def test_rollout_shard_timeout_delegates_atomic_quarantine_and_allows_restart(

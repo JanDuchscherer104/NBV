@@ -75,6 +75,7 @@ def test_rollout_cli_help_exits_cleanly() -> None:
 def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, monkeypatch) -> None:
     class _Campaign:
         config = SimpleNamespace(campaign_id="test-campaign")
+        progress_calls = 0
 
         def read_status(self):
             return SimpleNamespace(
@@ -98,6 +99,7 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
             )
 
         def progress_summary(self):
+            self.progress_calls += 1
             return {
                 "counts": {
                     "succeeded": 1,
@@ -106,15 +108,23 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
                     "insufficient_support": 0,
                     "timed_out": 0,
                     "pending": 0,
-                }
+                },
+                "active_pid": 4321,
+                "active_process_group": 4321,
+                "validated_artifacts": [{"work_unit_hash": "unit"}],
             }
 
-    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+    campaign = _Campaign()
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: campaign)
     result = runner.invoke(rollout_cli.campaign_app, ["status", "--config-path", str(tmp_path / "cfg.toml"), "--json"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["state"] == "completed_with_failures"
     assert payload["counts"]["failed"] == 1
+    assert payload["active_pid"] == 4321
+    assert payload["active_process_group"] == 4321
+    assert payload["validated_artifacts"] == [{"work_unit_hash": "unit"}]
+    assert campaign.progress_calls == 1
 
 
 def test_campaign_preflight_delegates_once(tmp_path, monkeypatch) -> None:

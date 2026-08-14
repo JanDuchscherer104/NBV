@@ -414,6 +414,72 @@ def test_status_exposes_current_unit_profile_stage_and_failure_reason(tmp_path):
     assert status.latest_failure_reason == "timeout"
 
 
+def test_status_does_not_invent_coordinator_worker_identity(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status = campaign.status(plan, current_unit=plan.work_units[0], stage="worker")
+    assert status.active_pid is None
+    assert status.active_process_group is None
+
+
+def test_process_runner_reports_child_identity_before_communicate(monkeypatch):
+    class Process:
+        pid = 4321
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            assert started
+            return b"{}", b""
+
+    started = []
+    runner = CampaignProcessRunner()
+    monkeypatch.setattr(runner, "start", lambda *args, **kwargs: Process())
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.os.getpgid", lambda _pid: 9876)
+    runner.run(("worker",), timeout=1, on_started=lambda pid, pgid: started.append((pid, pgid)))
+    assert started == [(4321, 9876)]
+
+
+def test_process_runner_reports_missing_process_group(monkeypatch):
+    class Process:
+        pid = 4321
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return b"{}", b""
+
+    seen = []
+    runner = CampaignProcessRunner()
+    monkeypatch.setattr(runner, "start", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.os.getpgid",
+        lambda _pid: (_ for _ in ()).throw(ProcessLookupError),
+    )
+    runner.run(("worker",), timeout=1, on_started=lambda pid, pgid: seen.append((pid, pgid)))
+    assert seen == [(4321, None)]
+
+
+def test_process_runner_cleans_up_when_start_callback_fails(monkeypatch):
+    class Process:
+        pid = 4321
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return b"{}", b""
+
+        def wait(self, timeout=None):
+            return 0
+
+    runner = CampaignProcessRunner()
+    process = Process()
+    monkeypatch.setattr(runner, "start", lambda *args, **kwargs: process)
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.os.getpgid", lambda _pid: 9876)
+    terminated = []
+    monkeypatch.setattr(runner, "terminate_group", lambda proc: terminated.append(proc))
+    with pytest.raises(RuntimeError):
+        runner.run(("worker",), timeout=1, on_started=lambda *_: (_ for _ in ()).throw(RuntimeError("status")))
+    assert terminated == [process]
+
+
 def test_process_group_timeout_sends_term_waits_grace_then_kills(monkeypatch):
     calls = []
 
@@ -690,6 +756,46 @@ def test_progress_summary_distinguishes_planned_all_pending_and_partial(tmp_path
     partial = campaign.progress_summary(plan)
     assert partial["counts"]["insufficient"] == 1
     assert partial["counts"]["pending"] == len(plan.work_units) - 1
+
+
+def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    shards = tmp_path / "shards"
+    shards.mkdir()
+    for unit in plan.work_units:
+        (shards / unit.work_unit_hash).mkdir()
+    (shards / "unrelated").mkdir()
+    units = tuple(
+        replace(
+            unit,
+            source_row_payload={"source_manifest_hash": "source", "split": "train", "source_store_dir": "/tmp/source"},
+        )
+        for unit in plan.work_units
+    )
+    plan = replace(plan, work_units=units)
+    entries = {unit.work_unit_hash: campaign.shard_entry_for_unit(plan, unit) for unit in plan.work_units}
+    monkeypatch.setattr(campaign, "shard_entry_for_unit", lambda _plan, unit: entries[unit.work_unit_hash])
+    from aria_nbv.oracle.pipelines import shards as shard_module
+
+    def read(path, *, shard_entry, writer_config_hash=""):
+        if path.name != plan.work_units[0].work_unit_hash:
+            return None
+        return {
+            "store_path": str(path.resolve()),
+            "owner_evidence": {"writer_config_hash": "effective"},
+            "success_evidence": {"owner_sha256": "owner", "rollout_manifest_sha256": "manifest"},
+            "validation": "passed",
+        }
+
+    monkeypatch.setattr(shard_module, "read_validated_completed_shard", read)
+    summary = campaign.progress_summary(plan)
+    artifacts = summary["validated_artifacts"]
+    assert [row["work_unit_hash"] for row in artifacts] == [plan.work_units[0].work_unit_hash]
+    assert artifacts[0]["store_path"] == str((shards / plan.work_units[0].work_unit_hash).resolve())
+    assert artifacts[0]["effective_writer_config_hash"] == "effective"
+    assert "owner_evidence" not in artifacts[0]
+    assert not any(row["work_unit_hash"] == "unrelated" for row in artifacts)
 
 
 def _row(scene: str, sample: str, target: str) -> SimpleNamespace:

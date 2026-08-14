@@ -173,19 +173,24 @@ def campaign_status(
 ) -> None:
     """Print persisted typed campaign status."""
     cfg = _campaign(config_path)
-    status = cfg.read_status()
+    summary = cfg.progress_summary()
+    counts = summary.get("counts", {})
+    inferred_state = "completed_with_failures" if counts.get("failed", 0) else "running"
     payload = {
-        "state": status.state,
+        "state": summary.get("state", inferred_state),
         "campaign_id": cfg.config.campaign_id,
-        "counts": cfg.progress_summary().get("counts", status.counts),
-        "plan_hash": status.plan_hash,
-        "updated_at": status.updated_at,
-        "current_work_unit": status.current_work_unit,
-        "current_target_id": status.current_target_id,
-        "current_profile": status.current_profile,
-        "current_stage": status.current_stage,
-        "elapsed_seconds": status.elapsed_seconds,
-        "latest_failure_reason": status.latest_failure_reason,
+        "counts": counts,
+        "plan_hash": summary.get("plan_hash", ""),
+        "updated_at": summary.get("updated_at", ""),
+        "current_work_unit": summary.get("current_work_unit"),
+        "current_target_id": summary.get("current_target_id"),
+        "current_profile": summary.get("current_profile"),
+        "current_stage": summary.get("current_stage"),
+        "elapsed_seconds": summary.get("elapsed_seconds", 0.0),
+        "latest_failure_reason": summary.get("latest_failure_reason"),
+        "active_pid": summary.get("active_pid"),
+        "active_process_group": summary.get("active_process_group"),
+        "validated_artifacts": summary.get("validated_artifacts", []),
     }
     if json_output:
         typer.echo(json.dumps(payload, sort_keys=True))
@@ -198,6 +203,7 @@ def campaign_status(
                     f"stage: {payload['current_stage'] or '-'}",
                     f"target/profile: {payload['current_target_id'] or payload['current_work_unit'] or '-'}/{payload['current_profile'] or '-'}",
                     f"elapsed_seconds: {payload['elapsed_seconds']}",
+                    f"worker_pid/pgid: {payload['active_pid'] or '-'}/{payload['active_process_group'] or '-'}",
                     f"counts: {json.dumps(payload['counts'], sort_keys=True)}",
                     f"latest_failure_reason: {payload['latest_failure_reason'] or '-'}",
                 )

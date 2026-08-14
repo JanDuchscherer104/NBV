@@ -243,7 +243,9 @@ def test_launch_ready_requires_current_smoke_success(monkeypatch, tmp_path: Path
     """Smoke success evidence is the gate; a persisted claim blocks launch."""
     plan_path = tmp_path / "plan.json"
     plan_path.write_text("{}", encoding="utf-8")
-    campaign = _FakeCampaign(tmp_path, evidence={"config_hash": "cfg", "result": {"outcome": "succeeded", "validated": True}})
+    campaign = _FakeCampaign(
+        tmp_path, evidence={"config_hash": "cfg", "result": {"outcome": "succeeded", "validated": True}}
+    )
     assert panel._launch_ready(campaign, plan_path) is True
     (tmp_path / "run-claim.json").write_text("{}", encoding="utf-8")
     assert panel._launch_ready(campaign, plan_path) is False
@@ -298,6 +300,9 @@ class _FakeStreamlit:
 
     def columns(self, n):
         return [_FakeColumn(self.buttons) for _ in range(n)]
+
+    def button(self, label, **kwargs):
+        return label in self.buttons and not kwargs.get("disabled", False)
 
     def code(self, *args, **kwargs):
         self.codes.extend(str(value) for value in args)
@@ -427,6 +432,18 @@ def test_page_refresh_reads_summary_and_events_once(monkeypatch, tmp_path: Path)
     assert fake_st.session_state["campaign_generation_view"]["tmux_output"] == "tail"
     assert "tmux output (bounded)" in fake_st.captions
     assert "tail" in fake_st.codes
+
+
+def test_page_inspect_handoff_sets_only_validated_absolute_path(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Refresh status", "Inspect unit-1"})
+    store = (tmp_path / "shards" / "unit-1").resolve()
+    campaign.progress_summary = lambda: {
+        "state": "completed",
+        "counts": {"completed": 1},
+        "validated_artifacts": [{"work_unit_hash": "unit-1", "store_path": str(store), "validation": "passed"}],
+    }
+    panel.render_campaign_generation_page()
+    assert fake_st.session_state["rollout_store_manual_path"] == str(store)
 
 
 def test_page_renders_full_read_only_scientific_recipe_summary(monkeypatch, tmp_path: Path) -> None:

@@ -348,6 +348,8 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                         "current_profile",
                         "current_stage",
                         "elapsed_seconds",
+                        "active_pid",
+                        "active_process_group",
                         "latest_failure_reason",
                         "last_work_unit",
                         "last_timeout",
@@ -357,6 +359,35 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                     )
                 }
             )
+            artifacts = summary.get("validated_artifacts", [])
+            if artifacts:
+                st.subheader("Validated campaign artifacts")
+                compact = [
+                    {
+                        key: artifact.get(key)
+                        for key in (
+                            "work_unit_hash",
+                            "target_id",
+                            "profile",
+                            "validation",
+                            "outcome",
+                            "store_path",
+                            "owner_evidence_path",
+                            "success_evidence_path",
+                            "owner_sha256",
+                            "rollout_manifest_sha256",
+                        )
+                    }
+                    for artifact in artifacts
+                ]
+                st.dataframe(compact, use_container_width=True)
+                for index, artifact in enumerate(artifacts):
+                    store_path = artifact.get("store_path")
+                    if not isinstance(store_path, str) or not Path(store_path).is_absolute():
+                        continue
+                    if st.button(f"Inspect {artifact.get('work_unit_hash', index)}", key=f"campaign_inspect_{index}"):
+                        st.session_state["rollout_store_manual_path"] = store_path
+                        st.info("Validated path selected. Open Rollout Supervision to inspect it.")
         st.caption(f"Progress ledger: {cfg.output_root / 'progress.jsonl'} · artifacts: {cfg.output_root}")
         st.info("Detailed completed-store inspection remains in Training Data → Rollout Supervision.")
         if refresh:
