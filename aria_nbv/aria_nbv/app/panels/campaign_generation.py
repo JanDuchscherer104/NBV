@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import json
 import math
 import re
@@ -118,12 +117,10 @@ def _launch_ready(campaign: Any, plan_path: Path) -> bool:
         plan = campaign.load_plan(plan_path)
         evidence = campaign.smoke_evidence(plan)
         result = evidence.get("result")
-        if isinstance(result, str):
-            result = ast.literal_eval(result)
         if not isinstance(result, dict) or result.get("outcome") != "succeeded" or result.get("validated") is not True:
             return False
         return not (campaign.config.output_root / "run-claim.json").exists()
-    except (OSError, ValueError, TypeError, RuntimeError, SyntaxError, json.JSONDecodeError):
+    except (OSError, ValueError, TypeError, RuntimeError, json.JSONDecodeError):
         return False
 
 

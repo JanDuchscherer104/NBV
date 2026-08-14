@@ -239,18 +239,11 @@ class _FakeCampaign:
         return []
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
-        {"config_hash": "cfg", "result": {"outcome": "succeeded", "validated": True}},
-        {"config_hash": "cfg", "result": "{'outcome': 'succeeded', 'validated': True}"},
-    ],
-)
-def test_launch_ready_requires_current_smoke_success(monkeypatch, tmp_path: Path, evidence: dict) -> None:
+def test_launch_ready_requires_current_smoke_success(monkeypatch, tmp_path: Path) -> None:
     """Smoke success evidence is the gate; a persisted claim blocks launch."""
     plan_path = tmp_path / "plan.json"
     plan_path.write_text("{}", encoding="utf-8")
-    campaign = _FakeCampaign(tmp_path, evidence=evidence)
+    campaign = _FakeCampaign(tmp_path, evidence={"config_hash": "cfg", "result": {"outcome": "succeeded", "validated": True}})
     assert panel._launch_ready(campaign, plan_path) is True
     (tmp_path / "run-claim.json").write_text("{}", encoding="utf-8")
     assert panel._launch_ready(campaign, plan_path) is False
