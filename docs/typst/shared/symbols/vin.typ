@@ -4,7 +4,7 @@
     loss: $cal(L)$,
     // Pose embedding.
     pose_emb: $bold(E)_q$,
-    // Token / feature vector.
+    // Reserved generic token; no direct authored use and it shares `rl.x`'s rendered form.
     token: $bold(x)$,
     // Pooled voxel token feature (used in pose-conditioned global attention).
     vox_tok: $bold(t)$,
@@ -18,7 +18,7 @@
     key: $bold(K)$,
     // Attention value.
     value: $bold(V)$,
-    // SE(3) transform.
+    // SE(3) transform; bold T distinguishes it from `rl.transition` and `shape.Tlen`.
     T: $bold(T)$,
     // Weight matrix.
     W: $bold(W)$,
@@ -28,29 +28,29 @@
     beta: $bold(beta)$,
     // Semi-dense observation count (track length).
     n_obs: $n_"obs"$,
-    // Max observation count used for normalization.
+    // Reserved normalization maximum; no direct authored use in the 2026-08-14 audit.
     n_obs_max: $n_"obs"^"max"$,
     // Inverse-distance std (sigma_rho) from semi-dense tracks.
     inv_dist_std: $sigma_(rho)$,
-    // Minimum inverse-distance standard deviation used for normalization.
+    // Reserved inverse-distance minimum; no direct authored use in the 2026-08-14 audit.
     inv_dist_std_min: $sigma_(rho,"min")$,
-    // 95th-percentile inverse-distance standard deviation for normalization.
+    // Reserved inverse-distance p95; no direct authored use in the 2026-08-14 audit.
     inv_dist_std_p95: $sigma_(rho,"p95")$,
-    // Distance std (sigma_d) for completeness.
+    // Reserved distance standard deviation; no direct authored use in the 2026-08-14 audit.
     dist_std: $sigma_d$,
-    // Continuous oracle RRI (per candidate).
+    // Continuous candidate RRI; plain r also denotes RL reward and the rig-frame label.
     rri: $r$,
     // Predicted RRI proxy (expected CORAL value).
     rri_hat: $hat(r)$,
-    // Coverage / visibility fraction (generic).
+    // Reserved unused coverage fraction; plain c also denotes the camera-frame label.
     cov_frac: $c$,
-    // Coverage-based weight.
+    // Coverage weight; plain w also denotes the world-frame label.
     cov_weight: $w$,
     // Coverage-weight blend strength.
     cov_strength: $lambda$,
     // Auxiliary regression weight.
     aux_weight: $lambda_"reg"$,
-    // Voxel coverage proxy (candidate-level).
+    // Candidate voxel-validity proxy; plain v also denotes the voxel-frame label.
     voxel_valid: $v$,
     // Semi-dense visibility proxy (candidate-level).
     sem_valid: $v^("sem")$,
@@ -58,7 +58,7 @@
     sem_proj: $bold(s)_"proj"$,
     // Semi-dense grid CNN features (per candidate).
     sem_grid: $bold(s)_"grid"$,
-    // Trajectory pooled feature (optional).
+    // Reserved trajectory feature; no direct authored use in the 2026-08-14 audit.
     traj_feat: $bold(f)_"traj"$,
     // Trajectory context per candidate (optional attention).
     traj_ctx: $bold(c)_"traj"$,
@@ -85,7 +85,7 @@
     counts_norm: $bold(V)_"count"^"norm"$,
     // Centerness prediction (geometric prior).
     cent_pr: $bold(V)_"cent"^"pr"$,
-    // Centerness after NMS (used in VINv3 field bundle).
+    // Reserved post-NMS centerness; no direct authored use in the 2026-08-14 audit.
     cent_pr_nms: $bold(V)_"cent"^"pr,nms"$,
     // Observed mask (counts > 0).
     observed: $bold(V)_"obs"$,
@@ -95,42 +95,42 @@
     new_surface_prior: $bold(V)_"new"$,
     // VIN scene field after lightweight 3D projection/assembly (multi-channel).
     field_v: $bold(F)_v$,
-    // Time-indexed EVL/EFM evidence field used by proposal rollouts.
+    // Reserved time-indexed EVL field; no direct authored use in the 2026-08-14 audit.
     field_evl_t: $bold(F)_t^"EVL"$,
     // Initial EVL/EFM evidence field at the rollout root.
     field_evl_0: $bold(F)_0^"EVL"$,
-    // Compatibility alias for the composite scene-memory tensor.
+    // Unused compatibility alias for canonical `scene.scene_memory_t`; migrate or prune.
     scene_memory_t: $bold(Phi)_t^"scene"$,
-    // Compatibility alias for the root-local EVL evidence field.
+    // Unused compatibility alias for canonical `scene.evl_local`; migrate or prune.
     evl_local: $bold(E)_0^"EVL-local"$,
-    // Compatibility alias for candidate EVL support fraction.
+    // Unused compatibility alias for canonical `scene.evl_support_frac`; migrate or prune.
     evl_support_frac: $omega_(t,i)^"EVL"$,
-    // Compatibility alias for the candidate-conditioned EVL support token.
+    // Unused compatibility alias for canonical `scene.evl_support_token`; migrate or prune.
     evl_support_token: $bold(g)_(t,i)^"EVL"$,
-    // Compatibility alias for the target support-pool descriptor.
+    // Unused compatibility alias for canonical `scene.target_support_pool`; migrate or prune.
     target_pool: $bold(g)_e^"tgt"$,
-    // Compatibility alias for the frustum support-pool descriptor.
+    // Unused compatibility alias for canonical `scene.frustum_support_pool`; migrate or prune.
     frustum_pool: $bold(g)_(t,i)^"fr"$,
-    // Compatibility alias for the target-frustum intersection descriptor.
+    // Unused compatibility alias for canonical `scene.target_frustum_pool`; migrate or prune.
     target_frustum_pool: $bold(g)_(t,e,i)^"cap"$,
-    // Compatibility alias for the candidate-conditioned ray-query vector.
+    // Unused compatibility alias for canonical `scene.ray_query_ti`; migrate or prune.
     ray_query_ti: $bold(g)_(t,i)^"ray"$,
-    // Compatibility alias for the named render-query operator.
+    // Unused compatibility alias for canonical `scene.render_query`; migrate or prune.
     render_query: $op("RenderQuery")$,
-    // Per-candidate voxel features sampled/pooled from the scene field.
+    // Reserved candidate voxel-field feature; no direct authored use in the 2026-08-14 audit.
     field_q: $bold(F)_q^("vox")$,
-    // Candidate pose/orientation and directional-observation features.
+    // Unused duplicate of canonical `spatial.pose_6d`; prefer the spatial owner.
     pose_6d: $bold(R)^"6D"$,
-    // Unit viewing direction used by candidate pose features.
+    // Unused duplicate of canonical `spatial.dir_unit`; prefer the spatial owner.
     dir_unit: $bold(d)$,
-    // Compatibility directional-history embedding used by VIN variants.
+    // Unused inconsistent alias: subscript "dir" disagrees with `spatial.dir_memory` superscript.
     dir_memory: $bold(h)_"dir"$,
-    // Compatibility directional-moment matrix used by VIN variants.
+    // Unused inconsistent alias: subscript "dir" disagrees with `spatial.dir_moment` superscript.
     dir_moment: $bold(M)_"dir"$,
-    // Spherical-harmonic basis values through degree L.
+    // Unused duplicate of canonical `spatial.sh_basis`; prefer the spatial owner.
     sh_basis: $bold(Y)_L$,
-    // Candidate-local pose descriptor used by the VIN scorer.
+    // Unused duplicate of canonical `spatial.candidate_pose_feat`; prefer the spatial owner.
     candidate_pose_feat: $bold(h)_(t,i)^"pose"$,
-    // Candidate-local directional-history descriptor used by the VIN scorer.
+    // Reserved candidate-direction feature; no direct authored use in the 2026-08-14 audit.
     candidate_dir_feat: $bold(h)_(t,i)^"dir"$,
   )

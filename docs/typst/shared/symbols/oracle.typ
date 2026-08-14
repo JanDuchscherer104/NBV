@@ -2,19 +2,19 @@
 #let oracle = (
     // Generic abstract reconstruction point set before time or candidate indexing.
     points: $cal(P)$,
-    // Actor-visible point set accumulated through rollout step t.
+    // Unused duplicate of canonical actor-visible `obs.points_t`; prefer the observation owner.
     points_t: $cal(P)_t$,
     // Candidate point set.
     points_q: $cal(P)_q$,
-    // Tensor encoding of a point set.
+    // Reserved point-set tensor; no direct authored use in the 2026-08-14 audit.
     points_tensor: $bold(P)$,
     // Candidate pose set.
     candidates: $cal(Q)$,
-    // Candidate pose set at rollout step t.
+    // Oracle-facing candidate set; visually identical to used `rl.candidate_table`.
     candidates_t: $cal(Q)_t$,
     // Candidate i at rollout step t.
     candidate_qti: $q_(t,i)$,
-    // Tensor encoding of candidate rows/features.
+    // Reserved candidate-row tensor; no direct authored use in the 2026-08-14 audit.
     candidate_tensor: $bold(X)^"cand"$,
     // Candidate depth maps.
     depth_q: $bold(D)_q$,
@@ -23,21 +23,21 @@
     mask_q: $bold(M)_q$,
     // Candidate camera intrinsics/extrinsics (non-PyTorch3D).
     cameras_q: $cal(C)_q$,
-    // Direction vector (sampling).
+    // Reserved sampling direction; duplicates `spatial.dir_unit` and VIN's unused alias.
     dir: $bold(d)$,
     // Center / translation vector.
     center: $bold(c)$,
-    // Offset vector.
+    // Reserved sampling offset; no direct authored use in the 2026-08-14 audit.
     offset: $bold(o)$,
     // Directional point-mesh error terms. `acc` / `comp` are compatibility aliases.
     dist_pm: $D_(P -> M)$,
     // Mesh-to-point directional reconstruction error.
     dist_mp: $D_(M -> P)$,
-    // Compatibility alias for point-to-mesh reconstruction error.
+    // Used compatibility alias; retain until consumers migrate to `dist_pm`.
     acc: $D_(P -> M)$,
-    // Compatibility alias for mesh-to-point reconstruction error.
+    // Used compatibility alias; retain until consumers migrate to `dist_mp`.
     comp: $D_(M -> P)$,
-    // Symmetric point-mesh error aggregate.
+    // Symmetric error aggregate; glyph D can collide with `shape.D` in mixed equations.
     err: $D$,
     // Relative Reconstruction Improvement scalar.
     rri: $op("RRI")$,

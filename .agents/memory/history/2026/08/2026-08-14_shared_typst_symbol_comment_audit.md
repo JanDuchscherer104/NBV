@@ -28,7 +28,10 @@ rendered expression. Compatibility aliases were retained. The audit identified
 unused entries and cross-module duplicate or inconsistent aliases for follow-up
 rather than changing notation semantics in a comment-only workpackage. The full
 finding inventory and recommended dispositions are captured in the linked OMX
-context artifact.
+context artifact. A follow-up pass then propagated those findings back to the
+definition sites: zero-use keys carry dated status notes, duplicate aliases name
+their preferred owner, inconsistent VIN directional notation is explicit, and
+generic glyph collisions are called out where they originate.
 
 ## Verification
 The adjacency audit passed with no missing comments. The active-thesis compile,

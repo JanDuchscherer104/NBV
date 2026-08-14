@@ -1,25 +1,25 @@
 // Composite scene memories and candidate-conditioned scene-query descriptors.
 #let scene = (
-  // Composite actor-visible scene memory queried by the value model.
+  // Canonical composite scene memory; `vin.scene_memory_t` is an unused compatibility alias.
   scene_memory_t: $bold(Phi)_t^"scene"$,
-  // Sparse ray-aware occupied / free / unknown scene memory at step t.
+  // Canonical ray memory at step t; `obs.ray_memory_t` and VIN aliases are unused duplicates.
   ray_memory_t: $bold(M)_t^"ray"$,
-  // Ray-aware scene memory after incorporating the next observation.
+  // Canonical next ray memory; `obs.ray_memory_next` is an unused duplicate.
   ray_memory_next: $bold(M)_(t+1)^"ray"$,
-  // Root-local EVL evidence field used for candidate-conditioned reads.
+  // Canonical root-local EVL field; `vin.evl_local` is an unused compatibility alias.
   evl_local: $bold(E)_0^"EVL-local"$,
-  // Fraction of EVL support available to candidate i at step t.
+  // Canonical EVL support fraction; VIN retains an unused compatibility alias.
   evl_support_frac: $omega_(t,i)^"EVL"$,
-  // Candidate-conditioned token pooled from EVL support.
+  // Canonical EVL support token; VIN retains an unused compatibility alias.
   evl_support_token: $bold(g)_(t,i)^"EVL"$,
-  // Pooled support descriptors over target, frustum, and their intersection.
+  // Canonical target support pool; `vin.target_pool` is an unused compatibility alias.
   target_support_pool: $bold(g)_e^"tgt"$,
-  // Support descriptor pooled over candidate i's viewing frustum.
+  // Canonical frustum support pool; VIN retains an unused compatibility alias.
   frustum_support_pool: $bold(g)_(t,i)^"fr"$,
-  // Support descriptor pooled over the target-frustum intersection.
+  // Canonical target-frustum pool; VIN retains an unused compatibility alias.
   target_frustum_pool: $bold(g)_(t,e,i)^"cap"$,
-  // Candidate-conditioned ray-query feature vector.
+  // Canonical candidate ray query; VIN retains an unused compatibility alias.
   ray_query_ti: $bold(g)_(t,i)^"ray"$,
-  // Named operator for querying render-derived candidate evidence.
+  // Canonical render-query operator; VIN retains an unused compatibility alias.
   render_query: $op("RenderQuery")$,
 )
