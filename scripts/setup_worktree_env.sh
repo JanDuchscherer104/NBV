@@ -3,7 +3,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-shared_root="${ARIA_NBV_SHARED_ROOT:-$(git -C "$repo_root" worktree list --porcelain | awk '/^worktree / { print substr($0, 10); exit }')}"
+repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)"
+shared_root="${ARIA_NBV_SHARED_ROOT:-$(git --git-dir="$repo_git_dir" worktree list --porcelain | awk '/^worktree / { print substr($0, 10); exit }')}"
 check_only=false
 
 usage() {
@@ -35,6 +36,10 @@ fail() {
 realpath_portable() {
   "$shared_python" -c \
     'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+git_in_worktree() {
+  git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
@@ -105,7 +110,7 @@ link_or_check "$shared_graphify_semantic_cache" "graphify-out/cache/semantic"
 link_or_check "$shared_graphify_semantic_deep_cache" "graphify-out/cache/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
-  git submodule update --init --recursive
+  git_in_worktree submodule update --init --recursive
   if [[ ! -e .env ]]; then
     ln -s .env.example .env
   fi
@@ -113,7 +118,7 @@ else
   [[ -e .env ]] || fail ".env is missing; run scripts/setup_worktree_env.sh before checking"
 fi
 
-if git submodule status --recursive | awk '/^[-+U]/ { exit 1 }'; then
+if git_in_worktree submodule status --recursive | awk '/^[-+U]/ { exit 1 }'; then
   printf 'ARIA-NBV worktree environment is ready. Source .env from %s.\n' "$repo_root"
 else
   fail "one or more submodules are not at the recorded commit"

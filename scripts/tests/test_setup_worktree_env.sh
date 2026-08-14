@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/aria-worktree-env.XXXXXX")"
 trap 'rm -rf "${SANDBOX}"' EXIT
 
@@ -61,6 +61,10 @@ chmod +x "${FAKE_BIN}/mamba"
 
 git -C "${WORKTREE_ROOT}" init -q
 git -C "${SECOND_WORKTREE_ROOT}" init -q
+git -C "${WORKTREE_ROOT}" config core.worktree "${SANDBOX}/stale-worktree"
+git -C "${SECOND_WORKTREE_ROOT}" config core.worktree "${SANDBOX}/stale-second-worktree"
+[[ "$(git -C "${WORKTREE_ROOT}" rev-parse --is-inside-work-tree)" == false ]]
+[[ "$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --is-inside-work-tree)" == false ]]
 
 if ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" \
   PATH="${FAKE_BIN}:${PATH}" \
