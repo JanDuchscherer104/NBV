@@ -280,7 +280,8 @@ def validate_theory_topology(rows: Iterable[dict[str, Any]], root: Path) -> list
             continue
         try:
             text = candidate.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as exc:
+            errors.append(ValidationError(path, f"theory page is not valid UTF-8: {exc}"))
             continue
         frontmatter = text.split("\n---\n", 1)[0] if text.startswith("---\n") else ""
         for key, expected in (("phase", "archive"), ("status", "deprecated"), ("owner", "docs")):
@@ -368,9 +369,12 @@ def validate_repository_sinks(root: Path, refs: Iterable[dict[str, Any]]) -> lis
         candidate = root / path
         if not candidate.is_file() or bounded:
             continue
+        if candidate.suffix.lower() in {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".zip", ".gz", ".bin"}:
+            continue
         try:
             text = candidate.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as exc:
+            errors.append(ValidationError(path, f"provenance candidate is not valid UTF-8: {exc}"))
             continue
         texts.append((path, text))
         if re.search(r"(?im)(?:promotion[_ ]target|canonical(?:[_ ]destination)?|canonical_updates_needed)\s*[:=].*(?:roadmap\.qmd|questions\.qmd|m1_contract_report\.qmd|PROJECT_STATE\.md|DECISIONS\.md|GOTCHAS\.md|OPEN_QUESTIONS\.md)", text):
