@@ -87,6 +87,12 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
 
     Encapsulates the radii/angle sampling envelope, orientation jitter options, collision and free-space
     filtering, and logging/debug controls used by `CandidateViewGenerator`.
+
+    The config is a Pydantic boundary: ``device`` and ``verbosity`` are coerced
+    through the shared config helpers, ``view_kappa`` and per-axis view caps
+    inherit their positional defaults when omitted, and ``is_debug`` promotes
+    verbosity to ``VERBOSE``. Candidate poses remain physical world/camera
+    geometry in metres; display-only CW90 rotations belong to plotting callers.
     """
 
     @property
@@ -229,7 +235,13 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
 
     @model_validator(mode="after")
     def set_debug(self) -> CandidateViewGeneratorConfig:
-        """Resolve debug verbosity and inherited view-jitter defaults."""
+        """Resolve debug verbosity and inherited view-jitter defaults.
+
+        ``None`` on the view-specific fields means "inherit the positional
+        sampler setting"; it is not a request to disable view jitter. This
+        normalization happens once during model construction so generator
+        code can consume concrete values without branch-dependent defaults.
+        """
         if self.is_debug:
             object.__setattr__(self, "verbosity", Verbosity.VERBOSE)
         if self.view_kappa is None:
