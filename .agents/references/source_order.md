@@ -20,15 +20,17 @@ Use this reference when a task needs current project truth or sources disagree.
   describe the older implemented substrate and past seminar writeup. Use them
   for historical evidence, not for current thesis priority.
 - Implementation behavior: `aria_nbv/aria_nbv/`, `aria_nbv/tests/`, and the
-  active configuration files own executable package behavior. Optional memory
-  or graph retrieval never substitutes for opening these exact sources.
+  active configuration files own executable package behavior. Mandatory
+  Graphify navigation and optional memory retrieval never substitute for
+  opening these exact sources.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
 - Accepted scaffold-rework target state:
   `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` owns the
   scoped scaffold requirements and planning bounds, including the explicit
-  2026-08-01 Graphify option-3 supersession. It does not replace the exact code,
-  test, configuration, thesis, or human-preference owners above.
+  2026-08-01 upstream-only boundary and 2026-08-14 mandatory Graphify
+  supersession. It does not replace the exact code, test, configuration,
+  thesis, or human-preference owners above.
 - Generated routing artifacts: `docs/_generated/context/source_index.md`,
   `literature_index.md`, and `data_contracts.md`; refresh with `make context`
   when stale.
@@ -46,8 +48,10 @@ Use this reference when a task needs current project truth or sources disagree.
   Semantic-drift warnings from `make scaffold-audit` are source-order review
   prompts: move durable truth to the owner above, or justify the text as a
   compact routing/evidence cue.
-- Optional tools and adapters provide evidence, not truth. Tool-specific
-  operating details remain with the retained tool owner.
+- Graphify is mandatory navigation in Codex worktrees but remains derived
+  evidence, not truth; its executable route and degradation contract belong to
+  `aria-nbv-context`. Other optional tools and adapters provide evidence, not
+  truth. Tool-specific operating details remain with the retained tool owner.
   - External research and automation propose source-linked changes; ordinary
     repository lanes review and apply durable mutations.
   - Prefer bounded typed interfaces over exposing unrestricted shell access to

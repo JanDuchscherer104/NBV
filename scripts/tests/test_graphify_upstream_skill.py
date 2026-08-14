@@ -9,6 +9,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+ROOT_GUIDANCE = ROOT / "AGENTS.md"
+TARGET_STATE = (
+    ROOT / ".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md"
+)
 SKILL_ROOT = ROOT / ".agents/skills/graphify"
 CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
 ARIA_BOUNDARY = (
@@ -61,6 +65,25 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertIn("Graphify 0.9.31 writes `graphify-out/needs_update`", boundary)
         self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
         self.assertIn("leave it after partial, failed, or unverified work", boundary)
+
+    def test_mandatory_worktree_route_stays_outside_upstream_bundle(self) -> None:
+        root_guidance = ROOT_GUIDANCE.read_text(encoding="utf-8")
+        context = CONTEXT_SKILL.read_text(encoding="utf-8")
+        boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
+        target_state = TARGET_STATE.read_text(encoding="utf-8")
+
+        self.assertIn("## Graphify", root_guidance)
+        self.assertIn("scripts/setup_worktree_env.sh", root_guidance)
+        self.assertIn("scripts/check_graphify_freshness.py --json", root_guidance)
+        self.assertIn("Accepted 2026-08-14 Mandatory Graphify Supersession", target_state)
+        for state in ("fresh", "usable-stale", "unusable"):
+            with self.subTest(state=state):
+                self.assertIn(f"`{state}`", root_guidance)
+                self.assertIn(f"`{state}`", context)
+                self.assertIn(f"`{state}`", boundary)
+        self.assertIn("query it before direct search", context)
+        self.assertIn("use direct sources only", boundary)
+        self.assertIn("Graphify never owns the located fact", boundary)
 
 
 if __name__ == "__main__":

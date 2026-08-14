@@ -111,6 +111,42 @@ those namespaces so any agent can reuse them when Graphify is available. No
 graph, projection, manifest, AST state, or semantic run state is shared, and
 cache presence never establishes freshness or gates exact-source work.
 
+## Accepted 2026-08-14 Mandatory Graphify Supersession
+
+The human owner now requires Graphify as a navigation prerequisite in every
+Codex worktree. This later decision supersedes only the optional-availability
+and optional-routing clauses in the 2026-08-01 Graphify decisions, `Optional
+Tools And External Capabilities`, `Graphify Contract`, and the corresponding
+absence/fallback scenarios below. Their upstream-first boundary, bounded corpus,
+projection capability limits, and non-authoritative source-order rules remain
+accepted.
+
+Every Codex worktree initializes its worktree-local Graphify artifacts through
+`scripts/setup_worktree_env.sh`. Before an eligible codebase architecture,
+relationship, ownership, or project-content question, the agent runs
+`scripts/check_graphify_freshness.py --json`. The public result has exactly
+three states:
+
+- `fresh`: query the byte-identical upstream Graphify skill first;
+- `usable-stale`: query Graphify first, then directly verify every consequential
+  path in the exact bounded `stale_sources` list; and
+- `unusable`: repair or reinitialize the bootstrap before eligible work. If the
+  artifacts remain unusable, report that state and use direct sources only.
+
+`usable-stale` is limited to an ancestor snapshot with valid provenance, an
+ARIA projection node, intact required artifacts, and an exact bounded stale
+source list. Every other incomplete, corrupt, wrong-root, non-ancestor, or
+unscoped state is `unusable`.
+
+Graphify chooses navigation context; it never settles behavior, scientific
+claims, or ownership. Agents open the exact repository sources located through
+the graph before making consequential claims or edits. Direct-source-only
+routing is the explicit degraded path for a broken bootstrap or `unusable`
+artifacts, not an alternative to querying a usable graph first. Graphify setup,
+freshness classification, and hosted contract validation are repository
+requirements; mutable graphs and semantic extraction remain worktree-local
+rather than authoritative shared state.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
