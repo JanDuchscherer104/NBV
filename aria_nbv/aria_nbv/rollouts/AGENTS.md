@@ -11,6 +11,12 @@ summary: Replay, rollout-Zarr/Q store, and finite-candidate rollout boundaries.
 Generation belongs to `aria_nbv.oracle.pipelines`; finite candidate sampling and
 provenance stay in `aria_nbv.pose_generation`.
 
+`aria_nbv.targets.protocol` owns actor-safe target instructions, while
+`aria_nbv.oracle.target_selection` owns privileged Oracle selection. Generation
+consumes `data_handling.vin_store.dataset.VinOfflineSample` roots;
+`data_handling.vin_store.batch.VinOracleBatch` remains the one-step VIN training
+DTO.
+
 ## Local Hazards
 
 - Replay data is standalone and source-row linked: do not mutate the immutable

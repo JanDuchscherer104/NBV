@@ -62,6 +62,11 @@ G008 passed agents-DB validation/listing, agent-memory validation, twelve G002
 governance tests, forty-two projection tests, scaffold audit/self-test, upstream
 skill identity, Ruff, Python compilation, and whitespace validation.
 
+The final review follow-up restored compact, routed review, Python, testing,
+upstream-reuse, EFM-key, and rollout DTO/target boundaries. It removed the
+unconsumed Quarto agent-doc generator and added a focused governance regression
+that prevents those routes from becoming circular or disappearing again.
+
 Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, `15a5c134`,
 `e98e3027`, `2c902989`, and `a30d64c4` were created during the completed
 workpackages. No push or other external publication was performed. Existing

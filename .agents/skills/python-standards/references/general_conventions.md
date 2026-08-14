@@ -1,10 +1,12 @@
 # Python Conventions
 
-This file is the long-form reference for non-docstring Python typing, runtime,
-and config conventions in `aria_nbv/`. Binding short-form rules live in
-`aria_nbv/AGENTS.md`. Python docstring rules, including field docs, tensor
-shape rendering, equations, examples, references, and Quartodoc behavior, live
-in the `python-standards` skill entrypoint and its focused references.
+This file owns the generic non-docstring Python typing, runtime, config, and
+upstream-reuse conventions for `aria_nbv/`. Python docstring rules, including
+field docs, tensor-shape rendering, equations, examples, references, and
+Quartodoc behavior, live in the `python-standards` skill entrypoint and its
+focused references. Executable formatter/linter configuration lives in
+`aria_nbv/pyproject.toml`; nearest source and tests own behavior and local API
+detail.
 
 ## Core Rules
 - Config classes should inherit from `BaseConfig` where appropriate.
