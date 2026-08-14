@@ -185,7 +185,7 @@
       "link_action": "keep setup/commands role-disjoint",
       "id": "retired-010-roadmap-verification",
       "source_blob_id": "96be4e83fdf77ba08d76b9cc4e12928c5c44ae94",
-      "destination_locator": "verification"
+      "destination_locator": "heading: Verification"
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
@@ -446,7 +446,7 @@
       "link_action": "keep role-disjoint commands",
       "id": "retired-029-m1-command-ledger",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "commands-and-evidence"
+      "destination_locator": "heading: Commands and evidence"
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
@@ -529,7 +529,7 @@
       "link_action": "retain only unique guidance",
       "id": "retired-035-workflow",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "role-split"
+      "destination_locator": "heading: Role Split"
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
@@ -563,12 +563,12 @@
       "lines": "321-321",
       "subject": "CI/pre-commit policy",
       "disposition": "unresolved",
-      "canonical_destination": ".github/workflows/ci.yml#ci-workflow",
+      "canonical_destination": ".github/workflows/ci.yml",
       "destination_verified": true,
       "link_action": "verify existing owner before deletion",
       "id": "retired-038-ci",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "ci-workflow"
+      "destination_locator": "workflow:name=Root Verification; jobs.ci"
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
@@ -576,12 +576,12 @@
       "lines": "12-18",
       "subject": "environment/tooling gotchas",
       "disposition": "unresolved",
-      "canonical_destination": "SETUP.md#offline-store-and-vin-diagnostics",
+      "canonical_destination": "SETUP.md#5-offline-store-and-vin-diagnostics",
       "destination_verified": true,
       "link_action": "keep setup guidance only",
       "id": "retired-039-environment",
       "source_blob_id": "ce680d4634ca5d3cc52ecdf572c6737d6ce9eb95",
-      "destination_locator": "offline-store-and-vin-diagnostics"
+      "destination_locator": "heading: 5. Offline store and VIN diagnostics"
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
