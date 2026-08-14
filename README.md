@@ -33,9 +33,10 @@ The public documentation is published at
 - [Literature index](docs/contents/literature/index.qmd): thesis-oriented
   adoption map for NBV, ARIA/EFM3D, rollout/value learning, 3DGS, and semantic
   scene references.
-- [Finite-candidate rollout and `Q_H` contract](docs/contents/theory/rl_planning.qmd),
-  [candidate sampling and target selection](docs/contents/theory/candidate_sampling_target_selection.qmd),
-  and [RRI theory](docs/contents/theory/rri_theory.qmd): current theory owners.
+- [Theory reading guides](docs/_quarto.yml): literature background and
+  navigation only. The [Typst thesis](docs/typst/thesis/main.typ) owns
+  scientific theory; Python docstrings, configuration, and tests own
+  executable contracts.
 - [Thesis Typst source](docs/typst/thesis/main.typ): active master's-thesis
   seed and compile entry point.
 - [Advisor meeting 2026-05-22](docs/typst/thesis/advisor_meeting_2026_05_22.typ):

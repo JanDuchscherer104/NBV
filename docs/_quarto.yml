@@ -133,14 +133,22 @@ website:
             - contents/archive/index.qmd
         - section: Theory
           contents:
-            - contents/theory/nbv_background.qmd
-            - contents/theory/rri_theory.qmd
-            - contents/theory/rl_planning.qmd
-            - contents/theory/candidate_sampling_target_selection.qmd
-            - contents/theory/candidate_view_dependence.qmd
-            - contents/theory/efm3d_scene_embeddings.qmd
-            - contents/theory/surface_metrics.qmd
-            - contents/theory/semi-dense-pc.qmd
+            - text: "NBV background (reading guide)"
+              href: contents/theory/nbv_background.qmd
+            - text: "RRI background and navigation"
+              href: contents/theory/rri_theory.qmd
+            - text: "Finite-candidate rollouts (reading guide)"
+              href: contents/theory/rl_planning.qmd
+            - text: "Candidate sampling (reading guide)"
+              href: contents/theory/candidate_sampling_target_selection.qmd
+            - text: "Candidate-view dependence (background)"
+              href: contents/theory/candidate_view_dependence.qmd
+            - text: "EFM3D embeddings (background)"
+              href: contents/theory/efm3d_scene_embeddings.qmd
+            - text: "Surface metrics (background)"
+              href: contents/theory/surface_metrics.qmd
+            - text: "Semi-dense points (background)"
+              href: contents/theory/semi-dense-pc.qmd
         - section: "Architecture Diagrams"
           contents:
             - contents/diagrams.qmd
