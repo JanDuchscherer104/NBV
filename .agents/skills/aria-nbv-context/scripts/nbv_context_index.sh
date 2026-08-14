@@ -61,7 +61,6 @@ lit_bib_count="$(count_files '*.bib' "${lit_root}")"
 lit_family_count="$(count_immediate_dirs "${lit_root}/tex-src")"
 py_count="$(count_files '*.py' "${ROOT_DIR}/aria_nbv/aria_nbv")"
 ref_count="$(count_files '*.md' "${ROOT_DIR}/.agents/references")"
-memory_state_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/state")"
 memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")"
 
 {
@@ -72,7 +71,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo
   echo "## Retrieval ladder"
   echo "1. Source order and conflict rule: .agents/references/source_order.md"
-  echo "2. Current thesis direction: docs/contents/thesis/{roadmap,questions}.qmd plus .agents/memory/state/{PROJECT_STATE,DECISIONS,OPEN_QUESTIONS,GOTCHAS}.md"
+  echo "2. Current thesis direction: docs/typst/thesis/main.typ plus development/roadmap.typ and sections/01-research-questions.typ"
   echo "3. Active thesis prose and hierarchy: docs/typst/thesis/main.typ plus recursive includes"
   echo "4. Shared scientific language: docs/typst/shared/{glossary,symbols,equations}.typ plus docs/notation.yml"
   echo "5. Seminar evidence: docs/typst/seminar_paper/main.typ for historical implemented evidence only"
@@ -83,8 +82,8 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo
   echo "## Core owner map"
   echo "- .agents/references/source_order.md"
-  echo "- docs/contents/thesis/roadmap.qmd"
-  echo "- docs/contents/thesis/questions.qmd"
+  echo "- docs/typst/thesis/development/roadmap.typ"
+  echo "- docs/typst/thesis/sections/01-research-questions.typ"
   echo "- docs/typst/shared/glossary.typ"
   echo "- docs/typst/shared/symbols.typ"
   echo "- docs/typst/shared/equations.typ"
@@ -93,10 +92,6 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- docs/typst/thesis/main.typ  # active thesis"
   echo "- docs/typst/seminar_paper/main.typ  # only for seminar evidence"
   echo "- docs/contents/ideas.qmd  # read-only archive/scratch"
-  echo "- .agents/memory/state/PROJECT_STATE.md"
-  echo "- .agents/memory/state/DECISIONS.md"
-  echo "- .agents/memory/state/OPEN_QUESTIONS.md"
-  echo "- .agents/memory/state/GOTCHAS.md"
   echo
   echo "## Lightweight refresh"
   echo "- \`make context\` refreshes \`source_index.md\`, \`literature_index.md\`, and \`data_contracts.md\`."
@@ -106,7 +101,6 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "## Source families"
   echo "| Family | Count | Use when | First reveal |"
   echo "|---|---:|---|---|"
-  echo "| Canonical state | ${memory_state_count} docs | You need current truth, conventions, or decisions | Open the relevant doc in \`.agents/memory/state/\` |"
   echo "| Agent history | ${memory_history_count} docs | The task is historical, comparative, or evidence-driven | \`rg -n \"<term>\" .agents/memory/history\` |"
   echo "| Agent references | ${ref_count} docs | You need authority, human-preference, or external-doc routing | Open the smallest named reference |"
   echo "| Quarto docs | ${qmd_count} files | You need implementation narrative, roadmap, or explainer docs | \`scripts/nbv_qmd_outline.sh --compact\` |"
@@ -121,7 +115,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "| Topic | Primary paths | Use when |"
   echo "|---|---|---|"
   echo "| Project hub | \`docs/index.qmd\` | You need the docs landing page or high-level navigation. |"
-  echo "| Current thesis | \`docs/contents/thesis/roadmap.qmd\`, \`docs/contents/thesis/questions.qmd\`, \`.agents/memory/state/\` | You need current milestones, direction, or open research questions. |"
+  echo "| Current thesis | \`docs/typst/thesis/main.typ\`, \`docs/typst/thesis/development/roadmap.typ\`, \`docs/typst/thesis/sections/01-research-questions.typ\` | You need current milestones, direction, or research questions. |"
   echo "| Active thesis prose | \`docs/typst/thesis/main.typ\` and its includes | You need current thesis wording, hierarchy, or claim placement. |"
   echo "| Shared scientific language | \`docs/typst/shared/glossary.typ\`, \`symbols.typ\`, \`equations.typ\`, \`docs/notation.yml\` | You need a durable term, symbol, equation, or printed notation entry. |"
   echo "| Setup and resources | \`docs/contents/setup.qmd\`, \`resources.qmd\` | You need environment/bootstrap help or external resource links. |"
@@ -154,7 +148,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- Heavy artifacts: \`context_snapshot.md\`, \`aria_nbv_uml.mmd\`, \`aria_nbv_filtered_uml.mmd\`, \`aria_nbv_class_docstrings.md\`, \`aria_nbv_tree.md\`."
   echo
   echo "## Search recipes (rg)"
-  echo 'rg -n "<term>" .agents/memory/state'
+  echo 'rg -n "<term>" docs/typst/thesis aria_nbv/aria_nbv .agents/skills'
   echo 'rg -n "<term>" .agents/memory/history'
   echo 'rg -n "<term>" .agents/references'
   echo 'rg -n "<term>" docs/**/*.qmd'

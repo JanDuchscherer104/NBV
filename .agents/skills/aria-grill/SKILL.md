@@ -33,15 +33,15 @@ metadata:
     - "literature-grounded plan"
   must_read:
     - ".agents/references/source_order.md"
-    - "docs/contents/thesis/roadmap.qmd"
-    - "docs/contents/thesis/questions.qmd"
-    - ".agents/memory/state/PROJECT_STATE.md"
+    - "docs/typst/thesis/main.typ"
+    - "docs/typst/thesis/development/roadmap.typ"
+    - "docs/typst/thesis/sections/01-research-questions.typ"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
   canonical_sources:
     - ".agents/references/source_order.md#role-split"
-    - "docs/contents/thesis/roadmap.qmd"
-    - "docs/contents/thesis/questions.qmd"
-    - ".agents/memory/state/PROJECT_STATE.md"
+    - "docs/typst/thesis/main.typ"
+    - "docs/typst/thesis/development/roadmap.typ"
+    - "docs/typst/thesis/sections/01-research-questions.typ"
     - ".agents/skills/aria-grill/references/plan-mode-theory-patterns.md"
   context7_refs:
     - "/pytorch/pytorch"
@@ -137,9 +137,9 @@ Keep the default path concise unless one of these modifiers applies.
   scenarios: one normal case, one boundary case, and one failure case.
 - Cross-check claims against code, paper, memory state, and roadmap before
   accepting them.
-- Resolved terminology updates `docs/typst/shared/glossary.typ` or
-  `.agents/memory/state/DECISIONS.md`. Do not add a parallel root context file
-  or ADR tree as a second source of truth.
+- Resolved terminology updates `docs/typst/shared/glossary.typ` or the
+  smallest applicable source-order owner. Do not add a parallel root context
+  file or ADR tree as a second source of truth.
 - Distinguish `current`, `planned`, `scratch`, and `archive` docs.
 - Capture durable outcomes through the root `AGENTS.md` Instruction Capture
   lanes.

@@ -1,9 +1,11 @@
 # Agent Memory
 
-This directory replaces the old flat `.codex/*.md` note bucket.
+This directory stores episodic evidence and migration indexes. Current truth
+lives with the smallest source-order owner: active Typst, Python/configuration,
+tests, setup, or agent guidance. The agents DB stores actionable follow-up
+metadata; it is not a narrative owner.
 
 ## Layout
-- `state/`: canonical current truth that should stay small and current
 - `history/YYYY/MM/`: dated task debriefs and imported episodic notes
 - `index/`: migration manifests and machine-oriented indexes
 
@@ -15,10 +17,12 @@ This directory replaces the old flat `.codex/*.md` note bucket.
 
 ## Current Policy
 - Non-trivial tasks should leave a debrief in `history/YYYY/MM/`.
-- If a task changes current truth, update one or more files in `state/`.
+- If a task changes current truth, update its exact canonical owner selected by
+  `.agents/references/source_order.md`.
 - Architect and critic review outputs remain session-local. Capture only their
-  accepted durable decisions in `state/`, actionable work in the agents DB, and
-  a bounded task summary in `history/`.
+  accepted durable decisions in the relevant Typst, code/config/test, setup, or
+  guidance owner; put actionable work in the agents DB and a bounded task
+  summary in `history/`.
 - If a task does not change current truth, say so explicitly in the debrief instead of silently relying on chat history.
 
 ## Debrief Contract
@@ -60,8 +64,8 @@ status: done
 topics: [scaffold, codex, memory]
 confidence: high
 canonical_updates_needed:
-  - .agents/memory/state/DECISIONS.md
-  - .agents/memory/state/PROJECT_STATE.md
+  - docs/typst/thesis/development/roadmap.typ
+  - aria_nbv/aria_nbv/<owner>.py
 ---
 ```
 
