@@ -23,8 +23,9 @@ tests, configuration, and Typst own behavior and scientific claims.
   the user explicitly chooses another route.
 - Reviews report severity-ranked, line-referenced findings. Publish actionable
   P0-P2 PR findings as resolvable GitHub review threads and resolve them only
-  after exact-head evidence; report local-only reviews locally. Failure-first
-  diagnosis is the
+  after exact-head evidence; report local-only reviews locally. Architect and
+  critic review outputs stay session-local; persist only accepted decisions in
+  their canonical owner. Failure-first diagnosis is the
   repository-wide invariant for bugs, regressions, suspicious metrics, and
   failing checks; `agent-behavior` owns the repeatable procedure, while the
   nearest semantic guide owns behavior. Reproduce the smallest failure, inspect

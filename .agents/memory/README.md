@@ -16,9 +16,9 @@ This directory replaces the old flat `.codex/*.md` note bucket.
 ## Current Policy
 - Non-trivial tasks should leave a debrief in `history/YYYY/MM/`.
 - If a task changes current truth, update one or more files in `state/`.
-- Extracted proposal, transcript, or review requirements belong in `state/` only
-  when they change durable truth, in the agents DB when they are actionable, and
-  in `history/` when they are task debriefs.
+- Architect and critic review outputs remain session-local. Capture only their
+  accepted durable decisions in `state/`, actionable work in the agents DB, and
+  a bounded task summary in `history/`.
 - If a task does not change current truth, say so explicitly in the debrief instead of silently relying on chat history.
 
 ## Debrief Contract
