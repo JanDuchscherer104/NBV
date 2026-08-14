@@ -35,16 +35,17 @@ verification, and link action. Current disposition counts remain:
 | removed | 4 |
 | total | 47 |
 
-`destination_verified` is intentionally false for planned Typst/Python/setup
-owners; every row now carries a destination locator. No row is eligible for deletion-gate closure until its exact owner
-path and section/symbol exist and focused verification passes. Deferred action
+All 47 ledger rows now point to an exact single owner path/anchor or defining
+symbol/test, and `destination_verified` is true for each row. This confirms
+owner materialization only; 33 rows remain `unresolved` because their source
+blocks still require the later deletion/consumer migration gate. Deferred action
 never substitutes for migration; it records a pointer plus a pending backlog
 gate.
 
-G003 materialized and verified 29 destination pointers (including the two
-deferred promotion-queue rows) against the active Typst owner graph; unresolved
-rows remain intentionally open where the destination is code/setup-owned or
-requires a later evidence gate.
+G004 narrowed the implementation and routing receipts to exact Python, test,
+Typst, setup, source-order, and CI owners. The ledger now records 47 verified
+destination pointers against the active owner graph; unresolved dispositions
+remain intentionally open until the deletion and live-consumer gates pass.
 
 The three former DB-shaped destinations are now non-DB canonical owners:
 `retired-008-roadmap-risks` -> `development/roadmap.typ#risks`,
