@@ -21,6 +21,7 @@ CORE = (
 )
 ROOT = Path("graphify-out/.graphify_root")
 SENTINEL = Path("graphify-out/.aria-worktree-seed.json")
+CACHE = Path("graphify-out/cache")
 GRAPHIFY_DISTRIBUTION = "graphifyy"
 PINNED_GRAPHIFY_VERSION = "0.9.31"
 
@@ -218,7 +219,11 @@ def validate_owned(destination: Path, common: Path) -> None:
     for path in files:
         validate_parent_chain(destination, path, "destination", require_existing=True)
         regular(destination / path, "seeded artifact")
-    if (destination / ROOT).read_text(encoding="utf-8") != f"{destination}\n":
+    try:
+        root_marker = (destination / ROOT).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        fail(f"invalid child .graphify_root: {error}")
+    if root_marker not in {str(destination), f"{destination}\n"}:
         fail("child .graphify_root is not bound to this worktree")
     validate_graph(destination)
     manifest_markdown(destination)
@@ -285,22 +290,52 @@ def seed(
         shutil.rmtree(staged, ignore_errors=True)
 
 
+def prepare_cache(destination: Path, *, check: bool) -> None:
+    """Prepare only the local parent directory for shared semantic cache leaves."""
+    destination = destination.resolve()
+    if not destination.is_dir():
+        fail("destination must be a directory")
+    guard = CACHE / "semantic"
+    if check:
+        validate_parent_chain(destination, guard, "destination", require_existing=True)
+        return
+    for directory in (Path("graphify-out"), CACHE):
+        validate_parent_chain(
+            destination,
+            directory / ".aria-cache-parent",
+            "destination",
+            require_existing=False,
+        )
+        path = destination / directory
+        if not path.exists():
+            path.mkdir()
+    validate_parent_chain(destination, guard, "destination", require_existing=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--source", type=Path)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--source-git-dir", type=Path)
     parser.add_argument("--destination-git-dir", type=Path)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--prepare-cache", action="store_true")
     args = parser.parse_args(argv)
     try:
-        seed(
-            args.source,
-            args.destination,
-            check=args.check,
-            source_git_dir=args.source_git_dir,
-            destination_git_dir=args.destination_git_dir,
-        )
+        if args.prepare_cache:
+            if args.source or args.source_git_dir or args.destination_git_dir:
+                parser.error("--prepare-cache accepts only --destination and --check")
+            prepare_cache(args.destination, check=args.check)
+        else:
+            if args.source is None:
+                parser.error("--source is required unless --prepare-cache is used")
+            seed(
+                args.source,
+                args.destination,
+                check=args.check,
+                source_git_dir=args.source_git_dir,
+                destination_git_dir=args.destination_git_dir,
+            )
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
