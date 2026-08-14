@@ -19,20 +19,16 @@ becoming an owner of migrated content.
   pages identify their canonical destination, inbound links, and citation
   disposition.
 - The expected Quarto page manifest is compared as an exact set.
-- Typst marker checks are executable once the marker implementation lands; the
-  current placeholder fixture may opt into `future_integration`.
+- Typst marker checks run through `make thesis-marker-contract`: development and
+  submission fixtures must compile, while invalid promotion fixtures and the
+  submission-mode TODO fixture must fail.
 
 The CLI has two modes: `--mode schema` validates shape, section coverage, and
 the merged-baseline receipt SHA/tree; `--mode deletion-ready` additionally
-reports each unresolved or unverified ledger/matrix row, live consumer
-references, and pending Python-docstring gates. The current frozen inventory
-passes schema mode and intentionally fails deletion-ready mode with structured
-blockers (including ledger readiness, materialized destination, matrix,
-consumer, coverage, and concrete transcript/debrief sink blockers). At the
-current G003 inventory snapshot this produced 140 errors; that number is
-observational evidence, not a fixed test invariant. Tests derive the required
-ledger blocker set from inventory rows so readiness changes remain visible
-without making stale counts authoritative.
+checks ledger/matrix readiness, live consumers, and pending owner gates. Both
+modes pass for the current frozen inventory. Tests derive required fields and
+readiness checks from inventory rows so future changes remain visible without
+making stale error counts authoritative.
 
 ## Current interface needed from inventory
 

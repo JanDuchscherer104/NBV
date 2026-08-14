@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci
+.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-marker-contract
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -722,7 +722,10 @@ thesis-pdf: ## Compile the DEVELOPMENT/DRAFT thesis PDF (submission is a separat
 thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
+thesis-marker-contract: _check_python ## Verify Typst development/submission marker fixtures
+	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_marker_contract.py
+
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-marker-contract ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

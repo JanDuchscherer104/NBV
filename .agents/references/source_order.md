@@ -24,7 +24,7 @@ Use this reference when a task needs current project truth or sources disagree.
   for historical evidence, not for current thesis priority.
 - Implementation behavior: `aria_nbv/aria_nbv/`, `aria_nbv/tests/`, and the
   active configuration files own executable package behavior. Mandatory
-  Graphify navigation and optional memory retrieval never substitute for
+  Graphify navigation and optional retrieval never substitute for
   opening these exact sources.
 - Development-only thesis owners: `docs/typst/thesis/development/roadmap.typ`,
   `docs/typst/thesis/development/m1-contract-report.typ`, and
@@ -73,20 +73,23 @@ Use this reference when a task needs current project truth or sources disagree.
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse
   thesis/code relationships, but they do not override the thesis, code,
-  bibliography, memory, or backlog owners above.
+  bibliography, guidance, or agents-DB owners above.
 
 ## Conflict Rule
 
-When current thesis docs or canonical memory conflict with the seminar paper,
-prefer the current source for direction and keep the seminar paper as historical
-implemented evidence. Do not promote planned work to implemented results.
+When active Typst thesis docs conflict with the seminar paper or dated history,
+prefer the active Typst source for direction and keep the other material as
+historical evidence. Resolve executable behavior through Python, tests, and
+active configuration; resolve routing through `AGENTS.md` and this source-order
+map. Do not promote planned work to implemented results.
 
 ## Capture Rule
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
 - Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- The retired duplicate memory-state layer is historical/context evidence only;
-  it is not a current-truth or replacement narrative owner.
+- Dated migration receipts and debrief history are evidence only; current truth
+  resolves to the active Typst, Python, configuration, test, and guidance
+  owners above.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
