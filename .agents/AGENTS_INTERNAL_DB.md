@@ -11,10 +11,11 @@ This file tracks the active engineering and research backlog for ARIA-NBV.
 
 ## Relation to Memory
 
-While `.agents/memory/state/` holds the **durable current truth**, this DB holds the **active maintenance debt**.
-Extracted proposal, transcript, or review requirements become agents-DB work
-when they are actionable. They should become canonical state only when they
-change current truth, and otherwise belong in dated memory debriefs.
+The agents DB holds **active maintenance debt**; it does not own current truth
+or replace a source document. Extracted proposal, transcript, or review
+requirements become agents-DB work when actionable. Accepted durable content
+goes to the exact Typst, Python/configuration/test, setup, or guidance owner;
+otherwise keep it in a dated memory debrief.
 
 Active issues and todos must carry compact prose context plus structured
 `references` pointers. Use `repo:` for internal files, `bib:` for papers in
