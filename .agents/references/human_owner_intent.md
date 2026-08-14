@@ -64,11 +64,13 @@ or repeatable workflows.
 
 - Keep `.agents/` as the canonical repository scaffold and keep the root
   dispatcher concise.
-- Keep OMX, the Graphify executable and graph artifacts, MemPalace, and similar
-  tools optional. Normal repository work and CI must still work from exact
-  source without them. Graphify's two content-addressed semantic cache
-  namespaces are nevertheless standard worktree prerequisites so every agent
-  can reuse extraction results whenever Graphify is available.
+- Require the Graphify executable and usable graph artifacts as navigation
+  prerequisites in every Codex worktree. Eligible codebase questions query a
+  usable graph first and still verify exact sources; a broken bootstrap or
+  unusable artifact permits an explicit direct-source-only degraded route.
+  OMX, MemPalace, and similar tools remain optional. Graphify's two
+  content-addressed semantic cache namespaces are shared worktree prerequisites;
+  mutable graph state stays local.
 - Use the official upstream Codex plugin for MemPalace and keep its reviewed
   corpus in user-local wings for the current thesis, curated literature reviews,
   primary-paper PDFs, remaining project documentation, native debriefs, and an
@@ -96,10 +98,10 @@ or repeatable workflows.
   skill under `.agents/skills/graphify/`, and one thin deterministic Markdown
   evidence projection for source-owned thesis links, both bibliography owners,
   the literature manifest, and local TeX/PDF asset identities. The upstream
-  skill stays byte-identical; `aria-nbv-context`, not the upstream bundle or
-  root `AGENTS.md`, owns the ARIA preflight. This file preserves the cross-task
-  preference; the specification owns the scoped decision and its bounded
-  corpus and capability limits. The projection is
+  skill stays byte-identical; root `AGENTS.md` gives the compact mandatory route
+  and `aria-nbv-context` owns its detailed ARIA preflight. This file preserves
+  the cross-task preference; the specification owns the scoped decision and its
+  bounded corpus and capability limits. The projection is
   ignored, reproducible, and derived; it must not grow into a parser framework,
   graph schema, query layer, lifecycle manager, or alternative source of truth.
 - The Graphify replacement branch carries the exact upstream skill and all other
@@ -111,12 +113,11 @@ or repeatable workflows.
   key, add repository or CI secrets, introduce a Graphify fork or skill overlay,
   repository-owned package import, hook/freshness lifecycle, or patch generated
   graph output.
-- The optional upstream Git hook is allowed only as a local incremental-code
-  accelerator and semantic-invalidation aid. It never becomes required routing,
-  CI, authentication, freshness authority, or lifecycle ownership; its success,
-  failure, or absence cannot make a graph current. `aria-nbv-context` owns the
-  ARIA-NBV operational preflight, while upstream Graphify owns its lifecycle
-  and root `AGENTS.md` remains a compact routing pointer.
+- The optional upstream Git hook is only a local incremental-code accelerator
+  and semantic-invalidation aid. Mandatory routing comes from worktree setup
+  plus the ARIA freshness preflight, not hook success. The hook remains neither
+  freshness authority nor lifecycle owner; `aria-nbv-context` owns the detailed
+  ARIA-NBV operational route while upstream Graphify owns its lifecycle.
 - Keep raw/full transcripts, runtime identifiers, machine paths, credentials,
   and private retrieval corpora untracked. At most one deterministic,
   pattern-sanitized, commit-scoped conversation slice may be tracked for a
@@ -170,8 +171,9 @@ These are intentionally unresolved and must not be presented as accepted
 policy:
 
 - Whether later evidence justifies changing the selected thin Graphify adapter
-  or retaining additional generated outputs; the current option-3 boundary is
-  accepted.
+  or retaining additional generated outputs; the upstream-first option-3
+  boundary remains accepted, with mandatory Codex-worktree routing superseding
+  its former optional status.
 - LitKG is retired; reintroduction requires a new evidence-backed decision.
 - Whether `aria-nbv-context` remains a thin router or owns a small amount of
   stable project orientation.

@@ -1,6 +1,6 @@
 ---
 name: aria-nbv-context
-description: Use to localize unknown ARIA-NBV owners through deterministic discovery or optional semantic recall of prior decisions, related work, and failed approaches before handoff.
+description: Use for mandatory Graphify-first ARIA-NBV codebase discovery, deterministic owner localization, or optional semantic recall before handoff.
 metadata:
   mode: router
   not_when:
@@ -64,28 +64,25 @@ metadata:
 
 ## Graphify branch
 
-For broad architecture, relationship, or project-content discovery, prefer an
-existing `graphify-out/graph.json` when its query interface is available,
-verified, and materially useful. Run `scripts/check_graphify_freshness.py
---json`; for any `usable: true` state, prefer the byte-identical upstream skill.
-Its provenance and `source_location` route exact-source checks; verify
-consequential `stale_sources` directly. If Graphify is unavailable, unverified,
-or not the narrowest useful route, use direct search; `missing` or `invalid`
-states bypass it entirely.
+Every Codex worktree initializes Graphify with
+`scripts/setup_worktree_env.sh`. For broad architecture, relationship,
+ownership, or project-content discovery, run
+`scripts/check_graphify_freshness.py --json` before retrieval. A `fresh` or
+`usable-stale` artifact is usable: invoke the byte-identical upstream skill and
+query it before direct search. Open the located exact sources before any
+consequential claim or edit, and verify every consequential `stale_sources`
+path for `usable-stale`.
 
-Freshness validates rather than globally gates reads. `make graphify-state-check`
-remains strict for scaffold and pre-push validation; `make graphify-usable-check`
-proves ordinary query safety. A Git HEAD mismatch alone is not staleness when the
-recorded graph and projection revisions are ancestors and indexed bytes still
-match. Refreshes first regenerate the deterministic projection with
-`scripts/build_graphify_projection.py`. Native semantic refreshes use
-`fork_turns="none"` and require every dispatched file to be accounted for.
+An `unusable` result requires bootstrap repair or reinitialization before the
+eligible query. If repair cannot establish a usable artifact, report the
+degradation and take the direct-source-only fallback. Never query corrupt,
+wrong-root, or otherwise unusable artifacts. The detailed state, provenance,
+projection, and worktree contract lives in
+[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
 
 Before any build or semantic refresh, read
 [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md),
-which owns ARIA's projection, upstream-only, coverage, marker, and linked-worktree
-rules. Leave incomplete or unreconciled graphs strict-gate stale, keep the last
-valid snapshot queryable, and verify affected sources directly.
+which owns ARIA's detailed freshness, projection, coverage, and worktree rules.
 
 ## MemPalace semantic-recall branch
 
@@ -108,9 +105,10 @@ implies supersession; ingestion-only dates stay unknown.
 ## Workflow
 
 1. Read `AGENTS.md` and `.agents/references/source_order.md`.
-2. Route implementation, test, configuration, or known-symbol questions
-   directly to `rg`, code-index, and the defining source; do not query
-   MemPalace for them.
+2. For eligible broad codebase discovery, follow the Graphify branch before
+   direct search. Route concrete failures and already-known implementation,
+   test, configuration, or symbol edits to their exact defining sources; do not
+   query MemPalace for them.
 3. For thesis-facing sections, terms, symbols, or equations, use the active thesis
    lane in `references/context_map.md`, its include graph, and the smallest shared
    owner among `glossary.typ`, `symbols.typ`, `equations.typ`, and `docs/notation.yml`;
@@ -118,9 +116,9 @@ implies supersession; ingestion-only dates stay unknown.
 4. When semantic recall is eligible, choose one reviewed wing and normally one
    room through the MemPalace branch above. Search `aria-codex-history` only for
    an explicit raw-history request.
-5. Prefer Graphify when its artifact is usable and its query interface is
-   available, verified, and materially useful; use `stale_sources` for scoped
-   verification. Otherwise continue with direct search without blocking.
+5. Query Graphify first for `fresh` or `usable-stale`; use `stale_sources` for
+   scoped verification. Repair `unusable` bootstrap state before falling back
+   explicitly to direct sources.
 6. Use `docs/_generated/context/source_index.md` only when it already exists or
    source-family routing is unclear; refresh with `make context` only as needed.
 7. Use source-specific outline tools before broad raw reads:

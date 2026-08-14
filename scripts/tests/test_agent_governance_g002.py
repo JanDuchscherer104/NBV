@@ -143,6 +143,71 @@ def test_mempalace_routing_scenarios() -> None:
     )
 
 
+def test_mandatory_graphify_routing_scenarios() -> None:
+    data = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
+    fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
+    expected = {
+        "graphify-codebase-navigation",
+        "graphify-usable-stale-navigation",
+        "graphify-unusable-bootstrap-repair",
+    }
+    assert expected <= fixtures.keys()
+    for fixture_id in expected:
+        fixture = fixtures[fixture_id]
+        assert _fixture_owner_paths_exist(ROOT, fixture)
+        assert fixture["required_outcomes"]
+        assert fixture["forbidden_outcomes"]
+
+    assert (
+        "worktree Graphify initialization and freshness classification precede eligible navigation"
+        in fixtures["graphify-codebase-navigation"]["required_outcomes"]
+    )
+    assert (
+        "fresh Graphify is queried before direct search"
+        in fixtures["graphify-codebase-navigation"]["required_outcomes"]
+    )
+    assert (
+        "consequential stale sources are verified exactly"
+        in fixtures["graphify-usable-stale-navigation"]["required_outcomes"]
+    )
+    assert (
+        "remaining unusable state is reported before direct-source-only fallback"
+        in fixtures["graphify-unusable-bootstrap-repair"]["required_outcomes"]
+    )
+    assert (
+        "direct-source-only fallback is treated as a usable-graph alternative"
+        in fixtures["graphify-unusable-bootstrap-repair"]["forbidden_outcomes"]
+    )
+
+
+def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
+    spec = _read(
+        ROOT
+        / ".omx"
+        / "specs"
+        / "deep-interview-aria-nbv-agent-scaffold-target-state.md"
+    )
+    amendment = "### Accepted 2026-08-01 Graphify remediation amendment"
+    supersession = "## Accepted 2026-08-14 Mandatory Graphify Supersession"
+    assert spec.index(amendment) < spec.index(supersession)
+    assert "Graphify as a navigation prerequisite in every\nCodex worktree" in spec
+    assert "Graphify chooses navigation context; it never settles behavior" in spec
+
+    root_guidance = _read(ROOT / "AGENTS.md")
+    assert "## Graphify" in root_guidance
+    assert "query the byte-identical\n  upstream Graphify skill first" in root_guidance
+    optional_tools = root_guidance.split("## Optional Tools And Capture", maxsplit=1)[1]
+    assert "Graphify" not in optional_tools
+
+    source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
+    intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
+    assert "Graphify is mandatory navigation in Codex worktrees" in source_order
+    assert "Require the Graphify executable and usable graph artifacts as navigation" in intent
+    assert "direct-source-only degraded route" in intent
+
+
 def test_route_only_domain_skill_contract() -> None:
     audit = _read(ROOT / "scripts" / "scaffold_audit.py")
     routing = json.loads(

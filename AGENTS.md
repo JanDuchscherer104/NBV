@@ -33,6 +33,17 @@ tests, configuration, and Typst own behavior and scientific claims.
   official-reference and Context7 route; package README files, code,
   configuration, and tests remain behavioral owners.
 
+## Graphify
+
+- Every Codex worktree initializes Graphify through
+  `scripts/setup_worktree_env.sh`. For eligible codebase architecture,
+  relationship, ownership, or project-content questions, run
+  `scripts/check_graphify_freshness.py --json`, query the byte-identical
+  upstream Graphify skill first for `fresh` or `usable-stale`, then verify
+  exact sources. Repair an `unusable` bootstrap before eligible work; if it
+  remains unusable, report the degradation and use exact sources only.
+  Graph output is derived navigation, never authority.
+
 ## Universal Safety
 
 - Do not use `git restore` or `git reset --hard` unless explicitly requested.
@@ -42,14 +53,11 @@ tests, configuration, and Typst own behavior and scientific claims.
 
 ## Optional Tools And Capture
 
-- External skills, OMX, MCP, Graphify, MemPalace, memory, and autoresearch are
-  optional evidence or orchestration, never ARIA truth owners or prerequisites
-  for normal work. Route durable changes through the source-order owner.
-- Use `aria-nbv-context` only when useful for semantic recall; if a tool is
-  absent or unverified, continue with direct repository search and exact sources.
-- Graphify eligibility, freshness, projection, and fallback belong to
-  `aria-nbv-context`; eligible queries use the byte-identical upstream Graphify
-  skill. Graph outputs remain derived navigation, never authority.
+- External skills, OMX, MCP, MemPalace, memory, and autoresearch provide
+  optional evidence or orchestration, never ARIA truth ownership. Route durable
+  changes through the source-order owner.
+- Use `aria-nbv-context` for semantic recall only when it materially improves
+  the task; unavailable optional retrieval falls back to exact sources.
 - The source-order capture rule selects the smallest owner. `agent-behavior`
   owns angle-bracket eligibility and the capture procedure. A read-only capture
   route still names each selected owner's verification; guidance, state, memory,
