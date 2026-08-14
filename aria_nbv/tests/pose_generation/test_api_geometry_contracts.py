@@ -13,8 +13,13 @@ from aria_nbv.rendering.candidate_depth_renderer import CandidateDepthRendererCo
 from aria_nbv.utils import Verbosity
 
 
-def test_candidate_config_resolves_inherited_view_defaults_and_debug() -> None:
-    """Omitted view settings inherit positional settings at config time."""
+def test_candidate_config_distinguishes_omitted_view_caps_from_explicit_none() -> None:
+    """Omitted caps keep field defaults while explicit None uses the fallback."""
+
+    omitted = CandidateViewGeneratorConfig(device="cpu")
+    assert omitted.view_kappa == omitted.kappa
+    assert omitted.view_max_azimuth_deg == 60.0
+    assert omitted.view_max_elevation_deg == 30.0
 
     config = CandidateViewGeneratorConfig(
         kappa=7.0,
@@ -26,7 +31,8 @@ def test_candidate_config_resolves_inherited_view_defaults_and_debug() -> None:
         device="cpu",
     )
 
-    assert config.view_kappa == 7.0
+    omitted_with_kappa = CandidateViewGeneratorConfig(kappa=7.0, device="cpu")
+    assert config.view_kappa == omitted_with_kappa.view_kappa == 7.0
     assert config.view_max_azimuth_deg == 12.0
     assert config.view_max_elevation_deg == 12.0
     assert config.verbosity is Verbosity.VERBOSE

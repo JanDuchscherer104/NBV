@@ -3,7 +3,9 @@
 Construction is a hard admission boundary: configured stages must be nonempty,
 share one :class:`~aria_nbv.rollouts.qh_reader.QhDataContract`, and have
 disjoint scene sets.  Once admitted, loaders preserve the dataset's padded
-candidate width and derive worker seeds from the Lightning base seed.
+candidate width, seed each DataLoader's torch generator from the configured
+module seed, and derive Python/NumPy worker seeds from each worker's
+``torch.initial_seed()``.
 """
 
 from __future__ import annotations
@@ -106,6 +108,7 @@ class QhDataModule(pl.LightningDataModule):
 
 
 def _seed_worker(_worker_id: int) -> None:
+    """Seed Python and NumPy from PyTorch's per-worker seed."""
     seed = torch.initial_seed() % (2**32)
     random.seed(seed)
     np.random.seed(seed)
