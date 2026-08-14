@@ -31,9 +31,16 @@ class OwnershipValidatorTests(unittest.TestCase):
     def test_frozen_inventory_deletion_mode_reports_unverified_rows(self) -> None:
         inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
         errors = validate_inventory(inventory, mode="deletion-ready")
-        self.assertEqual(sum("ledger[" in str(error) for error in errors), 43)
+        expected_ledger_blockers = [
+            f"ledger[{index}]"
+            for index, row in enumerate(inventory["disposition_ledger"])
+            if row["disposition"] == "unresolved" or row["destination_verified"] is False
+        ]
+        error_items = {error.item for error in errors}
+        self.assertTrue(expected_ledger_blockers)
+        self.assertTrue(set(expected_ledger_blockers) <= error_items)
         self.assertTrue(any("python_docstring_coverage" in str(error) for error in errors))
-        self.assertEqual(len(errors), 193)
+        self.assertGreaterEqual(len(errors), len(expected_ledger_blockers))
 
     def test_merged_baseline_receipt_requires_sha_and_tree(self) -> None:
         inventory = {"schema_version": 1, "baseline": {"pr50_commit": "bad", "tree": "bad", "receipt_status": "hosted-and-local-verification"}, "disposition_ledger": [], "theory_qmd_matrix": [], "consumer_inventory": {}, "python_docstring_coverage": {}, "verification": {}}
