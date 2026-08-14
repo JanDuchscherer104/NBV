@@ -96,5 +96,5 @@ or durable maintenance debt capture.
 
 - `make agents-db AGENTS_ARGS='validate'`
 - `make agents-db`
-- `make check-agent-memory` when canonical memory, skills, debriefs, or guidance
+- `make check-agent-memory` when skills, debriefs, guidance, or owner pointers
   changed

@@ -73,7 +73,7 @@ current owners.
 ## Theory & Background
 
 - **[NBV Background](contents/theory/nbv_background.qmd)**: Problem framing and prior work
-- **[RRI Theory](contents/theory/rri_theory.qmd)**: Mathematical formulation and properties of RRI
+- **[RRI Background and Navigation](contents/theory/rri_theory.qmd)**: External motivation and links to the canonical Typst formulation and Python/test owners
 - **[Surface Reconstruction Metrics](contents/theory/surface_metrics.qmd)**: Accuracy, completeness, Chamfer distance
 - **[Semi-Dense Point Clouds](contents/theory/semi-dense-pc.qmd)**: SLAM-based reconstruction signals
 
