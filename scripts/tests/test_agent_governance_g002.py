@@ -196,7 +196,9 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
         "mcp__MCP_DOCKER.get_library_docs",
     ]
     assert "supplied exact Context7 ID skips resolution" in fixture["required_outcomes"]
-    assert "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
+    assert (
+        "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
+    )
 
     context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
     registry = _read(
@@ -207,8 +209,13 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
         / "references"
         / "context7_library_ids.md"
     )
-    provenance = _read(ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md")
-    assert "supplied exact ID directly; otherwise resolve it, then get current docs" in context
+    provenance = _read(
+        ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md"
+    )
+    assert (
+        "supplied exact ID directly; otherwise resolve it, then get current docs"
+        in context
+    )
     assert "/graphify-labs/graphify" in registry
     assert "pinned skill/source" in registry
     assert "exact resolved" in provenance
@@ -237,8 +244,47 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
     assert "Graphify is mandatory navigation in Codex worktrees" in source_order
-    assert "Require the Graphify executable and usable graph artifacts as navigation" in intent
+    assert (
+        "Require the Graphify executable and usable graph artifacts as navigation"
+        in intent
+    )
     assert "direct-source-only degraded route" in intent
+
+
+def test_agents_db_loads_upstream_graphify_with_mandatory_aria_reconciliation() -> None:
+    internal_db = _read(ROOT / ".agents" / "AGENTS_INTERNAL_DB.md")
+    upstream = """## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query \"<question>\"` when graphify-out/graph.json exists. Use `graphify path \"<A>\" \"<B>\"` for relationships and `graphify explain \"<concept>\"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost)."""
+    assert upstream in internal_db
+    assert internal_db.count("## graphify") == 1
+    reconciliation = internal_db.split("### ARIA-NBV mandatory reconciliation", 1)[1]
+    assert "Graphify is mandatory navigation in Codex worktrees" in reconciliation
+    assert "exact repository\nsources remain authoritative" in reconciliation
+    assert "scripts/check_graphify_freshness.py --json" in reconciliation
+    assert "repair or reinitialize `unusable` artifacts" in reconciliation
+    assert "treating Graphify as optional" in reconciliation
+
+    active_projection_owners = (
+        ROOT / "scripts" / "build_graphify_projection.py",
+        ROOT / "scripts" / "tests" / "test_build_graphify_projection.py",
+        ROOT / "docs" / "literature" / "README.md",
+    )
+    for owner in active_projection_owners:
+        assert "optional Graphify" not in _read(owner)
+
+    root_guidance = _read(ROOT / "AGENTS.md")
+    assert "## Graphify" in root_guidance
+    assert "Graph output is derived navigation, never authority." in root_guidance
 
 
 def test_route_only_domain_skill_contract() -> None:

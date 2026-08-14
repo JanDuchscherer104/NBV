@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the optional, deterministic Markdown evidence projection for Graphify."""
+"""Build the deterministic Markdown evidence projection required by Graphify."""
 
 from __future__ import annotations
 
