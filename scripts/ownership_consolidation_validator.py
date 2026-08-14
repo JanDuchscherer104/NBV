@@ -135,7 +135,7 @@ def classify_reference(path: str, *, resolved: bool = False, receipt: bool = Fal
         return "dated-history"
     if normalized.startswith(".agents/archive/") or "/archive/" in normalized:
         return "archive-provenance"
-    if "/history/" in normalized or normalized.startswith(".agents/archive/"):
+    if "/history/" in normalized:
         return "dated-history"
     return "live-reference"
 
@@ -217,7 +217,8 @@ def validate_theory_matrix(rows: Iterable[dict[str, Any]], theory_paths: Iterabl
     actual = set(theory_paths)
     seen: set[str] = set()
     for row in rows:
-        path = str(row.get("path", "<missing-path>")); seen.add(path)
+        path = str(row.get("path", "<missing-path>"))
+        seen.add(path)
         if row.get("classification") not in THEORY_CLASSES:
             errors.append(ValidationError(path, "classification must be keep, thin, or delete"))
         if row.get("classification") != "delete" and not _nonempty(row.get("canonical_destination")):
@@ -233,7 +234,8 @@ def validate_expected_pages(manifest: dict[str, Any], actual_pages: Iterable[str
     expected = manifest.get("expected_pages")
     if not isinstance(expected, list) or not all(isinstance(p, str) for p in expected):
         return [ValidationError("manifest", "expected_pages must be a string list")]
-    actual = sorted(set(actual_pages)); wanted = sorted(set(expected))
+    actual = sorted(set(actual_pages))
+    wanted = sorted(set(expected))
     return [] if actual == wanted else [ValidationError("manifest", f"page mismatch: expected {wanted}, got {actual}")]
 
 
@@ -244,10 +246,13 @@ def validate_consumer_inventory(inventory: dict[str, Any]) -> list[ValidationErr
         return [ValidationError("consumer_inventory", "references must be a list")]
     for index, ref in enumerate(refs):
         if not isinstance(ref, dict):
-            errors.append(ValidationError(f"consumer[{index}]", "must be an object")); continue
+            errors.append(ValidationError(f"consumer[{index}]", "must be an object"))
+            continue
         for field in ("path", "locators", "classification", "consumer_type", "disposition", "replacement_owner"):
-            if field not in ref: errors.append(ValidationError(f"consumer[{index}]", f"missing field: {field}"))
-        if not isinstance(ref.get("locators"), list) or not ref.get("locators"): errors.append(ValidationError(f"consumer[{index}]", "locators must be non-empty"))
+            if field not in ref:
+                errors.append(ValidationError(f"consumer[{index}]", f"missing field: {field}"))
+        if not isinstance(ref.get("locators"), list) or not ref.get("locators"):
+            errors.append(ValidationError(f"consumer[{index}]", "locators must be non-empty"))
         if ref.get("classification") not in ALLOWED_REFERENCE_CLASSES | {"live-reference"}:
             errors.append(ValidationError(f"consumer[{index}]", "invalid classification"))
     counts = inventory.get("class_counts")
@@ -257,14 +262,14 @@ def validate_consumer_inventory(inventory: dict[str, Any]) -> list[ValidationErr
             observed[ref["classification"]] = observed.get(ref["classification"], 0) + 1
     if not isinstance(counts, dict) or counts != observed:
         errors.append(ValidationError("consumer_inventory", "class_counts do not match reference count"))
-    if inventory.get("reference_count") != len(refs): errors.append(ValidationError("consumer_inventory", "reference_count mismatch"))
+    if inventory.get("reference_count") != len(refs):
+        errors.append(ValidationError("consumer_inventory", "reference_count mismatch"))
     return errors
 
 
 def validate_source_blobs(rows: Iterable[dict[str, Any]], root: Path, *, receipt_commit: str | None = None) -> list[ValidationError]:
     """Ensure each source receipt still names the exact current Git blob."""
     errors: list[ValidationError] = []
-    import subprocess
     for row in rows:
         revisions = ["HEAD"]
         if receipt_commit:
@@ -329,9 +334,11 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
     for index, row in enumerate(ledger):
         item = f"ledger[{index}]"
         if not isinstance(row, dict):
-            errors.append(ValidationError(item, "must be an object")); continue
+            errors.append(ValidationError(item, "must be an object"))
+            continue
         missing = sorted(row_fields - row.keys())
-        if missing: errors.append(ValidationError(item, f"missing fields: {', '.join(missing)}"))
+        if missing:
+            errors.append(ValidationError(item, f"missing fields: {', '.join(missing)}"))
         if row.get("disposition") not in INVENTORY_DISPOSITIONS:
             errors.append(ValidationError(item, f"unknown disposition: {row.get('disposition')!r}"))
         if not isinstance(row.get("destination_verified"), bool):
@@ -342,14 +349,20 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
     errors.extend(validate_source_blobs(ledger, root, receipt_commit=data.get("source_receipt_commit")))
     matrix = data.get("theory_qmd_matrix", [])
     if not isinstance(matrix, list):
-        errors.append(ValidationError("theory_qmd_matrix", "must be a list")); matrix = []
+        errors.append(ValidationError("theory_qmd_matrix", "must be a list"))
+        matrix = []
     for index, row in enumerate(matrix):
         item = f"theory_qmd_matrix[{index}]"
-        if not isinstance(row, dict): errors.append(ValidationError(item, "must be an object")); continue
+        if not isinstance(row, dict):
+            errors.append(ValidationError(item, "must be an object"))
+            continue
         for field in ("path", "classification", "unique_role", "canonical_destination", "destination_verified", "inbound_links"):
-            if field not in row: errors.append(ValidationError(item, f"missing field: {field}"))
-        if row.get("classification") not in THEORY_CLASSES: errors.append(ValidationError(item, "invalid classification"))
-        if row.get("destination_verified") is False: blockers.append(ValidationError(item, "destination not verified"))
+            if field not in row:
+                errors.append(ValidationError(item, f"missing field: {field}"))
+        if row.get("classification") not in THEORY_CLASSES:
+            errors.append(ValidationError(item, "invalid classification"))
+        if row.get("destination_verified") is False:
+            blockers.append(ValidationError(item, "destination not verified"))
     errors.extend(validate_theory_matrix(matrix, [p.relative_to(root).as_posix() for p in (root / "docs/contents/theory").glob("*.qmd")]))
     manifest = data.get("expected_pages_manifest", {})
     actual_pages = [p.relative_to(root / "docs").as_posix() for p in (root / "docs/contents").rglob("*.qmd")]
@@ -366,11 +379,23 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
     if mode == "deletion-ready":
         errors.extend(validate_reference_classes(data.get("consumer_inventory", {}).get("references", []), root))
     consumers = data.get("consumer_inventory", {})
-    if not isinstance(consumers, dict): errors.append(ValidationError("consumer_inventory", "must be an object"))
-    elif mode == "deletion-ready" and consumers.get("unresolved_count", 0): blockers.append(ValidationError("consumer_inventory", f"{consumers['unresolved_count']} unresolved live consumers"))
+    if not isinstance(consumers, dict):
+        errors.append(ValidationError("consumer_inventory", "must be an object"))
+    elif mode == "deletion-ready" and consumers.get("unresolved_count", 0):
+        blockers.append(
+            ValidationError(
+                "consumer_inventory",
+                f"{consumers['unresolved_count']} unresolved live consumers",
+            )
+        )
     coverage = data.get("python_docstring_coverage", {})
-    if not isinstance(coverage, dict): errors.append(ValidationError("python_docstring_coverage", "must be an object"))
-    elif mode == "deletion-ready" and (coverage.get("status") != "verified" or coverage.get("destination_verified") is not True): blockers.append(ValidationError("python_docstring_coverage", "coverage is not verified"))
+    if not isinstance(coverage, dict):
+        errors.append(ValidationError("python_docstring_coverage", "must be an object"))
+    elif mode == "deletion-ready" and (
+        coverage.get("status") != "verified"
+        or coverage.get("destination_verified") is not True
+    ):
+        blockers.append(ValidationError("python_docstring_coverage", "coverage is not verified"))
     if mode == "deletion-ready":
         errors.extend(blockers)
     elif mode != "schema":
