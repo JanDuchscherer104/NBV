@@ -20,6 +20,7 @@ from aria_nbv.oracle.pipelines.campaign import (
 )
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
+from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.trace import TargetLineage
 from aria_nbv.rollouts.zarr_store import (
     LINEAGE_TABLE,
@@ -146,7 +147,19 @@ def test_canonical_worker_argv_carries_writer_config_path():
     unit = CampaignWorkUnit("cuda-rollouts-v1", "sample", "target", "realistic_core_60", "unit")
     argv = campaign.worker_argv(Path("plan.json"), unit)
     assert "--writer-config-path" in argv
-    assert ".configs/build_rollouts_v1_realistic.toml" in argv
+    assert ".configs/build_rollouts_v1_cuda_campaign_writer.toml" in argv
+
+    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
+    assert writer.max_samples == writer.source.limit == 100
+    assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
+    assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8"
+    assert writer.min_valid_root_candidates == 10
+    assert {
+        str(writer.source.map_location),
+        str(writer.candidate_mixture.base.device),
+        str(writer.target_scorer.depth.device),
+        str(writer.target_scorer.depth.renderer.device),
+    } == {"cuda"}
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps", "xpu", "meta"])
@@ -745,7 +758,8 @@ def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path
             "reason": "admitted",
         }
     ]
-    expected_hash = stable_msgspec_hash(rows)
+    normalized_rows = json.loads(json.dumps(rows, sort_keys=True))
+    expected_hash = stable_msgspec_hash(normalized_rows)
 
     path = campaign.write_admission_audit(
         rows,
@@ -761,8 +775,24 @@ def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path
         campaign.write_admission_audit(
             stale,
             source_manifest_hash="source",
-            expected_hash=stable_msgspec_hash(stale),
+            expected_hash=stable_msgspec_hash(json.loads(json.dumps(stale, sort_keys=True))),
         )
+
+
+def test_admission_audit_uses_the_plan_normalization(tmp_path):
+    campaign = _campaign(tmp_path)
+    rows = [_row("s0", "k0", "t0"), _row("s1", "k1", "t1")]
+    plan = campaign.plan(rows, source_manifest_hash="source")
+
+    path = campaign.write_admission_audit(
+        rows,
+        source_manifest_hash="source",
+        expected_hash=plan.admission_audit_hash,
+    )
+
+    payload = json.loads(path.read_text())
+    assert payload["admission_audit_hash"] == plan.admission_audit_hash
+    assert len(payload["rows"]) == 2
 
 
 def test_plan_hash_and_allocation_are_stable_and_source_change_rehashes(tmp_path):
@@ -813,6 +843,40 @@ def test_shard_entry_rejects_empty_profile_identity(tmp_path):
         empty = replace(unit, profile_hash="")
     with pytest.raises(ValueError, match="profile_hash"):
         campaign.shard_entry_for_unit(plan, empty)
+
+
+def test_shard_entry_uses_canonical_one_row_split_hash(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = replace(
+        plan.work_units[0],
+        source_row_payload={
+            "sample_index": 7,
+            "scene_id": "s0",
+            "snippet_id": "k0",
+            "split": "train",
+            "source_shard_id": "source-0",
+            "source_shard_row": 3,
+            "source_manifest_hash": "vin-source",
+        },
+    )
+
+    entry = campaign.shard_entry_for_unit(plan, unit)
+
+    assert entry.split_manifest_hash == build_rollout_split_manifest_hash(
+        source_manifest_hash="vin-source",
+        split="train",
+        records=[entry.rows[0].hash_record()],
+    )
+
+
+def test_shard_entry_rejects_missing_vin_source_manifest_lineage(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = replace(plan.work_units[0], source_row_payload={"scene_id": "s0", "split": "train"})
+
+    with pytest.raises(ValueError, match="VIN source_manifest_hash"):
+        campaign.shard_entry_for_unit(plan, unit)
 
 
 def test_plan_round_trip_and_immutable_write(tmp_path):

@@ -21,6 +21,7 @@ from aria_nbv.data_handling import VinSnippetView
 from aria_nbv.data_handling.ase_efm.views import EfmSnippetView
 from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
 from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.oracle import target_selection as target_selection_module
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriter
 from aria_nbv.oracle.target_selection import (
@@ -82,6 +83,17 @@ def _cameras(count: int = 1) -> PerspectiveCameras:
         image_size=torch.full((count, 2), 4.0, dtype=torch.float32),
         in_ndc=False,
     )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for mixed-device regression.")
+def test_world_obb_normalization_aligns_transform_device(monkeypatch: pytest.MonkeyPatch):
+    block = _obb_block([[0.0, 0.0, 0.0]])
+    transform = _poses([[1.0, 0.0, 0.0]]).to(device="cuda")
+    monkeypatch.setattr(target_selection_module, "snippet_t_world_snippet", lambda _sample: transform)
+
+    result = target_selection_module._world_obbs_for_sample(ObbTW(block.obbs), SimpleNamespace())
+
+    assert result.tensor().device.type == "cpu"
 
 
 def _sample(

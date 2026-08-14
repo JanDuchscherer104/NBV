@@ -186,6 +186,24 @@ def _work_unit_identity(unit: CampaignWorkUnit, *, seed: int) -> str:
     return stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
 
 
+def _jsonable_audit_rows(rows: Sequence[Any]) -> list[dict[str, Any]]:
+    """Normalize audit rows once for hashing and immutable persistence."""
+    return [
+        json.loads(
+            json.dumps(
+                row
+                if isinstance(row, dict)
+                else row.model_dump(mode="json")
+                if hasattr(row, "model_dump")
+                else vars(row),
+                sort_keys=True,
+                default=str,
+            )
+        )
+        for row in rows
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class CampaignPlan:
     campaign_id: str
@@ -659,6 +677,7 @@ class CudaRolloutCampaign:
                                 "source_shard_row",
                                 "source_store_dir",
                                 "source_cache_version",
+                                "source_manifest_hash",
                             )
                             if val(row, k) not in ("", None)
                         },
@@ -696,20 +715,7 @@ class CudaRolloutCampaign:
                 or ("admitted" if val(row, "admitted") is True else "unspecified")
             )
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        audit_rows = [
-            json.loads(
-                json.dumps(
-                    row
-                    if isinstance(row, dict)
-                    else row.model_dump(mode="json")
-                    if hasattr(row, "model_dump")
-                    else vars(row),
-                    sort_keys=True,
-                    default=str,
-                )
-            )
-            for row in rows
-        ]
+        audit_rows = _jsonable_audit_rows(rows)
         admission_audit_hash = stable_msgspec_hash(audit_rows)
         payload = {
             "campaign_id": self.config.campaign_id,
@@ -744,7 +750,23 @@ class CudaRolloutCampaign:
         from ..target_selection import OracleTargetTaskSampler, match_observed_target_descriptors
         from .rollout_dataset import ExplicitRolloutTargetConfig, RolloutDatasetWriter
 
-        dataset = writer_config.source.setup_target()
+        # Admission reads persisted target geometry and trajectory pose only.
+        # Loading raw EFM snippets, meshes, or backbone tensors would replay
+        # the expensive source pipeline for every reviewed row without
+        # contributing to observed/GT target matching.
+        audit_source = writer_config.source
+        if hasattr(audit_source, "model_copy"):
+            audit_source = audit_source.model_copy(
+                update={
+                    "include_efm_snippet": False,
+                    "include_gt_mesh": False,
+                    "load_backbone": False,
+                    "load_candidates": False,
+                    "load_depths": False,
+                    "load_candidate_pcs": False,
+                }
+            )
+        dataset = audit_source.setup_target()
         if dataset is None:
             raise RuntimeError("campaign source audit requires a VIN offline dataset")
         RolloutDatasetWriter._apply_source_manifest(
@@ -756,6 +778,11 @@ class CudaRolloutCampaign:
         if len(dataset) != len(source_rows):
             raise ValueError("campaign source audit dataset/manifest row count mismatch")
         sampler = OracleTargetTaskSampler(writer_config.oracle_target_task_sampler)
+        source_lineage = {
+            key: value
+            for key in ("source_manifest_hash", "source_cache_version", "source_store_dir")
+            if (value := getattr(source_manifest, key, None)) not in (None, "")
+        }
         audited: list[dict[str, Any]] = []
         for source_row, sample in zip(source_rows, dataset, strict=True):
             if str(sample.sample_key) != source_row.sample_key:
@@ -771,6 +798,7 @@ class CudaRolloutCampaign:
                 actor = match.descriptor
                 row = {
                     **source_row.to_jsonable(),
+                    **source_lineage,
                     "target_id": actor.target_id,
                     "detected_source_row": actor.source_row,
                     "gt_match_row": match.gt_match_row,
@@ -818,7 +846,8 @@ class CudaRolloutCampaign:
         path: Path | None = None,
     ) -> Path:
         """Persist the complete immutable target-admission audit before plan publication."""
-        audit_hash = stable_msgspec_hash(list(rows))
+        audit_rows = _jsonable_audit_rows(rows)
+        audit_hash = stable_msgspec_hash(audit_rows)
         if audit_hash != expected_hash:
             raise ValueError("admission audit hash does not match campaign plan")
         target = path or (self.config.output_root / "admission-audit.json")
@@ -827,7 +856,7 @@ class CudaRolloutCampaign:
             "campaign_id": self.config.campaign_id,
             "source_manifest_hash": source_manifest_hash,
             "admission_audit_hash": audit_hash,
-            "rows": list(rows),
+            "rows": audit_rows,
         }
         encoded = json.dumps(payload, sort_keys=True, indent=2) + "\n"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1203,12 +1232,12 @@ class CudaRolloutCampaign:
                     ]
                 }
             )
-        if hasattr(cfg, "model_dump"):
-            cfg = type(cfg).model_validate({**cfg.model_dump(), "explicit_target": target_payload})
         if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
             cfg = cfg.model_copy(
                 update={"store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})}
             )
+        if hasattr(cfg, "model_dump"):
+            cfg = type(cfg).model_validate({**cfg.model_dump(), "explicit_target": target_payload})
         # Canonical source/split/writer lineage is mandatory for production
         # shard entries.  Legacy unit tests may adapt a config without a real
         # shard envelope; those remain an in-memory construction seam only.
@@ -1253,7 +1282,12 @@ class CudaRolloutCampaign:
 
     def shard_entry_for_unit(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> Any:
         """Create the single-row manifest envelope used by the worker seam."""
-        from ...rollouts.shard_manifest import RolloutShardCampaignBinding, RolloutShardEntry, RolloutShardRow
+        from ...rollouts.shard_manifest import (
+            RolloutShardCampaignBinding,
+            RolloutShardEntry,
+            RolloutShardRow,
+            build_rollout_split_manifest_hash,
+        )
 
         if not unit.profile_hash:
             raise ValueError("work unit requires profile_hash identity")
@@ -1270,14 +1304,21 @@ class CudaRolloutCampaign:
             source_shard_id=str(source.get("source_shard_id", "campaign-source")),
             source_shard_row=int(source.get("source_shard_row", unit.source_row_index)),
         )
+        source_lineage_hash = str(source.get("source_manifest_hash", ""))
+        if not source_lineage_hash:
+            raise ValueError("work unit requires VIN source_manifest_hash lineage")
         entry = RolloutShardEntry(
             shard_id=f"shard-{unit.source_row_index:06d}",
             split=row.split,
             rows=(row,),
             writer_config_hash="",
-            source_manifest_hash=plan.source_manifest_hash,
+            source_manifest_hash=source_lineage_hash,
             source_cache_version=str(source.get("source_cache_version", "campaign-v1")),
-            split_manifest_hash=stable_msgspec_hash([row.to_jsonable()]),
+            split_manifest_hash=build_rollout_split_manifest_hash(
+                source_manifest_hash=source_lineage_hash,
+                split=row.split,
+                records=[row.hash_record()],
+            ),
             source_store_dir=str(source.get("source_store_dir", "")),
             campaign_binding=RolloutShardCampaignBinding(
                 campaign_id=plan.campaign_id,

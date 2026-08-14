@@ -1,0 +1,1012 @@
+{
+  "manifest_version": "rollout-source-manifest-v1",
+  "num_rows": 100,
+  "num_scenes": 100,
+  "rows": [
+    {
+      "order": 0,
+      "sample_index": 0,
+      "sample_key": "ASE_889_Atek_000008",
+      "scene_id": "889",
+      "snippet_id": "ASE_889_Atek_000008",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 1,
+      "sample_index": 1,
+      "sample_key": "ASE_8517_Atek_000000",
+      "scene_id": "8517",
+      "snippet_id": "ASE_8517_Atek_000000",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 2,
+      "sample_index": 2,
+      "sample_key": "ASE_8559_Atek_000000",
+      "scene_id": "8559",
+      "snippet_id": "ASE_8559_Atek_000000",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 3,
+      "sample_index": 3,
+      "sample_key": "ASE_8671_Atek_000040",
+      "scene_id": "8671",
+      "snippet_id": "ASE_8671_Atek_000040",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 4,
+      "sample_index": 4,
+      "sample_key": "ASE_8694_Atek_000024",
+      "scene_id": "8694",
+      "snippet_id": "ASE_8694_Atek_000024",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 5,
+      "sample_index": 5,
+      "sample_key": "ASE_8715_Atek_000008",
+      "scene_id": "8715",
+      "snippet_id": "ASE_8715_Atek_000008",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 6,
+      "sample_index": 6,
+      "sample_key": "ASE_8777_Atek_000008",
+      "scene_id": "8777",
+      "snippet_id": "ASE_8777_Atek_000008",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 7,
+      "sample_index": 7,
+      "sample_key": "ASE_8822_Atek_000016",
+      "scene_id": "8822",
+      "snippet_id": "ASE_8822_Atek_000016",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 8,
+      "sample_index": 8,
+      "sample_key": "ASE_8857_Atek_000032",
+      "scene_id": "8857",
+      "snippet_id": "ASE_8857_Atek_000032",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 9,
+      "sample_index": 9,
+      "sample_key": "ASE_8860_Atek_000040",
+      "scene_id": "8860",
+      "snippet_id": "ASE_8860_Atek_000040",
+      "source_shard_id": "shard-000000",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 10,
+      "sample_index": 10,
+      "sample_key": "ASE_8938_Atek_000048",
+      "scene_id": "8938",
+      "snippet_id": "ASE_8938_Atek_000048",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 11,
+      "sample_index": 11,
+      "sample_key": "ASE_81022_Atek_000016",
+      "scene_id": "81022",
+      "snippet_id": "ASE_81022_Atek_000016",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 12,
+      "sample_index": 12,
+      "sample_key": "ASE_81048_Atek_000040",
+      "scene_id": "81048",
+      "snippet_id": "ASE_81048_Atek_000040",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 13,
+      "sample_index": 13,
+      "sample_key": "ASE_81056_Atek_000016",
+      "scene_id": "81056",
+      "snippet_id": "ASE_81056_Atek_000016",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 14,
+      "sample_index": 14,
+      "sample_key": "ASE_81128_Atek_000024",
+      "scene_id": "81128",
+      "snippet_id": "ASE_81128_Atek_000024",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 15,
+      "sample_index": 15,
+      "sample_key": "ASE_81161_Atek_000016",
+      "scene_id": "81161",
+      "snippet_id": "ASE_81161_Atek_000016",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 16,
+      "sample_index": 16,
+      "sample_key": "ASE_81180_Atek_000008",
+      "scene_id": "81180",
+      "snippet_id": "ASE_81180_Atek_000008",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 17,
+      "sample_index": 17,
+      "sample_key": "ASE_81181_Atek_000016",
+      "scene_id": "81181",
+      "snippet_id": "ASE_81181_Atek_000016",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 18,
+      "sample_index": 18,
+      "sample_key": "ASE_81184_Atek_000000",
+      "scene_id": "81184",
+      "snippet_id": "ASE_81184_Atek_000000",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 19,
+      "sample_index": 19,
+      "sample_key": "ASE_81188_Atek_000024",
+      "scene_id": "81188",
+      "snippet_id": "ASE_81188_Atek_000024",
+      "source_shard_id": "shard-000001",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 20,
+      "sample_index": 20,
+      "sample_key": "ASE_81226_Atek_000000",
+      "scene_id": "81226",
+      "snippet_id": "ASE_81226_Atek_000000",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 21,
+      "sample_index": 21,
+      "sample_key": "ASE_81272_Atek_000000",
+      "scene_id": "81272",
+      "snippet_id": "ASE_81272_Atek_000000",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 22,
+      "sample_index": 22,
+      "sample_key": "ASE_81283_Atek_000016",
+      "scene_id": "81283",
+      "snippet_id": "ASE_81283_Atek_000016",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 23,
+      "sample_index": 23,
+      "sample_key": "ASE_81286_Atek_000112",
+      "scene_id": "81286",
+      "snippet_id": "ASE_81286_Atek_000112",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 24,
+      "sample_index": 24,
+      "sample_key": "ASE_81366_Atek_000008",
+      "scene_id": "81366",
+      "snippet_id": "ASE_81366_Atek_000008",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 25,
+      "sample_index": 25,
+      "sample_key": "ASE_81387_Atek_000024",
+      "scene_id": "81387",
+      "snippet_id": "ASE_81387_Atek_000024",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 26,
+      "sample_index": 26,
+      "sample_key": "ASE_81426_Atek_000000",
+      "scene_id": "81426",
+      "snippet_id": "ASE_81426_Atek_000000",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 27,
+      "sample_index": 27,
+      "sample_key": "ASE_81477_Atek_000080",
+      "scene_id": "81477",
+      "snippet_id": "ASE_81477_Atek_000080",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 28,
+      "sample_index": 28,
+      "sample_key": "ASE_81483_Atek_000048",
+      "scene_id": "81483",
+      "snippet_id": "ASE_81483_Atek_000048",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 29,
+      "sample_index": 29,
+      "sample_key": "ASE_81625_Atek_000000",
+      "scene_id": "81625",
+      "snippet_id": "ASE_81625_Atek_000000",
+      "source_shard_id": "shard-000002",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 30,
+      "sample_index": 30,
+      "sample_key": "ASE_81693_Atek_000008",
+      "scene_id": "81693",
+      "snippet_id": "ASE_81693_Atek_000008",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 31,
+      "sample_index": 31,
+      "sample_key": "ASE_81772_Atek_000000",
+      "scene_id": "81772",
+      "snippet_id": "ASE_81772_Atek_000000",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 32,
+      "sample_index": 32,
+      "sample_key": "ASE_81807_Atek_000024",
+      "scene_id": "81807",
+      "snippet_id": "ASE_81807_Atek_000024",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 33,
+      "sample_index": 33,
+      "sample_key": "ASE_81964_Atek_000072",
+      "scene_id": "81964",
+      "snippet_id": "ASE_81964_Atek_000072",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 34,
+      "sample_index": 34,
+      "sample_key": "ASE_82004_Atek_000032",
+      "scene_id": "82004",
+      "snippet_id": "ASE_82004_Atek_000032",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 35,
+      "sample_index": 35,
+      "sample_key": "ASE_82254_Atek_000008",
+      "scene_id": "82254",
+      "snippet_id": "ASE_82254_Atek_000008",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 36,
+      "sample_index": 36,
+      "sample_key": "ASE_82257_Atek_000016",
+      "scene_id": "82257",
+      "snippet_id": "ASE_82257_Atek_000016",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 37,
+      "sample_index": 37,
+      "sample_key": "ASE_82258_Atek_000000",
+      "scene_id": "82258",
+      "snippet_id": "ASE_82258_Atek_000000",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 38,
+      "sample_index": 38,
+      "sample_key": "ASE_82271_Atek_000016",
+      "scene_id": "82271",
+      "snippet_id": "ASE_82271_Atek_000016",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 39,
+      "sample_index": 39,
+      "sample_key": "ASE_82294_Atek_000008",
+      "scene_id": "82294",
+      "snippet_id": "ASE_82294_Atek_000008",
+      "source_shard_id": "shard-000003",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 40,
+      "sample_index": 40,
+      "sample_key": "ASE_82309_Atek_000000",
+      "scene_id": "82309",
+      "snippet_id": "ASE_82309_Atek_000000",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 41,
+      "sample_index": 41,
+      "sample_key": "ASE_82311_Atek_000000",
+      "scene_id": "82311",
+      "snippet_id": "ASE_82311_Atek_000000",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 42,
+      "sample_index": 42,
+      "sample_key": "ASE_82342_Atek_000032",
+      "scene_id": "82342",
+      "snippet_id": "ASE_82342_Atek_000032",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 43,
+      "sample_index": 43,
+      "sample_key": "ASE_82448_Atek_000008",
+      "scene_id": "82448",
+      "snippet_id": "ASE_82448_Atek_000008",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 44,
+      "sample_index": 44,
+      "sample_key": "ASE_82517_Atek_000000",
+      "scene_id": "82517",
+      "snippet_id": "ASE_82517_Atek_000000",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 45,
+      "sample_index": 45,
+      "sample_key": "ASE_82545_Atek_000016",
+      "scene_id": "82545",
+      "snippet_id": "ASE_82545_Atek_000016",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 46,
+      "sample_index": 46,
+      "sample_key": "ASE_82555_Atek_000008",
+      "scene_id": "82555",
+      "snippet_id": "ASE_82555_Atek_000008",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 47,
+      "sample_index": 47,
+      "sample_key": "ASE_82620_Atek_000000",
+      "scene_id": "82620",
+      "snippet_id": "ASE_82620_Atek_000000",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 48,
+      "sample_index": 48,
+      "sample_key": "ASE_82630_Atek_000008",
+      "scene_id": "82630",
+      "snippet_id": "ASE_82630_Atek_000008",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 49,
+      "sample_index": 49,
+      "sample_key": "ASE_82647_Atek_000008",
+      "scene_id": "82647",
+      "snippet_id": "ASE_82647_Atek_000008",
+      "source_shard_id": "shard-000004",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 50,
+      "sample_index": 50,
+      "sample_key": "ASE_82658_Atek_000000",
+      "scene_id": "82658",
+      "snippet_id": "ASE_82658_Atek_000000",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 51,
+      "sample_index": 51,
+      "sample_key": "ASE_82700_Atek_000016",
+      "scene_id": "82700",
+      "snippet_id": "ASE_82700_Atek_000016",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 52,
+      "sample_index": 52,
+      "sample_key": "ASE_82832_Atek_000040",
+      "scene_id": "82832",
+      "snippet_id": "ASE_82832_Atek_000040",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 53,
+      "sample_index": 53,
+      "sample_key": "ASE_82889_Atek_000008",
+      "scene_id": "82889",
+      "snippet_id": "ASE_82889_Atek_000008",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 54,
+      "sample_index": 54,
+      "sample_key": "ASE_82902_Atek_000000",
+      "scene_id": "82902",
+      "snippet_id": "ASE_82902_Atek_000000",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 55,
+      "sample_index": 55,
+      "sample_key": "ASE_82953_Atek_000000",
+      "scene_id": "82953",
+      "snippet_id": "ASE_82953_Atek_000000",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 56,
+      "sample_index": 56,
+      "sample_key": "ASE_83036_Atek_000032",
+      "scene_id": "83036",
+      "snippet_id": "ASE_83036_Atek_000032",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 57,
+      "sample_index": 57,
+      "sample_key": "ASE_83078_Atek_000000",
+      "scene_id": "83078",
+      "snippet_id": "ASE_83078_Atek_000000",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 58,
+      "sample_index": 58,
+      "sample_key": "ASE_83086_Atek_000024",
+      "scene_id": "83086",
+      "snippet_id": "ASE_83086_Atek_000024",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 59,
+      "sample_index": 59,
+      "sample_key": "ASE_83098_Atek_000000",
+      "scene_id": "83098",
+      "snippet_id": "ASE_83098_Atek_000000",
+      "source_shard_id": "shard-000005",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 60,
+      "sample_index": 60,
+      "sample_key": "ASE_83121_Atek_000048",
+      "scene_id": "83121",
+      "snippet_id": "ASE_83121_Atek_000048",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 61,
+      "sample_index": 61,
+      "sample_key": "ASE_83269_Atek_000056",
+      "scene_id": "83269",
+      "snippet_id": "ASE_83269_Atek_000056",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 62,
+      "sample_index": 62,
+      "sample_key": "ASE_83307_Atek_000016",
+      "scene_id": "83307",
+      "snippet_id": "ASE_83307_Atek_000016",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 63,
+      "sample_index": 63,
+      "sample_key": "ASE_83317_Atek_000056",
+      "scene_id": "83317",
+      "snippet_id": "ASE_83317_Atek_000056",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 64,
+      "sample_index": 64,
+      "sample_key": "ASE_83379_Atek_000000",
+      "scene_id": "83379",
+      "snippet_id": "ASE_83379_Atek_000000",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 65,
+      "sample_index": 65,
+      "sample_key": "ASE_83393_Atek_000016",
+      "scene_id": "83393",
+      "snippet_id": "ASE_83393_Atek_000016",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 66,
+      "sample_index": 66,
+      "sample_key": "ASE_83397_Atek_000000",
+      "scene_id": "83397",
+      "snippet_id": "ASE_83397_Atek_000000",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 67,
+      "sample_index": 67,
+      "sample_key": "ASE_83400_Atek_000032",
+      "scene_id": "83400",
+      "snippet_id": "ASE_83400_Atek_000032",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 68,
+      "sample_index": 68,
+      "sample_key": "ASE_83448_Atek_000008",
+      "scene_id": "83448",
+      "snippet_id": "ASE_83448_Atek_000008",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 69,
+      "sample_index": 69,
+      "sample_key": "ASE_83467_Atek_000000",
+      "scene_id": "83467",
+      "snippet_id": "ASE_83467_Atek_000000",
+      "source_shard_id": "shard-000006",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 70,
+      "sample_index": 70,
+      "sample_key": "ASE_83506_Atek_000032",
+      "scene_id": "83506",
+      "snippet_id": "ASE_83506_Atek_000032",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 71,
+      "sample_index": 71,
+      "sample_key": "ASE_83515_Atek_000080",
+      "scene_id": "83515",
+      "snippet_id": "ASE_83515_Atek_000080",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 72,
+      "sample_index": 72,
+      "sample_key": "ASE_83522_Atek_000024",
+      "scene_id": "83522",
+      "snippet_id": "ASE_83522_Atek_000024",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 73,
+      "sample_index": 73,
+      "sample_key": "ASE_83550_Atek_000144",
+      "scene_id": "83550",
+      "snippet_id": "ASE_83550_Atek_000144",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 74,
+      "sample_index": 74,
+      "sample_key": "ASE_83560_Atek_000016",
+      "scene_id": "83560",
+      "snippet_id": "ASE_83560_Atek_000016",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 75,
+      "sample_index": 75,
+      "sample_key": "ASE_83577_Atek_000072",
+      "scene_id": "83577",
+      "snippet_id": "ASE_83577_Atek_000072",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 76,
+      "sample_index": 76,
+      "sample_key": "ASE_83598_Atek_000000",
+      "scene_id": "83598",
+      "snippet_id": "ASE_83598_Atek_000000",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 77,
+      "sample_index": 77,
+      "sample_key": "ASE_83678_Atek_000032",
+      "scene_id": "83678",
+      "snippet_id": "ASE_83678_Atek_000032",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 78,
+      "sample_index": 78,
+      "sample_key": "ASE_83692_Atek_000008",
+      "scene_id": "83692",
+      "snippet_id": "ASE_83692_Atek_000008",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 79,
+      "sample_index": 79,
+      "sample_key": "ASE_83713_Atek_000016",
+      "scene_id": "83713",
+      "snippet_id": "ASE_83713_Atek_000016",
+      "source_shard_id": "shard-000007",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 80,
+      "sample_index": 80,
+      "sample_key": "ASE_83730_Atek_000000",
+      "scene_id": "83730",
+      "snippet_id": "ASE_83730_Atek_000000",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 81,
+      "sample_index": 81,
+      "sample_key": "ASE_83746_Atek_000008",
+      "scene_id": "83746",
+      "snippet_id": "ASE_83746_Atek_000008",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 82,
+      "sample_index": 82,
+      "sample_key": "ASE_83780_Atek_000000",
+      "scene_id": "83780",
+      "snippet_id": "ASE_83780_Atek_000000",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 83,
+      "sample_index": 83,
+      "sample_key": "ASE_83803_Atek_000000",
+      "scene_id": "83803",
+      "snippet_id": "ASE_83803_Atek_000000",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 84,
+      "sample_index": 84,
+      "sample_key": "ASE_83833_Atek_000048",
+      "scene_id": "83833",
+      "snippet_id": "ASE_83833_Atek_000048",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 85,
+      "sample_index": 85,
+      "sample_key": "ASE_83836_Atek_000016",
+      "scene_id": "83836",
+      "snippet_id": "ASE_83836_Atek_000016",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 86,
+      "sample_index": 86,
+      "sample_key": "ASE_83998_Atek_000024",
+      "scene_id": "83998",
+      "snippet_id": "ASE_83998_Atek_000024",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 87,
+      "sample_index": 87,
+      "sample_key": "ASE_84001_Atek_000000",
+      "scene_id": "84001",
+      "snippet_id": "ASE_84001_Atek_000000",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 88,
+      "sample_index": 88,
+      "sample_key": "ASE_84003_Atek_000000",
+      "scene_id": "84003",
+      "snippet_id": "ASE_84003_Atek_000000",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 89,
+      "sample_index": 89,
+      "sample_key": "ASE_84009_Atek_000024",
+      "scene_id": "84009",
+      "snippet_id": "ASE_84009_Atek_000024",
+      "source_shard_id": "shard-000008",
+      "source_shard_row": 9,
+      "split": "train"
+    },
+    {
+      "order": 90,
+      "sample_index": 90,
+      "sample_key": "ASE_84052_Atek_000008",
+      "scene_id": "84052",
+      "snippet_id": "ASE_84052_Atek_000008",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 0,
+      "split": "train"
+    },
+    {
+      "order": 91,
+      "sample_index": 91,
+      "sample_key": "ASE_84074_Atek_000024",
+      "scene_id": "84074",
+      "snippet_id": "ASE_84074_Atek_000024",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 1,
+      "split": "train"
+    },
+    {
+      "order": 92,
+      "sample_index": 92,
+      "sample_key": "ASE_84080_Atek_000000",
+      "scene_id": "84080",
+      "snippet_id": "ASE_84080_Atek_000000",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 2,
+      "split": "train"
+    },
+    {
+      "order": 93,
+      "sample_index": 93,
+      "sample_key": "ASE_84171_Atek_000008",
+      "scene_id": "84171",
+      "snippet_id": "ASE_84171_Atek_000008",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 3,
+      "split": "train"
+    },
+    {
+      "order": 94,
+      "sample_index": 94,
+      "sample_key": "ASE_84185_Atek_000000",
+      "scene_id": "84185",
+      "snippet_id": "ASE_84185_Atek_000000",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 4,
+      "split": "train"
+    },
+    {
+      "order": 95,
+      "sample_index": 95,
+      "sample_key": "ASE_84186_Atek_000000",
+      "scene_id": "84186",
+      "snippet_id": "ASE_84186_Atek_000000",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 5,
+      "split": "train"
+    },
+    {
+      "order": 96,
+      "sample_index": 96,
+      "sample_key": "ASE_84230_Atek_000016",
+      "scene_id": "84230",
+      "snippet_id": "ASE_84230_Atek_000016",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 6,
+      "split": "train"
+    },
+    {
+      "order": 97,
+      "sample_index": 97,
+      "sample_key": "ASE_84271_Atek_000008",
+      "scene_id": "84271",
+      "snippet_id": "ASE_84271_Atek_000008",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 7,
+      "split": "train"
+    },
+    {
+      "order": 98,
+      "sample_index": 98,
+      "sample_key": "ASE_84309_Atek_000000",
+      "scene_id": "84309",
+      "snippet_id": "ASE_84309_Atek_000000",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 8,
+      "split": "train"
+    },
+    {
+      "order": 99,
+      "sample_index": 99,
+      "sample_key": "ASE_84320_Atek_000048",
+      "scene_id": "84320",
+      "snippet_id": "ASE_84320_Atek_000048",
+      "source_shard_id": "shard-000009",
+      "source_shard_row": 9,
+      "split": "train"
+    }
+  ],
+  "source_cache_version": "7",
+  "source_manifest_hash": "2ec35736a2c66ed4",
+  "source_store_dir": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v8",
+  "split": "train",
+  "split_manifest_hash": "58e2e26eec2530d6"
+}

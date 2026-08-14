@@ -1,5 +1,5 @@
 campaign_id = "cuda-rollouts-v1"
-writer_config_path = ".configs/build_rollouts_v1_realistic.toml"
+writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
 seed = 20260728
 observed_target_iou_threshold = 0.20
 expected_scene_count = 100

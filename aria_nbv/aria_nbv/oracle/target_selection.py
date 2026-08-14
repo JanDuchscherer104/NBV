@@ -494,6 +494,7 @@ def _world_obbs_for_sample(obbs: ObbTW, sample: "VinOfflineSample") -> ObbTW:
     transform = snippet_t_world_snippet(sample)
     if transform is None:
         return selected
+    transform = transform.to(device=selected.tensor().device)
     return selected.transform(transform)
 
 
