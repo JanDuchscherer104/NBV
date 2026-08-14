@@ -135,7 +135,8 @@ Keep the default path concise unless one of these modifiers applies.
 - Challenge overloaded terms against `docs/typst/shared/glossary.typ`.
 - For fuzzy thesis or planning terms, test the plan with three concrete
   scenarios: one normal case, one boundary case, and one failure case.
-- Cross-check claims against code, paper, memory state, and roadmap before
+- Cross-check claims against the exact source-order owners (Typst, Python,
+  configuration, tests, and guidance), historical evidence, and roadmap before
   accepting them.
 - Resolved terminology updates `docs/typst/shared/glossary.typ` or the
   smallest applicable source-order owner. Do not add a parallel root context

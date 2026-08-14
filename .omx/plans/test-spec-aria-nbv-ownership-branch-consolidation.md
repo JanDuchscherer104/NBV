@@ -15,13 +15,16 @@ becoming an owner of migrated content.
   resolved provenance, or an explicit migration receipt.
 - Transcript/debrief files cannot contain generic `DECISIONS.md` or memory-state
   promotion sinks.
-- Every theory QMD appears exactly once in a keep/thin/delete matrix; retained
-  pages identify their canonical destination, inbound links, and citation
-  disposition.
+- Every theory QMD appears exactly once in the migration matrix and is classified
+  as deprecated archive, navigation, or background material; each page identifies
+  its canonical destination, inbound links, and citation disposition.
 - The expected Quarto page manifest is compared as an exact set.
 - Typst marker checks run through `make thesis-marker-contract`: development and
   submission fixtures must compile, while invalid promotion fixtures and the
   submission-mode TODO fixture must fail.
+- The frozen migration proof runs in hosted and local root CI through
+  `make ownership-consolidation-contract`, covering both validator modes and
+  the focused ownership/retired-memory regression tests.
 
 The CLI has two modes: `--mode schema` validates shape, section coverage, and
 the merged-baseline receipt SHA/tree; `--mode deletion-ready` additionally

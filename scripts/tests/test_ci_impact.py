@@ -98,6 +98,14 @@ class SelectionTests(unittest.TestCase):
             makefile,
         )
         self.assertIn(
+            "ownership-consolidation-contract",
+            makefile,
+        )
+        self.assertIn(
+            "ci: agents-db-validate ownership-consolidation-contract",
+            makefile,
+        )
+        self.assertIn(
             "scripts/build_graphify_projection.py --check --aria-code-ref "
             '"$$(git rev-parse HEAD)"',
             makefile,
