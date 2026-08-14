@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-marker-contract
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-marker-contract
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -296,6 +296,11 @@ qmd-frontmatter-check: _check_python ## 📖 Validate taxonomy frontmatter for r
 
 agents-db-validate: _check_python ## Validate the agents DB schema
 	@$(PYTHON_INTERPRETER) scripts/agents_db.py validate
+
+ownership-consolidation-contract: _check_python ## Validate the frozen ownership-consolidation migration proof
+	@$(PYTHON_INTERPRETER) scripts/ownership_consolidation_validator.py --mode schema .omx/specs/ownership-branch-consolidation-inventory.json
+	@$(PYTHON_INTERPRETER) scripts/ownership_consolidation_validator.py --mode deletion-ready .omx/specs/ownership-branch-consolidation-inventory.json
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_ownership_consolidation_validator.py scripts/tests/test_validate_agent_memory_retired.py
 
 #  ══════════════════════════════════════════════════════════════════════
 #  Offline / rollout inspection
@@ -737,7 +742,7 @@ package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contrac
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
-ci: agents-db-validate qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help
