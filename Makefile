@@ -716,10 +716,10 @@ typst-paper-ci: ## Compile the Typst paper into an ignored CI artifact path
 typst-slide: ## Compile a Typst slide deck (make typst-slide SLIDES=slides_4.typ or SLIDES=docs/typst/thesis_slides/slides_thesis_outlook.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(SLIDES_SRC) $(SLIDES_PDF)
 
-thesis-pdf: ## Compile the Typst thesis (docs/typst/thesis/main.typ)
+thesis-pdf: ## Compile the DEVELOPMENT/DRAFT thesis PDF (submission is a separate evidence-gated projection)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
-thesis-watch: ## Watch and recompile the Typst thesis
+thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
 docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci ## Render the core docs surfaces used by root CI
