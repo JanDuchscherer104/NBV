@@ -2,7 +2,7 @@
 id: 2026-08-14_cuda_rollout_rebased_verification
 date: 2026-08-14
 title: "CUDA rollout rebased verification"
-status: done
+status: in_progress
 topics: [rollouts, cuda, campaign, rebase, verification]
 confidence: high
 canonical_updates_needed: []
@@ -11,25 +11,46 @@ files_touched:
   - .configs/build_rollouts_v1_cuda_campaign_writer.toml
   - .configs/rollout_campaign100_source_manifest.json
   - aria_nbv/aria_nbv/oracle/pipelines/campaign.py
+  - aria_nbv/aria_nbv/oracle/pipelines/cli.py
+  - aria_nbv/aria_nbv/oracle/pipelines/shards.py
   - aria_nbv/aria_nbv/oracle/target_selection.py
+  - aria_nbv/aria_nbv/rollouts/inspection.py
+  - aria_nbv/aria_nbv/rollouts/reporting.py
+  - aria_nbv/aria_nbv/app/panels/campaign_generation.py
+  - aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py
   - aria_nbv/tests/oracle/test_campaign.py
   - aria_nbv/tests/oracle/test_target_selection.py
+  - aria_nbv/tests/rollouts/test_cli_typer.py
+  - aria_nbv/tests/rollouts/test_dataset_writer.py
+  - aria_nbv/tests/rollouts/test_inspection.py
+  - aria_nbv/tests/rollouts/test_reporting.py
+  - aria_nbv/tests/app/panels/test_campaign_generation_panel.py
+  - aria_nbv/tests/app/panels/test_counterfactual_rollouts_panel.py
 ---
 
 ## Task
 
-Finish rebased verification of the CUDA rollout campaign without launching the
-broad campaign, and tune the canonical local generation settings for an NVIDIA
-GeForce RTX 3080 Ti, 32 GB RAM, and an 8-core/16-thread Ryzen 7 5800X while
-keeping the implementation and operational model simple.
+Advance the CUDA rollout campaign through the three implementation stories
+before the replacement final-rebase story, without launching the broad
+campaign. Keep the implementation and operational model simple for the local
+RTX 3080 Ti host.
 
 ## Method
 
-The implementation branch was previously rebased from pre-rebase commit
-`756e1030db00f9543fbfdd1c10c659704bcac0c0` onto exact `origin/main`
-`8323b8ed83867e1a2f0c754c7cf3025153b21c41`; the initial rebased head was
-`731b3c5b3642c9c4bb8ef3f4b95011e07adb2477`. All earlier green evidence was
-treated as stale.
+The implementation branch was rebased from pre-rebase commit
+`463c9e7be8149cd32947c392e4546685edd445e6` onto exact `origin/main`
+`4748c4dd01e77bae5bdb2ff6932e8980a9416b4c`; the rebased implementation head
+is `229d175f3dc6aebab57cb437abe9d607b9bdb093`. Any evidence from before the
+issue stories or before this rebase is stale for the replacement final gate.
+
+Issue #58 now trusts only the canonical typed dictionary smoke-evidence
+interface; the stringified `ast.literal_eval` compatibility path and synthetic
+string-result test are gone. Issue #57 keeps one typed, ordered grouping
+vocabulary in `rollouts.inspection` and materializes candidate audit rows once
+per store for all reporting summaries. Issue #53 deepens the existing campaign
+read model with truthful post-spawn PID/PGID state and validated promoted
+artifact records, and keeps the CLI/Campaign Generation/read-only Rollout
+Supervision handoff within the existing interfaces.
 
 The missing canonical source prerequisite was closed without relaxing the
 100-scene contract: a reviewed immutable V7 source store was completed with one
@@ -49,36 +70,24 @@ function. Failed pre-repair runtime artifacts were preserved under
 
 ## Findings
 
-The canonical one-target smoke succeeded with plan hash
-`95118ab2f3853bf5`. It wrote and validated one promoted V1 Zarr shard containing
-12 rollouts, 78 retained trajectory steps, and 4,680 candidate rows. During the
-long compute phase, `nvidia-smi dmon` showed sustained 97--100% SM utilization,
-about 4.99 GiB peak framebuffer use, and roughly 180--258 W draw. Worker RSS was
-about 2.4 GiB.
+The earlier canonical one-target smoke established the simple local settings:
+one serial worker, exactly 60 candidates, renderer
+`max_views_per_batch = 2`, selected-depth `chunk_steps = 16`, branch factor 2,
+and beam width 2. That diagnostic remains useful for tuning, but it cannot
+satisfy the replacement final story after the issue changes.
 
 The hardware evidence does not justify concurrent work units, a larger
-candidate population, or another scheduling layer. The accepted simple local
-settings remain one serial worker, exactly 60 candidates, renderer
-`max_views_per_batch = 2`, selected-depth `chunk_steps = 16`, branch factor 2,
-and beam width 2. Free VRAM is not treated as evidence of idle compute; the GPU
-was already saturated. The changed-files AI-slop pass removed the remaining
-fallback from VIN source lineage to the unrelated campaign file digest and
-replaced it with explicit fail-closed validation. Narrow legacy in-memory
-fixture compatibility remains tested and does not weaken the canonical path.
+candidate population, or another scheduling layer. Free VRAM is not treated as
+evidence of idle compute; the GPU was already saturated.
 
 ## Verification
 
-- Ruff format/check and explicit-worktree `git diff --check` passed.
-- The post-cleaner campaign/target/CLI behavior lock passed: 118 tests.
-- The existing focused campaign, writer, CLI, Streamlit, and router gate passed:
-  195 tests.
-- Geometry, Zarr schema, public API, and legacy TOML invariant tests passed: 48
-  tests.
-- The canonical 100-scene plan and real one-target CUDA smoke passed without a
-  broad campaign launch.
-- Exact final commit, config digests, final post-commit smoke evidence, final
-  independent reviews, and the architecture audit are recorded in the durable
-  Ultragoal ledger rather than duplicated here.
+- The changed-files AI-slop pass made no changes; post-cleaner verification
+  recorded 186 tests.
+- Terminal CUDA smoke, final SHA/config-digest proof, independent reviews,
+  architecture audit, and the mandatory final quality gate are ledger-owned
+  evidence for the replacement final story and are not claimed here before
+  that story runs.
 - No push, pull request, issue, or other external GitHub write was performed.
 
 ## Canonical State Impact
