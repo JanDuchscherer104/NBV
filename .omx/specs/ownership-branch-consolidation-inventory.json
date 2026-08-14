@@ -889,7 +889,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "6a6c2eac7bb0a57900b2ea1542be23d47ad8d8fb",
+        "content_sha256": "5f49c7b5463be6b84ab25d4e93fa048a2524b5b0ca8b2ec144680b7db9dfd972"
       },
       {
         "path": ".agents/archive/skills/mojo-nbv-acceleration/SKILL.md",
@@ -900,7 +902,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "3770dfbc4804841cde8d2bce64d95603308b3af2",
+        "content_sha256": "e10ea804ce760c2454cd33d218788c5c4f0fbe949abed0dd79da636b617b3108"
       },
       {
         "path": ".agents/issues.toml",
@@ -915,7 +919,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "202dacc032f7b6f199d635958fa3dce048052bc7",
+        "content_sha256": "9c380dc06952059da3ef2eb4cbccb539bc62f9a036e03230cdb492f90adc2d43"
       },
       {
         "path": ".agents/memory/README.md",
@@ -928,7 +934,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "2895669047d99dbb60ff1341202f6560fca276e2",
+        "content_sha256": "e0e6c2790bb0867811565a26bcf80a9541aef4195a77018d3cec671efb371b6a"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_data_handling_legacy_api_split.md",
@@ -942,7 +950,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "9d99989c265939d5fea1dd1e43e5856e17d0c07e",
+        "content_sha256": "e64805cdf9a845777d2ed26892d71b4b1169b0673bfec97b6ae7093b6d282cb9"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_data_surface_canonicalization.md",
@@ -955,7 +965,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "77a1c47cf76b5ba9ce2587a95919e95c60ee24a7",
+        "content_sha256": "c1c01394f1ec5c44a14c55991dff3f8247e82e312ea471ba158109ef81e87bc3"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_indexed_msgpack_record_blocks.md",
@@ -967,7 +979,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "024dde23d9805566caa39f212a5b0cb109905f8a",
+        "content_sha256": "d722034810a4307e13f46d3cdf897804a139a8d78edf46f435df0a2782eaa60f"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_legacy_cache_cutover_markers.md",
@@ -983,7 +997,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "ee00f73a99c0130ff43548097d8b84b6d198789e",
+        "content_sha256": "ef93a967da8177871f81c8d7638675b55c746578d1b88f1ffcc1b7b06e2e8081"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_migration_cli_and_offline_runtime_cleanup.md",
@@ -995,7 +1011,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "a42d8c219ebc3a8c4b51371a2c624d2c5d4fd0bc",
+        "content_sha256": "a7111cd3ef9d6ffc7e72b6bfa4a5e9b813189d2537a08fc4df2689ad06872be3"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_quarto_agent_scaffold_pages.md",
@@ -1010,7 +1028,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "49b2f854eb2e9934765c6ffdd41d111a3d4fc313",
+        "content_sha256": "a7277903f2d1a8c82ccb0b03c966e0b501fb1eb76c931cba54e6c3a79f7eac33"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_quarto_api_reference_integration.md",
@@ -1025,7 +1045,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "504e2f08af8edc1ad365466e5793f271b21253d6",
+        "content_sha256": "5bf5c36aac438e2ffd87cb7a7bbe3542fc264b6fb421d201487e59c5f52e1fbb"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_quarto_kernel_path_repair.md",
@@ -1039,7 +1061,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "11dff6532415a58dfb883b36a26e7144a5021937",
+        "content_sha256": "4e46cfc340b655a884717248f123e4b93e1ff07263afd4ceafd1bf500cea28b6"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_remove_legacy_data_mirrors.md",
@@ -1052,7 +1076,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "3f5b02c9441e4f7edd4f1473fbb85e8dc58863c7",
+        "content_sha256": "737c6e7d0982a7b02bdb3b1237b7cf64e64f83fc16e87750baa7468c0a8828d6"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_strict_immutable_store_contract.md",
@@ -1066,7 +1092,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "74c62d53ea75afc29b3f7efcd4bf53736468063e",
+        "content_sha256": "773e20936b7fc587aa60f188c859a32f2edaf014349deb01af5d01667db304a9"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_vin_offline_subset_migration.md",
@@ -1080,7 +1108,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "7fc9866c6f0c01d57656cdedaa4d313b74ed7668",
+        "content_sha256": "3658f0104a88d061c5279ae1d5fff865c81728387bc02038e5dee276181b0f14"
       },
       {
         "path": ".agents/memory/history/2026/03/advisor_priorities_memory_reorg_2026-03-31.md",
@@ -1109,7 +1139,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "96c92c6a563f618f4a8eb7b031ce296ff800d736",
+        "content_sha256": "f8065605b4cd017a3f5f51bd92d4df0c18fc5f0aae2a6b0718abb4a6049cbeb8"
       },
       {
         "path": ".agents/memory/history/2026/03/agent_guidance_portability_and_verification_2026-03-30.md",
@@ -1124,7 +1156,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "c281fb3401f6a6ae381067dcb45f046b11780bd4",
+        "content_sha256": "8c60b12dc0077053c713cf72789ec64d93559e6ccfc0b30ce1fc89eeae553b7a"
       },
       {
         "path": ".agents/memory/history/2026/03/aria_nbv_package_rename_2026-03-29.md",
@@ -1141,7 +1175,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "065c9cb59df62db79bf2d251c64fbf0f19176967",
+        "content_sha256": "c756ba569d722e405cd0efa6a38ae84a303410df919878c422f6eb73dade5ff1"
       },
       {
         "path": ".agents/memory/history/2026/03/rl_counterfactual_rri_2026-03-30.md",
@@ -1160,7 +1196,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "1cdf781b540ab05166959b57049c393008c4001f",
+        "content_sha256": "2c8f532a6c0f98d237fc5612ff2f54b955918ee4c711c2e0e038d41f7348952d"
       },
       {
         "path": ".agents/memory/history/2026/03/rl_streamlit_inspector_2026-03-30.md",
@@ -1172,7 +1210,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "f9fafd558149276da4b990e7c63e42fa6799dcd9",
+        "content_sha256": "0bf4092a9b960934648b2c2cff243a2f395de28ef87e7c6d2441a3a6cd05d938"
       },
       {
         "path": ".agents/memory/history/2026/03/scaffold_operator_aids_2026-03-25.md",
@@ -1187,7 +1227,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "62cc6ccc97849fd9dd9388c84c045456df6c8da2",
+        "content_sha256": "461a723d5b73041f015ebca640eb74b5755741b9b9dec0824ab45ba0b6ad160e"
       },
       {
         "path": ".agents/memory/history/2026/03/scaffold_surface_simplification_2026-03-25.md",
@@ -1208,7 +1250,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8b5441f4e4d49c79e96c1e31f80cb664ec492ee9",
+        "content_sha256": "ea0abf7615eb9b469e60ac02da51bd72d2a99f139244aeffd78ee6b290bf0e9d"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_agents_scaffold_omx_integration.md",
@@ -1218,7 +1262,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d7e62c22040d667ca7babceea84167a0b884720d",
+        "content_sha256": "1dadf00cc4624aae326bb6f479a71d6b431ff9f173fbb0531917be78ae68bb32"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_aria_litkg_profile_initialization.md",
@@ -1229,7 +1275,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d09e18ad81ab3e034268161bbdf1b80ad317a110",
+        "content_sha256": "634d08b68a363dd194545e516ba4d62b07c6f1213e32e178dd9608a0d18ab77e"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_cleanup_refactor_commit_review.md",
@@ -1247,7 +1295,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d39814d125e16653dd3e2c65dfad69712ee8b934",
+        "content_sha256": "03a08f909c7773b24ef8c17818906cf592468527f7e06a8dc96fb4417d853d9a"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_oracle_pipeline_simplification_slice.md",
@@ -1261,7 +1311,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "473b471d49679cbd53832a649273ddb05997644d",
+        "content_sha256": "4eb91d26e34b1dea14ee49a0dfca879ac2145c2479f9d256377c8f69c837fbf5"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_semantic_scholar_litkg_skill.md",
@@ -1274,7 +1326,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "eb9199614a4e449b5af2cf47451eca3756700cdf",
+        "content_sha256": "a74d496e2163093f40c3fa88f0afc0bdb5df84b2d58b996a55bd8501b036ef12"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-29_thesis_roadmap_research_questions.md",
@@ -1285,7 +1339,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "99be5abdd386410c6d63a4cff23138126cdbf47c",
+        "content_sha256": "306514e4bf0541a7a24e3da3d6e8adbf07b350d9e067cff3e4474dd797e01f85"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_litkg_agent_friendly_kg_viewer.md",
@@ -1299,7 +1355,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "e3674b31341b90b3001cd8b688c5e74859a2c138",
+        "content_sha256": "932288e588a72227b31356b9a0d2577f712a5f37b0b24349f4098c365bcd430b"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_litkg_python_ast_code_graph.md",
@@ -1313,7 +1371,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "b67753d98abc31a5fb59c5decd9bb38740caca35",
+        "content_sha256": "3c49d27b72c7aa8fab51706decfc85abe1f84f522177d5a639376a29d31b994e"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_quarto_glossary_shortcodes.md",
@@ -1324,7 +1384,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "5de472df08993eb494f86b8413902b0a7bacf54d",
+        "content_sha256": "6949d962ea69eef0ace66c43e2c34f83add7a034d6dd7b2b0e79d1d194f0b19f"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_rerun_docs_memory_alignment.md",
@@ -1348,7 +1410,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d192e0af75aa78a5dc4e0897802c7e4df15736d1",
+        "content_sha256": "c50840b70ca6e2066b1a4c135804129264df0217f6a8d59966f5288bad2fc843"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_scaffold_docs_skills_phase_partition.md",
@@ -1361,7 +1425,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "ddcb26624a9923c965693d3a51569790d7578caf",
+        "content_sha256": "33db79128b6290979214d8134c2acca925e4c23f2c651cc176ee1db848584d0a"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_shared_glossary_source.md",
@@ -1373,7 +1439,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8a5be46f453694992e9eff0479d9c1fa9503b2aa",
+        "content_sha256": "c455f4485b9ef77f2aa2c15541b61dc2f806727ed364ecb42da37d016540d157"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_typst_first_glossary.md",
@@ -1383,7 +1451,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "b344a94ab686465962a8491f5eadce911d8198f6",
+        "content_sha256": "a1a6e9b44a13607ff0d79220f461a95fc7660b2843d99cc670d6a98aec855b9a"
       },
       {
         "path": ".agents/memory/history/2026/04/2026-04-30_typst_layout_split.md",
@@ -1394,7 +1464,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "4090957433180d3386a4a16e94c12efb9fd6a812",
+        "content_sha256": "373429a4cacad2ad2616c798458d69e93982e65182cb804bf623d1d21fd1f7fa"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-05_litkg_agent_useful_backbone.md",
@@ -1407,7 +1479,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8a55f0e870fcf5ca6c33bbada5d7fc24e0d76750",
+        "content_sha256": "78c71c2c27923208987ef9187ffe7d66c6f44ee8377c2c2ed88aa8d275365da4"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-05_math_heavy_glossary_lookup.md",
@@ -1424,7 +1498,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "bee622df8fdcd7d6cf32bdf35e9f3b9e408c37e5",
+        "content_sha256": "884430ada04c67fe00576661637acec8ccad394b827f85796f9390c4747d385b"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-05_questions_inline_todo_resolution.md",
@@ -1440,7 +1516,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "4dc03e39af91be3a33e67b4792e51956f7c186fd",
+        "content_sha256": "b5b35d9b41c0eef986e4549d3cd0e9b1468ffdd104418e5f16c0de269c2fe560"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-05_thesis_hard_qh_alignment.md",
@@ -1458,7 +1536,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "12ca186c59f4a76cc21087b0dcd2468b559dd0e8",
+        "content_sha256": "1c6dc7c96942af2f5ba0eb2a9ebe5a93e02c94c166cc3988c83ffe4a9f515bff"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_agents_scaffold_proposal_requirements_alignment.md",
@@ -1468,7 +1548,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "7a153b6461d72c6987c702263862c816052c4fc7",
+        "content_sha256": "4590b9ef9b75881df2f71d6abf53e99949b52fac35e0674dee05bcd34d5ba882"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_qh_dqn_iql_distillation.md",
@@ -1478,7 +1560,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "f89ce4fcb09d6de6fc90b1ebb3fd10bc8aa40411",
+        "content_sha256": "e4e0f86626f8c24c0e445560a4fdf6ccaf3893c2562fad89f09eb0e004fb4071"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_questions_rq_revision.md",
@@ -1497,7 +1581,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "7aea590862c5cce640ee7c13d283c26a89420422",
+        "content_sha256": "544fdf6ce0a185e513ada4f54ec50685bfb51a9c1cc7acb734a1e94b22c7c5a0"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_rl_planning_docs_dedup.md",
@@ -1507,7 +1593,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "489678e8de70f24b89946fa1e05f8e734cb69dc2",
+        "content_sha256": "a64910484e565a5ce686138929d7f10277104fd08ea727a1720ad60597c7ae9e"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_rollout_softmax_zarr_store.md",
@@ -1521,7 +1609,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "925e8075c5a612464404d7726847d20eec6923b9",
+        "content_sha256": "6006435569ddf235587b4ecda35d3de8d3891fd18f777e5e3c035f668cdb5ac6"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_rq1_objective_reformulation.md",
@@ -1535,7 +1625,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "6de3957e130d8f61e3ad75876af3926e02651c1d",
+        "content_sha256": "06e39a21178f1508d58bdb7f08eab90d9bf352e639842d39e9d8996cef76d6bf"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-06_thesis_sharpening_revision.md",
@@ -1559,7 +1651,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "6e9fd2289350d1543ab4803a38ad41e4a59bc64d",
+        "content_sha256": "645096207015b7373677146503600699265cf19dfa31b73b3ced6b5c21bbda06"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-07_proposal_roadmap_scientific_densification.md",
@@ -1569,7 +1663,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "7c9adf04b9761e49e183b8effc383a985a7bed1f",
+        "content_sha256": "0b60e6c90308010433c299155d68b4aef9f362d70841b4a6032e6b6ceb0606fe"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-07_rollout_softmax_zarr_hardening.md",
@@ -1583,7 +1679,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "37e6871ff7ebecf141b573bba37024b090d67a1c",
+        "content_sha256": "bf77b2c22d6300a0826b0ab1e572422549520eb9c966ec81e49fb49d5da86516"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-07_top_k_target_selector.md",
@@ -1594,7 +1692,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "b4432f7bcea7f883ee4b6f4ac0c711aab5fff236",
+        "content_sha256": "c5613460fae7c3ea76f44a81bc1d7bf252188ba424e4a8aa453c03d153a5bf32"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-07_vin_offline_store_v7_upgrade.md",
@@ -1611,7 +1711,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "f9c665aaeea1c9e8cc6b5b4258d2bfb81ccd6f2b",
+        "content_sha256": "88e688a44dbc6f2077adfb31a2735df7053407a46287cba00ae727da6714fa49"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-08_resolve_litkg_shipped_work_and_land_claude_scaffold_umbrella.md",
@@ -1624,7 +1726,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "163b86f0c89690c58ccc729b923d5266d86d46a1",
+        "content_sha256": "1cd39cc4ed8081c03ad6e0465ade176b799045d4b30af24eef580107ca383ed6"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-09_codex_transcript_decision_extraction.md",
@@ -1637,7 +1741,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "77ac1a31ae155674042d4b9b07aeb61b7dbb19d4",
+        "content_sha256": "50d79453118eedebf763c65967dbb8477b221be6538f68771515c28be15abd70"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-09_questions_drift_remediation.md",
@@ -1647,7 +1753,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8dd899caed357a86ed307d49e99d3879bf5ad2d3",
+        "content_sha256": "bff07dcfe2dac64e96f09323ffd76771cd2e1179c684c03297b1f1b4a221cbfb"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-09_typst_shared_notation_convention.md",
@@ -1660,7 +1768,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "1aa76e2efca6e2f3f1704659796cb7155edd7d23",
+        "content_sha256": "b586df9be45957b0cba249388e4dba581757878a0f34914e9ca933d5476c9587"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-11_decisions_litkg_cleanup.md",
@@ -1679,7 +1789,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "4680c5ff86a7d614a0bbf12cda7eaf3eada17980",
+        "content_sha256": "0cec2e1f9693abac00369b9c633553a3ac760f5c957e9157b34a079d6dca848a"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-11_kg_compact_default_and_stop_hook_auto_refresh.md",
@@ -1692,7 +1804,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "730775fd76eeb6262696a7f7e67710c8d1b3b5eb",
+        "content_sha256": "4d4b09c14884121f3c7bfc12d1e7c61454dce929938e645b19ec1d22c190a189"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-11_prune_vestigial_kg_verbs_and_file_lean_payload_todo.md",
@@ -1705,7 +1819,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d65c42c2f31ff1d0a26e51412ca31aeaa8a8147e",
+        "content_sha256": "5ddaa5e569114ad45ff5dd5f8d889e22ac2bca41ed5f8fa888798dc02444ab94"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-11_transcript_project_decision_update.md",
@@ -1722,7 +1838,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "cc1b160595fab2a9aa3f760141711ca04333176e",
+        "content_sha256": "f490795035386f2daea5f535e0808182ed5c43448643e9f4eff6e328c7414db7"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-12_advisor_distillation_todo_resolution.md",
@@ -1733,7 +1851,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d6ef49057f8d0618b02eb7f7d79436e56c810a29",
+        "content_sha256": "533f0f78f53c7ce7918c4d712728339ed68283e7f9aa3f74b4da9af361743d73"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-12_rollout_core_store_cleanup.md",
@@ -1744,7 +1864,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "fbeb99e2b9146b582138b04c5f020d4e0e47d9b7",
+        "content_sha256": "33929b12335e989f156e1a9f01b6736ac7dbc5acf4c6455ff1b4005731ca9703"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-12_semantic_kg_search_implementation.md",
@@ -1757,7 +1879,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "ca943b14f93518240d87e52454fb1fea4b2282da",
+        "content_sha256": "adcfb0a4c9b44b4f91bf3fa504ccd18176813e739799ce8a3d7b865c6994d6d3"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-12_semantic_kg_search_prereqs_5_todos_filed.md",
@@ -1770,7 +1894,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "a86fb3d4ba4da237ed278e8c1fd7fc1cd8ebe404",
+        "content_sha256": "2db4558623df74e849106a48117c1a2c6cf9ee4e96ef0540ba2aeed4994df8b4"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-13_litkg_current_state_retrieval_investigation.md",
@@ -1789,7 +1915,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "de151371935456d359c34c31d983a02228ee9a01",
+        "content_sha256": "f0b6f4eab0cea3696f1b17bc90b8873dea893e1ef133c51b45770daf6d901eae"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-13_litkg_grounding_chain_062_to_074.md",
@@ -1803,7 +1931,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "26c59dae3435ced994f72a72f92a92c6361a74dd",
+        "content_sha256": "47ae59f195f4177750ca361e0b2bc3f7ffe751b6743aa64cce49126e77047815"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-15_mamba_toolchain_pytorch3d_cuda_restore.md",
@@ -1818,7 +1948,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "52b482d46e387be6f3affd53d8b72a3d5ca926f8",
+        "content_sha256": "51257d3a7ef3e3b351ac659d07b4feb0d99340be1385c3cb6fa06b4161cad513"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-18_ase_depth_rri_eval_contract.md",
@@ -1828,7 +1960,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "0c1815f9a6194476d3d2259e4dbb662ac5cf84e1",
+        "content_sha256": "0df556a0cc2a10a75899d857a137face52bf2378408f5a9e64a5bb99874ac672"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-18_full_rri_qh_contract_repair.md",
@@ -1843,7 +1977,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8f88dc5dc1b85b42bf2f3c9fb879ec7bc50d72f7",
+        "content_sha256": "8fb89d0b6bbabdcb188add385a343cfee40555e0089550c7ac3d045be45daf4a"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-18_realistic_target_sampling_rri_bias.md",
@@ -1853,7 +1989,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "3b25b48592b90a9c508b6660d491490d0de6ca91",
+        "content_sha256": "066b507e6207ec79fc6c398350a9ab34e7be1c485fadead4939e434ecd202008"
       },
       {
         "path": ".agents/memory/history/2026/05/2026-05-20_target_first_rri_rollout_alignment.md",
@@ -1866,7 +2004,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "50f0d37df094a8c869b33e5b131c9b228602e9ed",
+        "content_sha256": "85fd039db8e6705e58ab5093c9fe050dac5b9fdd5707d0925750dbf250a6ee66"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_advisor_deck_source_of_truth_patch.md",
@@ -1878,7 +2018,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "50aa65d22fd3f52e8aaef4562ae985490d3f0a99",
+        "content_sha256": "c4e7ca0c2c637c11da6cf2ef2426844fb0964d178b0a553bbdd25322106bb9c6"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_c1_c6_thesis_source_conflicts.md",
@@ -1893,7 +2035,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "eab187b98993b051ba73b3eb8bbc6ce857d23b7f",
+        "content_sha256": "6f2a5edf4be42084eee8da8eeb9e2ae37426578755006f57e3be659354fd89fb"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration12_online_bridge.md",
@@ -1905,7 +2049,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d450fe71accc6aee4606416059e65424879d5668",
+        "content_sha256": "5ee1de230092a50d0cf73bdbd19ab54610b5511835191b942d6cc67b7c43a136"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration19_calibration_support.md",
@@ -1916,7 +2062,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "b6340d59b5886d1616dc0a3b6df09d7cf702f393",
+        "content_sha256": "56bab46ac9907a3d451b6664b576b38550c3973120e9ee66e25993040acd97cf"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration20_semantic_target_descriptors.md",
@@ -1929,7 +2077,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "e62cbf5e0b270c8fa29a498266471be5a96241a7",
+        "content_sha256": "7812052256599e3047849d42b4845566161396e8368d1ff8b064a8ff0c34c6a7"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration21_acquisition_headroom.md",
@@ -1940,7 +2090,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "66bbd0e61f67093d2c157e37769590808764d7e9",
+        "content_sha256": "8643c1c020c9cb2eecdb586c59ea638f9fcd7e993e72c7ac5df478bf51e282e2"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration23_geometric_tests.md",
@@ -1952,7 +2104,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "08109c17772d9cb64edb1405cd6b6457363e37b3",
+        "content_sha256": "e0575a5a93b0e2d3ec361e6add0c4e0d401a9738c5c045e41adc5383d7caf315"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-17_thesis_architecture_iteration9_target_descriptor_reliability.md",
@@ -1964,7 +2118,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "d96bc5e398accf20238d06116278e919fa5552ad",
+        "content_sha256": "8c670d6177d807801b8ea2f468f9866390f038682ad2d4aa3172dfee435237ce"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-18_target_selection_rework_autoresearch.md",
@@ -1977,7 +2133,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "b3c69cd7be33b441c6d9ac31500806e682c80de7",
+        "content_sha256": "26a52207cbf67ce406d80028c72e07c754c03d85a091b2a8c43a4a4dcc480ddb"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-18_target_task_sampler_method_split.md",
@@ -1992,7 +2150,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "6c72a0778dba188991580621bb0ee867bd831cd9",
+        "content_sha256": "2d9b8ff9302483ede29a51d1412b3dc932a91c540b6e7dd36f65411a2aed7c90"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-20_rollout_sample_autoresearch_iteration_1.md",
@@ -2002,7 +2162,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "84dd968be187378a55fe3a0184f40d3e10eb0781",
+        "content_sha256": "259444547b24750ea950b04dd4b1ea3f80197aafb97affda2a4ee78adf77885c"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-20_wave_1_rollout_alignment_implementation.md",
@@ -2012,7 +2174,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "585892729123079fcf8384363035124407461a50",
+        "content_sha256": "54d47e5f59ccfe066d149794d7c31d353ce41727b834414aacd60e8632f14bcd"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-24_thesis_descriptor_notation_patch.md",
@@ -2022,7 +2186,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "ed6e6be8ad5d34954e55ce3d41af7a77da73cdf8",
+        "content_sha256": "d6e75c83b191536a12feca23ecba7a99dcefbdb439f1c446a6afb9587f5468f5"
       },
       {
         "path": ".agents/memory/history/2026/06/2026-06-24_thesis_rollout_store_data_generation_patch.md",
@@ -2032,7 +2198,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "2c1bb8acf34ce70f9f387ea27e3205908289db33",
+        "content_sha256": "58eea0c400993699b760d011e3a5824d7fe5041a4024cf1c5c1ae0336ac3afd0"
       },
       {
         "path": ".agents/memory/history/2026/07/2026-07-08_python_docstring_guidance_ownership.md",
@@ -2042,7 +2210,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "8b5fe5d51ef92963afc61c1b106657e8ca0db3ac",
+        "content_sha256": "9931c6ab6cd57a58a99a991547e81a5e678477c6b8e395d29b137162c6f61985"
       },
       {
         "path": ".agents/memory/history/2026/07/2026-07-10_wp07_target_ownership_lane.md",
@@ -2052,7 +2222,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "6db02e4c72cab2ed3514db7f12ab57516918f6cc",
+        "content_sha256": "f623cf4d26e0fb0e2a3fdb78ddee86f0131ff77779b0c7c803b8f72ae7e0180d"
       },
       {
         "path": ".agents/memory/history/2026/07/2026-07-30_pr27_qh_infrastructure_remediation.md",
@@ -2064,7 +2236,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "2ac4b9039442dbceaa4067faa18071ff873ebc27",
+        "content_sha256": "8774925519abf02d28848428967aefe26d12f093fa2f14036a76454e2a7e5820"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-05-09/candidate_decisions.jsonl",
@@ -3861,7 +4035,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "dc45e9b943379261383ac8fe37d40c27818aae5c",
+        "content_sha256": "72c149d567fa9d68d729846016a4c37dde1e098c22ef6796e03b100b83b40cde"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-05-09/reviewed_decisions.jsonl",
@@ -5740,7 +5916,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "d12878e786a45254976f9c655ec8a015c20d95f5",
+        "content_sha256": "49bab82092e89e165ef1413d388f6c07d02dad6fe49986ed82fc805551c9f800"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-16/candidate_decisions.jsonl",
@@ -8370,7 +8548,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "d2d19eb788bf4b591621a870ef69cfd20e23e017",
+        "content_sha256": "4fd179d4fb14c09bd5b6abaa85710129048fe5557ae8b3534e8ef6c62e56a3f8"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-16/reviewed_decisions.jsonl",
@@ -11064,7 +11244,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "1ad1baf2ef22929268765fa89bfb39cd383502a2",
+        "content_sha256": "1b77f9f66cdcfc919894ddd5aca819da283250c59b61d936733e2021640155f9"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-18/candidate_decisions.jsonl",
@@ -13816,7 +13998,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "1b05df9ec986d76526196d1deaca609ed6099d14",
+        "content_sha256": "340a9b4f1296c2722871afdf3fe06385d4a682609bb6fa0de862f5bfb6fb2668"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-18/reviewed_decisions.jsonl",
@@ -16628,7 +16812,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "2055c0a600ff922b410951e4c6ee179f3a727580",
+        "content_sha256": "060973a84eeda60b81bcf0a9541e021d7322c180828bb6f4896737bbd884d19c"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-22/candidate_decisions.jsonl",
@@ -19486,7 +19672,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "67e6c3141f412b8a623d5f11e0892775417a9773",
+        "content_sha256": "93c8392dcbab5b746d398af8623ae2874b5289a3d747d0f7e19f9572a94f66fb"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-22/reviewed_decisions.jsonl",
@@ -22409,7 +22597,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "ebc99ca8beea7411b3a1bb822be4897a0684f311",
+        "content_sha256": "50d809573e9fb515786d151b5bb77b32dceaf6ddd72ae4c2393e06feb3e316b2"
       },
       {
         "path": ".agents/memory/transcripts/raw/2026-06-18/chat_messages.jsonl",
@@ -24726,7 +24916,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "0e56c1b5be9e102ee46f54f76e9f91d2223f5586",
+        "content_sha256": "c1face6bb8a137d43cde9db280f747fdc754b57f01a32a4f829c2360510f2506"
       },
       {
         "path": ".agents/memory/transcripts/raw/2026-06-22/chat_messages.jsonl",
@@ -27157,7 +27349,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "a3de55af5f6b609c500383faa02c85cc28bd2c7d",
+        "content_sha256": "cd11329815b55a4062b97a2fb40dde88876d842fea70699ea96a060948df21d7"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-05-09/plan_mode_answers.jsonl",
@@ -27177,7 +27371,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "0833befc6aa8a7b6c27502c17f1ddd9455d95d13",
+        "content_sha256": "fda04c86981522b972cdbf2f818dfc112667f71b5c37b4b7733bed2c55e99cc6"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-05-09/user_messages.jsonl",
@@ -27337,7 +27533,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "8419a3b8ee2147f47ed674dcadd9f6c2d79bfcd8",
+        "content_sha256": "f5d4c5c28eab304e0b50fc82ff0081da43385f415bc207b99a0014c8b41e7078"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-16/plan_mode_answers.jsonl",
@@ -27369,7 +27567,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "926d49b2f97e961a09fb00c1c7372f171c5ef8e7",
+        "content_sha256": "2e10ec6e4a9403a48fc175813c0c290142e62a4d9664ab72ea57966fa5629793"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-16/user_messages.jsonl",
@@ -27579,7 +27779,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "4857ffd79238503d072d1a273f33b2b67c6e2a6b",
+        "content_sha256": "599b62d102ba16da4580aa1f959f959250dbc46e5056cfa69f98c2cf0e1ef981"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-18/plan_mode_answers.jsonl",
@@ -27611,7 +27813,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "28982f6c155845364aaa11a1f05bb016bd2827f3",
+        "content_sha256": "5dc5f2fe4f142bda7b32b4f92607925d18d95c7cba0ae6a516f0b4fc45ad5b5b"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-18/user_messages.jsonl",
@@ -27841,7 +28045,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "908548865a8e4aff60527287963f9acc6ee2b3e6",
+        "content_sha256": "1d8a2557a4110bd3d3b44aba0548ebdf7d1a35a70490990ee9563e2a25359d20"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-22/plan_mode_answers.jsonl",
@@ -27873,7 +28079,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "99920db17e477b287cd296b84f1e4fb53c83b638",
+        "content_sha256": "2cc3ea33530ee35a3de54d2050545f1889c163b75f8f17df268525fc0b119f1d"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-22/user_messages.jsonl",
@@ -28114,7 +28322,9 @@
         "consumer_type": "executable consumer",
         "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "ddabc88874a62bfad81152d4dbdf8886c65d1f81",
+        "content_sha256": "401ca25d1254056f54e2fd42f9adc784612310666ed41334065fa528b2966498"
       },
       {
         "path": ".agents/refactors.toml",
@@ -28127,7 +28337,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "ac54d9cd362be2eb171598f44b5701b9c83be0b0",
+        "content_sha256": "bfa7bde099f99aca30c0f84aea27bec09db1b40eacf8583ff66b825e4eb17090"
       },
       {
         "path": ".agents/references/source_order.md",
@@ -28138,7 +28350,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "e1c66f1b2ba29750577c97a8681ca54c0d72e846",
+        "content_sha256": "381a8a3225b36acc60c460bc8e6e823ab66a17ec54302ddcd0dffc7b0d51ddbd"
       },
       {
         "path": ".agents/resolved.toml",
@@ -28166,7 +28380,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "retain resolved receipt",
         "replacement_owner": ".agents/resolved.toml",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "010166e71c07164e6ee150455526ab7f0fca6de7",
+        "content_sha256": "391f7bf901619dd4c4d80e298ebd1fc4fe72db1d1ad0434456320e0a051db348"
       },
       {
         "path": ".agents/skills/agents-db/SKILL.md",
@@ -28176,7 +28392,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "6722ff920a6188ecb4a46374833ffd27a400033f",
+        "content_sha256": "9760f86b5bdb93355b421986797423705159e7f7a2b8ab8612acbae1c5f2f7d4"
       },
       {
         "path": ".agents/skills/aria-grill/SKILL.md",
@@ -28191,7 +28409,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "edf737a729ae22f484c03f66d1d73034d9f93980",
+        "content_sha256": "e16e869c7e6b58928b2bb9f09fe27d94fad85c6cd2ea8aad2452105c59a3ea65"
       },
       {
         "path": ".agents/skills/aria-grill/references/upstream-mattpocock.md",
@@ -28202,7 +28422,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "a16c57501640cf617027480e7c25b491852e15ce",
+        "content_sha256": "d677407946176b4f9a6db07e65da0c21569b828fc0b9c87bff8d780e128236cd"
       },
       {
         "path": ".agents/skills/aria-nbv-context/references/context_map.md",
@@ -28234,7 +28456,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "81fdcff922106463d8148af6f7dacc649aeaf392",
+        "content_sha256": "17d324fbaf6e49fb50d81319db21d76e19bb8dc44ae5dfc5d61ce3b0a3e12dc0"
       },
       {
         "path": ".agents/skills/aria-nbv-context/scripts/nbv_context_index.sh",
@@ -28254,7 +28478,9 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "2bee03d2acfb58bf1061c79c2d9002a66f2594ec",
+        "content_sha256": "176b68f0d4dcf89bbfb9e53e4f69f2280abad30de2a1bdc96d34eef35005a208"
       },
       {
         "path": ".agents/todos.toml",
@@ -28293,7 +28519,9 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "9de1604469f1fe2756aa254ab1b54985ef2f8606",
+        "content_sha256": "1318bde45dfc44bb574908a3c7db3aa894485b5f57a22f944d8ea5f221cfca2f"
       },
       {
         "path": ".graphifyignore",
@@ -28305,7 +28533,9 @@
         "consumer_type": "generated artifact",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "3952f9e9dbd1615ad34c6b24df985169e208505e",
+        "content_sha256": "5ecdefabaf58333d8537f2c7faa3a0836baa1fc01443df9bdfd7936154a0eeeb"
       },
       {
         "path": ".omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md",
@@ -28315,7 +28545,9 @@
         "consumer_type": "public/documentation consumer",
         "disposition": "retain pointer receipt",
         "replacement_owner": ".omx/specs/ownership-branch-consolidation-inventory.json",
-        "classification": "migration-receipt"
+        "classification": "migration-receipt",
+        "blob_oid": "0202ffd93168534fb352507870b73caa424a1043",
+        "content_sha256": "4376d6f4ece8b7eee1bf7f12dfe9644ea73daa9c5d53c33e309616d1aefdf54b"
       },
       {
         "path": "aria_nbv/tests/agent_memory/test_codex_transcript_extract.py",
@@ -28331,7 +28563,9 @@
         "consumer_type": "public/documentation consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "a4cf7a6adce69a847f4fdf1361eef74364bb4070",
+        "content_sha256": "6b0cd6f8e237e11e4eb79463efd0382944d34c87fcb7e3ddff3a835d241a4502"
       },
       {
         "path": "docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ",
@@ -28349,7 +28583,9 @@
         "consumer_type": "public/documentation consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "dated-history"
+        "classification": "dated-history",
+        "blob_oid": "94c8179361d1ddb0b0e082d133e3f281af8c3f09",
+        "content_sha256": "113532650b6d357770b5dae46cec574f65cd85e908b0f511a62005d7b0bfc890"
       },
       {
         "path": "scripts/codex_transcript_extract.py",
@@ -28364,7 +28600,9 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "3d81ff5261804437d5931434d6c4daf2fa4a9b92",
+        "content_sha256": "5b5b21e5c9ed166bb675df11029e565914673f927aeb6302da5eec33ceabc279"
       },
       {
         "path": "scripts/new_debrief.py",
@@ -28374,7 +28612,9 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
+        "classification": "resolved-provenance",
+        "blob_oid": "df79834d8cf1fac7a6c6fb69269ff1b398651864",
+        "content_sha256": "e18de29bff62fe44ae19eefb9d5f2b243660053ed1d944309f84e54fde4aef97"
       },
       {
         "path": ".omx/specs/ownership-branch-consolidation-inventory.json",
@@ -28384,7 +28624,9 @@
         "classification": "migration-receipt",
         "consumer_type": "migration receipt",
         "disposition": "retain pointer receipt",
-        "replacement_owner": ".omx/specs/ownership-branch-consolidation-inventory.json"
+        "replacement_owner": ".omx/specs/ownership-branch-consolidation-inventory.json",
+        "blob_oid": "86fe876da0d9e2c13082be19bfcc7ba2cdd54033",
+        "content_sha256": "331db5bf136887106b9e615e5baeb0989a8c129a7b4cdd7246df70a0fb93f863"
       }
     ],
     "reference_count": 121,

@@ -6,6 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 import json
+import hashlib
+import subprocess
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -121,6 +123,34 @@ class OwnershipValidatorTests(unittest.TestCase):
         ]
         errors = validate_reference_classes(references, Path(__file__).parents[2])
         assert len(errors) == len(references)
+
+    def test_tracked_future_provenance_sink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in (".agents/memory/transcripts/2099/new.jsonl", ".agents/memory/history/2099/new.md", ".omx/specs/new.json"):
+                path = root / relative; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("promotion_target: .agents/memory/state/DECISIONS.md\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
+            assert validate_repository_sinks(root, [])
+
+    def test_modified_allowlisted_receipt_is_rejected_by_frozen_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); path = root / ".agents/memory/transcripts/2026/frozen.jsonl"
+            path.parent.mkdir(parents=True); path.write_text("historical transcript\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True); subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
+            oid = subprocess.check_output(["git", "hash-object", str(path)], cwd=root, text=True).strip()
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            inv = root / ".omx/specs/ownership-branch-consolidation-inventory.json"; inv.parent.mkdir(parents=True)
+            inv.write_text(json.dumps({"consumer_inventory": {"references": [{"path": ".agents/memory/transcripts/2026/frozen.jsonl", "classification": "resolved-provenance", "blob_oid": oid, "content_sha256": digest}]}}), encoding="utf-8")
+            path.write_text("modified\n", encoding="utf-8")
+            assert validate_repository_sinks(root, [])
 
     def test_inventory_uses_supplied_root_for_materialization(self) -> None:
         inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
